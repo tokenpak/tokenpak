@@ -73,13 +73,20 @@ tokenpak serve --port 8766
 | Connection pooling + WAL | `registry.py` | Reduced I/O overhead |
 | Pre-compiled regex | `processors/*.py` | **30%** faster processing |
 
-### Benchmark Results (570-file vault)
+### Benchmark Results (572-file vault)
 
 ```
-Token cache speedup: 25.2x
-Indexing throughput: 2745 files/sec (0.36ms/file)
-Search latency: 23ms/query
+Token cache speedup: 26.6x
+Indexing throughput: 2,738 files/sec
+Indexing speedup vs baseline: 55.27x (98.2% faster)
+Search latency: 22.7ms/query
 Processing: 0.09-0.19ms/file (code/text)
+```
+
+### Parallel Indexing
+
+```bash
+tokenpak index ~/vault --workers 4
 ```
 
 ### Token Savings (QMD + TokenPak)
