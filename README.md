@@ -12,7 +12,7 @@ Point TokenPak at any directory. Get optimized LLM context from every file type.
 - Processors for text, code, and structured data
 - Quadratic budget allocation (importance-weighted)
 - TOKPAK wire format output with provenance
-- CLI for indexing/search/stats/benchmark
+- CLI for indexing/search/stats/benchmark/calibration
 
 ### Compaction Engines
 - **Heuristic** (default): Fast rule-based, no ML dependencies
@@ -63,6 +63,8 @@ tokenpak stats
 
 ```bash
 tokenpak benchmark ~/vault --iterations 3
+# compare old-style baseline vs optimized pipeline
+tokenpak benchmark ~/vault --compare
 ```
 
 ### Serve (proxy passthrough to existing OpenClaw .ocp proxy)
@@ -99,6 +101,16 @@ Processing: 0.09-0.19ms/file (code/text)
 tokenpak index ~/vault --workers 4
 ```
 
+### Calibration Profile
+
+```bash
+# Inspect generated profile
+cat ~/.tokenpak/calibration.json
+```
+
+The profile stores per-host benchmark results and selected worker baseline.
+
+
 ### Token Savings (QMD + TokenPak)
 
 | Configuration | Avg tokens/req | Reduction |
@@ -119,7 +131,8 @@ tokenpak/
 ├── walker.py       # Directory traversal + file type detection
 ├── budget.py       # Quadratic budget allocation
 ├── wire.py         # TOKPAK wire format packing
-├── benchmark.py    # Latency benchmarking suite
+├── benchmark.py    # Latency benchmarking suite (+ compare mode)
+├── calibration.py  # Hybrid worker calibration (static + dynamic)
 ├── processors/
 │   ├── code.py     # Python/JS structure extraction
 │   ├── text.py     # Markdown/HTML compression

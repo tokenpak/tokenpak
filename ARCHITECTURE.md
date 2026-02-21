@@ -191,6 +191,7 @@ Companies have:
 | **Quality Scorer** | Per-output confidence scoring with routing | Designed |
 | **Review Queue** | Human-in-the-loop for low-confidence outputs | Designed |
 | **Monitoring Proxy** | Real-time token tracking + cost estimation | **Working ✅** |
+| **Hybrid Calibration** | Static benchmark + bounded dynamic worker adjustment | **Working ✅** |
 | **Multi-engine Fallback** | Try Tesseract → EasyOCR → Surya → flag for review | Designed |
 
 ---
@@ -458,8 +459,15 @@ def allocate_budget(blocks, total_budget):
 |---|---|---|---|
 | Baseline (no optimization) | 20,801 | — | 2026-02-20 |
 | QMD only | 6,136 | 70.5% | 2026-02-20 |
-| TokenPak compression only | TBD | Est. 50-80% | Pending |
-| QMD + TokenPak hybrid | TBD | Est. 92-97% | Pending |
+| TokenPak compression only | TBD | Pending A/B run | Pending |
+| QMD + TokenPak hybrid | 3,265 | 84.3% vs baseline (≈43% extra vs QMD-only) | 2026-02-21 |
+
+### Runtime Performance (Phase 2)
+
+- Indexing speedup: **55.27x** vs baseline (572-file vault)
+- Throughput: **~2,738 files/sec**
+- Token count cache speedup: **26.6x**
+- Search latency: **~22.7ms/query**
 
 ---
 
