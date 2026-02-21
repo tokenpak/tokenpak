@@ -132,9 +132,57 @@ tokenpak/
     └── obsidian.py   # Obsidian vault awareness
 ```
 
+## Recent Findings, Additions, and Features
+
+### 2026-02-21 — Phase 2 Hardening + Stability
+
+#### Major Additions
+- **Parallel indexing** with worker pool (`--workers`)
+- **Hybrid worker calibration**:
+  - Static host calibration (`tokenpak calibrate ...`)
+  - Dynamic bounded runtime adjustment (`--auto-workers`)
+- **Baseline vs optimized benchmark compare mode** (`benchmark --compare`)
+
+#### Hardening Changes
+- `tokens.py`
+  - Robust truncation edge-case handling (`max_tokens <= 0`, dense token text)
+  - Larger LRU cache (`maxsize=8192`)
+  - Lazy tokenizer load retained
+- `registry.py`
+  - `busy_timeout`, `BEGIN IMMEDIATE`, `mmap_size`, safer connection lifecycle
+  - cleanup hooks for connection stability
+- `cli.py`
+  - Auto-worker selection and optional recalibration controls
+- `benchmark.py`
+  - Simulated baseline path to produce real speedup deltas
+
+#### Measured Findings (572-file vault)
+- **Indexing speedup vs baseline:** `55.27x` (**98.2% faster**)
+- **Throughput:** `~2,738 files/sec`
+- **Token cache speedup:** `26.6x`
+- **Search latency:** `~22.7ms/query`
+
+### 2026-02-21 — Production Deployment Validation (Cali)
+- Synced latest TokenPak code and reinstalled editable package on Cali
+- Verified CLI feature set includes:
+  - `benchmark` subcommand
+  - worker controls (`--workers`, auto-calibration flags)
+- Rebooted Cali and re-validated:
+  - `tokenpak-proxy` service is **enabled + active** post-reboot
+  - TokenPak indexing still functional after restart
+
+### Recommended Operating Pattern
+1. **One-time per host:**
+   - `tokenpak calibrate <dir> --max-workers 8 --rounds 2`
+2. **Daily/default runs:**
+   - `tokenpak index <dir> --auto-workers --max-workers 8`
+3. **Periodic validation:**
+   - `tokenpak benchmark <dir> --compare`
+
 ## Notes
 
 - Registry DB default: `.tokenpak/registry.db`
+- Calibration profile path: `~/.tokenpak/calibration.json`
 - Uses stdlib only by default.
 - Optional: install `tiktoken` for accurate token counting.
 - Optional: install `llmlingua` for ML-powered compression.
