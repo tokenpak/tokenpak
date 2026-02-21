@@ -15,6 +15,7 @@ from .tokens import count_tokens, truncate_to_tokens, cache_info, estimate_token
 from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
+from .calibration import calibrate_workers, get_recommended_workers, load_profile
 
 
 # Batch size for SQLite transactions
@@ -68,6 +69,17 @@ def cmd_index(args):
     unchanged = 0
     
     workers = getattr(args, 'workers', 1) or 1
+
+    if getattr(args, 'recalibrate', False):
+        result = calibrate_workers(args.directory, max_workers=getattr(args, 'max_workers', 8), rounds=getattr(args, 'calibration_rounds', 2))
+        if "error" in result:
+            print(f"Calibration skipped: {result['error']}")
+        else:
+            print(f"Calibration complete: best_workers={result['best_workers']} on {result['sample_files']} files")
+
+    if getattr(args, 'auto_workers', False):
+        workers = get_recommended_workers(default_workers=max(1, workers), max_workers=getattr(args, 'max_workers', 8))
+        print(f"Auto workers selected: {workers}")
     
     if workers > 1:
         # Parallel processing path
@@ -225,6 +237,12 @@ def cmd_benchmark(args):
     run_benchmark(args.directory, args.iterations, compare=args.compare)
 
 
+def cmd_calibrate(args):
+    """Run static worker calibration and save host profile."""
+    result = calibrate_workers(args.directory, max_workers=args.max_workers, rounds=args.rounds)
+    print(json.dumps(result, indent=2))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="tokenpak", description="TokenPak CLI")
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
@@ -234,8 +252,16 @@ def build_parser():
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", help="Directory to index")
     p_index.add_argument("--budget", type=int, default=8000)
-    p_index.add_argument("--workers", "-w", type=int, default=1, 
-                         help="Parallel workers (default: 1)")
+    p_index.add_argument("--workers", "-w", type=int, default=4,
+                         help="Parallel workers (default: 4)")
+    p_index.add_argument("--auto-workers", action="store_true",
+                         help="Use hybrid calibration (static baseline + dynamic adjustment)")
+    p_index.add_argument("--recalibrate", action="store_true",
+                         help="Run static calibration before indexing")
+    p_index.add_argument("--calibration-rounds", type=int, default=2,
+                         help="Calibration rounds per candidate worker count")
+    p_index.add_argument("--max-workers", type=int, default=8,
+                         help="Upper worker cap for auto/recalibration")
     p_index.set_defaults(func=cmd_index)
 
     p_search = sub.add_parser("search", help="Search indexed content")
@@ -254,9 +280,15 @@ def build_parser():
     p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
     p_bench.add_argument("directory", help="Directory to benchmark")
     p_bench.add_argument("--iterations", type=int, default=3)
-    p_bench.add_argument("--compare", action="store_true", 
+    p_bench.add_argument("--compare", action="store_true",
                          help="Compare baseline vs optimized")
     p_bench.set_defaults(func=cmd_benchmark)
+
+    p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
+    p_cal.add_argument("directory", help="Directory to sample for calibration")
+    p_cal.add_argument("--max-workers", type=int, default=8)
+    p_cal.add_argument("--rounds", type=int, default=2)
+    p_cal.set_defaults(func=cmd_calibrate)
 
     return parser
 

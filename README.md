@@ -37,6 +37,16 @@ pip install -e .
 tokenpak index ~/vault
 ```
 
+### Hybrid auto-calibration (recommended)
+
+```bash
+# one-time static calibration for this host
+tokenpak calibrate ~/vault --max-workers 8 --rounds 2
+
+# normal indexing with dynamic adjustment around calibrated baseline
+tokenpak index ~/vault --auto-workers --max-workers 8
+```
+
 ### Search indexed content and emit wire format
 
 ```bash
