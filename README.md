@@ -1,0 +1,50 @@
+# TokenPak
+
+TokenPak is a universal content compiler for LLM context optimization.
+
+## Features (v0.1.0)
+
+- Directory indexing with file-type detection
+- SQLite-backed block registry with versioning + change detection
+- Processors for text, code, and structured data
+- Quadratic budget allocation
+- TOKPAK wire format output
+- CLI for indexing/search/stats
+
+## Install
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+### Index a directory
+
+```bash
+tokenpak index ~/vault
+```
+
+### Search indexed content and emit wire format
+
+```bash
+tokenpak search "token compression benchmark" --budget 8000 --top-k 8
+```
+
+### Show stats
+
+```bash
+tokenpak stats
+```
+
+### Serve (proxy passthrough to existing OpenClaw .ocp proxy)
+
+```bash
+tokenpak serve --port 8766
+```
+
+## Notes
+
+- Registry DB default: `.tokenpak/registry.db`
+- Uses stdlib only by default.
+- Optional: install `tiktoken` for accurate token counting.
