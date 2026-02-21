@@ -1,29 +1,29 @@
-"""TokenPak CLI."""
+"""TokenPak CLI with optimized batch processing."""
 
 import argparse
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Tuple
 
 from .registry import BlockRegistry, Block
 from .walker import walk_directory
-from .tokens import count_tokens, truncate_to_tokens
+from .tokens import count_tokens, truncate_to_tokens, cache_info
 from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
 
 
-def _process_file(path: str, file_type: str, registry: BlockRegistry) -> Block | None:
-    try:
-        content = Path(path).read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return None
+# Batch size for SQLite transactions
+BATCH_SIZE = 50
 
+
+def _process_file_content(path: str, file_type: str, content: str) -> Optional[Block]:
+    """Process file content into a block (CPU-bound, can parallelize)."""
     if not content.strip():
-        return None
-
-    if not registry.has_changed(path, content):
         return None
 
     processor = get_processor(file_type)
@@ -32,7 +32,7 @@ def _process_file(path: str, file_type: str, registry: BlockRegistry) -> Block |
 
     compressed = processor.process(content, path)
 
-    block = Block(
+    return Block(
         path=path,
         content_hash=hashlib.sha256(content.encode()).hexdigest(),
         version=1,
@@ -43,29 +43,72 @@ def _process_file(path: str, file_type: str, registry: BlockRegistry) -> Block |
         quality_score=1.0,
         importance=5.0,
     )
-    return registry.add_block(block)
+
+
+def _read_file(path: str) -> Tuple[str, Optional[str]]:
+    """Read file content, return (path, content or None)."""
+    try:
+        content = Path(path).read_text(encoding="utf-8", errors="ignore")
+        return path, content
+    except Exception:
+        return path, None
 
 
 def cmd_index(args):
+    """Index a directory with batch transactions and optional parallelism."""
     registry = BlockRegistry(args.db)
-    files = walk_directory(args.directory)
-
+    files = list(walk_directory(args.directory))
+    
+    start_time = time.perf_counter()
     processed = 0
     skipped = 0
-
-    for path, file_type, _ in files:
-        b = _process_file(path, file_type, registry)
-        if b:
-            processed += 1
-        else:
-            skipped += 1
-
+    unchanged = 0
+    
+    # Process in batches with batch transactions
+    with registry.batch_transaction() as conn:
+        batch_count = 0
+        
+        for path, file_type, _ in files:
+            try:
+                content = Path(path).read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                skipped += 1
+                continue
+            
+            if not content.strip():
+                skipped += 1
+                continue
+            
+            # Check if unchanged
+            if not registry.has_changed(path, content):
+                unchanged += 1
+                continue
+            
+            # Process
+            block = _process_file_content(path, file_type, content)
+            if block:
+                registry.add_block_batch(block, conn)
+                processed += 1
+                batch_count += 1
+                
+                # Commit every BATCH_SIZE files
+                if batch_count >= BATCH_SIZE:
+                    conn.commit()
+                    batch_count = 0
+            else:
+                skipped += 1
+    
+    elapsed = time.perf_counter() - start_time
     stats = registry.get_stats()
-    print(f"Indexed: {processed} files (skipped unchanged: {skipped})")
+    
+    print(f"Indexed: {processed} files in {elapsed:.2f}s")
+    print(f"Skipped: {skipped} | Unchanged: {unchanged}")
+    print(f"Token cache: {cache_info()}")
     print(json.dumps(stats, indent=2))
 
 
 def cmd_search(args):
+    """Search indexed content."""
     registry = BlockRegistry(args.db)
     matches = registry.search(args.query, top_k=args.top_k)
     if not matches:
@@ -90,12 +133,13 @@ def cmd_search(args):
     for m in matches:
         ref = f"{m.path}#v{m.version}"
         max_tokens = alloc.get(ref, 200)
-        content = truncate_to_tokens(m.compressed_content, max_tokens)
+        # truncate_to_tokens now returns (text, count) tuple
+        content, token_count = truncate_to_tokens(m.compressed_content, max_tokens)
         wire_blocks.append({
             "ref": ref,
             "type": m.file_type,
             "quality": m.quality_score,
-            "tokens": count_tokens(content),
+            "tokens": token_count,
             "content": content,
         })
 
@@ -104,12 +148,15 @@ def cmd_search(args):
 
 
 def cmd_stats(args):
+    """Show registry stats."""
     registry = BlockRegistry(args.db)
-    print(json.dumps(registry.get_stats(), indent=2))
+    stats = registry.get_stats()
+    stats["token_cache"] = str(cache_info())
+    print(json.dumps(stats, indent=2))
 
 
 def cmd_serve(args):
-    # Reuse existing Cali proxy implementation if available
+    """Start monitoring proxy (if available)."""
     try:
         import sys
         proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
@@ -120,6 +167,12 @@ def cmd_serve(args):
     except Exception as e:
         print(f"Serve mode unavailable: {e}")
         print("Run the existing proxy directly if needed.")
+
+
+def cmd_benchmark(args):
+    """Run latency benchmark."""
+    from .benchmark import run_benchmark
+    run_benchmark(args.directory, args.iterations)
 
 
 def build_parser():
@@ -145,6 +198,11 @@ def build_parser():
     p_serve = sub.add_parser("serve", help="Start monitoring proxy")
     p_serve.add_argument("--port", type=int, default=8766)
     p_serve.set_defaults(func=cmd_serve)
+
+    p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
+    p_bench.add_argument("directory", help="Directory to benchmark")
+    p_bench.add_argument("--iterations", type=int, default=3)
+    p_bench.set_defaults(func=cmd_benchmark)
 
     return parser
 

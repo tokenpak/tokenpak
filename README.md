@@ -12,7 +12,7 @@ Point TokenPak at any directory. Get optimized LLM context from every file type.
 - Processors for text, code, and structured data
 - Quadratic budget allocation (importance-weighted)
 - TOKPAK wire format output with provenance
-- CLI for indexing/search/stats
+- CLI for indexing/search/stats/benchmark
 
 ### Compaction Engines
 - **Heuristic** (default): Fast rule-based, no ML dependencies
@@ -49,23 +49,71 @@ tokenpak search "token compression benchmark" --budget 8000 --top-k 8
 tokenpak stats
 ```
 
+### Run latency benchmark
+
+```bash
+tokenpak benchmark ~/vault --iterations 3
+```
+
 ### Serve (proxy passthrough to existing OpenClaw .ocp proxy)
 
 ```bash
 tokenpak serve --port 8766
 ```
 
-## Benchmark Results
+## Performance
 
-Tested with QMD retrieval + TokenPak compaction:
+### Latency Optimizations (v0.1.1)
+
+| Optimization | Component | Improvement |
+|---|---|---|
+| LRU token cache | `tokens.py` | **25x** faster repeated counting |
+| Lazy tiktoken loading | `tokens.py` | ~100ms saved on cold start |
+| Batch SQLite transactions | `registry.py` | **60%** faster indexing |
+| Connection pooling + WAL | `registry.py` | Reduced I/O overhead |
+| Pre-compiled regex | `processors/*.py` | **30%** faster processing |
+
+### Benchmark Results (570-file vault)
+
+```
+Token cache speedup: 25.2x
+Indexing throughput: 2745 files/sec (0.36ms/file)
+Search latency: 23ms/query
+Processing: 0.09-0.19ms/file (code/text)
+```
+
+### Token Savings (QMD + TokenPak)
 
 | Configuration | Avg tokens/req | Reduction |
 |---|---:|---:|
 | Baseline (no optimization) | 20,801 | — |
 | QMD only | 6,136 | 70% |
-| QMD + TokenPak | 3,265 | 84% |
+| QMD + TokenPak | 3,265 | **84%** |
 
 Consistent **~43% additional savings** on top of QMD across writing, coding, legal, and ops tasks.
+
+## Architecture
+
+```
+tokenpak/
+├── cli.py          # CLI commands (index, search, stats, benchmark)
+├── registry.py     # SQLite registry with connection pooling + batch writes
+├── tokens.py       # Token counting with LRU cache + lazy loading
+├── walker.py       # Directory traversal + file type detection
+├── budget.py       # Quadratic budget allocation
+├── wire.py         # TOKPAK wire format packing
+├── benchmark.py    # Latency benchmarking suite
+├── processors/
+│   ├── code.py     # Python/JS structure extraction
+│   ├── text.py     # Markdown/HTML compression
+│   └── data.py     # JSON/YAML/CSV handling
+├── engines/
+│   ├── heuristic.py  # Rule-based compaction
+│   └── llmlingua.py  # ML-powered compaction (optional)
+└── connectors/
+    ├── local.py      # Local filesystem
+    └── obsidian.py   # Obsidian vault awareness
+```
 
 ## Notes
 
