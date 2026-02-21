@@ -1,38 +1,49 @@
-"""TokenPak CLI with optimized batch processing."""
+"""TokenPak CLI with parallel processing and optimized batch operations."""
 
 import argparse
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
+import os
 
 from .registry import BlockRegistry, Block
 from .walker import walk_directory
-from .tokens import count_tokens, truncate_to_tokens, cache_info
+from .tokens import count_tokens, truncate_to_tokens, cache_info, estimate_tokens
 from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
 
 
 # Batch size for SQLite transactions
-BATCH_SIZE = 50
+BATCH_SIZE = 100
 
 
-def _process_file_content(path: str, file_type: str, content: str) -> Optional[Block]:
-    """Process file content into a block (CPU-bound, can parallelize)."""
+def _process_file(args: Tuple[str, str]) -> Optional[Tuple[str, Block]]:
+    """
+    Process a single file into a block (CPU-bound, parallelizable).
+    
+    Args: (path, file_type)
+    Returns: (path, Block) or None if skipped
+    """
+    path, file_type = args
+    try:
+        content = Path(path).read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+    
     if not content.strip():
         return None
-
+    
     processor = get_processor(file_type)
     if not processor:
         return None
-
+    
     compressed = processor.process(content, path)
-
-    return Block(
+    
+    block = Block(
         path=path,
         content_hash=hashlib.sha256(content.encode()).hexdigest(),
         version=1,
@@ -43,19 +54,11 @@ def _process_file_content(path: str, file_type: str, content: str) -> Optional[B
         quality_score=1.0,
         importance=5.0,
     )
-
-
-def _read_file(path: str) -> Tuple[str, Optional[str]]:
-    """Read file content, return (path, content or None)."""
-    try:
-        content = Path(path).read_text(encoding="utf-8", errors="ignore")
-        return path, content
-    except Exception:
-        return path, None
+    return (path, content, block)
 
 
 def cmd_index(args):
-    """Index a directory with batch transactions and optional parallelism."""
+    """Index a directory with parallel processing and batch transactions."""
     registry = BlockRegistry(args.db)
     files = list(walk_directory(args.directory))
     
@@ -64,44 +67,92 @@ def cmd_index(args):
     skipped = 0
     unchanged = 0
     
-    # Process in batches with batch transactions
-    with registry.batch_transaction() as conn:
-        batch_count = 0
+    workers = getattr(args, 'workers', 1) or 1
+    
+    if workers > 1:
+        # Parallel processing path
+        print(f"Indexing with {workers} workers...")
         
-        for path, file_type, _ in files:
-            try:
-                content = Path(path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
-                skipped += 1
-                continue
-            
-            if not content.strip():
-                skipped += 1
-                continue
-            
-            # Check if unchanged
-            if not registry.has_changed(path, content):
-                unchanged += 1
-                continue
-            
-            # Process
-            block = _process_file_content(path, file_type, content)
-            if block:
+        # Phase 1: Parallel file processing (CPU-bound)
+        file_args = [(path, file_type) for path, file_type, _ in files]
+        results = []
+        
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_process_file, fa): fa for fa in file_args}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
+                else:
+                    skipped += 1
+        
+        # Phase 2: Serial DB writes (I/O-bound, needs locking)
+        with registry.batch_transaction() as conn:
+            batch_count = 0
+            for path, content, block in results:
+                if not registry.has_changed(path, content):
+                    unchanged += 1
+                    continue
+                
                 registry.add_block_batch(block, conn)
                 processed += 1
                 batch_count += 1
                 
-                # Commit every BATCH_SIZE files
                 if batch_count >= BATCH_SIZE:
                     conn.commit()
+                    conn.execute("BEGIN IMMEDIATE")
                     batch_count = 0
-            else:
-                skipped += 1
+    else:
+        # Single-threaded path (original behavior)
+        with registry.batch_transaction() as conn:
+            batch_count = 0
+            
+            for path, file_type, _ in files:
+                try:
+                    content = Path(path).read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    skipped += 1
+                    continue
+                
+                if not content.strip():
+                    skipped += 1
+                    continue
+                
+                if not registry.has_changed(path, content):
+                    unchanged += 1
+                    continue
+                
+                processor = get_processor(file_type)
+                if not processor:
+                    skipped += 1
+                    continue
+                
+                compressed = processor.process(content, path)
+                
+                block = Block(
+                    path=path,
+                    content_hash=hashlib.sha256(content.encode()).hexdigest(),
+                    version=1,
+                    file_type=file_type,
+                    raw_tokens=count_tokens(content),
+                    compressed_tokens=count_tokens(compressed),
+                    compressed_content=compressed,
+                    quality_score=1.0,
+                    importance=5.0,
+                )
+                registry.add_block_batch(block, conn)
+                processed += 1
+                batch_count += 1
+                
+                if batch_count >= BATCH_SIZE:
+                    conn.commit()
+                    conn.execute("BEGIN IMMEDIATE")
+                    batch_count = 0
     
     elapsed = time.perf_counter() - start_time
     stats = registry.get_stats()
     
-    print(f"Indexed: {processed} files in {elapsed:.2f}s")
+    print(f"Indexed: {processed} files in {elapsed:.2f}s ({processed/max(elapsed,0.001):.1f} files/sec)")
     print(f"Skipped: {skipped} | Unchanged: {unchanged}")
     print(f"Token cache: {cache_info()}")
     print(json.dumps(stats, indent=2))
@@ -133,7 +184,6 @@ def cmd_search(args):
     for m in matches:
         ref = f"{m.path}#v{m.version}"
         max_tokens = alloc.get(ref, 200)
-        # truncate_to_tokens now returns (text, count) tuple
         content, token_count = truncate_to_tokens(m.compressed_content, max_tokens)
         wire_blocks.append({
             "ref": ref,
@@ -172,7 +222,7 @@ def cmd_serve(args):
 def cmd_benchmark(args):
     """Run latency benchmark."""
     from .benchmark import run_benchmark
-    run_benchmark(args.directory, args.iterations)
+    run_benchmark(args.directory, args.iterations, compare=args.compare)
 
 
 def build_parser():
@@ -184,6 +234,8 @@ def build_parser():
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", help="Directory to index")
     p_index.add_argument("--budget", type=int, default=8000)
+    p_index.add_argument("--workers", "-w", type=int, default=1, 
+                         help="Parallel workers (default: 1)")
     p_index.set_defaults(func=cmd_index)
 
     p_search = sub.add_parser("search", help="Search indexed content")
@@ -202,6 +254,8 @@ def build_parser():
     p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
     p_bench.add_argument("directory", help="Directory to benchmark")
     p_bench.add_argument("--iterations", type=int, default=3)
+    p_bench.add_argument("--compare", action="store_true", 
+                         help="Compare baseline vs optimized")
     p_bench.set_defaults(func=cmd_benchmark)
 
     return parser

@@ -1,13 +1,34 @@
-"""Block Registry — SQLite-backed content versioning with optimized I/O."""
+"""Block Registry — SQLite-backed content versioning with optimized I/O.
+
+Hardened for stability:
+- Connection pooling with thread-local storage
+- WAL mode + busy timeout for concurrent access
+- Explicit cleanup hooks
+- Graceful error recovery
+"""
 
 import hashlib
 import sqlite3
 import time
 import threading
+import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List, Generator
+
+# Global registry of all instances for cleanup
+_REGISTRIES: List["BlockRegistry"] = []
+_CLEANUP_REGISTERED = False
+
+
+def _cleanup_all_registries():
+    """Cleanup hook for process exit."""
+    for reg in _REGISTRIES:
+        try:
+            reg.close()
+        except Exception:
+            pass
 
 
 @dataclass
@@ -33,23 +54,48 @@ class BlockRegistry:
     - Connection pooling (reuse instead of open/close per operation)
     - WAL mode for better concurrent read/write
     - Batch transaction context manager
+    - Busy timeout for lock contention
     - Prepared statement caching (SQLite handles this)
+    
+    Stability:
+    - Thread-local connections
+    - Graceful cleanup on exit
+    - Error recovery in transactions
     """
 
     def __init__(self, db_path: str = ".tokenpak/registry.db"):
+        global _CLEANUP_REGISTERED
+        
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
+        self._closed = False
         self._init_db()
+        
+        # Register for cleanup
+        _REGISTRIES.append(self)
+        if not _CLEANUP_REGISTERED:
+            atexit.register(_cleanup_all_registries)
+            _CLEANUP_REGISTERED = True
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get thread-local connection (pooling)."""
+        if self._closed:
+            raise RuntimeError("Registry is closed")
+        
         if not hasattr(self._local, 'conn') or self._local.conn is None:
-            conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            # Enable WAL mode for better concurrency
+            conn = sqlite3.connect(
+                self.db_path,
+                check_same_thread=False,
+                timeout=30.0  # 30s busy timeout for lock contention
+            )
+            # Performance pragmas
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
+            conn.execute("PRAGMA busy_timeout=30000")  # 30s busy timeout
+            conn.execute("PRAGMA temp_store=MEMORY")
+            conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
             self._local.conn = conn
         return self._local.conn
 
@@ -88,10 +134,14 @@ class BlockRegistry:
         """
         conn = self._get_connection()
         try:
+            conn.execute("BEGIN IMMEDIATE")  # Acquire write lock early
             yield conn
             conn.commit()
-        except Exception:
-            conn.rollback()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             raise
 
     def has_changed(self, path: str, content: str) -> bool:
@@ -117,40 +167,30 @@ class BlockRegistry:
         return self._upsert_block(block, conn)
 
     def _upsert_block(self, block: Block, conn: sqlite3.Connection) -> Block:
-        """Internal upsert logic."""
+        """Internal upsert logic using INSERT OR REPLACE for atomicity."""
+        # Check existing version
         existing = conn.execute(
             "SELECT version FROM blocks WHERE path = ?", (block.path,)
         ).fetchone()
-
+        
         if existing:
             block.version = existing[0] + 1
-            conn.execute("""
-                UPDATE blocks SET
-                    content_hash = ?, version = ?, file_type = ?,
-                    raw_tokens = ?, compressed_tokens = ?,
-                    compressed_content = ?, quality_score = ?,
-                    importance = ?, processed_at = ?
-                WHERE path = ?
-            """, (
-                block.content_hash, block.version, block.file_type,
-                block.raw_tokens, block.compressed_tokens,
-                block.compressed_content, block.quality_score,
-                block.importance, block.processed_at, block.path
-            ))
         else:
             block.version = 1
-            conn.execute("""
-                INSERT INTO blocks
-                    (path, content_hash, version, file_type, raw_tokens,
-                     compressed_tokens, compressed_content, quality_score,
-                     importance, processed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                block.path, block.content_hash, block.version, block.file_type,
-                block.raw_tokens, block.compressed_tokens,
-                block.compressed_content, block.quality_score,
-                block.importance, block.processed_at
-            ))
+        
+        # Use INSERT OR REPLACE for atomic upsert
+        conn.execute("""
+            INSERT OR REPLACE INTO blocks
+                (path, content_hash, version, file_type, raw_tokens,
+                 compressed_tokens, compressed_content, quality_score,
+                 importance, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            block.path, block.content_hash, block.version, block.file_type,
+            block.raw_tokens, block.compressed_tokens,
+            block.compressed_content, block.quality_score,
+            block.importance, block.processed_at
+        ))
         
         return block
 
@@ -182,6 +222,9 @@ class BlockRegistry:
         conn = self._get_connection()
         conn.row_factory = sqlite3.Row
         terms = query.lower().split()
+        if not terms:
+            return []
+        
         rows = conn.execute("SELECT * FROM blocks").fetchall()
         conn.row_factory = None
 
@@ -236,6 +279,25 @@ class BlockRegistry:
 
     def close(self):
         """Close the connection pool."""
+        if self._closed:
+            return
+        self._closed = True
         if hasattr(self._local, 'conn') and self._local.conn:
-            self._local.conn.close()
+            try:
+                self._local.conn.close()
+            except Exception:
+                pass
             self._local.conn = None
+        
+        # Remove from global registry
+        try:
+            _REGISTRIES.remove(self)
+        except ValueError:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
