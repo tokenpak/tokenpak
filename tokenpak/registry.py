@@ -15,7 +15,9 @@ import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, Generator
+from typing import Optional, List, Generator, TYPE_CHECKING
+if TYPE_CHECKING:
+    from .connectors.base_source import Provenance
 
 # Global registry of all instances for cleanup
 _REGISTRIES: List["BlockRegistry"] = []
@@ -45,6 +47,7 @@ class Block:
     importance: float = 5.0
     processed_at: float = field(default_factory=time.time)
     slice_id: str = ""
+    provenance: Optional[object] = None  # Optional[Provenance] — avoid circular import
 
     def __post_init__(self):
         """Auto-generate slice_id if not provided."""
