@@ -219,7 +219,11 @@ def cmd_search(args):
             "content": content,
         })
 
-    output = pack(wire_blocks, args.budget, {"query": args.query})
+    if getattr(args, 'inject_refs', False):
+        from .compiler import compile_with_refs
+        output = compile_with_refs(wire_blocks, args.query, args.budget)
+    else:
+        output = pack(wire_blocks, args.budget, {"query": args.query})
     print(output)
 
 
@@ -286,6 +290,8 @@ def build_parser():
     p_search.add_argument("--top-k", type=int, default=10)
     p_search.add_argument("--gaps", default=DEFAULT_GAPS_PATH,
                           help="Path to gaps.json for miss-based retrieval expansion")
+    p_search.add_argument("--inject-refs", action="store_true",
+                          help="Enable compile-time reference injection (GitHub, URLs)")
     p_search.set_defaults(func=cmd_search)
 
     p_stats = sub.add_parser("stats", help="Show registry stats")
