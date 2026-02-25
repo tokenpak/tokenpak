@@ -23,26 +23,29 @@ from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
 BATCH_SIZE = 100
 
 
-def _process_file(args: Tuple[str, str]) -> Optional[Tuple[str, Block]]:
+def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
     """
     Process a single file into a block (CPU-bound, parallelizable).
-    
-    Args: (path, file_type)
-    Returns: (path, Block) or None if skipped
+
+    Args: (path, file_type) or (path, file_type, no_treesitter)
+    Returns: (path, content, Block) or None if skipped
     """
-    path, file_type = args
+    path = args[0]
+    file_type = args[1]
+    no_treesitter = args[2] if len(args) > 2 else False
+
     try:
         content = Path(path).read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return None
-    
+
     if not content.strip():
         return None
-    
-    processor = get_processor(file_type)
+
+    processor = get_processor(file_type, no_treesitter=no_treesitter)
     if not processor:
         return None
-    
+
     compressed = processor.process(content, path)
     
     block = Block(
@@ -82,12 +85,14 @@ def cmd_index(args):
         workers = get_recommended_workers(default_workers=max(1, workers), max_workers=getattr(args, 'max_workers', 8))
         print(f"Auto workers selected: {workers}")
     
+    no_treesitter = getattr(args, 'no_treesitter', False)
+
     if workers > 1:
         # Parallel processing path
         print(f"Indexing with {workers} workers...")
-        
+
         # Phase 1: Parallel file processing (CPU-bound)
-        file_args = [(path, file_type) for path, file_type, _ in files]
+        file_args = [(path, file_type, no_treesitter) for path, file_type, _ in files]
         results = []
         
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -135,7 +140,7 @@ def cmd_index(args):
                     unchanged += 1
                     continue
                 
-                processor = get_processor(file_type)
+                processor = get_processor(file_type, no_treesitter=no_treesitter)
                 if not processor:
                     skipped += 1
                     continue
@@ -271,6 +276,8 @@ def build_parser():
                          help="Calibration rounds per candidate worker count")
     p_index.add_argument("--max-workers", type=int, default=8,
                          help="Upper worker cap for auto/recalibration")
+    p_index.add_argument("--no-treesitter", action="store_true",
+                         help="Force regex-based code processing (skip tree-sitter)")
     p_index.set_defaults(func=cmd_index)
 
     p_search = sub.add_parser("search", help="Search indexed content")
