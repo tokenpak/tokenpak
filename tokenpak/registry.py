@@ -44,6 +44,15 @@ class Block:
     quality_score: float = 1.0
     importance: float = 5.0
     processed_at: float = field(default_factory=time.time)
+    slice_id: str = ""
+
+    def __post_init__(self):
+        """Auto-generate slice_id if not provided."""
+        if not self.slice_id:
+            digest = hashlib.sha256(
+                f"{self.path}:{self.content_hash}".encode()
+            ).hexdigest()[:8]
+            self.slice_id = f"s_{digest}"
 
 
 class BlockRegistry:
@@ -112,11 +121,18 @@ class BlockRegistry:
                 compressed_content TEXT NOT NULL,
                 quality_score REAL NOT NULL DEFAULT 1.0,
                 importance REAL NOT NULL DEFAULT 5.0,
-                processed_at REAL NOT NULL
+                processed_at REAL NOT NULL,
+                slice_id TEXT NOT NULL DEFAULT ''
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_type ON blocks(file_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_hash ON blocks(content_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_slice ON blocks(slice_id)")
+        # Migration: add slice_id column to existing DBs
+        try:
+            conn.execute("ALTER TABLE blocks ADD COLUMN slice_id TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass  # Column already exists
         conn.commit()
 
     @contextmanager
@@ -183,13 +199,13 @@ class BlockRegistry:
             INSERT OR REPLACE INTO blocks
                 (path, content_hash, version, file_type, raw_tokens,
                  compressed_tokens, compressed_content, quality_score,
-                 importance, processed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 importance, processed_at, slice_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             block.path, block.content_hash, block.version, block.file_type,
             block.raw_tokens, block.compressed_tokens,
             block.compressed_content, block.quality_score,
-            block.importance, block.processed_at
+            block.importance, block.processed_at, block.slice_id
         ))
         
         return block

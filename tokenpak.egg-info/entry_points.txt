@@ -1,0 +1,2 @@
+[console_scripts]
+tokenpak = tokenpak.cli:main
