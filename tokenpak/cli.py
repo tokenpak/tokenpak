@@ -16,6 +16,7 @@ from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
 from .calibration import calibrate_workers, get_recommended_workers, load_profile
+from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
 
 
 # Batch size for SQLite transactions
@@ -173,7 +174,15 @@ def cmd_index(args):
 def cmd_search(args):
     """Search indexed content."""
     registry = BlockRegistry(args.db)
-    matches = registry.search(args.query, top_k=args.top_k)
+
+    # Retrieval expansion: if query overlaps with a prior miss, double top_k
+    top_k = args.top_k
+    gaps_path = getattr(args, 'gaps', DEFAULT_GAPS_PATH)
+    if should_expand_retrieval(args.query, gaps_path=gaps_path):
+        top_k = top_k * 2
+        print(f"[miss-detector] expanded due to prior miss: top_k={top_k}", flush=True)
+
+    matches = registry.search(args.query, top_k=top_k)
     if not matches:
         print("No matches found.")
         return
@@ -268,6 +277,8 @@ def build_parser():
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("--budget", type=int, default=8000)
     p_search.add_argument("--top-k", type=int, default=10)
+    p_search.add_argument("--gaps", default=DEFAULT_GAPS_PATH,
+                          help="Path to gaps.json for miss-based retrieval expansion")
     p_search.set_defaults(func=cmd_search)
 
     p_stats = sub.add_parser("stats", help="Show registry stats")
