@@ -255,22 +255,69 @@ class ContextAssembler:
         self,
         required_blocks: Dict[str, Tuple[str, Optional[str]]],
         state_manager=None,
+        evidence_pack=None,
+        recent_text: str = "",
+        tools_text: str = "",
+        budgeter=None,
     ) -> str:
         """
         Build the complete OCP payload: CANON section + optional STATE_JSON.
 
+        Optionally enforces token budget via a Budgeter instance before
+        assembling the final payload.
+
         Args:
             required_blocks: passed to assemble_context()
             state_manager:   optional StateManager; if provided, appends STATE_JSON
+            evidence_pack:   optional EvidencePack; if provided, appends EVIDENCE section
+            recent_text:     optional recent conversation context
+            tools_text:      optional tool/skill schema text
+            budgeter:        optional Budgeter; enforces total_tokens budget
 
         Returns:
             Full payload string ready to prepend to a request.
         """
+        # Apply budget constraints before assembling if budgeter provided
+        if budgeter is not None and (evidence_pack or recent_text or tools_text):
+            components = {
+                "state": {
+                    "text": state_manager.to_wire_format() if state_manager else "",
+                    "priority": "critical",
+                },
+                "recent": {"text": recent_text, "priority": "high"},
+                "evidence": {
+                    "items": evidence_pack.items if evidence_pack else [],
+                    "priority": "medium",
+                },
+                "tools": {"text": tools_text, "priority": "variable"},
+            }
+            trimmed = budgeter.allocate(components)
+
+            # Rebuild evidence_pack from trimmed items (if trimmed)
+            if evidence_pack and trimmed.get("evidence"):
+                from .evidence_pack import EvidencePack
+                new_pack = EvidencePack()
+                new_pack.items = trimmed["evidence"]["items"]
+                evidence_pack = new_pack
+
+            recent_text = trimmed.get("recent", {}).get("text", recent_text)
+            tools_text = trimmed.get("tools", {}).get("text", tools_text)
+
+        # Build sections
         canon_section = self.assemble_context(required_blocks)
         parts = [canon_section]
 
         if state_manager is not None:
             parts.append(state_manager.to_wire_section())
+
+        if evidence_pack is not None and len(evidence_pack) > 0:
+            parts.append(evidence_pack.to_wire_format())
+
+        if recent_text:
+            parts.append(f"RECENT:\n{recent_text}")
+
+        if tools_text:
+            parts.append(f"TOOLS:\n{tools_text}")
 
         return "\n\n".join(parts)
 
