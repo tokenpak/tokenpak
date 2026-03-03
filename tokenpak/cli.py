@@ -291,6 +291,8 @@ def build_parser():
     p_cal.set_defaults(func=cmd_calibrate)
 
     _build_trigger_parser(sub)
+    _build_cost_parser(sub)
+    _build_budget_parser(sub)
 
     return parser
 
@@ -396,3 +398,145 @@ def _build_trigger_parser(sub):
     p_log.set_defaults(func=cmd_trigger_log)
 
     tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)
+
+
+# ── Cost / Budget commands ────────────────────────────────────────────────────
+
+def _budget_tracker():
+    from .agent.telemetry.budget import get_budget_tracker
+    return get_budget_tracker()
+
+
+def cmd_cost(args):
+    """Show cost summary for a time period."""
+    tracker = _budget_tracker()
+    period = "monthly" if args.month else ("weekly" if args.week else "daily")
+
+    if args.by_model:
+        rows = tracker.by_model_summary(period=period)
+        if not rows:
+            print(f"No spend recorded for {period} period.")
+            return
+        print(f"{'MODEL':<30} {'REQUESTS':>9} {'INPUT':>9} {'OUTPUT':>9} {'COST':>10}")
+        print("-" * 72)
+        for r in rows:
+            print(
+                f"{(r['model'] or 'unknown'):<30} "
+                f"{r['requests']:>9} "
+                f"{r['tokens_input']:>9,} "
+                f"{r['tokens_output']:>9,} "
+                f"${r['cost_usd']:>9.4f}"
+            )
+        total = sum(r['cost_usd'] for r in rows)
+        print(f"\nTotal: ${total:.4f}")
+        return
+
+    if args.export_csv:
+        print(tracker.export_csv(period=period), end="")
+        return
+
+    total = tracker.total_spent(period)
+    label = {"daily": "Today", "weekly": "This week", "monthly": "This month"}[period]
+
+    print(f"TokenPak Cost Summary — {label}")
+    print(f"  Spent:  ${total:.4f}")
+
+    # Show budget status if configured
+    for p in ("daily", "monthly"):
+        status = tracker.get_status(p)
+        if status:
+            alert_tag = " ⚠️  ALERT" if status.alert_triggered else ""
+            print(
+                f"  {p.capitalize()} budget: ${status.spent_usd:.4f} / "
+                f"${status.limit_usd:.2f} ({status.percent_used:.1f}%){alert_tag}"
+            )
+
+
+def cmd_budget_set(args):
+    from .agent.telemetry.budget import load_budget_config, save_budget_config
+    cfg = load_budget_config()
+    changed = False
+    if args.daily is not None:
+        cfg.daily_limit_usd = args.daily
+        changed = True
+    if args.monthly is not None:
+        cfg.monthly_limit_usd = args.monthly
+        changed = True
+    if args.alert_at is not None:
+        cfg.alert_at_percent = args.alert_at
+        changed = True
+    if args.hard_stop is not None:
+        cfg.hard_stop = args.hard_stop
+        changed = True
+    if changed:
+        save_budget_config(cfg)
+        print("Budget config saved.")
+    print(f"  Daily limit:   {f'${cfg.daily_limit_usd:.2f}' if cfg.daily_limit_usd else 'not set'}")
+    print(f"  Monthly limit: {f'${cfg.monthly_limit_usd:.2f}' if cfg.monthly_limit_usd else 'not set'}")
+    print(f"  Alert at:      {cfg.alert_at_percent:.0f}%")
+    print(f"  Hard stop:     {'yes' if cfg.hard_stop else 'no'}")
+
+
+def cmd_budget_status(args):
+    tracker = _budget_tracker()
+    printed = False
+    for period in ("daily", "monthly"):
+        status = tracker.get_status(period)
+        if status:
+            bar_width = 30
+            filled = int(bar_width * min(status.percent_used, 100) / 100)
+            bar = "█" * filled + "░" * (bar_width - filled)
+            alert_tag = " ⚠️  ALERT" if status.alert_triggered else ""
+            print(f"{period.capitalize()} budget{alert_tag}")
+            print(f"  [{bar}] {status.percent_used:.1f}%")
+            print(f"  ${status.spent_usd:.4f} / ${status.limit_usd:.2f} (${status.remaining_usd:.4f} remaining)")
+            printed = True
+    if not printed:
+        print("No budget limits configured. Use `tokenpak budget set --daily N` to set one.")
+
+
+def cmd_budget_history(args):
+    tracker = _budget_tracker()
+    period = "monthly" if args.month else "daily"
+    rows = tracker.list_spend(limit=args.limit, period=period)
+    if not rows:
+        print("No spend records found.")
+        return
+    print(f"{'TIMESTAMP':<22} {'MODEL':<25} {'COST':>10} {'TOKENS_IN':>10} {'TOKENS_OUT':>10}")
+    print("-" * 82)
+    for r in rows:
+        print(
+            f"{r['timestamp'][:19]:<22} "
+            f"{(r['model'] or 'unknown'):<25} "
+            f"${r['cost_usd']:>9.4f} "
+            f"{r['tokens_input']:>10,} "
+            f"{r['tokens_output']:>10,}"
+        )
+
+
+def _build_cost_parser(sub):
+    p_cost = sub.add_parser("cost", help="Show API cost summary")
+    p_cost.add_argument("--week", action="store_true", help="Show weekly totals")
+    p_cost.add_argument("--month", action="store_true", help="Show monthly totals")
+    p_cost.add_argument("--by-model", action="store_true", help="Break down by model")
+    p_cost.add_argument("--export-csv", action="store_true", help="Export as CSV")
+    p_cost.set_defaults(func=cmd_cost)
+
+
+def _build_budget_parser(sub):
+    p_budget = sub.add_parser("budget", help="Manage budget limits")
+    bsub = p_budget.add_subparsers(dest="budget_cmd", required=True)
+
+    p_set = bsub.add_parser("set", help="Configure budget limits")
+    p_set.add_argument("--daily", type=float, metavar="USD", help="Daily spend limit in USD")
+    p_set.add_argument("--monthly", type=float, metavar="USD", help="Monthly spend limit in USD")
+    p_set.add_argument("--alert-at", type=float, metavar="PCT", help="Alert threshold %% (default 80)")
+    p_set.add_argument("--hard-stop", action="store_true", default=None, help="Block requests when limit exceeded")
+    p_set.set_defaults(func=cmd_budget_set)
+
+    bsub.add_parser("status", help="Show current budget status").set_defaults(func=cmd_budget_status)
+
+    p_hist = bsub.add_parser("history", help="Show recent spend records")
+    p_hist.add_argument("--limit", type=int, default=20)
+    p_hist.add_argument("--month", action="store_true", help="Show this month")
+    p_hist.set_defaults(func=cmd_budget_history)
