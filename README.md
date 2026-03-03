@@ -1,50 +1,251 @@
 # TokenPak
 
-TokenPak is a universal content compiler for LLM context optimization.
+> **Zero-token operations. Maximum context efficiency.**
 
-## Features (v0.1.0)
+TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
-- Directory indexing with file-type detection
-- SQLite-backed block registry with versioning + change detection
-- Processors for text, code, and structured data
-- Quadratic budget allocation
-- TOKPAK wire format output
-- CLI for indexing/search/stats
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Install
+---
+
+## What It Does
+
+- **Compresses context** before it hits the API — fewer tokens, lower cost
+- **Routes requests** to the right model (fast/cheap vs. powerful/expensive)
+- **Tracks costs** locally — per model, per session, per agent
+- **Indexes your vault** for instant semantic search without an LLM call
+- **80%+ of operations cost zero tokens** — CLI-first, deterministic
+
+## Core Principles
+
+| Principle | What it means |
+|-----------|---------------|
+| **Zero Data** | We never see your prompts, code, or responses |
+| **Zero Credentials** | Pure passthrough proxy — no API keys stored |
+| **Zero Lock-in** | Downgrade anytime; keep all your data |
+| **Zero Tokens for Ops** | Status, search, cost reports — all free |
+
+---
+
+## Quick Start
+
+### Install
 
 ```bash
+pip install tokenpak
+# or from source:
+git clone https://github.com/tokenpak/tokenpak && cd tokenpak
 pip install -e .
 ```
 
-## Usage
+### Configure your LLM client
 
-### Index a directory
+Point your existing tool (Claude Code, OpenAI client, etc.) at the TokenPak proxy:
+
+```bash
+# Start the proxy
+tokenpak serve --port 8766
+
+# In your LLM client, set base URL to:
+# http://localhost:8766
+```
+
+Your credentials pass through unchanged. TokenPak never stores them.
+
+### Index your vault (optional, zero tokens)
 
 ```bash
 tokenpak index ~/vault
+tokenpak vault search "compression benchmark"
 ```
 
-### Search indexed content and emit wire format
+### Check costs
 
 ```bash
-tokenpak search "token compression benchmark" --budget 8000 --top-k 8
+tokenpak cost --week
+tokenpak cost --by-model
 ```
 
-### Show stats
+---
+
+## CLI Reference
+
+### Status & Health
 
 ```bash
-tokenpak stats
+tokenpak status [--full]               # proxy health
+tokenpak health                        # full system health
+tokenpak logs [--errors] [--today]     # proxy logs
 ```
 
-### Serve (proxy passthrough to existing OpenClaw .ocp proxy)
+### Cost & Telemetry
 
 ```bash
-tokenpak serve --port 8766
+tokenpak cost [--week|--month|--by-model|--by-agent|--export csv]
+tokenpak budget set --monthly 50       # set $50/month budget
+tokenpak budget alert --at 80%         # alert at 80% usage
+tokenpak savings [--lifetime]
 ```
 
-## Notes
+### Compression
 
-- Registry DB default: `.tokenpak/registry.db`
-- Uses stdlib only by default.
-- Optional: install `tiktoken` for accurate token counting.
+```bash
+tokenpak demo [--verbose]              # see pipeline on real data
+tokenpak compress <file> [--diff]      # dry-run compression
+tokenpak trace [--id <id>]             # trace a pipeline run
+```
+
+### Vault & Indexing
+
+```bash
+tokenpak index [<path>]                # index a directory
+tokenpak index --watch                 # auto re-index on changes
+tokenpak index --status                # check index health
+tokenpak vault search "query"          # semantic search
+tokenpak vault blocks [--stale]        # inspect content blocks
+```
+
+### Model Routing
+
+```bash
+tokenpak route set ".*test.*" gpt-4o-mini   # route test queries to cheaper model
+tokenpak route test "write unit tests"       # preview routing decision
+tokenpak route history                        # recent routing decisions
+```
+
+### Agent Management
+
+```bash
+tokenpak agent list                    # list registered agents
+tokenpak agent register <name>         # register an agent
+tokenpak agent tasks --queue           # pending tasks
+tokenpak agent lock <file>             # acquire a file lock
+```
+
+### Event Triggers
+
+```bash
+tokenpak trigger list
+tokenpak trigger add file-change "*.py" "bash lint.sh"
+tokenpak trigger add cost-alert 80% "notify"
+tokenpak trigger log
+```
+
+### A/B Testing
+
+```bash
+tokenpak ab create my-test --variant-a "compress aggressive" --variant-b "compress minimal"
+tokenpak ab status my-test
+tokenpak ab apply my-test
+tokenpak ab presets
+```
+
+### Replay & Debug
+
+```bash
+tokenpak replay list
+tokenpak replay <id> --no-compress
+tokenpak replay <id> --model gpt-4o-mini
+tokenpak replay <id> --diff
+tokenpak debug on [--requests 50]
+tokenpak debug off
+```
+
+### Templates
+
+```bash
+tokenpak template list
+tokenpak template create my-tpl
+tokenpak template use my-tpl
+tokenpak template export my-tpl
+```
+
+### Configuration & Maintenance
+
+```bash
+tokenpak config set compression.enabled true
+tokenpak config get compression.level
+tokenpak config export
+tokenpak prune --older-than 30d
+```
+
+---
+
+## Directory Structure
+
+```
+tokenpak/
+├── agent/
+│   ├── agentic/          # multi-agent coordination
+│   ├── cli/              # entry point + command modules
+│   ├── compression/      # pipeline, segmentizer, recipes
+│   ├── proxy/            # request routing + streaming
+│   ├── telemetry/        # cost tracking, storage, demo
+│   └── vault/            # indexer, ast_parser, symbols, blocks
+├── recipes/
+│   └── oss/              # built-in compression recipes (YAML)
+├── tests/
+└── pyproject.toml
+```
+
+---
+
+## How Compression Works
+
+TokenPak intercepts requests before they reach the LLM and applies a multi-stage pipeline:
+
+1. **Segmentize** — split content into semantic blocks
+2. **Fingerprint** — identify block type (code, docs, config…)
+3. **Apply recipe** — use declarative rules to compress that block type
+4. **Budget** — allocate tokens using a quadratic priority algorithm
+5. **Assemble** — reconstruct the compressed prompt
+
+Result: same semantic content, 20–60% fewer tokens.
+
+---
+
+## Configuration
+
+Default config: `~/.tokenpak/config.json`
+
+```json
+{
+  "proxy": {
+    "port": 8766,
+    "passthrough_url": "https://api.openai.com"
+  },
+  "compression": {
+    "enabled": true,
+    "level": "balanced"
+  },
+  "budget": {
+    "monthly_usd": null,
+    "alert_at_pct": 80
+  },
+  "vault": {
+    "db_path": ".tokenpak/registry.db",
+    "watch": false
+  }
+}
+```
+
+---
+
+## Requirements
+
+- Python 3.11+
+- No external dependencies for core functionality
+- Optional: `tiktoken` for accurate token counting
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)
+
+---
+
+## Contributing
+
+Issues and PRs welcome. See [ARCHITECTURE.md](ARCHITECTURE.md) for system design.
