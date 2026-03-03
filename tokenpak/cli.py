@@ -290,6 +290,8 @@ def build_parser():
     p_cal.add_argument("--rounds", type=int, default=2)
     p_cal.set_defaults(func=cmd_calibrate)
 
+    _build_trigger_parser(sub)
+
     return parser
 
 
@@ -301,3 +303,96 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── Trigger commands ──────────────────────────────────────────────────────────
+
+def _trigger_store():
+    from .agent.triggers.store import TriggerStore
+    return TriggerStore()
+
+
+def cmd_trigger_list(args):
+    store = _trigger_store()
+    triggers = store.list()
+    if not triggers:
+        print("No triggers registered.")
+        return
+    print(f"{'ID':<10} {'ENABLED':<8} {'EVENT':<35} ACTION")
+    print("-" * 75)
+    for t in triggers:
+        enabled = "yes" if t.enabled else "no"
+        print(f"{t.id:<10} {enabled:<8} {t.event:<35} {t.action}")
+
+
+def cmd_trigger_add(args):
+    store = _trigger_store()
+    t = store.add(event=args.event, action=args.action)
+    print(f"Trigger added: id={t.id}  event={t.event}  action={t.action}")
+
+
+def cmd_trigger_remove(args):
+    store = _trigger_store()
+    if store.remove(args.id):
+        print(f"Trigger {args.id} removed.")
+    else:
+        print(f"No trigger with id={args.id}")
+
+
+def cmd_trigger_test(args):
+    """Dry-run: show which registered triggers would fire for a given event."""
+    from .agent.triggers.matcher import match_event
+    store = _trigger_store()
+    event = args.event
+    print(f"Testing event: {event}")
+    matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
+    if not matched:
+        print("  No triggers would fire.")
+    for t in matched:
+        print(f"  ✓ {t.id}  {t.event}  →  {t.action}")
+
+
+def cmd_trigger_log(args):
+    store = _trigger_store()
+    logs = store.list_logs(limit=args.limit)
+    if not logs:
+        print("No trigger log entries.")
+        return
+    for lg in logs:
+        status = "✓" if lg.exit_code == 0 else "✗"
+        print(f"{status} [{lg.fired_at[:19]}] {lg.trigger_id}  {lg.event}  →  {lg.action}")
+        if lg.output:
+            print(f"   {lg.output[:120]}")
+
+
+def cmd_trigger_daemon(args):
+    from .agent.triggers.daemon import TriggerDaemon
+    store = _trigger_store()
+    daemon = TriggerDaemon(store=store)
+    daemon.run()
+
+
+def _build_trigger_parser(sub):
+    p_trig = sub.add_parser("trigger", help="Manage event triggers")
+    tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
+
+    tsub.add_parser("list", help="List all triggers").set_defaults(func=cmd_trigger_list)
+
+    p_add = tsub.add_parser("add", help="Register a new trigger")
+    p_add.add_argument("event", help="Event pattern (e.g. file:changed:*.py, timer:5m, cost:daily>10)")
+    p_add.add_argument("action", help="Action: tokenpak sub-command or shell script path")
+    p_add.set_defaults(func=cmd_trigger_add)
+
+    p_rm = tsub.add_parser("remove", help="Remove a trigger by id")
+    p_rm.add_argument("id", help="Trigger ID")
+    p_rm.set_defaults(func=cmd_trigger_remove)
+
+    p_test = tsub.add_parser("test", help="Dry-run: show which triggers match an event")
+    p_test.add_argument("event", help="Event string to test")
+    p_test.set_defaults(func=cmd_trigger_test)
+
+    p_log = tsub.add_parser("log", help="Show recent trigger fire log")
+    p_log.add_argument("--limit", type=int, default=20)
+    p_log.set_defaults(func=cmd_trigger_log)
+
+    tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)
