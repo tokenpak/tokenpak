@@ -292,6 +292,14 @@ def main():
     pps.add_parser("status")
     pps.add_parser("restart")
 
+    # debug subcommand
+    dbgp = sub.add_parser("debug")
+    dbg_sub = dbgp.add_subparsers(dest="debug_cmd")
+    dbg_on = dbg_sub.add_parser("on")
+    dbg_on.add_argument("--requests", dest="debug_requests", type=int, default=None)
+    dbg_sub.add_parser("off")
+    dbg_sub.add_parser("status")
+
     args, _ = p.parse_known_args()
 
     if args.cmd == "proxy":
@@ -306,6 +314,7 @@ def main():
             "last": cmd_last,
             "logs": cmd_logs,
             "help": cmd_help,
+            "debug": _dispatch_debug,
         }
         fn = dispatch.get(args.cmd)
         if fn:
@@ -398,3 +407,8 @@ def cmd_last(args):
     if session and not no_session:
         requests = session.get("session_requests", 0)
         print(f"Requests This Session:   {requests}")
+
+
+def _dispatch_debug(args) -> None:
+    from tokenpak.agent.cli.commands.debug import debug_cmd
+    debug_cmd(args)
