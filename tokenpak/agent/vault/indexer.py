@@ -1,0 +1,146 @@
+"""TokenPak Agent Vault Indexer — index local files into compressed block storage."""
+
+from __future__ import annotations
+
+import hashlib
+import time
+from pathlib import Path
+from typing import Callable, Optional
+
+from tokenpak.walker import walk_directory
+from tokenpak.processors import get_processor
+from tokenpak.tokens import count_tokens
+
+from .blocks import BlockStore, BlockRecord, get_block_store
+from .symbols import SymbolTable
+
+
+class VaultIndexer:
+    """Index a directory of code and doc files into compressed block storage.
+
+    Usage::
+
+        indexer = VaultIndexer()
+        results = indexer.index_directory("~/projects/myapp")
+        print(f"Indexed {results['files_indexed']} files")
+
+        # Search indexed content
+        blocks = indexer.search("authentication middleware")
+    """
+
+    def __init__(
+        self,
+        block_store: Optional[BlockStore] = None,
+        symbol_table: Optional[SymbolTable] = None,
+    ):
+        self.blocks = block_store or get_block_store()
+        self.symbols = symbol_table or SymbolTable()
+
+    def index_file(self, path: str, content: Optional[str] = None) -> Optional[BlockRecord]:
+        """Index a single file. Reads from disk if content not provided."""
+        file_path = Path(path)
+        if not file_path.exists() and content is None:
+            return None
+
+        if content is None:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                return None
+
+        # Detect file type via extension
+        from tokenpak.walker import FILE_TYPES
+        ext = file_path.suffix.lower()
+        file_type = FILE_TYPES.get(ext)
+        if file_type not in ("code", "text", "data"):
+            return None
+
+        # Compress
+        processor = get_processor(file_type)
+        if processor is None:
+            return None
+
+        compressed = processor.process(content, path)
+        raw_tokens = count_tokens(content)
+        compressed_tokens = count_tokens(compressed)
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        block_id = f"{path}#{content_hash[:8]}"
+
+        record = BlockRecord(
+            block_id=block_id,
+            path=path,
+            content_hash=content_hash,
+            file_type=file_type,
+            raw_tokens=raw_tokens,
+            compressed_tokens=compressed_tokens,
+            compressed_content=compressed,
+        )
+        self.blocks.save(record)
+
+        # Index symbols for code files
+        if file_type == "code":
+            self.symbols.index_file(path, content)
+
+        return record
+
+    def index_directory(
+        self,
+        root: str,
+        on_progress: Optional[Callable[[str], None]] = None,
+    ) -> dict:
+        """Walk and index all supported files under root.
+
+        Returns a summary dict::
+
+            {
+                "files_found": 42,
+                "files_indexed": 40,
+                "files_skipped": 2,
+                "tokens_raw": 180000,
+                "tokens_compressed": 95000,
+                "tokens_saved": 85000,
+                "duration_ms": 1234,
+            }
+        """
+        start = time.time()
+        files = walk_directory(root)
+
+        indexed = skipped = raw_total = compressed_total = 0
+
+        for path, _file_type, _size in files:
+            record = self.index_file(path)
+            if record:
+                indexed += 1
+                raw_total += record.raw_tokens
+                compressed_total += record.compressed_tokens
+                if on_progress:
+                    on_progress(path)
+            else:
+                skipped += 1
+
+        duration_ms = int((time.time() - start) * 1000)
+
+        return {
+            "files_found": len(files),
+            "files_indexed": indexed,
+            "files_skipped": skipped,
+            "tokens_raw": raw_total,
+            "tokens_compressed": compressed_total,
+            "tokens_saved": max(0, raw_total - compressed_total),
+            "duration_ms": duration_ms,
+        }
+
+    def search(self, query: str, top_k: int = 10) -> list[BlockRecord]:
+        """Search indexed blocks by keyword."""
+        return self.blocks.search(query, top_k=top_k)
+
+    def lookup_symbol(self, name: str):
+        """Look up a symbol by exact name."""
+        return self.symbols.lookup(name)
+
+    def stats(self) -> dict:
+        """Return indexer stats."""
+        return {
+            **self.blocks.stats(),
+            "total_symbols": len(self.symbols),
+        }
