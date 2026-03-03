@@ -266,6 +266,17 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate workflow subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "workflow":
+        try:
+            from tokenpak.agent.cli.commands.workflow import workflow_cmd
+            sys.argv = sys.argv[1:]
+            workflow_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"workflow command not available: {e}")
+            sys.exit(1)
+        return
+
     p = argparse.ArgumentParser(prog="tokenpak", add_help=False)
     p.add_argument("--verbose", "-v", action="store_true")
     p.add_argument("--raw", action="store_true")

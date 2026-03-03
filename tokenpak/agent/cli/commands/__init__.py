@@ -15,4 +15,5 @@ __all__ = [
     "maintenance",
     "license",
     "last",
+    "workflow",
 ]
