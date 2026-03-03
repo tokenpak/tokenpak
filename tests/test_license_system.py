@@ -119,9 +119,12 @@ class TestRSACrypto:
     def test_tampered_signature_rejected(self, private_pem, public_pem):
         payload = _make_payload("enterprise")
         token = sign_license(payload, private_pem)
-        # flip last char of signature
+        # flip a mid-signature char (not the last — base64 padding makes last char's
+        # lower 4 bits irrelevant when there are 2 padding '=' bytes)
         parts = token.split(".")
-        bad_sig = parts[1][:-1] + ("A" if parts[1][-1] != "A" else "B")
+        mid = len(parts[1]) // 2
+        flipped = "A" if parts[1][mid] != "A" else "B"
+        bad_sig = parts[1][:mid] + flipped + parts[1][mid + 1:]
         bad_token = parts[0] + "." + bad_sig
         with pytest.raises(ValueError, match="signature invalid"):
             verify_license(bad_token, public_pem)
