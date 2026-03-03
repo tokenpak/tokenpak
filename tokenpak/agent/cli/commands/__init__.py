@@ -14,4 +14,5 @@ __all__ = [
     "config",
     "maintenance",
     "license",
+    "last",
 ]

@@ -275,6 +275,12 @@ def main():
     for c in ["status", "version", "config", "reset"]:
         sub.add_parser(c)
 
+    # Special argument handling for 'last' command
+    lastp = sub.add_parser("last")
+    lastp.add_argument("--oneline", action="store_true")
+    lastp.add_argument("--no-session", action="store_true")
+
+
     lp = sub.add_parser("logs")
     lp.add_argument("lines", nargs="?", type=int, default=30)
 
@@ -297,6 +303,7 @@ def main():
             "version": cmd_version,
             "config": cmd_config,
             "reset": cmd_reset,
+            "last": cmd_last,
             "logs": cmd_logs,
             "help": cmd_help,
         }
@@ -312,3 +319,82 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def cmd_last(args):
+    """Show last request stats."""
+    from datetime import datetime
+    
+    oneline = getattr(args, "oneline", False)
+    no_session = getattr(args, "no_session", False)
+    raw = getattr(args, "raw", False)
+    
+    d = proxy_get("/stats/last") or proxy_err()
+    
+    if raw:
+        print(json.dumps(d, indent=2))
+        return
+    
+    request = d.get("request")
+    session = d.get("session", {})
+    
+    if not request:
+        print("⚠ No requests captured yet")
+        return
+    
+    tokens_saved = request.get("tokens_saved", 0)
+    percent_saved = request.get("percent_saved", 0)
+    cost_saved = request.get("cost_saved", 0)
+    request_id = request.get("request_id", "unknown")
+    timestamp = request.get("timestamp", "")
+    
+    if oneline:
+        # Format: ⚡ TokenPak: -312 tokens (18%) | $0.003 saved | Session: $1.24 total
+        if tokens_saved == 0:
+            footer = "⚡ TokenPak: 0 tokens saved"
+        else:
+            footer = f"⚡ TokenPak: -{tokens_saved:,} tokens ({percent_saved:.0f}%) | ${cost_saved:.3f} saved"
+        
+        if not no_session and session:
+            session_total = session.get("session_total_cost_saved", 0)
+            footer += f" | Session: ${session_total:.2f} total"
+        
+        print(footer)
+        return
+    
+    # Full format
+    print(header("Last Request"))
+    print()
+    print(f"Request ID:              {request_id}")
+    if timestamp:
+        try:
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            print(f"Time:                    {dt.strftime('%H:%M:%S')}")
+        except:
+            print(f"Time:                    {timestamp}")
+    print()
+    
+    # Tokens section
+    input_raw = request.get("input_tokens_raw", 0)
+    input_sent = request.get("input_tokens_sent", 0)
+    
+    print("Tokens:")
+    print(f"  Raw Input:             {input_raw:,}")
+    print(f"  Sent:                  {input_sent:,}")
+    print(f"  Saved:                 {tokens_saved:,} ({percent_saved:.1f}%)")
+    print()
+    
+    # Cost section
+    print("Cost:")
+    print(f"  This Request:          ${cost_saved:.3f} saved")
+    
+    if session:
+        session_total = session.get("session_total_cost_saved", 0)
+        print(f"  Session Total:         ${session_total:.2f} saved")
+    
+    print()
+    
+    # Session stats
+    if session and not no_session:
+        requests = session.get("session_requests", 0)
+        print(f"Requests This Session:   {requests}")

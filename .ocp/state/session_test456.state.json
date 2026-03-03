@@ -1,0 +1,11 @@
+{
+  "goal": "Test OCP",
+  "constraints": [],
+  "current_task": "Validate STATE_JSON",
+  "done": [
+    "Set up test env"
+  ],
+  "open": [],
+  "next": [],
+  "defs": {}
+}

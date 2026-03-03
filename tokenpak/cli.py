@@ -314,6 +314,52 @@ def build_parser():
     p_cal.add_argument("--rounds", type=int, default=2)
     p_cal.set_defaults(func=cmd_calibrate)
 
+    # TRIGGER COMMANDS
+    p_trigger = sub.add_parser("trigger", help="Manage event triggers")
+    trigger_sub = p_trigger.add_subparsers(dest="trigger_command", required=True)
+
+    # trigger add
+    p_trig_add = trigger_sub.add_parser("add", help="Add a new trigger")
+    p_trig_add.add_argument("event", help="Event type (file:changed, git:push, cost:threshold, agent:finished)")
+    p_trig_add.add_argument("pattern", help="Pattern to match (glob for files, * for any)")
+    p_trig_add.add_argument("action", help="CLI command to execute")
+    p_trig_add.add_argument("--description", "-d", help="Optional description")
+    p_trig_add.set_defaults(func=cmd_trigger_add)
+
+    # trigger list
+    p_trig_list = trigger_sub.add_parser("list", help="List all triggers")
+    p_trig_list.add_argument("--event", help="Filter by event type")
+    p_trig_list.set_defaults(func=cmd_trigger_list)
+
+    # trigger remove
+    p_trig_rm = trigger_sub.add_parser("remove", help="Remove a trigger")
+    p_trig_rm.add_argument("id", help="Trigger ID to remove")
+    p_trig_rm.set_defaults(func=cmd_trigger_remove)
+
+    # trigger test
+    p_trig_test = trigger_sub.add_parser("test", help="Dry-run: show what would fire")
+    p_trig_test.add_argument("event", help="Event type to test")
+    p_trig_test.add_argument("--data", help="Event data (e.g., file path)")
+    p_trig_test.set_defaults(func=cmd_trigger_test)
+
+    # trigger log
+    p_trig_log = trigger_sub.add_parser("log", help="Show recent trigger activations")
+    p_trig_log.add_argument("--limit", type=int, default=20, help="Max entries to show")
+    p_trig_log.add_argument("--trigger", help="Filter by trigger ID")
+    p_trig_log.set_defaults(func=cmd_trigger_log)
+
+    # trigger fire (manual event firing)
+    p_trig_fire = trigger_sub.add_parser("fire", help="Manually fire an event")
+    p_trig_fire.add_argument("event", help="Event type")
+    p_trig_fire.add_argument("data", help="Event data")
+    p_trig_fire.add_argument("--dry-run", action="store_true", help="Do not execute actions")
+    p_trig_fire.set_defaults(func=cmd_trigger_fire)
+
+    # trigger watch (start file watcher)
+    p_trig_watch = trigger_sub.add_parser("watch", help="Start file watcher")
+    p_trig_watch.add_argument("paths", nargs="*", help="Paths to watch (default: .)")
+    p_trig_watch.set_defaults(func=cmd_trigger_watch)
+
     return parser
 
 
@@ -325,3 +371,179 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ============================================================================
+# TRIGGER COMMANDS (Event-driven automation)
+# ============================================================================
+
+def cmd_trigger_add(args):
+    """Add a new event trigger."""
+    from .agent.macros.hooks import add_trigger, EventType
+    
+    # Validate event type early
+    try:
+        EventType.from_string(args.event)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
+    
+    trigger = add_trigger(
+        event_type=args.event,
+        pattern=args.pattern,
+        action=args.action,
+        description=getattr(args, 'description', '') or ''
+    )
+    
+    print(f"✓ Trigger created: {trigger.id}")
+    print(f"  Event:   {trigger.event_type}")
+    print(f"  Pattern: {trigger.pattern}")
+    print(f"  Action:  {trigger.action}")
+
+
+def cmd_trigger_list(args):
+    """List all triggers."""
+    from .agent.macros.hooks import list_triggers
+    
+    triggers = list_triggers(event_type=getattr(args, 'event', None))
+    
+    if not triggers:
+        print("No triggers registered.")
+        return
+    
+    print(f"{'ID':<10} {'EVENT':<18} {'PATTERN':<25} {'ACTION':<30} {'ENABLED'}")
+    print("-" * 95)
+    
+    for t in triggers:
+        enabled = "✓" if t.enabled else "✗"
+        pattern = t.pattern[:23] + ".." if len(t.pattern) > 25 else t.pattern
+        action = t.action[:28] + ".." if len(t.action) > 30 else t.action
+        print(f"{t.id:<10} {t.event_type:<18} {pattern:<25} {action:<30} {enabled}")
+
+
+def cmd_trigger_remove(args):
+    """Remove a trigger."""
+    from .agent.macros.hooks import remove_trigger, _get_registry
+    
+    trigger = _get_registry().get(args.id)
+    if not trigger:
+        print(f"Error: Trigger '{args.id}' not found.")
+        return
+    
+    if remove_trigger(args.id):
+        print(f"✓ Trigger '{args.id}' removed.")
+    else:
+        print(f"Error: Failed to remove trigger '{args.id}'.")
+
+
+def cmd_trigger_test(args):
+    """Dry-run: show what triggers would fire for an event."""
+    from .agent.macros.hooks import test_trigger, EventType
+    
+    # Validate event type
+    try:
+        EventType.from_string(args.event)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
+    
+    event_data = getattr(args, 'data', '*') or '*'
+    results = test_trigger(args.event, event_data)
+    
+    if not results:
+        print(f"No triggers would fire for event '{args.event}' with data '{event_data}'.")
+        return
+    
+    print(f"Triggers that would fire for '{args.event}' ({event_data}):")
+    print("-" * 60)
+    
+    for r in results:
+        print(f"  [{r['id']}] {r['pattern']}")
+        print(f"    → {r['action']}")
+        print()
+
+
+def cmd_trigger_log(args):
+    """Show recent trigger activations."""
+    from .agent.macros.hooks import get_trigger_log
+    
+    limit = getattr(args, 'limit', 20) or 20
+    trigger_id = getattr(args, 'trigger', None)
+    
+    entries = get_trigger_log(limit=limit, trigger_id=trigger_id)
+    
+    if not entries:
+        print("No trigger activations logged.")
+        return
+    
+    for entry in entries:
+        status = "✓" if entry.success else "✗"
+        dry = " [dry-run]" if entry.dry_run else ""
+        print(f"{status} {entry.timestamp[:19]} [{entry.trigger_id}]{dry}")
+        print(f"   Event: {entry.event_type} → {entry.event_data[:50]}")
+        print(f"   Action: {entry.action[:60]}")
+        if entry.error:
+            print(f"   Error: {entry.error[:80]}")
+        print()
+
+
+def cmd_trigger_fire(args):
+    """Manually fire an event (for testing)."""
+    from .agent.macros.hooks import fire_event, EventType
+    
+    # Validate event type
+    try:
+        EventType.from_string(args.event)
+    except ValueError as e:
+        print(f"Error: {e}")
+        return
+    
+    dry_run = getattr(args, 'dry_run', False)
+    entries = fire_event(args.event, args.data, dry_run=dry_run)
+    
+    if not entries:
+        print(f"No triggers matched event '{args.event}' with data '{args.data}'.")
+        return
+    
+    mode = "[DRY-RUN] " if dry_run else ""
+    print(f"{mode}Fired {len(entries)} trigger(s):")
+    
+    for entry in entries:
+        status = "✓" if entry.success else "✗"
+        print(f"  {status} [{entry.trigger_id}] {entry.action}")
+        if entry.output:
+            for line in entry.output.strip().split('\n')[:5]:
+                print(f"      {line}")
+        if entry.error:
+            print(f"      Error: {entry.error[:80]}")
+
+
+def cmd_trigger_watch(args):
+    """Start file watcher for file:changed events."""
+    from .agent.macros.hooks import start_file_watcher, stop_file_watcher, is_file_watcher_running
+    import signal
+    
+    paths = args.paths if args.paths else ["."]
+    
+    if not start_file_watcher(paths):
+        if is_file_watcher_running():
+            print("File watcher already running.")
+        else:
+            print("Error: Could not start file watcher. Is 'watchdog' installed?")
+            print("  pip install watchdog")
+        return
+    
+    print(f"File watcher started. Watching: {', '.join(paths)}")
+    print("Press Ctrl+C to stop.")
+    
+    def handle_sigint(sig, frame):
+        stop_file_watcher()
+        print("\nFile watcher stopped.")
+        exit(0)
+    
+    signal.signal(signal.SIGINT, handle_sigint)
+    
+    # Block forever
+    import time
+    while True:
+        time.sleep(1)
