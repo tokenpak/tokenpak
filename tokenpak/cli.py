@@ -293,6 +293,7 @@ def build_parser():
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
     _build_budget_parser(sub)
+    _build_agent_parser(sub)
 
     return parser
 
@@ -374,6 +375,96 @@ def cmd_trigger_daemon(args):
     daemon.run()
 
 
+
+def cmd_trigger_fire(args):
+    """Fire an event string immediately — executes all matching enabled triggers."""
+    import subprocess
+    from .agent.triggers.matcher import match_event
+    store = _trigger_store()
+    event = args.event
+    matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
+    if not matched:
+        print(f"No triggers matched event: {event}")
+        return
+    print(f"Firing event: {event} ({len(matched)} trigger(s))")
+    for t in matched:
+        print(f"  -> {t.id}  {t.action}")
+        cmd = t.action
+        if not cmd.startswith("/") and not cmd.startswith("./") and not cmd.startswith("~"):
+            cmd = f"tokenpak {cmd}"
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            output = (result.stdout + result.stderr).strip()
+            store.log_fire(t, result.returncode, output)
+            if output:
+                print(f"     {output[:200]}")
+        except subprocess.TimeoutExpired:
+            store.log_fire(t, -1, "timeout")
+            print("     [timeout]")
+
+
+_GIT_POST_COMMIT = """#!/bin/sh
+# Installed by: tokenpak trigger hook install
+tokenpak trigger fire git:commit
+"""
+
+_GIT_POST_PUSH = """#!/bin/sh
+# Installed by: tokenpak trigger hook install
+tokenpak trigger fire git:push
+"""
+
+
+def cmd_trigger_hook(args):
+    """Install or uninstall git hooks that emit trigger events."""
+    import stat as _stat
+    from pathlib import Path as _Path
+
+    subcmd = args.hook_cmd
+    git_dir = _Path(".git")
+    if not git_dir.exists():
+        print("Not in a git repository (no .git directory found).")
+        return
+
+    hooks_dir = git_dir / "hooks"
+    hooks_dir.mkdir(exist_ok=True)
+
+    hooks = {
+        "post-commit": _GIT_POST_COMMIT,
+        "post-push": _GIT_POST_PUSH,
+    }
+
+    if subcmd == "install":
+        for name, body in hooks.items():
+            hook_path = hooks_dir / name
+            existing = hook_path.read_text() if hook_path.exists() else ""
+            if "tokenpak trigger fire" in existing:
+                print(f"  {name}: already installed (skip)")
+            elif existing.strip():
+                hook_path.write_text(existing.rstrip() + "\n\n" + body.strip() + "\n")
+                print(f"  {name}: appended to existing hook")
+            else:
+                hook_path.write_text(body)
+                hook_path.chmod(hook_path.stat().st_mode | _stat.S_IEXEC | _stat.S_IXGRP | _stat.S_IXOTH)
+                print(f"  {name}: installed")
+        print("Git hooks installed. Events: git:commit, git:push")
+
+    elif subcmd == "uninstall":
+        for name in hooks:
+            hook_path = hooks_dir / name
+            if not hook_path.exists():
+                continue
+            body = hook_path.read_text()
+            lines = body.splitlines(keepends=True)
+            filtered = [l for l in lines if "tokenpak trigger fire" not in l and "Installed by: tokenpak" not in l]
+            new_body = "".join(filtered).strip()
+            if new_body:
+                hook_path.write_text(new_body + "\n")
+            else:
+                hook_path.unlink()
+            print(f"  {name}: uninstalled")
+        print("Git hooks removed.")
+
+
 def _build_trigger_parser(sub):
     p_trig = sub.add_parser("trigger", help="Manage event triggers")
     tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
@@ -398,6 +489,15 @@ def _build_trigger_parser(sub):
     p_log.set_defaults(func=cmd_trigger_log)
 
     tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)
+
+    p_fire = tsub.add_parser("fire", help="Fire an event string and execute matching triggers")
+    p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:cali)")
+    p_fire.set_defaults(func=cmd_trigger_fire)
+
+    p_hook = tsub.add_parser("hook", help="Install/uninstall git hooks for trigger events")
+    hsub = p_hook.add_subparsers(dest="hook_cmd", required=True)
+    hsub.add_parser("install", help="Install post-commit and post-push git hooks").set_defaults(func=cmd_trigger_hook)
+    hsub.add_parser("uninstall", help="Remove tokenpak git hooks").set_defaults(func=cmd_trigger_hook)
 
 
 # ── Cost / Budget commands ────────────────────────────────────────────────────
@@ -540,3 +640,68 @@ def _build_budget_parser(sub):
     p_hist.add_argument("--limit", type=int, default=20)
     p_hist.add_argument("--month", action="store_true", help="Show this month")
     p_hist.set_defaults(func=cmd_budget_history)
+
+
+# ── agent lock/unlock/locks commands ─────────────────────────────────────────
+
+def cmd_agent_lock(args):
+    from .agent.agentic.locks import FileLockManager, LockConflictError
+    mgr = FileLockManager(agent_id=args.agent or None)
+    try:
+        record = mgr.claim(args.path, timeout_s=args.timeout)
+        print(f"✅ Lock acquired: {record['path']}")
+        print(f"   Agent:   {record['agent']}")
+        print(f"   Expires: {record['expires']:.0f} (in {record['expires'] - __import__('time').time():.0f}s)")
+    except LockConflictError as e:
+        print(f"❌ {e}")
+        raise SystemExit(1)
+
+
+def cmd_agent_unlock(args):
+    from .agent.agentic.locks import FileLockManager
+    mgr = FileLockManager(agent_id=args.agent or None)
+    released = mgr.release(args.path)
+    if released:
+        print(f"✅ Lock released: {args.path}")
+    else:
+        print(f"⚠️  No lock held by this agent on: {args.path}")
+
+
+def cmd_agent_locks(args):
+    from .agent.agentic.locks import FileLockManager
+    import time
+    mgr = FileLockManager(agent_id=args.agent or None)
+    mgr.prune_expired()
+    locks = mgr.locks()
+    if not locks:
+        print("No active locks.")
+        return
+    print(f"{'Path':<50} {'Agent':<15} {'Expires In':>12}")
+    print("-" * 80)
+    now = time.time()
+    for lock in locks:
+        remaining = max(0, lock.get("expires", 0) - now)
+        path = lock.get("path", "?")
+        if len(path) > 49:
+            path = "…" + path[-48:]
+        print(f"{path:<50} {lock.get('agent','?'):<15} {remaining:>10.0f}s")
+
+
+def _build_agent_parser(sub):
+    p_agent = sub.add_parser("agent", help="Agent coordination (locks, retry)")
+    asub = p_agent.add_subparsers(dest="agent_cmd", required=True)
+
+    p_lock = asub.add_parser("lock", help="Claim a file lock")
+    p_lock.add_argument("path", help="File path to lock")
+    p_lock.add_argument("--timeout", type=int, default=600, metavar="SECONDS", help="Lock TTL in seconds (default 600)")
+    p_lock.add_argument("--agent", default=None, help="Agent id override")
+    p_lock.set_defaults(func=cmd_agent_lock)
+
+    p_unlock = asub.add_parser("unlock", help="Release a file lock")
+    p_unlock.add_argument("path", help="File path to unlock")
+    p_unlock.add_argument("--agent", default=None, help="Agent id override")
+    p_unlock.set_defaults(func=cmd_agent_unlock)
+
+    p_locks = asub.add_parser("locks", help="List all active locks")
+    p_locks.add_argument("--agent", default=None, help="Filter by agent id")
+    p_locks.set_defaults(func=cmd_agent_locks)

@@ -106,3 +106,48 @@ def test_parse_interval_invalid():
         _parse_interval_seconds("5d")
     with pytest.raises(ValueError):
         _parse_interval_seconds("abc")
+
+
+# ── Git + Agent Events ────────────────────────────────────────────────────────
+
+def test_match_git_push_exact():
+    assert match_event("git:push", "git:push")
+
+
+def test_match_git_commit_exact():
+    assert match_event("git:commit", "git:commit")
+
+
+def test_match_git_push_with_branch():
+    """git:push pattern should match git:push:<branch> events"""
+    assert match_event("git:push", "git:push:main")
+    assert match_event("git:push", "git:push:feature/x")
+
+
+def test_no_match_git_push_vs_commit():
+    assert not match_event("git:push", "git:commit")
+    assert not match_event("git:commit", "git:push")
+
+
+def test_match_agent_finished_wildcard():
+    assert match_event("agent:finished", "agent:finished:cali")
+    assert match_event("agent:finished", "agent:finished")
+
+
+def test_match_agent_finished_specific():
+    assert match_event("agent:finished:cali", "agent:finished:cali")
+    assert not match_event("agent:finished:cali", "agent:finished:trix")
+
+
+def test_match_agent_failed_wildcard():
+    assert match_event("agent:failed", "agent:failed:some-task")
+
+
+def test_match_agent_failed_specific():
+    assert match_event("agent:failed:trix", "agent:failed:trix")
+    assert not match_event("agent:failed:trix", "agent:failed:cali")
+
+
+def test_no_cross_match_finished_failed():
+    assert not match_event("agent:finished", "agent:failed:cali")
+    assert not match_event("agent:failed", "agent:finished:cali")
