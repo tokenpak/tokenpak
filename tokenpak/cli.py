@@ -1,37 +1,49 @@
-"""TokenPak CLI."""
+"""TokenPak CLI with parallel processing and optimized batch operations."""
 
 import argparse
 import hashlib
 import json
-import os
+import time
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Tuple, List
+import os
 
 from .registry import BlockRegistry, Block
 from .walker import walk_directory
-from .tokens import count_tokens, truncate_to_tokens
+from .tokens import count_tokens, truncate_to_tokens, cache_info, estimate_tokens
 from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
+from .calibration import calibrate_workers, get_recommended_workers, load_profile
 
 
-def _process_file(path: str, file_type: str, registry: BlockRegistry) -> Block | None:
+# Batch size for SQLite transactions
+BATCH_SIZE = 100
+
+
+def _process_file(args: Tuple[str, str]) -> Optional[Tuple[str, Block]]:
+    """
+    Process a single file into a block (CPU-bound, parallelizable).
+    
+    Args: (path, file_type)
+    Returns: (path, Block) or None if skipped
+    """
+    path, file_type = args
     try:
         content = Path(path).read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return None
-
+    
     if not content.strip():
         return None
-
-    if not registry.has_changed(path, content):
-        return None
-
+    
     processor = get_processor(file_type)
     if not processor:
         return None
-
+    
     compressed = processor.process(content, path)
-
+    
     block = Block(
         path=path,
         content_hash=hashlib.sha256(content.encode()).hexdigest(),
@@ -43,29 +55,123 @@ def _process_file(path: str, file_type: str, registry: BlockRegistry) -> Block |
         quality_score=1.0,
         importance=5.0,
     )
-    return registry.add_block(block)
+    return (path, content, block)
 
 
 def cmd_index(args):
+    """Index a directory with parallel processing and batch transactions."""
     registry = BlockRegistry(args.db)
-    files = walk_directory(args.directory)
-
+    files = list(walk_directory(args.directory))
+    
+    start_time = time.perf_counter()
     processed = 0
     skipped = 0
+    unchanged = 0
+    
+    workers = getattr(args, 'workers', 1) or 1
 
-    for path, file_type, _ in files:
-        b = _process_file(path, file_type, registry)
-        if b:
-            processed += 1
+    if getattr(args, 'recalibrate', False):
+        result = calibrate_workers(args.directory, max_workers=getattr(args, 'max_workers', 8), rounds=getattr(args, 'calibration_rounds', 2))
+        if "error" in result:
+            print(f"Calibration skipped: {result['error']}")
         else:
-            skipped += 1
+            print(f"Calibration complete: best_workers={result['best_workers']} on {result['sample_files']} files")
 
+    if getattr(args, 'auto_workers', False):
+        workers = get_recommended_workers(default_workers=max(1, workers), max_workers=getattr(args, 'max_workers', 8))
+        print(f"Auto workers selected: {workers}")
+    
+    if workers > 1:
+        # Parallel processing path
+        print(f"Indexing with {workers} workers...")
+        
+        # Phase 1: Parallel file processing (CPU-bound)
+        file_args = [(path, file_type) for path, file_type, _ in files]
+        results = []
+        
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_process_file, fa): fa for fa in file_args}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    results.append(result)
+                else:
+                    skipped += 1
+        
+        # Phase 2: Serial DB writes (I/O-bound, needs locking)
+        with registry.batch_transaction() as conn:
+            batch_count = 0
+            for path, content, block in results:
+                if not registry.has_changed(path, content):
+                    unchanged += 1
+                    continue
+                
+                registry.add_block_batch(block, conn)
+                processed += 1
+                batch_count += 1
+                
+                if batch_count >= BATCH_SIZE:
+                    conn.commit()
+                    conn.execute("BEGIN IMMEDIATE")
+                    batch_count = 0
+    else:
+        # Single-threaded path (original behavior)
+        with registry.batch_transaction() as conn:
+            batch_count = 0
+            
+            for path, file_type, _ in files:
+                try:
+                    content = Path(path).read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    skipped += 1
+                    continue
+                
+                if not content.strip():
+                    skipped += 1
+                    continue
+                
+                if not registry.has_changed(path, content):
+                    unchanged += 1
+                    continue
+                
+                processor = get_processor(file_type)
+                if not processor:
+                    skipped += 1
+                    continue
+                
+                compressed = processor.process(content, path)
+                
+                block = Block(
+                    path=path,
+                    content_hash=hashlib.sha256(content.encode()).hexdigest(),
+                    version=1,
+                    file_type=file_type,
+                    raw_tokens=count_tokens(content),
+                    compressed_tokens=count_tokens(compressed),
+                    compressed_content=compressed,
+                    quality_score=1.0,
+                    importance=5.0,
+                )
+                registry.add_block_batch(block, conn)
+                processed += 1
+                batch_count += 1
+                
+                if batch_count >= BATCH_SIZE:
+                    conn.commit()
+                    conn.execute("BEGIN IMMEDIATE")
+                    batch_count = 0
+    
+    elapsed = time.perf_counter() - start_time
     stats = registry.get_stats()
-    print(f"Indexed: {processed} files (skipped unchanged: {skipped})")
+    
+    print(f"Indexed: {processed} files in {elapsed:.2f}s ({processed/max(elapsed,0.001):.1f} files/sec)")
+    print(f"Skipped: {skipped} | Unchanged: {unchanged}")
+    print(f"Token cache: {cache_info()}")
     print(json.dumps(stats, indent=2))
 
 
 def cmd_search(args):
+    """Search indexed content."""
     registry = BlockRegistry(args.db)
     matches = registry.search(args.query, top_k=args.top_k)
     if not matches:
@@ -90,12 +196,12 @@ def cmd_search(args):
     for m in matches:
         ref = f"{m.path}#v{m.version}"
         max_tokens = alloc.get(ref, 200)
-        content = truncate_to_tokens(m.compressed_content, max_tokens)
+        content, token_count = truncate_to_tokens(m.compressed_content, max_tokens)
         wire_blocks.append({
             "ref": ref,
             "type": m.file_type,
             "quality": m.quality_score,
-            "tokens": count_tokens(content),
+            "tokens": token_count,
             "content": content,
         })
 
@@ -104,12 +210,15 @@ def cmd_search(args):
 
 
 def cmd_stats(args):
+    """Show registry stats."""
     registry = BlockRegistry(args.db)
-    print(json.dumps(registry.get_stats(), indent=2))
+    stats = registry.get_stats()
+    stats["token_cache"] = str(cache_info())
+    print(json.dumps(stats, indent=2))
 
 
 def cmd_serve(args):
-    # Reuse existing Cali proxy implementation if available
+    """Start monitoring proxy (if available)."""
     try:
         import sys
         proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
@@ -122,6 +231,18 @@ def cmd_serve(args):
         print("Run the existing proxy directly if needed.")
 
 
+def cmd_benchmark(args):
+    """Run latency benchmark."""
+    from .benchmark import run_benchmark
+    run_benchmark(args.directory, args.iterations, compare=args.compare)
+
+
+def cmd_calibrate(args):
+    """Run static worker calibration and save host profile."""
+    result = calibrate_workers(args.directory, max_workers=args.max_workers, rounds=args.rounds)
+    print(json.dumps(result, indent=2))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="tokenpak", description="TokenPak CLI")
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
@@ -131,6 +252,16 @@ def build_parser():
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", help="Directory to index")
     p_index.add_argument("--budget", type=int, default=8000)
+    p_index.add_argument("--workers", "-w", type=int, default=4,
+                         help="Parallel workers (default: 4)")
+    p_index.add_argument("--auto-workers", action="store_true",
+                         help="Use hybrid calibration (static baseline + dynamic adjustment)")
+    p_index.add_argument("--recalibrate", action="store_true",
+                         help="Run static calibration before indexing")
+    p_index.add_argument("--calibration-rounds", type=int, default=2,
+                         help="Calibration rounds per candidate worker count")
+    p_index.add_argument("--max-workers", type=int, default=8,
+                         help="Upper worker cap for auto/recalibration")
     p_index.set_defaults(func=cmd_index)
 
     p_search = sub.add_parser("search", help="Search indexed content")
@@ -145,6 +276,19 @@ def build_parser():
     p_serve = sub.add_parser("serve", help="Start monitoring proxy")
     p_serve.add_argument("--port", type=int, default=8766)
     p_serve.set_defaults(func=cmd_serve)
+
+    p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
+    p_bench.add_argument("directory", help="Directory to benchmark")
+    p_bench.add_argument("--iterations", type=int, default=3)
+    p_bench.add_argument("--compare", action="store_true",
+                         help="Compare baseline vs optimized")
+    p_bench.set_defaults(func=cmd_benchmark)
+
+    p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
+    p_cal.add_argument("directory", help="Directory to sample for calibration")
+    p_cal.add_argument("--max-workers", type=int, default=8)
+    p_cal.add_argument("--rounds", type=int, default=2)
+    p_cal.set_defaults(func=cmd_calibrate)
 
     return parser
 
