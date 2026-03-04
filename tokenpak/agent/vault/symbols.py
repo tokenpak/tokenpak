@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -55,7 +57,16 @@ class SymbolTable:
 
     def index_file(self, path: str, content: str) -> list[Symbol]:
         """Parse a file and add its symbols to the table. Returns new symbols."""
-        nodes: list[ParsedNode] = self._parser.parse_file(path, content)
+        ext = Path(path).suffix.lower()
+        nodes: list[ParsedNode]
+
+        if ext == ".md":
+            nodes = self._parse_markdown_headers(content)
+        elif ext in (".json", ".yaml", ".yml"):
+            nodes = self._parse_data_top_keys(path, content)
+        else:
+            nodes = self._parser.parse_file(path, content)
+
         new_symbols: list[Symbol] = []
 
         for node in nodes:
@@ -72,6 +83,62 @@ class SymbolTable:
             new_symbols.append(sym)
 
         return new_symbols
+
+    def _parse_markdown_headers(self, content: str) -> list[ParsedNode]:
+        nodes: list[ParsedNode] = []
+        for i, line in enumerate(content.splitlines(), start=1):
+            m = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+            if not m:
+                continue
+            header = m.group(2).strip()
+            nodes.append(ParsedNode(
+                kind="header",
+                name=header,
+                line_start=i,
+                line_end=i,
+                signature=line.strip(),
+            ))
+        return nodes
+
+    def _parse_data_top_keys(self, path: str, content: str) -> list[ParsedNode]:
+        ext = Path(path).suffix.lower()
+        payload = None
+
+        if ext == ".json":
+            try:
+                payload = json.loads(content)
+            except json.JSONDecodeError:
+                return []
+        else:
+            try:
+                import yaml
+                payload = yaml.safe_load(content)
+            except Exception:
+                return []
+
+        if not isinstance(payload, dict):
+            return []
+
+        nodes: list[ParsedNode] = []
+        lines = content.splitlines()
+        for key in payload.keys():
+            line_no = self._find_key_line(lines, str(key))
+            nodes.append(ParsedNode(
+                kind="key",
+                name=str(key),
+                line_start=line_no,
+                line_end=line_no,
+                signature=f"{key}: ...",
+            ))
+        return nodes
+
+    def _find_key_line(self, lines: list[str], key: str) -> int:
+        json_pattern = re.compile(rf'^\s*"{re.escape(key)}"\s*:')
+        yaml_pattern = re.compile(rf"^\s*{re.escape(key)}\s*:")
+        for i, line in enumerate(lines, start=1):
+            if json_pattern.search(line) or yaml_pattern.search(line):
+                return i
+        return 1
 
     def lookup(self, name: str) -> list[Symbol]:
         """Find all symbols matching the given name (exact)."""
