@@ -27,7 +27,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -433,6 +433,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["output_tokens"] += output_tokens
                     ps.session["cost"] += cost
                     ps.session["cost_saved"] += cost_saved
+                # Track per-request compression ratio for rolling average
+                if input_tokens > 0:
+                    ratio = round(saved / input_tokens, 4)
+                    with ps._compression_lock:
+                        ps._compression_ratios.append(ratio)
 
                 if trace:
                     trace.model = model
@@ -560,6 +565,9 @@ class ProxyServer:
         self._last_lock = threading.Lock()
         self._server: Optional[_ThreadedHTTPServer] = None
         self._server_thread: Optional[threading.Thread] = None
+        # Rolling window of per-request compression ratios (last 100)
+        self._compression_ratios: deque = deque(maxlen=100)
+        self._compression_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -595,10 +603,21 @@ class ProxyServer:
     # ------------------------------------------------------------------
 
     def health(self) -> dict:
+        with self._session_lock:
+            uptime = round(time.time() - self.session["start_time"])
+            requests_total = self.session["requests"]
+            requests_errors = self.session["errors"]
+        with self._compression_lock:
+            ratios = list(self._compression_ratios)
+        compression_ratio_avg = round(sum(ratios) / len(ratios), 4) if ratios else 0.0
         return {
             "status": "ok",
-            "compilation_mode": self.compilation_mode,
-            "stats": self.session,
+            "uptime_seconds": uptime,
+            "version": "0.1.0",
+            "requests_total": requests_total,
+            "requests_errors": requests_errors,
+            "compression_ratio_avg": compression_ratio_avg,
+            "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
     def stats(self) -> dict:
