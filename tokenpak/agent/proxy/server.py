@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, PassthroughConfig
+from tokenpak.agent.dashboard.export_api import ExportAPI
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +251,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("http"):
             self._proxy_to(self.path, "POST")
+        elif self.path == "/v1/export/csv":
+            # CSV export endpoint — reads body, returns downloadable CSV
+            ps = self.server.proxy_server
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            traces = [t.to_dict() for t in ps.trace_storage.get_all()]
+            stats = ps.session_stats()
+            body, status, headers = ExportAPI.handle(
+                raw_body=raw_body,
+                traces=traces,
+                session_stats=stats,
+            )
+            self.send_response(status)
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path.startswith("/v1/"):
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
