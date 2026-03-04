@@ -37,6 +37,7 @@ from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, PassthroughConfig
 from .stats import CompressionStats
+from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.dashboard.export_api import ExportAPI
 from tokenpak.agent.dashboard.session_filter import (
     SessionFilter,
@@ -345,6 +346,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
+            )
+
+        # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
+        _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
+        if _adapters_enabled and should_log and is_messages:
+            import logging as _logging
+            _adapter = detect_platform(dict(self.headers), dict(os.environ))
+            _logging.debug(
+                "tokenpak.proxy: detected platform=%s for request to %s",
+                _adapter.platform_name,
+                target_url[:60],
             )
 
         # Run compression pipeline hook if registered
