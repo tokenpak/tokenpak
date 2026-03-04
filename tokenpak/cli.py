@@ -25,8 +25,7 @@ from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
 BATCH_SIZE = 100
 
 
-def cmd_doctor(args):
-    pass
+
 
 def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
     """
@@ -366,7 +365,8 @@ def cmd_doctor(args):
     fixes_needed = []
     
     # Check 1: Python version
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    py_major, py_minor, py_micro = sys.version_info[:3]
+    py_version = f"{py_major}.{py_minor}.{py_micro}"
     if sys.version_info >= (3, 10):
         print(Colors.ok(f"Python version      {py_version} — OK"))
         results["pass"] += 1
@@ -385,11 +385,11 @@ def cmd_doctor(args):
         except json.JSONDecodeError:
             print(Colors.fail(f"Config file         {config_path} — invalid JSON"))
             results["fail"] += 1
-            fixes_needed.append("reset config")
+            fixes_needed.append(("reset config", config_path))
     else:
         print(Colors.warn(f"Config file         {config_path} — not found"))
         results["warn"] += 1
-        fixes_needed.append("create config")
+        fixes_needed.append(("create config", config_path))
     
     # Check 3: Vault index
     index_path = Path.home() / ".tokenpak" / "index.json"
@@ -422,9 +422,8 @@ def cmd_doctor(args):
             print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK"))
             results["pass"] += 1
         else:
-            print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused"))
+            print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"))
             results["warn"] += 1
-            fixes_needed.append("start proxy")
     except Exception:
         print(Colors.warn(f"Proxy reachable     port {proxy_port} — check failed"))
         results["warn"] += 1
@@ -459,15 +458,26 @@ def cmd_doctor(args):
     summary = f"{results['fail']} error{'s' if results['fail'] != 1 else ''}, {results['warn']} warning{'s' if results['warn'] != 1 else ''}."
     print(summary)
     
-    if hasattr(args, 'fix') and args.fix:
+    if hasattr(args, 'fix') and args.fix and fixes_needed:
         print("\nAuto-fix requested. Fixing issues...")
-        for fix in fixes_needed:
-            if fix == "create config":
+        for fix_type, fix_path in fixes_needed:
+            if fix_type == "create config":
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_config = {"version": "1.0", "port": 8765, "compress": True}
-                with open(config_path, "w") as f:
+                with open(fix_path, "w") as f:
                     json.dump(default_config, f, indent=2)
-                print(f"  ✓ Created {config_path}")
+                print(f"  ✓ Created {fix_path}")
+            elif fix_type == "reset config":
+                # Backup before overwriting
+                backup_path = Path(str(fix_path) + ".backup")
+                if fix_path.exists():
+                    fix_path.rename(backup_path)
+                    print(f"  ✓ Backed up invalid config to {backup_path}")
+                tokenpak_dir.mkdir(parents=True, exist_ok=True)
+                default_config = {"version": "1.0", "port": 8765, "compress": True}
+                with open(fix_path, "w") as f:
+                    json.dump(default_config, f, indent=2)
+                print(f"  ✓ Recreated {fix_path}")
     
     if results["fail"] > 0:
         sys.exit(1)
@@ -914,6 +924,7 @@ def _build_budget_parser(sub):
     p_set.set_defaults(func=cmd_budget_set)
 
     bsub.add_parser("status", help="Show current budget status").set_defaults(func=cmd_budget_status)
+    bsub.add_parser("show", help="Alias for status — show current budget status").set_defaults(func=cmd_budget_status)
 
     p_hist = bsub.add_parser("history", help="Show recent spend records")
     p_hist.add_argument("--limit", type=int, default=20)
