@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from tokenpak.walker import walk_directory
+from tokenpak.walker import walk_directory, detect_file_type
 from tokenpak.processors import get_processor
 from tokenpak.tokens import count_tokens
 
@@ -48,10 +48,8 @@ class VaultIndexer:
             except OSError:
                 return None
 
-        # Detect file type via extension
-        from tokenpak.walker import FILE_TYPES
-        ext = file_path.suffix.lower()
-        file_type = FILE_TYPES.get(ext)
+        # Detect file type via extension or basename (e.g. ".env")
+        file_type = detect_file_type(path)
         if file_type not in ("code", "text", "data"):
             return None
 
@@ -77,8 +75,8 @@ class VaultIndexer:
         )
         self.blocks.save(record)
 
-        # Index symbols for code files
-        if file_type == "code":
+        # Index symbols for code, docs, and structured data.
+        if file_type in ("code", "text", "data"):
             self.symbols.index_file(path, content)
 
         return record

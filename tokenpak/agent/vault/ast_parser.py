@@ -85,6 +85,28 @@ class ASTParser:
                     docstring=docstring,
                 ))
 
+        # Capture module-level assignments as variables/constants.
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    for name in self._extract_python_target_names(target):
+                        nodes.append(ParsedNode(
+                            kind="variable",
+                            name=name,
+                            line_start=node.lineno,
+                            line_end=node.end_lineno or node.lineno,
+                            signature=f"{name} = ...",
+                        ))
+            elif isinstance(node, ast.AnnAssign):
+                for name in self._extract_python_target_names(node.target):
+                    nodes.append(ParsedNode(
+                        kind="variable",
+                        name=name,
+                        line_start=node.lineno,
+                        line_end=node.end_lineno or node.lineno,
+                        signature=f"{name}: ...",
+                    ))
+
         return sorted(nodes, key=lambda n: n.line_start)
 
     def _python_signature(self, node: ast.FunctionDef, lines: list[str]) -> str:
@@ -118,6 +140,17 @@ class ASTParser:
         except Exception:
             return "..."
 
+    def _extract_python_target_names(self, target: ast.AST) -> list[str]:
+        """Extract simple variable names from assignment targets."""
+        if isinstance(target, ast.Name):
+            return [target.id]
+        if isinstance(target, (ast.Tuple, ast.List)):
+            names: list[str] = []
+            for elt in target.elts:
+                names.extend(self._extract_python_target_names(elt))
+            return names
+        return []
+
     # ------------------------------------------------------------------
     # JavaScript / TypeScript (regex fallback)
     # ------------------------------------------------------------------
@@ -131,6 +164,7 @@ class ASTParser:
             (r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(", "function"),
             (r"^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(.*\)\s*=>", "function"),
             (r"^(?:export\s+)?class\s+(\w+)", "class"),
+            (r"^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=", "variable"),
         ]
 
         for i, line in enumerate(lines, start=1):

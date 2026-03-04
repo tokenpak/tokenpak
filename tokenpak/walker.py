@@ -11,9 +11,10 @@ FILE_TYPES = {
     ".py": "code", ".js": "code", ".ts": "code", ".jsx": "code",
     ".tsx": "code", ".go": "code", ".rs": "code", ".rb": "code",
     ".java": "code", ".c": "code", ".cpp": "code", ".h": "code",
-    ".sh": "code", ".bash": "code",
+    ".sh": "code", ".bash": "code", ".sql": "code", ".css": "code",
     ".json": "data", ".csv": "data", ".tsv": "data",
     ".yaml": "data", ".yml": "data", ".toml": "data",
+    ".env": "data", ".cfg": "data", ".ini": "data",
     ".pdf": "pdf",
     ".png": "image", ".jpg": "image", ".jpeg": "image",
     ".gif": "image", ".webp": "image", ".svg": "image",
@@ -21,6 +22,11 @@ FILE_TYPES = {
     ".flac": "audio", ".ogg": "audio",
     ".mp4": "video", ".mkv": "video", ".avi": "video",
     ".mov": "video", ".webm": "video",
+}
+
+# Basename-based mappings for dotfiles with no "suffix" via pathlib.
+FILE_NAME_TYPES = {
+    ".env": "data",
 }
 
 # Directories to always skip
@@ -50,9 +56,8 @@ def walk_directory(root: str, max_size: int = MAX_FILE_SIZE) -> List[Tuple[str, 
 
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
-            ext = Path(filename).suffix.lower()
-
-            if ext not in FILE_TYPES:
+            file_type = detect_file_type(filepath)
+            if file_type is None:
                 continue
 
             try:
@@ -63,12 +68,15 @@ def walk_directory(root: str, max_size: int = MAX_FILE_SIZE) -> List[Tuple[str, 
             if size == 0 or size > max_size:
                 continue
 
-            results.append((filepath, FILE_TYPES[ext], size))
+            results.append((filepath, file_type, size))
 
     return sorted(results, key=lambda x: x[0])
 
 
 def detect_file_type(path: str) -> str | None:
     """Detect file type from extension."""
-    ext = Path(path).suffix.lower()
-    return FILE_TYPES.get(ext)
+    p = Path(path)
+    ext = p.suffix.lower()
+    if ext in FILE_TYPES:
+        return FILE_TYPES[ext]
+    return FILE_NAME_TYPES.get(p.name.lower())
