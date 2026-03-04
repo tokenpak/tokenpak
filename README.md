@@ -1,40 +1,63 @@
 # TokenPak
 
-**Universal content compiler for LLM context optimization.**
+> **Zero-token operations. Maximum context efficiency.**
 
-Point TokenPak at any directory. Get optimized LLM context from every file type.
+TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
-## Features
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-### Core (v0.1.0)
-- Directory indexing with file-type detection
-- SQLite-backed block registry with versioning + change detection
-- Processors for text, code, and structured data
-- Quadratic budget allocation (importance-weighted)
-- TOKPAK wire format output with provenance
-- CLI for indexing/search/stats/benchmark/calibration
+---
 
-### Compaction Engines
-- **Heuristic** (default): Fast rule-based, no ML dependencies
-- **LLMLingua**: ML-powered (requires `pip install llmlingua`)
+## What It Does
 
-### Platform Connectors
-- **Free**: Local filesystem, Obsidian vaults
-- **Pro** (planned): Google Drive, Notion, GitHub
-- **Enterprise** (planned): OneDrive, SharePoint, Confluence, Slack
+- **Compresses context** before it hits the API — fewer tokens, lower cost
+- **Routes requests** to the right model (fast/cheap vs. powerful/expensive)
+- **Tracks costs** locally — per model, per session, per agent
+- **Indexes your vault** for instant semantic search without an LLM call
+- **80%+ of operations cost zero tokens** — CLI-first, deterministic
 
-## Install
+## Core Principles
+
+| Principle | What it means |
+|-----------|---------------|
+| **Zero Data** | We never see your prompts, code, or responses |
+| **Zero Credentials** | Pure passthrough proxy — no API keys stored |
+| **Zero Lock-in** | Downgrade anytime; keep all your data |
+| **Zero Tokens for Ops** | Status, search, cost reports — all free |
+
+---
+
+## Quick Start
+
+### Install
 
 ```bash
+pip install tokenpak
+# or from source:
+git clone https://github.com/tokenpak/tokenpak && cd tokenpak
 pip install -e .
 ```
 
-## Usage
+### Configure your LLM client
 
-### Index a directory
+Point your existing tool (Claude Code, OpenAI client, etc.) at the TokenPak proxy:
+
+```bash
+# Start the proxy
+tokenpak serve --port 8766
+
+# In your LLM client, set base URL to:
+# http://localhost:8766
+```
+
+Your credentials pass through unchanged. TokenPak never stores them.
+
+### Index your vault (optional, zero tokens)
 
 ```bash
 tokenpak index ~/vault
+tokenpak vault search "compression benchmark"
 ```
 
 ### Hybrid auto-calibration (recommended)
@@ -47,31 +70,126 @@ tokenpak calibrate ~/vault --max-workers 8 --rounds 2
 tokenpak index ~/vault --auto-workers --max-workers 8
 ```
 
-### Search indexed content and emit wire format
+### Check costs
 
 ```bash
-tokenpak search "token compression benchmark" --budget 8000 --top-k 8
+tokenpak cost --week
+tokenpak cost --by-model
 ```
 
-### Show stats
+---
+
+## CLI Reference
+
+### Status & Health
 
 ```bash
-tokenpak stats
+tokenpak status [--full]               # proxy health
+tokenpak health                        # full system health
+tokenpak logs [--errors] [--today]     # proxy logs
+tokenpak doctor                        # comprehensive diagnostics
 ```
 
-### Run latency benchmark
+### Cost & Telemetry
+
+```bash
+tokenpak cost [--week|--month|--by-model|--by-agent|--export csv]
+tokenpak budget set --monthly 50       # set $50/month budget
+tokenpak budget alert --at 80%         # alert at 80% usage
+tokenpak savings [--lifetime]
+```
+
+### Compression
+
+```bash
+tokenpak demo [--verbose]              # see pipeline on real data
+tokenpak compress <file> [--diff]      # dry-run compression
+tokenpak trace [--id <id>]             # trace a pipeline run
+```
+
+### Vault & Indexing
+
+```bash
+tokenpak index [<path>]                # index a directory
+tokenpak index --watch                 # auto re-index on changes
+tokenpak index --status                # check index health
+tokenpak vault search "query"          # semantic search
+tokenpak vault blocks [--stale]        # inspect content blocks
+```
+
+### Benchmarking & Calibration
 
 ```bash
 tokenpak benchmark ~/vault --iterations 3
-# compare old-style baseline vs optimized pipeline
-tokenpak benchmark ~/vault --compare
+tokenpak benchmark ~/vault --compare   # baseline vs optimized
+tokenpak calibrate ~/vault --max-workers 8 --rounds 2
 ```
 
-### Serve (proxy passthrough to existing OpenClaw .ocp proxy)
+### Model Routing
 
 ```bash
-tokenpak serve --port 8766
+tokenpak route set ".*test.*" gpt-4o-mini   # route test queries to cheaper model
+tokenpak route test "write unit tests"       # preview routing decision
+tokenpak route history                        # recent routing decisions
 ```
+
+### Agent Management
+
+```bash
+tokenpak agent list                    # list registered agents
+tokenpak agent register <name>         # register an agent
+tokenpak agent tasks --queue           # pending tasks
+tokenpak agent lock <file>             # acquire a file lock
+```
+
+### Event Triggers
+
+```bash
+tokenpak trigger list
+tokenpak trigger add file-change "*.py" "bash lint.sh"
+tokenpak trigger add cost-alert 80% "notify"
+tokenpak trigger log
+```
+
+### A/B Testing
+
+```bash
+tokenpak ab create my-test --variant-a "compress aggressive" --variant-b "compress minimal"
+tokenpak ab status my-test
+tokenpak ab apply my-test
+tokenpak ab presets
+```
+
+### Replay & Debug
+
+```bash
+tokenpak replay list
+tokenpak replay <id> --no-compress
+tokenpak replay <id> --model gpt-4o-mini
+tokenpak replay <id> --diff
+tokenpak debug on [--requests 50]
+tokenpak debug off
+```
+
+### Templates
+
+```bash
+tokenpak template list
+tokenpak template create my-tpl
+tokenpak template use my-tpl
+tokenpak template export my-tpl
+```
+
+### Configuration & Maintenance
+
+```bash
+tokenpak config set compression.enabled true
+tokenpak config get compression.level
+tokenpak config export
+tokenpak prune --older-than 30d
+```
+
+---
 
 ## Performance
 
@@ -95,22 +213,6 @@ Search latency: 22.7ms/query
 Processing: 0.09-0.19ms/file (code/text)
 ```
 
-### Parallel Indexing
-
-```bash
-tokenpak index ~/vault --workers 4
-```
-
-### Calibration Profile
-
-```bash
-# Inspect generated profile
-cat ~/.tokenpak/calibration.json
-```
-
-The profile stores per-host benchmark results and selected worker baseline.
-
-
 ### Token Savings (QMD + TokenPak)
 
 | Configuration | Avg tokens/req | Reduction |
@@ -121,76 +223,89 @@ The profile stores per-host benchmark results and selected worker baseline.
 
 Consistent **~43% additional savings** on top of QMD across writing, coding, legal, and ops tasks.
 
-## Architecture
+---
+
+## How Compression Works
+
+TokenPak intercepts requests before they reach the LLM and applies a multi-stage pipeline:
+
+1. **Segmentize** — split content into semantic blocks
+2. **Fingerprint** — identify block type (code, docs, config…)
+3. **Apply recipe** — use declarative rules to compress that block type
+4. **Budget** — allocate tokens using a quadratic priority algorithm
+5. **Assemble** — reconstruct the compressed prompt
+
+Result: same semantic content, 20–60% fewer tokens.
+
+---
+
+## Directory Structure
 
 ```
 tokenpak/
-├── cli.py          # CLI commands (index, search, stats, benchmark)
-├── registry.py     # SQLite registry with connection pooling + batch writes
-├── tokens.py       # Token counting with LRU cache + lazy loading
-├── walker.py       # Directory traversal + file type detection
-├── budget.py       # Quadratic budget allocation
-├── wire.py         # TOKPAK wire format packing
-├── benchmark.py    # Latency benchmarking suite (+ compare mode)
-├── calibration.py  # Hybrid worker calibration (static + dynamic)
+├── agent/
+│   ├── agentic/          # multi-agent coordination (locks, retry)
+│   ├── cli/              # entry point + command modules
+│   ├── compression/      # pipeline, segmentizer, recipes, directives
+│   ├── proxy/            # request routing + streaming
+│   ├── telemetry/        # cost tracking, storage, demo
+│   └── vault/            # indexer, ast_parser, symbols, blocks
+├── recipes/
+│   └── oss/              # built-in compression recipes (YAML)
 ├── processors/
-│   ├── code.py     # Python/JS structure extraction
-│   ├── text.py     # Markdown/HTML compression
-│   └── data.py     # JSON/YAML/CSV handling
+│   ├── code.py           # Python/JS structure extraction
+│   ├── text.py           # Markdown/HTML compression
+│   └── data.py           # JSON/YAML/CSV handling
 ├── engines/
-│   ├── heuristic.py  # Rule-based compaction
-│   └── llmlingua.py  # ML-powered compaction (optional)
-└── connectors/
-    ├── local.py      # Local filesystem
-    └── obsidian.py   # Obsidian vault awareness
+│   ├── heuristic.py      # Rule-based compaction
+│   └── llmlingua.py      # ML-powered compaction (optional)
+├── connectors/
+│   ├── local.py          # Local filesystem
+│   └── obsidian.py       # Obsidian vault awareness
+├── tests/
+└── pyproject.toml
 ```
 
-## Recent Findings, Additions, and Features
+---
 
-### 2026-02-21 — Phase 2 Hardening + Stability
+## Configuration
 
-#### Major Additions
-- **Parallel indexing** with worker pool (`--workers`)
-- **Hybrid worker calibration**:
-  - Static host calibration (`tokenpak calibrate ...`)
-  - Dynamic bounded runtime adjustment (`--auto-workers`)
-- **Baseline vs optimized benchmark compare mode** (`benchmark --compare`)
+Default config: `~/.tokenpak/config.json`
 
-#### Hardening Changes
-- `tokens.py`
-  - Robust truncation edge-case handling (`max_tokens <= 0`, dense token text)
-  - Larger LRU cache (`maxsize=8192`)
-  - Lazy tokenizer load retained
-- `registry.py`
-  - `busy_timeout`, `BEGIN IMMEDIATE`, `mmap_size`, safer connection lifecycle
-  - cleanup hooks for connection stability
-- `cli.py`
-  - Auto-worker selection and optional recalibration controls
-- `benchmark.py`
-  - Simulated baseline path to produce real speedup deltas
+```json
+{
+  "proxy": {
+    "port": 8766,
+    "passthrough_url": "https://api.openai.com"
+  },
+  "compression": {
+    "enabled": true,
+    "level": "balanced"
+  },
+  "budget": {
+    "monthly_usd": null,
+    "alert_at_pct": 80
+  },
+  "vault": {
+    "db_path": ".tokenpak/registry.db",
+    "watch": false
+  }
+}
+```
 
-#### Measured Findings (572-file vault)
-- **Indexing speedup vs baseline:** `55.27x` (**98.2% faster**)
-- **Throughput:** `~2,738 files/sec`
-- **Token cache speedup:** `26.6x`
-- **Search latency:** `~22.7ms/query`
+- Registry DB default: `.tokenpak/registry.db`
+- Calibration profile path: `~/.tokenpak/calibration.json`
 
-### 2026-02-21 — Production Deployment Validation (Cali)
-- Synced latest TokenPak code and reinstalled editable package on Cali
-- Verified CLI feature set includes:
-  - `benchmark` subcommand
-  - worker controls (`--workers`, auto-calibration flags)
-- Rebooted Cali and re-validated:
-  - `tokenpak-proxy` service is **enabled + active** post-reboot
-  - TokenPak indexing still functional after restart
+---
 
-### Recommended Operating Pattern
-1. **One-time per host:**
-   - `tokenpak calibrate <dir> --max-workers 8 --rounds 2`
-2. **Daily/default runs:**
-   - `tokenpak index <dir> --auto-workers --max-workers 8`
-3. **Periodic validation:**
-   - `tokenpak benchmark <dir> --compare`
+## Requirements
+
+- Python 3.11+
+- No external dependencies for core functionality
+- Optional: `tiktoken` for accurate token counting
+- Optional: `llmlingua` for ML-powered compression
+
+---
 
 ## Contributing / Dev Workflow
 
@@ -208,20 +323,12 @@ This will:
 2. Push to `shared` (SueBot's QA repo) and SSH-verify the hash matches
 3. Exit non-zero if either push fails — safe to use in CI or pre-push hooks
 
-Example output:
-```
-Pushing to origin... ✅ origin/master @ abc1234
-Pushing to shared... ✅ shared/master @ abc1234
-Verifying on SueBot... ✅ SueBot has abc1234
-All remotes verified.
-```
-
 > ⚠️ Do NOT push with bare `git push origin` — the shared remote will be skipped and Sue's QA will fail.
 
-## Notes
+Issues and PRs welcome. See [ARCHITECTURE.md](ARCHITECTURE.md) for system design.
 
-- Registry DB default: `.tokenpak/registry.db`
-- Calibration profile path: `~/.tokenpak/calibration.json`
-- Uses stdlib only by default.
-- Optional: install `tiktoken` for accurate token counting.
-- Optional: install `llmlingua` for ML-powered compression.
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)

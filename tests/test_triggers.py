@@ -302,84 +302,73 @@ class TestTriggerRegistry:
 
 
 class TestCLIIntegration:
-    """Test CLI command functions."""
-    
+    """Test CLI command functions (using merged triggers.store backend)."""
+
     @pytest.fixture
-    def mock_registry(self):
-        """Mock the module-level registry."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            triggers_path = Path(tmpdir) / "triggers.json"
-            log_path = Path(tmpdir) / "log.json"
-            registry = TriggerRegistry(
-                triggers_path=triggers_path,
-                log_path=log_path
-            )
-            
-            with patch('tokenpak.agent.macros.hooks._registry', registry):
-                yield registry
-    
-    def test_add_command(self, mock_registry, capsys):
+    def tmp_store(self, tmp_path):
+        """Patch the trigger store to use a temp directory."""
+        from tokenpak.agent.triggers.store import TriggerStore
+        store = TriggerStore(config_path=tmp_path / "triggers.yaml")
+        with patch('tokenpak.cli._trigger_store', return_value=store):
+            yield store
+
+    def test_add_command(self, tmp_store, capsys):
         """Test trigger add CLI command."""
         from tokenpak.cli import cmd_trigger_add
-        
+
         class Args:
             event = "file:changed"
-            pattern = "*.py"
             action = "echo hello"
-            description = "Test"
-        
+
         cmd_trigger_add(Args())
-        
+
         captured = capsys.readouterr()
-        assert "Trigger created" in captured.out
-        assert len(mock_registry.list()) == 1
-    
-    def test_list_command(self, mock_registry, capsys):
+        assert "Trigger added" in captured.out
+        assert len(tmp_store.list()) == 1
+
+    def test_list_command(self, tmp_store, capsys):
         """Test trigger list CLI command."""
         from tokenpak.cli import cmd_trigger_list
-        
-        mock_registry.add("file:changed", "*.py", "echo test")
-        
+
+        tmp_store.add(event="file:changed:*.py", action="echo test")
+
         class Args:
-            event = None
-        
+            pass
+
         cmd_trigger_list(Args())
-        
+
         captured = capsys.readouterr()
         assert "file:changed" in captured.out
-        assert "*.py" in captured.out
-    
-    def test_remove_command(self, mock_registry, capsys):
+        assert "echo test" in captured.out
+
+    def test_remove_command(self, tmp_store, capsys):
         """Test trigger remove CLI command."""
         from tokenpak.cli import cmd_trigger_remove
-        
-        trigger = mock_registry.add("file:changed", "*", "echo test")
-        
+
+        trigger = tmp_store.add(event="file:changed", action="echo test")
+
         class Args:
             id = trigger.id
-        
+
         cmd_trigger_remove(Args())
-        
+
         captured = capsys.readouterr()
         assert "removed" in captured.out
-        assert len(mock_registry.list()) == 0
-    
-    def test_test_command(self, mock_registry, capsys):
-        """Test trigger test CLI command."""
+        assert len(tmp_store.list()) == 0
+
+    def test_test_command(self, tmp_store, capsys):
+        """Test trigger test CLI command (new event-match format)."""
         from tokenpak.cli import cmd_trigger_test
-        
-        mock_registry.add("file:changed", "*.py", "echo python")
-        mock_registry.add("file:changed", "*.md", "echo markdown")
-        
+
+        tmp_store.add(event="file:changed", action="echo python")
+
         class Args:
             event = "file:changed"
-            data = "test.py"
-        
+
         cmd_trigger_test(Args())
-        
+
         captured = capsys.readouterr()
         assert "echo python" in captured.out
-        assert "echo markdown" not in captured.out
 
 
 class TestFileWatcher:

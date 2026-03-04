@@ -1,1 +1,1 @@
-"""Agent module for TokenPak agentic features."""
+"""TokenPak Agent Module — proxy, telemetry, vault, and compression."""

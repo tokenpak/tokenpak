@@ -20,6 +20,10 @@ tokens = ["tiktoken>=0.5.0"]
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tokenpak*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
