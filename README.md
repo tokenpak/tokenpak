@@ -192,6 +192,32 @@ tokenpak/
 3. **Periodic validation:**
    - `tokenpak benchmark <dir> --compare`
 
+## Contributing / Dev Workflow
+
+### Pushing code (dual-remote setup)
+
+TokenPak has two remotes: `origin` (GitHub) and `shared` (SueBot QA repo).
+**Always use the verification script** to ensure both land:
+
+```bash
+bash scripts/push-verified.sh [branch]
+```
+
+This will:
+1. Push to `origin` and verify the commit hash landed
+2. Push to `shared` (SueBot's QA repo) and SSH-verify the hash matches
+3. Exit non-zero if either push fails — safe to use in CI or pre-push hooks
+
+Example output:
+```
+Pushing to origin... ✅ origin/master @ abc1234
+Pushing to shared... ✅ shared/master @ abc1234
+Verifying on SueBot... ✅ SueBot has abc1234
+All remotes verified.
+```
+
+> ⚠️ Do NOT push with bare `git push origin` — the shared remote will be skipped and Sue's QA will fail.
+
 ## Notes
 
 - Registry DB default: `.tokenpak/registry.db`
