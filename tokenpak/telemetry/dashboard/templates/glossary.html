@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Glossary{% endblock %}
+{% block page_title %}Terminology Glossary{% endblock %}
+{% block page_subtitle %}Standardized definitions for all dashboard metrics and terms{% endblock %}
+
+{% block content %}
+<div class="gloss-page">
+
+  <div class="gloss-page-search-wrap">
+    <input id="gloss-page-search" type="search" placeholder="Search terms, aliases, formulas…"
+           autocomplete="off" aria-label="Search glossary terms" class="gloss-page-search-input">
+  </div>
+
+  {% for cat_key, cat in categories.items() %}
+  <section class="gloss-page-cat" id="gloss-cat-{{ cat_key }}" data-cat="{{ cat_key }}">
+    <h2 class="gloss-page-cat-header">{{ cat.icon }} {{ cat.label }}</h2>
+    <div class="gloss-page-grid">
+      {% for term_key in cat.keys %}
+      {% set card = glossary.get(term_key) %}
+      {% if card %}
+      <div class="gloss-page-card"
+           data-search="{{ ([term_labels.get(term_key, card.term), card.what] + card.aliases) | join(' ') | lower }}">
+        <div class="gloss-page-card-header">
+          <span class="gloss-page-term">{{ term_labels.get(term_key, card.term) }}</span>
+          {% if card.aliases %}
+          <span class="gloss-page-alias">{{ card.aliases[:2] | join(', ') }}</span>
+          {% endif %}
+        </div>
+        <p class="gloss-page-what">{{ card.what }}</p>
+        {% if card.how %}
+        <code class="gloss-page-formula">{{ card.how }}</code>
+        {% endif %}
+        <div class="gloss-page-meta">
+          {% if card.why %}
+          <div class="gloss-page-row">
+            <span class="gloss-page-lbl">Why</span>
+            <span>{{ card.why }}</span>
+          </div>
+          {% endif %}
+          {% if card.not_this %}
+          <div class="gloss-page-row">
+            <span class="gloss-page-lbl">≠ Not</span>
+            <span class="gloss-page-not">{{ card.not_this }}</span>
+          </div>
+          {% endif %}
+        </div>
+        {% if unit_rules.get(term_key) %}
+        <div class="gloss-page-unit">
+          Format: <code class="gloss-unit-ex">{{ unit_rules[term_key].example }}</code>
+          <span class="gloss-page-unit-desc">{{ unit_rules[term_key].pattern }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <!-- Aggregation Explanations -->
+  <section class="gloss-page-cat" id="gloss-aggr">
+    <h2 class="gloss-page-cat-header">📊 Aggregation Types</h2>
+    <div class="gloss-page-grid gloss-page-grid-wide">
+      <div class="gloss-page-card">
+        <div class="gloss-page-term">Daily</div>
+        <p class="gloss-page-what">Aggregated by request date (UTC). Midnight-to-midnight boundaries.</p>
+      </div>
+      <div class="gloss-page-card">
+        <div class="gloss-page-term">Hourly</div>
+        <p class="gloss-page-what">Grouped by hour boundary (UTC). Partial hours are included.</p>
+      </div>
+      <div class="gloss-page-card">
+        <div class="gloss-page-term">Per-request</div>
+        <p class="gloss-page-what">Individual request data. No aggregation — each row is one API call.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- p95/p99 Explained -->
+  <section class="gloss-page-cat" id="gloss-percentiles">
+    <h2 class="gloss-page-cat-header">📈 Percentile Latency Explained</h2>
+    <div class="gloss-page-card gloss-page-card-full">
+      <p class="gloss-page-what">Percentile latency tells you how fast a given percentage of requests completed.</p>
+      <div class="gloss-percentile-table">
+        <div class="gloss-pct-row">
+          <span class="gloss-pct-label">p50 (median)</span>
+          <span>Half of requests completed faster than this. The "typical" experience.</span>
+        </div>
+        <div class="gloss-pct-row">
+          <span class="gloss-pct-label">p95</span>
+          <span>95% of requests completed faster than this. Only 1-in-20 were slower.</span>
+        </div>
+        <div class="gloss-pct-row">
+          <span class="gloss-pct-label">p99</span>
+          <span>99% of requests completed faster than this. Only 1-in-100 were slower — worst-case experience.</span>
+        </div>
+      </div>
+      <div class="gloss-page-note">
+        💡 High p99 with low p50 means most requests are fast, but a few outliers are very slow.
+        Investigate spikes in the Engineering dashboard.
+      </div>
+    </div>
+  </section>
+
+  <!-- Unit Format Rules -->
+  <section class="gloss-page-cat" id="gloss-units">
+    <h2 class="gloss-page-cat-header">📐 Unit Format Rules</h2>
+    <div class="gloss-page-grid gloss-page-grid-wide">
+      {% for unit_key, rule in all_unit_rules.items() %}
+      <div class="gloss-page-card">
+        <span class="gloss-page-term">{{ unit_key | replace('_', ' ') | title }}</span>
+        <p class="gloss-page-what">
+          Example: <code class="gloss-unit-ex">{{ rule.example }}</code>
+        </p>
+        <div class="gloss-page-unit-desc">{{ rule.pattern }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+</div>
+
+<style>
+.gloss-page { max-width: 900px; margin: 0 auto; }
+.gloss-page-search-wrap { margin-bottom: 24px; }
+.gloss-page-search-input {
+  width: 100%; max-width: 480px;
+  background: var(--bg-card); border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-size: 14px; padding: 10px 14px; box-sizing: border-box; outline: none;
+}
+.gloss-page-search-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,.2); }
+.gloss-page-cat { margin-bottom: 36px; }
+.gloss-page-cat-header {
+  font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text-muted); border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px; margin-bottom: 14px;
+}
+.gloss-page-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px;
+}
+.gloss-page-grid-wide { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.gloss-page-card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: 14px 16px;
+  transition: border-color .15s;
+}
+.gloss-page-card:hover { border-color: var(--border-default); }
+.gloss-page-card-full { grid-column: 1 / -1; }
+.gloss-page-card-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.gloss-page-term { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.gloss-page-alias { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.gloss-page-what { font-size: 13px; color: var(--text-secondary); line-height: 1.45; margin: 0 0 8px; }
+.gloss-page-formula {
+  display: block; font-family: var(--font-mono); font-size: 11px;
+  color: var(--color-info); background: rgba(59,130,246,.08);
+  padding: 4px 8px; border-radius: 4px; margin-bottom: 8px; word-break: break-all;
+}
+.gloss-page-meta { display: flex; flex-direction: column; gap: 4px; }
+.gloss-page-row { display: flex; gap: 8px; font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.gloss-page-lbl { min-width: 44px; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding-top: 1px; flex-shrink: 0; }
+.gloss-page-not { color: var(--color-warning); font-size: 12px; }
+.gloss-page-unit { font-size: 11px; color: var(--text-muted); margin-top: 8px; border-top: 1px solid var(--border-subtle); padding-top: 6px; }
+.gloss-page-unit-desc { color: var(--text-muted); font-size: 11px; }
+.gloss-unit-ex {
+  font-family: var(--font-mono); font-size: 12px; color: var(--color-positive);
+  background: rgba(16,185,129,.1); padding: 2px 6px; border-radius: 4px; margin-right: 4px;
+}
+.gloss-percentile-table { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.gloss-pct-row { display: flex; gap: 12px; font-size: 13px; color: var(--text-secondary); }
+.gloss-pct-label { font-weight: 600; color: var(--text-primary); min-width: 80px; }
+.gloss-page-note {
+  background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.2);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  font-size: 13px; color: var(--text-secondary); margin-top: 10px;
+}
+</style>
+
+<script>
+(function() {
+  const inp = document.getElementById('gloss-page-search');
+  if (!inp) return;
+  inp.addEventListener('input', function() {
+    const q = inp.value.toLowerCase().trim();
+    document.querySelectorAll('.gloss-page-card[data-search]').forEach(function(card) {
+      card.style.display = (!q || card.dataset.search.includes(q)) ? '' : 'none';
+    });
+    document.querySelectorAll('.gloss-page-cat').forEach(function(cat) {
+      const cards = cat.querySelectorAll('.gloss-page-card[data-search]');
+      if (!cards.length) return;
+      const visible = Array.from(cards).some(c => c.style.display !== 'none');
+      cat.style.display = visible ? '' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}
