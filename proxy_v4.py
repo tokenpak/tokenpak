@@ -28,6 +28,7 @@ import time
 import threading
 import socket
 import ssl
+import signal
 import os
 import sys
 import re
@@ -599,6 +600,14 @@ SESSION = {
     "cache_read_tokens": 0,
     "cache_creation_tokens": 0,
 }
+
+# ---------------------------------------------------------------------------
+# Graceful Shutdown — SIGTERM/SIGINT drain support
+# ---------------------------------------------------------------------------
+_shutdown_event = threading.Event()
+_active_request_count = 0
+_active_request_lock = threading.Lock()
+_active_requests_drained = threading.Event()
 
 # ---------------------------------------------------------------------------
 # Last Request Stats — captures most recent request for /stats/last
@@ -1529,17 +1538,25 @@ def sync_loop():
 # ---------------------------------------------------------------------------
 class ThreadedHTTPServer(HTTPServer):
     def process_request(self, request, client_address):
+        global _active_request_count
+        with _active_request_lock:
+            _active_request_count += 1
         t = threading.Thread(target=self._handle, args=(request, client_address))
         t.daemon = True
         t.start()
 
     def _handle(self, request, client_address):
+        global _active_request_count
         try:
             self.finish_request(request, client_address)
         except Exception:
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)
+            with _active_request_lock:
+                _active_request_count -= 1
+                if _active_request_count == 0 and _shutdown_event.is_set():
+                    _active_requests_drained.set()
 
 
 def main():
@@ -1601,22 +1618,49 @@ def main():
     sync_thread.start()
 
     server = ThreadedHTTPServer(("0.0.0.0", port), ForwardProxyHandler)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print(f"\n📊 Session Summary:")
-        print(f"   Mode:            {COMPILATION_MODE}")
-        print(f"   Requests:        {SESSION['requests']}")
-        print(f"   Input:           {SESSION['input_tokens']:,} tokens")
-        print(f"   Sent:            {SESSION['sent_input_tokens']:,} tokens")
-        print(f"   Protected:       {SESSION['protected_tokens']:,} tokens (never compressed)")
-        print(f"   Saved:           {SESSION['saved_tokens']:,} tokens")
-        print(f"   Injected:        {SESSION['injected_tokens']:,} tokens ({SESSION['injection_hits']} hits)")
-        print(f"   Output:          {SESSION['output_tokens']:,} tokens")
-        print(f"   Est. cost:       ${SESSION['cost']:.4f}")
-        print(f"   Errors:          {SESSION['errors']}")
-        sync_to_vault()
-        server.shutdown()
+
+    def _handle_signal(signum, frame):
+        sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+        print(f"\n[shutdown] {sig_name} received — stopping gracefully…")
+        _shutdown_event.set()
+        # shutdown() must be called from a different thread than serve_forever()
+        threading.Thread(target=server.shutdown, daemon=True).start()
+
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+    server.serve_forever()
+
+    # --- Drain in-flight requests (up to 10s) ---
+    drain_timeout = 10
+    with _active_request_lock:
+        count = _active_request_count
+    if count > 0:
+        print(f"[shutdown] Draining {count} in-flight request(s) (up to {drain_timeout}s)…")
+        _active_requests_drained.wait(timeout=drain_timeout)
+        with _active_request_lock:
+            remaining = _active_request_count
+        if remaining:
+            print(f"[shutdown] ⚠️  {remaining} request(s) still active after {drain_timeout}s — forcing exit")
+        else:
+            print("[shutdown] ✅ All in-flight requests completed")
+    else:
+        print("[shutdown] ✅ No in-flight requests — clean exit")
+
+    print(f"\n📊 Session Summary:")
+    print(f"   Mode:            {COMPILATION_MODE}")
+    print(f"   Requests:        {SESSION['requests']}")
+    print(f"   Input:           {SESSION['input_tokens']:,} tokens")
+    print(f"   Sent:            {SESSION['sent_input_tokens']:,} tokens")
+    print(f"   Protected:       {SESSION['protected_tokens']:,} tokens (never compressed)")
+    print(f"   Saved:           {SESSION['saved_tokens']:,} tokens")
+    print(f"   Injected:        {SESSION['injected_tokens']:,} tokens ({SESSION['injection_hits']} hits)")
+    print(f"   Output:          {SESSION['output_tokens']:,} tokens")
+    print(f"   Est. cost:       ${SESSION['cost']:.4f}")
+    print(f"   Errors:          {SESSION['errors']}")
+    sync_to_vault()
+    print("[shutdown] SQLite connections closed (per-request open/close pattern — no persistent handles)")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
