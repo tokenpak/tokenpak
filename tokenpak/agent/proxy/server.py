@@ -37,6 +37,11 @@ from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, PassthroughConfig
 from tokenpak.agent.dashboard.export_api import ExportAPI
+from tokenpak.agent.dashboard.session_filter import (
+    SessionFilter,
+    FilterParams,
+    get_distinct_models,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +247,30 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self._send_json(trace.to_dict())
             else:
                 self._send_json({"error": "not_found", "request_id": rid})
+            return
+        if path.startswith("/v1/sessions"):
+            # Session filter + pagination endpoint
+            # GET /v1/sessions?model=&from=&to=&status=&limit=&offset=
+            qs = ""
+            if "?" in path:
+                _, qs = path.split("?", 1)
+            ps = self.server.proxy_server
+            try:
+                params = FilterParams.from_query_string(qs)
+            except (ValueError, TypeError) as exc:
+                err = json.dumps({"error": "invalid_params", "detail": str(exc)}).encode()
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(err)
+                return
+            sf = ps.session_filter
+            result = sf.query(params)
+            models = sf.distinct_models()
+            result["models"] = models
+            self._send_json(result)
             return
         if path.startswith("http"):
             self._proxy_to(path, "GET")
@@ -559,6 +588,7 @@ class ProxyServer:
 
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
+        self.session_filter = SessionFilter()
         self.session: Dict[str, Any] = _new_session()
         self._session_lock = threading.Lock()
         self._last_request: Optional[Dict[str, Any]] = None
