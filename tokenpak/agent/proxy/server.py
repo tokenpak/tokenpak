@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, PassthroughConfig
+from .stats import CompressionStats
 from tokenpak.agent.dashboard.export_api import ExportAPI
 from tokenpak.agent.dashboard.session_filter import (
     SessionFilter,
@@ -467,6 +468,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ratio = round(saved / input_tokens, 4)
                     with ps._compression_lock:
                         ps._compression_ratios.append(ratio)
+                    # Write compression telemetry event
+                    ps.compression_stats.record_compression(
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        ratio=ratio,
+                        latency_ms=latency_ms,
+                        status="ok",
+                    )
 
                 if trace:
                     trace.model = model
@@ -496,6 +506,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             with ps._session_lock:
                 ps.session["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
+            # Record error event in compression telemetry if this was an intercepted request
+            if should_log and is_messages and input_tokens > 0:
+                ps.compression_stats.record_compression(
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=0,
+                    ratio=0.0,
+                    latency_ms=latency_ms,
+                    status="error",
+                )
             print(f"  ✖ Proxy error [{method} {target_url[:60]}]: {type(exc).__name__}: {exc} | {latency_ms}ms")
             try:
                 err = json.dumps({"error": {"type": "proxy_error", "message": str(exc)}}).encode()
@@ -598,6 +618,8 @@ class ProxyServer:
         # Rolling window of per-request compression ratios (last 100)
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
+        # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
+        self.compression_stats = CompressionStats(start_time=self.session["start_time"])
 
     # ------------------------------------------------------------------
     # Lifecycle

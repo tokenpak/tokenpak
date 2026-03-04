@@ -228,11 +228,63 @@ def cmd_search(args):
 
 
 def cmd_stats(args):
-    """Show registry stats."""
-    registry = BlockRegistry(args.db)
-    stats = registry.get_stats()
-    stats["token_cache"] = str(cache_info())
-    print(json.dumps(stats, indent=2))
+    """Show compression telemetry stats (last 100 requests)."""
+    SEP = "─" * 45
+
+    # Try to pull live stats from the running proxy
+    proxy_data = None
+    try:
+        import urllib.request as _urlreq
+        proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+        with _urlreq.urlopen(f"{proxy_base}/health", timeout=3) as r:
+            proxy_data = json.loads(r.read())
+    except Exception:
+        proxy_data = None
+
+    # Also read from the JSONL file for accurate rolling stats
+    from tokenpak.agent.proxy.stats import CompressionStats
+    cs = CompressionStats()
+    file_stats = cs.stats_from_file(limit=100)
+
+    # Prefer live proxy data for request counts / uptime when available
+    if proxy_data:
+        requests_total = proxy_data.get("requests_total", file_stats["requests_total"])
+        requests_errors = proxy_data.get("requests_errors", file_stats["requests_errors"])
+        avg_ratio = proxy_data.get("compression_ratio_avg", file_stats["avg_ratio"])
+        uptime_s = proxy_data.get("uptime_seconds")
+    else:
+        requests_total = file_stats["requests_total"]
+        requests_errors = file_stats["requests_errors"]
+        avg_ratio = file_stats["avg_ratio"]
+        uptime_s = None
+
+    avg_latency = file_stats["avg_latency_ms"]
+    pct_reduction = round((1.0 - avg_ratio) * 100, 1) if avg_ratio else 0.0
+
+    # Format uptime
+    if uptime_s is not None:
+        h, rem = divmod(int(uptime_s), 3600)
+        m = rem // 60
+        uptime_str = f"{h}h {m:02d}m" if h else f"{m}m"
+    else:
+        uptime_str = "n/a (proxy not running)"
+
+    if getattr(args, "raw", False):
+        print(json.dumps({
+            "requests_total": requests_total,
+            "requests_errors": requests_errors,
+            "avg_ratio": avg_ratio,
+            "avg_latency_ms": avg_latency,
+            "uptime": uptime_str,
+        }, indent=2))
+        return
+
+    print(f"TokenPak Compression Stats (last 100 requests)")
+    print(SEP)
+    print(f"{'Requests:':<17}{requests_total} total, {requests_errors} errors")
+    print(f"{'Avg ratio:':<17}{avg_ratio} ({pct_reduction}% token reduction)")
+    print(f"{'Avg latency:':<17}{avg_latency}ms")
+    print(f"{'Uptime:':<17}{uptime_str}")
 
 
 def cmd_serve(args):
