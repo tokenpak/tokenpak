@@ -552,6 +552,8 @@ def build_parser():
     _build_replay_parser(sub)
     _build_status_parser(sub)
     _build_demo_parser(sub)
+    _build_run_parser(sub)
+    _build_macro_parser(sub)
 
     return parser
 
@@ -1611,3 +1613,165 @@ def cmd_recipe_benchmark(args):
     t = result["timing_ms"]
     print(f"  Timing ms (mean)      : {t['mean']:.3f} ms  "
           f"[min {t['min']:.3f} – max {t['max']:.3f}]")
+
+# ── run: Macro scheduler CLI ──────────────────────────────────────────────────
+
+def cmd_run_cron(args):
+    """Schedule a macro to run on a cron expression."""
+    from .agent.macros.scheduler import schedule_cron
+    scheduled = schedule_cron(
+        name=args.name,
+        cron_expr=args.cron,
+        description=getattr(args, "description", ""),
+    )
+    print(f"✅ Scheduled '{args.name}' [id: {scheduled.id}]")
+    print(f"   Cron:    {scheduled.schedule}")
+    print(f"   Command: {scheduled.command}")
+
+
+def cmd_run_at(args):
+    """Schedule a macro to run once at a given time."""
+    from .agent.macros.scheduler import schedule_at
+    scheduled = schedule_at(
+        name=args.name,
+        run_at=args.at,
+        description=getattr(args, "description", ""),
+    )
+    print(f"✅ Scheduled '{args.name}' [id: {scheduled.id}]")
+    print(f"   At:      {scheduled.schedule}")
+    print(f"   Command: {scheduled.command}")
+
+
+def cmd_run_list_scheduled(args):
+    """List all scheduled macro runs."""
+    from .agent.macros.scheduler import list_scheduled
+    schedules = list_scheduled()
+    if not schedules:
+        print("No scheduled macros.")
+        return
+    print(f"{'ID':<10} {'NAME':<25} {'TYPE':<6} {'SCHEDULE':<25} {'COMMAND'}")
+    print("-" * 90)
+    for s in schedules:
+        print(f"{s.id:<10} {s.name:<25} {s.schedule_type:<6} {s.schedule:<25} {s.command}")
+
+
+def cmd_run_cancel(args):
+    """Cancel a scheduled macro run."""
+    from .agent.macros.scheduler import cancel_schedule
+    ok = cancel_schedule(args.id)
+    if ok:
+        print(f"✅ Cancelled scheduled run: {args.id}")
+    else:
+        print(f"❌ No scheduled run found with id: {args.id}")
+
+
+def _build_run_parser(sub):
+    p_run = sub.add_parser("run", help="Schedule and manage macro runs")
+    rsub = p_run.add_subparsers(dest="run_cmd", required=True)
+
+    # run <name> --cron "<expr>"
+    p_cron = rsub.add_parser("cron", help="Schedule a macro on a cron expression")
+    p_cron.add_argument("name", help="Macro name")
+    p_cron.add_argument("--cron", required=True, metavar="EXPR", help='Cron expression e.g. "0 9 * * 1-5"')
+    p_cron.add_argument("--description", default="", help="Optional description")
+    p_cron.set_defaults(func=cmd_run_cron)
+
+    # run <name> --at "<time>"
+    p_at = rsub.add_parser("at", help="Schedule a one-shot macro run at a specific time")
+    p_at.add_argument("name", help="Macro name")
+    p_at.add_argument("--at", required=True, metavar="TIME", help='Time string e.g. "2026-03-06 09:00" or "now + 1 hour"')
+    p_at.add_argument("--description", default="", help="Optional description")
+    p_at.set_defaults(func=cmd_run_at)
+
+    # run list --scheduled
+    p_list = rsub.add_parser("list", help="List all scheduled macro runs")
+    p_list.set_defaults(func=cmd_run_list_scheduled)
+
+    # run cancel <id>
+    p_cancel = rsub.add_parser("cancel", help="Cancel a scheduled macro run")
+    p_cancel.add_argument("id", help="Schedule ID to cancel")
+    p_cancel.set_defaults(func=cmd_run_cancel)
+
+
+# ── macro: Premade macro CLI ──────────────────────────────────────────────────
+
+def cmd_macro_install(args):
+    """Install a premade macro."""
+    from .agent.macros.premade_macros import install_macro
+    try:
+        path = install_macro(args.name)
+        print(f"✅ Installed macro '{args.name}' → {path}")
+    except ValueError as e:
+        print(f"❌ {e}")
+
+
+def cmd_macro_run(args):
+    """Run a premade macro."""
+    from .agent.macros.premade_macros import run_macro, format_macro_output, PREMADE_MACROS
+    name = args.name
+    if name not in PREMADE_MACROS:
+        print(f"❌ Unknown macro: '{name}'. Available: {', '.join(PREMADE_MACROS.keys())}")
+        return
+    result = run_macro(name)
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps(result, indent=2))
+    else:
+        print(format_macro_output(result))
+
+
+def cmd_macro_list(args):
+    """List all available premade macros."""
+    from .agent.macros.premade_macros import list_macros
+    macros = list_macros()
+    print(f"{'NAME':<20} DESCRIPTION")
+    print("-" * 70)
+    for m in macros:
+        print(f"{m['name']:<20} {m['description']}")
+
+
+def cmd_macro_hooks(args):
+    """List, install, or check hook scripts."""
+    from .agent.macros.script_hooks import list_hooks, install_hook, HOOK_NAMES
+    if args.hook_action == "list":
+        hooks = list_hooks()
+        print(f"{'HOOK':<20} {'EXISTS':<8} {'EXEC':<8} PATH")
+        print("-" * 80)
+        for name, info in hooks.items():
+            exists = "✅" if info["exists"] else "—"
+            executable = "✅" if info["executable"] else "—"
+            print(f"{name:<20} {exists:<8} {executable:<8} {info['path']}")
+    elif args.hook_action == "install":
+        try:
+            path = install_hook(args.hook_name)
+            print(f"✅ Installed hook stub: {path}")
+            print(f"   Edit this file to customize the hook behavior.")
+        except ValueError as e:
+            print(f"❌ {e}")
+
+
+def _build_macro_parser(sub):
+    p_macro = sub.add_parser("macro", help="Premade macros and script hooks")
+    msub = p_macro.add_subparsers(dest="macro_cmd", required=True)
+
+    # macro install <name>
+    p_install = msub.add_parser("install", help="Install a premade macro")
+    p_install.add_argument("name", help="Macro name (morning-standup, pre-deploy, weekly-report)")
+    p_install.set_defaults(func=cmd_macro_install)
+
+    # macro run <name>
+    p_run = msub.add_parser("run", help="Run a premade macro")
+    p_run.add_argument("name", help="Macro name")
+    p_run.add_argument("--json", action="store_true", help="Output raw JSON")
+    p_run.set_defaults(func=cmd_macro_run)
+
+    # macro list
+    msub.add_parser("list", help="List available premade macros").set_defaults(func=cmd_macro_list)
+
+    # macro hooks list / install <name>
+    p_hooks = msub.add_parser("hooks", help="Manage proxy lifecycle script hooks")
+    hsub = p_hooks.add_subparsers(dest="hook_action", required=True)
+    hsub.add_parser("list", help="List all hook scripts and their status").set_defaults(func=cmd_macro_hooks)
+    p_hook_install = hsub.add_parser("install", help="Install a hook stub script")
+    p_hook_install.add_argument("hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)")
+    p_hook_install.set_defaults(func=cmd_macro_hooks)
