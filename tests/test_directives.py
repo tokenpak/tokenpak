@@ -298,3 +298,206 @@ class TestApplyDirectives:
     def test_tokens_saved_positive(self):
         result = apply_directives(list(SEGMENTS), list(VAULT_BLOCKS), FULL_DIRECTIVE)
         assert result.tokens_saved >= 0
+
+
+# ---------------------------------------------------------------------------
+# New directive types: compression_mode_change, recipe_override, budget_adjustment
+# ---------------------------------------------------------------------------
+
+MOCK_NEW_DIRECTIVES = {
+    "request_id": "mock-server-001",
+    "compression": [
+        {"target": "segment_0", "action": "compression_mode_change", "params": {"mode": "aggressive"}},
+        {"target": "segment_1", "action": "recipe_override", "params": {"recipe_name": "code_review", "max_tokens": 500}},
+        {"target": "segment_2", "action": "budget_adjustment", "params": {"reduction_pct": 0.4}},
+    ],
+    "estimated_savings": {"tokens": 200, "pct": 20.0},
+}
+
+
+class TestCompressionModeChange:
+    """Tests for compression_mode_change directive (mocked server response)."""
+
+    def test_aggressive_mode_prunes_content(self):
+        segs = [{"id": "segment_0", "content": "\n".join(f"line{i}" for i in range(20)), "tokens": 100}]
+        directives = [{"target": "segment_0", "action": "compression_mode_change",
+                       "params": {"mode": "aggressive"}}]
+        updated, applied, skipped = apply_compression_directives(segs, directives)
+        assert updated[0]["tokens"] < 100
+        assert updated[0]["_compressed"] == "compression_mode_change"
+        assert len(applied) == 1
+
+    def test_conservative_mode_keeps_more(self):
+        segs = [{"id": "segment_0", "content": "\n".join(f"line{i}" for i in range(20)), "tokens": 100}]
+        agg = [{"target": "segment_0", "action": "compression_mode_change",
+                "params": {"mode": "aggressive"}}]
+        cons = [{"target": "segment_0", "action": "compression_mode_change",
+                 "params": {"mode": "conservative"}}]
+        agg_result, _, _ = apply_compression_directives(list(segs), agg)
+        cons_result, _, _ = apply_compression_directives(list(segs), cons)
+        assert cons_result[0]["tokens"] >= agg_result[0]["tokens"]
+
+    def test_lossless_mode_preserves_content(self):
+        segs = [{"id": "segment_0", "content": "important content", "tokens": 10}]
+        directives = [{"target": "segment_0", "action": "compression_mode_change",
+                       "params": {"mode": "lossless"}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["content"] == "important content"
+        assert updated[0]["_compression_mode"] == "lossless"
+
+    def test_summarize_mode_adds_ellipsis(self):
+        segs = [{"id": "segment_0", "content": "first line\n" + "\n".join(f"extra{i}" for i in range(10)),
+                 "tokens": 80}]
+        directives = [{"target": "segment_0", "action": "compression_mode_change",
+                       "params": {"mode": "summarize"}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert "…" in updated[0]["content"] or "omitted" in updated[0]["content"]
+
+    def test_invalid_mode_defaults_to_aggressive(self):
+        segs = [{"id": "segment_0", "content": "\n".join(f"line{i}" for i in range(20)), "tokens": 100}]
+        directives = [{"target": "segment_0", "action": "compression_mode_change",
+                       "params": {"mode": "turbo_max"}}]
+        updated, applied, skipped = apply_compression_directives(segs, directives)
+        assert len(applied) == 1  # still applied with aggressive fallback
+        assert updated[0]["_compression_mode"] == "aggressive"
+
+
+class TestRecipeOverride:
+    """Tests for recipe_override directive (mocked server response)."""
+
+    def test_recipe_name_stored_in_segment(self):
+        segs = [{"id": "segment_1", "content": "some content", "tokens": 20}]
+        directives = [{"target": "segment_1", "action": "recipe_override",
+                       "params": {"recipe_name": "code_review"}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["_recipe_name"] == "code_review"
+        assert updated[0]["_compressed"] == "recipe_override"
+
+    def test_max_tokens_override_stored(self):
+        segs = [{"id": "segment_1", "content": "some content", "tokens": 20}]
+        directives = [{"target": "segment_1", "action": "recipe_override",
+                       "params": {"recipe_name": "fast_answer", "max_tokens": 300}}]
+        updated, _, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["max_tokens"] == 300
+
+    def test_recipe_override_preserves_original_content(self):
+        segs = [{"id": "segment_1", "content": "keep this content", "tokens": 20}]
+        directives = [{"target": "segment_1", "action": "recipe_override",
+                       "params": {"recipe_name": "test_recipe"}}]
+        updated, _, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["content"] == "keep this content"
+
+
+class TestBudgetAdjustment:
+    """Tests for budget_adjustment directive (mocked server response)."""
+
+    def test_reduction_pct_trims_tokens(self):
+        segs = [{"id": "segment_2", "content": "\n".join(f"word{i}" for i in range(100)), "tokens": 100}]
+        directives = [{"target": "segment_2", "action": "budget_adjustment",
+                       "params": {"reduction_pct": 0.5}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["tokens"] <= 55  # ~50% reduction
+        assert updated[0]["_compressed"] == "budget_adjustment"
+
+    def test_max_tokens_cap_enforced(self):
+        segs = [{"id": "segment_2", "content": "\n".join(f"word{i}" for i in range(100)), "tokens": 200}]
+        directives = [{"target": "segment_2", "action": "budget_adjustment",
+                       "params": {"max_tokens": 50}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert updated[0]["tokens"] <= 50
+        assert updated[0]["_budget_cap"] == 50
+
+    def test_budget_no_params_is_noop(self):
+        segs = [{"id": "segment_2", "content": "hello world", "tokens": 10}]
+        directives = [{"target": "segment_2", "action": "budget_adjustment", "params": {}}]
+        updated, applied, _ = apply_compression_directives(segs, directives)
+        assert len(applied) == 1
+        assert updated[0]["content"] == "hello world"
+
+
+class TestNewDirectivesInKnownActions:
+    """Verify new actions pass parse_directives validation."""
+
+    def test_compression_mode_change_accepted(self):
+        d = {"compression": [{"target": "segment_0", "action": "compression_mode_change",
+                               "params": {"mode": "conservative"}}]}
+        result = parse_directives(d)
+        assert len(result["compression"]) == 1
+
+    def test_recipe_override_accepted(self):
+        d = {"compression": [{"target": "segment_0", "action": "recipe_override",
+                               "params": {"recipe_name": "debug"}}]}
+        result = parse_directives(d)
+        assert len(result["compression"]) == 1
+
+    def test_budget_adjustment_accepted(self):
+        d = {"compression": [{"target": "segment_0", "action": "budget_adjustment",
+                               "params": {"reduction_pct": 0.3}}]}
+        result = parse_directives(d)
+        assert len(result["compression"]) == 1
+
+    def test_full_mock_server_response_applies(self):
+        segs = [
+            {"id": "segment_0", "content": "\n".join(f"l{i}" for i in range(20)), "tokens": 100},
+            {"id": "segment_1", "content": "fn code body", "tokens": 50},
+            {"id": "segment_2", "content": "\n".join(f"item{i}" for i in range(20)), "tokens": 80},
+        ]
+        result = apply_directives(list(segs), [], MOCK_NEW_DIRECTIVES)
+        assert len(result.applied) == 3
+        assert len(result.skipped) == 0
+
+
+# ---------------------------------------------------------------------------
+# DirectiveCache
+# ---------------------------------------------------------------------------
+
+from tokenpak.agent.compression.directives import DirectiveCache
+
+
+class TestDirectiveCache:
+    def test_cache_hit_returns_parsed(self):
+        cache = DirectiveCache()
+        raw = {"compression": [{"target": "segment_0", "action": "prune", "params": {}}]}
+        parsed = parse_directives(raw)
+        cache.set(raw, parsed)
+        result = cache.get(raw)
+        assert result is not None
+        assert result["compression"][0]["action"] == "prune"
+
+    def test_cache_miss_returns_none(self):
+        cache = DirectiveCache()
+        result = cache.get({"request_id": "nope"})
+        assert result is None
+
+    def test_cache_expiry(self):
+        cache = DirectiveCache(ttl_seconds=0.01)
+        raw = {"request_id": "x"}
+        cache.set(raw, {"compression": []})
+        import time
+        time.sleep(0.05)
+        assert cache.get(raw) is None
+
+    def test_cache_invalidate(self):
+        cache = DirectiveCache()
+        raw = {"request_id": "y"}
+        cache.set(raw, {"compression": []})
+        removed = cache.invalidate(raw)
+        assert removed is True
+        assert cache.get(raw) is None
+
+    def test_cache_clear(self):
+        cache = DirectiveCache()
+        for i in range(3):
+            cache.set({"id": i}, {"compression": []})
+        cache.clear()
+        assert cache.size == 0
+
+    def test_apply_directives_uses_cache(self):
+        cache = DirectiveCache()
+        raw = dict(FULL_DIRECTIVE)
+        # First call — populates cache
+        apply_directives(list(SEGMENTS), list(VAULT_BLOCKS), raw, cache=cache)
+        assert cache.size == 1
+        # Second call — cache hit (size stays 1)
+        apply_directives(list(SEGMENTS), list(VAULT_BLOCKS), raw, cache=cache)
+        assert cache.size == 1

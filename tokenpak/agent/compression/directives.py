@@ -19,8 +19,11 @@ Directive format (from Intelligence Server):
 from __future__ import annotations
 
 
+import hashlib
+import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,6 +35,67 @@ logger = logging.getLogger(__name__)
 
 Segment = dict[str, Any]
 VaultBlock = dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Directive Cache (5-minute TTL)
+# ---------------------------------------------------------------------------
+
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+class DirectiveCache:
+    """In-process cache for server directive responses with 5-minute TTL."""
+
+    def __init__(self, ttl_seconds: float = _CACHE_TTL_SECONDS) -> None:
+        self._ttl = ttl_seconds
+        self._store: dict[str, tuple[dict, float]] = {}
+
+    @staticmethod
+    def _make_key(raw: dict) -> str:
+        serialised = json.dumps(raw, sort_keys=True, default=str)
+        return hashlib.sha256(serialised.encode()).hexdigest()[:16]
+
+    def _is_expired(self, expires_at: float) -> bool:
+        return time.monotonic() > expires_at
+
+    def get(self, raw: dict) -> "dict | None":
+        key = self._make_key(raw)
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        parsed, expires_at = entry
+        if self._is_expired(expires_at):
+            del self._store[key]
+            return None
+        return parsed
+
+    def set(self, raw: dict, parsed: dict) -> None:
+        key = self._make_key(raw)
+        self._store[key] = (parsed, time.monotonic() + self._ttl)
+
+    def invalidate(self, raw: dict) -> bool:
+        key = self._make_key(raw)
+        return self._store.pop(key, None) is not None
+
+    def clear(self) -> None:
+        self._store.clear()
+
+    def purge_expired(self) -> int:
+        now = time.monotonic()
+        expired = [k for k, (_, exp) in self._store.items() if now > exp]
+        for k in expired:
+            del self._store[k]
+        return len(expired)
+
+    @property
+    def size(self) -> int:
+        return len(self._store)
+
+
+# Module-level cache instance (shared across calls in same process)
+_directive_cache: DirectiveCache = DirectiveCache()
+
 
 
 @dataclass
@@ -50,7 +114,7 @@ class DirectiveResult:
 # Parsing
 # ---------------------------------------------------------------------------
 
-KNOWN_ACTIONS = {"prune", "collapse", "dedup", "reorder", "prune_turns"}
+KNOWN_ACTIONS = {"prune", "collapse", "dedup", "reorder", "prune_turns", "compression_mode_change", "recipe_override", "budget_adjustment"}
 
 
 def parse_directives(raw: dict[str, Any]) -> dict[str, Any]:
@@ -198,12 +262,109 @@ def _apply_prune_turns(segment: Segment, params: dict) -> Segment:
         return {**segment, "content": content, "tokens": tokens_after, "_compressed": "prune_turns"}
 
 
+def _apply_compression_mode_change(segment: Segment, params: dict) -> Segment:
+    """Switch compression mode (e.g. aggressive, conservative, lossless)."""
+    mode = params.get("mode", "aggressive")
+    valid_modes = {"aggressive", "conservative", "lossless", "summarize"}
+    if mode not in valid_modes:
+        logger.warning("directives: unknown compression_mode %r — using aggressive", mode)
+        mode = "aggressive"
+
+    content = segment.get("content", "")
+    tokens_before = segment.get("tokens", len(content.split()))
+
+    if mode == "lossless":
+        # No content change; mode is recorded only
+        return {**segment, "_compression_mode": mode, "_compressed": "compression_mode_change"}
+    elif mode == "summarize":
+        lines = content.splitlines()
+        summary = lines[0] if lines else ""
+        if len(lines) > 1:
+            summary += f"\n[…{len(lines)-1} lines omitted]"
+        tokens_after = max(1, len(summary.split()))
+        return {**segment, "content": summary, "tokens": tokens_after,
+                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+    elif mode == "conservative":
+        keep_ratio = float(params.get("keep_ratio", 0.85))
+        lines = content.splitlines()
+        keep_n = max(1, int(len(lines) * keep_ratio))
+        pruned = "\n".join(lines[:keep_n])
+        tokens_after = max(1, int(tokens_before * keep_ratio))
+        return {**segment, "content": pruned, "tokens": tokens_after,
+                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+    else:  # aggressive
+        keep_ratio = float(params.get("keep_ratio", 0.5))
+        lines = content.splitlines()
+        keep_n = max(1, int(len(lines) * keep_ratio))
+        pruned = "\n".join(lines[:keep_n])
+        tokens_after = max(1, int(tokens_before * keep_ratio))
+        return {**segment, "content": pruned, "tokens": tokens_after,
+                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+
+
+def _apply_recipe_override(segment: Segment, params: dict) -> Segment:
+    """Override local recipe settings with server-provided recipe fields."""
+    recipe_name = params.get("recipe_name", "")
+    max_tokens = params.get("max_tokens")
+    priority_order = params.get("priority_order")
+    required_blocks = params.get("required_blocks")
+
+    overrides: dict[str, Any] = {"_compressed": "recipe_override"}
+    if recipe_name:
+        overrides["_recipe_name"] = recipe_name
+    if max_tokens is not None:
+        overrides["max_tokens"] = int(max_tokens)
+    if priority_order is not None:
+        overrides["_priority_order"] = priority_order
+    if required_blocks is not None:
+        overrides["_required_blocks"] = required_blocks
+
+    return {**segment, **overrides}
+
+
+def _apply_budget_adjustment(segment: Segment, params: dict) -> Segment:
+    """Adjust token budget for this segment per server directive."""
+    new_budget = params.get("max_tokens")
+    reduction_pct = params.get("reduction_pct")
+
+    content = segment.get("content", "")
+    tokens = segment.get("tokens", len(content.split()))
+
+    if new_budget is not None:
+        new_budget = int(new_budget)
+        if tokens > new_budget:
+            # Trim content to fit within new budget (rough char estimate)
+            ratio = new_budget / max(tokens, 1)
+            lines = content.splitlines()
+            keep_n = max(1, int(len(lines) * ratio))
+            content = "\n".join(lines[:keep_n])
+            tokens = new_budget
+        return {**segment, "content": content, "tokens": tokens,
+                "_budget_cap": new_budget, "_compressed": "budget_adjustment"}
+
+    elif reduction_pct is not None:
+        reduction_pct = max(0.0, min(1.0, float(reduction_pct)))
+        new_tokens = max(1, int(tokens * (1.0 - reduction_pct)))
+        ratio = new_tokens / max(tokens, 1)
+        lines = content.splitlines()
+        keep_n = max(1, int(len(lines) * ratio))
+        content = "\n".join(lines[:keep_n])
+        return {**segment, "content": content, "tokens": new_tokens,
+                "_budget_reduction": reduction_pct, "_compressed": "budget_adjustment"}
+
+    # No change if no parameters
+    return {**segment, "_compressed": "budget_adjustment"}
+
+
 _ACTION_HANDLERS = {
     "prune": _apply_prune,
     "collapse": _apply_collapse,
     "dedup": _apply_dedup,
     "reorder": _apply_reorder,
     "prune_turns": _apply_prune_turns,
+    "compression_mode_change": _apply_compression_mode_change,
+    "recipe_override": _apply_recipe_override,
+    "budget_adjustment": _apply_budget_adjustment,
 }
 
 
@@ -306,14 +467,33 @@ def apply_directives(
     vault_blocks: list[VaultBlock],
     raw_directives: dict[str, Any],
     local_recipe_fn=None,
+    cache: 'DirectiveCache | None' = None,
 ) -> DirectiveResult:
     """
     Apply all server directives to segments and vault blocks.
 
     Server directives take priority over local recipe when present.
     Falls back to local_recipe_fn if no server directives are available.
+
+    Parameters
+    ----------
+    cache:
+        Optional DirectiveCache instance. Uses module-level shared cache by default.
+        Pass a fresh DirectiveCache() to opt out of caching for a single call.
     """
-    directives = parse_directives(raw_directives) if raw_directives else {}
+    if cache is None:
+        cache = _directive_cache
+
+    if raw_directives:
+        cached = cache.get(raw_directives)
+        if cached is not None:
+            logger.debug("directives: cache hit — skipping parse")
+            directives = cached
+        else:
+            directives = parse_directives(raw_directives)
+            cache.set(raw_directives, directives)
+    else:
+        directives = {}
 
     has_server_directives = bool(
         directives.get("compression")
