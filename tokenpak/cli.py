@@ -547,6 +547,7 @@ def build_parser():
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
     _build_budget_parser(sub)
+    _build_lock_parser(sub)
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
@@ -995,6 +996,125 @@ def _build_budget_parser(sub):
     p_hist.add_argument("--month", action="store_true", help="Show this month")
     p_hist.set_defaults(func=cmd_budget_history)
 
+
+
+
+# ── top-level lock subcommand ─────────────────────────────────────────────────
+
+def cmd_lock_claim(args):
+    from .agent.agentic.locks import FileLockManager, LockConflictError
+    import time as _time
+    mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
+    try:
+        record = mgr.claim(args.path, timeout_s=args.timeout)
+        print(f"✅ Lock claimed: {record['path']}")
+        print(f"   Agent:      {record['agent']}")
+        exp = record['expires']
+        print(f"   Expires in: {exp - _time.time():.0f}s  (at epoch {exp:.0f})")
+    except LockConflictError as e:
+        print(f"❌ {e}")
+        raise SystemExit(1)
+
+
+def cmd_lock_release(args):
+    from .agent.agentic.locks import FileLockManager
+    mgr = FileLockManager(agent_id=args.agent or None)
+    released = mgr.release(args.path)
+    if released:
+        print(f"✅ Released: {args.path}")
+    else:
+        print(f"⚠️  No lock held by this agent on: {args.path}")
+
+
+def cmd_lock_query(args):
+    from .agent.agentic.locks import FileLockManager
+    import time as _time
+    mgr = FileLockManager(agent_id=args.agent or None)
+    record = mgr.query(args.path)
+    if record is None:
+        print(f"🔓 Unlocked: {args.path}")
+    else:
+        remaining = max(0, record.get("expires", 0) - _time.time())
+        print(f"🔒 Locked:   {record['path']}")
+        print(f"   Agent:      {record['agent']}")
+        print(f"   PID:        {record.get('pid', '?')}")
+        print(f"   Expires in: {remaining:.0f}s")
+
+
+def cmd_lock_list(args):
+    from .agent.agentic.locks import FileLockManager
+    import time as _time
+    mgr = FileLockManager(agent_id=args.agent or None)
+    mgr.prune_expired()
+    locks = mgr.locks()
+    if not locks:
+        print("No active locks.")
+        return
+    now = _time.time()
+    print(f"{'Path':<50} {'Agent':<15} {'Expires In':>12}")
+    print("-" * 80)
+    for lock in locks:
+        remaining = max(0, lock.get("expires", 0) - now)
+        path = lock.get("path", "?")
+        if len(path) > 49:
+            path = "…" + path[-48:]
+        print(f"{path:<50} {lock.get('agent', '?'):<15} {remaining:>10.0f}s")
+
+
+def cmd_lock_renew(args):
+    from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
+    import time as _time
+    mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
+    try:
+        record = mgr.renew(args.path, timeout_s=args.timeout)
+        exp = record["expires"]
+        print(f"🔄 Renewed: {record['path']}")
+        print(f"   Agent:      {record['agent']}")
+        print(f"   Expires in: {exp - _time.time():.0f}s")
+    except LockExpiredError as e:
+        print(f"⚠️  {e}")
+        raise SystemExit(1)
+    except LockConflictError as e:
+        print(f"❌ {e}")
+        raise SystemExit(1)
+
+
+def _build_lock_parser(sub):
+    p_lock = sub.add_parser("lock", help="File lock management for multi-agent coordination")
+    lsub = p_lock.add_subparsers(dest="lock_cmd", required=True)
+
+    # claim
+    p_claim = lsub.add_parser("claim", help="Claim a lock on a file or directory")
+    p_claim.add_argument("path", help="File or directory path to lock")
+    p_claim.add_argument("--timeout", type=int, default=1800, metavar="SECONDS",
+                         help="Lock TTL in seconds (default 1800 = 30 min)")
+    p_claim.add_argument("--agent", default=None, help="Agent id override")
+    p_claim.set_defaults(func=cmd_lock_claim)
+
+    # release
+    p_release = lsub.add_parser("release", help="Release a held lock")
+    p_release.add_argument("path", help="File or directory path to release")
+    p_release.add_argument("--agent", default=None, help="Agent id override")
+    p_release.set_defaults(func=cmd_lock_release)
+
+    # query
+    p_query = lsub.add_parser("query", help="Query who holds a lock on a path")
+    p_query.add_argument("path", help="File or directory path to query")
+    p_query.add_argument("--agent", default=None, help="Agent id override (for manager context)")
+    p_query.set_defaults(func=cmd_lock_query)
+
+    # list
+    p_list = lsub.add_parser("list", help="List all active locks")
+    p_list.add_argument("--agent", default=None, help="Filter by agent id (display context only)")
+    p_list.set_defaults(func=cmd_lock_list)
+
+    # renew (heartbeat)
+    p_renew = lsub.add_parser("renew", help="Renew (heartbeat) a held lock to extend its TTL")
+    p_renew.add_argument("path", help="File or directory path to renew")
+    p_renew.add_argument("--timeout", type=int, default=1800, metavar="SECONDS",
+                         help="New TTL in seconds (default 1800 = 30 min)")
+    p_renew.add_argument("--agent", default=None, help="Agent id override")
+    p_renew.set_defaults(func=cmd_lock_renew)
 
 # ── agent lock/unlock/locks commands ─────────────────────────────────────────
 

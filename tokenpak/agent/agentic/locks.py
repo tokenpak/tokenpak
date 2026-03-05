@@ -218,3 +218,36 @@ class FileLockManager:
             for c in candidates
             if self.query(c) is None
         ]
+    def renew(self, path: str | Path, timeout_s: Optional[int] = None) -> dict:
+        """
+        Renew (extend) an existing lock held by this agent.
+
+        Raises LockConflictError if path is locked by another agent.
+        Raises LockExpiredError if the lock has already expired.
+        Returns the updated lock record on success.
+        """
+        abs_path = str(Path(path).resolve())
+        lock_file = self._lock_file(abs_path)
+        existing = self._read_lock(lock_file)
+
+        if not existing:
+            raise LockExpiredError(f"No lock found on '{abs_path}' — cannot renew.")
+
+        if time.time() >= existing.get("expires", 0):
+            try:
+                lock_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise LockExpiredError(f"Lock on '{abs_path}' has already expired.")
+
+        if existing.get("agent") != self.agent_id:
+            raise LockConflictError(abs_path, existing)
+
+        timeout = timeout_s if timeout_s is not None else self.timeout_s
+        now = time.time()
+        updated = dict(existing)
+        updated["expires"] = now + timeout
+        updated["renewed"] = now
+        self._write_lock(lock_file, updated)
+        return updated
+
