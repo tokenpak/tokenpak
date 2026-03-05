@@ -616,3 +616,127 @@ _RESPONSE_TRANSLATORS = {
     ("anthropic", "openai"): _anthropic_to_openai_response,
     ("openai", "anthropic"): _openai_to_anthropic_response,
 }
+
+
+# ---------------------------------------------------------------------------
+# Google → Anthropic (response)
+# ---------------------------------------------------------------------------
+
+def _google_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert Google generateContent response to Anthropic /v1/messages format."""
+    candidates = data.get("candidates", [{}])
+    candidate = candidates[0] if candidates else {}
+    g_content = candidate.get("content", {})
+    parts = g_content.get("parts", [])
+
+    content: List[Dict[str, Any]] = []
+    for part in parts:
+        if "thought" in part:
+            # Google thought/reasoning parts → skip gracefully (not in Anthropic response)
+            pass
+        elif "text" in part:
+            content.append({"type": "text", "text": part["text"]})
+        elif "functionCall" in part:
+            fc = part["functionCall"]
+            content.append({
+                "type": "tool_use",
+                "id": fc.get("name", ""),
+                "name": fc.get("name", ""),
+                "input": fc.get("args", {}),
+            })
+        else:
+            # Unknown part type → convert to text
+            content.append({"type": "text", "text": str(part)})
+
+    # Map finish reason
+    finish_reason = candidate.get("finishReason", "STOP")
+    stop_reason_map = {
+        "STOP": "end_turn",
+        "MAX_TOKENS": "max_tokens",
+        "SAFETY": "end_turn",
+        "RECITATION": "end_turn",
+        "TOOL_CODE": "tool_use",
+    }
+    stop_reason = stop_reason_map.get(finish_reason, "end_turn")
+    if any(b.get("type") == "tool_use" for b in content):
+        stop_reason = "tool_use"
+
+    # Usage metadata
+    usage_meta = data.get("usageMetadata", {})
+    return {
+        "id": f"google-{id(data)}",
+        "type": "message",
+        "role": "assistant",
+        "model": data.get("modelVersion", ""),
+        "content": content,
+        "stop_reason": stop_reason,
+        "usage": {
+            "input_tokens": usage_meta.get("promptTokenCount", 0),
+            "output_tokens": usage_meta.get("candidatesTokenCount", 0),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Anthropic → Google (response)
+# ---------------------------------------------------------------------------
+
+def _anthropic_to_google_response(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert Anthropic /v1/messages response to Google generateContent format."""
+    content_blocks = data.get("content", [])
+    parts: List[Dict[str, Any]] = []
+
+    for block in content_blocks:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            parts.append({"text": block.get("text", "")})
+        elif btype == "tool_use":
+            parts.append({
+                "functionCall": {
+                    "name": block.get("name", ""),
+                    "args": block.get("input", {}),
+                }
+            })
+        elif btype == "thinking":
+            # Thinking blocks → gracefully skip (Google doesn't support this)
+            pass
+
+    stop_reason = data.get("stop_reason", "end_turn")
+    finish_reason_map = {
+        "end_turn": "STOP",
+        "max_tokens": "MAX_TOKENS",
+        "tool_use": "TOOL_CODE",
+        "stop_sequence": "STOP",
+    }
+    finish_reason = finish_reason_map.get(stop_reason, "STOP")
+
+    usage = data.get("usage", {})
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": parts,
+                },
+                "finishReason": finish_reason,
+                "index": 0,
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": usage.get("input_tokens", 0),
+            "candidatesTokenCount": usage.get("output_tokens", 0),
+            "totalTokenCount": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+        },
+        "modelVersion": data.get("model", ""),
+    }
+
+
+# Update response translator dispatch table with Google support
+_RESPONSE_TRANSLATORS.update({
+    ("google", "anthropic"): _google_to_anthropic_response,
+    ("anthropic", "google"): _anthropic_to_google_response,
+    ("google", "openai"): lambda d: _anthropic_to_openai_response(_google_to_anthropic_response(d)),
+    ("openai", "google"): lambda d: _anthropic_to_google_response(_openai_to_anthropic_response(d)),
+})
