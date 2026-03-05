@@ -38,12 +38,15 @@ from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
 from .stats import CompressionStats
 from tokenpak.agent.adapters.registry import detect_platform
+from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
 from tokenpak.agent.dashboard.session_filter import (
     SessionFilter,
     FilterParams,
     get_distinct_models,
 )
+from tokenpak.agent.telemetry.collector import RequestStats
+from tokenpak.agent.telemetry.footer import render_footer_oneline
 
 
 # ---------------------------------------------------------------------------
@@ -534,6 +537,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "cost_saved": round(cost_saved, 6),
                         "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
                     }
+
+                # ── Stats footer ──────────────────────────────────────────
+                if get_stats_footer_enabled():
+                    req_stats = RequestStats(
+                        request_id=trace.request_id if trace else "?",
+                        timestamp=datetime.now(),
+                        input_tokens_raw=input_tokens,
+                        input_tokens_sent=sent_input_tokens,
+                        tokens_saved=saved,
+                        percent_saved=round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
+                        cost_saved=round(cost_saved, 6),
+                    )
+                    print(render_footer_oneline(req_stats), file=sys.stderr)
 
         except Exception as exc:
             with ps._session_lock:
