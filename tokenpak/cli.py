@@ -549,6 +549,7 @@ def build_parser():
     _build_budget_parser(sub)
     _build_agent_parser(sub)
     _build_replay_parser(sub)
+    _build_demo_parser(sub)
 
     return parser
 
@@ -1195,3 +1196,74 @@ def _build_replay_parser(sub):
         cmd_replay_list(args)
 
     p_replay.set_defaults(func=_replay_dispatch)
+
+
+# ── Demo command ──────────────────────────────────────────────────────────────
+
+def _build_demo_parser(sub):
+    p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
+    p_demo.add_argument("--list", action="store_true", help="List all 50 baked-in recipes")
+    p_demo.add_argument("--category", default=None, help="Filter by category (general, python, javascript, markdown, config, common_patterns)")
+    p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
+    p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
+    p_demo.set_defaults(func=cmd_demo)
+
+
+def cmd_demo(args):
+    """Show OSS compression recipes and demonstrate recipe selection."""
+    from .agent.compression.recipes import get_oss_engine
+
+    engine = get_oss_engine()
+
+    # ── Single recipe detail
+    if args.recipe:
+        recipe = engine.get_recipe(args.recipe)
+        if recipe is None:
+            print(f"Recipe '{args.recipe}' not found.")
+            print(f"Available: {', '.join(engine.list_recipes()[:5])} ...")
+            return
+        print(f"┌─ Recipe: {recipe.name}")
+        print(f"│  Category   : {recipe.category}")
+        print(f"│  Description: {recipe.description}")
+        print(f"│  Match mode : {recipe.match_mode}")
+        print(f"│  Compression: ~{int(recipe.compression_hint * 100)}% reduction expected")
+        print(f"│  Operations :")
+        for op in recipe.operations:
+            op_type = op.get("type", "?")
+            params = {k: v for k, v in op.items() if k != "type"}
+            param_str = ", ".join(f"{k}={v!r}" for k, v in list(params.items())[:3])
+            print(f"│    [{op_type}]  {param_str}")
+        print("└──")
+        return
+
+    # ── File matching
+    if args.file:
+        print(f"Recipes applicable to: {args.file}")
+        matches = engine.recipes_for_file(args.file)
+        if not matches:
+            print("  (none)")
+        for r in matches:
+            print(f"  {r.name:<45} [{r.category}]  ~{int(r.compression_hint*100)}% savings")
+        return
+
+    # ── List all (optionally filtered by category)
+    summary = engine.summary()
+    print("TokenPak OSS — Baked-in Compression Recipes")
+    print("=" * 50)
+    print(f"Total recipes: {summary['total']}")
+    print()
+
+    categories = [args.category] if args.category else engine.categories()
+
+    for cat in categories:
+        recipes = engine.by_category(cat)
+        if not recipes:
+            print(f"  [no recipes in category '{cat}']")
+            continue
+        print(f"  ── {cat} ({len(recipes)}) ──")
+        for r in recipes:
+            hint = f"~{int(r.compression_hint*100)}%" if r.compression_hint > 0 else "   "
+            print(f"    {r.name:<45}  {hint}  {r.description[:60]}")
+        print()
+
+    print("Use --recipe <name> for details, --file <path> to see applicable recipes.")

@@ -1,0 +1,10 @@
+name: gen-duplicate-line-removal
+category: general
+description: Remove consecutive duplicate lines, keeping the first occurrence of each run.
+pattern:
+  match: any
+action:
+  operations:
+  - type: dedup_consecutive_lines
+    strip_before_compare: true
+  compression_hint: 0.1

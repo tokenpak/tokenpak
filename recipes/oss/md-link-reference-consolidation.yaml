@@ -1,0 +1,14 @@
+name: md-link-reference-consolidation
+category: markdown
+description: Consolidate repeated inline links to reference-style links at document end.
+pattern:
+  match: extension
+  extensions:
+  - .md
+  - .markdown
+  - .mdx
+action:
+  operations:
+  - type: md_consolidate_links
+    min_occurrences: 2
+  compression_hint: 0.08

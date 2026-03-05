@@ -188,3 +188,170 @@ class RecipeEngine:
                 logger.info("Recipe %s skipped optional block %s (budget)", recipe.intent, block_id)
 
         return segments
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Compression Recipe System (OSS tier)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_OSS_RECIPES_DIR = Path(__file__).parent.parent.parent.parent / "recipes" / "oss"
+
+
+@dataclass(frozen=True)
+class CompressionRecipe:
+    """A declarative compression recipe loaded from YAML."""
+
+    name: str
+    category: str
+    description: str
+    pattern: dict
+    action: dict
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], *, source: str) -> "CompressionRecipe":
+        if not isinstance(data, dict):
+            raise ValueError(f"CompressionRecipe in {source} must be a mapping")
+        for field in ("name", "category", "description", "pattern", "action"):
+            if field not in data:
+                raise ValueError(f"CompressionRecipe in {source} missing field: {field}")
+        name = str(data["name"]).strip()
+        category = str(data["category"]).strip()
+        if not name:
+            raise ValueError(f"CompressionRecipe in {source} has empty name")
+        if not category:
+            raise ValueError(f"CompressionRecipe in {source} has empty category")
+        return cls(
+            name=name,
+            category=category,
+            description=str(data["description"]).strip(),
+            pattern=dict(data["pattern"]),
+            action=dict(data["action"]),
+        )
+
+    @property
+    def compression_hint(self) -> float:
+        """Expected compression ratio 0.0–1.0 (fraction of content removed)."""
+        return float(self.action.get("compression_hint", 0.0))
+
+    @property
+    def operations(self) -> list[dict[str, Any]]:
+        return list(self.action.get("operations", []))
+
+    @property
+    def match_mode(self) -> str:
+        return str(self.pattern.get("match", "any"))
+
+    def matches(self, filename: str = "", content_sample: str = "") -> bool:
+        """Return True if this recipe is applicable to the given file/content."""
+        mode = self.match_mode
+        if mode == "any":
+            return True
+        if mode == "extension":
+            exts = self.pattern.get("extensions", [])
+            for ext in exts:
+                if filename.endswith(ext):
+                    return True
+            return False
+        if mode == "filename":
+            fnames = self.pattern.get("filenames", [])
+            base = Path(filename).name
+            return base in fnames
+        if mode == "content":
+            keywords = self.pattern.get("keywords", [])
+            return any(kw in content_sample for kw in keywords)
+        if mode == "path_pattern":
+            import re
+            path_patterns = self.pattern.get("path_patterns", [])
+            return any(re.search(p, filename) for p in path_patterns)
+        # Unknown mode: conservative — skip
+        return False
+
+
+class CompressionRecipeEngine:
+    """Loads and indexes OSS compression recipes from YAML files."""
+
+    def __init__(self) -> None:
+        self._recipes: dict[str, CompressionRecipe] = {}
+        self._loaded = False
+
+    def load_from_dir(self, path: str | Path | None = None) -> None:
+        """Load all YAML recipe files from *path* (defaults to bundled OSS dir)."""
+        root = Path(path) if path is not None else _OSS_RECIPES_DIR
+        if not root.exists() or not root.is_dir():
+            raise ValueError(f"CompressionRecipe path not found: {root}")
+
+        recipe_files = sorted(list(root.glob("*.yaml")) + list(root.glob("*.yml")))
+        loaded = 0
+        for recipe_file in recipe_files:
+            with recipe_file.open("r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh)
+            if data is None:
+                logger.warning("Empty recipe file: %s", recipe_file)
+                continue
+            try:
+                recipe = CompressionRecipe.from_dict(data, source=str(recipe_file))
+            except (ValueError, TypeError) as exc:
+                logger.error("Failed to load recipe %s: %s", recipe_file, exc)
+                continue
+            if recipe.name in self._recipes:
+                logger.warning("Duplicate recipe name %r — skipping %s", recipe.name, recipe_file)
+                continue
+            self._recipes[recipe.name] = recipe
+            loaded += 1
+
+        self._loaded = True
+        logger.info("Loaded %d compression recipes from %s", loaded, root)
+
+    def _ensure_loaded(self) -> None:
+        if not self._loaded:
+            self.load_from_dir()
+
+    def get_recipe(self, name: str) -> CompressionRecipe | None:
+        self._ensure_loaded()
+        return self._recipes.get(name)
+
+    def list_recipes(self) -> list[str]:
+        self._ensure_loaded()
+        return sorted(self._recipes.keys())
+
+    def recipes_for_file(self, filename: str, content_sample: str = "") -> list[CompressionRecipe]:
+        """Return recipes applicable to a given file, sorted by compression_hint desc."""
+        self._ensure_loaded()
+        applicable = [
+            r for r in self._recipes.values()
+            if r.matches(filename=filename, content_sample=content_sample)
+        ]
+        return sorted(applicable, key=lambda r: r.compression_hint, reverse=True)
+
+    def by_category(self, category: str) -> list[CompressionRecipe]:
+        self._ensure_loaded()
+        return sorted(
+            [r for r in self._recipes.values() if r.category == category],
+            key=lambda r: r.name,
+        )
+
+    def categories(self) -> list[str]:
+        self._ensure_loaded()
+        return sorted({r.category for r in self._recipes.values()})
+
+    def summary(self) -> dict[str, Any]:
+        """Return a summary dict suitable for CLI display."""
+        self._ensure_loaded()
+        cats = self.categories()
+        return {
+            "total": len(self._recipes),
+            "categories": {cat: len(self.by_category(cat)) for cat in cats},
+        }
+
+
+# Module-level singleton (lazy-loaded)
+_oss_engine: CompressionRecipeEngine | None = None
+
+
+def get_oss_engine() -> CompressionRecipeEngine:
+    """Return the module-level CompressionRecipeEngine, loading recipes on first call."""
+    global _oss_engine
+    if _oss_engine is None:
+        _oss_engine = CompressionRecipeEngine()
+        _oss_engine.load_from_dir()
+    return _oss_engine
