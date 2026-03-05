@@ -549,8 +549,71 @@ def build_parser():
     _build_budget_parser(sub)
     _build_agent_parser(sub)
     _build_replay_parser(sub)
+    _build_status_parser(sub)
 
     return parser
+
+
+def cmd_status(args):
+    """Show system status including recent retry events."""
+    import time as _time
+    from .agent.agentic.retry import load_recent_retry_events
+
+    print("TokenPak Status\n" + "─" * 40)
+
+    # ── Recent retry events ──
+    n = getattr(args, "limit", 20)
+    events = load_recent_retry_events(n=n)
+    if not events:
+        print("\n  Retry events: none\n")
+    else:
+        print(f"\n  Recent retry events (last {len(events)}):\n")
+        for ev in events:
+            ts = ev.get("timestamp", 0)
+            try:
+                ts_str = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(ts))
+            except Exception:
+                ts_str = str(ts)
+            event_type = ev.get("event", "unknown")
+            task = ev.get("task_id") or ev.get("task") or "—"
+            extra = ""
+            if ev.get("http_status"):
+                extra += f" [HTTP {ev['http_status']}]"
+            if ev.get("error"):
+                extra += f" — {ev['error'][:60]}"
+            if ev.get("from_model") and ev.get("to_model"):
+                extra += f" {ev['from_model']} → {ev['to_model']}"
+            if ev.get("from_provider") and ev.get("to_provider"):
+                extra += f" {ev['from_provider']} → {ev['to_provider']}"
+            print(f"    {ts_str}  {event_type:<30}  task={task}{extra}")
+        print()
+
+    # ── Budget status (if available) ──
+    try:
+        from .budgeter import BudgetTracker
+        tracker = BudgetTracker()
+        any_budget = False
+        for period in ("daily", "weekly", "monthly"):
+            status = tracker.get_status(period)
+            if status:
+                any_budget = True
+                alert_tag = " ⚠️  ALERT" if status.alert_triggered else ""
+                print(
+                    f"  {period.capitalize()} budget: ${status.spent_usd:.4f} / "
+                    f"${status.limit_usd:.2f} ({status.percent_used:.1f}%){alert_tag}"
+                )
+        if not any_budget:
+            print("  Budget: not configured")
+    except Exception:
+        pass
+
+    print()
+
+
+def _build_status_parser(sub):
+    p_status = sub.add_parser("status", help="Show system status and recent retry events")
+    p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
+    p_status.set_defaults(func=cmd_status)
 
 
 def main():
