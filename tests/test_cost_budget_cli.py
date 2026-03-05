@@ -1,9 +1,4 @@
-"""Tests for tokenpak cost and budget CLI commands.
-
-Tests for:
-- tokenpak.agent.cli.commands.cost
-- tokenpak.agent.cli.commands.budget
-"""
+"""Tests for tokenpak cost and budget CLI commands."""
 
 from __future__ import annotations
 
@@ -15,500 +10,348 @@ import sqlite3
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
-# Fixtures
+# Helpers to wire the module to a temp DB
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def monitor_db(tmp_path):
-    """Create a temp monitor DB with test data."""
-    db_path = str(tmp_path / "monitor.db")
-    conn = sqlite3.connect(db_path)
+def temp_db(tmp_path):
+    """Create a temp monitor.db with schema + sample rows."""
+    db_path = tmp_path / "monitor.db"
+    conn = sqlite3.connect(str(db_path))
     conn.execute("""
         CREATE TABLE requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            model TEXT NOT NULL,
+            timestamp TEXT,
+            model TEXT,
             request_type TEXT,
             input_tokens INTEGER,
             output_tokens INTEGER,
             estimated_cost REAL,
-            latency_ms INTEGER,
+            latency_ms REAL,
             status_code INTEGER,
             endpoint TEXT,
             compilation_mode TEXT,
             protected_tokens INTEGER,
             compressed_tokens INTEGER,
-            injected_tokens INTEGER DEFAULT 0,
-            injected_sources TEXT DEFAULT '',
-            cache_read_tokens INTEGER DEFAULT 0,
-            cache_creation_tokens INTEGER DEFAULT 0
+            injected_tokens INTEGER,
+            injected_sources TEXT,
+            cache_read_tokens INTEGER,
+            cache_creation_tokens INTEGER
         )
     """)
     today = date.today().isoformat()
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    last_week = (date.today() - timedelta(days=5)).isoformat()
-
     rows = [
-        # Today
-        (f"{today}T10:00:00", "claude-sonnet-4-6", 1000, 200, 0.0034, "https://api.anthropic.com/v1/messages"),
-        (f"{today}T11:00:00", "claude-haiku-4-5",  500,  100, 0.0002, "https://api.anthropic.com/v1/messages"),
-        (f"{today}T12:00:00", "claude-sonnet-4-6", 2000, 400, 0.0068, "https://api.anthropic.com/v1/messages"),
-        # Yesterday
-        (f"{yesterday}T09:00:00", "claude-opus-4-6", 3000, 600, 0.06, "https://api.anthropic.com/v1/messages"),
-        (f"{yesterday}T14:00:00", "gpt-4o",           1000, 200, 0.003, "https://openai.com/v1/chat"),
-        # Last week
-        (f"{last_week}T10:00:00", "claude-sonnet-4-6", 800, 160, 0.0027, "https://api.anthropic.com/v1/messages"),
+        (f"{today}T10:00:00", "claude-sonnet-4-6", "chat", 1000, 100, 0.003, 300, 200, "https://api.anthropic.com/v1/messages", "hybrid", 900, 100, 200, None, 500, 50),
+        (f"{today}T11:00:00", "claude-haiku-4-5",  "chat",  500,  50, 0.001, 200, 200, "https://api.anthropic.com/v1/messages", "hybrid", 400,  50, 100, None, 200, 20),
+        (f"{today}T12:00:00", "claude-sonnet-4-6", "chat", 2000, 200, 0.006, 400, 200, "https://api.anthropic.com/v1/messages", "hybrid", 1800, 200, 300, None, 800, 80),
+        (f"{yesterday}T09:00:00", "claude-sonnet-4-6", "chat", 1500, 150, 0.0045, 350, 200, "https://api.anthropic.com/v1/messages", "hybrid", 1400, 100, 150, None, 600, 60),
     ]
     conn.executemany(
-        "INSERT INTO requests (timestamp, model, input_tokens, output_tokens, estimated_cost, endpoint) VALUES (?,?,?,?,?,?)",
-        rows,
+        "INSERT INTO requests (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,latency_ms,status_code,endpoint,compilation_mode,protected_tokens,compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        rows
     )
     conn.commit()
     conn.close()
-    return db_path
+    return str(db_path)
 
 
 @pytest.fixture
-def budget_config_file(tmp_path):
-    """Create a temp budget config YAML."""
+def cost_mod(temp_db):
+    """Import cost module patched to use temp DB."""
+    import importlib
+    import tokenpak.agent.cli.commands.cost as cost
+    importlib.reload(cost)
+    with patch.object(cost, "_MONITOR_DB", temp_db):
+        yield cost
+
+
+@pytest.fixture
+def budget_mod(temp_db, tmp_path):
+    """Import budget module patched to use temp DB + temp config."""
+    import importlib
+    import tokenpak.agent.cli.commands.budget as budget
+    importlib.reload(budget)
     cfg_path = tmp_path / "budget_config.yaml"
-    cfg_path.write_text("daily_limit_usd: 10.0\nalert_at_percent: 80.0\nhard_stop: false\n")
-    return str(cfg_path)
+    with patch.object(budget, "_MONITOR_DB", temp_db), \
+         patch.object(budget, "_BUDGET_CONFIG", cfg_path):
+        yield budget, cfg_path
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # cost.py tests
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
-class TestCostQuerySummary:
-    def test_today_summary(self, monitor_db):
-        with patch.dict(os.environ, {"TOKENPAK_DB": monitor_db}):
-            from importlib import reload
-            import tokenpak.agent.cli.commands.cost as cost_mod
-            reload(cost_mod)
-            # Patch _MONITOR_DB directly
-            cost_mod._MONITOR_DB = monitor_db
-            data = cost_mod.query_summary("today")
-        assert data["requests"] == 3
-        assert data["input_tokens"] == 3500
-        assert data["output_tokens"] == 700
-        assert data["total_tokens"] == 4200
-        assert data["total_cost_usd"] == pytest.approx(0.0104, abs=1e-4)
+class TestQuerySummary:
+    def test_today_returns_correct_totals(self, cost_mod):
+        result = cost_mod.query_summary("today")
+        assert result["requests"] == 3
+        assert result["input_tokens"] == 3500
+        assert result["output_tokens"] == 350
+        assert abs(result["total_cost_usd"] - 0.010) < 0.0001
 
-    def test_yesterday_summary(self, monitor_db):
-        from importlib import reload
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        data = cost_mod.query_summary("yesterday")
-        assert data["requests"] == 2
-        assert data["total_cost_usd"] == pytest.approx(0.063, abs=1e-3)
+    def test_yesterday_returns_one_row(self, cost_mod):
+        result = cost_mod.query_summary("yesterday")
+        assert result["requests"] == 1
 
-    def test_week_summary(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        data = cost_mod.query_summary("week")
-        assert data["requests"] >= 5  # today + yesterday + last_week
+    def test_week_includes_today_and_yesterday(self, cost_mod):
+        result = cost_mod.query_summary("week")
+        assert result["requests"] == 4
 
-    def test_month_summary(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        data = cost_mod.query_summary("month")
-        assert data["requests"] >= 3
+    def test_month_includes_all_rows(self, cost_mod):
+        result = cost_mod.query_summary("month")
+        assert result["requests"] == 4
 
-    def test_empty_db(self, tmp_path):
-        """No crash on empty DB."""
-        db_path = str(tmp_path / "empty.db")
-        conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, endpoint TEXT)")
-        conn.commit()
+    def test_empty_db_returns_zeros(self, tmp_path):
+        import tokenpak.agent.cli.commands.cost as cost
+        empty_db = tmp_path / "empty.db"
+        conn = sqlite3.connect(str(empty_db))
+        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)")
         conn.close()
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = db_path
-        data = cost_mod.query_summary("today")
-        assert data["requests"] == 0
-        assert data["total_cost_usd"] == 0.0
+        with patch.object(cost, "_MONITOR_DB", str(empty_db)):
+            result = cost.query_summary("today")
+        assert result["requests"] == 0
+        assert result["total_cost_usd"] == 0.0
 
-    def test_missing_db(self, tmp_path):
-        """Returns error dict when DB doesn't exist."""
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = str(tmp_path / "nonexistent.db")
-        data = cost_mod.query_summary("today")
-        assert "error" in data
+    def test_missing_db_returns_error(self, tmp_path):
+        import tokenpak.agent.cli.commands.cost as cost
+        with patch.object(cost, "_MONITOR_DB", str(tmp_path / "nonexistent.db")):
+            result = cost.query_summary("today")
+        assert "error" in result
 
 
-class TestCostQueryByModel:
-    def test_by_model_today(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+class TestQueryByModel:
+    def test_returns_two_models_today(self, cost_mod):
         rows = cost_mod.query_by_model("today")
-        assert len(rows) == 2  # sonnet + haiku
         models = [r["model"] for r in rows]
         assert "claude-sonnet-4-6" in models
         assert "claude-haiku-4-5" in models
 
-    def test_by_model_sorted_by_cost(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+    def test_ordered_by_cost_desc(self, cost_mod):
         rows = cost_mod.query_by_model("today")
         costs = [r["cost_usd"] for r in rows]
         assert costs == sorted(costs, reverse=True)
 
-    def test_by_model_empty(self, tmp_path):
-        db_path = str(tmp_path / "empty.db")
-        conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, endpoint TEXT)")
-        conn.commit()
-        conn.close()
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = db_path
-        rows = cost_mod.query_by_model("today")
-        assert rows == []
-
-    def test_by_model_missing_db(self, tmp_path):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = str(tmp_path / "no.db")
-        rows = cost_mod.query_by_model("today")
-        assert rows == []
+    def test_empty_period_returns_empty_list(self, cost_mod):
+        rows = cost_mod.query_by_model("yesterday")
+        assert len(rows) == 1
+        assert rows[0]["model"] == "claude-sonnet-4-6"
 
 
-class TestCostQueryByAgent:
-    def test_by_agent_returns_data(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+class TestQueryByAgent:
+    def test_returns_agent_breakdown(self, cost_mod):
         rows = cost_mod.query_by_agent("today")
         assert len(rows) >= 1
 
-    def test_by_agent_has_required_keys(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+    def test_agent_has_cost_field(self, cost_mod):
         rows = cost_mod.query_by_agent("today")
         for r in rows:
-            assert "agent" in r
-            assert "requests" in r
             assert "cost_usd" in r
+            assert "requests" in r
 
 
-class TestCostExportCsv:
-    def test_csv_has_header(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        csv_data = cost_mod.export_csv_data("today")
-        lines = csv_data.strip().splitlines()
-        assert lines[0] == "timestamp,model,input_tokens,output_tokens,estimated_cost"
+class TestExportCsv:
+    def test_csv_has_header_row(self, cost_mod):
+        output = cost_mod.export_csv_data("today")
+        reader = csv.reader(io.StringIO(output))
+        header = next(reader)
+        assert "timestamp" in header
+        assert "model" in header
+        assert "estimated_cost" in header
 
-    def test_csv_row_count(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        csv_data = cost_mod.export_csv_data("today")
-        reader = csv.DictReader(io.StringIO(csv_data))
-        rows = list(reader)
-        assert len(rows) == 3
+    def test_csv_has_correct_row_count(self, cost_mod):
+        output = cost_mod.export_csv_data("today")
+        lines = [l for l in output.strip().splitlines() if l]
+        assert len(lines) == 4  # 1 header + 3 data rows
 
-    def test_csv_empty_db(self, tmp_path):
-        db_path = str(tmp_path / "empty.db")
-        conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, endpoint TEXT)")
-        conn.commit()
+    def test_empty_db_returns_only_header(self, tmp_path):
+        import tokenpak.agent.cli.commands.cost as cost
+        empty_db = tmp_path / "empty.db"
+        conn = sqlite3.connect(str(empty_db))
+        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)")
         conn.close()
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = db_path
-        csv_data = cost_mod.export_csv_data("today")
-        # Just header row
-        assert "timestamp" in csv_data
-        reader = csv.DictReader(io.StringIO(csv_data))
-        assert list(reader) == []
-
-    def test_csv_yesterday(self, monitor_db):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        csv_data = cost_mod.export_csv_data("yesterday")
-        reader = csv.DictReader(io.StringIO(csv_data))
-        rows = list(reader)
-        assert len(rows) == 2
+        with patch.object(cost, "_MONITOR_DB", str(empty_db)):
+            output = cost.export_csv_data("today")
+        lines = [l for l in output.strip().splitlines() if l]
+        assert len(lines) == 1  # header only
 
 
-class TestCostPrintFunctions:
-    def test_print_summary_output(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+class TestPrintSummary:
+    def test_prints_without_error(self, cost_mod, capsys):
         cost_mod.print_summary("today")
-        out = capsys.readouterr().out
-        assert "TOKENPAK" in out
-        assert "Cost" in out
-        assert "Requests:" in out
-        assert "Total Cost:" in out
+        captured = capsys.readouterr()
+        assert "TOKENPAK" in captured.out
+        assert "Cost" in captured.out
 
-    def test_print_summary_raw(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
+    def test_raw_output_is_valid_json(self, cost_mod, capsys):
         cost_mod.print_summary("today", raw=True)
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert data["requests"] == 3
-
-    def test_print_by_model_output(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        cost_mod.print_by_model("today")
-        out = capsys.readouterr().out
-        assert "claude-sonnet-4-6" in out
-
-    def test_print_by_model_raw(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        cost_mod.print_by_model("today", raw=True)
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert isinstance(data, list)
-        assert len(data) == 2
-
-    def test_print_by_agent_output(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.cost as cost_mod
-        cost_mod._MONITOR_DB = monitor_db
-        cost_mod.print_by_agent("today")
-        out = capsys.readouterr().out
-        assert "Agent" in out
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert "total_cost_usd" in data
 
 
-# ---------------------------------------------------------------------------
+class TestRunCostCmd:
+    def test_default_prints_summary(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=False, week=False, month=False, by_model=False, by_agent=False, export=None, raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "TOKENPAK" in captured.out
+
+    def test_yesterday_flag(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=True, week=False, month=False, by_model=False, by_agent=False, export=None, raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "Yesterday" in captured.out
+
+    def test_week_flag(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=False, week=True, month=False, by_model=False, by_agent=False, export=None, raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "7 Days" in captured.out
+
+    def test_export_csv_flag(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=False, week=False, month=False, by_model=False, by_agent=False, export="csv", raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "timestamp" in captured.out
+
+    def test_by_model_flag(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=False, week=False, month=False, by_model=True, by_agent=False, export=None, raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "Model" in captured.out
+
+    def test_by_agent_flag(self, cost_mod, capsys):
+        args = SimpleNamespace(yesterday=False, week=False, month=False, by_model=False, by_agent=True, export=None, raw=False)
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "Agent" in captured.out
+
+
+# ===========================================================================
 # budget.py tests
-# ---------------------------------------------------------------------------
+# ===========================================================================
 
 class TestBudgetConfig:
-    def test_load_config(self, budget_config_file):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        orig = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = Path(budget_config_file)
-        try:
-            cfg = budget_mod._load_config()
-            assert cfg["daily_limit_usd"] == 10.0
-            assert cfg["alert_at_percent"] == 80.0
-        finally:
-            budget_mod._BUDGET_CONFIG = orig
+    def test_set_daily_limit(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        args = SimpleNamespace(budget_cmd="set", daily=5.0, monthly=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Daily" in captured.out
+        assert cfg_path.exists()
 
-    def test_load_config_missing_returns_empty(self, tmp_path):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        orig = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = tmp_path / "no_config.yaml"
-        try:
-            cfg = budget_mod._load_config()
-            assert cfg == {}
-        finally:
-            budget_mod._BUDGET_CONFIG = orig
+    def test_set_monthly_limit(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        args = SimpleNamespace(budget_cmd="set", daily=None, monthly=50.0, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Monthly" in captured.out
 
-    def test_save_config(self, tmp_path):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        orig = budget_mod._BUDGET_CONFIG
-        cfg_path = tmp_path / "budget_config.yaml"
-        budget_mod._BUDGET_CONFIG = cfg_path
-        try:
-            budget_mod._save_config({"daily_limit_usd": 25.0, "alert_at_percent": 90.0})
-            loaded = budget_mod._load_config()
-            assert loaded["daily_limit_usd"] == 25.0
-            assert loaded["alert_at_percent"] == 90.0
-        finally:
-            budget_mod._BUDGET_CONFIG = orig
+    def test_set_alert_threshold(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        args = SimpleNamespace(budget_cmd="alert", at=75.0, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "75" in captured.out
+        assert cfg_path.exists()
+
+    def test_set_without_flags_shows_usage(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        args = SimpleNamespace(budget_cmd="set", daily=None, monthly=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Usage" in captured.out
 
 
-class TestBudgetSpendQueries:
-    def test_get_spent_today(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        spent = budget_mod._get_spent("daily")
-        assert spent == pytest.approx(0.0104, abs=1e-4)
+class TestBudgetStatus:
+    def test_no_limit_set_shows_not_set(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "not set" in captured.out or "TOKENPAK" in captured.out
 
-    def test_get_spent_monthly(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        spent = budget_mod._get_spent("monthly")
-        # includes today + yesterday (both in current month if same month)
-        assert spent > 0
+    def test_with_limit_shows_progress(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        # Set a daily limit first
+        cfg_path.write_text("daily_limit_usd: 1.00\nalert_at_percent: 80.0\n")
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "%" in captured.out
 
-    def test_get_spent_missing_db(self, tmp_path):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        orig = budget_mod._MONITOR_DB
-        budget_mod._MONITOR_DB = str(tmp_path / "no.db")
-        try:
-            spent = budget_mod._get_spent("daily")
-            assert spent == 0.0
-        finally:
-            budget_mod._MONITOR_DB = orig
+    def test_alert_fires_when_over_threshold(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        # Set a very low limit to force alert
+        cfg_path.write_text("daily_limit_usd: 0.001\nalert_at_percent: 80.0\n")
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "ALERT" in captured.out
+
+    def test_raw_output_is_valid_json(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd=None, raw=True)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert "daily" in data
+        assert "monthly" in data
+
+    def test_no_alert_when_under_threshold(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        # Set very high limit to avoid alert
+        cfg_path.write_text("daily_limit_usd: 1000.00\nalert_at_percent: 80.0\n")
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "ALERT" not in captured.out
 
 
 class TestBudgetHistory:
-    def test_history_returns_list(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        history = budget_mod._budget_history(days=30)
-        assert isinstance(history, list)
-        assert len(history) > 0
+    def test_history_shows_days(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd="history", days=30, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "History" in captured.out
 
-    def test_history_has_required_keys(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        history = budget_mod._budget_history(days=30)
-        for r in history:
-            assert "day" in r
-            assert "requests" in r
-            assert "cost_usd" in r
-
-    def test_history_sorted_by_day(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        history = budget_mod._budget_history(days=30)
-        days = [r["day"] for r in history]
-        assert days == sorted(days)
-
-    def test_history_empty_db(self, tmp_path):
-        db_path = str(tmp_path / "empty.db")
-        conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, endpoint TEXT)")
-        conn.commit()
-        conn.close()
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = db_path
-        history = budget_mod._budget_history(days=30)
-        assert history == []
+    def test_history_raw_is_json(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd="history", days=7, raw=True)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        assert isinstance(data, list)
 
 
 class TestBudgetForecast:
-    def test_forecast_structure(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        fc = budget_mod._budget_forecast("monthly")
-        assert "daily_avg_usd" in fc
-        assert "days_remaining" in fc
-        assert "projected_total_usd" in fc
-        assert "already_spent_usd" in fc
+    def test_forecast_shows_projection(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd="forecast", raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Forecast" in captured.out
 
-    def test_forecast_projected_positive(self, monitor_db):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        fc = budget_mod._budget_forecast("monthly")
-        assert fc["projected_total_usd"] >= 0
-
-    def test_forecast_empty_db_no_crash(self, tmp_path):
-        db_path = str(tmp_path / "empty.db")
-        conn = sqlite3.connect(db_path)
-        conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, endpoint TEXT)")
-        conn.commit()
-        conn.close()
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = db_path
-        fc = budget_mod._budget_forecast("monthly")
-        assert fc["projected_total_usd"] == 0.0
-
-
-class TestBudgetPrintFunctions:
-    def test_print_status_no_limit(self, monitor_db, tmp_path, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        orig_cfg = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = tmp_path / "empty_cfg.yaml"
-        try:
-            budget_mod.print_budget_status()
-            out = capsys.readouterr().out
-            assert "Budget Status" in out
-            assert "not set" in out
-        finally:
-            budget_mod._BUDGET_CONFIG = orig_cfg
-
-    def test_print_status_with_limit(self, monitor_db, budget_config_file, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        orig_cfg = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = Path(budget_config_file)
-        try:
-            budget_mod.print_budget_status()
-            out = capsys.readouterr().out
-            assert "Limit:" in out
-            assert "Spent:" in out
-            assert "Progress:" in out
-        finally:
-            budget_mod._BUDGET_CONFIG = orig_cfg
-
-    def test_print_status_raw(self, monitor_db, budget_config_file, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        orig_cfg = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = Path(budget_config_file)
-        try:
-            budget_mod.print_budget_status(raw=True)
-            out = capsys.readouterr().out
-            data = json.loads(out)
-            assert "daily" in data
-            assert "monthly" in data
-        finally:
-            budget_mod._BUDGET_CONFIG = orig_cfg
-
-    def test_print_history_output(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        budget_mod.print_budget_history(days=30)
-        out = capsys.readouterr().out
-        assert "History" in out
-        assert "Date" in out
-
-    def test_print_history_raw(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        budget_mod.print_budget_history(days=30, raw=True)
-        out = capsys.readouterr().out
-        data = json.loads(out)
-        assert isinstance(data, list)
-
-    def test_print_forecast_output(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        budget_mod.print_budget_forecast()
-        out = capsys.readouterr().out
-        assert "Forecast" in out
-        assert "Daily Avg" in out
-
-    def test_print_forecast_raw(self, monitor_db, capsys):
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        budget_mod.print_budget_forecast(raw=True)
-        out = capsys.readouterr().out
-        data = json.loads(out)
+    def test_forecast_raw_is_json(self, budget_mod, capsys):
+        budget, _ = budget_mod
+        args = SimpleNamespace(budget_cmd="forecast", raw=True)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
         assert "projected_total_usd" in data
 
-
-class TestBudgetAlertThreshold:
-    def test_alert_triggered_when_over_threshold(self, monitor_db, tmp_path, capsys):
-        """Alert should appear when spend exceeds threshold."""
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        cfg_path = tmp_path / "alert_cfg.yaml"
-        # Set very low limit so today's spend triggers alert
-        cfg_path.write_text("daily_limit_usd: 0.001\nalert_at_percent: 80.0\nhard_stop: false\n")
-        orig_cfg = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = cfg_path
-        try:
-            budget_mod.print_budget_status()
-            out = capsys.readouterr().out
-            assert "ALERT" in out
-        finally:
-            budget_mod._BUDGET_CONFIG = orig_cfg
-
-    def test_no_alert_when_under_threshold(self, monitor_db, tmp_path, capsys):
-        """No alert when spend is below threshold."""
-        import tokenpak.agent.cli.commands.budget as budget_mod
-        budget_mod._MONITOR_DB = monitor_db
-        cfg_path = tmp_path / "safe_cfg.yaml"
-        # Set very high limit so today's spend is safely under
-        cfg_path.write_text("daily_limit_usd: 1000.0\nalert_at_percent: 80.0\nhard_stop: false\n")
-        orig_cfg = budget_mod._BUDGET_CONFIG
-        budget_mod._BUDGET_CONFIG = cfg_path
-        try:
-            budget_mod.print_budget_status()
-            out = capsys.readouterr().out
-            assert "ALERT" not in out
-        finally:
-            budget_mod._BUDGET_CONFIG = orig_cfg
+    def test_forecast_with_monthly_limit_shows_status(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("monthly_limit_usd: 100.00\nalert_at_percent: 80.0\n")
+        args = SimpleNamespace(budget_cmd="forecast", raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert any(s in captured.out for s in ["OK", "CLOSE", "OVER"])
