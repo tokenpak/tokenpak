@@ -334,6 +334,17 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate doctor subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "doctor":
+        try:
+            from tokenpak.agent.cli.commands.doctor import doctor_cmd
+            sys.argv = sys.argv[1:]
+            doctor_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"doctor command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
         from tokenpak.agent.cli.commands.cost import run_cost_cmd as _cost_cmd
