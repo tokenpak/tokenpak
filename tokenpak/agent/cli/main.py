@@ -368,11 +368,19 @@ def main():
     dbg_sub.add_parser("off")
     dbg_sub.add_parser("status")
 
+    # learn subcommand
+    learnp = sub.add_parser("learn", help="Show or reset learned patterns")
+    learn_sub = learnp.add_subparsers(dest="learn_cmd")
+    learn_sub.add_parser("status", help="Show learned patterns summary")
+    learn_sub.add_parser("reset", help="Clear all learned data")
+
     args, _ = p.parse_known_args()
 
     if args.cmd == "proxy":
         dispatch = {"status": cmd_proxy_status, "restart": cmd_proxy_restart}
         dispatch.get(args.proxy_cmd, lambda a: print("Usage: tokenpak proxy <status|restart>"))(args)
+    elif args.cmd == "learn":
+        _dispatch_learn(args)
     elif args.cmd:
         dispatch = {
             "status": cmd_status,
@@ -480,3 +488,19 @@ def cmd_last(args):
 def _dispatch_debug(args) -> None:
     from tokenpak.agent.cli.commands.debug import debug_cmd
     debug_cmd(args)
+
+
+def _dispatch_learn(args) -> None:
+    """Handle `tokenpak learn status` and `tokenpak learn reset`."""
+    from tokenpak.agent.agentic.learning import cmd_learn_status, learn, reset
+
+    learn_cmd = getattr(args, "learn_cmd", None)
+    if learn_cmd == "reset":
+        reset()
+        print("✓ Learning store cleared.")
+    elif learn_cmd == "status":
+        # Refresh from current telemetry files first
+        learn()
+        cmd_learn_status()
+    else:
+        print("Usage: tokenpak learn <status|reset>")
