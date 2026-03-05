@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import fnmatch
 import logging
+import os
 import signal
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ class WatcherConfig:
     recursive: bool = True
     ignore_patterns: list = field(default_factory=lambda: list(DEFAULT_IGNORE_PATTERNS))
     db_path: Optional[str] = None
+    use_gitignore: bool = True
+    use_tokenpakignore: bool = True
 
 
 @dataclass
@@ -74,6 +77,9 @@ class VaultWatcher:
         self._debounce_lock = threading.Lock()
         self._debounce_thread: Optional[threading.Thread] = None
         self._observer = None
+        self._gitignore_patterns: List[str] = []
+        self._tokenpakignore_patterns: List[str] = []
+        self._load_ignore_files()
 
     def start(self, blocking: bool = False) -> None:
         """Start watching. If blocking=True, run until Ctrl+C."""
@@ -137,12 +143,68 @@ class VaultWatcher:
             "files_reindexed": s.files_reindexed,
         }
 
+    def _load_patterns_from_file(self, filepath: str) -> List[str]:
+        """Read patterns from a .gitignore-style file, skipping comments/blanks."""
+        patterns = []
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.rstrip("\n")
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    # Negation patterns (!) are not yet supported — skip
+                    if stripped.startswith("!"):
+                        continue
+                    patterns.append(stripped)
+        except OSError:
+            pass
+        return patterns
+
+    def _load_ignore_files(self) -> None:
+        """Scan watch paths for .gitignore and .tokenpakignore files."""
+        self._gitignore_patterns = []
+        self._tokenpakignore_patterns = []
+        for raw_path in self.config.watch_paths:
+            watch_dir = Path(raw_path).expanduser().resolve()
+            if self.config.use_gitignore:
+                gi_path = watch_dir / ".gitignore"
+                self._gitignore_patterns.extend(self._load_patterns_from_file(str(gi_path)))
+            if self.config.use_tokenpakignore:
+                tpi_path = watch_dir / ".tokenpakignore"
+                self._tokenpakignore_patterns.extend(self._load_patterns_from_file(str(tpi_path)))
+        if self._gitignore_patterns:
+            logger.info("Loaded %d pattern(s) from .gitignore", len(self._gitignore_patterns))
+        if self._tokenpakignore_patterns:
+            logger.info("Loaded %d pattern(s) from .tokenpakignore", len(self._tokenpakignore_patterns))
+
     def _should_ignore(self, path: str) -> bool:
-        parts = Path(path).parts
-        for pattern in (self.config.ignore_patterns or []):
-            for part in parts:
-                if fnmatch.fnmatch(part, pattern):
+        """Return True if path matches any ignore pattern (config, .gitignore, .tokenpakignore)."""
+        p = Path(path)
+        parts = p.parts
+        name = p.name
+
+        all_patterns = list(self.config.ignore_patterns or [])
+        all_patterns.extend(self._gitignore_patterns)
+        all_patterns.extend(self._tokenpakignore_patterns)
+
+        for pattern in all_patterns:
+            # Directory pattern (trailing slash) — match against path parts
+            if pattern.endswith("/"):
+                dir_pattern = pattern.rstrip("/")
+                for part in parts:
+                    if fnmatch.fnmatch(part, dir_pattern):
+                        return True
+            # Pattern with slash = relative path match
+            elif "/" in pattern:
+                # Match against the full path string
+                if fnmatch.fnmatch(str(p), f"*{pattern}") or fnmatch.fnmatch(str(p), pattern):
                     return True
+            else:
+                # Simple name/extension pattern — match against each path component
+                for part in parts:
+                    if fnmatch.fnmatch(part, pattern):
+                        return True
         return False
 
     def _on_fs_event(self, path: str) -> None:

@@ -311,3 +311,70 @@ class TestCLIWatchArg:
         parser = build_parser()
         args = parser.parse_args(["index", "/tmp", "--watch", "--debounce", "250"])
         assert args.debounce == 250
+
+
+# ---------------------------------------------------------------------------
+# .gitignore and .tokenpakignore support
+# ---------------------------------------------------------------------------
+
+class TestIgnoreFiles:
+    def test_load_gitignore_patterns(self, tmp_path):
+        gi = tmp_path / ".gitignore"
+        gi.write_text("*.log\nbuild/\n# comment\n\n.env\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=True)
+        w = VaultWatcher(cfg)
+        assert "*.log" in w._gitignore_patterns
+        assert "build/" in w._gitignore_patterns
+        assert ".env" in w._gitignore_patterns
+        # Comments and blanks are excluded
+        assert "# comment" not in w._gitignore_patterns
+        assert "" not in w._gitignore_patterns
+
+    def test_load_tokenpakignore_patterns(self, tmp_path):
+        tpi = tmp_path / ".tokenpakignore"
+        tpi.write_text("secrets/\n*.key\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_tokenpakignore=True)
+        w = VaultWatcher(cfg)
+        assert "secrets/" in w._tokenpakignore_patterns
+        assert "*.key" in w._tokenpakignore_patterns
+
+    def test_gitignore_patterns_applied_in_should_ignore(self, tmp_path):
+        gi = tmp_path / ".gitignore"
+        gi.write_text("*.log\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=True)
+        w = VaultWatcher(cfg)
+        assert w._should_ignore(str(tmp_path / "app.log"))
+        assert not w._should_ignore(str(tmp_path / "app.py"))
+
+    def test_tokenpakignore_patterns_applied(self, tmp_path):
+        tpi = tmp_path / ".tokenpakignore"
+        tpi.write_text("*.key\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_tokenpakignore=True)
+        w = VaultWatcher(cfg)
+        assert w._should_ignore(str(tmp_path / "secret.key"))
+        assert not w._should_ignore(str(tmp_path / "secret.py"))
+
+    def test_disable_gitignore(self, tmp_path):
+        gi = tmp_path / ".gitignore"
+        gi.write_text("*.log\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=False)
+        w = VaultWatcher(cfg)
+        assert w._gitignore_patterns == []
+        # Pattern not applied — .log is not ignored via gitignore
+        # (default patterns don't include *.log)
+        assert not w._should_ignore(str(tmp_path / "app.log"))
+
+    def test_missing_ignore_files_ok(self, tmp_path):
+        # No .gitignore or .tokenpakignore present — should not raise
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=True, use_tokenpakignore=True)
+        w = VaultWatcher(cfg)
+        assert w._gitignore_patterns == []
+        assert w._tokenpakignore_patterns == []
+
+    def test_negation_lines_skipped(self, tmp_path):
+        gi = tmp_path / ".gitignore"
+        gi.write_text("*.log\n!important.log\n")
+        cfg = WatcherConfig(watch_paths=[str(tmp_path)], use_gitignore=True)
+        w = VaultWatcher(cfg)
+        assert "!important.log" not in w._gitignore_patterns
+        assert "*.log" in w._gitignore_patterns
