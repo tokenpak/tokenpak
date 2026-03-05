@@ -1,0 +1,16 @@
+name: cp-repeated-json-dedup
+category: common_patterns
+description: Deduplicate repeated identical JSON objects within an array.
+pattern:
+  match: extension
+  extensions:
+  - .json
+  - .jsonl
+  - .ndjson
+action:
+  operations:
+  - type: json_array_dedup_objects
+    annotation:
+      _deduped: true
+      original_count: '{count}'
+  compression_hint: 0.3

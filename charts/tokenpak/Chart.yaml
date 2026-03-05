@@ -1,0 +1,20 @@
+apiVersion: v2
+name: tokenpak
+description: |
+  TokenPak — Universal LLM context optimizer. Deploys the intelligence server,
+  team server, and optional dashboard as a production-ready Kubernetes workload.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - llm
+  - ai
+  - token
+  - compression
+  - context
+home: https://github.com/tokenpak/tokenpak
+sources:
+  - https://github.com/tokenpak/tokenpak
+maintainers:
+  - name: TokenPak Team
+    email: team@tokenpak.ai

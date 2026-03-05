@@ -1,0 +1,73 @@
+{{- if .Values.intelligence.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tokenpak.fullname" . }}-intelligence
+  labels:
+    {{- include "tokenpak.labels" . | nindent 4 }}
+    app.kubernetes.io/component: intelligence
+spec:
+  {{- if not .Values.intelligence.autoscaling.enabled }}
+  replicas: {{ .Values.intelligence.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "tokenpak.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: intelligence
+  template:
+    metadata:
+      labels:
+        {{- include "tokenpak.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: intelligence
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "tokenpak.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: intelligence
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "tokenpak.image" (dict "Values" .Values "image" .Values.intelligence.image) }}
+          imagePullPolicy: {{ .Values.intelligence.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.intelligence.service.port }}
+              protocol: TCP
+          env:
+            {{- if .Values.intelligence.apiKeys }}
+            - name: TOKENPAK_API_KEYS
+              value: {{ .Values.intelligence.apiKeys | quote }}
+            {{- else if .Values.intelligence.apiKeysSecretName }}
+            - name: TOKENPAK_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.intelligence.apiKeysSecretName }}
+                  key: TOKENPAK_API_KEYS
+            {{- end }}
+            {{- range $k, $v := .Values.intelligence.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.intelligence.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.intelligence.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.intelligence.resources | nindent 12 }}
+      {{- with .Values.intelligence.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.intelligence.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.intelligence.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

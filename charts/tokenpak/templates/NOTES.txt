@@ -1,0 +1,37 @@
+🚀 TokenPak has been deployed!
+
+Components enabled:
+{{- if .Values.intelligence.enabled }}
+  ✅ Intelligence Server  (port {{ .Values.intelligence.service.port }})
+{{- end }}
+{{- if .Values.team.enabled }}
+  ✅ Team Server          (port {{ .Values.team.service.port }})
+{{- end }}
+{{- if .Values.dashboard.enabled }}
+  ✅ Dashboard            (port {{ .Values.dashboard.service.port }})
+{{- else }}
+  ⬜ Dashboard            (disabled — set dashboard.enabled=true to enable)
+{{- end }}
+
+To access the Intelligence Server from within the cluster:
+  http://{{ include "tokenpak.fullname" . }}-intelligence:{{ .Values.intelligence.service.port }}
+
+{{- if .Values.ingress.enabled }}
+External URL:
+  {{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+  {{- end }}
+{{- else }}
+Port-forward to test locally:
+  kubectl port-forward svc/{{ include "tokenpak.fullname" . }}-intelligence {{ .Values.intelligence.service.port }}:{{ .Values.intelligence.service.port }} -n {{ .Release.Namespace }}
+  curl http://localhost:{{ .Values.intelligence.service.port }}/health
+{{- end }}
+
+{{- if not .Values.intelligence.apiKeys }}
+{{- if not .Values.intelligence.apiKeysSecretName }}
+
+⚠️  No API keys configured. Set one of:
+    --set intelligence.apiKeys="mykey:enterprise"
+    --set intelligence.apiKeysSecretName=my-secret
+{{- end }}
+{{- end }}

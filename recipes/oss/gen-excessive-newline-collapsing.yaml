@@ -1,0 +1,14 @@
+name: gen-excessive-newline-collapsing
+category: general
+description: Collapse 3+ consecutive blank lines down to 2.
+pattern:
+  match: any
+action:
+  operations:
+  - type: regex_replace
+    pattern: \n{3,}
+    replacement: '
+
+
+      '
+  compression_hint: 0.05

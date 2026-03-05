@@ -1,0 +1,42 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tokenpak.fullname" . }}
+  labels:
+    {{- include "tokenpak.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "tokenpak.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow intra-namespace traffic between tokenpak components
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "tokenpak.selectorLabels" . | nindent 14 }}
+    # Allow ingress controller traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+  egress:
+    # Allow DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow HTTPS to external AI providers
+    - ports:
+        - port: 443
+          protocol: TCP
+    # Allow intra-namespace
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "tokenpak.selectorLabels" . | nindent 14 }}
+{{- end }}

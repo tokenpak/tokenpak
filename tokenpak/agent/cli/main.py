@@ -251,6 +251,52 @@ def cmd_help(args):
 
 
 # ---------------------------------------------------------------------------
+# cost / budget argparse helpers
+# ---------------------------------------------------------------------------
+
+def _cost_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.cost import run_cost_cmd
+    cp = argparse.ArgumentParser(prog="tokenpak cost", add_help=True)
+    cp.add_argument("--yesterday", action="store_true", help="Yesterday's spend")
+    cp.add_argument("--week", action="store_true", help="Last 7 days")
+    cp.add_argument("--month", action="store_true", help="This month")
+    cp.add_argument("--by-model", dest="by_model", action="store_true", help="Break down by model")
+    cp.add_argument("--by-agent", dest="by_agent", action="store_true", help="Break down by agent")
+    cp.add_argument("--export", choices=["csv"], default=None, help="Export format")
+    cp.add_argument("--raw", action="store_true", help="Output raw JSON")
+    args = cp.parse_args(argv)
+    run_cost_cmd(args)
+
+
+def _budget_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.budget import run_budget_cmd
+    bp = argparse.ArgumentParser(prog="tokenpak budget", add_help=True)
+    bsub = bp.add_subparsers(dest="budget_cmd")
+
+    # tokenpak budget set --daily N --monthly N
+    setp = bsub.add_parser("set", help="Set budget limits")
+    setp.add_argument("--daily", type=float, default=None, help="Daily budget in USD")
+    setp.add_argument("--monthly", type=float, default=None, help="Monthly budget in USD")
+
+    # tokenpak budget alert --at N
+    alp = bsub.add_parser("alert", help="Set alert threshold")
+    alp.add_argument("--at", type=float, required=True, help="Alert at N%%")
+
+    # tokenpak budget history
+    hisp = bsub.add_parser("history", help="Budget vs actual history")
+    hisp.add_argument("--days", type=int, default=30, help="Number of days")
+    hisp.add_argument("--raw", action="store_true")
+
+    # tokenpak budget forecast
+    bsub.add_parser("forecast", help="Projected spend forecast")
+
+    bp.add_argument("--raw", action="store_true", help="Output raw JSON")
+    args = bp.parse_args(argv)
+    run_budget_cmd(args)
+
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -275,6 +321,17 @@ def main():
         except ImportError as e:
             print(f"workflow command not available: {e}")
             sys.exit(1)
+        return
+
+    # Delegate cost subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "cost":
+        from tokenpak.agent.cli.commands.cost import run_cost_cmd as _cost_cmd
+        _cost_argparse(sys.argv[2:])
+        return
+
+    # Delegate budget subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "budget":
+        _budget_argparse(sys.argv[2:])
         return
 
     p = argparse.ArgumentParser(prog="tokenpak", add_help=False)

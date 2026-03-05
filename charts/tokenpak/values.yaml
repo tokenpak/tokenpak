@@ -1,0 +1,205 @@
+# ────────────────────────────────────────────────────────────────────────────
+# TokenPak Helm Chart — Default Values
+# Override any value with:  --set key=value  or  -f custom-values.yaml
+# ────────────────────────────────────────────────────────────────────────────
+
+# ── Global ──────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: ""          # Optional prefix for all images (e.g. "registry.example.com")
+  imagePullSecrets: []       # List of pull-secret names
+  storageClass: ""           # Default storage class; "" uses cluster default
+
+# ── Intelligence Server ──────────────────────────────────────────────────────
+intelligence:
+  enabled: true
+
+  image:
+    repository: tokenpak/intelligence
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  service:
+    type: ClusterIP
+    port: 9000
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  # API key validation — env var injected at runtime
+  apiKeys: ""                # e.g. "key1:pro,key2:enterprise" — mount via secret in prod
+  apiKeysSecretName: ""      # Name of existing Secret with key TOKENPAK_API_KEYS
+
+  env: {}
+    # TOKENPAK_LOG_LEVEL: INFO
+    # TOKENPAK_CORS_ORIGINS: "*"
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Probes
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 9000
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 9000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── Team Server ──────────────────────────────────────────────────────────────
+team:
+  enabled: true
+
+  image:
+    repository: tokenpak/team
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 9100
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "800m"
+      memory: "512Mi"
+
+  # Persistent storage for the team vault
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""         # Inherits global.storageClass if blank
+    accessMode: ReadWriteOnce
+
+  env: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 9100
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 9100
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+
+# ── Dashboard (optional) ─────────────────────────────────────────────────────
+dashboard:
+  enabled: false
+
+  image:
+    repository: tokenpak/dashboard
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 3000
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+
+  env: {}
+    # NEXT_PUBLIC_API_URL: http://tokenpak-intelligence:9000
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# ── Ingress ──────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: ""              # e.g. "nginx" or "traefik"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: tokenpak.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: intelligence   # "intelligence" | "team" | "dashboard"
+  tls: []
+  # - secretName: tokenpak-tls
+  #   hosts:
+  #     - tokenpak.example.com
+
+# ── Service Account ──────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""                   # Auto-generated if blank
+
+# ── Pod Security ─────────────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ── Network Policy ───────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: false

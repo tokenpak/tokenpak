@@ -1,0 +1,22 @@
+name: medical-note-cleanup
+category: medical
+description: "Strip PHI headers and confidentiality footers from clinical notes."
+pattern:
+  match: content
+  keywords:
+    - "PATIENT:"
+    - "DOB:"
+    - "MRN:"
+    - "CONFIDENTIALITY NOTICE"
+action:
+  compression_hint: 0.25
+  operations:
+    - type: regex_replace
+      pattern: "CONFIDENTIALITY NOTICE[^\\n]+\\n"
+      replacement: ""
+      flags: ["MULTILINE"]
+    - type: regex_replace
+      pattern: "(Patient Name|DOB|MRN|Date of Birth): [^\\n]+\\n"
+      replacement: ""
+      flags: ["MULTILINE", "IGNORECASE"]
+    - type: collapse_whitespace

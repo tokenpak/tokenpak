@@ -1,0 +1,76 @@
+{{- if .Values.team.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tokenpak.fullname" . }}-team
+  labels:
+    {{- include "tokenpak.labels" . | nindent 4 }}
+    app.kubernetes.io/component: team
+spec:
+  replicas: {{ .Values.team.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "tokenpak.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: team
+  template:
+    metadata:
+      labels:
+        {{- include "tokenpak.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: team
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "tokenpak.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: team
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "tokenpak.image" (dict "Values" .Values "image" .Values.team.image) }}
+          imagePullPolicy: {{ .Values.team.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.team.service.port }}
+              protocol: TCP
+          {{- if .Values.team.persistence.enabled }}
+          volumeMounts:
+            - name: vault-storage
+              mountPath: /data/vault
+          {{- end }}
+          env:
+            {{- if .Values.team.persistence.enabled }}
+            - name: TOKENPAK_VAULT_PATH
+              value: /data/vault
+            {{- end }}
+            {{- range $k, $v := .Values.team.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.team.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.team.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.team.resources | nindent 12 }}
+      {{- if .Values.team.persistence.enabled }}
+      volumes:
+        - name: vault-storage
+          persistentVolumeClaim:
+            claimName: {{ include "tokenpak.fullname" . }}-team-vault
+      {{- end }}
+      {{- with .Values.team.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.team.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.team.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

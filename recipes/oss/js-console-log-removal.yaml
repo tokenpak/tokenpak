@@ -1,0 +1,19 @@
+name: js-console-log-removal
+category: javascript
+description: Remove console.log, console.debug, and console.info statements.
+pattern:
+  match: extension
+  extensions:
+  - .js
+  - .jsx
+  - .ts
+  - .tsx
+  - .mjs
+  - .cjs
+action:
+  operations:
+  - type: regex_replace
+    pattern: ^\s*console\.(log|debug|info|warn)\(.*\);\s*$
+    replacement: ''
+    flags: multiline
+  compression_hint: 0.05

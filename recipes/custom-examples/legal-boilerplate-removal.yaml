@@ -1,0 +1,24 @@
+name: legal-boilerplate-removal
+category: legal
+description: "Remove WHEREAS recitals and signature blocks; keep operative clauses."
+pattern:
+  match: content
+  keywords:
+    - "WHEREAS"
+    - "NOW, THEREFORE"
+    - "IN WITNESS WHEREOF"
+    - "RECITALS"
+action:
+  compression_hint: 0.35
+  operations:
+    - type: regex_replace
+      pattern: "WHEREAS[^;]+;"
+      replacement: "[WHEREAS RECITAL OMITTED]"
+      flags: ["DOTALL"]
+    - type: regex_replace
+      pattern: "IN WITNESS WHEREOF[^.]+\\."
+      replacement: "[SIGNATURE BLOCK OMITTED]"
+      flags: ["DOTALL"]
+    - type: collapse_whitespace
+    - type: remove_empty_lines
+      max_consecutive: 1

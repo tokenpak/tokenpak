@@ -550,6 +550,7 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_demo_parser(sub)
 
     return parser
 
@@ -1258,3 +1259,235 @@ def _build_replay_parser(sub):
         cmd_replay_list(args)
 
     p_replay.set_defaults(func=_replay_dispatch)
+
+
+# ── Demo command ──────────────────────────────────────────────────────────────
+
+def _build_demo_parser(sub):
+    # ── Recipe SDK ─────────────────────────────────────────────────────────────
+    p_recipe = sub.add_parser("recipe", help="Custom recipe development tooling (create/test/validate/benchmark)")
+    rsub2 = p_recipe.add_subparsers(dest="recipe_cmd", required=True)
+
+    # recipe create
+    p_rcreate = rsub2.add_parser("create", help="Scaffold a new custom recipe YAML file")
+    p_rcreate.add_argument("name", help="Recipe name (e.g. my-legal-cleanup)")
+    p_rcreate.add_argument("--output-dir", default=".", metavar="DIR",
+                           help="Directory to write the recipe file (default: current dir)")
+    p_rcreate.add_argument("--category", default="general",
+                           help="Recipe category: python, markdown, legal, medical, etc.")
+    p_rcreate.add_argument("--description", default="", help="Short description")
+    p_rcreate.add_argument("--match-mode", default="extension",
+                           help="Pattern match mode: any|extension|filename|content|path_pattern")
+    p_rcreate.add_argument("--ext", default="txt", help="File extension hint (for extension match mode)")
+    p_rcreate.add_argument("--domain-example", default=None, metavar="DOMAIN",
+                           help="Use a domain-specific template: legal | medical")
+    p_rcreate.set_defaults(func=cmd_recipe_create)
+
+    # recipe validate
+    p_rvalidate = rsub2.add_parser("validate", help="Validate a recipe YAML against the schema")
+    p_rvalidate.add_argument("file", help="Path to recipe YAML file")
+    p_rvalidate.set_defaults(func=cmd_recipe_validate)
+
+    # recipe test
+    p_rtest = rsub2.add_parser("test", help="Test a recipe against sample input")
+    p_rtest.add_argument("file", help="Path to recipe YAML file")
+    p_rtest.add_argument("--input-text", default=None, help="Raw text to test against")
+    p_rtest.add_argument("--input-file", default=None, metavar="FILE",
+                         help="Path to a file to use as test input")
+    p_rtest.add_argument("--filename-hint", default="", metavar="FILENAME",
+                         help="Filename to check pattern matching against (e.g. script.py)")
+    p_rtest.set_defaults(func=cmd_recipe_test)
+
+    # recipe benchmark
+    p_rbench = rsub2.add_parser("benchmark", help="Benchmark compression ratio and speed for a recipe")
+    p_rbench.add_argument("file", help="Path to recipe YAML file")
+    p_rbench.add_argument("--samples-file", default=None, metavar="FILE",
+                          help="JSON file with list of sample strings (default: auto-generated)")
+    p_rbench.add_argument("--runs", type=int, default=5,
+                          help="Repetitions per sample for timing (default: 5)")
+    p_rbench.set_defaults(func=cmd_recipe_benchmark)
+
+    # ── Demo ───────────────────────────────────────────────────────────────────
+    p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
+    p_demo.add_argument("--list", action="store_true", help="List all 50 baked-in recipes")
+    p_demo.add_argument("--category", default=None, help="Filter by category (general, python, javascript, markdown, config, common_patterns)")
+    p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
+    p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
+    p_demo.set_defaults(func=cmd_demo)
+
+
+def cmd_demo(args):
+    """Show OSS compression recipes and demonstrate recipe selection."""
+    from .agent.compression.recipes import get_oss_engine
+
+    engine = get_oss_engine()
+
+    # ── Single recipe detail
+    if args.recipe:
+        recipe = engine.get_recipe(args.recipe)
+        if recipe is None:
+            print(f"Recipe '{args.recipe}' not found.")
+            print(f"Available: {', '.join(engine.list_recipes()[:5])} ...")
+            return
+        print(f"┌─ Recipe: {recipe.name}")
+        print(f"│  Category   : {recipe.category}")
+        print(f"│  Description: {recipe.description}")
+        print(f"│  Match mode : {recipe.match_mode}")
+        print(f"│  Compression: ~{int(recipe.compression_hint * 100)}% reduction expected")
+        print(f"│  Operations :")
+        for op in recipe.operations:
+            op_type = op.get("type", "?")
+            params = {k: v for k, v in op.items() if k != "type"}
+            param_str = ", ".join(f"{k}={v!r}" for k, v in list(params.items())[:3])
+            print(f"│    [{op_type}]  {param_str}")
+        print("└──")
+        return
+
+    # ── File matching
+    if args.file:
+        print(f"Recipes applicable to: {args.file}")
+        matches = engine.recipes_for_file(args.file)
+        if not matches:
+            print("  (none)")
+        for r in matches:
+            print(f"  {r.name:<45} [{r.category}]  ~{int(r.compression_hint*100)}% savings")
+        return
+
+    # ── List all (optionally filtered by category)
+    summary = engine.summary()
+    print("TokenPak OSS — Baked-in Compression Recipes")
+    print("=" * 50)
+    print(f"Total recipes: {summary['total']}")
+    print()
+
+    categories = [args.category] if args.category else engine.categories()
+
+    for cat in categories:
+        recipes = engine.by_category(cat)
+        if not recipes:
+            print(f"  [no recipes in category '{cat}']")
+            continue
+        print(f"  ── {cat} ({len(recipes)}) ──")
+        for r in recipes:
+            hint = f"~{int(r.compression_hint*100)}%" if r.compression_hint > 0 else "   "
+            print(f"    {r.name:<45}  {hint}  {r.description[:60]}")
+        print()
+
+    print("Use --recipe <name> for details, --file <path> to see applicable recipes.")
+
+
+# ── Recipe SDK CLI commands ────────────────────────────────────────────────────
+
+def cmd_recipe_create(args):
+    """Scaffold a new custom recipe file."""
+    from .agent.recipe_sdk import RecipeSDK
+    sdk = RecipeSDK()
+    out = sdk.create(
+        args.name,
+        output_dir=args.output_dir,
+        category=args.category or "general",
+        description=args.description or "",
+        match_mode=args.match_mode or "extension",
+        ext=args.ext or "txt",
+        domain_example=args.domain_example,
+    )
+    print(f"✅ Recipe scaffolded: {out}")
+    print(f"   Next: tokenpak recipe validate {out}")
+    print(f"         tokenpak recipe test {out}")
+
+
+def cmd_recipe_validate(args):
+    """Validate a recipe YAML file against the schema."""
+    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    sdk = RecipeSDK()
+    try:
+        warnings = sdk.validate(args.file)
+    except RecipeValidationError as exc:
+        print(f"❌ Validation FAILED: {exc}")
+        raise SystemExit(1)
+    if warnings:
+        print(f"⚠️  Validation passed with {len(warnings)} warning(s):")
+        for w in warnings:
+            print(f"   • {w}")
+    else:
+        print(f"✅ Recipe '{args.file}' is valid — no issues found.")
+
+
+def cmd_recipe_test(args):
+    """Test a recipe against sample input and show compression result."""
+    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    sdk = RecipeSDK()
+    try:
+        result = sdk.test(
+            args.file,
+            input_text=args.input_text,
+            input_file=args.input_file,
+            filename_hint=args.filename_hint or "",
+        )
+    except RecipeValidationError as exc:
+        print(f"❌ Recipe validation error: {exc}")
+        raise SystemExit(1)
+
+    print(f"Recipe test: {args.file}")
+    print("─" * 50)
+    if result["warnings"]:
+        for w in result["warnings"]:
+            print(f"  ⚠️  {w}")
+    print(f"  Pattern match  : {'✅ yes' if result['pattern_match'] else '❌ no (check pattern settings)'}")
+    print(f"  Filename hint  : {result['filename_hint']}")
+    print(f"  Ops applied    : {', '.join(result['ops_applied']) or '(none)'}")
+    print(f"  Input chars    : {result['input_chars']}")
+    print(f"  Output chars   : {result['output_chars']}")
+    ratio_pct = round(result['compression_ratio'] * 100, 1)
+    print(f"  Compression    : {ratio_pct}% removed")
+    if result.get("compression_hint") is not None:
+        hint_pct = round(result["compression_hint"] * 100, 1)
+        print(f"  Hint vs actual : {hint_pct}% expected → {ratio_pct}% actual")
+    print()
+    print("Output preview:")
+    print("─" * 50)
+    print(result["output_preview"])
+
+
+def cmd_recipe_benchmark(args):
+    """Benchmark a recipe's compression ratio and throughput."""
+    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    sdk = RecipeSDK()
+
+    samples = None
+    if args.samples_file:
+        import json as _json
+        raw = open(args.samples_file).read()
+        try:
+            loaded = _json.loads(raw)
+            if isinstance(loaded, list):
+                samples = [str(s) for s in loaded]
+            else:
+                samples = [raw]
+        except Exception:
+            samples = [raw]
+
+    try:
+        result = sdk.benchmark(args.file, samples=samples, runs=args.runs)
+    except RecipeValidationError as exc:
+        print(f"❌ Recipe validation error: {exc}")
+        raise SystemExit(1)
+
+    print(f"Benchmark: {result['recipe']}  [{result['category']}]")
+    print("─" * 50)
+    print(f"  Samples tested        : {result['samples_tested']}")
+    print(f"  Runs per sample       : {result['runs_per_sample']}")
+    print(f"  Total chars processed : {result['total_chars_processed']:,}")
+    print()
+    c = result["compression"]
+    print(f"  Compression (mean)    : {round(c['mean']*100, 1)}%  "
+          f"[min {round(c['min']*100, 1)}% – max {round(c['max']*100, 1)}%]")
+    if result["hint_vs_actual"]["hint"] is not None:
+        hint_pct = round(result["hint_vs_actual"]["hint"] * 100, 1)
+        actual_pct = round(result["hint_vs_actual"]["actual_mean"] * 100, 1)
+        delta = actual_pct - hint_pct
+        sign = "+" if delta >= 0 else ""
+        print(f"  Hint vs actual        : {hint_pct}% → {actual_pct}%  ({sign}{delta:.1f}% delta)")
+    t = result["timing_ms"]
+    print(f"  Timing ms (mean)      : {t['mean']:.3f} ms  "
+          f"[min {t['min']:.3f} – max {t['max']:.3f}]")
