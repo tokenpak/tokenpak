@@ -35,7 +35,7 @@ from urllib.parse import urlparse
 
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
-from .passthrough import forward_headers, PassthroughConfig
+from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
 from .stats import CompressionStats
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.dashboard.export_api import ExportAPI
@@ -386,8 +386,29 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
 
-        # Build forwarding headers
-        passthrough_cfg = PassthroughConfig()
+        # Validate credentials for intercepted provider requests
+        # Client-supplied key takes precedence over any environment-level key.
+        if should_log and is_messages:
+            passthrough_cfg = PassthroughConfig(require_auth=True)
+            auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
+            if not auth_ok:
+                import json as _json
+                err_body = _json.dumps({
+                    "error": {
+                        "type": "authentication_error",
+                        "message": auth_err,
+                    }
+                }).encode()
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err_body)))
+                self.end_headers()
+                self.wfile.write(err_body)
+                return
+        else:
+            passthrough_cfg = PassthroughConfig(require_auth=False)
+
+        # Build forwarding headers (client-supplied auth forwarded unchanged)
         fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
         fwd_headers["Host"] = parsed.netloc
         if body is not None:
