@@ -19,6 +19,7 @@ tokens = ["tiktoken>=0.5.0"]
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
+tokenpak-admin = "tokenpak.agent.license.admin_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

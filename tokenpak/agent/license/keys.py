@@ -2,7 +2,7 @@
 TokenPak License Key Cryptography — RSA-based signing and verification.
 
 Key format:  TPAK-XXXX-XXXX-XXXX
-Underlying:  RSA-2048, SHA-256, base64url payload + signature
+Underlying:  RSA-4096, SHA-256, base64url payload + signature
 """
 
 from __future__ import annotations
@@ -38,11 +38,12 @@ KEY_SEGMENTS = 3  # produces TPAK-XXXX-XXXX-XXXX
 class LicensePayload:
     """The decoded payload embedded in a license."""
     key_id: str
-    tier: str                  # oss | pro | team | enterprise
-    seats: int                 # 0 = unlimited
-    issued_at: str             # ISO-8601
-    expires_at: Optional[str]  # ISO-8601 or None = perpetual
+    tier: str                    # oss | pro | team | enterprise
+    seats: int                   # 0 = unlimited
+    issued_at: str               # ISO-8601
+    expires_at: Optional[str]    # ISO-8601 or None = perpetual
     features: list[str]
+    customer_id: Optional[str] = None  # opaque customer hash (never plaintext PII)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -56,6 +57,7 @@ class LicensePayload:
             issued_at=d["issued_at"],
             expires_at=d.get("expires_at"),
             features=d.get("features", []),
+            customer_id=d.get("customer_id"),
         )
 
 
@@ -74,7 +76,7 @@ def generate_keypair() -> tuple[bytes, bytes]:
 
     private_key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=2048,
+        key_size=4096,
         backend=default_backend(),
     )
     private_pem = private_key.private_bytes(
