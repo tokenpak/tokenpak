@@ -1418,6 +1418,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                injected_tokens, sources_str, cache_read_tokens, cache_creation_tokens)
                 except Exception as _monitor_err:
                     print(f"  ⚠️ Monitor.log() failed (SQLite error, request unaffected): {_monitor_err}")
+                try:
+                    from tokenpak.telemetry.anon_metrics import record_request
+                    record_request(
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        tokens_saved=saved,
+                        latency_ms=latency_ms,
+                        model=model,
+                    )
+                except Exception:
+                    pass  # never break the proxy
                 SESSION["requests"] += 1
                 SESSION["input_tokens"] += input_tokens
                 SESSION["sent_input_tokens"] += sent_input_tokens
@@ -1616,6 +1627,13 @@ def main():
 
     sync_thread = threading.Thread(target=sync_loop, daemon=True)
     sync_thread.start()
+
+    # Schedule anonymous metrics daily batch sync (non-blocking, opt-in only)
+    try:
+        from tokenpak.telemetry.reporter import schedule_daily_sync
+        schedule_daily_sync()
+    except Exception:
+        pass
 
     server = ThreadedHTTPServer(("0.0.0.0", port), ForwardProxyHandler)
 

@@ -17,6 +17,7 @@ CONFIG_PATH = Path(os.path.expanduser("~/.tokenpak/config.json"))
 # Keys that map to env var overrides (env takes priority)
 _ENV_OVERRIDES: dict[str, str] = {
     "stats_footer": "TOKENPAK_STATS_FOOTER",
+    "metrics.enabled": "TOKENPAK_METRICS_ENABLED",
 }
 
 
@@ -49,6 +50,21 @@ def set_config(key: str, value: Any) -> None:
     data = _load()
     data[key] = value
     _save(data)
+
+
+def get_metrics_enabled() -> bool:
+    """Return True if anonymous metrics reporting is opt-in enabled.
+
+    Resolution order:
+      1. TOKENPAK_METRICS_ENABLED env var (1/true → on)
+      2. ~/.tokenpak/config.json "metrics.enabled" key
+      3. Default: False (opt-in — disabled by default)
+    """
+    env_val = os.environ.get("TOKENPAK_METRICS_ENABLED")
+    if env_val is not None:
+        return env_val not in ("0", "false", "False", "no")
+    data = _load()
+    return bool(data.get("metrics.enabled", False))
 
 
 def get_stats_footer_enabled() -> bool:

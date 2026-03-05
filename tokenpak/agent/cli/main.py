@@ -345,6 +345,35 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate metrics subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "metrics":
+        from tokenpak.agent.cli.commands.metrics import (
+            cmd_history, cmd_preview, cmd_status, cmd_sync,
+        )
+        import argparse as _ap
+        mp = _ap.ArgumentParser(prog="tokenpak metrics", add_help=True)
+        msub = mp.add_subparsers(dest="metrics_cmd")
+        msub.add_parser("status")
+        msub.add_parser("preview")
+        hh = msub.add_parser("history")
+        hh.add_argument("--days", type=int, default=30)
+        hh.add_argument("--raw", action="store_true")
+        ss = msub.add_parser("sync")
+        ss.add_argument("--dry-run", dest="dry_run", action="store_true")
+        margs = mp.parse_args(sys.argv[2:])
+        dispatch_m = {
+            "status": cmd_status,
+            "preview": cmd_preview,
+            "history": cmd_history,
+            "sync": cmd_sync,
+        }
+        fn_m = dispatch_m.get(margs.metrics_cmd)
+        if fn_m:
+            fn_m(margs)
+        else:
+            mp.print_help()
+        return
+
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
         from tokenpak.agent.cli.commands.cost import run_cost_cmd as _cost_cmd

@@ -25,6 +25,7 @@ TOKENPAK_VARS = [
 # Maps friendly key → env var name and config.json key
 _SETTABLE_KEYS: dict[str, tuple[str, str]] = {
     "stats_footer": ("TOKENPAK_STATS_FOOTER", "stats_footer"),
+    "metrics.enabled": ("TOKENPAK_METRICS_ENABLED", "metrics.enabled"),
 }
 
 _TRUTHY = {"1", "true", "on", "yes"}
@@ -83,7 +84,14 @@ def run_set(key: str, value: str) -> None:
 
     flag = "enabled" if parsed else "disabled"
     print(f"✔ {key} → {flag}  (saved to ~/.tokenpak/config.json)")
-    print(f"  Note: restart proxy for changes to take effect if it is already running.")
+    if key == "metrics.enabled":
+        if parsed:
+            print("  Anonymous metrics: token counts, model, compression ratio, latency only.")
+            print("  No prompt/response content is ever collected.")
+        else:
+            print("  Anonymous metrics reporting disabled.")
+    else:
+        print(f"  Note: restart proxy for changes to take effect if it is already running.")
 
 
 try:
