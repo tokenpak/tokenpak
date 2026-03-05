@@ -323,6 +323,17 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate index subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "index":
+        try:
+            from tokenpak.agent.cli.commands.index import index_cmd
+            sys.argv = sys.argv[1:]
+            index_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"index command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
         from tokenpak.agent.cli.commands.cost import run_cost_cmd as _cost_cmd

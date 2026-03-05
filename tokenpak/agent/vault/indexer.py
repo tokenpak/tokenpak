@@ -33,8 +33,8 @@ class VaultIndexer:
         block_store: Optional[BlockStore] = None,
         symbol_table: Optional[SymbolTable] = None,
     ):
-        self.blocks = block_store or get_block_store()
-        self.symbols = symbol_table or SymbolTable()
+        self.blocks = block_store if block_store is not None else get_block_store()
+        self.symbols = symbol_table if symbol_table is not None else SymbolTable()
 
     def index_file(self, path: str, content: Optional[str] = None) -> Optional[BlockRecord]:
         """Index a single file. Reads from disk if content not provided."""
@@ -47,6 +47,12 @@ class VaultIndexer:
                 content = file_path.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 return None
+
+        # Incremental check: skip if content hasn't changed
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        existing = self.blocks.get_by_path(path)
+        if existing and existing[0].content_hash == content_hash:
+            return existing[0]  # Already indexed, no change
 
         # Detect file type via extension or basename (e.g. ".env")
         file_type = detect_file_type(path)
@@ -61,7 +67,6 @@ class VaultIndexer:
         compressed = processor.process(content, path)
         raw_tokens = count_tokens(content)
         compressed_tokens = count_tokens(compressed)
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
         block_id = f"{path}#{content_hash[:8]}"
 
         record = BlockRecord(
@@ -141,4 +146,20 @@ class VaultIndexer:
         return {
             **self.blocks.stats(),
             "total_symbols": len(self.symbols),
+        }
+
+    def stats_by_type(self) -> dict:
+        """Return indexed file count broken down by file type and extension."""
+        from collections import Counter
+        blocks = self.blocks.all()
+        by_type: Counter = Counter()
+        by_ext: Counter = Counter()
+        for b in blocks:
+            by_type[b.file_type] += 1
+            ext = Path(b.path).suffix.lower() or "(no ext)"
+            by_ext[ext] += 1
+        return {
+            "total_files": len(blocks),
+            "by_type": dict(by_type),
+            "by_extension": dict(sorted(by_ext.items())),
         }

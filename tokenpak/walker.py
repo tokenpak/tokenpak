@@ -7,14 +7,15 @@ from typing import List, Tuple
 # Supported file extensions → type mapping
 FILE_TYPES = {
     ".md": "text", ".txt": "text", ".html": "text", ".htm": "text",
-    ".rst": "text", ".adoc": "text",
+    ".rst": "text", ".adoc": "text", ".org": "text",
     ".py": "code", ".js": "code", ".ts": "code", ".jsx": "code",
     ".tsx": "code", ".go": "code", ".rs": "code", ".rb": "code",
     ".java": "code", ".c": "code", ".cpp": "code", ".h": "code",
     ".sh": "code", ".bash": "code", ".sql": "code", ".css": "code",
+    ".php": "code", ".cs": "code", ".swift": "code", ".kt": "code",
     ".json": "data", ".csv": "data", ".tsv": "data",
     ".yaml": "data", ".yml": "data", ".toml": "data",
-    ".env": "data", ".cfg": "data", ".ini": "data",
+    ".env": "data", ".cfg": "data", ".ini": "data", ".xml": "data",
     ".pdf": "pdf",
     ".png": "image", ".jpg": "image", ".jpeg": "image",
     ".gif": "image", ".webp": "image", ".svg": "image",
