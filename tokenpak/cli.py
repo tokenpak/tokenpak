@@ -1758,28 +1758,206 @@ def cmd_macro_install(args):
 
 
 def cmd_macro_run(args):
-    """Run a premade macro."""
+    """Run a user-defined YAML macro or a premade macro."""
+    import json as _json
+    from .agent.macros.engine import MacroEngine
     from .agent.macros.premade_macros import run_macro, format_macro_output, PREMADE_MACROS
+
     name = args.name
-    if name not in PREMADE_MACROS:
-        print(f"❌ Unknown macro: '{name}'. Available: {', '.join(PREMADE_MACROS.keys())}")
+    dry_run = getattr(args, "dry_run", False)
+    continue_on_error = getattr(args, "continue_on_error", False)
+    raw_vars = getattr(args, "var", []) or []
+
+    # Parse --var KEY=VALUE overrides
+    runtime_vars: dict = {}
+    for kv in raw_vars:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            runtime_vars[k.strip()] = v.strip()
+        else:
+            print(f"⚠️  Ignoring malformed --var (expected KEY=VALUE): {kv}")
+
+    # Try user-defined YAML macro first
+    engine = MacroEngine()
+    if engine.exists(name):
+        result = engine.run(name, variables=runtime_vars or None, dry_run=dry_run,
+                            continue_on_error=continue_on_error)
+        if getattr(args, "json", False):
+            print(_json.dumps(result.to_dict(), indent=2))
+        else:
+            print(result.format())
         return
-    result = run_macro(name)
-    if getattr(args, "json", False):
-        import json
-        print(json.dumps(result, indent=2))
-    else:
-        print(format_macro_output(result))
+
+    # Fall back to premade macros
+    if name in PREMADE_MACROS:
+        if dry_run:
+            print(f"[DRY RUN] Would run premade macro '{name}' ({len(PREMADE_MACROS[name]['steps'])} steps)")
+            for step in PREMADE_MACROS[name]["steps"]:
+                print(f"  🔍 {step['label']}: {step['cmd']}")
+            return
+        result_dict = run_macro(name)
+        if getattr(args, "json", False):
+            print(_json.dumps(result_dict, indent=2))
+        else:
+            print(format_macro_output(result_dict))
+        return
+
+    # Nothing found
+    engine_macros = [m.name for m in engine.list()]
+    premade = list(PREMADE_MACROS.keys())
+    all_names = sorted(set(engine_macros + premade))
+    print(f"❌ Unknown macro: '{name}'.")
+    if all_names:
+        print(f"   Available: {', '.join(all_names)}")
 
 
 def cmd_macro_list(args):
-    """List all available premade macros."""
+    """List all available macros (premade + user-defined YAML)."""
+    from .agent.macros.engine import MacroEngine
     from .agent.macros.premade_macros import list_macros
-    macros = list_macros()
-    print(f"{'NAME':<20} DESCRIPTION")
-    print("-" * 70)
-    for m in macros:
-        print(f"{m['name']:<20} {m['description']}")
+
+    print(f"{'NAME':<25} {'TYPE':<10} DESCRIPTION")
+    print("-" * 75)
+
+    # Premade macros
+    for m in list_macros():
+        print(f"{m['name']:<25} {'premade':<10} {m['description']}")
+
+    # User-defined YAML macros
+    engine = MacroEngine()
+    user_macros = engine.list()
+    for m in user_macros:
+        print(f"{m.name:<25} {'yaml':<10} {m.description}")
+
+    if not user_macros:
+        print(f"  (no user macros — use `tokenpak macro create` to add one)")
+
+
+def cmd_macro_create(args):
+    """Create a user-defined YAML macro."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    from .agent.macros.engine import MacroEngine
+
+    engine = MacroEngine()
+
+    # If --file provided, load YAML from file
+    if getattr(args, "file", None):
+        yaml_text = _Path(args.file).read_text()
+        try:
+            path = engine.create_from_yaml(yaml_text, overwrite=getattr(args, "overwrite", False))
+            print(f"✅ Created macro from file → {path}")
+        except Exception as e:
+            print(f"❌ {e}")
+        return
+
+    # Build from CLI args
+    name = getattr(args, "name", None)
+    if not name:
+        print("❌ --name is required (or use --file to load from YAML)")
+        return
+
+    # Parse --step "label:cmd" pairs
+    raw_steps = getattr(args, "step", []) or []
+    steps = []
+    for i, s in enumerate(raw_steps, 1):
+        if ":" in s:
+            label, cmd = s.split(":", 1)
+            steps.append({"name": f"step{i}", "label": label.strip(), "cmd": cmd.strip()})
+        else:
+            steps.append({"name": f"step{i}", "label": f"Step {i}", "cmd": s.strip()})
+
+    if not steps:
+        print("❌ At least one --step is required (e.g., --step 'Check status:tokenpak status')")
+        return
+
+    # Parse --var KEY=VALUE defaults
+    raw_vars = getattr(args, "var", []) or []
+    variables: dict = {}
+    for kv in raw_vars:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            variables[k.strip()] = v.strip()
+
+    try:
+        path = engine.create(
+            name=name,
+            steps=steps,
+            description=getattr(args, "description", "") or "",
+            variables=variables or None,
+            continue_on_error=getattr(args, "continue_on_error", False),
+            overwrite=getattr(args, "overwrite", False),
+        )
+        print(f"✅ Created macro '{name}' → {path}")
+        print(f"   Run it with: tokenpak macro run {name}")
+    except Exception as e:
+        print(f"❌ {e}")
+
+
+def cmd_macro_show(args):
+    """Show a macro definition."""
+    import json as _json
+    from .agent.macros.engine import MacroEngine
+    from .agent.macros.premade_macros import PREMADE_MACROS
+
+    name = args.name
+    engine = MacroEngine()
+
+    if engine.exists(name):
+        macro = engine.show(name)
+        if getattr(args, "json", False):
+            print(_json.dumps(macro.to_dict(), indent=2))
+        else:
+            print(f"Name:         {macro.name}")
+            print(f"Description:  {macro.description or '(none)'}")
+            print(f"Fail mode:    {'continue-on-error' if macro.continue_on_error else 'fail-fast'}")
+            if macro.variables:
+                print(f"Variables:")
+                for k, v in macro.variables.items():
+                    print(f"  {k} = {v}")
+            print(f"Steps ({len(macro.steps)}):")
+            for i, step in enumerate(macro.steps, 1):
+                print(f"  {i}. [{step.name}] {step.label}")
+                print(f"       $ {step.cmd}")
+        return
+
+    if name in PREMADE_MACROS:
+        macro_data = PREMADE_MACROS[name]
+        if getattr(args, "json", False):
+            print(_json.dumps({"name": name, **macro_data}, indent=2))
+        else:
+            print(f"Name:        {name}  (premade)")
+            print(f"Description: {macro_data['description']}")
+            print(f"Steps ({len(macro_data['steps'])}):")
+            for i, step in enumerate(macro_data["steps"], 1):
+                print(f"  {i}. [{step['name']}] {step['label']}")
+                print(f"       $ {step['cmd']}")
+        return
+
+    print(f"❌ Macro '{name}' not found.")
+
+
+def cmd_macro_delete(args):
+    """Delete a user-defined YAML macro."""
+    from .agent.macros.engine import MacroEngine
+
+    name = args.name
+    engine = MacroEngine()
+
+    if not engine.exists(name):
+        print(f"❌ Macro '{name}' not found.")
+        return
+
+    if not getattr(args, "yes", False):
+        confirm = input(f"Delete macro '{name}'? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return
+
+    if engine.delete(name):
+        print(f"✅ Deleted macro '{name}'.")
+    else:
+        print(f"❌ Failed to delete macro '{name}'.")
 
 
 def cmd_macro_hooks(args):
@@ -1803,22 +1981,56 @@ def cmd_macro_hooks(args):
 
 
 def _build_macro_parser(sub):
-    p_macro = sub.add_parser("macro", help="Premade macros and script hooks")
+    p_macro = sub.add_parser("macro", help="Premade macros, user-defined YAML macros, and script hooks")
     msub = p_macro.add_subparsers(dest="macro_cmd", required=True)
 
-    # macro install <name>
-    p_install = msub.add_parser("install", help="Install a premade macro")
-    p_install.add_argument("name", help="Macro name (morning-standup, pre-deploy, weekly-report)")
-    p_install.set_defaults(func=cmd_macro_install)
+    # macro list
+    msub.add_parser("list", help="List all macros (premade + user-defined)").set_defaults(func=cmd_macro_list)
+
+    # macro create
+    p_create = msub.add_parser("create", help="Create a user-defined YAML macro")
+    p_create.add_argument("--name", help="Macro name (e.g., my-deploy)")
+    p_create.add_argument("--description", default="", help="Short description")
+    p_create.add_argument("--step", action="append", metavar="LABEL:CMD",
+                          help="Add a step (repeatable). Format: 'Label:command'")
+    p_create.add_argument("--var", action="append", metavar="KEY=VALUE",
+                          help="Default variable (repeatable). Format: KEY=VALUE")
+    p_create.add_argument("--continue-on-error", action="store_true", default=False,
+                          help="Keep running if a step fails (default: fail-fast)")
+    p_create.add_argument("--file", help="Load macro definition from a YAML file")
+    p_create.add_argument("--overwrite", action="store_true", default=False,
+                          help="Overwrite an existing macro with the same name")
+    p_create.set_defaults(func=cmd_macro_create)
 
     # macro run <name>
-    p_run = msub.add_parser("run", help="Run a premade macro")
+    p_run = msub.add_parser("run", help="Run a macro (YAML or premade)")
     p_run.add_argument("name", help="Macro name")
+    p_run.add_argument("--dry-run", action="store_true", default=False,
+                       help="Print commands without executing them")
+    p_run.add_argument("--continue-on-error", action="store_true", default=False,
+                       help="Keep running if a step fails")
+    p_run.add_argument("--var", action="append", metavar="KEY=VALUE",
+                       help="Runtime variable override (repeatable)")
     p_run.add_argument("--json", action="store_true", help="Output raw JSON")
     p_run.set_defaults(func=cmd_macro_run)
 
-    # macro list
-    msub.add_parser("list", help="List available premade macros").set_defaults(func=cmd_macro_list)
+    # macro show <name>
+    p_show = msub.add_parser("show", help="Show a macro definition")
+    p_show.add_argument("name", help="Macro name")
+    p_show.add_argument("--json", action="store_true", help="Output raw JSON")
+    p_show.set_defaults(func=cmd_macro_show)
+
+    # macro delete <name>
+    p_delete = msub.add_parser("delete", help="Delete a user-defined YAML macro")
+    p_delete.add_argument("name", help="Macro name")
+    p_delete.add_argument("--yes", "-y", action="store_true", default=False,
+                          help="Skip confirmation prompt")
+    p_delete.set_defaults(func=cmd_macro_delete)
+
+    # macro install <name>  (premade shortcut)
+    p_install = msub.add_parser("install", help="Install a premade macro as a local file")
+    p_install.add_argument("name", help="Macro name (morning-standup, pre-deploy, weekly-report)")
+    p_install.set_defaults(func=cmd_macro_install)
 
     # macro hooks list / install <name>
     p_hooks = msub.add_parser("hooks", help="Manage proxy lifecycle script hooks")

@@ -1,5 +1,17 @@
 """Macro and hook systems for event-driven automation."""
 
+from .engine import (
+    MacroEngine,
+    MacroDefinition,
+    MacroStep,
+    MacroResult,
+    StepResult,
+    create_macro,
+    show_macro,
+    list_user_macros,
+    delete_macro,
+    run_user_macro,
+)
 from .hooks import (
     TriggerRegistry,
     Trigger,
@@ -42,6 +54,17 @@ from .premade_macros import (
 )
 
 __all__ = [
+    # YAML macro engine
+    "MacroEngine",
+    "MacroDefinition",
+    "MacroStep",
+    "MacroResult",
+    "StepResult",
+    "create_macro",
+    "show_macro",
+    "list_user_macros",
+    "delete_macro",
+    "run_user_macro",
     # Trigger/event system
     "TriggerRegistry",
     "Trigger",
