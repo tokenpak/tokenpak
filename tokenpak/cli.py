@@ -638,8 +638,17 @@ def _trigger_store():
 
 
 def cmd_trigger_list(args):
+    import json as _json
     store = _trigger_store()
     triggers = store.list()
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(id=t.id, event=t.event, action=t.action,
+                  enabled=t.enabled, created_at=t.created_at)
+             for t in triggers],
+            indent=2,
+        ))
+        return
     if not triggers:
         print("No triggers registered.")
         return
@@ -651,14 +660,26 @@ def cmd_trigger_list(args):
 
 
 def cmd_trigger_add(args):
+    import json as _json
     store = _trigger_store()
     t = store.add(event=args.event, action=args.action)
+    if getattr(args, "json", False):
+        print(_json.dumps(dict(
+            id=t.id, event=t.event, action=t.action,
+            enabled=t.enabled, created_at=t.created_at,
+        ), indent=2))
+        return
     print(f"Trigger added: id={t.id}  event={t.event}  action={t.action}")
 
 
 def cmd_trigger_remove(args):
+    import json as _json
     store = _trigger_store()
-    if store.remove(args.id):
+    removed = store.remove(args.id)
+    if getattr(args, "json", False):
+        print(_json.dumps({"removed": removed, "id": args.id}, indent=2))
+        return
+    if removed:
         print(f"Trigger {args.id} removed.")
     else:
         print(f"No trigger with id={args.id}")
@@ -666,11 +687,19 @@ def cmd_trigger_remove(args):
 
 def cmd_trigger_test(args):
     """Dry-run: show which registered triggers would fire for a given event."""
+    import json as _json
     from .agent.triggers.matcher import match_event
     store = _trigger_store()
     event = args.event
-    print(f"Testing event: {event}")
     matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(id=t.id, event=t.event, action=t.action, would_fire=True)
+             for t in matched],
+            indent=2,
+        ))
+        return
+    print(f"Testing event: {event}")
     if not matched:
         print("  No triggers would fire.")
     for t in matched:
@@ -678,8 +707,17 @@ def cmd_trigger_test(args):
 
 
 def cmd_trigger_log(args):
+    import json as _json
     store = _trigger_store()
     logs = store.list_logs(limit=args.limit)
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(trigger_id=lg.trigger_id, event=lg.event, action=lg.action,
+                  fired_at=lg.fired_at, exit_code=lg.exit_code, output=lg.output)
+             for lg in logs],
+            indent=2,
+        ))
+        return
     if not logs:
         print("No trigger log entries.")
         return
@@ -791,23 +829,36 @@ def _build_trigger_parser(sub):
     p_trig = sub.add_parser("trigger", help="Manage event triggers")
     tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
 
-    tsub.add_parser("list", help="List all triggers").set_defaults(func=cmd_trigger_list)
+    p_list = tsub.add_parser("list", help="List all triggers")
+    p_list.add_argument("--json", dest="json", action="store_true", default=False,
+                        help="Output raw JSON")
+    p_list.set_defaults(func=cmd_trigger_list)
 
     p_add = tsub.add_parser("add", help="Register a new trigger")
-    p_add.add_argument("event", help="Event pattern (e.g. file:changed:*.py, timer:5m, cost:daily>10)")
-    p_add.add_argument("action", help="Action: tokenpak sub-command or shell script path")
+    p_add.add_argument("--event", required=True,
+                       help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)")
+    p_add.add_argument("--action", required=True,
+                       help="Action: tokenpak sub-command or shell script path")
+    p_add.add_argument("--json", dest="json", action="store_true", default=False,
+                       help="Output raw JSON")
     p_add.set_defaults(func=cmd_trigger_add)
 
     p_rm = tsub.add_parser("remove", help="Remove a trigger by id")
     p_rm.add_argument("id", help="Trigger ID")
+    p_rm.add_argument("--json", dest="json", action="store_true", default=False,
+                      help="Output raw JSON")
     p_rm.set_defaults(func=cmd_trigger_remove)
 
     p_test = tsub.add_parser("test", help="Dry-run: show which triggers match an event")
-    p_test.add_argument("event", help="Event string to test")
+    p_test.add_argument("--event", required=True, help="Event string to test")
+    p_test.add_argument("--json", dest="json", action="store_true", default=False,
+                        help="Output raw JSON")
     p_test.set_defaults(func=cmd_trigger_test)
 
     p_log = tsub.add_parser("log", help="Show recent trigger fire log")
     p_log.add_argument("--limit", type=int, default=20)
+    p_log.add_argument("--json", dest="json", action="store_true", default=False,
+                       help="Output raw JSON")
     p_log.set_defaults(func=cmd_trigger_log)
 
     tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)

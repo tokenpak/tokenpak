@@ -1,18 +1,7 @@
-"""trigger command — re-exported from agent triggers."""
+"""trigger command — re-exported from agent triggers CLI."""
 
 from __future__ import annotations
 
-try:
-    # Re-export trigger_group from the agent triggers CLI module
-    from tokenpak.agent.cli.trigger_cmd import trigger_group  # noqa: F401
-except ImportError:
-    try:
-        import click
+from tokenpak.agent.cli.trigger_cmd import trigger_group  # noqa: F401
 
-        @click.group("trigger", help="Manage event triggers and actions")
-        def trigger_group():
-            """Event triggers (agent triggers module not available)."""
-            pass
-
-    except ImportError:
-        trigger_group = None
+__all__ = ["trigger_group"]
