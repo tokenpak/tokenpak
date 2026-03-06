@@ -1,3 +1,0 @@
-[console_scripts]
-tokenpak = tokenpak.cli:main
-tokenpak-admin = tokenpak.agent.license.admin_cli:main
