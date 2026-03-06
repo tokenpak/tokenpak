@@ -19,6 +19,7 @@ from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
 from .calibration import calibrate_workers, get_recommended_workers, load_profile
 from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
+from .security import secure_write_config, sanitize_model_name, sanitize_cli_arg
 
 
 # Batch size for SQLite transactions
@@ -476,9 +477,8 @@ def cmd_doctor(args):
             if fix_type == "create config":
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_config = {"version": "1.0", "port": 8765, "compress": True}
-                with open(fix_path, "w") as f:
-                    json.dump(default_config, f, indent=2)
-                print(f"  ✓ Created {fix_path}")
+                secure_write_config(fix_path, default_config)
+                print(f"  ✓ Created {fix_path} (mode 600)")
             elif fix_type == "reset config":
                 # Backup before overwriting
                 backup_path = Path(str(fix_path) + ".backup")
@@ -487,9 +487,8 @@ def cmd_doctor(args):
                     print(f"  ✓ Backed up invalid config to {backup_path}")
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_config = {"version": "1.0", "port": 8765, "compress": True}
-                with open(fix_path, "w") as f:
-                    json.dump(default_config, f, indent=2)
-                print(f"  ✓ Recreated {fix_path}")
+                secure_write_config(fix_path, default_config)
+                print(f"  ✓ Recreated {fix_path} (mode 600)")
     
     if results["fail"] > 0:
         sys.exit(1)
