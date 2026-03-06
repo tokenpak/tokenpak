@@ -579,6 +579,7 @@ def build_parser():
     _build_macro_parser(sub)
     _build_fingerprint_parser(sub)
     _build_learn_parser(sub)
+    _build_user_template_parser(sub)
 
     return parser
 
@@ -708,6 +709,43 @@ def cmd_learn_reset(args):
     from .agent.agentic.learning import reset
     reset()
     print("✓ Learning store cleared.")
+
+
+def _build_user_template_parser(sub):
+    """Build `tokenpak template` subcommand parser for local user templates."""
+    from .user_templates import (
+        cmd_template_list, cmd_template_add, cmd_template_show,
+        cmd_template_remove, cmd_template_use,
+    )
+
+    p_tmpl = sub.add_parser("template", help="Manage local user prompt templates")
+    tsub = p_tmpl.add_subparsers(dest="template_cmd", required=True)
+
+    # list
+    tsub.add_parser("list", help="List all saved templates").set_defaults(func=cmd_template_list)
+
+    # add
+    p_add = tsub.add_parser("add", help="Add or update a template")
+    p_add.add_argument("name", help="Template name")
+    p_add.add_argument("--content", default=None, help="Template content (use {{var}} for variables)")
+    p_add.set_defaults(func=cmd_template_add)
+
+    # show
+    p_show = tsub.add_parser("show", help="Display a template")
+    p_show.add_argument("name", help="Template name")
+    p_show.set_defaults(func=cmd_template_show)
+
+    # remove
+    p_rm = tsub.add_parser("remove", help="Delete a template")
+    p_rm.add_argument("name", help="Template name")
+    p_rm.set_defaults(func=cmd_template_remove)
+
+    # use
+    p_use = tsub.add_parser("use", help="Expand a template with variables")
+    p_use.add_argument("name", help="Template name")
+    p_use.add_argument("--var", action="append", default=[], metavar="KEY=VALUE",
+                       help="Variable substitution (repeatable)")
+    p_use.set_defaults(func=cmd_template_use)
 
 
 def main():
