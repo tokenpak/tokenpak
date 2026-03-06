@@ -8,6 +8,7 @@ from .anthropic import AnthropicFormat
 from .openai import OpenAIFormat
 from .google import GoogleFormat
 from .translator import translate_request, translate_response
+from .stream_translator import StreamingTranslator
 from .detector import detect_provider
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "GoogleFormat",
     "translate_request",
     "translate_response",
+    "StreamingTranslator",
     "detect_provider",
 ]

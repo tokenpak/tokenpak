@@ -442,6 +442,38 @@ def main():
     learn_sub.add_parser("status", help="Show learned patterns summary")
     learn_sub.add_parser("reset", help="Clear all learned data")
 
+    # agent subcommand
+    agentp = sub.add_parser("agent", help="Agent coordination commands")
+    agent_sub = agentp.add_subparsers(dest="agent_cmd")
+    # agent handoff
+    handoffp = agent_sub.add_parser("handoff", help="Context handoff between agents")
+    handoff_sub = handoffp.add_subparsers(dest="handoff_cmd")
+    # create
+    createp = handoff_sub.add_parser("create", help="Create a context handoff")
+    createp.add_argument("--from", dest="handoff_from", required=True, help="Sending agent name")
+    createp.add_argument("--to", dest="handoff_to", required=True, help="Receiving agent name")
+    createp.add_argument("--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)")
+    createp.add_argument("--done", metavar="TEXT", help="What was done")
+    createp.add_argument("--next", dest="next", metavar="TEXT", help="What comes next")
+    createp.add_argument("--file", action="append", metavar="PATH", help="Relevant file path (repeatable)")
+    createp.add_argument("--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)")
+    # receive
+    receivep = handoff_sub.add_parser("receive", help="Receive and validate a handoff")
+    receivep.add_argument("handoff_id", help="Handoff ID")
+    # apply
+    applyp = handoff_sub.add_parser("apply", help="Apply a handoff (mark context as loaded)")
+    applyp.add_argument("handoff_id", help="Handoff ID")
+    # list
+    listp = handoff_sub.add_parser("list", help="List handoffs")
+    listp.add_argument("--to", dest="handoff_to", metavar="AGENT", help="Filter by recipient")
+    listp.add_argument("--from", dest="handoff_from", metavar="AGENT", help="Filter by sender")
+    listp.add_argument("--status", metavar="STATUS", help="Filter by status")
+    # show
+    showp = handoff_sub.add_parser("show", help="Show handoff details")
+    showp.add_argument("handoff_id", help="Handoff ID")
+    # expire
+    handoff_sub.add_parser("expire", help="Expire stale handoffs")
+
     args, _ = p.parse_known_args()
 
     if args.cmd == "proxy":
@@ -569,6 +601,17 @@ def _dispatch_license(args) -> None:
 def _dispatch_debug(args) -> None:
     from tokenpak.agent.cli.commands.debug import debug_cmd
     debug_cmd(args)
+
+
+def _dispatch_agent(args) -> None:
+    """Handle `tokenpak agent <subcommand>` commands."""
+    from tokenpak.agent.cli.commands.handoff import handoff_cmd
+
+    agent_cmd = getattr(args, "agent_cmd", None)
+    if agent_cmd == "handoff":
+        handoff_cmd(args)
+    else:
+        print("Usage: tokenpak agent <handoff>")
 
 
 def _dispatch_learn(args) -> None:

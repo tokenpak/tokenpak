@@ -70,6 +70,34 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
+    # --status mode: show stats without indexing
+    if getattr(args, 'status', False):
+        import os
+        db_path = getattr(args, 'db', os.path.join(os.getcwd(), '.tokenpak', 'registry.db'))
+        if not os.path.exists(db_path):
+            print(f"No index found at {db_path}. Run `tokenpak index <directory>` first.")
+            return
+        registry = BlockRegistry(db_path)
+        stats = registry.get_stats()
+        print("Vault Index Status")
+        print("─" * 40)
+        print(f"  Database:            {db_path}")
+        print(f"  Total indexed files: {stats.get('total_files', 0)}")
+        by_type = stats.get('by_type', {})
+        if by_type:
+            print("  By type:")
+            for t, info in by_type.items():
+                if isinstance(info, dict):
+                    print(f"    {t:<12} {info.get('files', 0)} files")
+                else:
+                    print(f"    {t:<12} {info} files")
+        print(f"  Tokens raw:          {stats.get('total_raw_tokens', 0):,}")
+        print(f"  Tokens compressed:   {stats.get('total_compressed_tokens', 0):,}")
+        ratio = stats.get('compression_ratio', 0)
+        if ratio:
+            print(f"  Compression ratio:   {ratio:.2f}x")
+        return
+
     # --watch mode: initial index then watch for changes
     if getattr(args, 'watch', False):
         from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
@@ -82,6 +110,9 @@ def cmd_index(args):
         )
         watcher = VaultWatcher(config)
         watcher.start(blocking=True)
+        return
+    if not args.directory:
+        print("error: directory is required when --status is not set")
         return
     _do_index(args)
 
@@ -502,7 +533,8 @@ def build_parser():
     _build_route_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
-    p_index.add_argument("directory", help="Directory to index")
+    p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
+    p_index.add_argument("--status", action="store_true", help="Show indexed file count by type")
     p_index.add_argument("--budget", type=int, default=8000)
     p_index.add_argument("--workers", "-w", type=int, default=4,
                          help="Parallel workers (default: 4)")
@@ -617,6 +649,28 @@ def cmd_status(args):
                 extra += f" {ev['from_provider']} → {ev['to_provider']}"
             print(f"    {ts_str}  {event_type:<30}  task={task}{extra}")
         print()
+
+    # ── Failover events ──
+    try:
+        from .agent.proxy.failover_engine import get_event_log
+        flog = get_event_log()
+        failover_events = flog.get_recent(limit=n)
+        if not failover_events:
+            print("  Failover events: none\n")
+        else:
+            print(f"  Recent failover events (last {len(failover_events)}):\n")
+            for ev in failover_events:
+                ts = ev.get("timestamp", "")[:19].replace("T", " ")
+                orig = ev.get("original_provider", "?")
+                fail = ev.get("failover_provider", "?")
+                etype = ev.get("error_type", "?")
+                http_s = ev.get("http_status") or ""
+                http_tag = f" [{http_s}]" if http_s else ""
+                status_icon = "✅" if ev.get("succeeded") else "❌"
+                print(f"    {ts}  {status_icon} {orig} → {fail}{http_tag} ({etype})")
+            print()
+    except Exception:
+        pass
 
     # ── Budget status (if available) ──
     try:
@@ -1653,6 +1707,11 @@ def cmd_agent_prune(args):
     else:
         print("No stale agents to prune.")
 
+def cmd_agent_handoff(args):
+    """Dispatch to handoff command handler."""
+    from .agent.cli.commands.handoff import handoff_cmd
+    handoff_cmd(args)
+
 
 def _build_agent_parser(sub):
     p_agent = sub.add_parser("agent", help="Agent coordination (locks, registry, capabilities)")
@@ -1710,6 +1769,41 @@ def _build_agent_parser(sub):
 
     p_prune = asub.add_parser("prune", help="Remove stale agents")
     p_prune.set_defaults(func=cmd_agent_prune)
+
+    # handoff subcommand
+    p_handoff = asub.add_parser("handoff", help="Context handoff between agents")
+    hsub = p_handoff.add_subparsers(dest="handoff_cmd", required=True)
+
+    hc = hsub.add_parser("create", help="Create a context handoff")
+    hc.add_argument("--from", dest="handoff_from", required=True, help="Sending agent")
+    hc.add_argument("--to", dest="handoff_to", required=True, help="Receiving agent")
+    hc.add_argument("--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)")
+    hc.add_argument("--done", metavar="TEXT", help="What was done")
+    hc.add_argument("--next", dest="whats_next", metavar="TEXT", help="What comes next")
+    hc.add_argument("--file", action="append", metavar="PATH", help="Relevant file (repeatable)")
+    hc.add_argument("--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)")
+    hc.set_defaults(func=cmd_agent_handoff)
+
+    hr = hsub.add_parser("receive", help="Receive and validate a handoff")
+    hr.add_argument("handoff_id", help="Handoff ID")
+    hr.set_defaults(func=cmd_agent_handoff)
+
+    ha = hsub.add_parser("apply", help="Apply a handoff (load context)")
+    ha.add_argument("handoff_id", help="Handoff ID")
+    ha.set_defaults(func=cmd_agent_handoff)
+
+    hl = hsub.add_parser("list", help="List handoffs")
+    hl.add_argument("--to", dest="handoff_to", metavar="AGENT", help="Filter by recipient")
+    hl.add_argument("--from", dest="handoff_from", metavar="AGENT", help="Filter by sender")
+    hl.add_argument("--status", metavar="STATUS", help="Filter by status")
+    hl.set_defaults(func=cmd_agent_handoff)
+
+    hs = hsub.add_parser("show", help="Show handoff details")
+    hs.add_argument("handoff_id", help="Handoff ID")
+    hs.set_defaults(func=cmd_agent_handoff)
+
+    he = hsub.add_parser("expire", help="Expire stale handoffs")
+    he.set_defaults(func=cmd_agent_handoff)
 
 
 # ── Replay commands ───────────────────────────────────────────────────────────

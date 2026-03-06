@@ -11,6 +11,15 @@ from .learning import (
     DEFAULT_LEARNING_PATH,
 )
 
+from .handoff import (
+    HandoffManager,
+    HandoffStatus,
+    ContextRef,
+    Handoff,
+    DEFAULT_HANDOFF_DIR,
+    REGISTERED_AGENTS,
+)
+
 __all__ = [
     "FileLockManager",
     "LockConflictError",
@@ -24,4 +33,10 @@ __all__ = [
     "get_effective_compression",
     "cmd_learn_status",
     "DEFAULT_LEARNING_PATH",
+    "HandoffManager",
+    "HandoffStatus",
+    "ContextRef",
+    "Handoff",
+    "DEFAULT_HANDOFF_DIR",
+    "REGISTERED_AGENTS",
 ]

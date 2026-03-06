@@ -218,6 +218,14 @@ def create_app(
         limiter=_limiter,
     )
 
+    # ── Cost intelligence router ──────────────────────────────────
+    from .cost_router import cost_router
+    app.include_router(cost_router, prefix="/v1")
+
+    # ── A/B Auto-Optimizer router ──────────────────────────────
+    from .ab_router import ab_router
+    app.include_router(ab_router, prefix="/v1")
+
     # ── License router ─────────────────────────────────────────
     app.include_router(license_router, prefix="/v1")
 
