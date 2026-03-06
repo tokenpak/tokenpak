@@ -15,6 +15,10 @@ from urllib.parse import urlparse, ParseResult
 PROVIDER_URLS = {
     "anthropic": "https://api.anthropic.com",
     "openai": "https://api.openai.com",
+    # openai-codex: subscription OAuth model (gpt-5.x-codex series)
+    # Uses api.openai.com with OAuth Bearer token instead of API key.
+    # Preferred endpoint: /v1/responses (Responses API)
+    "openai-codex": "https://api.openai.com",
     "google": "https://generativelanguage.googleapis.com",
 }
 
@@ -40,6 +44,11 @@ MODEL_COSTS = {
     # Google models
     "gemini-pro":         {"input": 0.5,   "output": 1.5},
     "gemini-1.5-pro":     {"input": 3.5,   "output": 10.5},
+    # OpenAI Codex subscription models (gpt-5.x-codex series, OAuth-only)
+    "gpt-5.1-codex-mini": {"input": 1.5,   "output": 6.0},
+    "gpt-5.2-codex":      {"input": 3.0,   "output": 12.0},
+    "gpt-5.3-codex":      {"input": 3.0,   "output": 12.0},
+    "gpt-5.3-codex-spark":{"input": 1.5,   "output": 6.0},
 }
 
 # Default costs for unknown models
@@ -49,11 +58,14 @@ DEFAULT_COSTS = {"input": 3.0, "output": 15.0}
 @dataclass
 class RouteResult:
     """Result of routing a request."""
-    provider: str  # "anthropic", "openai", "google", "unknown"
+    provider: str  # "anthropic", "openai", "openai-codex", "google", "unknown"
     base_url: str
     full_url: str
     should_intercept: bool  # Whether to apply compression/logging
     model: str
+    auth_type: str = "apikey"        # "apikey" | "oauth" | "none"
+    is_codex: bool = False           # True for Codex subscription models
+    skip_cache_keying: bool = False  # True for OAuth (token may expire)
 
 
 class ProviderRouter:
@@ -98,24 +110,35 @@ class ProviderRouter:
         if path.startswith("http"):
             parsed = urlparse(path)
             provider = self._detect_provider_from_host(parsed.netloc)
+            model = self._extract_model(body) if body else "unknown"
+            from .oauth import analyze_request as _analyze_oauth
+            _oauth_ctx = _analyze_oauth(parsed.path, headers, model)
             return RouteResult(
                 provider=provider,
                 base_url=f"{parsed.scheme}://{parsed.netloc}",
                 full_url=path,
                 should_intercept=parsed.netloc in INTERCEPT_HOSTS,
-                model=self._extract_model(body) if body else "unknown",
+                model=model,
+                auth_type=_oauth_ctx.auth_type,
+                is_codex=_oauth_ctx.is_codex,
+                skip_cache_keying=_oauth_ctx.skip_cache_keying,
             )
         
         # Reverse proxy mode - determine provider from headers/path
         provider = self._detect_provider(path, headers, body)
         base_url = self.provider_urls.get(provider, self.provider_urls["anthropic"])
-        
+        model = self._extract_model(body) if body else "unknown"
+        from .oauth import analyze_request as _analyze_oauth
+        _oauth_ctx = _analyze_oauth(path, headers, model)
         return RouteResult(
             provider=provider,
             base_url=base_url,
             full_url=base_url + path,
             should_intercept=True,  # Reverse proxy always intercepts
-            model=self._extract_model(body) if body else "unknown",
+            model=model,
+            auth_type=_oauth_ctx.auth_type,
+            is_codex=_oauth_ctx.is_codex,
+            skip_cache_keying=_oauth_ctx.skip_cache_keying,
         )
     
     def _detect_provider_from_host(self, host: str) -> str:
@@ -135,35 +158,51 @@ class ProviderRouter:
         headers: Dict[str, str],
         body: Optional[bytes] = None,
     ) -> str:
-        """Detect provider from path, headers, and body."""
-        # Path-based detection
+        """Detect provider from path, headers, and body.
+
+        Detection priority:
+        1. Path patterns (/v1/messages → anthropic, /v1/responses → openai-codex)
+        2. Anthropic-specific headers (x-api-key, anthropic-version)
+        3. Body model name (claude → anthropic, codex → openai-codex, gpt → openai)
+        4. Bearer token presence (non-Google Bearer → openai)
+        5. Default: anthropic
+        """
+        # Path-based detection (highest priority)
         if "/v1/messages" in path:
             return "anthropic"
+        if "/v1/responses" in path:
+            # OpenAI Responses API — used by Codex subscription models
+            return "openai-codex"
         if "/chat/completions" in path:
             return "openai"
         if "/models/" in path and "generateContent" in path:
             return "google"
-        
-        # Header-based detection
-        if headers.get("x-api-key") or headers.get("anthropic-version"):
+
+        # Anthropic-specific header detection
+        lower_headers = {k.lower(): v for k, v in headers.items()}
+        if lower_headers.get("x-api-key") or lower_headers.get("anthropic-version"):
             return "anthropic"
-        if headers.get("Authorization", "").startswith("Bearer "):
-            # Could be either OpenAI or Google, check path
-            if "google" in path.lower():
-                return "google"
-            return "openai"
-        
+
         # Body-based detection (model name patterns)
         if body:
             model = self._extract_model(body)
             if model.startswith("claude"):
                 return "anthropic"
-            if model.startswith("gpt"):
+            if "codex" in model.lower():
+                return "openai-codex"
+            if model.startswith("gpt") or model.startswith("o1") or model.startswith("o3"):
                 return "openai"
             if model.startswith("gemini"):
                 return "google"
-        
-        # Default to Anthropic (most common use case)
+
+        # Header-based detection (lower priority than path/body)
+        auth = lower_headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            if "google" in path.lower():
+                return "google"
+            return "openai"
+
+        # Default to Anthropic (most common reverse-proxy use case)
         return "anthropic"
     
     def _extract_model(self, body: bytes) -> str:
