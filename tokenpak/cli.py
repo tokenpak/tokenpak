@@ -1163,6 +1163,12 @@ def cmd_agent_locks(args):
         print(f"{path:<50} {lock.get('agent','?'):<15} {remaining:>10.0f}s")
 
 
+def cmd_agent_handoff(args):
+    """Dispatch to handoff command handler."""
+    from .agent.cli.commands.handoff import handoff_cmd
+    handoff_cmd(args)
+
+
 def _build_agent_parser(sub):
     p_agent = sub.add_parser("agent", help="Agent coordination (locks, retry)")
     asub = p_agent.add_subparsers(dest="agent_cmd", required=True)
@@ -1181,6 +1187,41 @@ def _build_agent_parser(sub):
     p_locks = asub.add_parser("locks", help="List all active locks")
     p_locks.add_argument("--agent", default=None, help="Filter by agent id")
     p_locks.set_defaults(func=cmd_agent_locks)
+
+    # handoff subcommand
+    p_handoff = asub.add_parser("handoff", help="Context handoff between agents")
+    hsub = p_handoff.add_subparsers(dest="handoff_cmd", required=True)
+
+    hc = hsub.add_parser("create", help="Create a context handoff")
+    hc.add_argument("--from", dest="handoff_from", required=True, help="Sending agent")
+    hc.add_argument("--to", dest="handoff_to", required=True, help="Receiving agent")
+    hc.add_argument("--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)")
+    hc.add_argument("--done", metavar="TEXT", help="What was done")
+    hc.add_argument("--next", dest="whats_next", metavar="TEXT", help="What comes next")
+    hc.add_argument("--file", action="append", metavar="PATH", help="Relevant file (repeatable)")
+    hc.add_argument("--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)")
+    hc.set_defaults(func=cmd_agent_handoff)
+
+    hr = hsub.add_parser("receive", help="Receive and validate a handoff")
+    hr.add_argument("handoff_id", help="Handoff ID")
+    hr.set_defaults(func=cmd_agent_handoff)
+
+    ha = hsub.add_parser("apply", help="Apply a handoff (load context)")
+    ha.add_argument("handoff_id", help="Handoff ID")
+    ha.set_defaults(func=cmd_agent_handoff)
+
+    hl = hsub.add_parser("list", help="List handoffs")
+    hl.add_argument("--to", dest="handoff_to", metavar="AGENT", help="Filter by recipient")
+    hl.add_argument("--from", dest="handoff_from", metavar="AGENT", help="Filter by sender")
+    hl.add_argument("--status", metavar="STATUS", help="Filter by status")
+    hl.set_defaults(func=cmd_agent_handoff)
+
+    hs = hsub.add_parser("show", help="Show handoff details")
+    hs.add_argument("handoff_id", help="Handoff ID")
+    hs.set_defaults(func=cmd_agent_handoff)
+
+    he = hsub.add_parser("expire", help="Expire stale handoffs")
+    he.set_defaults(func=cmd_agent_handoff)
 
 
 # ── Replay commands ───────────────────────────────────────────────────────────
