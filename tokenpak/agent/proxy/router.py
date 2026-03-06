@@ -232,3 +232,30 @@ def get_model_tier(model: str) -> str:
         return "economy"
     
     return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Vault retrieval helpers — re-exported here for proxy-layer consumers
+# ---------------------------------------------------------------------------
+# These functions provide cache-stable BM25 retrieval injection used by the
+# proxy to keep prompt structures byte-identical across repeated requests.
+
+from tokenpak.agent.vault.retrieval import (  # noqa: E402
+    sort_retrieval_results,
+    inject_retrieved_context,
+    measure_injection_consistency,
+    RETRIEVED_CONTEXT_HEADER,
+    DEFAULT_MAX_TOKENS,
+)
+
+__all__ = [
+    "ProviderRouter",
+    "RouteResult",
+    "estimate_cost",
+    "get_model_tier",
+    "sort_retrieval_results",
+    "inject_retrieved_context",
+    "measure_injection_consistency",
+    "RETRIEVED_CONTEXT_HEADER",
+    "DEFAULT_MAX_TOKENS",
+]
