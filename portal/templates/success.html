@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Payment Successful — TokenPak{% endblock %}
+{% block content %}
+<div style="text-align:center; padding:4rem 0;">
+  <div style="font-size:3rem; margin-bottom:1rem;">🎉</div>
+  <h1 style="font-size:1.8rem; font-weight:700; color:#fff; margin-bottom:0.5rem;">You're all set!</h1>
+  {% if error %}
+    <p style="color:#f87171; margin-bottom:2rem;">{{ error }}</p>
+  {% elif key %}
+    <p style="color:#888; margin-bottom:2rem;">Welcome to TokenPak {{ tier }}. Your license key is ready.</p>
+    <div class="card" style="max-width:560px; margin:0 auto 2rem; text-align:left;">
+      <div class="card-title">Your License Key</div>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <span class="key-token" id="key-display">{{ key }}</span>
+        <button onclick="copyKey()" class="btn btn-ghost" style="font-size:0.8rem; padding:0.4rem 0.8rem;">Copy</button>
+      </div>
+      <p style="color:#666; font-size:0.8rem; margin-top:0.75rem;">
+        Save this key — we don't store the raw value. You can regenerate it from your dashboard anytime.
+      </p>
+    </div>
+    <div class="card" style="max-width:560px; margin:0 auto 2rem; text-align:left;">
+      <div class="card-title">Activate</div>
+      <pre style="background:#111; padding:1rem; border-radius:6px; font-size:0.85rem; color:#6ee7b7;"><code>tokenpak activate {{ key }}</code></pre>
+    </div>
+  {% else %}
+    <p style="color:#888; margin-bottom:2rem;">Your payment was processed.</p>
+  {% endif %}
+  <a href="/dashboard" class="btn btn-primary">Go to Dashboard →</a>
+</div>
+<script>
+function copyKey() {
+  navigator.clipboard.writeText(document.getElementById('key-display').textContent.trim());
+  event.target.textContent = 'Copied!';
+  setTimeout(() => event.target.textContent = 'Copy', 2000);
+}
+</script>
+{% endblock %}

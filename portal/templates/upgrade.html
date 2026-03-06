@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Upgrade — TokenPak{% endblock %}
+{% block content %}
+<div style="text-align:center; padding:4rem 0;">
+  <div style="font-size:3rem; margin-bottom:1rem;">🔒</div>
+  <h1 style="font-size:1.5rem; font-weight:700; color:#fff; margin-bottom:0.5rem;">{{ required_tier | title }} plan required</h1>
+  <p style="color:#888; margin-bottom:2rem;">This feature requires the {{ required_tier }} plan or higher.</p>
+  <a href="/pricing" class="btn btn-primary">View Plans →</a>
+</div>
+{% endblock %}

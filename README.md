@@ -4,8 +4,23 @@
 
 TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
+[![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
+[![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
+[![Downloads](https://img.shields.io/pypi/dm/tokenpak.svg)](https://pypi.org/project/tokenpak/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+---
+
+## 3 Commands to Savings
+
+```bash
+pip install tokenpak          # install
+tokenpak serve --port 8766    # start proxy
+tokenpak cost --week          # watch savings grow
+```
+
+Point your LLM client's base URL at `http://localhost:8766`. That's it — **zero config required.**
 
 ---
 
@@ -28,192 +43,70 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 
 ---
 
-## Quick Start
+## Architecture
 
-### Install
+```mermaid
+graph LR
+    subgraph Your Machine
+        Client["LLM Client\n(Claude Code / OpenAI SDK)"]
+        Proxy["TokenPak Proxy\n:8766"]
+        Vault["Local Vault\n(semantic index)"]
+    end
 
-```bash
-pip install tokenpak
-# or from source:
-git clone https://github.com/tokenpak/tokenpak && cd tokenpak
-pip install -e .
+    subgraph Pipeline
+        P1["① Segment\nSplit into blocks"]
+        P2["② Fingerprint\nDetect type"]
+        P3["③ Compress\nApply recipe"]
+        P4["④ Budget\nPrioritize tokens"]
+        P5["⑤ Assemble\nRebuild prompt"]
+    end
+
+    subgraph Routing
+        R1["Route Rules\n(model/prefix/tokens)"]
+        R2["Provider A\n(OpenAI)"]
+        R3["Provider B\n(Anthropic)"]
+    end
+
+    Client -->|"request"| Proxy
+    Proxy --> R1
+    R1 -->|"rule match"| R2
+    R1 -->|"fallback"| R3
+    Proxy --> P1 --> P2 --> P3 --> P4 --> P5
+    Proxy <-->|"zero-token search"| Vault
+    P5 -->|"compressed request"| R2
+    R2 -->|"response"| Client
 ```
 
-### Configure your LLM client
-
-Point your existing tool (Claude Code, OpenAI client, etc.) at the TokenPak proxy:
-
-```bash
-# Start the proxy
-tokenpak serve --port 8766
-
-# In your LLM client, set base URL to:
-# http://localhost:8766
-```
-
-Your credentials pass through unchanged. TokenPak never stores them.
-
-### Index your vault (optional, zero tokens)
-
-```bash
-tokenpak index ~/vault
-tokenpak vault search "compression benchmark"
-```
-
-### Hybrid auto-calibration (recommended)
-
-```bash
-# one-time static calibration for this host
-tokenpak calibrate ~/vault --max-workers 8 --rounds 2
-
-# normal indexing with dynamic adjustment around calibrated baseline
-tokenpak index ~/vault --auto-workers --max-workers 8
-```
-
-### Check costs
-
-```bash
-tokenpak cost --week
-tokenpak cost --by-model
-```
+**Key insight:** The compression pipeline runs locally, before the request leaves your machine. The LLM never sees your raw tokens — only the compressed version.
 
 ---
 
-## CLI Reference
+## Plans
 
-### Status & Health
+| Feature | OSS | Pro | Team |
+|---|:---:|:---:|:---:|
+| Context compression | ✅ | ✅ | ✅ |
+| Model routing | ✅ | ✅ | ✅ |
+| Cost tracking | ✅ | ✅ | ✅ |
+| Vault indexing + search | ✅ | ✅ | ✅ |
+| CLI + proxy | ✅ | ✅ | ✅ |
+| A/B testing | ✅ | ✅ | ✅ |
+| Replay + debug | ✅ | ✅ | ✅ |
+| Advanced compression recipes | — | ✅ | ✅ |
+| Budget enforcement + alerts | — | ✅ | ✅ |
+| Priority support | — | ✅ | ✅ |
+| Multi-agent coordination | — | — | ✅ |
+| Shared vault (team) | — | — | ✅ |
+| RBAC + audit logs | — | — | ✅ |
+| Seat management | — | — | ✅ |
+| SSO / enterprise auth | — | — | 🔜 |
+| **Price** | **Free** | **$19/mo** | **$49/mo** |
 
-```bash
-tokenpak status [--full]               # proxy health
-tokenpak health                        # full system health
-tokenpak logs [--errors] [--today]     # proxy logs
-tokenpak doctor                        # comprehensive diagnostics
-```
-
-### Cost & Telemetry
-
-```bash
-tokenpak cost [--week|--month|--by-model|--by-agent|--export csv]
-tokenpak budget set --monthly 50       # set $50/month budget
-tokenpak budget alert --at 80%         # alert at 80% usage
-tokenpak savings [--lifetime]
-```
-
-### Compression
-
-```bash
-tokenpak demo [--verbose]              # see pipeline on real data
-tokenpak compress <file> [--diff]      # dry-run compression
-tokenpak trace [--id <id>]             # trace a pipeline run
-```
-
-### Vault & Indexing
-
-```bash
-tokenpak index [<path>]                # index a directory
-tokenpak index --watch                 # auto re-index on changes
-tokenpak index --status                # check index health
-tokenpak vault search "query"          # semantic search
-tokenpak vault blocks [--stale]        # inspect content blocks
-```
-
-### Benchmarking & Calibration
-
-```bash
-tokenpak benchmark ~/vault --iterations 3
-tokenpak benchmark ~/vault --compare   # baseline vs optimized
-tokenpak calibrate ~/vault --max-workers 8 --rounds 2
-```
-
-### Model Routing
-
-```bash
-tokenpak route set ".*test.*" gpt-4o-mini   # route test queries to cheaper model
-tokenpak route test "write unit tests"       # preview routing decision
-tokenpak route history                        # recent routing decisions
-```
-
-### Agent Management
-
-```bash
-tokenpak agent list                    # list registered agents
-tokenpak agent register <name>         # register an agent
-tokenpak agent tasks --queue           # pending tasks
-tokenpak agent lock <file>             # acquire a file lock
-```
-
-### Event Triggers
-
-```bash
-tokenpak trigger list
-tokenpak trigger add file-change "*.py" "bash lint.sh"
-tokenpak trigger add cost-alert 80% "notify"
-tokenpak trigger log
-```
-
-### A/B Testing
-
-```bash
-tokenpak ab create my-test --variant-a "compress aggressive" --variant-b "compress minimal"
-tokenpak ab status my-test
-tokenpak ab apply my-test
-tokenpak ab presets
-```
-
-### Replay & Debug
-
-```bash
-tokenpak replay list
-tokenpak replay <id> --no-compress
-tokenpak replay <id> --model gpt-4o-mini
-tokenpak replay <id> --diff
-tokenpak debug on [--requests 50]
-tokenpak debug off
-```
-
-### Templates
-
-```bash
-tokenpak template list
-tokenpak template create my-tpl
-tokenpak template use my-tpl
-tokenpak template export my-tpl
-```
-
-### Configuration & Maintenance
-
-```bash
-tokenpak config set compression.enabled true
-tokenpak config get compression.level
-tokenpak config export
-tokenpak prune --older-than 30d
-```
+[→ Get a Pro or Team key](https://portal.tokenpak.dev)
 
 ---
 
-## Performance
-
-### Latency Optimizations (v0.1.1)
-
-| Optimization | Component | Improvement |
-|---|---|---|
-| LRU token cache | `tokens.py` | **25x** faster repeated counting |
-| Lazy tiktoken loading | `tokens.py` | ~100ms saved on cold start |
-| Batch SQLite transactions | `registry.py` | **60%** faster indexing |
-| Connection pooling + WAL | `registry.py` | Reduced I/O overhead |
-| Pre-compiled regex | `processors/*.py` | **30%** faster processing |
-
-### Benchmark Results (572-file vault)
-
-```
-Token cache speedup: 26.6x
-Indexing throughput: 2,738 files/sec
-Indexing speedup vs baseline: 55.27x (98.2% faster)
-Search latency: 22.7ms/query
-Processing: 0.09-0.19ms/file (code/text)
-```
-
-### Token Savings (QMD + TokenPak)
+## Token Savings (QMD + TokenPak)
 
 | Configuration | Avg tokens/req | Reduction |
 |---|---:|---:|
@@ -222,6 +115,24 @@ Processing: 0.09-0.19ms/file (code/text)
 | QMD + TokenPak | 3,265 | **84%** |
 
 Consistent **~43% additional savings** on top of QMD across writing, coding, legal, and ops tasks.
+
+---
+
+## Performance
+
+| Optimization | Improvement |
+|---|---|
+| LRU token cache | **25x** faster repeated counting |
+| Batch SQLite transactions | **60%** faster indexing |
+| Pre-compiled regex | **30%** faster processing |
+| Connection pooling + WAL | Reduced I/O overhead |
+
+**Benchmark (572-file vault):**
+```
+Indexing throughput:  2,738 files/sec
+Indexing speedup:     55x faster than baseline
+Search latency:       22.7ms/query
+```
 
 ---
 
@@ -239,29 +150,75 @@ Result: same semantic content, 20–60% fewer tokens.
 
 ---
 
+## CLI Reference
+
+### Core
+
+```bash
+tokenpak serve --port 8766     # start proxy
+tokenpak status [--full]       # proxy health
+tokenpak cost [--week|--month] # cost report
+tokenpak savings [--lifetime]  # token savings summary
+```
+
+### Compression & Debug
+
+```bash
+tokenpak compress <file>       # dry-run compression
+tokenpak demo [--verbose]      # see pipeline on real data
+tokenpak trace [--id <id>]     # trace a pipeline run
+tokenpak debug on              # capture raw/compressed pairs
+```
+
+### Vault & Indexing
+
+```bash
+tokenpak index [<path>]        # index a directory
+tokenpak vault search "query"  # semantic search (zero tokens)
+tokenpak calibrate ~/vault     # auto-tune workers for this host
+```
+
+### Model Routing
+
+```bash
+tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307
+tokenpak route list
+tokenpak route test "write unit tests"
+```
+
+### Templates & Replay
+
+```bash
+tokenpak template list
+tokenpak template use my-tpl
+tokenpak replay list
+tokenpak replay <id> --diff
+```
+
+---
+
 ## Directory Structure
 
 ```
 tokenpak/
-├── agent/
-│   ├── agentic/          # multi-agent coordination (locks, retry)
-│   ├── cli/              # entry point + command modules
-│   ├── compression/      # pipeline, segmentizer, recipes, directives
-│   ├── proxy/            # request routing + streaming
-│   ├── telemetry/        # cost tracking, storage, demo
-│   └── vault/            # indexer, ast_parser, symbols, blocks
-├── recipes/
-│   └── oss/              # built-in compression recipes (YAML)
-├── processors/
-│   ├── code.py           # Python/JS structure extraction
-│   ├── text.py           # Markdown/HTML compression
-│   └── data.py           # JSON/YAML/CSV handling
-├── engines/
-│   ├── heuristic.py      # Rule-based compaction
-│   └── llmlingua.py      # ML-powered compaction (optional)
-├── connectors/
-│   ├── local.py          # Local filesystem
-│   └── obsidian.py       # Obsidian vault awareness
+├── tokenpak/
+│   ├── agent/
+│   │   ├── compression/    # pipeline, segmentizer, recipes, directives
+│   │   ├── proxy/          # request routing + streaming
+│   │   ├── routing/        # manual route rules
+│   │   ├── telemetry/      # cost tracking, storage
+│   │   ├── vault/          # indexer, ast_parser, symbols
+│   │   ├── license/        # key generation, validation, store
+│   │   └── team/           # multi-agent coordination, shared vault
+│   ├── engines/
+│   │   ├── heuristic.py    # Rule-based compaction
+│   │   └── llmlingua.py    # ML-powered compaction (optional)
+│   └── processors/
+│       ├── code.py         # Python/JS structure extraction
+│       ├── text.py         # Markdown/HTML compression
+│       └── data.py         # JSON/YAML/CSV handling
+├── portal/                 # self-service web portal
+├── recipes/oss/            # built-in compression recipes (YAML)
 ├── tests/
 └── pyproject.toml
 ```
@@ -293,39 +250,47 @@ Default config: `~/.tokenpak/config.json`
 }
 ```
 
-- Registry DB default: `.tokenpak/registry.db`
-- Calibration profile path: `~/.tokenpak/calibration.json`
-
 ---
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.10+
 - No external dependencies for core functionality
 - Optional: `tiktoken` for accurate token counting
 - Optional: `llmlingua` for ML-powered compression
 
 ---
 
-## Contributing / Dev Workflow
+## Contributing
 
-### Pushing code (dual-remote setup)
+We welcome issues and pull requests!
 
-TokenPak has two remotes: `origin` (GitHub) and `shared` (SueBot QA repo).
-**Always use the verification script** to ensure both land:
+### Quick setup
 
 ```bash
-bash scripts/push-verified.sh [branch]
+git clone https://github.com/kaywhy331/tokenpak
+cd tokenpak
+pip install -e ".[dev]"
+pytest tests/ -q
 ```
 
-This will:
-1. Push to `origin` and verify the commit hash landed
-2. Push to `shared` (SueBot's QA repo) and SSH-verify the hash matches
-3. Exit non-zero if either push fails — safe to use in CI or pre-push hooks
+### Dual-remote push (required for CI)
 
-> ⚠️ Do NOT push with bare `git push origin` — the shared remote will be skipped and Sue's QA will fail.
+TokenPak uses two remotes: `origin` (GitHub) and `shared` (internal QA). Always push with the verified script:
 
-Issues and PRs welcome. See [ARCHITECTURE.md](ARCHITECTURE.md) for system design.
+```bash
+bash scripts/push-verified.sh
+```
+
+This pushes to both remotes and SSH-verifies the commit hash landed. **Never use bare `git push origin`** — the QA remote will be skipped.
+
+### Guidelines
+
+- All new features need tests (`tests/test_<module>.py`)
+- Keep CLI commands backward-compatible
+- Compression recipes live in `recipes/oss/` as YAML
+- Run `pytest tests/ -q` before opening a PR
+- See [ARCHITECTURE.md](ARCHITECTURE.md) for system design
 
 ---
 

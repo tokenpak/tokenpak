@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Team — TokenPak Portal{% endblock %}
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2rem;">
+  <h1 style="font-size:1.5rem; font-weight:700; color:#fff;">Team</h1>
+  <span style="color:#666; font-size:0.9rem;">{{ members | length }} / {{ customer.seats }} seats used</span>
+</div>
+
+<div class="card">
+  <div class="card-title">Invite Member</div>
+  <div style="display:flex; gap:0.75rem; align-items:center;">
+    <input type="email" id="invite-email" placeholder="colleague@company.com"
+      style="flex:1; background:#111; border:1px solid #333; color:#fff; border-radius:6px; padding:0.6rem 0.8rem; font-size:0.9rem;">
+    <button onclick="inviteMember()" class="btn btn-primary">Invite</button>
+  </div>
+  <div id="invite-result" style="display:none; margin-top:0.75rem;" class="alert alert-info"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">Members</div>
+  {% if members %}
+  <table>
+    <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.email }}</td>
+        <td>{{ m.role }}</td>
+        <td>
+          {% if m.accepted %}<span style="color:#6ee7b7;">Active</span>
+          {% else %}<span style="color:#888;">Pending invite</span>{% endif %}
+        </td>
+        <td>
+          <button onclick="removeMember('{{ m.email }}')" class="btn btn-danger"
+            style="font-size:0.8rem; padding:0.3rem 0.7rem;">Remove</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">No team members yet. Invite someone above.</div>
+  {% endif %}
+</div>
+
+{% if members | length >= customer.seats %}
+<div class="alert alert-warn">
+  You've used all {{ customer.seats }} seats.
+  <a href="/portal">Upgrade your plan</a> to add more.
+</div>
+{% endif %}
+
+<script>
+async function inviteMember() {
+  const email = document.getElementById('invite-email').value.trim();
+  if (!email) return;
+  const fd = new FormData(); fd.append('email', email);
+  const resp = await fetch('/team/invite', { method: 'POST', body: fd });
+  const data = await resp.json();
+  const el = document.getElementById('invite-result');
+  el.style.display = 'block';
+  el.textContent = data.error ? '❌ ' + data.error : '✅ Invited ' + data.email;
+  if (!data.error) { document.getElementById('invite-email').value = ''; setTimeout(() => location.reload(), 1500); }
+}
+
+async function removeMember(email) {
+  if (!confirm('Remove ' + email + ' from the team?')) return;
+  const fd = new FormData(); fd.append('email', email);
+  await fetch('/team/remove', { method: 'POST', body: fd });
+  location.reload();
+}
+</script>
+{% endblock %}
