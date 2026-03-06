@@ -16,6 +16,11 @@ from tokenpak.telemetry.canonical import (
 )
 from tokenpak.telemetry.adapters.registry import AdapterRegistry
 
+# Public API additions — TelemetryCollector and CompletionTracker
+from tokenpak.telemetry.collector import TelemetryCollector
+from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+from tokenpak.telemetry.cache import CacheStore as CacheManager
+
 __all__ = [
     "CanonicalRequest",
     "CanonicalResponse",
@@ -23,4 +28,8 @@ __all__ = [
     "UsageSource",
     "Confidence",
     "AdapterRegistry",
+    # Public API
+    "TelemetryCollector",
+    "CompletionTracker",
+    "CacheManager",
 ]
