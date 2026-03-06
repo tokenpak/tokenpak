@@ -10,7 +10,7 @@ Usage::
     entries = store.list(limit=20)
     entry = store.get("abc123")
     store.delete("abc123")
-    store.prune(days=30)
+    store.prune(days=7)
 """
 
 from __future__ import annotations
@@ -249,8 +249,8 @@ class ReplayStore:
         conn.commit()
         return cursor.rowcount > 0
 
-    def prune(self, days: int = 30) -> int:
-        """Delete entries older than *days* days. Returns count removed."""
+    def prune(self, days: int = 7) -> int:
+        """Delete entries older than *days* days. Returns count removed (default 7 days)."""
         conn = self._conn()
         cursor = conn.execute(
             "DELETE FROM tp_replay WHERE timestamp < datetime('now', ?)",
