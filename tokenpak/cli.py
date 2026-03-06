@@ -554,6 +554,7 @@ def build_parser():
     _build_demo_parser(sub)
     _build_run_parser(sub)
     _build_macro_parser(sub)
+    _build_fingerprint_parser(sub)
 
     return parser
 
@@ -1826,3 +1827,160 @@ def _build_macro_parser(sub):
     p_hook_install = hsub.add_parser("install", help="Install a hook stub script")
     p_hook_install.add_argument("hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)")
     p_hook_install.set_defaults(func=cmd_macro_hooks)
+
+# ── Fingerprint commands ──────────────────────────────────────────────────────
+
+def _build_fingerprint_parser(sub):
+    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management (Pro+)")
+    fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=True)
+
+    # fingerprint sync
+    p_sync = fpsub.add_parser("sync", help="Generate and sync a fingerprint, receive directives")
+    p_sync.add_argument("text", nargs="?", help="Prompt text (or omit to read from stdin)")
+    p_sync.add_argument("--file", "-f", dest="input_file", help="Read prompt from file")
+    p_sync.add_argument("--messages", dest="messages_file", help="OpenAI messages JSON file")
+    p_sync.add_argument("--dry-run", action="store_true", default=False,
+                        help="Show what would be sent without transmitting")
+    p_sync.add_argument("--privacy", choices=["minimal", "standard", "full"], default="standard")
+    p_sync.add_argument("--ttl", type=int, default=3600, help="Cache TTL in seconds (default 3600)")
+    p_sync.add_argument("--skip-cache", action="store_true", default=False)
+    p_sync.add_argument("--json", dest="output_json", action="store_true", default=False)
+    p_sync.set_defaults(func=cmd_fingerprint_sync)
+
+    # fingerprint cache
+    p_cache = fpsub.add_parser("cache", help="Show local directive cache status")
+    p_cache.add_argument("--json", dest="output_json", action="store_true", default=False)
+    p_cache.set_defaults(func=cmd_fingerprint_cache)
+
+    # fingerprint clear-cache
+    p_clear = fpsub.add_parser("clear-cache", help="Clear cached directives")
+    p_clear.add_argument("--id", dest="fp_id", default=None,
+                         help="Clear only this fingerprint ID (default: all)")
+    p_clear.add_argument("--yes", "-y", action="store_true", default=False,
+                         help="Skip confirmation prompt")
+    p_clear.set_defaults(func=cmd_fingerprint_clear_cache)
+
+
+def cmd_fingerprint_sync(args):
+    import json as _json
+    import sys as _sys
+    from pathlib import Path as _Path
+    from tokenpak.agent.fingerprint.generator import FingerprintGenerator
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
+
+    gen = FingerprintGenerator()
+
+    if getattr(args, "messages_file", None):
+        with open(args.messages_file) as f:
+            messages = _json.load(f)
+        fingerprint = gen.generate_from_messages(messages)
+    elif getattr(args, "input_file", None):
+        content = _Path(args.input_file).read_text()
+        fingerprint = gen.generate(content)
+    elif getattr(args, "text", None):
+        fingerprint = gen.generate(args.text)
+    elif not _sys.stdin.isatty():
+        content = _sys.stdin.read()
+        fingerprint = gen.generate(content)
+    else:
+        print("Error: provide TEXT, --file, --messages, or pipe stdin.", file=_sys.stderr)
+        _sys.exit(1)
+
+    privacy_level = PrivacyLevel(args.privacy)
+    client = FingerprintSync(ttl=args.ttl, privacy_level=privacy_level)
+
+    if args.dry_run:
+        payload = apply_privacy(fingerprint.to_dict(), privacy_level)
+        if args.output_json:
+            print(_json.dumps({
+                "dry_run": True,
+                "fingerprint_id": fingerprint.fingerprint_id,
+                "payload_preview": payload,
+            }, indent=2))
+        else:
+            print("── Dry Run ─────────────────────────────────")
+            print(f"  Fingerprint ID : {fingerprint.fingerprint_id}")
+            print(f"  Total tokens   : {fingerprint.total_tokens:,}")
+            print(f"  Segments       : {fingerprint.segment_count}")
+            print(f"  Privacy level  : {args.privacy}")
+            print()
+            print("  Payload that would be sent:")
+            print(_json.dumps(payload, indent=4))
+        return
+
+    try:
+        result = client.sync(fingerprint, dry_run=False, skip_cache=args.skip_cache)
+    except PermissionError as e:
+        print(f"✗ {e}", file=_sys.stderr)
+        _sys.exit(1)
+
+    if args.output_json:
+        print(_json.dumps({
+            "success": result.success,
+            "source": result.source,
+            "fingerprint_id": fingerprint.fingerprint_id,
+            "directives": [d.to_dict() for d in result.directives],
+            "cached_at": result.cached_at,
+            "expires_at": result.expires_at,
+            "error": result.error,
+        }, indent=2))
+        return
+
+    status_icon = "✓" if result.success else "⚠"
+    source_label = {
+        "server": "intelligence server",
+        "cache": "local cache",
+        "oss_fallback": "OSS fallback",
+    }.get(result.source, result.source)
+
+    print(f"{status_icon} Fingerprint synced  [{source_label}]")
+    print(f"  ID         : {fingerprint.fingerprint_id}")
+    print(f"  Tokens     : {fingerprint.total_tokens:,}")
+    print(f"  Directives : {len(result.directives)}")
+
+    if result.error:
+        print(f"  Warning    : {result.error}", file=_sys.stderr)
+
+    if result.directives:
+        print()
+        print("  Directives received:")
+        for d in result.directives:
+            print(f"    [{d.priority}] {d.action}  — {d.description or d.directive_id}")
+
+
+def cmd_fingerprint_cache(args):
+    import json as _json
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    client = FingerprintSync()
+    status = client.cache_status()
+
+    if getattr(args, "output_json", False):
+        print(_json.dumps(status, indent=2))
+        return
+
+    print("── Fingerprint Cache ────────────────────────")
+    print(f"  Cache dir  : {status['cache_dir']}")
+    print(f"  TTL        : {status['ttl_seconds']}s")
+    print(f"  Entries    : {status['entries']}")
+    print(f"  Valid      : {status.get('valid', 0)}")
+    print(f"  Expired    : {status.get('expired', 0)}")
+
+
+def cmd_fingerprint_clear_cache(args):
+    import sys as _sys
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    client = FingerprintSync()
+
+    fp_id = getattr(args, "fp_id", None)
+    yes = getattr(args, "yes", False)
+    scope = f"fingerprint {fp_id}" if fp_id else "ALL cached directives"
+
+    if not yes:
+        confirm = input(f"Clear {scope}? [y/N] ").strip().lower()
+        if confirm not in ("y", "yes"):
+            print("Aborted.")
+            _sys.exit(0)
+
+    deleted = client.clear_cache(fingerprint_id=fp_id)
+    print(f"✓ Cleared {deleted} cache file(s).")

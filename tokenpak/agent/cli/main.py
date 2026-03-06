@@ -334,6 +334,17 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate fingerprint subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "fingerprint":
+        try:
+            from tokenpak.agent.cli.commands.fingerprint import fingerprint_cmd
+            sys.argv = sys.argv[1:]
+            fingerprint_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"fingerprint command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate doctor subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "doctor":
         try:
@@ -394,6 +405,12 @@ def main():
     for c in ["status", "version", "config", "reset"]:
         sub.add_parser(c)
 
+    # activate / deactivate / plan (license management)
+    act_p = sub.add_parser("activate", help="Activate a Pro/Team/Enterprise license key")
+    act_p.add_argument("key", help="License token to activate")
+    sub.add_parser("deactivate", help="Remove license and revert to OSS")
+    sub.add_parser("plan", help="Show current license tier, expiry, seats, and features")
+
     # Special argument handling for 'last' command
     lastp = sub.add_parser("last")
     lastp.add_argument("--oneline", action="store_true")
@@ -432,6 +449,8 @@ def main():
         dispatch.get(args.proxy_cmd, lambda a: print("Usage: tokenpak proxy <status|restart>"))(args)
     elif args.cmd == "learn":
         _dispatch_learn(args)
+    elif args.cmd in ("activate", "deactivate", "plan"):
+        _dispatch_license(args)
     elif args.cmd:
         dispatch = {
             "status": cmd_status,
@@ -534,6 +553,17 @@ def cmd_last(args):
     if session and not no_session:
         requests = session.get("session_requests", 0)
         print(f"Requests This Session:   {requests}")
+
+
+def _dispatch_license(args) -> None:
+    """Handle tokenpak activate / deactivate / plan."""
+    from tokenpak.agent.cli.commands.license import _run_activate, _run_deactivate, _run_plan
+    if args.cmd == "activate":
+        _run_activate(args.key)
+    elif args.cmd == "deactivate":
+        _run_deactivate()
+    elif args.cmd == "plan":
+        _run_plan()
 
 
 def _dispatch_debug(args) -> None:
