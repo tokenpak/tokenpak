@@ -19,6 +19,7 @@ _ENV_OVERRIDES: dict[str, str] = {
     "stats_footer": "TOKENPAK_STATS_FOOTER",
     "metrics.enabled": "TOKENPAK_METRICS_ENABLED",
     "debug": "TOKENPAK_DEBUG",
+    "capsule_builder.enabled": "TOKENPAK_CAPSULE_BUILDER",
 }
 
 
@@ -81,6 +82,42 @@ def get_stats_footer_enabled() -> bool:
         return env_val not in ("0", "false", "False", "no")
     data = _load()
     return bool(data.get("stats_footer", False))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Capsule Builder
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_capsule_builder_enabled() -> bool:
+    """Return True if capsule builder is enabled.
+
+    Resolution order:
+      1. TOKENPAK_CAPSULE_BUILDER env var (1/true → on, 0/false → off)
+      2. ~/.tokenpak/config.json "capsule_builder.enabled" key
+      3. Default: False (opt-in)
+    """
+    env_val = os.environ.get("TOKENPAK_CAPSULE_BUILDER")
+    if env_val is not None:
+        return env_val not in ("0", "false", "False", "no")
+    data = _load()
+    capsule_cfg = data.get("capsule_builder", {})
+    if isinstance(capsule_cfg, dict):
+        return bool(capsule_cfg.get("enabled", False))
+    return bool(capsule_cfg)
+
+
+def set_capsule_builder_enabled(enabled: bool) -> None:
+    """Enable or disable capsule builder in config file."""
+    data = _load()
+    if "capsule_builder" not in data or not isinstance(data["capsule_builder"], dict):
+        data["capsule_builder"] = {}
+    data["capsule_builder"]["enabled"] = enabled
+    _save(data)
+
+
+def load_config() -> dict:
+    """Return the full config dict (for direct access by other modules)."""
+    return _load()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
