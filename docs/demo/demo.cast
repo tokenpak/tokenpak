@@ -1,0 +1,4 @@
+{"version": 2, "width": 120, "height": 24, "timestamp": 1772798037, "idle_time_limit": 1.0, "env": {"SHELL": "/bin/bash", "TERM": null}}
+[0.005141, "o", "TERM environment variable not set.\r\n"]
+[0.005965, "o", "🔷 TokenPak — Context Compression for LLMs\r\n\r\n"]
+[1.0084, "o", "Running compression benchmark on sample files...\r\n\r\n"]

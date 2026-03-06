@@ -24,6 +24,14 @@ Point your LLM client's base URL at `http://localhost:8766`. That's it — **zer
 
 ---
 
+## See It In Action
+
+![TokenPak compression demo](docs/demo/demo.gif)
+
+> **48.9% token reduction** — across real payloads, zero config. 5,074 → 2,594 tokens in <1ms.
+
+---
+
 ## What It Does
 
 - **Compresses context** before it hits the API — fewer tokens, lower cost
