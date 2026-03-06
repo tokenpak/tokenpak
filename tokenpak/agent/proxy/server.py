@@ -645,7 +645,7 @@ class ProxyServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: Optional[int] = None,
         compilation_mode: Optional[str] = None,
         request_hook: Optional[Callable] = None,

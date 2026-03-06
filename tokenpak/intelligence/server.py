@@ -185,12 +185,14 @@ def create_app(
     limiter:
         Custom :class:`RateLimiter` (useful in tests).
     """
+    # Disable Swagger/ReDoc in production via TOKENPAK_DISABLE_DOCS=1
+    _disable_docs = os.environ.get("TOKENPAK_DISABLE_DOCS", "0") == "1"
     app = FastAPI(
         title="TokenPak Intelligence Server",
         version=_VERSION,
         description="Compression, budgeting, and license validation API.",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url=None if _disable_docs else "/docs",
+        redoc_url=None if _disable_docs else "/redoc",
     )
 
     # ── CORS ──────────────────────────────────────────────────
