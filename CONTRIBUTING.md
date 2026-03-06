@@ -1,156 +1,145 @@
 # Contributing to TokenPak
 
-Thanks for your interest in contributing! TokenPak is an open-source project and we welcome contributions of all kinds — bug fixes, new recipes, documentation improvements, and new features.
+Thank you for your interest in contributing to TokenPak! This guide will help you get started.
 
----
+## Code of Conduct
+
+Be respectful, constructive, and patient. We're all here to build something great together.
 
 ## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
+- pip or uv (recommended)
 - Git
 
-### Setup
+### Development Setup
 
 ```bash
+# Clone the repo
 git clone https://github.com/kaywhy331/tokenpak.git
 cd tokenpak
 
-# Create and activate virtual environment
+# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 
-# Install in editable mode with dev dependencies
+# Install in development mode
 pip install -e ".[dev]"
 
-# Run the tests
-pytest tests/ -q
+# Run tests to verify setup
+pytest
 ```
 
----
+### Project Structure
+
+```
+tokenpak/
+├── tokenpak/
+│   ├── agent/           # Agent-mode proxy (agentic workflows)
+│   ├── core/            # Core compression logic
+│   ├── telemetry/       # Usage tracking and analytics
+│   └── cli.py           # Command-line interface
+├── tests/               # Test suite
+├── docs/                # Documentation
+└── recipes/             # Compression recipes
+```
 
 ## How to Contribute
 
-### Reporting Bugs
+### Reporting Issues
 
-1. Check [existing issues](https://github.com/kaywhy331/tokenpak/issues) first
-2. If not found, open a new issue with:
-   - Clear title and description
-   - Steps to reproduce
-   - Expected vs. actual behavior
-   - Python version and OS
+1. Search existing issues first
+2. Use issue templates when available
+3. Include: Python version, OS, full error traceback, minimal reproduction
 
 ### Suggesting Features
 
-Open an issue with the `enhancement` label. Include:
-- The problem you're trying to solve
-- Why you think it belongs in the core project
-- Any alternative approaches you've considered
+Open a GitHub Discussion or Issue with:
+- Use case description
+- Proposed solution (optional)
+- Alternatives considered
 
-### Submitting Code
+### Pull Requests
 
-1. **Fork** the repository
-2. **Create a branch** from `master`: `git checkout -b feature/your-feature-name`
-3. **Write tests** for your changes
-4. **Run the test suite**: `pytest tests/ -q`
-5. **Commit** with a clear message: `git commit -m "feat: add XYZ"` 
-6. **Push** your branch and **open a Pull Request**
+1. **Fork** the repo and create a branch from `main`
+2. **Write tests** for new functionality
+3. **Run the test suite** before submitting:
+   ```bash
+   pytest
+   black --check .
+   ```
+4. **Keep PRs focused** — one feature/fix per PR
+5. **Write clear commit messages** (see below)
 
----
+### Commit Message Format
 
-## Code Style
+```
+type: brief description
 
-- Follow PEP 8
-- Use type hints where practical
-- Keep functions focused and small
-- Docstrings for public functions
+Longer explanation if needed.
 
-We use `black` for formatting (optional but appreciated):
-```bash
-pip install black
-black tokenpak/
+Fixes #123
 ```
 
----
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
 
-## Adding a Recipe
-
-Recipes are YAML files in `recipes/oss/`. Each recipe defines a compression transformation.
-
-**Naming convention:** `<category>-<description>.yaml`
-
-**Categories:**
-- `gen-` — general text transformations
-- `py-` — Python-specific
-- `js-` — JavaScript/TypeScript
-- `cp-` — content/payload (JSON, CSV, etc.)
-- `cfg-` — config files
-- `md-` — Markdown
-
-**Recipe structure:**
-
-```yaml
-name: your-recipe-name
-description: "One-line description of what this compresses"
-category: gen
-triggers:
-  - pattern: "some pattern"
-    type: regex
-transforms:
-  - type: replace
-    pattern: "..."
-    replacement: "..."
-examples:
-  - input: "..."
-    output: "..."
-    savings_pct: 25
-```
-
-See `recipes/oss/gen-whitespace-normalization.yaml` for a complete example.
-
----
+Examples:
+- `feat: add Google Gemini failover support`
+- `fix: handle empty response in SSE stream`
+- `docs: update compression modes documentation`
 
 ## Testing
 
 ```bash
 # Run all tests
-pytest tests/ -q
+pytest
 
 # Run with coverage
-pytest tests/ --cov=tokenpak --cov-report=term-missing
+pytest --cov=tokenpak
 
-# Run a specific test file
-pytest tests/test_recipes_engine.py -v
+# Run specific test file
+pytest tests/test_compression.py
+
+# Run tests matching pattern
+pytest -k "test_cache"
 ```
 
----
+## Code Style
 
-## Project Structure
+We use:
+- **Black** for formatting
+- **Type hints** for all public functions
+- **Docstrings** (Google style) for classes and public methods
 
-```
-tokenpak/
-├── tokenpak/           # Core library
-│   ├── agent/          # Proxy agent (routing, CLI, telemetry)
-│   ├── compression/    # Compression pipeline (in agent/)
-│   ├── telemetry/      # Cost tracking and dashboard
-│   ├── connectors/     # Source connectors (GitHub, Notion, etc.)
-│   ├── engines/        # Compression engines
-│   └── intelligence/   # Routing intelligence server
-├── recipes/oss/        # Open-source compression recipes
-├── tests/              # Test suite
-├── docs/               # Documentation source
-└── .github/workflows/  # CI/CD
+```bash
+# Format code
+black .
+
+# Check formatting
+black --check .
 ```
 
----
+## Documentation
+
+- Update relevant docs when changing behavior
+- Add docstrings to new functions/classes
+- Keep README.md examples up to date
+
+## Release Process (Maintainers)
+
+1. Update version in `pyproject.toml`
+2. Update CHANGELOG.md
+3. Create GitHub Release with tag `vX.Y.Z`
+4. CI publishes to PyPI automatically
+
+## Questions?
+
+- Open a GitHub Discussion
+- Check existing issues and discussions
+- Read the docs at `/docs`
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
-
----
-
-## Code of Conduct
-
-Be respectful, constructive, and welcoming to all contributors. This project follows the [Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/).
+By contributing, you agree that your contributions will be licensed under the MIT License.
