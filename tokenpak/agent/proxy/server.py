@@ -134,6 +134,9 @@ def _new_session() -> Dict[str, Any]:
         "cost_saved": 0.0,
         "errors": 0,
         "start_time": time.time(),
+        # Anthropic prompt caching stats
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
     }
 
 
@@ -499,6 +502,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["output_tokens"] += output_tokens
                     ps.session["cost"] += cost
                     ps.session["cost_saved"] += cost_saved
+                    ps.session["cache_read_tokens"] += cache_read_tokens
+                    ps.session["cache_creation_tokens"] += cache_creation_tokens
                 # Track per-request compression ratio for rolling average
                 if input_tokens > 0:
                     ratio = round(saved / input_tokens, 4)
