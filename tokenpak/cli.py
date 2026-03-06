@@ -499,6 +499,7 @@ def build_parser():
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
 
     sub = parser.add_subparsers(dest="command", required=True)
+    _build_route_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", help="Directory to index")
@@ -650,6 +651,204 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── Route commands ────────────────────────────────────────────────────────────
+
+def _get_route_store(args=None):
+    from .routing.rules import RouteStore, DEFAULT_ROUTES_PATH
+    path = getattr(args, "routes", None) or DEFAULT_ROUTES_PATH
+    return RouteStore(path=path)
+
+
+def cmd_route_list(args):
+    """List all routing rules."""
+    store = _get_route_store(args)
+    rules = store.list()
+    if not rules:
+        print("No routing rules defined.")
+        print("Add one with: tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307")
+        return
+    print(f"{'ID':<10} {'PRI':>4} {'EN':<4} {'PATTERN':<45} TARGET")
+    print("-" * 90)
+    for r in rules:
+        pat_parts = []
+        if r.pattern.model:
+            pat_parts.append(f"model={r.pattern.model}")
+        if r.pattern.prefix:
+            pat_parts.append(f"prefix={r.pattern.prefix!r}")
+        if r.pattern.min_tokens is not None:
+            pat_parts.append(f"min_tokens={r.pattern.min_tokens}")
+        if r.pattern.max_tokens is not None:
+            pat_parts.append(f"max_tokens={r.pattern.max_tokens}")
+        pat_str = ", ".join(pat_parts) or "(any)"
+        enabled = "yes" if r.enabled else "no"
+        desc = f"  # {r.description}" if r.description else ""
+        print(f"{r.id:<10} {r.priority:>4} {enabled:<4} {pat_str:<45} {r.target}{desc}")
+
+
+def cmd_route_add(args):
+    """Add a routing rule."""
+    from .routing.rules import RouteStore, parse_pattern_args, DEFAULT_ROUTES_PATH
+
+    store = _get_route_store(args)
+    try:
+        pattern = parse_pattern_args(
+            model=getattr(args, "model", None),
+            prefix=getattr(args, "prefix", None),
+            min_tokens=getattr(args, "min_tokens", None),
+            max_tokens=getattr(args, "max_tokens", None),
+        )
+    except ValueError as e:
+        print(f"❌ {e}")
+        raise SystemExit(1)
+
+    rule = store.add(
+        pattern=pattern,
+        target=args.target,
+        priority=getattr(args, "priority", 100),
+        description=getattr(args, "description", "") or "",
+    )
+    print(f"✅ Rule added: id={rule.id}  priority={rule.priority}  target={rule.target}")
+    _print_rule_pattern(rule)
+
+
+def _print_rule_pattern(rule):
+    pat = rule.pattern
+    if pat.model:
+        print(f"   Pattern: model glob = {pat.model!r}")
+    if pat.prefix:
+        print(f"   Pattern: prefix = {pat.prefix!r}")
+    if pat.min_tokens is not None:
+        print(f"   Pattern: min_tokens = {pat.min_tokens}")
+    if pat.max_tokens is not None:
+        print(f"   Pattern: max_tokens = {pat.max_tokens}")
+
+
+def cmd_route_remove(args):
+    """Remove a routing rule by id."""
+    store = _get_route_store(args)
+    removed = store.remove(args.id)
+    if removed:
+        print(f"✅ Rule {args.id} removed.")
+    else:
+        print(f"⚠️  No rule found with id={args.id}")
+        raise SystemExit(1)
+
+
+def cmd_route_test(args):
+    """Show which rule would match a given prompt."""
+    from .routing.rules import RouteEngine, RouteStore, _count_tokens_approx
+
+    store = _get_route_store(args)
+    engine = RouteEngine(store=store)
+
+    prompt = args.prompt or ""
+    model = getattr(args, "model", "") or ""
+    token_count = getattr(args, "tokens", None)
+
+    if token_count is None and prompt:
+        token_count = _count_tokens_approx(prompt)
+
+    print(f"Testing: model={model!r}  prompt={prompt[:60]!r}{'...' if len(prompt) > 60 else ''}  tokens≈{token_count}")
+    print()
+
+    match = engine.match(model=model, prompt=prompt, token_count=token_count)
+    if match:
+        print(f"✅ Matched rule: id={match.id}  priority={match.priority}")
+        print(f"   Target: {match.target}")
+        _print_rule_pattern(match)
+        if match.description:
+            print(f"   Note: {match.description}")
+    else:
+        print("❌ No rule matched — request would use original model.")
+
+    # Show all rules and their match status
+    rules = store.list()
+    if rules and getattr(args, "verbose", False):
+        print()
+        print("All rules evaluated:")
+        for r in rules:
+            from .routing.rules import RouteEngine as _RE
+            did_match = _RE._matches(r.pattern, model=model, prompt=prompt, token_count=token_count)
+            tag = "✓" if (did_match and r.enabled) else ("skip" if not r.enabled else "✗")
+            print(f"  [{tag}] {r.id}  {r.target}")
+
+
+def cmd_route_enable(args):
+    """Enable a routing rule."""
+    store = _get_route_store(args)
+    ok = store.set_enabled(args.id, True)
+    print(f"✅ Rule {args.id} enabled." if ok else f"⚠️  Rule {args.id} not found.")
+
+
+def cmd_route_disable(args):
+    """Disable a routing rule."""
+    store = _get_route_store(args)
+    ok = store.set_enabled(args.id, False)
+    print(f"✅ Rule {args.id} disabled." if ok else f"⚠️  Rule {args.id} not found.")
+
+
+def _build_route_parser(sub):
+    p_route = sub.add_parser("route", help="Manage manual model routing rules")
+    rsub = p_route.add_subparsers(dest="route_cmd", required=True)
+
+    # Common --routes flag
+    _routes_flag = dict(
+        flag="--routes",
+        kwargs=dict(default=None, help="Path to routes.yaml (default: ~/.tokenpak/routes.yaml)"),
+    )
+
+    # route list
+    p_list = rsub.add_parser("list", help="Show all routing rules")
+    p_list.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_list.set_defaults(func=cmd_route_list)
+
+    # route add
+    p_add = rsub.add_parser("add", help="Add a routing rule")
+    p_add.add_argument("--model", default=None,
+                       help="Model glob pattern (e.g. 'gpt-4*', 'openai/*')")
+    p_add.add_argument("--prefix", default=None,
+                       help="Prompt prefix match (case-insensitive)")
+    p_add.add_argument("--min-tokens", dest="min_tokens", type=int, default=None,
+                       help="Minimum token count (inclusive)")
+    p_add.add_argument("--max-tokens", dest="max_tokens", type=int, default=None,
+                       help="Maximum token count (inclusive)")
+    p_add.add_argument("--target", required=True,
+                       help="Target model/provider (e.g. 'anthropic/claude-3-haiku-20240307')")
+    p_add.add_argument("--priority", type=int, default=100,
+                       help="Rule priority (lower = higher priority, default 100)")
+    p_add.add_argument("--description", default="", help="Optional description")
+    p_add.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_add.set_defaults(func=cmd_route_add)
+
+    # route remove
+    p_rm = rsub.add_parser("remove", help="Remove a routing rule by id")
+    p_rm.add_argument("id", help="Rule ID to remove")
+    p_rm.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_rm.set_defaults(func=cmd_route_remove)
+
+    # route test
+    p_test = rsub.add_parser("test", help="Show which rule matches a prompt")
+    p_test.add_argument("prompt", nargs="?", default="", help="Prompt text to test")
+    p_test.add_argument("--model", default="", help="Model name to test against")
+    p_test.add_argument("--tokens", type=int, default=None,
+                        help="Token count override (default: auto-estimated)")
+    p_test.add_argument("--verbose", "-v", action="store_true",
+                        help="Show all rules and their match status")
+    p_test.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_test.set_defaults(func=cmd_route_test)
+
+    # route enable / disable
+    p_en = rsub.add_parser("enable", help="Enable a routing rule")
+    p_en.add_argument("id", help="Rule ID")
+    p_en.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_en.set_defaults(func=cmd_route_enable)
+
+    p_dis = rsub.add_parser("disable", help="Disable a routing rule")
+    p_dis.add_argument("id", help="Rule ID")
+    p_dis.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_dis.set_defaults(func=cmd_route_disable)
 
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
