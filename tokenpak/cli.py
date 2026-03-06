@@ -69,6 +69,39 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
+    # --status mode: show stats from BlockRegistry
+    if getattr(args, "status", False):
+        from tokenpak.registry import BlockRegistry
+        registry = BlockRegistry(args.db)
+        stats = registry.get_stats()
+        total = stats["total_files"]
+        sep = "────────────────────────────────────────"
+        print("Vault Index Status")
+        print(sep)
+        print(f"  Database:            {args.db}")
+        print(f"  Total indexed files: {total}")
+        if total == 0:
+            print("  (no files indexed yet — run: tokenpak index <path>)")
+        else:
+            by_type = stats.get("by_type", {})
+            if by_type:
+                print()
+                print("  By type:")
+                for ftype, info in sorted(by_type.items()):
+                    print(f"    {ftype:<10} {info['files']:>6} files")
+            raw = stats.get("total_raw_tokens", 0)
+            compressed = stats.get("total_compressed_tokens", 0)
+            ratio = stats.get("compression_ratio", 0)
+            print()
+            print(f"  Tokens raw:          {raw:,}")
+            print(f"  Tokens compressed:   {compressed:,}")
+            print(f"  Compression ratio:   {ratio}x")
+        return
+
+    if not args.directory:
+        import argparse
+        raise argparse.ArgumentError(None, "directory is required when --status is not set")
+
     # --watch mode: initial index then watch for changes
     if getattr(args, 'watch', False):
         from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
@@ -490,7 +523,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_index = sub.add_parser("index", help="Index a directory")
-    p_index.add_argument("directory", help="Directory to index")
+    p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
+    p_index.add_argument("--status", action="store_true", help="Show indexed file count by type")
     p_index.add_argument("--budget", type=int, default=8000)
     p_index.add_argument("--workers", "-w", type=int, default=4,
                          help="Parallel workers (default: 4)")
