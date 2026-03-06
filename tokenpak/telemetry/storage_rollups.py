@@ -203,6 +203,12 @@ class RollupsMixin:
         cur.execute("DELETE FROM tp_rollup_daily_model")
         cur.execute("""
             INSERT INTO tp_rollup_daily_model (date, model, total_requests, total_tokens, total_cost, total_savings, avg_raw_tokens, avg_final_tokens, avg_cost)
+            WITH seg_agg AS (
+                SELECT trace_id,
+                    AVG(NULLIF(tokens_raw, 0)) as avg_raw,
+                    AVG(NULLIF(tokens_after_tp, 0)) as avg_tp
+                FROM tp_segments GROUP BY trace_id
+            )
             SELECT
                 strftime('%Y-%m-%d', datetime(e.ts, 'unixepoch')) as date,
                 e.model,
@@ -210,13 +216,13 @@ class RollupsMixin:
                 COALESCE(SUM(u.input_billed + u.output_billed), 0) as total_tokens,
                 COALESCE(SUM(c.cost_total), 0) as total_cost,
                 COALESCE(SUM(c.savings_total), 0) as total_savings,
-                COALESCE(AVG(NULLIF(s.tokens_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
-                COALESCE(AVG(NULLIF(s.tokens_after_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
                 COALESCE(AVG(c.cost_total), 0) as avg_cost
             FROM tp_events e
             LEFT JOIN tp_usage u ON e.trace_id = u.trace_id
             LEFT JOIN tp_costs c ON e.trace_id = c.trace_id
-            LEFT JOIN tp_segments s ON e.trace_id = s.trace_id
+            LEFT JOIN seg_agg sa ON e.trace_id = sa.trace_id
             GROUP BY date, e.model
         """)
         counts["model"] = cur.rowcount
@@ -225,6 +231,12 @@ class RollupsMixin:
         cur.execute("DELETE FROM tp_rollup_daily_provider")
         cur.execute("""
             INSERT INTO tp_rollup_daily_provider (date, provider, total_requests, total_tokens, total_cost, total_savings, avg_raw_tokens, avg_final_tokens, avg_cost)
+            WITH seg_agg AS (
+                SELECT trace_id,
+                    AVG(NULLIF(tokens_raw, 0)) as avg_raw,
+                    AVG(NULLIF(tokens_after_tp, 0)) as avg_tp
+                FROM tp_segments GROUP BY trace_id
+            )
             SELECT
                 strftime('%Y-%m-%d', datetime(e.ts, 'unixepoch')) as date,
                 e.provider,
@@ -232,13 +244,13 @@ class RollupsMixin:
                 COALESCE(SUM(u.input_billed + u.output_billed), 0) as total_tokens,
                 COALESCE(SUM(c.cost_total), 0) as total_cost,
                 COALESCE(SUM(c.savings_total), 0) as total_savings,
-                COALESCE(AVG(NULLIF(s.tokens_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
-                COALESCE(AVG(NULLIF(s.tokens_after_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
                 COALESCE(AVG(c.cost_total), 0) as avg_cost
             FROM tp_events e
             LEFT JOIN tp_usage u ON e.trace_id = u.trace_id
             LEFT JOIN tp_costs c ON e.trace_id = c.trace_id
-            LEFT JOIN tp_segments s ON e.trace_id = s.trace_id
+            LEFT JOIN seg_agg sa ON e.trace_id = sa.trace_id
             GROUP BY date, e.provider
         """)
         counts["provider"] = cur.rowcount
@@ -247,6 +259,12 @@ class RollupsMixin:
         cur.execute("DELETE FROM tp_rollup_daily_agent")
         cur.execute("""
             INSERT INTO tp_rollup_daily_agent (date, agent_id, total_requests, total_tokens, total_cost, total_savings, avg_raw_tokens, avg_final_tokens, avg_cost)
+            WITH seg_agg AS (
+                SELECT trace_id,
+                    AVG(NULLIF(tokens_raw, 0)) as avg_raw,
+                    AVG(NULLIF(tokens_after_tp, 0)) as avg_tp
+                FROM tp_segments GROUP BY trace_id
+            )
             SELECT
                 strftime('%Y-%m-%d', datetime(e.ts, 'unixepoch')) as date,
                 e.agent_id,
@@ -254,13 +272,13 @@ class RollupsMixin:
                 COALESCE(SUM(u.input_billed + u.output_billed), 0) as total_tokens,
                 COALESCE(SUM(c.cost_total), 0) as total_cost,
                 COALESCE(SUM(c.savings_total), 0) as total_savings,
-                COALESCE(AVG(NULLIF(s.tokens_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
-                COALESCE(AVG(NULLIF(s.tokens_after_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_raw, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_raw_tokens,
+                COALESCE(AVG(NULLIF(sa.avg_tp, 0)), AVG(u.input_billed + u.output_billed), 0) as avg_final_tokens,
                 COALESCE(AVG(c.cost_total), 0) as avg_cost
             FROM tp_events e
             LEFT JOIN tp_usage u ON e.trace_id = u.trace_id
             LEFT JOIN tp_costs c ON e.trace_id = c.trace_id
-            LEFT JOIN tp_segments s ON e.trace_id = s.trace_id
+            LEFT JOIN seg_agg sa ON e.trace_id = sa.trace_id
             GROUP BY date, e.agent_id
         """)
         counts["agent"] = cur.rowcount

@@ -70,7 +70,7 @@ def parse_filter(filter_str: Optional[str]) -> dict[str, str]:
             value = value.strip()
             if key and value:
                 # Normalize key names
-                if key in ("provider", "model", "agent", "agent_id"):
+                if key in ("provider", "model", "agent", "agent_id", "status", "start", "end"):
                     if key == "agent":
                         key = "agent_id"
                     result[key] = value
