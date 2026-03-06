@@ -324,9 +324,21 @@ def cmd_serve(args):
 
 
 def cmd_benchmark(args):
-    """Run latency benchmark."""
-    from .benchmark import run_benchmark
-    run_benchmark(args.directory, args.iterations, compare=args.compare)
+    """Run compression benchmark (default) or latency benchmark (--latency)."""
+    file_arg = getattr(args, "file", None)
+    use_samples = getattr(args, "samples", False)
+    as_json = getattr(args, "json", False)
+    latency_mode = getattr(args, "latency", False)
+
+    if latency_mode:
+        # Legacy latency benchmark — requires a directory
+        directory = getattr(args, "directory", None) or "."
+        from .benchmark import run_benchmark
+        run_benchmark(directory, args.iterations, compare=args.compare)
+    else:
+        # Compression benchmark (new default)
+        from .benchmark import run_compression_benchmark
+        run_compression_benchmark(file=file_arg, use_samples=use_samples, as_json=as_json)
 
 
 def cmd_calibrate(args):
@@ -527,11 +539,21 @@ def build_parser():
     p_serve.add_argument("--port", type=int, default=8766)
     p_serve.set_defaults(func=cmd_serve)
 
-    p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
-    p_bench.add_argument("directory", help="Directory to benchmark")
-    p_bench.add_argument("--iterations", type=int, default=3)
+    p_bench = sub.add_parser("benchmark", help="Benchmark compression performance on sample or real data")
+    p_bench.add_argument("directory", nargs="?", default=None,
+                         help="Directory to benchmark (used with --latency mode)")
+    p_bench.add_argument("--file", default=None, metavar="PATH",
+                         help="Benchmark a specific file")
+    p_bench.add_argument("--samples", action="store_true",
+                         help="Use built-in sample data (default when no file/directory given)")
+    p_bench.add_argument("--json", dest="json", action="store_true", default=False,
+                         help="Output results as JSON")
+    p_bench.add_argument("--latency", action="store_true",
+                         help="Run latency/indexing benchmark instead of compression benchmark")
+    p_bench.add_argument("--iterations", type=int, default=3,
+                         help="Iterations for latency benchmark (default: 3)")
     p_bench.add_argument("--compare", action="store_true",
-                         help="Compare baseline vs optimized")
+                         help="Compare baseline vs optimized (latency mode only)")
     p_bench.set_defaults(func=cmd_benchmark)
 
     p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
