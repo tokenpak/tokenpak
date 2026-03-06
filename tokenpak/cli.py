@@ -1236,10 +1236,129 @@ def cmd_agent_locks(args):
         print(f"{path:<50} {lock.get('agent','?'):<15} {remaining:>10.0f}s")
 
 
+def cmd_agent_list(args):
+    """List registered agents."""
+    import json as json_mod
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if args.all:
+        agents = registry.list_all()
+    else:
+        agents = registry.list_active()
+    
+    if args.json:
+        print(json_mod.dumps([a.to_dict() for a in agents], indent=2))
+        return
+    
+    if not agents:
+        print("No registered agents.")
+        return
+    
+    print(f"{'ID':<10} {'Name':<12} {'Hostname':<15} {'Status':<10} {'Heartbeat':<12}")
+    print("-" * 65)
+    for a in agents:
+        age = a.heartbeat_age_seconds()
+        if age < 60:
+            hb = f"{age:.0f}s ago"
+        elif age < 3600:
+            hb = f"{age/60:.0f}m ago"
+        else:
+            hb = f"{age/3600:.1f}h ago"
+        stale = " (stale)" if a.is_stale() else ""
+        print(f"{a.agent_id:<10} {a.name:<12} {a.hostname:<15} {a.status:<10} {hb}{stale}")
+
+
+def cmd_agent_register(args):
+    """Register this agent."""
+    import json as json_mod
+    import socket
+    from .agent.agentic.registry import AgentRegistry
+    
+    hostname = args.hostname or socket.gethostname()
+    capabilities = {
+        "gpu": args.gpu,
+        "memory_gb": args.memory,
+        "specialties": args.specialties,
+        "provider_access": args.providers,
+        "max_concurrent": 1,
+    }
+    
+    registry = AgentRegistry()
+    agent_id = registry.register(args.name, hostname, capabilities)
+    
+    if args.json:
+        agent = registry.get(agent_id)
+        print(json_mod.dumps(agent.to_dict(), indent=2))
+    else:
+        print(f"✅ Registered: {args.name} @ {hostname} (id: {agent_id})")
+
+
+def cmd_agent_deregister(args):
+    """Remove agent from registry."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if registry.deregister(args.agent_id):
+        print(f"✅ Deregistered: {args.agent_id}")
+    else:
+        print(f"⚠️  Agent not found: {args.agent_id}")
+
+
+def cmd_agent_heartbeat(args):
+    """Send heartbeat for agent."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if registry.heartbeat(args.agent_id, status=args.status, current_task=args.task):
+        print(f"✅ Heartbeat: {args.agent_id}")
+    else:
+        print(f"⚠️  Agent not found: {args.agent_id}")
+
+
+def cmd_agent_match(args):
+    """Find agents matching requirements."""
+    import json as json_mod
+    from .agent.agentic.capabilities import CapabilityMatcher, TaskRequirements
+    
+    requirements = TaskRequirements(
+        requires_gpu=True if args.gpu else None,
+        min_memory_gb=args.memory,
+        required_specialties=args.specialty or [],
+        required_providers=args.provider or [],
+    )
+    
+    matcher = CapabilityMatcher()
+    matches = matcher.match(requirements)
+    
+    if args.json:
+        print(json_mod.dumps([m.to_dict() for m in matches], indent=2))
+        return
+    
+    if not matches:
+        print("No matching agents found.")
+        return
+    
+    print(f"{'Score':<8} {'ID':<10} {'Name':<12} {'Reasons'}")
+    print("-" * 60)
+    for m in matches:
+        reasons = ", ".join(m.reasons[:3]) if m.reasons else "-"
+        print(f"{m.score:<8.1f} {m.agent.agent_id:<10} {m.agent.name:<12} {reasons}")
+
+
+def cmd_agent_prune(args):
+    """Remove stale agents."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    count = registry.prune_stale()
+    if count:
+        print(f"✅ Pruned {count} stale agent(s)")
+    else:
+        print("No stale agents to prune.")
+
+
 def _build_agent_parser(sub):
-    p_agent = sub.add_parser("agent", help="Agent coordination (locks, retry)")
+    p_agent = sub.add_parser("agent", help="Agent coordination (locks, registry, capabilities)")
     asub = p_agent.add_subparsers(dest="agent_cmd", required=True)
 
+    # --- Lock commands ---
     p_lock = asub.add_parser("lock", help="Claim a file lock")
     p_lock.add_argument("path", help="File path to lock")
     p_lock.add_argument("--timeout", type=int, default=600, metavar="SECONDS", help="Lock TTL in seconds (default 600)")
@@ -1254,6 +1373,43 @@ def _build_agent_parser(sub):
     p_locks = asub.add_parser("locks", help="List all active locks")
     p_locks.add_argument("--agent", default=None, help="Filter by agent id")
     p_locks.set_defaults(func=cmd_agent_locks)
+
+    # --- Registry commands ---
+    p_list = asub.add_parser("list", help="List registered agents")
+    p_list.add_argument("--all", action="store_true", help="Include stale agents")
+    p_list.add_argument("--json", action="store_true", help="JSON output")
+    p_list.set_defaults(func=cmd_agent_list)
+
+    p_register = asub.add_parser("register", help="Register this agent")
+    p_register.add_argument("name", help="Agent name (e.g., trix, sue, cali)")
+    p_register.add_argument("--hostname", default=None, help="Hostname (default: auto-detect)")
+    p_register.add_argument("--gpu", action="store_true", help="Has GPU")
+    p_register.add_argument("--memory", type=float, default=4.0, help="Memory in GB")
+    p_register.add_argument("--specialties", nargs="*", default=[], help="Specialties (e.g., code research)")
+    p_register.add_argument("--providers", nargs="*", default=["anthropic"], help="Provider access")
+    p_register.add_argument("--json", action="store_true", help="JSON output")
+    p_register.set_defaults(func=cmd_agent_register)
+
+    p_deregister = asub.add_parser("deregister", help="Remove an agent from registry")
+    p_deregister.add_argument("agent_id", help="Agent ID to remove")
+    p_deregister.set_defaults(func=cmd_agent_deregister)
+
+    p_heartbeat = asub.add_parser("heartbeat", help="Send heartbeat for an agent")
+    p_heartbeat.add_argument("agent_id", help="Agent ID")
+    p_heartbeat.add_argument("--status", choices=["active", "busy", "draining"], help="Update status")
+    p_heartbeat.add_argument("--task", default=None, help="Current task name")
+    p_heartbeat.set_defaults(func=cmd_agent_heartbeat)
+
+    p_match = asub.add_parser("match", help="Find agents matching requirements")
+    p_match.add_argument("--gpu", action="store_true", help="Require GPU")
+    p_match.add_argument("--memory", type=float, default=None, help="Minimum memory GB")
+    p_match.add_argument("--specialty", nargs="*", default=[], help="Required specialties")
+    p_match.add_argument("--provider", nargs="*", default=[], help="Required providers")
+    p_match.add_argument("--json", action="store_true", help="JSON output")
+    p_match.set_defaults(func=cmd_agent_match)
+
+    p_prune = asub.add_parser("prune", help="Remove stale agents")
+    p_prune.set_defaults(func=cmd_agent_prune)
 
 
 # ── Replay commands ───────────────────────────────────────────────────────────
