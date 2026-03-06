@@ -754,10 +754,6 @@ def main():
     args.func(args)
 
 
-if __name__ == "__main__":
-    main()
-
-
 # ── Route commands ────────────────────────────────────────────────────────────
 
 def _get_route_store(args=None):
@@ -2677,3 +2673,7 @@ def cmd_fingerprint_clear_cache(args):
 
     deleted = client.clear_cache(fingerprint_id=fp_id)
     print(f"✓ Cleared {deleted} cache file(s).")
+
+
+if __name__ == "__main__":
+    main()
