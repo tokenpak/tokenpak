@@ -1556,9 +1556,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 stream_tag = " [SSE]" if is_sse else ""
                 mode_tag = f" [{COMPILATION_MODE}]"
                 inject_tag = f" [+{injected_tokens} vault]" if injected_tokens > 0 else ""
+                # Cache status tag: show FRESH/CACHED with token counts for clarity
+                if cache_read_tokens > 0:
+                    _saved_k = f"{cache_read_tokens:,}"
+                    cache_tag = f" (CACHED: {_saved_k} tokens)"
+                elif cache_creation_tokens > 0:
+                    _written_k = f"{cache_creation_tokens:,}"
+                    cache_tag = f" (FRESH: {_written_k} written)"
+                else:
+                    cache_tag = " (FRESH)"
                 print(f"  📊 {model}{stream_tag}{mode_tag}{inject_tag}: {input_tokens:,} in → {sent_input_tokens:,} sent "
                       f"(saved {saved:,}, protected {protected_tokens:,}) / {output_tokens:,} out | "
-                      f"~${cost:.4f} | {latency_ms}ms")
+                      f"~${cost:.4f}{cache_tag} | {latency_ms}ms")
 
         except Exception as e:
             SESSION["errors"] += 1
