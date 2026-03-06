@@ -1494,6 +1494,13 @@ def cmd_replay_run(args):
             print("(no textual diff — content identical)")
 
 
+def cmd_replay_clear(args):
+    """Clear all entries from the replay store."""
+    store = _get_replay_store()
+    n = store.clear()
+    print(f"Cleared {n} replay entr{'y' if n == 1 else 'ies'} from store.")
+
+
 def _build_replay_parser(sub):
     p_replay = sub.add_parser("replay", help="List, inspect, and re-run captured sessions")
     rsub = p_replay.add_subparsers(dest="replay_cmd")
@@ -1522,6 +1529,10 @@ def _build_replay_parser(sub):
     p_run.add_argument("--diff", action="store_true",
                        help="Show unified diff of original vs compressed messages")
     p_run.set_defaults(func=cmd_replay_run)
+
+    # clear
+    p_clear = rsub.add_parser("clear", help="Remove all entries from the replay store")
+    p_clear.set_defaults(func=cmd_replay_clear)
 
     def _replay_dispatch(args):
         # Default action when no subcommand given: show list

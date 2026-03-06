@@ -272,3 +272,44 @@ class TestCmdReplayRun:
         raw = count_tokens(json.dumps(e.messages))
         assert f"Raw tokens    : {raw:,}" in out
         assert f"Result tokens : {raw:,}" in out
+
+
+class TestReplayClearCLI:
+    def test_clear_empty_store(self, capsys):
+        from tokenpak.cli import cmd_replay_clear
+        from unittest.mock import patch, MagicMock
+        store = ReplayStore(":memory:")
+        args = MagicMock()
+        with patch("tokenpak.cli._get_replay_store", return_value=store):
+            cmd_replay_clear(args)
+        out = capsys.readouterr().out
+        assert "0" in out
+        assert "entries" in out or "entry" in out
+
+    def test_clear_with_entries(self, capsys):
+        from tokenpak.cli import cmd_replay_clear
+        from unittest.mock import patch, MagicMock
+        store, _ = make_store_with_entries()
+        assert store.count() > 0
+        args = MagicMock()
+        with patch("tokenpak.cli._get_replay_store", return_value=store):
+            cmd_replay_clear(args)
+        out = capsys.readouterr().out
+        assert store.count() == 0
+        assert "Cleared" in out
+
+    def test_clear_via_argparse(self, capsys):
+        """End-to-end: tokenpak replay clear via CLI parser."""
+        from tokenpak.cli import _build_replay_parser
+        import argparse
+        from unittest.mock import patch
+        store, _ = make_store_with_entries()
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers()
+        _build_replay_parser(sub)
+        args = parser.parse_args(["replay", "clear"])
+        with patch("tokenpak.cli._get_replay_store", return_value=store):
+            args.func(args)
+        out = capsys.readouterr().out
+        assert "Cleared" in out
+        assert store.count() == 0

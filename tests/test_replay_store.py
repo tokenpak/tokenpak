@@ -192,3 +192,39 @@ class TestGetReplayStore:
             _r._store = None
             _r._store_path = ":memory:"
             os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# Clear tests
+# ---------------------------------------------------------------------------
+
+class TestReplayStoreClear:
+    def test_clear_empty_store_returns_zero(self):
+        s = ReplayStore(":memory:")
+        assert s.clear() == 0
+
+    def test_clear_removes_all_entries(self):
+        s = ReplayStore(":memory:")
+        s.capture(make_entry(provider="a"))
+        s.capture(make_entry(provider="b"))
+        s.capture(make_entry(provider="c"))
+        assert s.count() == 3
+        n = s.clear()
+        assert n == 3
+        assert s.count() == 0
+
+    def test_clear_returns_count_removed(self):
+        s = ReplayStore(":memory:")
+        for _ in range(5):
+            s.capture(make_entry())
+        assert s.clear() == 5
+
+    def test_clear_then_capture_works(self):
+        """Store is still functional after clear."""
+        s = ReplayStore(":memory:")
+        s.capture(make_entry(provider="before"))
+        s.clear()
+        s.capture(make_entry(provider="after"))
+        entries = s.list(limit=10)
+        assert len(entries) == 1
+        assert entries[0].provider == "after"

@@ -265,6 +265,14 @@ class ReplayStore:
         row = conn.execute("SELECT COUNT(*) AS n FROM tp_replay").fetchone()
         return row["n"] if row else 0
 
+    def clear(self) -> int:
+        """Delete ALL entries from the store. Returns count removed."""
+        conn = self._conn()
+        n = self.count()
+        conn.execute("DELETE FROM tp_replay")
+        conn.commit()
+        return n
+
     def close(self) -> None:
         if hasattr(self._local, "conn") and self._local.conn:
             self._local.conn.close()
