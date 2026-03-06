@@ -573,6 +573,7 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_debug_parser(sub)
     _build_demo_parser(sub)
     _build_run_parser(sub)
     _build_macro_parser(sub)
@@ -641,6 +642,49 @@ def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.set_defaults(func=cmd_status)
+
+
+def _build_debug_parser(sub):
+    """Build debug mode subcommand parser."""
+    p_debug = sub.add_parser("debug", help="Toggle verbose debug logging")
+    dsub = p_debug.add_subparsers(dest="debug_cmd", required=True)
+
+    dsub.add_parser("on", help="Enable debug mode").set_defaults(func=cmd_debug_on)
+    dsub.add_parser("off", help="Disable debug mode").set_defaults(func=cmd_debug_off)
+    dsub.add_parser("status", help="Show debug mode state").set_defaults(func=cmd_debug_status)
+
+
+def cmd_debug_on(args):
+    """Enable debug mode."""
+    from .agent.config import set_debug_enabled
+    set_debug_enabled(True)
+    print("✅ Debug mode enabled")
+    print("   Debug logs will appear on stderr during proxy requests.")
+    print("   Disable with: tokenpak debug off")
+
+
+def cmd_debug_off(args):
+    """Disable debug mode."""
+    from .agent.config import set_debug_enabled
+    set_debug_enabled(False)
+    print("✅ Debug mode disabled")
+
+
+def cmd_debug_status(args):
+    """Show debug mode state."""
+    import os
+    from .agent.config import get_debug_enabled, CONFIG_PATH
+    
+    enabled = get_debug_enabled()
+    env_override = os.environ.get("TOKENPAK_DEBUG")
+    
+    status = "🟢 ON" if enabled else "⚪ OFF"
+    print(f"Debug mode: {status}")
+    
+    if env_override is not None:
+        print(f"  Source: TOKENPAK_DEBUG env var = {env_override}")
+    else:
+        print(f"  Source: {CONFIG_PATH}")
 
 
 def main():
