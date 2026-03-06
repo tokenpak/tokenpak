@@ -578,6 +578,7 @@ def build_parser():
     _build_run_parser(sub)
     _build_macro_parser(sub)
     _build_fingerprint_parser(sub)
+    _build_learn_parser(sub)
 
     return parser
 
@@ -685,6 +686,28 @@ def cmd_debug_status(args):
         print(f"  Source: TOKENPAK_DEBUG env var = {env_override}")
     else:
         print(f"  Source: {CONFIG_PATH}")
+
+
+def _build_learn_parser(sub):
+    """Build `tokenpak learn` subcommand parser."""
+    p_learn = sub.add_parser("learn", help="Show or reset learned patterns from telemetry")
+    lsub = p_learn.add_subparsers(dest="learn_cmd", required=True)
+    lsub.add_parser("status", help="Show learned patterns summary").set_defaults(func=cmd_learn_status)
+    lsub.add_parser("reset", help="Clear all learned data").set_defaults(func=cmd_learn_reset)
+
+
+def cmd_learn_status(args):
+    """Show learned patterns from routing, compression, and context data."""
+    from .agent.agentic.learning import cmd_learn_status as _learn_status, learn
+    learn()
+    _learn_status()
+
+
+def cmd_learn_reset(args):
+    """Clear all learned data."""
+    from .agent.agentic.learning import reset
+    reset()
+    print("✓ Learning store cleared.")
 
 
 def main():
