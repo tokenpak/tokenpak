@@ -301,6 +301,17 @@ def _budget_argparse(argv: list) -> None:
 # ---------------------------------------------------------------------------
 
 def main():
+    # Delegate serve subcommand (Phase 5A: Ingest API)
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        import argparse as _ap
+        sp = _ap.ArgumentParser(prog="tokenpak serve")
+        sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+        sp.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
+        sargs = sp.parse_args(sys.argv[2:])
+        from tokenpak.agent.cli.commands.serve import run_serve_cmd
+        run_serve_cmd(sargs)
+        return
+
     # Delegate trigger subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "trigger":
         try:

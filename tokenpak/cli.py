@@ -364,9 +364,26 @@ def cmd_serve(args):
         from .telemetry.server import create_app
         watch_path = str(Path.home() / ".openclaw" / "workspace" / "session.jsonl")
         app = create_app()
+        # Phase 5A: register ingest router
+        try:
+            from .agent.ingest.api import router as ingest_router
+            app.include_router(ingest_router)
+        except Exception as _ingest_err:
+            print(f"[warn] Ingest router not loaded: {_ingest_err}")
         workers = getattr(args, 'workers', 1)
         print(f"Starting TokenPak telemetry server on port {args.port} (workers={workers})")
         uvicorn.run(app, host="0.0.0.0", port=args.port, workers=workers)
+        return
+    if getattr(args, 'ingest', False):
+        import uvicorn
+        from .agent.ingest.api import create_ingest_app
+        app = create_ingest_app()
+        port = args.port
+        print(f"TokenPak Ingest API — http://127.0.0.1:{port}")
+        print(f"  POST /ingest")
+        print(f"  POST /ingest/batch")
+        print(f"  GET  /health")
+        uvicorn.run(app, host="127.0.0.1", port=port)
         return
     try:
         import sys
@@ -646,6 +663,7 @@ def build_parser():
     p_serve = sub.add_parser("serve", help="Start monitoring proxy or telemetry server")
     p_serve.add_argument("--port", type=int, default=8766)
     p_serve.add_argument("--telemetry", action="store_true", help="Start telemetry ingest server")
+    p_serve.add_argument("--ingest", action="store_true", help="Start Phase 5A ingest API server")
     p_serve.add_argument("--workers", type=int, default=1, help="Number of uvicorn workers")
     p_serve.set_defaults(func=cmd_serve)
 
