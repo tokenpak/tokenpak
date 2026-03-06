@@ -69,6 +69,34 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
+    # --status mode: show stats without indexing
+    if getattr(args, 'status', False):
+        import os
+        db_path = getattr(args, 'db', os.path.join(os.getcwd(), '.tokenpak', 'registry.db'))
+        if not os.path.exists(db_path):
+            print(f"No index found at {db_path}. Run `tokenpak index <directory>` first.")
+            return
+        registry = BlockRegistry(db_path)
+        stats = registry.get_stats()
+        print("Vault Index Status")
+        print("─" * 40)
+        print(f"  Database:            {db_path}")
+        print(f"  Total indexed files: {stats.get('total_files', 0)}")
+        by_type = stats.get('by_type', {})
+        if by_type:
+            print("  By type:")
+            for t, info in by_type.items():
+                if isinstance(info, dict):
+                    print(f"    {t:<12} {info.get('files', 0)} files")
+                else:
+                    print(f"    {t:<12} {info} files")
+        print(f"  Tokens raw:          {stats.get('total_raw_tokens', 0):,}")
+        print(f"  Tokens compressed:   {stats.get('total_compressed_tokens', 0):,}")
+        ratio = stats.get('compression_ratio', 0)
+        if ratio:
+            print(f"  Compression ratio:   {ratio:.2f}x")
+        return
+
     # --watch mode: initial index then watch for changes
     if getattr(args, 'watch', False):
         from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
@@ -81,6 +109,9 @@ def cmd_index(args):
         )
         watcher = VaultWatcher(config)
         watcher.start(blocking=True)
+        return
+    if not args.directory:
+        print("error: directory is required when --status is not set")
         return
     _do_index(args)
 
@@ -490,7 +521,8 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_index = sub.add_parser("index", help="Index a directory")
-    p_index.add_argument("directory", help="Directory to index")
+    p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
+    p_index.add_argument("--status", action="store_true", help="Show indexed file count by type")
     p_index.add_argument("--budget", type=int, default=8000)
     p_index.add_argument("--workers", "-w", type=int, default=4,
                          help="Parallel workers (default: 4)")
