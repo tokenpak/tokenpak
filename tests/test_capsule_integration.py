@@ -311,3 +311,70 @@ class TestTokenEstimation:
         body = b"invalid"
         tokens = _estimate_tokens(body)
         assert tokens >= 0  # Should not raise
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Server wiring tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestProxyServerWiring:
+    """Verify capsule hook is auto-wired into ProxyServer."""
+
+    def test_proxy_server_has_capsule_hook_by_default(self):
+        """ProxyServer should have a request_hook installed even with no args."""
+        from tokenpak.agent.proxy.server import ProxyServer
+        ps = ProxyServer()
+        assert ps.request_hook is not None, "request_hook must be set on ProxyServer"
+        assert callable(ps.request_hook), "request_hook must be callable"
+
+    def test_proxy_server_hook_is_capsule_hook(self):
+        """The default hook should invoke the capsule pipeline (disabled = pass-through)."""
+        from tokenpak.agent.proxy.server import ProxyServer
+        ps = ProxyServer()
+        payload = json.dumps({"messages": [{"role": "user", "content": "hello"}]}).encode()
+        result = ps.request_hook(payload, "gpt-4o")
+        assert isinstance(result, tuple) and len(result) == 4, (
+            "hook must return (body, sent_tokens, raw_tokens, protected_tokens)"
+        )
+        body_out, _, _, _ = result
+        # Disabled by default — body unchanged
+        assert body_out == payload
+
+    def test_proxy_server_wraps_external_hook(self):
+        """An external request_hook passed to ProxyServer should still be invoked."""
+        from tokenpak.agent.proxy.server import ProxyServer
+        called_with = {}
+
+        def my_hook(body, model, trace=None):
+            called_with["body"] = body
+            called_with["model"] = model
+            return body, 0, 0, 0
+
+        ps = ProxyServer(request_hook=my_hook)
+        payload = json.dumps({"messages": [{"role": "user", "content": "test"}]}).encode()
+        ps.request_hook(payload, "claude-3")
+        assert called_with.get("model") == "claude-3", "external hook should be chained"
+
+    def test_capsule_hook_enabled_compresses_in_proxy(self):
+        """When TOKENPAK_CAPSULE_BUILDER=1, ProxyServer hook should compress large blocks."""
+        from tokenpak.agent.proxy.server import ProxyServer
+        long_text = "This is a very long sentence that goes on and on. " * 20  # >400 chars
+        # Place the large block outside the hot window (last 2 msgs) so it qualifies
+        payload = json.dumps({
+            "messages": [
+                {"role": "user", "content": long_text},  # idx 0 — outside hot window
+                {"role": "assistant", "content": "short reply"},
+                {"role": "user", "content": "follow-up question here"},
+                {"role": "assistant", "content": "ok"},  # idx 3 — hot window
+            ]
+        }).encode()
+
+        clear_cache()
+        with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "1"}):
+            clear_cache()
+            ps = ProxyServer()
+            body_out, sent_tokens, raw_tokens, _ = ps.request_hook(payload, "gpt-4o")
+        clear_cache()
+
+        assert b"[CAPSULE" in body_out, "capsule envelope should appear in compressed output"
+        assert sent_tokens < raw_tokens, "sent_tokens should be less than raw_tokens after compression"

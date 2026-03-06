@@ -653,7 +653,18 @@ class ProxyServer:
         self.host = host
         self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
         self.compilation_mode = compilation_mode or os.environ.get("TOKENPAK_MODE", "hybrid")
-        self.request_hook = request_hook
+
+        # Auto-wire the capsule builder hook.  When TOKENPAK_CAPSULE_BUILDER=0
+        # (the default) the hook is a no-op, so this is safe for all deployments.
+        # If a caller supplies their own request_hook it is chained *after* the
+        # capsule stage so they still see the (potentially compressed) body.
+        try:
+            from .capsule_integration import get_capsule_request_hook
+            self.request_hook: Optional[Callable] = get_capsule_request_hook(
+                base_hook=request_hook
+            )
+        except Exception:  # pragma: no cover — import failure falls back gracefully
+            self.request_hook = request_hook
 
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
