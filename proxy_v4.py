@@ -18,7 +18,7 @@ Env vars:
     TOKENPAK_COMPACT_CACHE_SIZE     (default: 2000)
     TOKENPAK_DB               (default: .ocp/monitor.db)
     TOKENPAK_VAULT_INDEX      (default: ~/vault/.tokenpak) — path to shared vault index
-    TOKENPAK_INJECT_BUDGET    (default: 2000) — max tokens to inject from vault
+    TOKENPAK_INJECT_BUDGET    (default: 4000) — max tokens to inject from vault
     TOKENPAK_INJECT_TOP_K     (default: 5) — max vault blocks to inject
     TOKENPAK_INJECT_MIN_SCORE (default: 2.0) — minimum BM25 score to include
 """
@@ -136,7 +136,7 @@ COMPILATION_MODE = os.environ.get("TOKENPAK_MODE", "hybrid").lower()  # strict|h
 
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
-INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "2000"))
+INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "4000"))  # raised to 4000 for cache stability
 INJECT_TOP_K = int(os.environ.get("TOKENPAK_INJECT_TOP_K", "5"))
 INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
 INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
@@ -353,10 +353,15 @@ class VaultIndex:
             if score >= min_score:
                 scores[bid] = score
 
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        # Sort deterministically: score desc, then path asc, then block_id asc
+        # This ensures byte-identical ordering for cache stability even on score ties
+        ranked = sorted(
+            scores.items(),
+            key=lambda x: (-x[1], blocks[x[0]].get("source_path", ""), x[0]),
+        )[:top_k]
         return [(blocks[bid], score) for bid, score in ranked]
 
-    def compile_injection(self, query: str, budget: int = 2000, top_k: int = 5, min_score: float = 2.0) -> Tuple[str, int, List[str]]:
+    def compile_injection(self, query: str, budget: int = 4000, top_k: int = 5, min_score: float = 2.0) -> Tuple[str, int, List[str]]:
         """
         Search vault and compile injection text within budget.
         Returns (injection_text, tokens_used, source_refs).
@@ -393,7 +398,7 @@ class VaultIndex:
         if not injection_parts:
             return "", 0, []
 
-        header = "\n\n## Supplementary Context (from shared knowledge base)\n"
+        header = "\n\n## Retrieved Context\n"  # fixed header for cache stability
         injection_text = header + "\n\n".join(injection_parts)
         # Recount with header
         tokens_used = count_tokens(injection_text)
