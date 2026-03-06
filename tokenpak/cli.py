@@ -690,6 +690,8 @@ def build_parser():
     _build_fingerprint_parser(sub)
     _build_learn_parser(sub)
     _build_user_template_parser(sub)
+    _build_audit_parser(sub)
+    _build_compliance_parser(sub)
 
     return parser
 
@@ -878,6 +880,200 @@ def _build_user_template_parser(sub):
     p_use.add_argument("--var", action="append", default=[], metavar="KEY=VALUE",
                        help="Variable substitution (repeatable)")
     p_use.set_defaults(func=cmd_template_use)
+
+
+
+# ---------------------------------------------------------------------------
+# Enterprise Audit commands
+# ---------------------------------------------------------------------------
+
+def _build_audit_parser(sub):
+    p_audit = sub.add_parser("audit", help="Enterprise audit log management")
+    asub = p_audit.add_subparsers(dest="audit_cmd", required=True)
+
+    p_list = asub.add_parser("list", help="List audit log entries")
+    p_list.add_argument("--since", default=None, metavar="DATE",
+                        help="Filter entries since date (ISO format, e.g. 2026-01-01)")
+    p_list.add_argument("--until", default=None, metavar="DATE",
+                        help="Filter entries until date")
+    p_list.add_argument("--user", dest="user_id", default=None, help="Filter by user ID")
+    p_list.add_argument("--action", default=None, help="Filter by action type")
+    p_list.add_argument("--model", default=None, help="Filter by model name")
+    p_list.add_argument("--outcome", default=None, help="Filter by outcome (ok/auth_failure/...)")
+    p_list.add_argument("--limit", type=int, default=50, help="Max results (default: 50)")
+    p_list.add_argument("--json", dest="as_json", action="store_true", help="Output as JSON")
+    p_list.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
+    p_list.set_defaults(func=cmd_audit_list)
+
+    p_export = asub.add_parser("export", help="Export audit log to file")
+    p_export.add_argument("output", help="Output file path")
+    p_export.add_argument("--format", dest="fmt", choices=["json", "csv"], default="json",
+                          help="Export format (default: json)")
+    p_export.add_argument("--since", default=None, metavar="DATE")
+    p_export.add_argument("--until", default=None, metavar="DATE")
+    p_export.add_argument("--user", dest="user_id", default=None)
+    p_export.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
+    p_export.set_defaults(func=cmd_audit_export)
+
+    p_verify = asub.add_parser("verify", help="Verify hash chain integrity")
+    p_verify.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
+    p_verify.set_defaults(func=cmd_audit_verify)
+
+    p_prune = asub.add_parser("prune", help="Remove entries older than retention window")
+    p_prune.add_argument("--days", type=int, default=90,
+                         help="Retention window in days (default: 90)")
+    p_prune.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
+    p_prune.set_defaults(func=cmd_audit_prune)
+
+    p_summary = asub.add_parser("summary", help="Show audit log summary stats")
+    p_summary.add_argument("--since", default=None, metavar="DATE")
+    p_summary.add_argument("--db", dest="audit_db", default=None)
+    p_summary.set_defaults(func=cmd_audit_summary)
+
+
+def _get_audit_db(args) -> str:
+    import os
+    from pathlib import Path
+    if hasattr(args, "audit_db") and args.audit_db:
+        return args.audit_db
+    home = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
+    return str(home / "audit.db")
+
+
+def cmd_audit_list(args):
+    from tokenpak.enterprise.audit import AuditLog
+    import json as _json
+    db_path = _get_audit_db(args)
+    with AuditLog(db_path) as log:
+        rows = log.list(
+            since=getattr(args, "since", None),
+            until=getattr(args, "until", None),
+            user_id=getattr(args, "user_id", None),
+            action=getattr(args, "action", None),
+            model=getattr(args, "model", None),
+            outcome=getattr(args, "outcome", None),
+            limit=getattr(args, "limit", 50),
+        )
+    if getattr(args, "as_json", False):
+        print(_json.dumps(rows, indent=2, default=str))
+    else:
+        if not rows:
+            print("No audit entries found.")
+            return
+        # Pretty table
+        header = f"{'Time':<26} {'User':<16} {'Action':<24} {'Model':<28} {'Outcome':<10}"
+        print(header)
+        print("-" * len(header))
+        for r in rows:
+            print(f"{r.get('ts_iso','')[:25]:<26} "
+                  f"{(r.get('user_id','') or '-'):<16} "
+                  f"{r.get('action',''):<24} "
+                  f"{(r.get('model','') or '-'):<28} "
+                  f"{r.get('outcome',''):<10}")
+        print(f"\n{len(rows)} entries")
+
+
+def cmd_audit_export(args):
+    from tokenpak.enterprise.audit import AuditLog
+    db_path = _get_audit_db(args)
+    with AuditLog(db_path) as log:
+        n = log.export(
+            args.output,
+            fmt=args.fmt,
+            since=getattr(args, "since", None),
+            until=getattr(args, "until", None),
+            user_id=getattr(args, "user_id", None),
+        )
+    print(f"Exported {n} entries → {args.output} ({args.fmt})")
+
+
+def cmd_audit_verify(args):
+    from tokenpak.enterprise.audit import AuditLog
+    db_path = _get_audit_db(args)
+    with AuditLog(db_path) as log:
+        ok, errors = log.verify_chain()
+    if ok:
+        print("✅ Audit chain integrity: OK")
+    else:
+        print(f"❌ Audit chain integrity: FAILED ({len(errors)} violation(s))")
+        for e in errors:
+            print(f"  • {e}")
+        import sys; sys.exit(1)
+
+
+def cmd_audit_prune(args):
+    from tokenpak.enterprise.audit import AuditLog
+    db_path = _get_audit_db(args)
+    with AuditLog(db_path) as log:
+        n = log.prune(retention_days=args.days)
+    print(f"Pruned {n} entries older than {args.days} days from {db_path}")
+
+
+def cmd_audit_summary(args):
+    import json as _json
+    from tokenpak.enterprise.audit import AuditLog
+    db_path = _get_audit_db(args)
+    with AuditLog(db_path) as log:
+        stats = log.summary(since=getattr(args, "since", None))
+    total = stats.get("total", 0)
+    print(f"Total audit entries: {total}")
+    if stats.get("by_action"):
+        print("\nBy action:")
+        for r in stats["by_action"][:10]:
+            action = r.get("action", "?") if isinstance(r, dict) else r[0]
+            n = r.get("n", 0) if isinstance(r, dict) else r[1]
+            print(f"  {action:<30} {n}")
+    if stats.get("by_outcome"):
+        print("\nBy outcome:")
+        for r in stats["by_outcome"]:
+            outcome = r.get("outcome", "?") if isinstance(r, dict) else r[0]
+            n = r.get("n", 0) if isinstance(r, dict) else r[1]
+            print(f"  {outcome:<20} {n}")
+
+
+# ---------------------------------------------------------------------------
+# Enterprise Compliance commands
+# ---------------------------------------------------------------------------
+
+def _build_compliance_parser(sub):
+    p_comp = sub.add_parser("compliance", help="Generate compliance reports (SOC2, GDPR, CCPA)")
+    csub = p_comp.add_subparsers(dest="compliance_cmd", required=True)
+
+    p_report = csub.add_parser("report", help="Generate a compliance report")
+    p_report.add_argument("--standard", choices=["soc2", "gdpr", "ccpa"], required=True,
+                          help="Compliance standard to report against")
+    p_report.add_argument("--since", default=None, metavar="DATE",
+                          help="Report period start date (ISO)")
+    p_report.add_argument("--until", default=None, metavar="DATE",
+                          help="Report period end date (ISO)")
+    p_report.add_argument("--org", dest="organization", default=None,
+                          help="Organization name for the report")
+    p_report.add_argument("--output", default=None, metavar="FILE",
+                          help="Save report to file (.json or .txt)")
+    p_report.add_argument("--format", dest="fmt", choices=["json", "text"], default="text")
+    p_report.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
+    p_report.set_defaults(func=cmd_compliance_report)
+
+
+def cmd_compliance_report(args):
+    import os
+    from tokenpak.enterprise.compliance import ComplianceReporter
+    org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
+    db_path = _get_audit_db(args)
+    reporter = ComplianceReporter(audit_db=db_path, organization=org)
+    report = reporter.generate(
+        standard=args.standard,
+        since=getattr(args, "since", None),
+        until=getattr(args, "until", None),
+    )
+    if getattr(args, "output", None):
+        report.save(args.output, fmt=args.fmt)
+        print(f"Report saved → {args.output}")
+    else:
+        if args.fmt == "json":
+            print(report.as_json())
+        else:
+            print(report.as_text())
 
 
 def main():
