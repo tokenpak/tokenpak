@@ -1324,3 +1324,12 @@ tbody td.accent { color: var(--tp-accent2); }
     display: none;
   }
 }
+
+/* Audit timeline row highlight (from scatter plot click) */
+.trace-row-highlight {
+  animation: tp-row-highlight 2s ease-out;
+}
+@keyframes tp-row-highlight {
+  0%   { background: rgba(74, 144, 226, 0.3); }
+  100% { background: transparent; }
+}

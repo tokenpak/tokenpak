@@ -421,6 +421,16 @@ def create_dashboard_router(
         )
 
         totals = summary.get("totals", {})
+        # Top token offenders (largest requests) for engineering drilldown
+        top_traces_raw = await loop.run_in_executor(
+            _executor, _safe_list_traces, storage, 50, provider, model, agent
+        )
+        top_traces = sorted(
+            top_traces_raw,
+            key=lambda t: (t.get("input_billed") or t.get("total_tokens_billed") or 0),
+            reverse=True,
+        )[:20]
+
         ctx = {
             "request": request,
             "view": "engineering",
@@ -434,6 +444,7 @@ def create_dashboard_router(
             "latency_timeseries": [],  # Placeholder - latency tracking not yet implemented
             "error_timeseries": [],  # Placeholder - error tracking not yet implemented
             "token_composition": [],  # Placeholder - composition breakdown not yet implemented
+            "top_traces": top_traces,
             **_filter_ctx(days, provider, model, agent, status, compression),
         }
 

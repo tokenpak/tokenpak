@@ -419,10 +419,144 @@
     return _savingsChart;
   }
 
+
+  // ─── 5. Savings by Model (horizontal bar, sorted by savings) ─────────────
+
+  function initSavingsByModelChart(byModel) {
+    const id = 'finops-savings-by-model';
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (Chart.getChart(canvas)) Chart.getChart(canvas).destroy();
+
+    const theme = C.getActiveTheme();
+    const sorted = [...byModel]
+      .filter(r => (r.savings || r.total_savings || 0) > 0)
+      .sort((a, b) => (b.savings || b.total_savings || 0) - (a.savings || a.total_savings || 0))
+      .slice(0, 5);
+
+    if (!sorted.length) {
+      const empty = canvas.closest('.chart-canvas-wrapper')?.querySelector('.chart-empty');
+      if (empty) { empty.style.display = 'flex'; canvas.style.display = 'none'; }
+      return;
+    }
+
+    const labels = sorted.map(r => {
+      const m = r.model || r.name || '—';
+      return m.length > 28 ? m.slice(0, 27) + '…' : m;
+    });
+    const values = sorted.map(r => +(r.savings || r.total_savings || 0));
+
+    new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Savings ($)',
+          data: values,
+          backgroundColor: values.map((_, i) =>
+            `hsla(${140 - i * 20},60%,50%,0.75)`),
+          borderWidth: 0,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `$${ctx.parsed.x.toFixed(4)} saved`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: theme.gridColor || 'rgba(255,255,255,0.08)' },
+            ticks: {
+              color: theme.tickColor || '#aaa',
+              callback: v => '$' + v.toFixed(4),
+            },
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: theme.tickColor || '#aaa', font: { size: 11 } },
+          },
+        },
+        onClick(event, elements) {
+          if (elements.length) {
+            const idx = elements[0].index;
+            applyFilter('model', sorted[idx].model || sorted[idx].name || '');
+          }
+        },
+      },
+    });
+  }
+
+  // ─── 6. Compression Gauge (doughnut semicircle) ────────────────────────────
+
+  function initCompressionGauge(compressionPct) {
+    const id = 'finops-compression-gauge';
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (Chart.getChart(canvas)) Chart.getChart(canvas).destroy();
+
+    const pct = Math.max(0, Math.min(100, compressionPct || 0));
+    const remainder = 100 - pct;
+
+    // Color: green ≥50, yellow 30-50, red <30
+    const fill = pct >= 50 ? '#4caf50' : pct >= 30 ? '#ff9800' : '#f44336';
+    const label = pct.toFixed(1) + '%';
+
+    new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        datasets: [{
+          data: [pct, remainder],
+          backgroundColor: [fill, 'rgba(255,255,255,0.08)'],
+          borderWidth: 0,
+          circumference: 180,
+          rotation: 270,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: false },
+        },
+      },
+      plugins: [{
+        id: 'gaugeLabel',
+        afterDraw(chart) {
+          const { ctx, chartArea } = chart;
+          if (!chartArea) return;
+          const cx = (chartArea.left + chartArea.right) / 2;
+          const cy = chartArea.bottom - 8;
+          ctx.save();
+          ctx.fillStyle = fill;
+          ctx.font = 'bold 22px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, cx, cy);
+          ctx.fillStyle = '#aaa';
+          ctx.font = '11px Inter, sans-serif';
+          ctx.fillText('compression', cx, cy + 14);
+          ctx.restore();
+        },
+      }],
+    });
+  }
+
+
+
   // ─── Public API ────────────────────────────────────────────────────────────
 
   window.TokenPakFinOps = {
-    init(costData, savingsData, byProvider, byModel) {
+    init(costData, savingsData, byProvider, byModel, compressionPct) {
       // Verify chart-factory loaded
       if (!window.TokenPakCharts) {
         console.error('TokenPakCharts not loaded — ensure chart-factory.js is included before finops-charts.js');
@@ -432,6 +566,8 @@
       initCostByProviderChart(byProvider);
       initCostByModelChart(byModel);
       initSavingsOverTimeChart(costData, savingsData, null);
+      initSavingsByModelChart(byModel);
+      initCompressionGauge(compressionPct || 0);
     },
     filterProvider(provider) { applyFilter('provider', provider); },
     filterModel(model) { applyFilter('model', model); },

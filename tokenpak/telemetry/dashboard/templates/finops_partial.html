@@ -128,6 +128,34 @@
   </div>
 </div>
 
+
+<!-- ── Charts 5 & 6: Savings by Model + Compression Gauge ─────────────── -->
+<div class="charts-row-2col" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Savings by Model</h3>
+        <span class="chart-subtitle">Top 5 · Sorted by savings · Click to filter</span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:180px;">
+      <canvas id="finops-savings-by-model"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No savings by model yet</p></div>
+    </div>
+  </div>
+  <div class="chart-container" id="compression-gauge-card">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Compression %</h3>
+        <span class="chart-subtitle">Avg across all requests · refreshes every 30s</span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:180px;">
+      <canvas id="finops-compression-gauge"></canvas>
+    </div>
+  </div>
+</div>
+
 <!-- ── Chart 4: Savings Over Time ─────────────────────────────────────── -->
 <div class="chart-section">
   <div class="chart-container">
@@ -537,13 +565,14 @@
 
 <script>
 (function () {
-  const costData    = {{ cost_timeseries | tojson }};
-  const savingsData = {{ savings_timeseries | tojson }};
-  const byProvider  = {{ by_provider | tojson }};
-  const byModel     = {{ by_model | tojson }};
-  const byAgent     = {{ by_agent | tojson }};
-  if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel);
-  else window.addEventListener('load', () => { if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel); });
+  const costData       = {{ cost_timeseries | tojson }};
+  const savingsData    = {{ savings_timeseries | tojson }};
+  const byProvider     = {{ by_provider | tojson }};
+  const byModel        = {{ by_model | tojson }};
+  const byAgent        = {{ by_agent | tojson }};
+  const compressionPct = {{ savings_summary.compression_pct | default(0) }};
+  if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel, compressionPct);
+  else window.addEventListener('load', () => { if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel, compressionPct); });
   // Notify trust layer of refresh
   if (window.TokenPakTrust) TokenPakTrust.setLastRefresh(Date.now());
 })();

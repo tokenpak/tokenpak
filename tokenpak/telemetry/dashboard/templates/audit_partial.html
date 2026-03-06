@@ -28,6 +28,34 @@
   </div>
 </div>
 
+
+<!-- ── Trace Timeline Chart ────────────────────────────────────────────── -->
+<div class="chart-section" id="audit-timeline-section" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Trace Timeline</h3>
+        <span class="chart-subtitle">Each dot = one trace · X = time · Y = tokens · Color = provider · Click dot → trace detail</span>
+      </div>
+      <div class="chart-actions">
+        <span id="audit-timeline-legend" style="display:flex;gap:12px;align-items:center;font-size:12px;color:var(--text-muted)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#4a90e2;display:inline-block"></span>anthropic</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#f44336;display:inline-block"></span>openai</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#4caf50;display:inline-block"></span>gemini/google</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#9c27b0;display:inline-block"></span>other</span>
+        </span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:240px;">
+      <canvas id="audit-trace-timeline"></canvas>
+      <div class="chart-empty" id="audit-timeline-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No trace data yet</p></div>
+    </div>
+  </div>
+</div>
+<script id="audit-timeline-data" type="application/json">
+{{ traces | tojson }}
+</script>
+
 <!-- ── Table Toolbar ───────────────────────────────────────────────────── -->
 <div class="table-toolbar">
   <!-- Context: active filters + row count -->
@@ -101,6 +129,7 @@
         {% set has_savings = (t.savings_total or 0) > 0 %}
         {% set is_error = t.status == 'error' %}
         <tr class="trace-row {% if is_error %}row-error{% endif %}"
+            data-trace-id="{{ t.trace_id }}"
             onclick="TokenPakDrawer.loadTrace('{{ t.trace_id }}')"
             title="Click to inspect trace {{ t.trace_id }}">
 
@@ -299,3 +328,7 @@
   window.debounceSearch = debounceSearch;
 })();
 </script>
+
+<!-- ── Trace Detail Panel (HTMX drilldown target from timeline click) ── -->
+<div id="trace-detail-panel" style="margin-top:var(--space-xl,2rem)"></div>
+

@@ -203,6 +203,51 @@ if (window.CompressionExplainer) {
 </div>
 {% endif %}
 
+
+<!-- ── Largest Token Offenders Table ──────────────────────────────────── -->
+{% if top_traces %}
+<div class="table-card" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="table-card-header">
+    <span class="table-card-title">Largest Token Offenders</span>
+    <span class="table-card-subtitle" style="font-size:12px;color:var(--text-muted)">Top 20 · sorted by request tokens · click row → Audit view</span>
+  </div>
+  <div style="overflow-x:auto;max-height:420px;overflow-y:auto;">
+  <table id="tbl-eng-offenders" class="rollup-table" style="font-size:12px;">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Segment Type</th>
+        <th class="align-right">Req Tokens</th>
+        <th class="align-right">Final Tokens</th>
+        <th class="align-right">Savings %</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in top_traces %}
+      {% set raw_tok = t.input_billed or t.total_tokens_billed or 0 %}
+      {% set final_tok = t.input_billed or 0 %}
+      {% set savings_tok = (t.savings_total or 0) %}
+      {% set savings_pct = (savings_tok / (raw_tok + 0.0001) * 100) if raw_tok > 0 else 0 %}
+      <tr class="trace-row"
+          data-trace-id="{{ t.trace_id }}"
+          style="cursor:pointer"
+          onclick="window.location.href='/dashboard/audit?provider={{ t.provider or '' }}&amp;search={{ t.trace_id }}';"
+          title="Click to view trace {{ t.trace_id }} in Audit view">
+        <td class="col-str" title="{{ t.model }}">{{ (t.model or '—')[:28] }}{% if t.model and t.model|length > 28 %}…{% endif %}</td>
+        <td class="col-str" style="color:var(--text-muted)">—</td>
+        <td class="col-num">{{ "{:,}".format(raw_tok) }}</td>
+        <td class="col-num">{{ "{:,}".format(final_tok) }}</td>
+        <td class="col-num {% if savings_pct > 0 %}positive{% endif %}">{{ "%.1f"|format(savings_pct) }}%</td>
+        <td class="col-str" style="color:var(--text-muted);font-size:11px">{{ t.ts_iso or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- ── Chart Initialization ────────────────────────────────────────────── -->
 <script>
 (function () {
