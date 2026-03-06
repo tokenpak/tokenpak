@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenPak Dashboard Embed Example</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: #0a0a0a; color: #e0e0e0; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    p { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+    .embed-container { border: 2px solid #333; border-radius: 8px; overflow: hidden; }
+    pre { background: #1a1a1a; border-radius: 6px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>TokenPak Dashboard — Web Component Embed</h1>
+  <p>Drop this custom element into any HTML page to embed the TokenPak telemetry dashboard.</p>
+
+  <div class="embed-container">
+    <tokenpak-dashboard 
+      data-source="http://localhost:17888"
+      view="finops"
+      theme="dark"
+      date-range="7d">
+    </tokenpak-dashboard>
+  </div>
+
+  <h2 style="margin-top: 32px;">Usage</h2>
+  <pre>&lt;script src="/dashboard/static/embed/tokenpak-dashboard.js"&gt;&lt;/script&gt;
+&lt;tokenpak-dashboard 
+  data-source="http://localhost:17888"
+  view="finops"
+  theme="dark"
+  date-range="7d"
+  provider="anthropic"&gt;
+&lt;/tokenpak-dashboard&gt;</pre>
+
+  <h2>JavaScript API</h2>
+  <pre>const dashboard = document.querySelector('tokenpak-dashboard');
+
+// Listen for events
+dashboard.addEventListener('tp-ready', e => console.log('Ready:', e.detail));
+dashboard.addEventListener('tp-filter-change', e => console.log('Filters:', e.detail));
+
+// Programmatic control
+dashboard.setFilters({ provider: 'anthropic', model: 'claude-sonnet-4-5' });
+dashboard.refresh();
+dashboard.setView('engineering');
+console.log(dashboard.getState());</pre>
+
+  <h2>Theme Customization</h2>
+  <pre>tokenpak-dashboard {
+  --tp-bg-primary: #0a0a0a;
+  --tp-bg-card: #1a1a1a;
+  --tp-text-primary: #e2e8f0;
+  --tp-text-muted: #94a3b8;
+  --tp-accent: #6366f1;
+  --tp-positive: #22c55e;
+  --tp-danger: #ef4444;
+}</pre>
+
+  <script src="tokenpak-dashboard.js"></script>
+  <script>
+    // Example: listen to dashboard events
+    const dashboard = document.querySelector('tokenpak-dashboard');
+    dashboard.addEventListener('tp-ready', e => {
+      console.log('Dashboard ready:', e.detail);
+    });
+    dashboard.addEventListener('tp-filter-change', e => {
+      console.log('Filters changed:', e.detail);
+    });
+    dashboard.addEventListener('tp-trace-click', e => {
+      console.log('Trace clicked:', e.detail);
+    });
+  </script>
+</body>
+</html>

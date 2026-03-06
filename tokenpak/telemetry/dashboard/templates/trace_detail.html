@@ -1,0 +1,127 @@
+<!-- Trace Detail Partial — loaded on row click -->
+<div class="table-card" style="margin-top:1.5rem;">
+  <div class="table-card-header">
+    <span class="table-card-title">Trace: <span class="mono" style="color:var(--tp-accent2); font-family:var(--tp-mono);">{{ trace.trace_id }}</span></span>
+    <a href="/v1/exports/trace/{{ trace.trace_id }}" class="btn" target="_blank">⬇ Export JSON</a>
+  </div>
+
+  <!-- Summary row -->
+  <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:1rem; padding:1.25rem; border-bottom: 1px solid var(--tp-border);">
+    <div>
+      <div class="stat-label">Model</div>
+      <div style="font-size:0.85rem; color:var(--tp-accent2);">{{ event.model or '—' }}</div>
+    </div>
+    <div>
+      <div class="stat-label">Provider</div>
+      <div style="font-size:0.85rem;">{{ event.provider or '—' }}</div>
+    </div>
+    <div>
+      <div class="stat-label">Agent</div>
+      <div style="font-size:0.85rem;">{{ event.agent_id or '—' }}</div>
+    </div>
+    <div>
+      <div class="stat-label">Time</div>
+      <div style="font-size:0.85rem; font-family:var(--tp-mono);">{{ event.ts_iso[:19].replace('T',' ') if event.ts_iso else '—' }}</div>
+    </div>
+  </div>
+
+  <!-- Usage & Cost Breakdown -->
+  <div style="padding:1.25rem; border-bottom: 1px solid var(--tp-border);">
+    <div class="chart-title" style="margin-bottom:0.75rem;">Usage & Cost (Provider-Reported)</div>
+    <div style="display:grid; grid-template-columns: repeat(5,1fr); gap:0.75rem;">
+      <div>
+        <div class="stat-label">Input Tokens</div>
+        <div class="stat-value" style="font-size:1.1rem;">{{ "{:,}".format(usage.input_billed or 0) }}</div>
+        <div class="stat-delta" style="color:var(--tp-fg2); font-size:0.75rem;">${{ "%.5f"|format(cost.cost_input or 0) }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Output Tokens</div>
+        <div class="stat-value" style="font-size:1.1rem;">{{ "{:,}".format(usage.output_billed or 0) }}</div>
+        <div class="stat-delta" style="color:var(--tp-fg2); font-size:0.75rem;">${{ "%.5f"|format(cost.cost_output or 0) }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Cache Read</div>
+        <div class="stat-value green" style="font-size:1.1rem;">{{ "{:,}".format(usage.cache_read or 0) }}</div>
+        <div class="stat-delta" style="color:var(--tp-fg2); font-size:0.75rem;">${{ "%.5f"|format(cost.cost_cache_read or 0) }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Cache Write</div>
+        <div class="stat-value" style="font-size:1.1rem;">{{ "{:,}".format(usage.cache_write or 0) }}</div>
+        <div class="stat-delta" style="color:var(--tp-fg2); font-size:0.75rem;">${{ "%.5f"|format(cost.cost_cache_write or 0) }}</div>
+      </div>
+      <div>
+        <div class="stat-label">Total Cost</div>
+        <div class="stat-value accent" style="font-size:1.1rem;">${{ "%.5f"|format(cost.cost_total or 0) }}</div>
+        <div class="stat-delta" style="color:var(--tp-fg2); font-size:0.75rem;">{{ cost.cost_source or 'unknown' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Segment breakdown -->
+  <div style="padding:1.25rem; border-bottom: 1px solid var(--tp-border);">
+    <div class="chart-title" style="margin-bottom:0.75rem;">Segment Breakdown — Token Deltas</div>
+    {% if segments %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Type</th>
+          <th>Tokens (Raw → TP)</th>
+          <th>Saved</th>
+          <th>Compression %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for seg in segments %}
+        {% set saved = (seg.tokens_raw or 0) - (seg.tokens_tp or seg.tokens_raw or 0) %}
+        {% set pct = (saved / seg.tokens_raw * 100) if seg.tokens_raw and seg.tokens_raw > 0 else 0 %}
+        <tr>
+          <td class="mono">{{ seg.order }}</td>
+          <td>{{ seg.segment_type or '—' }}</td>
+          <td>
+            <div class="delta-row">
+              <span class="tok-badge raw">{{ "{:,}".format(seg.tokens_raw or 0) }}</span>
+              <span class="tok-arrow">→</span>
+              <span class="tok-badge qmd">{{ "{:,}".format(seg.tokens_qmd or seg.tokens_raw or 0) }}</span>
+              <span class="tok-arrow">→</span>
+              <span class="tok-badge tp">{{ "{:,}".format(seg.tokens_tp or seg.tokens_raw or 0) }}</span>
+            </div>
+          </td>
+          <td class="green">{{ "{:,}".format(saved) }}</td>
+          <td class="accent">{{ "%.1f"|format(pct) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--tp-fg2); font-size:0.82rem;">No segment data for this trace.</p>
+    {% endif %}
+  </div>
+
+  <!-- Hash chain -->
+  <div style="padding:1.25rem;">
+    <div class="chart-title" style="margin-bottom:0.75rem;">Hash Chain</div>
+    <div class="hash-chain">
+      <div class="hash-node">
+        <span class="hash-label">trace_id</span>
+        <span class="hash-val">{{ trace.trace_id }}</span>
+      </div>
+      <div class="hash-node">
+        <span class="hash-label">request_id</span>
+        <span class="hash-val">{{ event.request_id or '—' }}</span>
+      </div>
+      {% if segments %}
+      {% for seg in segments %}
+      <div class="hash-node">
+        <span class="hash-label">seg[{{ seg.order }}].hash</span>
+        <span class="hash-val">{{ seg.content_hash or '(no hash)' }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+      <div class="hash-node">
+        <span class="hash-label">pricing_ver</span>
+        <span class="hash-val">{{ cost.pricing_version or '—' }}</span>
+      </div>
+    </div>
+  </div>
+</div>

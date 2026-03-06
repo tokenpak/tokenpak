@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}FinOps{% endblock %}
+{% block page_title %}FinOps{% endblock %}
+{% block page_subtitle %}Cost & savings analysis · {{ days }}-day window{% endblock %}
+{% block htmx_target %}finops{% endblock %}
+
+{% block content %}
+{% include "finops_partial.html" %}
+{% endblock %}

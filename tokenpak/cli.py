@@ -344,7 +344,16 @@ def cmd_stats(args):
 
 
 def cmd_serve(args):
-    """Start monitoring proxy (if available)."""
+    """Start monitoring proxy or telemetry server (if available)."""
+    if getattr(args, 'telemetry', False):
+        import uvicorn
+        from .telemetry.server import create_app
+        watch_path = str(Path.home() / ".openclaw" / "workspace" / "session.jsonl")
+        app = create_app()
+        workers = getattr(args, 'workers', 1)
+        print(f"Starting TokenPak telemetry server on port {args.port} (workers={workers})")
+        uvicorn.run(app, host="0.0.0.0", port=args.port, workers=workers)
+        return
     try:
         import sys
         proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
@@ -609,8 +618,10 @@ def build_parser():
     p_stats = sub.add_parser("stats", help="Show registry stats")
     p_stats.set_defaults(func=cmd_stats)
 
-    p_serve = sub.add_parser("serve", help="Start monitoring proxy")
+    p_serve = sub.add_parser("serve", help="Start monitoring proxy or telemetry server")
     p_serve.add_argument("--port", type=int, default=8766)
+    p_serve.add_argument("--telemetry", action="store_true", help="Start telemetry ingest server")
+    p_serve.add_argument("--workers", type=int, default=1, help="Number of uvicorn workers")
     p_serve.set_defaults(func=cmd_serve)
 
     p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
