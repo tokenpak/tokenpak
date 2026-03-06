@@ -21,6 +21,9 @@ Env vars:
     TOKENPAK_INJECT_BUDGET    (default: 2000) — max tokens to inject from vault
     TOKENPAK_INJECT_TOP_K     (default: 5) — max vault blocks to inject
     TOKENPAK_INJECT_MIN_SCORE (default: 2.0) — minimum BM25 score to include
+    TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
+    TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
+    TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
 """
 
 import json
@@ -133,6 +136,11 @@ COMPACT_MAX_CHARS = int(os.environ.get("TOKENPAK_COMPACT_MAX_CHARS", "120"))
 COMPACT_THRESHOLD_TOKENS = int(os.environ.get("TOKENPAK_COMPACT_THRESHOLD_TOKENS", "4500"))
 COMPACT_CACHE_SIZE = int(os.environ.get("TOKENPAK_COMPACT_CACHE_SIZE", "2000"))
 COMPILATION_MODE = os.environ.get("TOKENPAK_MODE", "hybrid").lower()  # strict|hybrid|aggressive
+
+# Capsule Builder config (Phase 0.5 of request pipeline)
+ENABLE_CAPSULE_BUILDER = os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0").lower() in ("1", "true", "yes", "on")
+CAPSULE_MIN_CHARS = int(os.environ.get("TOKENPAK_CAPSULE_MIN_CHARS", "400"))
+CAPSULE_HOT_WINDOW = int(os.environ.get("TOKENPAK_CAPSULE_HOT_WINDOW", "2"))
 
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
@@ -408,6 +416,19 @@ def _bm25_tokenize(text: str) -> List[str]:
 
 # Global vault index instance
 VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+
+# Global capsule builder instance
+try:
+    from tokenpak.capsule.builder import CapsuleBuilder as _CapsuleBuilder
+    CAPSULE_BUILDER = _CapsuleBuilder(
+        enabled=ENABLE_CAPSULE_BUILDER,
+        min_block_chars=CAPSULE_MIN_CHARS,
+        hot_window=CAPSULE_HOT_WINDOW,
+    )
+    print(f"  💊 Capsule builder loaded (enabled={ENABLE_CAPSULE_BUILDER}, min_chars={CAPSULE_MIN_CHARS})")
+except ImportError as _cb_err:
+    CAPSULE_BUILDER = None
+    print(f"  ⚠️  Capsule builder unavailable: {_cb_err}")
 
 
 # ---------------------------------------------------------------------------
@@ -1260,6 +1281,42 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
                 except Exception as _route_err:
                     print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
+
+                # Phase 0.5: Capsule builder — compress historical context blocks
+                if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
+                    t_capsule = time.time()
+                    capsule_stage = StageTrace(
+                        name="capsule",
+                        enabled=True,
+                        input_tokens=input_tokens,
+                    )
+                    try:
+                        body, _cap_stats = CAPSULE_BUILDER.process(body)
+                        _cap_blocks = _cap_stats.get("blocks_capsulized", 0)
+                        _cap_ratio = _cap_stats.get("ratio", 1.0)
+                        _cap_chars_in = _cap_stats.get("chars_in", 0)
+                        _cap_chars_out = _cap_stats.get("chars_out", 0)
+                        capsule_stage.details["blocks_capsulized"] = _cap_blocks
+                        capsule_stage.details["compression_ratio"] = _cap_ratio
+                        capsule_stage.details["chars_in"] = _cap_chars_in
+                        capsule_stage.details["chars_out"] = _cap_chars_out
+                        capsule_stage.details["skip_reason"] = _cap_stats.get("skip_reason")
+                        if _cap_blocks > 0:
+                            # Recount tokens after capsulisation
+                            _, input_tokens = extract_request_tokens(body)
+                            print(
+                                f"  💊 Capsule: {_cap_blocks} block(s) compressed "
+                                f"({_cap_chars_in}→{_cap_chars_out} chars, ratio={_cap_ratio})"
+                            )
+                        capsule_stage.output_tokens = input_tokens
+                        capsule_stage.tokens_delta = capsule_stage.output_tokens - capsule_stage.input_tokens
+                    except Exception as _cap_err:
+                        print(f"  ⚠️  Capsule builder error (skipping): {_cap_err}")
+                        capsule_stage.details["error"] = str(_cap_err)
+                        capsule_stage.output_tokens = input_tokens
+                    capsule_stage.duration_ms = (time.time() - t_capsule) * 1000
+                    if trace:
+                        trace.stages.append(capsule_stage)
 
                 # Phase 1: Vault context injection (BEFORE compaction)
                 t_inject = time.time()
