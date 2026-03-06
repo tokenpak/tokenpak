@@ -62,12 +62,20 @@ def _fmt_n(n: int) -> str:
 # Core query functions
 # ---------------------------------------------------------------------------
 
-def query_summary(period: str = "today") -> dict:
-    """Return aggregated cost summary for the period."""
+def query_summary(period: str = "today", model: Optional[str] = None) -> dict:
+    """Return aggregated cost summary for the period.
+    
+    Args:
+        period: Time period (today, yesterday, week, month)
+        model: Optional model name filter
+    """
     conn = _connect()
     if not conn:
         return {"error": "DB not found", "db": _MONITOR_DB}
     where, params = _period_clause(period)
+    if model:
+        where += " AND model = ?"
+        params.append(model)
     row = conn.execute(
         f"""
         SELECT
@@ -88,6 +96,7 @@ def query_summary(period: str = "today") -> dict:
         "output_tokens": row["output_tokens"],
         "total_tokens": row["input_tokens"] + row["output_tokens"],
         "total_cost_usd": round(float(row["total_cost"]), 6),
+        "model_filter": model,
     }
 
 
@@ -272,6 +281,7 @@ def run_cost_cmd(args) -> None:
     """Dispatch handler for 'tokenpak cost' from main.py argparse."""
     raw = getattr(args, "raw", False)
     export = getattr(args, "export", None)
+    model_filter = getattr(args, "model", None)
 
     # Period selection
     if getattr(args, "yesterday", False):
@@ -295,7 +305,27 @@ def run_cost_cmd(args) -> None:
         print_by_agent(period, raw=raw)
         return
 
-    # Default: summary + model breakdown
+    # Default: summary (with optional model filter)
+    if model_filter:
+        data = query_summary(period, model=model_filter)
+        if raw:
+            import json
+            print(json.dumps(data, indent=2))
+        else:
+            label = _period_label(period)
+            print(f"TOKENPAK  |  Cost — {label} (model: {model_filter})")
+            print(SEP)
+            if "error" in data:
+                print(f"  ✖ {data['error']}: {data.get('db', '')}")
+            else:
+                print(f"  {'Requests:':<24}{_fmt_n(data['requests'])}")
+                print(f"  {'Input Tokens:':<24}{_fmt_n(data['input_tokens'])}")
+                print(f"  {'Output Tokens:':<24}{_fmt_n(data['output_tokens'])}")
+                print(f"  {'Total Tokens:':<24}{_fmt_n(data['total_tokens'])}")
+                print(f"  {'Total Cost:':<24}{_fmt_cost(data['total_cost_usd'])}")
+                print()
+        return
+
     print_summary(period, raw=raw)
     if not raw:
         print_by_model(period, raw=False)

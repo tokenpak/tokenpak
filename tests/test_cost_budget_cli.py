@@ -294,7 +294,8 @@ class TestBudgetStatus:
         args = SimpleNamespace(budget_cmd=None, raw=False)
         budget.run_budget_cmd(args)
         captured = capsys.readouterr()
-        assert "ALERT" in captured.out
+        # Should show some kind of alert — WARNING, ALERT, or OVER BUDGET
+        assert any(s in captured.out for s in ["WARNING", "ALERT", "OVER BUDGET"])
 
     def test_raw_output_is_valid_json(self, budget_mod, capsys):
         budget, _ = budget_mod
@@ -355,3 +356,137 @@ class TestBudgetForecast:
         budget.run_budget_cmd(args)
         captured = capsys.readouterr()
         assert any(s in captured.out for s in ["OK", "CLOSE", "OVER"])
+
+
+# ===========================================================================
+# New feature tests: --model filter, budget clear, 95% alert, hard-stop
+# ===========================================================================
+
+class TestCostModelFilter:
+    def test_model_filter_returns_only_matching_model(self, cost_mod):
+        rows = cost_mod.query_summary("today", model="claude-sonnet-4-6")
+        assert rows["requests"] == 2  # Only sonnet rows today
+
+    def test_model_filter_excludes_other_models(self, cost_mod):
+        rows = cost_mod.query_summary("today", model="claude-haiku-4-5")
+        assert rows["requests"] == 1  # Only haiku rows today
+
+    def test_model_filter_nonexistent_returns_zeros(self, cost_mod):
+        rows = cost_mod.query_summary("today", model="does-not-exist")
+        assert rows["requests"] == 0
+        assert rows["total_cost_usd"] == 0.0
+
+    def test_run_cost_cmd_with_model_flag(self, cost_mod, capsys):
+        from types import SimpleNamespace
+        args = SimpleNamespace(
+            yesterday=False, week=False, month=False,
+            by_model=False, by_agent=False, export=None,
+            raw=False, model="claude-sonnet-4-6"
+        )
+        cost_mod.run_cost_cmd(args)
+        captured = capsys.readouterr()
+        assert "claude-sonnet-4-6" in captured.out
+
+    def test_model_filter_included_in_result_key(self, cost_mod):
+        data = cost_mod.query_summary("today", model="claude-haiku-4-5")
+        assert data.get("model_filter") == "claude-haiku-4-5"
+
+
+class TestBudgetClear:
+    def test_clear_removes_daily_limit(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 5.0\nmonthly_limit_usd: 50.0\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd="clear", target="daily", raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "daily" in captured.out.lower()
+        # Verify config no longer has daily
+        import yaml
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        assert "daily_limit_usd" not in cfg
+
+    def test_clear_removes_monthly_limit(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 5.0\nmonthly_limit_usd: 50.0\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd="clear", target="monthly", raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "monthly" in captured.out.lower()
+        import yaml
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        assert "monthly_limit_usd" not in cfg
+
+    def test_clear_all_removes_all_limits(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 5.0\nmonthly_limit_usd: 50.0\nhard_stop: true\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd="clear", target=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Cleared" in captured.out
+
+
+class TestBudgetThresholds:
+    def test_warning_at_80pct(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        # Set limit so spend (0.01) is between 80% and 95%
+        cfg_path.write_text("daily_limit_usd: 0.011\nalert_at_percent: 80.0\nwarn_at_percent: 95.0\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.out
+
+    def test_alert_at_95pct(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        # Set limit so spend is > 95%
+        cfg_path.write_text("daily_limit_usd: 0.0105\nalert_at_percent: 80.0\nwarn_at_percent: 95.0\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        # Should show ALERT (between 95% and 100%)
+        assert any(s in captured.out for s in ["ALERT", "OVER BUDGET"])
+
+    def test_over_budget_at_100pct(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 0.001\nalert_at_percent: 80.0\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "OVER BUDGET" in captured.out
+
+
+class TestBudgetHardStop:
+    def test_hard_stop_shown_in_status(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 5.0\nhard_stop: true\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Hard-stop" in captured.out or "hard-stop" in captured.out.lower()
+
+    def test_hard_stop_not_shown_when_disabled(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        cfg_path.write_text("daily_limit_usd: 5.0\nhard_stop: false\n")
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd=None, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        # Should not show hard-stop message when disabled
+        assert "Hard-stop ENABLED" not in captured.out
+
+    def test_set_hard_stop_via_set_cmd(self, budget_mod, capsys):
+        budget, cfg_path = budget_mod
+        from types import SimpleNamespace
+        args = SimpleNamespace(budget_cmd="set", daily=5.0, monthly=None, hard_stop=True, raw=False)
+        budget.run_budget_cmd(args)
+        captured = capsys.readouterr()
+        assert "Hard-stop" in captured.out or "hard-stop" in captured.out.lower()
+        import yaml
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+        assert cfg.get("hard_stop") is True

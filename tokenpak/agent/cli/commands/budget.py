@@ -187,8 +187,12 @@ def print_budget_status(raw: bool = False) -> None:
         print(json.dumps(data, indent=2))
         return
 
+    hard_stop = cfg.get("hard_stop", False)
     print(f"TOKENPAK  |  Budget Status")
     print(SEP)
+    if hard_stop:
+        print("  ⚠ Hard-stop ENABLED — requests will be blocked when limit exceeded")
+        print()
     for period_name, info in data.items():
         label = period_name.title()
         spent = info["spent_usd"]
@@ -202,7 +206,8 @@ def print_budget_status(raw: bool = False) -> None:
             remaining = info["remaining_usd"]
             bar_filled = int(pct / 5) if pct is not None else 0
             bar = "█" * bar_filled + "░" * (20 - bar_filled)
-            alert = "⚠ ALERT" if pct is not None and pct >= alert_pct else ""
+            warn_pct = float(cfg.get("warn_at_percent", 95.0))
+            alert = "🔴 OVER BUDGET" if pct is not None and pct >= 100 else ("🟠 ALERT" if pct is not None and pct >= warn_pct else ("⚠ WARNING" if pct is not None and pct >= alert_pct else ""))
             print(f"  {label}:")
             print(f"    Limit:        {_fmt_cost(limit_f)}")
             print(f"    Spent:        {_fmt_cost(spent)}")
@@ -284,29 +289,68 @@ def run_budget_cmd(args) -> None:
         changed = []
         daily = getattr(args, "daily", None)
         monthly = getattr(args, "monthly", None)
+        hard_stop = getattr(args, "hard_stop", None)
         if daily is not None:
             cfg["daily_limit_usd"] = daily
             changed.append(f"Daily limit: {_fmt_cost(daily)}")
         if monthly is not None:
             cfg["monthly_limit_usd"] = monthly
             changed.append(f"Monthly limit: {_fmt_cost(monthly)}")
+        if hard_stop is not None:
+            cfg["hard_stop"] = hard_stop
+            changed.append(f"Hard-stop: {'enabled' if hard_stop else 'disabled'}")
         if not changed:
-            print("Usage: tokenpak budget set --daily N --monthly N")
+            print("Usage: tokenpak budget set --daily N --monthly N [--hard-stop]")
             return
         _save_config(cfg)
         for c in changed:
             print(f"✓ Set {c}")
         return
 
+    if budget_cmd == "clear":
+        cfg = _load_config()
+        target = getattr(args, "target", None)
+        if target == "daily":
+            cfg.pop("daily_limit_usd", None)
+            _save_config(cfg)
+            print("✓ Cleared daily budget limit")
+        elif target == "monthly":
+            cfg.pop("monthly_limit_usd", None)
+            _save_config(cfg)
+            print("✓ Cleared monthly budget limit")
+        else:
+            # Clear all
+            cfg.pop("daily_limit_usd", None)
+            cfg.pop("monthly_limit_usd", None)
+            cfg.pop("hard_stop", None)
+            _save_config(cfg)
+            print("✓ Cleared all budget limits")
+        return
+
+    if budget_cmd == "set-hard-stop":
+        enabled = getattr(args, "enabled", True)
+        cfg = _load_config()
+        cfg["hard_stop"] = enabled
+        _save_config(cfg)
+        print(f"✓ Hard-stop {'enabled' if enabled else 'disabled'}")
+        return
+
     if budget_cmd == "alert":
         threshold = getattr(args, "at", None)
-        if threshold is None:
-            print("Usage: tokenpak budget alert --at N")
+        warn_threshold = getattr(args, "warn_at", None)
+        if threshold is None and warn_threshold is None:
+            cfg = _load_config()
+            print(f"  Warning threshold (level 1): {cfg.get('alert_at_percent', 80.0):.0f}%")
+            print(f"  Alert threshold (level 2):   {cfg.get('warn_at_percent', 95.0):.0f}%")
             return
         cfg = _load_config()
-        cfg["alert_at_percent"] = threshold
+        if threshold is not None:
+            cfg["alert_at_percent"] = threshold
+            print(f"✓ Warning threshold set to {threshold}%")
+        if warn_threshold is not None:
+            cfg["warn_at_percent"] = warn_threshold
+            print(f"✓ Alert threshold set to {warn_threshold}%")
         _save_config(cfg)
-        print(f"✓ Alert threshold set to {threshold}%")
         return
 
     if budget_cmd == "history":
