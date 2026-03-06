@@ -15,6 +15,7 @@ from .pipeline import CompressionPipeline
 from .segmentizer import segmentize, Segment, SegmentType
 from .slot_filler import SlotFiller, FilledSlots
 from .recipes import RecipeEngine, Recipe, MissingBlockError
+from .recipes import RecipeType, ContentSegment, CompressionRuleEngine, PHRASE_MAP
 from .canon import validate, apply_fallback, ValidationResult
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
@@ -29,6 +30,10 @@ __all__ = [
     "RecipeEngine",
     "Recipe",
     "MissingBlockError",
+    "RecipeType",
+    "ContentSegment",
+    "CompressionRuleEngine",
+    "PHRASE_MAP",
     "validate",
     "apply_fallback",
     "ValidationResult",
