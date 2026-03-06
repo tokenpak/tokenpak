@@ -355,3 +355,270 @@ def get_oss_engine() -> CompressionRecipeEngine:
         _oss_engine = CompressionRecipeEngine()
         _oss_engine.load_from_dir()
     return _oss_engine
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 7C — Deterministic Compression Rule Engine
+# ─────────────────────────────────────────────────────────────────────────────
+# This engine operates on ContentSegment objects (raw text + segment_type).
+# It is intentionally named CompressionRuleEngine to avoid conflict with the
+# YAML-recipe-based RecipeEngine above.  The public API matches the spec:
+#   engine.select_recipes(segment) -> list[RecipeType]
+#   engine.apply_recipes(segment, recipes) -> ContentSegment
+# ─────────────────────────────────────────────────────────────────────────────
+
+import dataclasses
+import re
+from enum import Enum
+from typing import List
+
+
+# ---------------------------------------------------------------------------
+# Token counter (cheap, deterministic — matches rest of codebase)
+# ---------------------------------------------------------------------------
+
+def _count_tokens(text: str) -> int:
+    """Approximate token count: 1 token ≈ 4 characters."""
+    return len(text) // 4
+
+
+# ---------------------------------------------------------------------------
+# RecipeType
+# ---------------------------------------------------------------------------
+
+class RecipeType(Enum):
+    WHITESPACE_COLLAPSE = "whitespace_collapse"
+    LIST_DEDUP = "list_dedup"
+    PHRASE_SUBSTITUTION = "phrase_substitution"
+    TRUNCATE_TAIL = "truncate_tail"
+    BOILERPLATE_STRIP = "boilerplate_strip"
+
+
+# ---------------------------------------------------------------------------
+# ContentSegment — text-bearing segment used by CompressionRuleEngine
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class ContentSegment:
+    """Lightweight segment that carries raw text and its classification."""
+
+    raw_content: str
+    segment_type: str          # uses SegmentType string values
+    raw_tokens: int = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self.raw_tokens = _count_tokens(self.raw_content)
+
+    def with_content(self, new_content: str) -> "ContentSegment":
+        """Return a new ContentSegment with updated content (and recounted tokens)."""
+        seg = dataclasses.replace(self, raw_content=new_content)
+        seg.raw_tokens = _count_tokens(new_content)
+        return seg
+
+
+# ---------------------------------------------------------------------------
+# Phrase substitution map
+# ---------------------------------------------------------------------------
+
+PHRASE_MAP: dict[str, str] = {
+    "the following": ":",
+    "as mentioned above": "[ref]",
+    "for more information": "[info]",
+    "in this case": "here",
+    "it is important to note that": "note:",
+    "it should be noted that": "note:",
+    "please be aware that": "note:",
+    "in order to": "to",
+    "at this point in time": "now",
+    "due to the fact that": "because",
+}
+
+
+# ---------------------------------------------------------------------------
+# CompressionRuleEngine
+# ---------------------------------------------------------------------------
+
+_TRUNCATE_TAIL_TOKEN_THRESHOLD = 2000
+_TRUNCATE_TAIL_KEEP_RATIO = 0.80
+
+# Boilerplate patterns (copyright/license, installation sections)
+_BOILERPLATE_PATTERNS = [
+    re.compile(r"^[ \t]*#.*?[Cc]opyright.*?$", re.MULTILINE),
+    re.compile(r"^[ \t]*#.*?[Ll]icense.*?$", re.MULTILINE),
+    re.compile(r"^[ \t]*//.*?[Cc]opyright.*?$", re.MULTILINE),
+    re.compile(r"^[ \t]*//.*?[Ll]icense.*?$", re.MULTILINE),
+    re.compile(
+        r"^##\s+Installation\s*\n(?:.*\n)*?(?=^##|\Z)",
+        re.MULTILINE,
+    ),
+    re.compile(r"^---\s*\n(?:copyright|license):.*?^---\s*\n", re.MULTILINE | re.DOTALL),
+]
+
+_API_RATE_LIMIT_PATTERN = re.compile(
+    r"(?im)^.*?api\s+rate\s+limit.*?$",
+    re.MULTILINE,
+)
+
+
+class CompressionRuleEngine:
+    """Deterministic compression rule engine for ContentSegment objects.
+
+    Applies text reduction rules in a fixed order:
+    1. WHITESPACE_COLLAPSE
+    2. LIST_DEDUP
+    3. BOILERPLATE_STRIP
+    4. TRUNCATE_TAIL
+    5. PHRASE_SUBSTITUTION  (last — ensures phrases not re-introduced)
+
+    Usage::
+
+        engine = CompressionRuleEngine()
+        recipes = engine.select_recipes(segment)
+        compressed = engine.apply_recipes(segment, recipes)
+    """
+
+    def __init__(self) -> None:
+        # Tracks how many times API-rate-limit text has been seen in this session
+        self._api_rate_limit_count: int = 0
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def select_recipes(self, segment: ContentSegment) -> List[RecipeType]:
+        """Return ordered list of RecipeType that apply to *segment*."""
+        recipes: List[RecipeType] = []
+        seg_type = segment.segment_type
+
+        if seg_type == "tool_output":
+            recipes.append(RecipeType.WHITESPACE_COLLAPSE)
+            if segment.raw_tokens > _TRUNCATE_TAIL_TOKEN_THRESHOLD:
+                recipes.append(RecipeType.TRUNCATE_TAIL)
+
+        if seg_type == "retrieval":
+            recipes.append(RecipeType.LIST_DEDUP)
+            recipes.append(RecipeType.PHRASE_SUBSTITUTION)
+
+        if seg_type in ("memory", "assistant_context"):
+            recipes.append(RecipeType.BOILERPLATE_STRIP)
+
+        return recipes
+
+    def apply_recipes(
+        self, segment: ContentSegment, recipes: List[RecipeType]
+    ) -> ContentSegment:
+        """Apply *recipes* in order; return new ContentSegment with updated tokens."""
+        content = segment.raw_content
+        for recipe in recipes:
+            content = self._apply_rule(content, recipe)
+        return segment.with_content(content)
+
+    # ------------------------------------------------------------------
+    # Internal dispatcher
+    # ------------------------------------------------------------------
+
+    def _apply_rule(self, content: str, recipe: RecipeType) -> str:
+        if recipe == RecipeType.WHITESPACE_COLLAPSE:
+            return self._whitespace_collapse(content)
+        if recipe == RecipeType.LIST_DEDUP:
+            return self._list_dedup(content)
+        if recipe == RecipeType.PHRASE_SUBSTITUTION:
+            return self._phrase_substitution(content)
+        if recipe == RecipeType.TRUNCATE_TAIL:
+            return self._truncate_tail(content)
+        if recipe == RecipeType.BOILERPLATE_STRIP:
+            return self._boilerplate_strip(content)
+        return content  # unknown recipe — pass through
+
+    # ------------------------------------------------------------------
+    # Rule implementations
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _whitespace_collapse(content: str) -> str:
+        """Collapse excess whitespace without altering meaningful structure.
+
+        - 3+ consecutive newlines → 2 newlines
+        - 4+ consecutive spaces (not at line-start indentation) → 2 spaces
+        - Trim trailing whitespace from every line
+        Target: 5-10% reduction on verbose output.
+        """
+        # Trim trailing whitespace per line
+        lines = [line.rstrip() for line in content.split("\n")]
+        content = "\n".join(lines)
+        # Collapse 3+ newlines to 2
+        content = re.sub(r"\n{3,}", "\n\n", content)
+        # Collapse 4+ mid-line spaces to 2 (negative lookbehind: not at line start)
+        content = re.sub(r"(?m)(?<=\S) {4,}", "  ", content)
+        return content
+
+    @staticmethod
+    def _list_dedup(content: str) -> str:
+        """Remove duplicate bullet / numbered list items (case-insensitive).
+
+        Preserves order of first occurrence.
+        Target: 15-25% reduction on repeated content.
+        """
+        lines = content.split("\n")
+        seen: set[str] = set()
+        result: list[str] = []
+        bullet_re = re.compile(r"^(\s*(?:[-*+]|\d+\.)\s+)(.*)")
+
+        for line in lines:
+            m = bullet_re.match(line)
+            if m:
+                item_text = m.group(2).strip().lower()
+                if item_text in seen:
+                    continue  # duplicate — drop it
+                seen.add(item_text)
+            result.append(line)
+
+        return "\n".join(result)
+
+    @staticmethod
+    def _phrase_substitution(content: str) -> str:
+        """Replace verbose phrases with compact equivalents (case-insensitive).
+
+        Target: 3-5% reduction.
+        """
+        for phrase, replacement in PHRASE_MAP.items():
+            # Case-insensitive word-boundary-aware replacement
+            pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+            content = pattern.sub(replacement, content)
+        return content
+
+    @staticmethod
+    def _truncate_tail(content: str) -> str:
+        """Drop the last 20% of oversized segments (> 2000 tokens).
+
+        Appends a ``[...truncated...]`` marker.
+        Target: 20% reduction on oversized segments.
+        """
+        tokens = _count_tokens(content)
+        if tokens <= _TRUNCATE_TAIL_TOKEN_THRESHOLD:
+            return content
+        # Work in characters (token ≈ 4 chars)
+        keep_chars = int(len(content) * _TRUNCATE_TAIL_KEEP_RATIO)
+        return content[:keep_chars] + "\n[...truncated...]"
+
+    def _boilerplate_strip(self, content: str) -> str:
+        """Remove copyright headers, license blocks, and Installation sections.
+
+        Also strips API rate-limit warnings on their 3rd+ occurrence in the session.
+        Target: 2-5% reduction.
+        """
+        # Remove static boilerplate patterns
+        for pattern in _BOILERPLATE_PATTERNS:
+            content = pattern.sub("", content)
+
+        # API rate-limit warnings: count occurrences, strip from 3rd onward
+        def _rate_limit_replacer(m: re.Match) -> str:
+            self._api_rate_limit_count += 1
+            if self._api_rate_limit_count >= 3:
+                return ""
+            return m.group(0)
+
+        content = _API_RATE_LIMIT_PATTERN.sub(_rate_limit_replacer, content)
+        # Collapse any blank lines left behind by removals
+        content = re.sub(r"\n{3,}", "\n\n", content)
+        return content

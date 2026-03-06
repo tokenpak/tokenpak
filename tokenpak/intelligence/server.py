@@ -49,6 +49,7 @@ from .auth import (
     TokenPakAuthMiddleware,
 )
 from .license_endpoint import router as license_router
+from ..security import sanitize_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,11 @@ class CompressRequest(BaseModel):
         description="Compression mode: strict | hybrid | aggressive.",
     )
 
+    @field_validator("model")
+    @classmethod
+    def _valid_model(cls, v: str) -> str:
+        return sanitize_model_name(v)
+
     @field_validator("mode")
     @classmethod
     def _valid_mode(cls, v: str) -> str:
@@ -121,6 +127,11 @@ class BudgetRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=500_000)
     model: str = Field("gpt-4o", max_length=128)
     target_tokens: int = Field(8_000, ge=1, le=1_000_000)
+
+    @field_validator("model")
+    @classmethod
+    def _valid_model(cls, v: str) -> str:
+        return sanitize_model_name(v)
 
 
 class BudgetResponse(BaseModel):

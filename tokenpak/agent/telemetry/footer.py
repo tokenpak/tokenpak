@@ -2,8 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Optional
+import logging
+from typing import Optional, List
 from .collector import RequestStats, SessionStats
+
+logger = logging.getLogger(__name__)
+
+
+def log_failover_event(chain: List[str], original: str, final: str, reason: str = "") -> None:
+    """Log a failover event at INFO level.
+    
+    Args:
+        chain: List of providers tried (in order)
+        original: Original provider that was requested
+        final: Final provider that succeeded
+        reason: Reason for failover (e.g., "rate_limit", "timeout")
+    """
+    chain_str = "→".join(chain)
+    reason_part = f" ({reason})" if reason else ""
+    logger.info(f"Failover: {chain_str}{reason_part}")
 
 
 def render_footer_oneline(stats: RequestStats) -> str:

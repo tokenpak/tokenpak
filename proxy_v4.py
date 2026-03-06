@@ -1241,6 +1241,26 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except:
                     pass
 
+                # Phase 0: Manual routing rules — rewrite model before any processing
+                try:
+                    from tokenpak.routing.rules import RouteEngine, _extract_prompt_text, _count_tokens_approx
+                    _route_engine = RouteEngine()
+                    _route_payload = json.loads(body) if body else {}
+                    _route_prompt = _extract_prompt_text(_route_payload)
+                    _route_tokens = _count_tokens_approx(_route_prompt)
+                    _matched_rule = _route_engine.match(
+                        model=model,
+                        prompt=_route_prompt,
+                        token_count=_route_tokens,
+                    )
+                    if _matched_rule:
+                        _route_payload["model"] = _matched_rule.target
+                        body = json.dumps(_route_payload).encode()
+                        model = _matched_rule.target
+                        print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
+                except Exception as _route_err:
+                    print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
+
                 # Phase 1: Vault context injection (BEFORE compaction)
                 t_inject = time.time()
                 VAULT_INDEX.maybe_reload()

@@ -20,6 +20,7 @@ from .budget import BudgetBlock, quadratic_allocate
 from .wire import pack
 from .calibration import calibrate_workers, get_recommended_workers, load_profile
 from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
+from .security import secure_write_config, sanitize_model_name, sanitize_cli_arg
 
 
 # Batch size for SQLite transactions
@@ -72,14 +73,19 @@ def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
     # --status mode: show stats from BlockRegistry
     if getattr(args, "status", False):
+        import os
         from tokenpak.registry import BlockRegistry
-        registry = BlockRegistry(args.db)
+        db_path = getattr(args, 'db', os.path.join(os.getcwd(), '.tokenpak', 'registry.db'))
+        if not os.path.exists(db_path):
+            print(f"No index found at {db_path}. Run `tokenpak index <directory>` first.")
+            return
+        registry = BlockRegistry(db_path)
         stats = registry.get_stats()
-        total = stats["total_files"]
+        total = stats.get("total_files", 0)
         sep = "────────────────────────────────────────"
         print("Vault Index Status")
         print(sep)
-        print(f"  Database:            {args.db}")
+        print(f"  Database:            {db_path}")
         print(f"  Total indexed files: {total}")
         if total == 0:
             print("  (no files indexed yet — run: tokenpak index <path>)")
@@ -89,19 +95,24 @@ def cmd_index(args):
                 print()
                 print("  By type:")
                 for ftype, info in sorted(by_type.items()):
-                    print(f"    {ftype:<10} {info['files']:>6} files")
+                    if isinstance(info, dict):
+                        print(f"    {ftype:<10} {info.get('files', 0):>6} files")
+                    else:
+                        print(f"    {ftype:<10} {info:>6} files")
             raw = stats.get("total_raw_tokens", 0)
             compressed = stats.get("total_compressed_tokens", 0)
             ratio = stats.get("compression_ratio", 0)
             print()
             print(f"  Tokens raw:          {raw:,}")
             print(f"  Tokens compressed:   {compressed:,}")
-            print(f"  Compression ratio:   {ratio}x")
+            if ratio:
+                print(f"  Compression ratio:   {ratio:.2f}x")
         return
 
     if not args.directory:
         import argparse
         raise argparse.ArgumentError(None, "directory is required when --status is not set")
+
 
     # --watch mode: initial index then watch for changes
     if getattr(args, 'watch', False):
@@ -115,6 +126,9 @@ def cmd_index(args):
         )
         watcher = VaultWatcher(config)
         watcher.start(blocking=True)
+        return
+    if not args.directory:
+        print("error: directory is required when --status is not set")
         return
     _do_index(args)
 
@@ -367,9 +381,21 @@ def cmd_serve(args):
 
 
 def cmd_benchmark(args):
-    """Run latency benchmark."""
-    from .benchmark import run_benchmark
-    run_benchmark(args.directory, args.iterations, compare=args.compare)
+    """Run compression benchmark (default) or latency benchmark (--latency)."""
+    file_arg = getattr(args, "file", None)
+    use_samples = getattr(args, "samples", False)
+    as_json = getattr(args, "json", False)
+    latency_mode = getattr(args, "latency", False)
+
+    if latency_mode:
+        # Legacy latency benchmark — requires a directory
+        directory = getattr(args, "directory", None) or "."
+        from .benchmark import run_benchmark
+        run_benchmark(directory, args.iterations, compare=args.compare)
+    else:
+        # Compression benchmark (new default)
+        from .benchmark import run_compression_benchmark
+        run_compression_benchmark(file=file_arg, use_samples=use_samples, as_json=as_json)
 
 
 def cmd_calibrate(args):
@@ -554,9 +580,8 @@ def cmd_doctor(args):
             if fix_type == "create config":
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_config = {"version": "1.0", "port": 8765, "compress": True}
-                with open(fix_path, "w") as f:
-                    json.dump(default_config, f, indent=2)
-                print(f"  ✓ Created {fix_path}")
+                secure_write_config(fix_path, default_config)
+                print(f"  ✓ Created {fix_path} (mode 600)")
             elif fix_type == "reset config":
                 # Backup before overwriting
                 backup_path = Path(str(fix_path) + ".backup")
@@ -565,9 +590,8 @@ def cmd_doctor(args):
                     print(f"  ✓ Backed up invalid config to {backup_path}")
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
                 default_config = {"version": "1.0", "port": 8765, "compress": True}
-                with open(fix_path, "w") as f:
-                    json.dump(default_config, f, indent=2)
-                print(f"  ✓ Recreated {fix_path}")
+                secure_write_config(fix_path, default_config)
+                print(f"  ✓ Recreated {fix_path} (mode 600)")
             elif fix_type == "create dirs":
                 for d in fix_path:
                     d.mkdir(parents=True, exist_ok=True)
@@ -582,6 +606,7 @@ def build_parser():
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
 
     sub = parser.add_subparsers(dest="command", required=True)
+    _build_route_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
@@ -624,11 +649,21 @@ def build_parser():
     p_serve.add_argument("--workers", type=int, default=1, help="Number of uvicorn workers")
     p_serve.set_defaults(func=cmd_serve)
 
-    p_bench = sub.add_parser("benchmark", help="Run latency benchmark")
-    p_bench.add_argument("directory", help="Directory to benchmark")
-    p_bench.add_argument("--iterations", type=int, default=3)
+    p_bench = sub.add_parser("benchmark", help="Benchmark compression performance on sample or real data")
+    p_bench.add_argument("directory", nargs="?", default=None,
+                         help="Directory to benchmark (used with --latency mode)")
+    p_bench.add_argument("--file", default=None, metavar="PATH",
+                         help="Benchmark a specific file")
+    p_bench.add_argument("--samples", action="store_true",
+                         help="Use built-in sample data (default when no file/directory given)")
+    p_bench.add_argument("--json", dest="json", action="store_true", default=False,
+                         help="Output results as JSON")
+    p_bench.add_argument("--latency", action="store_true",
+                         help="Run latency/indexing benchmark instead of compression benchmark")
+    p_bench.add_argument("--iterations", type=int, default=3,
+                         help="Iterations for latency benchmark (default: 3)")
     p_bench.add_argument("--compare", action="store_true",
-                         help="Compare baseline vs optimized")
+                         help="Compare baseline vs optimized (latency mode only)")
     p_bench.set_defaults(func=cmd_benchmark)
 
     p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
@@ -648,9 +683,13 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_debug_parser(sub)
     _build_demo_parser(sub)
     _build_run_parser(sub)
     _build_macro_parser(sub)
+    _build_fingerprint_parser(sub)
+    _build_learn_parser(sub)
+    _build_user_template_parser(sub)
 
     return parser
 
@@ -739,14 +778,310 @@ def _build_status_parser(sub):
     p_status.set_defaults(func=cmd_status)
 
 
+def _build_debug_parser(sub):
+    """Build debug mode subcommand parser."""
+    p_debug = sub.add_parser("debug", help="Toggle verbose debug logging")
+    dsub = p_debug.add_subparsers(dest="debug_cmd", required=True)
+
+    dsub.add_parser("on", help="Enable debug mode").set_defaults(func=cmd_debug_on)
+    dsub.add_parser("off", help="Disable debug mode").set_defaults(func=cmd_debug_off)
+    dsub.add_parser("status", help="Show debug mode state").set_defaults(func=cmd_debug_status)
+
+
+def cmd_debug_on(args):
+    """Enable debug mode."""
+    from .agent.config import set_debug_enabled
+    set_debug_enabled(True)
+    print("✅ Debug mode enabled")
+    print("   Debug logs will appear on stderr during proxy requests.")
+    print("   Disable with: tokenpak debug off")
+
+
+def cmd_debug_off(args):
+    """Disable debug mode."""
+    from .agent.config import set_debug_enabled
+    set_debug_enabled(False)
+    print("✅ Debug mode disabled")
+
+
+def cmd_debug_status(args):
+    """Show debug mode state."""
+    import os
+    from .agent.config import get_debug_enabled, CONFIG_PATH
+    
+    enabled = get_debug_enabled()
+    env_override = os.environ.get("TOKENPAK_DEBUG")
+    
+    status = "🟢 ON" if enabled else "⚪ OFF"
+    print(f"Debug mode: {status}")
+    
+    if env_override is not None:
+        print(f"  Source: TOKENPAK_DEBUG env var = {env_override}")
+    else:
+        print(f"  Source: {CONFIG_PATH}")
+
+
+def _build_learn_parser(sub):
+    """Build `tokenpak learn` subcommand parser."""
+    p_learn = sub.add_parser("learn", help="Show or reset learned patterns from telemetry")
+    lsub = p_learn.add_subparsers(dest="learn_cmd", required=True)
+    lsub.add_parser("status", help="Show learned patterns summary").set_defaults(func=cmd_learn_status)
+    lsub.add_parser("reset", help="Clear all learned data").set_defaults(func=cmd_learn_reset)
+
+
+def cmd_learn_status(args):
+    """Show learned patterns from routing, compression, and context data."""
+    from .agent.agentic.learning import cmd_learn_status as _learn_status, learn
+    learn()
+    _learn_status()
+
+
+def cmd_learn_reset(args):
+    """Clear all learned data."""
+    from .agent.agentic.learning import reset
+    reset()
+    print("✓ Learning store cleared.")
+
+
+def _build_user_template_parser(sub):
+    """Build `tokenpak template` subcommand parser for local user templates."""
+    from .user_templates import (
+        cmd_template_list, cmd_template_add, cmd_template_show,
+        cmd_template_remove, cmd_template_use,
+    )
+
+    p_tmpl = sub.add_parser("template", help="Manage local user prompt templates")
+    tsub = p_tmpl.add_subparsers(dest="template_cmd", required=True)
+
+    # list
+    tsub.add_parser("list", help="List all saved templates").set_defaults(func=cmd_template_list)
+
+    # add
+    p_add = tsub.add_parser("add", help="Add or update a template")
+    p_add.add_argument("name", help="Template name")
+    p_add.add_argument("--content", default=None, help="Template content (use {{var}} for variables)")
+    p_add.set_defaults(func=cmd_template_add)
+
+    # show
+    p_show = tsub.add_parser("show", help="Display a template")
+    p_show.add_argument("name", help="Template name")
+    p_show.set_defaults(func=cmd_template_show)
+
+    # remove
+    p_rm = tsub.add_parser("remove", help="Delete a template")
+    p_rm.add_argument("name", help="Template name")
+    p_rm.set_defaults(func=cmd_template_remove)
+
+    # use
+    p_use = tsub.add_parser("use", help="Expand a template with variables")
+    p_use.add_argument("name", help="Template name")
+    p_use.add_argument("--var", action="append", default=[], metavar="KEY=VALUE",
+                       help="Variable substitution (repeatable)")
+    p_use.set_defaults(func=cmd_template_use)
+
+
 def main():
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
 
 
-if __name__ == "__main__":
-    main()
+# ── Route commands ────────────────────────────────────────────────────────────
+
+def _get_route_store(args=None):
+    from .routing.rules import RouteStore, DEFAULT_ROUTES_PATH
+    path = getattr(args, "routes", None) or DEFAULT_ROUTES_PATH
+    return RouteStore(path=path)
+
+
+def cmd_route_list(args):
+    """List all routing rules."""
+    store = _get_route_store(args)
+    rules = store.list()
+    if not rules:
+        print("No routing rules defined.")
+        print("Add one with: tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307")
+        return
+    print(f"{'ID':<10} {'PRI':>4} {'EN':<4} {'PATTERN':<45} TARGET")
+    print("-" * 90)
+    for r in rules:
+        pat_parts = []
+        if r.pattern.model:
+            pat_parts.append(f"model={r.pattern.model}")
+        if r.pattern.prefix:
+            pat_parts.append(f"prefix={r.pattern.prefix!r}")
+        if r.pattern.min_tokens is not None:
+            pat_parts.append(f"min_tokens={r.pattern.min_tokens}")
+        if r.pattern.max_tokens is not None:
+            pat_parts.append(f"max_tokens={r.pattern.max_tokens}")
+        pat_str = ", ".join(pat_parts) or "(any)"
+        enabled = "yes" if r.enabled else "no"
+        desc = f"  # {r.description}" if r.description else ""
+        print(f"{r.id:<10} {r.priority:>4} {enabled:<4} {pat_str:<45} {r.target}{desc}")
+
+
+def cmd_route_add(args):
+    """Add a routing rule."""
+    from .routing.rules import RouteStore, parse_pattern_args, DEFAULT_ROUTES_PATH
+
+    store = _get_route_store(args)
+    try:
+        pattern = parse_pattern_args(
+            model=getattr(args, "model", None),
+            prefix=getattr(args, "prefix", None),
+            min_tokens=getattr(args, "min_tokens", None),
+            max_tokens=getattr(args, "max_tokens", None),
+        )
+    except ValueError as e:
+        print(f"❌ {e}")
+        raise SystemExit(1)
+
+    rule = store.add(
+        pattern=pattern,
+        target=args.target,
+        priority=getattr(args, "priority", 100),
+        description=getattr(args, "description", "") or "",
+    )
+    print(f"✅ Rule added: id={rule.id}  priority={rule.priority}  target={rule.target}")
+    _print_rule_pattern(rule)
+
+
+def _print_rule_pattern(rule):
+    pat = rule.pattern
+    if pat.model:
+        print(f"   Pattern: model glob = {pat.model!r}")
+    if pat.prefix:
+        print(f"   Pattern: prefix = {pat.prefix!r}")
+    if pat.min_tokens is not None:
+        print(f"   Pattern: min_tokens = {pat.min_tokens}")
+    if pat.max_tokens is not None:
+        print(f"   Pattern: max_tokens = {pat.max_tokens}")
+
+
+def cmd_route_remove(args):
+    """Remove a routing rule by id."""
+    store = _get_route_store(args)
+    removed = store.remove(args.id)
+    if removed:
+        print(f"✅ Rule {args.id} removed.")
+    else:
+        print(f"⚠️  No rule found with id={args.id}")
+        raise SystemExit(1)
+
+
+def cmd_route_test(args):
+    """Show which rule would match a given prompt."""
+    from .routing.rules import RouteEngine, RouteStore, _count_tokens_approx
+
+    store = _get_route_store(args)
+    engine = RouteEngine(store=store)
+
+    prompt = args.prompt or ""
+    model = getattr(args, "model", "") or ""
+    token_count = getattr(args, "tokens", None)
+
+    if token_count is None and prompt:
+        token_count = _count_tokens_approx(prompt)
+
+    print(f"Testing: model={model!r}  prompt={prompt[:60]!r}{'...' if len(prompt) > 60 else ''}  tokens≈{token_count}")
+    print()
+
+    match = engine.match(model=model, prompt=prompt, token_count=token_count)
+    if match:
+        print(f"✅ Matched rule: id={match.id}  priority={match.priority}")
+        print(f"   Target: {match.target}")
+        _print_rule_pattern(match)
+        if match.description:
+            print(f"   Note: {match.description}")
+    else:
+        print("❌ No rule matched — request would use original model.")
+
+    # Show all rules and their match status
+    rules = store.list()
+    if rules and getattr(args, "verbose", False):
+        print()
+        print("All rules evaluated:")
+        for r in rules:
+            from .routing.rules import RouteEngine as _RE
+            did_match = _RE._matches(r.pattern, model=model, prompt=prompt, token_count=token_count)
+            tag = "✓" if (did_match and r.enabled) else ("skip" if not r.enabled else "✗")
+            print(f"  [{tag}] {r.id}  {r.target}")
+
+
+def cmd_route_enable(args):
+    """Enable a routing rule."""
+    store = _get_route_store(args)
+    ok = store.set_enabled(args.id, True)
+    print(f"✅ Rule {args.id} enabled." if ok else f"⚠️  Rule {args.id} not found.")
+
+
+def cmd_route_disable(args):
+    """Disable a routing rule."""
+    store = _get_route_store(args)
+    ok = store.set_enabled(args.id, False)
+    print(f"✅ Rule {args.id} disabled." if ok else f"⚠️  Rule {args.id} not found.")
+
+
+def _build_route_parser(sub):
+    p_route = sub.add_parser("route", help="Manage manual model routing rules")
+    rsub = p_route.add_subparsers(dest="route_cmd", required=True)
+
+    # Common --routes flag
+    _routes_flag = dict(
+        flag="--routes",
+        kwargs=dict(default=None, help="Path to routes.yaml (default: ~/.tokenpak/routes.yaml)"),
+    )
+
+    # route list
+    p_list = rsub.add_parser("list", help="Show all routing rules")
+    p_list.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_list.set_defaults(func=cmd_route_list)
+
+    # route add
+    p_add = rsub.add_parser("add", help="Add a routing rule")
+    p_add.add_argument("--model", default=None,
+                       help="Model glob pattern (e.g. 'gpt-4*', 'openai/*')")
+    p_add.add_argument("--prefix", default=None,
+                       help="Prompt prefix match (case-insensitive)")
+    p_add.add_argument("--min-tokens", dest="min_tokens", type=int, default=None,
+                       help="Minimum token count (inclusive)")
+    p_add.add_argument("--max-tokens", dest="max_tokens", type=int, default=None,
+                       help="Maximum token count (inclusive)")
+    p_add.add_argument("--target", required=True,
+                       help="Target model/provider (e.g. 'anthropic/claude-3-haiku-20240307')")
+    p_add.add_argument("--priority", type=int, default=100,
+                       help="Rule priority (lower = higher priority, default 100)")
+    p_add.add_argument("--description", default="", help="Optional description")
+    p_add.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_add.set_defaults(func=cmd_route_add)
+
+    # route remove
+    p_rm = rsub.add_parser("remove", help="Remove a routing rule by id")
+    p_rm.add_argument("id", help="Rule ID to remove")
+    p_rm.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_rm.set_defaults(func=cmd_route_remove)
+
+    # route test
+    p_test = rsub.add_parser("test", help="Show which rule matches a prompt")
+    p_test.add_argument("prompt", nargs="?", default="", help="Prompt text to test")
+    p_test.add_argument("--model", default="", help="Model name to test against")
+    p_test.add_argument("--tokens", type=int, default=None,
+                        help="Token count override (default: auto-estimated)")
+    p_test.add_argument("--verbose", "-v", action="store_true",
+                        help="Show all rules and their match status")
+    p_test.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_test.set_defaults(func=cmd_route_test)
+
+    # route enable / disable
+    p_en = rsub.add_parser("enable", help="Enable a routing rule")
+    p_en.add_argument("id", help="Rule ID")
+    p_en.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_en.set_defaults(func=cmd_route_enable)
+
+    p_dis = rsub.add_parser("disable", help="Disable a routing rule")
+    p_dis.add_argument("id", help="Rule ID")
+    p_dis.add_argument("--routes", default=None, help="Path to routes.yaml")
+    p_dis.set_defaults(func=cmd_route_disable)
 
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
@@ -757,8 +1092,17 @@ def _trigger_store():
 
 
 def cmd_trigger_list(args):
+    import json as _json
     store = _trigger_store()
     triggers = store.list()
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(id=t.id, event=t.event, action=t.action,
+                  enabled=t.enabled, created_at=t.created_at)
+             for t in triggers],
+            indent=2,
+        ))
+        return
     if not triggers:
         print("No triggers registered.")
         return
@@ -770,14 +1114,26 @@ def cmd_trigger_list(args):
 
 
 def cmd_trigger_add(args):
+    import json as _json
     store = _trigger_store()
     t = store.add(event=args.event, action=args.action)
+    if getattr(args, "json", False):
+        print(_json.dumps(dict(
+            id=t.id, event=t.event, action=t.action,
+            enabled=t.enabled, created_at=t.created_at,
+        ), indent=2))
+        return
     print(f"Trigger added: id={t.id}  event={t.event}  action={t.action}")
 
 
 def cmd_trigger_remove(args):
+    import json as _json
     store = _trigger_store()
-    if store.remove(args.id):
+    removed = store.remove(args.id)
+    if getattr(args, "json", False):
+        print(_json.dumps({"removed": removed, "id": args.id}, indent=2))
+        return
+    if removed:
         print(f"Trigger {args.id} removed.")
     else:
         print(f"No trigger with id={args.id}")
@@ -785,11 +1141,19 @@ def cmd_trigger_remove(args):
 
 def cmd_trigger_test(args):
     """Dry-run: show which registered triggers would fire for a given event."""
+    import json as _json
     from .agent.triggers.matcher import match_event
     store = _trigger_store()
     event = args.event
-    print(f"Testing event: {event}")
     matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(id=t.id, event=t.event, action=t.action, would_fire=True)
+             for t in matched],
+            indent=2,
+        ))
+        return
+    print(f"Testing event: {event}")
     if not matched:
         print("  No triggers would fire.")
     for t in matched:
@@ -797,8 +1161,17 @@ def cmd_trigger_test(args):
 
 
 def cmd_trigger_log(args):
+    import json as _json
     store = _trigger_store()
     logs = store.list_logs(limit=args.limit)
+    if getattr(args, "json", False):
+        print(_json.dumps(
+            [dict(trigger_id=lg.trigger_id, event=lg.event, action=lg.action,
+                  fired_at=lg.fired_at, exit_code=lg.exit_code, output=lg.output)
+             for lg in logs],
+            indent=2,
+        ))
+        return
     if not logs:
         print("No trigger log entries.")
         return
@@ -910,23 +1283,36 @@ def _build_trigger_parser(sub):
     p_trig = sub.add_parser("trigger", help="Manage event triggers")
     tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
 
-    tsub.add_parser("list", help="List all triggers").set_defaults(func=cmd_trigger_list)
+    p_list = tsub.add_parser("list", help="List all triggers")
+    p_list.add_argument("--json", dest="json", action="store_true", default=False,
+                        help="Output raw JSON")
+    p_list.set_defaults(func=cmd_trigger_list)
 
     p_add = tsub.add_parser("add", help="Register a new trigger")
-    p_add.add_argument("event", help="Event pattern (e.g. file:changed:*.py, timer:5m, cost:daily>10)")
-    p_add.add_argument("action", help="Action: tokenpak sub-command or shell script path")
+    p_add.add_argument("--event", required=True,
+                       help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)")
+    p_add.add_argument("--action", required=True,
+                       help="Action: tokenpak sub-command or shell script path")
+    p_add.add_argument("--json", dest="json", action="store_true", default=False,
+                       help="Output raw JSON")
     p_add.set_defaults(func=cmd_trigger_add)
 
     p_rm = tsub.add_parser("remove", help="Remove a trigger by id")
     p_rm.add_argument("id", help="Trigger ID")
+    p_rm.add_argument("--json", dest="json", action="store_true", default=False,
+                      help="Output raw JSON")
     p_rm.set_defaults(func=cmd_trigger_remove)
 
     p_test = tsub.add_parser("test", help="Dry-run: show which triggers match an event")
-    p_test.add_argument("event", help="Event string to test")
+    p_test.add_argument("--event", required=True, help="Event string to test")
+    p_test.add_argument("--json", dest="json", action="store_true", default=False,
+                        help="Output raw JSON")
     p_test.set_defaults(func=cmd_trigger_test)
 
     p_log = tsub.add_parser("log", help="Show recent trigger fire log")
     p_log.add_argument("--limit", type=int, default=20)
+    p_log.add_argument("--json", dest="json", action="store_true", default=False,
+                       help="Output raw JSON")
     p_log.set_defaults(func=cmd_trigger_log)
 
     tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)
@@ -1282,6 +1668,123 @@ def cmd_agent_locks(args):
         print(f"{path:<50} {lock.get('agent','?'):<15} {remaining:>10.0f}s")
 
 
+def cmd_agent_list(args):
+    """List registered agents."""
+    import json as json_mod
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if args.all:
+        agents = registry.list_all()
+    else:
+        agents = registry.list_active()
+    
+    if args.json:
+        print(json_mod.dumps([a.to_dict() for a in agents], indent=2))
+        return
+    
+    if not agents:
+        print("No registered agents.")
+        return
+    
+    print(f"{'ID':<10} {'Name':<12} {'Hostname':<15} {'Status':<10} {'Heartbeat':<12}")
+    print("-" * 65)
+    for a in agents:
+        age = a.heartbeat_age_seconds()
+        if age < 60:
+            hb = f"{age:.0f}s ago"
+        elif age < 3600:
+            hb = f"{age/60:.0f}m ago"
+        else:
+            hb = f"{age/3600:.1f}h ago"
+        stale = " (stale)" if a.is_stale() else ""
+        print(f"{a.agent_id:<10} {a.name:<12} {a.hostname:<15} {a.status:<10} {hb}{stale}")
+
+
+def cmd_agent_register(args):
+    """Register this agent."""
+    import json as json_mod
+    import socket
+    from .agent.agentic.registry import AgentRegistry
+    
+    hostname = args.hostname or socket.gethostname()
+    capabilities = {
+        "gpu": args.gpu,
+        "memory_gb": args.memory,
+        "specialties": args.specialties,
+        "provider_access": args.providers,
+        "max_concurrent": 1,
+    }
+    
+    registry = AgentRegistry()
+    agent_id = registry.register(args.name, hostname, capabilities)
+    
+    if args.json:
+        agent = registry.get(agent_id)
+        print(json_mod.dumps(agent.to_dict(), indent=2))
+    else:
+        print(f"✅ Registered: {args.name} @ {hostname} (id: {agent_id})")
+
+
+def cmd_agent_deregister(args):
+    """Remove agent from registry."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if registry.deregister(args.agent_id):
+        print(f"✅ Deregistered: {args.agent_id}")
+    else:
+        print(f"⚠️  Agent not found: {args.agent_id}")
+
+
+def cmd_agent_heartbeat(args):
+    """Send heartbeat for agent."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    if registry.heartbeat(args.agent_id, status=args.status, current_task=args.task):
+        print(f"✅ Heartbeat: {args.agent_id}")
+    else:
+        print(f"⚠️  Agent not found: {args.agent_id}")
+
+
+def cmd_agent_match(args):
+    """Find agents matching requirements."""
+    import json as json_mod
+    from .agent.agentic.capabilities import CapabilityMatcher, TaskRequirements
+    
+    requirements = TaskRequirements(
+        requires_gpu=True if args.gpu else None,
+        min_memory_gb=args.memory,
+        required_specialties=args.specialty or [],
+        required_providers=args.provider or [],
+    )
+    
+    matcher = CapabilityMatcher()
+    matches = matcher.match(requirements)
+    
+    if args.json:
+        print(json_mod.dumps([m.to_dict() for m in matches], indent=2))
+        return
+    
+    if not matches:
+        print("No matching agents found.")
+        return
+    
+    print(f"{'Score':<8} {'ID':<10} {'Name':<12} {'Reasons'}")
+    print("-" * 60)
+    for m in matches:
+        reasons = ", ".join(m.reasons[:3]) if m.reasons else "-"
+        print(f"{m.score:<8.1f} {m.agent.agent_id:<10} {m.agent.name:<12} {reasons}")
+
+
+def cmd_agent_prune(args):
+    """Remove stale agents."""
+    from .agent.agentic.registry import AgentRegistry
+    registry = AgentRegistry()
+    count = registry.prune_stale()
+    if count:
+        print(f"✅ Pruned {count} stale agent(s)")
+    else:
+        print("No stale agents to prune.")
+
 def cmd_agent_handoff(args):
     """Dispatch to handoff command handler."""
     from .agent.cli.commands.handoff import handoff_cmd
@@ -1289,9 +1792,10 @@ def cmd_agent_handoff(args):
 
 
 def _build_agent_parser(sub):
-    p_agent = sub.add_parser("agent", help="Agent coordination (locks, retry)")
+    p_agent = sub.add_parser("agent", help="Agent coordination (locks, registry, capabilities)")
     asub = p_agent.add_subparsers(dest="agent_cmd", required=True)
 
+    # --- Lock commands ---
     p_lock = asub.add_parser("lock", help="Claim a file lock")
     p_lock.add_argument("path", help="File path to lock")
     p_lock.add_argument("--timeout", type=int, default=600, metavar="SECONDS", help="Lock TTL in seconds (default 600)")
@@ -1306,6 +1810,43 @@ def _build_agent_parser(sub):
     p_locks = asub.add_parser("locks", help="List all active locks")
     p_locks.add_argument("--agent", default=None, help="Filter by agent id")
     p_locks.set_defaults(func=cmd_agent_locks)
+
+    # --- Registry commands ---
+    p_list = asub.add_parser("list", help="List registered agents")
+    p_list.add_argument("--all", action="store_true", help="Include stale agents")
+    p_list.add_argument("--json", action="store_true", help="JSON output")
+    p_list.set_defaults(func=cmd_agent_list)
+
+    p_register = asub.add_parser("register", help="Register this agent")
+    p_register.add_argument("name", help="Agent name (e.g., trix, sue, cali)")
+    p_register.add_argument("--hostname", default=None, help="Hostname (default: auto-detect)")
+    p_register.add_argument("--gpu", action="store_true", help="Has GPU")
+    p_register.add_argument("--memory", type=float, default=4.0, help="Memory in GB")
+    p_register.add_argument("--specialties", nargs="*", default=[], help="Specialties (e.g., code research)")
+    p_register.add_argument("--providers", nargs="*", default=["anthropic"], help="Provider access")
+    p_register.add_argument("--json", action="store_true", help="JSON output")
+    p_register.set_defaults(func=cmd_agent_register)
+
+    p_deregister = asub.add_parser("deregister", help="Remove an agent from registry")
+    p_deregister.add_argument("agent_id", help="Agent ID to remove")
+    p_deregister.set_defaults(func=cmd_agent_deregister)
+
+    p_heartbeat = asub.add_parser("heartbeat", help="Send heartbeat for an agent")
+    p_heartbeat.add_argument("agent_id", help="Agent ID")
+    p_heartbeat.add_argument("--status", choices=["active", "busy", "draining"], help="Update status")
+    p_heartbeat.add_argument("--task", default=None, help="Current task name")
+    p_heartbeat.set_defaults(func=cmd_agent_heartbeat)
+
+    p_match = asub.add_parser("match", help="Find agents matching requirements")
+    p_match.add_argument("--gpu", action="store_true", help="Require GPU")
+    p_match.add_argument("--memory", type=float, default=None, help="Minimum memory GB")
+    p_match.add_argument("--specialty", nargs="*", default=[], help="Required specialties")
+    p_match.add_argument("--provider", nargs="*", default=[], help="Required providers")
+    p_match.add_argument("--json", action="store_true", help="JSON output")
+    p_match.set_defaults(func=cmd_agent_match)
+
+    p_prune = asub.add_parser("prune", help="Remove stale agents")
+    p_prune.set_defaults(func=cmd_agent_prune)
 
     # handoff subcommand
     p_handoff = asub.add_parser("handoff", help="Context handoff between agents")
@@ -1877,28 +2418,206 @@ def cmd_macro_install(args):
 
 
 def cmd_macro_run(args):
-    """Run a premade macro."""
+    """Run a user-defined YAML macro or a premade macro."""
+    import json as _json
+    from .agent.macros.engine import MacroEngine
     from .agent.macros.premade_macros import run_macro, format_macro_output, PREMADE_MACROS
+
     name = args.name
-    if name not in PREMADE_MACROS:
-        print(f"❌ Unknown macro: '{name}'. Available: {', '.join(PREMADE_MACROS.keys())}")
+    dry_run = getattr(args, "dry_run", False)
+    continue_on_error = getattr(args, "continue_on_error", False)
+    raw_vars = getattr(args, "var", []) or []
+
+    # Parse --var KEY=VALUE overrides
+    runtime_vars: dict = {}
+    for kv in raw_vars:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            runtime_vars[k.strip()] = v.strip()
+        else:
+            print(f"⚠️  Ignoring malformed --var (expected KEY=VALUE): {kv}")
+
+    # Try user-defined YAML macro first
+    engine = MacroEngine()
+    if engine.exists(name):
+        result = engine.run(name, variables=runtime_vars or None, dry_run=dry_run,
+                            continue_on_error=continue_on_error)
+        if getattr(args, "json", False):
+            print(_json.dumps(result.to_dict(), indent=2))
+        else:
+            print(result.format())
         return
-    result = run_macro(name)
-    if getattr(args, "json", False):
-        import json
-        print(json.dumps(result, indent=2))
-    else:
-        print(format_macro_output(result))
+
+    # Fall back to premade macros
+    if name in PREMADE_MACROS:
+        if dry_run:
+            print(f"[DRY RUN] Would run premade macro '{name}' ({len(PREMADE_MACROS[name]['steps'])} steps)")
+            for step in PREMADE_MACROS[name]["steps"]:
+                print(f"  🔍 {step['label']}: {step['cmd']}")
+            return
+        result_dict = run_macro(name)
+        if getattr(args, "json", False):
+            print(_json.dumps(result_dict, indent=2))
+        else:
+            print(format_macro_output(result_dict))
+        return
+
+    # Nothing found
+    engine_macros = [m.name for m in engine.list()]
+    premade = list(PREMADE_MACROS.keys())
+    all_names = sorted(set(engine_macros + premade))
+    print(f"❌ Unknown macro: '{name}'.")
+    if all_names:
+        print(f"   Available: {', '.join(all_names)}")
 
 
 def cmd_macro_list(args):
-    """List all available premade macros."""
+    """List all available macros (premade + user-defined YAML)."""
+    from .agent.macros.engine import MacroEngine
     from .agent.macros.premade_macros import list_macros
-    macros = list_macros()
-    print(f"{'NAME':<20} DESCRIPTION")
-    print("-" * 70)
-    for m in macros:
-        print(f"{m['name']:<20} {m['description']}")
+
+    print(f"{'NAME':<25} {'TYPE':<10} DESCRIPTION")
+    print("-" * 75)
+
+    # Premade macros
+    for m in list_macros():
+        print(f"{m['name']:<25} {'premade':<10} {m['description']}")
+
+    # User-defined YAML macros
+    engine = MacroEngine()
+    user_macros = engine.list()
+    for m in user_macros:
+        print(f"{m.name:<25} {'yaml':<10} {m.description}")
+
+    if not user_macros:
+        print(f"  (no user macros — use `tokenpak macro create` to add one)")
+
+
+def cmd_macro_create(args):
+    """Create a user-defined YAML macro."""
+    import sys as _sys
+    from pathlib import Path as _Path
+    from .agent.macros.engine import MacroEngine
+
+    engine = MacroEngine()
+
+    # If --file provided, load YAML from file
+    if getattr(args, "file", None):
+        yaml_text = _Path(args.file).read_text()
+        try:
+            path = engine.create_from_yaml(yaml_text, overwrite=getattr(args, "overwrite", False))
+            print(f"✅ Created macro from file → {path}")
+        except Exception as e:
+            print(f"❌ {e}")
+        return
+
+    # Build from CLI args
+    name = getattr(args, "name", None)
+    if not name:
+        print("❌ --name is required (or use --file to load from YAML)")
+        return
+
+    # Parse --step "label:cmd" pairs
+    raw_steps = getattr(args, "step", []) or []
+    steps = []
+    for i, s in enumerate(raw_steps, 1):
+        if ":" in s:
+            label, cmd = s.split(":", 1)
+            steps.append({"name": f"step{i}", "label": label.strip(), "cmd": cmd.strip()})
+        else:
+            steps.append({"name": f"step{i}", "label": f"Step {i}", "cmd": s.strip()})
+
+    if not steps:
+        print("❌ At least one --step is required (e.g., --step 'Check status:tokenpak status')")
+        return
+
+    # Parse --var KEY=VALUE defaults
+    raw_vars = getattr(args, "var", []) or []
+    variables: dict = {}
+    for kv in raw_vars:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            variables[k.strip()] = v.strip()
+
+    try:
+        path = engine.create(
+            name=name,
+            steps=steps,
+            description=getattr(args, "description", "") or "",
+            variables=variables or None,
+            continue_on_error=getattr(args, "continue_on_error", False),
+            overwrite=getattr(args, "overwrite", False),
+        )
+        print(f"✅ Created macro '{name}' → {path}")
+        print(f"   Run it with: tokenpak macro run {name}")
+    except Exception as e:
+        print(f"❌ {e}")
+
+
+def cmd_macro_show(args):
+    """Show a macro definition."""
+    import json as _json
+    from .agent.macros.engine import MacroEngine
+    from .agent.macros.premade_macros import PREMADE_MACROS
+
+    name = args.name
+    engine = MacroEngine()
+
+    if engine.exists(name):
+        macro = engine.show(name)
+        if getattr(args, "json", False):
+            print(_json.dumps(macro.to_dict(), indent=2))
+        else:
+            print(f"Name:         {macro.name}")
+            print(f"Description:  {macro.description or '(none)'}")
+            print(f"Fail mode:    {'continue-on-error' if macro.continue_on_error else 'fail-fast'}")
+            if macro.variables:
+                print(f"Variables:")
+                for k, v in macro.variables.items():
+                    print(f"  {k} = {v}")
+            print(f"Steps ({len(macro.steps)}):")
+            for i, step in enumerate(macro.steps, 1):
+                print(f"  {i}. [{step.name}] {step.label}")
+                print(f"       $ {step.cmd}")
+        return
+
+    if name in PREMADE_MACROS:
+        macro_data = PREMADE_MACROS[name]
+        if getattr(args, "json", False):
+            print(_json.dumps({"name": name, **macro_data}, indent=2))
+        else:
+            print(f"Name:        {name}  (premade)")
+            print(f"Description: {macro_data['description']}")
+            print(f"Steps ({len(macro_data['steps'])}):")
+            for i, step in enumerate(macro_data["steps"], 1):
+                print(f"  {i}. [{step['name']}] {step['label']}")
+                print(f"       $ {step['cmd']}")
+        return
+
+    print(f"❌ Macro '{name}' not found.")
+
+
+def cmd_macro_delete(args):
+    """Delete a user-defined YAML macro."""
+    from .agent.macros.engine import MacroEngine
+
+    name = args.name
+    engine = MacroEngine()
+
+    if not engine.exists(name):
+        print(f"❌ Macro '{name}' not found.")
+        return
+
+    if not getattr(args, "yes", False):
+        confirm = input(f"Delete macro '{name}'? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Aborted.")
+            return
+
+    if engine.delete(name):
+        print(f"✅ Deleted macro '{name}'.")
+    else:
+        print(f"❌ Failed to delete macro '{name}'.")
 
 
 def cmd_macro_hooks(args):
@@ -1922,22 +2641,56 @@ def cmd_macro_hooks(args):
 
 
 def _build_macro_parser(sub):
-    p_macro = sub.add_parser("macro", help="Premade macros and script hooks")
+    p_macro = sub.add_parser("macro", help="Premade macros, user-defined YAML macros, and script hooks")
     msub = p_macro.add_subparsers(dest="macro_cmd", required=True)
 
-    # macro install <name>
-    p_install = msub.add_parser("install", help="Install a premade macro")
-    p_install.add_argument("name", help="Macro name (morning-standup, pre-deploy, weekly-report)")
-    p_install.set_defaults(func=cmd_macro_install)
+    # macro list
+    msub.add_parser("list", help="List all macros (premade + user-defined)").set_defaults(func=cmd_macro_list)
+
+    # macro create
+    p_create = msub.add_parser("create", help="Create a user-defined YAML macro")
+    p_create.add_argument("--name", help="Macro name (e.g., my-deploy)")
+    p_create.add_argument("--description", default="", help="Short description")
+    p_create.add_argument("--step", action="append", metavar="LABEL:CMD",
+                          help="Add a step (repeatable). Format: 'Label:command'")
+    p_create.add_argument("--var", action="append", metavar="KEY=VALUE",
+                          help="Default variable (repeatable). Format: KEY=VALUE")
+    p_create.add_argument("--continue-on-error", action="store_true", default=False,
+                          help="Keep running if a step fails (default: fail-fast)")
+    p_create.add_argument("--file", help="Load macro definition from a YAML file")
+    p_create.add_argument("--overwrite", action="store_true", default=False,
+                          help="Overwrite an existing macro with the same name")
+    p_create.set_defaults(func=cmd_macro_create)
 
     # macro run <name>
-    p_run = msub.add_parser("run", help="Run a premade macro")
+    p_run = msub.add_parser("run", help="Run a macro (YAML or premade)")
     p_run.add_argument("name", help="Macro name")
+    p_run.add_argument("--dry-run", action="store_true", default=False,
+                       help="Print commands without executing them")
+    p_run.add_argument("--continue-on-error", action="store_true", default=False,
+                       help="Keep running if a step fails")
+    p_run.add_argument("--var", action="append", metavar="KEY=VALUE",
+                       help="Runtime variable override (repeatable)")
     p_run.add_argument("--json", action="store_true", help="Output raw JSON")
     p_run.set_defaults(func=cmd_macro_run)
 
-    # macro list
-    msub.add_parser("list", help="List available premade macros").set_defaults(func=cmd_macro_list)
+    # macro show <name>
+    p_show = msub.add_parser("show", help="Show a macro definition")
+    p_show.add_argument("name", help="Macro name")
+    p_show.add_argument("--json", action="store_true", help="Output raw JSON")
+    p_show.set_defaults(func=cmd_macro_show)
+
+    # macro delete <name>
+    p_delete = msub.add_parser("delete", help="Delete a user-defined YAML macro")
+    p_delete.add_argument("name", help="Macro name")
+    p_delete.add_argument("--yes", "-y", action="store_true", default=False,
+                          help="Skip confirmation prompt")
+    p_delete.set_defaults(func=cmd_macro_delete)
+
+    # macro install <name>  (premade shortcut)
+    p_install = msub.add_parser("install", help="Install a premade macro as a local file")
+    p_install.add_argument("name", help="Macro name (morning-standup, pre-deploy, weekly-report)")
+    p_install.set_defaults(func=cmd_macro_install)
 
     # macro hooks list / install <name>
     p_hooks = msub.add_parser("hooks", help="Manage proxy lifecycle script hooks")
@@ -1946,3 +2699,164 @@ def _build_macro_parser(sub):
     p_hook_install = hsub.add_parser("install", help="Install a hook stub script")
     p_hook_install.add_argument("hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)")
     p_hook_install.set_defaults(func=cmd_macro_hooks)
+
+# ── Fingerprint commands ──────────────────────────────────────────────────────
+
+def _build_fingerprint_parser(sub):
+    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management (Pro+)")
+    fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=True)
+
+    # fingerprint sync
+    p_sync = fpsub.add_parser("sync", help="Generate and sync a fingerprint, receive directives")
+    p_sync.add_argument("text", nargs="?", help="Prompt text (or omit to read from stdin)")
+    p_sync.add_argument("--file", "-f", dest="input_file", help="Read prompt from file")
+    p_sync.add_argument("--messages", dest="messages_file", help="OpenAI messages JSON file")
+    p_sync.add_argument("--dry-run", action="store_true", default=False,
+                        help="Show what would be sent without transmitting")
+    p_sync.add_argument("--privacy", choices=["minimal", "standard", "full"], default="standard")
+    p_sync.add_argument("--ttl", type=int, default=3600, help="Cache TTL in seconds (default 3600)")
+    p_sync.add_argument("--skip-cache", action="store_true", default=False)
+    p_sync.add_argument("--json", dest="output_json", action="store_true", default=False)
+    p_sync.set_defaults(func=cmd_fingerprint_sync)
+
+    # fingerprint cache
+    p_cache = fpsub.add_parser("cache", help="Show local directive cache status")
+    p_cache.add_argument("--json", dest="output_json", action="store_true", default=False)
+    p_cache.set_defaults(func=cmd_fingerprint_cache)
+
+    # fingerprint clear-cache
+    p_clear = fpsub.add_parser("clear-cache", help="Clear cached directives")
+    p_clear.add_argument("--id", dest="fp_id", default=None,
+                         help="Clear only this fingerprint ID (default: all)")
+    p_clear.add_argument("--yes", "-y", action="store_true", default=False,
+                         help="Skip confirmation prompt")
+    p_clear.set_defaults(func=cmd_fingerprint_clear_cache)
+
+
+def cmd_fingerprint_sync(args):
+    import json as _json
+    import sys as _sys
+    from pathlib import Path as _Path
+    from tokenpak.agent.fingerprint.generator import FingerprintGenerator
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
+
+    gen = FingerprintGenerator()
+
+    if getattr(args, "messages_file", None):
+        with open(args.messages_file) as f:
+            messages = _json.load(f)
+        fingerprint = gen.generate_from_messages(messages)
+    elif getattr(args, "input_file", None):
+        content = _Path(args.input_file).read_text()
+        fingerprint = gen.generate(content)
+    elif getattr(args, "text", None):
+        fingerprint = gen.generate(args.text)
+    elif not _sys.stdin.isatty():
+        content = _sys.stdin.read()
+        fingerprint = gen.generate(content)
+    else:
+        print("Error: provide TEXT, --file, --messages, or pipe stdin.", file=_sys.stderr)
+        _sys.exit(1)
+
+    privacy_level = PrivacyLevel(args.privacy)
+    client = FingerprintSync(ttl=args.ttl, privacy_level=privacy_level)
+
+    if args.dry_run:
+        payload = apply_privacy(fingerprint.to_dict(), privacy_level)
+        if args.output_json:
+            print(_json.dumps({
+                "dry_run": True,
+                "fingerprint_id": fingerprint.fingerprint_id,
+                "payload_preview": payload,
+            }, indent=2))
+        else:
+            print("── Dry Run ─────────────────────────────────")
+            print(f"  Fingerprint ID : {fingerprint.fingerprint_id}")
+            print(f"  Total tokens   : {fingerprint.total_tokens:,}")
+            print(f"  Segments       : {fingerprint.segment_count}")
+            print(f"  Privacy level  : {args.privacy}")
+            print()
+            print("  Payload that would be sent:")
+            print(_json.dumps(payload, indent=4))
+        return
+
+    try:
+        result = client.sync(fingerprint, dry_run=False, skip_cache=args.skip_cache)
+    except PermissionError as e:
+        print(f"✗ {e}", file=_sys.stderr)
+        _sys.exit(1)
+
+    if args.output_json:
+        print(_json.dumps({
+            "success": result.success,
+            "source": result.source,
+            "fingerprint_id": fingerprint.fingerprint_id,
+            "directives": [d.to_dict() for d in result.directives],
+            "cached_at": result.cached_at,
+            "expires_at": result.expires_at,
+            "error": result.error,
+        }, indent=2))
+        return
+
+    status_icon = "✓" if result.success else "⚠"
+    source_label = {
+        "server": "intelligence server",
+        "cache": "local cache",
+        "oss_fallback": "OSS fallback",
+    }.get(result.source, result.source)
+
+    print(f"{status_icon} Fingerprint synced  [{source_label}]")
+    print(f"  ID         : {fingerprint.fingerprint_id}")
+    print(f"  Tokens     : {fingerprint.total_tokens:,}")
+    print(f"  Directives : {len(result.directives)}")
+
+    if result.error:
+        print(f"  Warning    : {result.error}", file=_sys.stderr)
+
+    if result.directives:
+        print()
+        print("  Directives received:")
+        for d in result.directives:
+            print(f"    [{d.priority}] {d.action}  — {d.description or d.directive_id}")
+
+
+def cmd_fingerprint_cache(args):
+    import json as _json
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    client = FingerprintSync()
+    status = client.cache_status()
+
+    if getattr(args, "output_json", False):
+        print(_json.dumps(status, indent=2))
+        return
+
+    print("── Fingerprint Cache ────────────────────────")
+    print(f"  Cache dir  : {status['cache_dir']}")
+    print(f"  TTL        : {status['ttl_seconds']}s")
+    print(f"  Entries    : {status['entries']}")
+    print(f"  Valid      : {status.get('valid', 0)}")
+    print(f"  Expired    : {status.get('expired', 0)}")
+
+
+def cmd_fingerprint_clear_cache(args):
+    import sys as _sys
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    client = FingerprintSync()
+
+    fp_id = getattr(args, "fp_id", None)
+    yes = getattr(args, "yes", False)
+    scope = f"fingerprint {fp_id}" if fp_id else "ALL cached directives"
+
+    if not yes:
+        confirm = input(f"Clear {scope}? [y/N] ").strip().lower()
+        if confirm not in ("y", "yes"):
+            print("Aborted.")
+            _sys.exit(0)
+
+    deleted = client.clear_cache(fingerprint_id=fp_id)
+    print(f"✓ Cleared {deleted} cache file(s).")
+
+
+if __name__ == "__main__":
+    main()
