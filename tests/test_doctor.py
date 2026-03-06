@@ -554,3 +554,145 @@ class ColorsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DoctorRequiredDirsTest(unittest.TestCase):
+    """Test required directories check."""
+
+    def setUp(self):
+        self.args = MagicMock()
+        self.args.fix = False
+        self.temp_home = tempfile.TemporaryDirectory()
+        self.temp_path = Path(self.temp_home.name)
+
+    def tearDown(self):
+        self.temp_home.cleanup()
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    def test_required_dirs_all_present(self, mock_stdout):
+        """All required dirs present should pass."""
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        (config_dir / "cache").mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            cmd_doctor(self.args)
+            output = mock_stdout.getvalue()
+            self.assertIn('Required dirs', output)
+            self.assertIn('all present', output)
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    def test_required_dirs_missing(self, mock_stdout):
+        """Missing required dirs should warn."""
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        # Don't create cache dir
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            cmd_doctor(self.args)
+            output = mock_stdout.getvalue()
+            self.assertIn('⚠️', output)
+            self.assertIn('Required dirs', output)
+            self.assertIn('missing', output)
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    def test_fix_creates_missing_dirs(self, mock_stdout):
+        """--fix should create missing directories."""
+        self.args.fix = True
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            cmd_doctor(self.args)
+            # cache dir should be created by --fix
+            self.assertTrue((config_dir / "cache").exists())
+
+
+class DoctorDependenciesTest(unittest.TestCase):
+    """Test Python dependencies check."""
+
+    def setUp(self):
+        self.args = MagicMock()
+        self.args.fix = False
+        self.temp_home = tempfile.TemporaryDirectory()
+        self.temp_path = Path(self.temp_home.name)
+
+    def tearDown(self):
+        self.temp_home.cleanup()
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    def test_required_deps_present(self, mock_stdout):
+        """Standard lib deps (json, sqlite3, pathlib) always present."""
+        import importlib.util
+        # These are stdlib — always available
+        for pkg in ('json', 'sqlite3', 'pathlib'):
+            self.assertIsNotNone(importlib.util.find_spec(pkg))
+
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        (config_dir / "cache").mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            cmd_doctor(self.args)
+            output = mock_stdout.getvalue()
+            self.assertIn('Dependencies', output)
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    @patch('importlib.util.find_spec')
+    def test_missing_optional_deps_warns(self, mock_find_spec, mock_stdout):
+        """Missing optional deps should warn."""
+        # Stdlib always present, optional packages absent
+        def fake_find_spec(pkg):
+            if pkg in ('aiohttp', 'fastapi', 'uvicorn'):
+                return None
+            import importlib.util as _iu
+            return _iu.find_spec.__wrapped__(pkg) if hasattr(_iu.find_spec, '__wrapped__') else True
+
+        mock_find_spec.side_effect = lambda p: None if p in ('aiohttp', 'fastapi', 'uvicorn') else True
+
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        (config_dir / "cache").mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            cmd_doctor(self.args)
+            output = mock_stdout.getvalue()
+            self.assertIn('Dependencies', output)
+            # Should warn or pass (aiohttp/fastapi/uvicorn are optional)
+            self.assertIn('⚠️', output)
+
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
+    @patch('importlib.util.find_spec')
+    def test_missing_required_deps_fails(self, mock_find_spec, mock_stdout):
+        """Missing required dep should fail."""
+        mock_find_spec.return_value = None  # All packages "missing"
+
+        config_dir = self.temp_path / ".tokenpak"
+        config_dir.mkdir()
+        (config_dir / "cache").mkdir()
+        config_file = config_dir / "config.json"
+        config_file.write_text(json.dumps({"port": 8765}))
+
+        with patch('pathlib.Path.home', return_value=self.temp_path):
+            with self.assertRaises(SystemExit) as cm:
+                cmd_doctor(self.args)
+            self.assertEqual(cm.exception.code, 1)
+            output = mock_stdout.getvalue()
+            self.assertIn('Dependencies', output)
+            self.assertIn('❌', output)

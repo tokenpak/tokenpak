@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import importlib.util
 import time
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -486,6 +487,53 @@ def cmd_doctor(args):
         print(Colors.ok(f"Debug log           (not present)"))
         results["pass"] += 1
     
+    # Check 7: Required directories exist
+    required_dirs = [
+        Path.home() / ".tokenpak",
+        Path.home() / ".tokenpak" / "cache",
+    ]
+    missing_dirs = [d for d in required_dirs if not d.exists()]
+    if not missing_dirs:
+        print(Colors.ok(f"Required dirs       all present ({len(required_dirs)} checked)"))
+        results["pass"] += 1
+    else:
+        missing_list = ", ".join(str(d) for d in missing_dirs)
+        print(Colors.warn(f"Required dirs       missing: {missing_list}"))
+        results["warn"] += 1
+        fixes_needed.append(("create dirs", missing_dirs))
+    
+    # Check 8: Python dependencies installed
+    missing_deps = []
+    optional_deps = []
+    required_packages = [
+        ("pathlib", True),
+        ("json", True),
+        ("sqlite3", True),
+        ("aiohttp", False),
+        ("fastapi", False),
+        ("uvicorn", False),
+    ]
+    import importlib
+    for pkg, is_required in required_packages:
+        spec = importlib.util.find_spec(pkg)
+        if spec is None:
+            if is_required:
+                missing_deps.append(pkg)
+            else:
+                optional_deps.append(pkg)
+    
+    if not missing_deps and not optional_deps:
+        print(Colors.ok(f"Dependencies        all packages present"))
+        results["pass"] += 1
+    elif not missing_deps and optional_deps:
+        opt_list = ", ".join(optional_deps)
+        print(Colors.warn(f"Dependencies        optional missing: {opt_list} (run: pip install tokenpak[full])"))
+        results["warn"] += 1
+    else:
+        dep_list = ", ".join(missing_deps)
+        print(Colors.fail(f"Dependencies        required missing: {dep_list} (run: pip install tokenpak)"))
+        results["fail"] += 1
+    
     # Summary
     print(f"\n──────────────────────────────")
     summary = f"{results['fail']} error{'s' if results['fail'] != 1 else ''}, {results['warn']} warning{'s' if results['warn'] != 1 else ''}."
@@ -511,6 +559,10 @@ def cmd_doctor(args):
                 with open(fix_path, "w") as f:
                     json.dump(default_config, f, indent=2)
                 print(f"  ✓ Recreated {fix_path}")
+            elif fix_type == "create dirs":
+                for d in fix_path:
+                    d.mkdir(parents=True, exist_ok=True)
+                    print(f"  ✓ Created {d}")
     
     if results["fail"] > 0:
         sys.exit(1)
