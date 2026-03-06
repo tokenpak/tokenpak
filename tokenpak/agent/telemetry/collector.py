@@ -6,7 +6,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 
 @dataclass
@@ -19,18 +19,39 @@ class RequestStats:
     tokens_saved: int
     percent_saved: float
     cost_saved: float
+    # Failover tracking: list of providers tried (empty = no failover)
+    failover_chain: List[str] = field(default_factory=list)
+    # Original provider before failover (None = no failover)
+    original_provider: Optional[str] = None
+    # Final provider used (None = use first in chain or default)
+    final_provider: Optional[str] = None
+
+    @property
+    def failover_indicator(self) -> Optional[str]:
+        """Generate failover indicator string if failover occurred."""
+        if not self.failover_chain or len(self.failover_chain) <= 1:
+            return None
+        chain_str = "→".join(self.failover_chain)
+        return f"⚠️ failover:{chain_str}"
 
     @property
     def footer_oneline(self) -> str:
+        base = ""
         if self.tokens_saved == 0:
-            return "⚡ TokenPak: 0 tokens saved"
-        return (
-            f"⚡ TokenPak: -{self.tokens_saved:,} tokens "
-            f"({self.percent_saved:.0f}%) | ${self.cost_saved:.3f} saved"
-        )
+            base = "⚡ TokenPak: 0 tokens saved"
+        else:
+            base = (
+                f"⚡ TokenPak: -{self.tokens_saved:,} tokens "
+                f"({self.percent_saved:.0f}%) | ${self.cost_saved:.3f} saved"
+            )
+        # Append failover indicator if present
+        indicator = self.failover_indicator
+        if indicator:
+            base = f"{base} | {indicator}"
+        return base
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "request_id": self.request_id,
             "timestamp": self.timestamp.isoformat(),
             "input_tokens_raw": self.input_tokens_raw,
@@ -39,6 +60,12 @@ class RequestStats:
             "percent_saved": self.percent_saved,
             "cost_saved": self.cost_saved,
         }
+        if self.failover_chain:
+            d["failover_chain"] = self.failover_chain
+            d["original_provider"] = self.original_provider
+            d["final_provider"] = self.final_provider
+            d["failover_indicator"] = self.failover_indicator
+        return d
 
 
 @dataclass
