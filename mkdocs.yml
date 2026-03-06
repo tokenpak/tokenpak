@@ -1,0 +1,80 @@
+site_name: TokenPak
+site_url: https://docs.tokenpak.dev
+site_description: Zero-token operations. Maximum context efficiency.
+site_author: TokenPak Team
+repo_url: https://github.com/tokenpak/tokenpak
+repo_name: tokenpak/tokenpak
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - tags
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - footnotes
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides:
+    - Proxy Setup: guides/proxy-setup.md
+    - Recipe Development: guides/recipes.md
+    - Telemetry & Dashboard: guides/telemetry.md
+    - Team Server: guides/team-server.md
+  - CLI Reference: cli-reference.md
+  - API Reference: api-reference.md
+  - FAQ: faq.md
+  - Blog:
+    - Why Zero Data Architecture: blog/zero-data-architecture.md
+    - Save 35% on LLM Tokens: blog/save-35-percent-tokens.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/tokenpak/tokenpak
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/tokenpak/
