@@ -50,3 +50,36 @@ def render_footer_compact(stats: RequestStats) -> str:
     if stats.tokens_saved == 0:
         return "⚡0"
     return f"⚡-{stats.tokens_saved:,}t"
+
+
+def render_footer_with_failover(
+    stats: RequestStats,
+    failover_indicator: Optional[str] = None,
+    session: Optional[SessionStats] = None,
+) -> str:
+    """Multi-line footer block with optional failover indicator.
+
+    Example output when failover occurred::
+
+        ─────────────────────────────────────────
+        ⚡ TokenPak  -312 tokens (18%) | $0.003 saved
+        ⚠️ failover:openai (anthropic 429 rate_limit)
+        ─────────────────────────────────────────
+
+    Args:
+        stats: Request compression stats
+        failover_indicator: Failover indicator string from FailoverEventLog
+        session: Optional session totals
+
+    Returns:
+        Formatted footer string (multi-line)
+    """
+    base = render_footer(stats, session=session)
+    if not failover_indicator:
+        return base
+
+    lines = base.split("\n")
+    sep = lines[-1]  # last line is the separator
+    # Insert failover line before final separator
+    lines.insert(-1, failover_indicator)
+    return "\n".join(lines)

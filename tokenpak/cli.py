@@ -592,6 +592,28 @@ def cmd_status(args):
             print(f"    {ts_str}  {event_type:<30}  task={task}{extra}")
         print()
 
+    # ── Failover events ──
+    try:
+        from .agent.proxy.failover_engine import get_event_log
+        flog = get_event_log()
+        failover_events = flog.get_recent(limit=n)
+        if not failover_events:
+            print("  Failover events: none\n")
+        else:
+            print(f"  Recent failover events (last {len(failover_events)}):\n")
+            for ev in failover_events:
+                ts = ev.get("timestamp", "")[:19].replace("T", " ")
+                orig = ev.get("original_provider", "?")
+                fail = ev.get("failover_provider", "?")
+                etype = ev.get("error_type", "?")
+                http_s = ev.get("http_status") or ""
+                http_tag = f" [{http_s}]" if http_s else ""
+                status_icon = "✅" if ev.get("succeeded") else "❌"
+                print(f"    {ts}  {status_icon} {orig} → {fail}{http_tag} ({etype})")
+            print()
+    except Exception:
+        pass
+
     # ── Budget status (if available) ──
     try:
         from .budgeter import BudgetTracker
