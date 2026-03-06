@@ -16,4 +16,5 @@ __all__ = [
     "license",
     "last",
     "workflow",
+    "replay",
 ]
