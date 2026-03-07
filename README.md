@@ -6,9 +6,10 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 
 [![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
-[![Downloads](https://img.shields.io/pypi/dm/tokenpak.svg)](https://pypi.org/project/tokenpak/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
+[![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
+[![Downloads](https://static.pepy.tech/badge/tokenpak/month)](https://pepy.tech/project/tokenpak)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![codecov](https://codecov.io/gh/kaywhy331/tokenpak/branch/master/graph/badge.svg)](https://codecov.io/gh/kaywhy331/tokenpak)
 
 ---
 
