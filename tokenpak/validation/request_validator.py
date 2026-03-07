@@ -223,9 +223,18 @@ class RequestValidator:
             self._compiled[provider] = Draft202012Validator(schema)
         validator = self._compiled[provider]
 
+        import re as _re
+
         errors: List[Dict[str, Any]] = []
         for err in validator.iter_errors(data):
-            field = ".".join(str(p) for p in err.absolute_path) or "(root)"
+            field = ".".join(str(p) for p in err.absolute_path)
+            if not field and err.validator == "required":
+                # jsonschema reports missing required fields with empty path;
+                # extract the field name from the message: "'fieldname' is a required property"
+                m = _re.match(r"'([^']+)' is a required property", err.message)
+                field = m.group(1) if m else "(root)"
+            elif not field:
+                field = "(root)"
             errors.append({"field": field, "error": err.message})
         return errors
 
