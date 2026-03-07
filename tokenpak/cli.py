@@ -556,16 +556,28 @@ def cmd_serve(args):
         print(f"  GET  /health")
         uvicorn.run(app, host="127.0.0.1", port=port)
         return
+    # Default: start the TokenPak proxy server
+    shutdown_timeout = getattr(args, "shutdown_timeout", None)
     try:
-        import sys
-        proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
-        if proxy_path not in sys.path:
-            sys.path.insert(0, proxy_path)
-        import proxy
-        proxy.run_proxy(args.port)
+        from .agent.proxy.server import start_proxy
+        start_proxy(
+            host="127.0.0.1",
+            port=args.port,
+            blocking=True,
+            shutdown_timeout=shutdown_timeout,
+        )
     except Exception as e:
-        print(f"Serve mode unavailable: {e}")
-        print("Run the existing proxy directly if needed.")
+        # Fallback for legacy proxy.py deployments
+        try:
+            import sys
+            proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
+            if proxy_path not in sys.path:
+                sys.path.insert(0, proxy_path)
+            import proxy
+            proxy.run_proxy(args.port)
+        except Exception:
+            print(f"Serve mode unavailable: {e}")
+            print("Run the existing proxy directly if needed.")
 
 
 def cmd_benchmark(args):
@@ -863,6 +875,16 @@ def build_parser():
     p_serve.add_argument("--telemetry", action="store_true", help="Start telemetry ingest server")
     p_serve.add_argument("--ingest", action="store_true", help="Start Phase 5A ingest API server")
     p_serve.add_argument("--workers", type=int, default=1, help="Number of uvicorn workers")
+    p_serve.add_argument(
+        "--shutdown-timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "Seconds to wait for in-flight requests to complete before forcing shutdown "
+            "(default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)"
+        ),
+    )
     p_serve.set_defaults(func=cmd_serve)
 
     p_bench = sub.add_parser("benchmark", help="Benchmark compression performance on sample or real data")
