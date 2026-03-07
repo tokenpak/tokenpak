@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  sample_3race_fixture.xml
+  Minimal synthetic TrackEdge PPS fixture — 3 races, 5 horses each.
+  All horse names and data are fictional. Do NOT use as real handicapping data.
+-->
+<ppsdata>
+
+  <!-- ===== RACE 1 — 6F Maiden Claiming, Dirt ===== -->
+  <race number="1" track="SA" date="2026-02-27" surface="D"
+        purse="32000" class_rating="32000" type="Maiden Claiming">
+
+    <horse program="1" name="Iron Velocity" morn_odds="2-1"
+           jockey="J. Rosario" trainer="B. Baffert"
+           jockey_win_rate="0.22" trainer_win_rate="0.26"
+           jockey_starts="65" trainer_starts="130"
+           starts="8" avg_class_rating="32000" pace_style="E">
+      <pastperformances>
+        <pp racedate="2026-01-18" surface="D" speedfigur="78"
+            lenback1="0.5" lenback2="1.0"
+            position1="1" position2="1"
+            pacefigure="88" purse="32000"/>
+        <pp racedate="2025-12-05" surface="D" speedfigur="74"
+            lenback1="1.0" lenback2="1.5"
+            position1="2" position2="2"
+            pacefigure="84" purse="28000"/>
+        <pp racedate="2025-10-22" surface="T" speedfigur="70"
+            lenback1="2.0" lenback2="3.0"
+            position1="3" position2="4"
+            pacefigure="80" purse="25000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-20" furlongs="5" time="0:59.4" rank="2" total="9" days_ago="7"/>
+        <workout date="2026-02-13" furlongs="4" time="0:47.1" rank="1" total="8" days_ago="14"/>
+      </workouts>
+    </horse>
+
+    <horse program="2" name="Shadow Dancer" morn_odds="5-1"
+           jockey="F. Prat" trainer="D. O'Neill"
+           jockey_win_rate="0.20" trainer_win_rate="0.18"
+           jockey_starts="55" trainer_starts="110"
+           starts="12" avg_class_rating="28000" pace_style="EP">
+      <pastperformances>
+        <pp racedate="2026-01-30" surface="D" speedfigur="76"
+            lenback1="1.0" lenback2="2.0"
+            position1="2" position2="2"
+            pacefigure="86" purse="32000"/>
+        <pp racedate="2025-12-15" surface="D" speedfigur="72"
+            lenback1="1.5" lenback2="2.5"
+            position1="3" position2="3"
+            pacefigure="82" purse="30000"/>
+        <pp racedate="2025-11-01" surface="D" speedfigur="68"
+            lenback1="3.0" lenback2="4.0"
+            position1="4" position2="4"
+            pacefigure="78" purse="26000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-21" furlongs="4" time="0:48.0" rank="3" total="10" days_ago="6"/>
+        <workout date="2026-02-14" furlongs="3" time="0:36.2" rank="2" total="7" days_ago="13"/>
+      </workouts>
+    </horse>
+
+    <horse program="3" name="Copper Creek" morn_odds="8-1"
+           jockey="T. Baze" trainer="P. Miller"
+           jockey_win_rate="0.15" trainer_win_rate="0.14"
+           jockey_starts="40" trainer_starts="80"
+           starts="6" avg_class_rating="25000" pace_style="P">
+      <pastperformances>
+        <pp racedate="2026-02-01" surface="D" speedfigur="71"
+            lenback1="2.5" lenback2="3.5"
+            position1="5" position2="5"
+            pacefigure="79" purse="30000"/>
+        <pp racedate="2025-12-20" surface="T" speedfigur="67"
+            lenback1="3.5" lenback2="4.5"
+            position1="6" position2="6"
+            pacefigure="75" purse="22000"/>
+        <pp racedate="2025-11-15" surface="D" speedfigur="63"
+            lenback1="4.0" lenback2="5.0"
+            position1="7" position2="7"
+            pacefigure="72" purse="20000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-19" furlongs="4" time="0:49.1" rank="5" total="10" days_ago="8"/>
+        <workout date="2026-02-12" furlongs="3" time="0:37.0" rank="4" total="8" days_ago="15"/>
+      </workouts>
+    </horse>
+
+    <horse program="4" name="Desert Wind" morn_odds="12-1"
+           jockey="R. Gutierrez" trainer="H. Motion"
+           jockey_win_rate="0.13" trainer_win_rate="0.16"
+           jockey_starts="35" trainer_starts="75"
+           starts="9" avg_class_rating="22000" pace_style="S">
+      <pastperformances>
+        <pp racedate="2026-01-10" surface="D" speedfigur="65"
+            lenback1="5.0" lenback2="6.0"
+            position1="8" position2="8"
+            pacefigure="70" purse="25000"/>
+        <pp racedate="2025-11-28" surface="D" speedfigur="61"
+            lenback1="6.0" lenback2="7.0"
+            position1="9" position2="9"
+            pacefigure="66" purse="22000"/>
+        <pp racedate="2025-10-10" surface="T" speedfigur="58"
+            lenback1="7.0" lenback2="8.0"
+            position1="10" position2="10"
+            pacefigure="63" purse="18000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-18" furlongs="4" time="0:50.3" rank="7" total="11" days_ago="9"/>
+        <workout date="2026-02-11" furlongs="3" time="0:38.1" rank="6" total="9" days_ago="16"/>
+      </workouts>
+    </horse>
+
+    <horse program="5" name="Night Storm" morn_odds="20-1"
+           jockey="A. Canchari" trainer="C. Gonzalez"
+           jockey_win_rate="0.10" trainer_win_rate="0.11"
+           jockey_starts="25" trainer_starts="60"
+           starts="14" avg_class_rating="18000" pace_style="S">
+      <pastperformances>
+        <pp racedate="2026-02-05" surface="D" speedfigur="59"
+            lenback1="8.0" lenback2="9.0"
+            position1="11" position2="11"
+            pacefigure="61" purse="20000"/>
+        <pp racedate="2025-12-30" surface="D" speedfigur="55"
+            lenback1="9.0" lenback2="10.0"
+            position1="12" position2="12"
+            pacefigure="57" purse="17000"/>
+        <pp racedate="2025-11-20" surface="T" speedfigur="52"
+            lenback1="10.0" lenback2="11.0"
+            position1="13" position2="13"
+            pacefigure="53" purse="15000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-22" furlongs="3" time="0:38.4" rank="8" total="12" days_ago="5"/>
+        <workout date="2026-02-15" furlongs="3" time="0:39.0" rank="9" total="12" days_ago="12"/>
+      </workouts>
+    </horse>
+
+  </race>
+
+
+  <!-- ===== RACE 2 — 1M Allowance Optional Claiming, Turf ===== -->
+  <race number="2" track="SA" date="2026-02-27" surface="T"
+        purse="70000" class_rating="70000" type="Allowance">
+
+    <horse program="1" name="Emerald Prince" morn_odds="3-1"
+           jockey="J. Castellano" trainer="C. McGaughey"
+           jockey_win_rate="0.21" trainer_win_rate="0.22"
+           jockey_starts="70" trainer_starts="140"
+           starts="15" avg_class_rating="70000" pace_style="EP">
+      <pastperformances>
+        <pp racedate="2026-01-22" surface="T" speedfigur="92"
+            lenback1="1.0" lenback2="1.5"
+            position1="1" position2="1"
+            pacefigure="95" purse="70000"/>
+        <pp racedate="2025-12-10" surface="T" speedfigur="89"
+            lenback1="0.5" lenback2="1.0"
+            position1="2" position2="2"
+            pacefigure="93" purse="65000"/>
+        <pp racedate="2025-10-30" surface="T" speedfigur="85"
+            lenback1="2.0" lenback2="2.5"
+            position1="1" position2="3"
+            pacefigure="91" purse="60000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-20" furlongs="5" time="1:00.1" rank="1" total="8" days_ago="7"/>
+        <workout date="2026-02-13" furlongs="4" time="0:48.0" rank="1" total="9" days_ago="14"/>
+      </workouts>
+    </horse>
+
+    <horse program="2" name="Royal Heritage" morn_odds="4-1"
+           jockey="I. Ortiz Jr" trainer="T. Pletcher"
+           jockey_win_rate="0.23" trainer_win_rate="0.24"
+           jockey_starts="75" trainer_starts="150"
+           starts="18" avg_class_rating="68000" pace_style="P">
+      <pastperformances>
+        <pp racedate="2026-01-28" surface="T" speedfigur="90"
+            lenback1="1.5" lenback2="2.0"
+            position1="2" position2="1"
+            pacefigure="93" purse="70000"/>
+        <pp racedate="2025-12-18" surface="T" speedfigur="87"
+            lenback1="2.0" lenback2="2.5"
+            position1="3" position2="2"
+            pacefigure="90" purse="65000"/>
+        <pp racedate="2025-11-05" surface="T" speedfigur="83"
+            lenback1="2.5" lenback2="3.0"
+            position1="4" position2="3"
+            pacefigure="87" purse="60000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-21" furlongs="5" time="1:01.0" rank="2" total="9" days_ago="6"/>
+        <workout date="2026-02-14" furlongs="4" time="0:48.4" rank="3" total="10" days_ago="13"/>
+      </workouts>
+    </horse>
+
+    <horse program="3" name="Willow Breeze" morn_odds="6-1"
+           jockey="L. Saez" trainer="W. Mott"
+           jockey_win_rate="0.18" trainer_win_rate="0.19"
+           jockey_starts="50" trainer_starts="100"
+           starts="20" avg_class_rating="62000" pace_style="E">
+      <pastperformances>
+        <pp racedate="2026-01-15" surface="T" speedfigur="86"
+            lenback1="0.5" lenback2="1.0"
+            position1="1" position2="1"
+            pacefigure="94" purse="68000"/>
+        <pp racedate="2025-12-02" surface="T" speedfigur="82"
+            lenback1="1.0" lenback2="1.5"
+            position1="2" position2="2"
+            pacefigure="90" purse="62000"/>
+        <pp racedate="2025-10-20" surface="T" speedfigur="78"
+            lenback1="2.0" lenback2="3.0"
+            position1="3" position2="3"
+            pacefigure="86" purse="58000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-19" furlongs="5" time="1:01.3" rank="3" total="8" days_ago="8"/>
+        <workout date="2026-02-12" furlongs="4" time="0:49.2" rank="4" total="10" days_ago="15"/>
+      </workouts>
+    </horse>
+
+    <horse program="4" name="Cobalt Sky" morn_odds="10-1"
+           jockey="E. Cancel" trainer="M. Maker"
+           jockey_win_rate="0.14" trainer_win_rate="0.16"
+           jockey_starts="40" trainer_starts="85"
+           starts="22" avg_class_rating="55000" pace_style="S">
+      <pastperformances>
+        <pp racedate="2026-01-08" surface="T" speedfigur="80"
+            lenback1="3.0" lenback2="4.0"
+            position1="5" position2="5"
+            pacefigure="83" purse="65000"/>
+        <pp racedate="2025-11-25" surface="T" speedfigur="76"
+            lenback1="4.0" lenback2="5.0"
+            position1="6" position2="6"
+            pacefigure="79" purse="60000"/>
+        <pp racedate="2025-10-12" surface="D" speedfigur="72"
+            lenback1="5.0" lenback2="6.0"
+            position1="7" position2="7"
+            pacefigure="75" purse="55000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-18" furlongs="4" time="0:50.0" rank="5" total="11" days_ago="9"/>
+        <workout date="2026-02-11" furlongs="3" time="0:37.3" rank="5" total="10" days_ago="16"/>
+      </workouts>
+    </horse>
+
+    <horse program="5" name="Autumn Gold" morn_odds="15-1"
+           jockey="K. Desormeaux" trainer="R. Mandella"
+           jockey_win_rate="0.12" trainer_win_rate="0.15"
+           jockey_starts="30" trainer_starts="70"
+           starts="25" avg_class_rating="50000" pace_style="P">
+      <pastperformances>
+        <pp racedate="2026-01-31" surface="T" speedfigur="77"
+            lenback1="4.0" lenback2="5.0"
+            position1="8" position2="8"
+            pacefigure="80" purse="60000"/>
+        <pp racedate="2025-12-22" surface="T" speedfigur="73"
+            lenback1="5.0" lenback2="6.0"
+            position1="9" position2="9"
+            pacefigure="76" purse="56000"/>
+        <pp racedate="2025-11-08" surface="T" speedfigur="69"
+            lenback1="6.0" lenback2="7.0"
+            position1="10" position2="10"
+            pacefigure="72" purse="52000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-20" furlongs="4" time="0:50.2" rank="6" total="12" days_ago="7"/>
+        <workout date="2026-02-13" furlongs="3" time="0:38.0" rank="7" total="11" days_ago="14"/>
+      </workouts>
+    </horse>
+
+    <horse program="6" name="Sterling Chase" morn_odds="20-1"
+           jockey="J. Valdivia" trainer="P. Gallagher"
+           jockey_win_rate="0.11" trainer_win_rate="0.12"
+           jockey_starts="25" trainer_starts="55"
+           starts="28" avg_class_rating="45000" pace_style="S">
+      <pastperformances>
+        <pp racedate="2026-02-04" surface="D" speedfigur="71"
+            lenback1="7.0" lenback2="8.0"
+            position1="11" position2="11"
+            pacefigure="68" purse="50000"/>
+        <pp racedate="2025-12-28" surface="T" speedfigur="68"
+            lenback1="8.0" lenback2="9.0"
+            position1="12" position2="12"
+            pacefigure="65" purse="48000"/>
+        <pp racedate="2025-11-14" surface="T" speedfigur="64"
+            lenback1="9.0" lenback2="10.0"
+            position1="13" position2="13"
+            pacefigure="62" purse="44000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-17" furlongs="3" time="0:38.3" rank="9" total="13" days_ago="10"/>
+        <workout date="2026-02-10" furlongs="3" time="0:39.1" rank="10" total="13" days_ago="17"/>
+      </workouts>
+    </horse>
+
+  </race>
+
+
+  <!-- ===== RACE 3 — 1 1/16M Stakes, Dirt ===== -->
+  <race number="3" track="SA" date="2026-02-27" surface="D"
+        purse="150000" class_rating="150000" type="Stakes">
+
+    <horse program="1" name="Phantom Thunder" morn_odds="2-1"
+           jockey="J. Rosario" trainer="B. Baffert"
+           jockey_win_rate="0.22" trainer_win_rate="0.26"
+           jockey_starts="80" trainer_starts="160"
+           starts="10" avg_class_rating="150000" pace_style="E">
+      <pastperformances>
+        <pp racedate="2026-01-25" surface="D" speedfigur="105"
+            lenback1="0.5" lenback2="0.5"
+            position1="1" position2="1"
+            pacefigure="108" purse="150000"/>
+        <pp racedate="2025-12-14" surface="D" speedfigur="102"
+            lenback1="1.0" lenback2="1.0"
+            position1="1" position2="1"
+            pacefigure="105" purse="140000"/>
+        <pp racedate="2025-11-02" surface="D" speedfigur="98"
+            lenback1="0.5" lenback2="1.5"
+            position1="2" position2="1"
+            pacefigure="103" purse="130000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-20" furlongs="6" time="1:12.0" rank="1" total="10" days_ago="7"/>
+        <workout date="2026-02-13" furlongs="5" time="0:59.2" rank="1" total="9" days_ago="14"/>
+      </workouts>
+    </horse>
+
+    <horse program="2" name="Solar Eclipse" morn_odds="3-1"
+           jockey="F. Prat" trainer="J. Sadler"
+           jockey_win_rate="0.20" trainer_win_rate="0.21"
+           jockey_starts="72" trainer_starts="145"
+           starts="12" avg_class_rating="140000" pace_style="EP">
+      <pastperformances>
+        <pp racedate="2026-01-18" surface="D" speedfigur="103"
+            lenback1="1.0" lenback2="1.5"
+            position1="2" position2="2"
+            pacefigure="106" purse="150000"/>
+        <pp racedate="2025-12-06" surface="D" speedfigur="100"
+            lenback1="1.5" lenback2="2.0"
+            position1="1" position2="2"
+            pacefigure="104" purse="140000"/>
+        <pp racedate="2025-10-25" surface="D" speedfigur="96"
+            lenback1="2.0" lenback2="2.5"
+            position1="3" position2="3"
+            pacefigure="101" purse="125000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-21" furlongs="6" time="1:12.4" rank="2" total="10" days_ago="6"/>
+        <workout date="2026-02-14" furlongs="5" time="1:00.0" rank="2" total="9" days_ago="13"/>
+      </workouts>
+    </horse>
+
+    <horse program="3" name="Mystic Harbor" morn_odds="5-1"
+           jockey="T. Gaffalione" trainer="S. Asmussen"
+           jockey_win_rate="0.19" trainer_win_rate="0.20"
+           jockey_starts="60" trainer_starts="200"
+           starts="16" avg_class_rating="130000" pace_style="P">
+      <pastperformances>
+        <pp racedate="2026-01-12" surface="D" speedfigur="99"
+            lenback1="2.0" lenback2="2.5"
+            position1="3" position2="3"
+            pacefigure="102" purse="140000"/>
+        <pp racedate="2025-11-30" surface="D" speedfigur="96"
+            lenback1="2.5" lenback2="3.0"
+            position1="4" position2="4"
+            pacefigure="99" purse="130000"/>
+        <pp racedate="2025-10-18" surface="T" speedfigur="92"
+            lenback1="3.0" lenback2="3.5"
+            position1="5" position2="5"
+            pacefigure="95" purse="120000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-19" furlongs="5" time="1:01.0" rank="3" total="10" days_ago="8"/>
+        <workout date="2026-02-12" furlongs="4" time="0:48.3" rank="3" total="9" days_ago="15"/>
+      </workouts>
+    </horse>
+
+    <horse program="4" name="Golden Compass" morn_odds="8-1"
+           jockey="I. Ortiz Jr" trainer="C. Brown"
+           jockey_win_rate="0.23" trainer_win_rate="0.22"
+           jockey_starts="68" trainer_starts="135"
+           starts="14" avg_class_rating="120000" pace_style="S">
+      <pastperformances>
+        <pp racedate="2026-01-05" surface="D" speedfigur="94"
+            lenback1="4.0" lenback2="4.5"
+            position1="6" position2="6"
+            pacefigure="97" purse="130000"/>
+        <pp racedate="2025-11-22" surface="D" speedfigur="91"
+            lenback1="4.5" lenback2="5.0"
+            position1="7" position2="7"
+            pacefigure="94" purse="120000"/>
+        <pp racedate="2025-10-08" surface="D" speedfigur="87"
+            lenback1="5.0" lenback2="5.5"
+            position1="8" position2="8"
+            pacefigure="90" purse="110000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-18" furlongs="5" time="1:01.2" rank="4" total="11" days_ago="9"/>
+        <workout date="2026-02-11" furlongs="4" time="0:49.0" rank="5" total="10" days_ago="16"/>
+      </workouts>
+    </horse>
+
+    <horse program="5" name="Silver Lining" morn_odds="12-1"
+           jockey="J. Velazquez" trainer="T. Pletcher"
+           jockey_win_rate="0.18" trainer_win_rate="0.24"
+           jockey_starts="55" trainer_starts="150"
+           starts="20" avg_class_rating="110000" pace_style="P">
+      <pastperformances>
+        <pp racedate="2026-01-20" surface="D" speedfigur="89"
+            lenback1="5.0" lenback2="5.5"
+            position1="9" position2="9"
+            pacefigure="92" purse="120000"/>
+        <pp racedate="2025-12-08" surface="D" speedfigur="86"
+            lenback1="5.5" lenback2="6.0"
+            position1="10" position2="10"
+            pacefigure="89" purse="115000"/>
+        <pp racedate="2025-10-28" surface="D" speedfigur="82"
+            lenback1="6.0" lenback2="6.5"
+            position1="11" position2="11"
+            pacefigure="85" purse="100000"/>
+      </pastperformances>
+      <workouts>
+        <workout date="2026-02-20" furlongs="5" time="1:02.0" rank="5" total="12" days_ago="7"/>
+        <workout date="2026-02-13" furlongs="4" time="0:49.4" rank="6" total="11" days_ago="14"/>
+      </workouts>
+    </horse>
+
+  </race>
+
+</ppsdata>
