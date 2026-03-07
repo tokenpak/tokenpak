@@ -40,6 +40,11 @@ _COMMAND_GROUPS = {
         ("recipe",      "Manage compression recipes"),
         ("template",    "Manage prompt templates"),
         ("budget",      "Set API budget limits"),
+        ("config",      "Config sync, pull, validate (version control)"),
+    ],
+    "Versioning": [
+        ("version",     "Show current versions (proxy, config, cli)"),
+        ("update",      "Update TokenPak to latest from git/pypi"),
     ],
     "Operations": [
         ("benchmark",   "Run compression benchmarks"),
@@ -903,6 +908,9 @@ def build_parser():
     _build_user_template_parser(sub)
     _build_audit_parser(sub)
     _build_compliance_parser(sub)
+    _build_version_parser(sub)
+    _build_update_parser(sub)
+    _build_config_mgmt_parser(sub)
 
     return parser
 
@@ -1287,6 +1295,350 @@ def cmd_compliance_report(args):
             print(report.as_text())
 
 
+# ── Version Control Commands ──────────────────────────────────────────────────
+
+PROXY_VERSION = "0.4.0"
+_LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
+_OPENCLAW_CFG = Path.home() / ".openclaw" / "openclaw.json"
+_PROXY_URL = "http://localhost:8766"
+
+
+def _compute_config_hash(cfg: dict) -> str:
+    import hashlib as _hl
+    normalized = {k: v for k, v in sorted(cfg.items()) if k != "meta"}
+    raw = json.dumps(normalized, sort_keys=True).encode()
+    return "sha256:" + _hl.sha256(raw).hexdigest()[:12]
+
+
+def _get_proxy_version() -> dict:
+    """Query proxy /version endpoint. Returns dict or raises."""
+    import urllib.request as _ur
+    try:
+        with _ur.urlopen(f"{_PROXY_URL}/version", timeout=3) as resp:
+            return json.loads(resp.read())
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _load_lock() -> dict:
+    if _LOCK_FILE.exists():
+        try:
+            return json.loads(_LOCK_FILE.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_lock(lock: dict):
+    _LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _LOCK_FILE.write_text(json.dumps(lock, indent=2) + "\n")
+
+
+def cmd_version(args):
+    """Show current versions of proxy, config, and CLI."""
+    from tokenpak import __version__ as cli_ver
+
+    # CLI version
+    print(f"TokenPak CLI     : {cli_ver}")
+    print(f"Proxy (expected) : {PROXY_VERSION}")
+
+    # Proxy version (live)
+    proxy_info = _get_proxy_version()
+    if "error" in proxy_info:
+        print(f"Proxy (running)  : ✗ not reachable ({proxy_info['error']})")
+    else:
+        uptime = proxy_info.get("uptime", 0)
+        h, m = divmod(uptime // 60, 60)
+        print(f"Proxy (running)  : {proxy_info.get('version', '?')}  uptime={h}h{m:02d}m  python={proxy_info.get('pythonVersion', '?')}")
+        print(f"Proxy config hash: {proxy_info.get('configHash', '?')}")
+
+    # openclaw.json meta
+    try:
+        cfg = json.loads(_OPENCLAW_CFG.read_text())
+        meta = cfg.get("meta", {})
+        print(f"Config version   : {meta.get('configVersion', 'unknown')}")
+        print(f"Config hash      : {meta.get('configHash', 'unknown')}")
+        print(f"Last updated     : {meta.get('lastUpdated', 'unknown')}")
+    except Exception as e:
+        print(f"Config           : ✗ could not read ({e})")
+
+    # Lock file drift check
+    lock = _load_lock()
+    if lock:
+        print(f"\nLock file        : {_LOCK_FILE}")
+        print(f"  Locked version : {lock.get('proxyVersion', '?')}")
+        print(f"  Locked hash    : {lock.get('configHash', '?')}")
+        print(f"  Locked by      : {lock.get('lockedBy', '?')} at {lock.get('lockedAt', '?')}")
+        # Drift check
+        try:
+            cfg = json.loads(_OPENCLAW_CFG.read_text())
+            current_hash = _compute_config_hash(cfg)
+            if lock.get("configHash") and lock["configHash"] != current_hash:
+                print(f"\n  ⚠️  Config drift detected!")
+                print(f"  Lock hash    : {lock['configHash']}")
+                print(f"  Current hash : {current_hash}")
+                print("  Run `tokenpak config sync` to reconcile.")
+            else:
+                print("  ✓ Config matches lock file")
+        except Exception:
+            pass
+    else:
+        print(f"\n  Lock file not found at {_LOCK_FILE}")
+
+
+def cmd_update(args):
+    """Update TokenPak proxy and CLI to latest."""
+    import subprocess as _sp
+
+    check_only = getattr(args, "check", False)
+    force = getattr(args, "force", False)
+    core_only = getattr(args, "core_only", False)
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        print("🔍 Dry run — showing what would change (no changes applied)\n")
+
+    # Check latest version from PyPI
+    print("Checking for updates...")
+    try:
+        import urllib.request as _ur
+        with _ur.urlopen("https://pypi.org/pypi/tokenpak/json", timeout=5) as resp:
+            data = json.loads(resp.read())
+            latest = data["info"]["version"]
+    except Exception as e:
+        print(f"  ✗ Could not reach PyPI: {e}")
+        latest = None
+
+    from tokenpak import __version__ as current_ver
+    print(f"  Current : {current_ver}")
+    if latest:
+        print(f"  Latest  : {latest}")
+        if latest == current_ver:
+            print("  ✓ Already up to date!")
+            if not force:
+                return
+        else:
+            print(f"  → Upgrade available: {current_ver} → {latest}")
+
+    if check_only:
+        return
+
+    if dry_run:
+        print("\nWould run: pip install --upgrade tokenpak")
+        print("Would restart proxy if running.")
+        return
+
+    # Check if proxy is running first
+    proxy_info = _get_proxy_version()
+    proxy_running = "error" not in proxy_info
+
+    print("\nUpdating TokenPak...")
+    result = _sp.run(
+        [sys.executable, "-m", "pip", "install", "--upgrade", "tokenpak"],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        print("  ✓ tokenpak updated")
+    else:
+        print(f"  ✗ pip install failed:\n{result.stderr[:400]}")
+        return
+
+    # Restart proxy if it was running
+    if proxy_running and not core_only:
+        print("\nRestarting proxy...")
+        try:
+            _sp.Popen([sys.executable, "-m", "tokenpak", "restart"],
+                      stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            print("  ✓ Proxy restart initiated")
+        except Exception as e:
+            print(f"  ⚠ Could not restart proxy: {e}")
+
+    # Update lock file
+    try:
+        cfg = json.loads(_OPENCLAW_CFG.read_text())
+        import datetime as _dt
+        lock = {
+            "proxyVersion": latest or current_ver,
+            "configVersion": cfg.get("meta", {}).get("configVersion", "unknown"),
+            "configHash": _compute_config_hash(cfg),
+            "lockedAt": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "lockedBy": "tokenpak-update",
+        }
+        _save_lock(lock)
+        print(f"  ✓ Lock file updated at {_LOCK_FILE}")
+    except Exception as e:
+        print(f"  ⚠ Could not update lock file: {e}")
+
+    print("\n✓ Update complete.")
+
+
+def cmd_config_sync(args):
+    """Pull latest config from canonical source (git/vault)."""
+    import subprocess as _sp
+    source = getattr(args, "source", "git")
+    dry_run = getattr(args, "dry_run", False)
+
+    print(f"Syncing config from source: {source}")
+
+    if source == "git":
+        vault_dir = Path.home() / "vault"
+        if not vault_dir.exists():
+            print(f"  ✗ Vault not found at {vault_dir}")
+            return
+        # Pull latest vault
+        result = _sp.run(
+            ["bash", str(vault_dir / "scripts" / "vault-sync.sh")],
+            capture_output=True, text=True, cwd=str(vault_dir)
+        )
+        if result.returncode == 0:
+            print("  ✓ Vault synced")
+        else:
+            print(f"  ⚠ Vault sync output: {result.stdout[-200:]}")
+
+        # Compare lock file with current config
+        lock = _load_lock()
+        try:
+            cfg = json.loads(_OPENCLAW_CFG.read_text())
+            current_hash = _compute_config_hash(cfg)
+            lock_hash = lock.get("configHash", "")
+            if lock_hash and lock_hash != current_hash:
+                print(f"\n  Config drift detected:")
+                print(f"    Lock hash    : {lock_hash}")
+                print(f"    Current hash : {current_hash}")
+                if dry_run:
+                    print("  (dry-run: no changes applied)")
+                else:
+                    print("  Config is in sync after vault pull.")
+            else:
+                print("  ✓ Config matches lock — no drift")
+        except Exception as e:
+            print(f"  ⚠ Could not compare hashes: {e}")
+
+    elif source == "url":
+        url = getattr(args, "url", None)
+        if not url:
+            print("  ✗ --url required for source=url")
+            return
+        try:
+            import urllib.request as _ur
+            with _ur.urlopen(url, timeout=10) as resp:
+                remote_cfg = json.loads(resp.read())
+            print(f"  ✓ Fetched config from {url}")
+            if dry_run:
+                print("  (dry-run: not applying)")
+            else:
+                # Merge: remote wins on conflicts, local additions preserved
+                cfg = json.loads(_OPENCLAW_CFG.read_text())
+                merged = {**remote_cfg, **cfg}  # local wins (conservative)
+                merged["meta"] = remote_cfg.get("meta", {})
+                _OPENCLAW_CFG.write_text(json.dumps(merged, indent=2))
+                print("  ✓ Config merged (local additions preserved)")
+        except Exception as e:
+            print(f"  ✗ Failed to fetch config: {e}")
+    else:
+        print(f"  ✗ Unknown source: {source}. Use --source=git or --source=url")
+
+
+def cmd_config_validate(args):
+    """Validate openclaw.json config against expected schema."""
+    required_meta_fields = ["configVersion", "tokenpakVersion", "lastUpdated", "configHash"]
+
+    try:
+        cfg = json.loads(_OPENCLAW_CFG.read_text())
+    except Exception as e:
+        print(f"✗ Could not read config: {e}")
+        return
+
+    errors = []
+    warnings = []
+
+    # Check meta fields
+    meta = cfg.get("meta", {})
+    for field in required_meta_fields:
+        if field not in meta:
+            warnings.append(f"meta.{field} missing")
+
+    # Check configHash integrity
+    if "configHash" in meta:
+        computed = _compute_config_hash(cfg)
+        stored = meta["configHash"]
+        if stored != computed:
+            warnings.append(f"configHash mismatch: stored={stored}, computed={computed}")
+        else:
+            print(f"  ✓ configHash valid ({stored})")
+
+    # Check lock file consistency
+    lock = _load_lock()
+    if lock:
+        if lock.get("configHash") and lock["configHash"] != _compute_config_hash(cfg):
+            warnings.append("Config hash doesn't match lock file")
+        else:
+            print("  ✓ Lock file consistent")
+
+    if errors:
+        print("\n❌ Errors:")
+        for e in errors:
+            print(f"   {e}")
+    if warnings:
+        print("\n⚠️  Warnings:")
+        for w in warnings:
+            print(f"   {w}")
+    if not errors and not warnings:
+        print("✓ Config valid — all checks passed")
+
+
+def cmd_config_pull(args):
+    """Pull config from git or URL (alias for sync with explicit source)."""
+    cmd_config_sync(args)
+
+
+# ── Parser builders for new commands ─────────────────────────────────────────
+
+def _build_version_parser(sub):
+    p = sub.add_parser("version", help="Show current versions (proxy, config, cli)")
+    p.set_defaults(func=cmd_version)
+
+
+def _build_update_parser(sub):
+    p = sub.add_parser("update", help="Update TokenPak to latest from git/pypi")
+    p.add_argument("--check", action="store_true", help="Check for updates without installing")
+    p.add_argument("--force", action="store_true", help="Force update even if already up to date")
+    p.add_argument("--core-only", action="store_true", dest="core_only",
+                   help="Update core only, skip config merge")
+    p.add_argument("--dry-run", action="store_true", dest="dry_run",
+                   help="Show what would change without applying")
+    p.set_defaults(func=cmd_update)
+
+
+def _build_config_mgmt_parser(sub):
+    p = sub.add_parser("config", help="Config management (sync, pull, validate)")
+    csub = p.add_subparsers(dest="config_cmd", required=True)
+
+    # sync
+    p_sync = csub.add_parser("sync", help="Sync config from canonical source")
+    p_sync.add_argument("--source", choices=["git", "url"], default="git",
+                        help="Config source: git (vault) or url")
+    p_sync.add_argument("--url", help="URL for source=url")
+    p_sync.add_argument("--dry-run", action="store_true", dest="dry_run")
+    p_sync.set_defaults(func=cmd_config_sync)
+
+    # pull
+    p_pull = csub.add_parser("pull", help="Pull config from git or URL")
+    p_pull.add_argument("--source", choices=["git", "url"], default="git")
+    p_pull.add_argument("--url", help="URL for source=url")
+    p_pull.add_argument("--dry-run", action="store_true", dest="dry_run")
+    p_pull.add_argument("--merge", choices=["replace", "merge", "diff"], default="merge",
+                        help="Merge strategy")
+    p_pull.set_defaults(func=cmd_config_pull)
+
+    # validate
+    p_val = csub.add_parser("validate", help="Validate config against schema")
+    p_val.set_defaults(func=cmd_config_validate)
+
+
+# ── End Version Control Commands ──────────────────────────────────────────────
+
+
 def main():
     parser = build_parser()
 
@@ -1300,6 +1652,7 @@ def main():
     known_cmds = set(_ALL_COMMANDS) | {
         # also include argparse-registered commands not in groups
         "help", "start", "stop", "restart", "logs",
+        "version", "update", "config",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)

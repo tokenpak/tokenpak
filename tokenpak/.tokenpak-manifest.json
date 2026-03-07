@@ -1,0 +1,66 @@
+{
+  "_comment": "TokenPak Core Manifest — lists all core-managed files and their checksums. Generated on build/release. Used by `tokenpak update` to identify which files are safe to replace.",
+  "version": "0.4.0",
+  "generatedAt": "2026-03-07T20:00:00Z",
+  "protected_paths": [
+    "user/",
+    "user/config.yaml",
+    "user/providers.yaml",
+    "user/recipes/",
+    "user/hooks/",
+    "user/extensions/",
+    "user/templates/"
+  ],
+  "core_zones": {
+    "description": "Files in core/ are ALWAYS replaced on update. Never edit.",
+    "paths": [
+      "core/engine/proxy.py",
+      "core/engine/router.py",
+      "core/engine/compressor.py",
+      "core/engine/cache.py",
+      "core/cli/main.py",
+      "core/telemetry/",
+      "core/_version.py"
+    ]
+  },
+  "user_zones": {
+    "description": "Files in user/ are NEVER touched by updates. Customize freely.",
+    "paths": [
+      "user/config.yaml",
+      "user/providers.yaml",
+      "user/recipes/*.yaml",
+      "user/hooks/*.py",
+      "user/extensions/*.py",
+      "user/templates/*.yaml"
+    ]
+  },
+  "core_files": {
+    "proxy.py": {
+      "hash": "sha256:computed-on-build",
+      "zone": "core",
+      "note": "Main proxy server — DO NOT MODIFY"
+    },
+    "cli.py": {
+      "hash": "sha256:computed-on-build",
+      "zone": "core",
+      "note": "CLI entrypoint — DO NOT MODIFY"
+    },
+    "core.py": {
+      "hash": "sha256:computed-on-build",
+      "zone": "core",
+      "note": "TokenPak core engine — DO NOT MODIFY"
+    },
+    "__init__.py": {
+      "hash": "sha256:computed-on-build",
+      "zone": "core",
+      "note": "Public API surface — DO NOT MODIFY"
+    }
+  },
+  "update_policy": {
+    "core_files": "always_replace",
+    "user_files": "never_touch",
+    "defaults_files": "update_reference_only",
+    "data_files": "preserve",
+    "modified_core_files": "backup_and_warn"
+  }
+}
