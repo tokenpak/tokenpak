@@ -29,6 +29,21 @@ tokenpak serve --port 8000
 
 ---
 
+## Development Setup
+
+```bash
+cd sdk/
+npm install --include=dev
+npm run build
+npm test
+```
+
+> **Note:** Binaries (jest, tsc) install to `~/.npm-global/bin/` if your `~/.npmrc` sets a global prefix.
+> The `npm run build` script uses `node_modules/.bin/tsc` (always available after `npm ci`).
+> The `npm test` script is pre-configured to find jest correctly.
+
+---
+
 ## Quick Start
 
 ### Compress a single prompt
