@@ -26,6 +26,7 @@ from .converters import (
 from .retrievers import TokenPakRetriever
 from .memory import TokenPakMemory
 from .context import TokenPakContextManager
+from .langgraph import TokenPakState
 
 __version__ = "0.1.0"
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "block_to_langchain_document",
     "langchain_documents_to_blocks",
     "blocks_to_langchain_documents",
+    "TokenPakState",
 ]
