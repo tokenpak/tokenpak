@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autogen-tokenpak"
+version = "0.1.0"
+description = "TokenPak integration for AutoGen — automatic context compression for multi-agent conversations"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+  { name = "TokenPak Team" }
+]
+keywords = ["autogen", "agents", "compression", "context", "tokens"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "tokenpak-sdk>=0.1.0",
+  "pyautogen>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+"Homepage" = "https://github.com/tokenpak/autogen-tokenpak"
+"Documentation" = "https://tokenpak.dev/integrations/autogen"
+"Repository" = "https://github.com/tokenpak/autogen-tokenpak.git"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["autogen_tokenpak*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

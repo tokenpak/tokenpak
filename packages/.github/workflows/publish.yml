@@ -1,0 +1,47 @@
+name: Publish Packages to PyPI
+
+on:
+  push:
+    tags:
+      - "langchain-*"
+      - "llamaindex-*"
+      - "crewai-*"
+      - "autogen-*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: 
+          - langchain-tokenpak
+          - llamaindex-tokenpak
+          - crewai-tokenpak
+          - autogen-tokenpak
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      
+      - name: Check if tag matches package
+        run: |
+          if [[ "${{ github.ref }}" != refs/tags/${{ matrix.package }}-* ]]; then
+            echo "Tag does not match package, skipping"
+            exit 0
+          fi
+      
+      - name: Build package
+        run: |
+          cd packages/${{ matrix.package }}
+          pip install build
+          python -m build
+      
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/${{ matrix.package }}/dist
+          password: ${{ secrets.PYPI_API_TOKEN }}
