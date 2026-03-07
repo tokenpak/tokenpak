@@ -192,6 +192,16 @@ class CompressionStats:
             "window_size": total,
         }
 
+    def flush_shutdown_record(self, record: Dict[str, Any]) -> None:
+        """
+        Append a ``event: shutdown`` record to the telemetry JSONL file.
+
+        Called by ``ProxyServer.stop()`` during graceful shutdown to persist
+        session-level stats before the process exits.
+        """
+        with self._lock:
+            self._write_event(record)
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

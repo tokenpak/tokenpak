@@ -20,17 +20,20 @@ import http.client
 import json
 import os
 import re
+import signal
 import socket
 import ssl
+import sys
 import threading
 import time
 import uuid
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -122,6 +125,64 @@ class TraceStorage:
     def get_all(self) -> List[PipelineTrace]:
         with self._lock:
             return list(self._traces)
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown manager
+# ---------------------------------------------------------------------------
+
+class GracefulShutdown:
+    """
+    Coordinates graceful shutdown for the proxy.
+
+    Lifecycle
+    ---------
+    1. ``begin()``          — signal that shutdown has started (new requests → 503)
+    2. ``track_request()``  — context manager: increment/decrement in-flight counter
+    3. ``wait_for_drain()`` — block until all in-flight requests finish or timeout
+    """
+
+    def __init__(self) -> None:
+        self._shutting_down: bool = False
+        self._in_flight: int = 0
+        self._lock = threading.Lock()
+        self._all_done = threading.Event()
+        self._all_done.set()  # starts "done" (no requests in flight)
+
+    @property
+    def is_shutting_down(self) -> bool:
+        return self._shutting_down
+
+    def begin(self) -> None:
+        """Mark the start of shutdown. New requests will receive 503."""
+        with self._lock:
+            self._shutting_down = True
+
+    @contextmanager
+    def track_request(self) -> Generator[None, None, None]:
+        """Context manager that increments/decrements the in-flight counter."""
+        with self._lock:
+            self._in_flight += 1
+            self._all_done.clear()
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._in_flight -= 1
+                if self._in_flight == 0:
+                    self._all_done.set()
+
+    def in_flight_count(self) -> int:
+        with self._lock:
+            return self._in_flight
+
+    def wait_for_drain(self, timeout: float = 30.0) -> bool:
+        """
+        Block until all in-flight requests complete or *timeout* seconds elapse.
+
+        Returns True if drained cleanly, False if timed out.
+        """
+        return self._all_done.wait(timeout=timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -231,8 +292,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         ps = self.server.proxy_server
         path = self.path
 
+        # Always allow /health during shutdown (needed for health-check polling)
         if path == "/health":
             self._send_json(ps.health())
+            return
+
+        # Reject new proxied requests while shutting down
+        if ps.shutdown.is_shutting_down and path.startswith("http"):
+            self._send_503_shutdown()
             return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
@@ -296,6 +363,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and (
+            self.path.startswith("http") or self.path.startswith("/v1/")
+        ):
+            self._send_503_shutdown()
+            return
         if self.path.startswith("http"):
             self._proxy_to(self.path, "POST")
         elif self.path == "/v1/export/csv":
@@ -323,22 +396,53 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_PUT(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and self.path.startswith("http"):
+            self._send_503_shutdown()
+            return
         if self.path.startswith("http"):
             self._proxy_to(self.path, "PUT")
         else:
             self.send_error(404)
 
     def do_DELETE(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and self.path.startswith("http"):
+            self._send_503_shutdown()
+            return
         if self.path.startswith("http"):
             self._proxy_to(self.path, "DELETE")
         else:
             self.send_error(404)
+
+    def _send_503_shutdown(self) -> None:
+        """Return 503 Service Unavailable during graceful shutdown drain."""
+        body = json.dumps({
+            "error": {
+                "type": "service_unavailable",
+                "message": (
+                    "TokenPak proxy is shutting down. "
+                    "Please retry your request against a new proxy instance."
+                ),
+            }
+        }).encode()
+        self.send_response(503)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Retry-After", "5")
+        self.end_headers()
+        self.wfile.write(body)
 
     # ------------------------------------------------------------------
     # Core forwarding
     # ------------------------------------------------------------------
 
     def _proxy_to(self, target_url: str, method: str) -> None:
+        ps = self.server.proxy_server
+        with ps.shutdown.track_request():
+            self._proxy_to_inner(target_url, method)
+
+    def _proxy_to_inner(self, target_url: str, method: str) -> None:
         t0 = time.time()
         ps = self.server.proxy_server
         parsed = urlparse(target_url)
@@ -743,10 +847,18 @@ class ProxyServer:
         port: Optional[int] = None,
         compilation_mode: Optional[str] = None,
         request_hook: Optional[Callable] = None,
+        shutdown_timeout: Optional[float] = None,
     ):
         self.host = host
         self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
         self.compilation_mode = compilation_mode or os.environ.get("TOKENPAK_MODE", "hybrid")
+        self.shutdown_timeout: float = (
+            shutdown_timeout
+            if shutdown_timeout is not None
+            else float(os.environ.get("TOKENPAK_SHUTDOWN_TIMEOUT", "30"))
+        )
+        # Graceful shutdown coordinator
+        self.shutdown = GracefulShutdown()
 
         # Connection pool — shared across all handler threads
         self._connection_pool = ConnectionPool(PoolConfig.from_env())
@@ -801,21 +913,123 @@ class ProxyServer:
         self._server = server
 
         if blocking:
+            # Install signal handlers only in the main thread (signal module restriction)
+            if threading.current_thread() is threading.main_thread():
+                signal.signal(signal.SIGTERM, self._handle_signal)
+                signal.signal(signal.SIGINT, self._handle_signal)
+
             print(f"TokenPak proxy listening on {self.host}:{self.port} [{self.compilation_mode}]")
             try:
                 server.serve_forever()
             except KeyboardInterrupt:
-                self.stop()
+                pass  # SIGINT handled via _handle_signal → stop()
+            finally:
+                # Ensure stop is called even if serve_forever exits unexpectedly
+                if self._server is not None:
+                    self.stop()
         else:
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
 
+    def _handle_signal(self, signum: int, frame: Any) -> None:
+        """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
+        sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+        print(f"\nTokenPak: {sig_name} received — starting graceful shutdown "
+              f"(drain timeout: {self.shutdown_timeout:.0f}s)...", flush=True)
+        # Run stop() in a background thread so the signal handler returns quickly
+        t = threading.Thread(target=self.stop, daemon=True)
+        t.start()
+
     def stop(self) -> None:
-        """Shut down the proxy server."""
-        if self._server:
-            self._server.shutdown()
-            self._server = None
-        self._connection_pool.close()
+        """
+        Gracefully shut down the proxy server.
+
+        Sequence:
+          1. Stop accepting new requests (return 503 for any new proxied calls)
+          2. Drain in-flight requests (up to ``shutdown_timeout`` seconds)
+          3. Flush telemetry buffer to disk
+          4. Close the HTTP connection pool
+          5. Stop the HTTP server
+        """
+        if self._server is None:
+            return  # already stopped
+
+        # ── Step 1: Stop accepting new proxy requests ─────────────────────
+        self.shutdown.begin()
+        print("TokenPak: shutdown step 1/5 — rejecting new requests (503)", flush=True)
+
+        # ── Step 2: Drain in-flight requests ──────────────────────────────
+        in_flight = self.shutdown.in_flight_count()
+        if in_flight > 0:
+            print(
+                f"TokenPak: shutdown step 2/5 — draining {in_flight} in-flight request(s) "
+                f"(timeout: {self.shutdown_timeout:.0f}s)...",
+                flush=True,
+            )
+        else:
+            print("TokenPak: shutdown step 2/5 — no in-flight requests, proceeding", flush=True)
+
+        drained = self.shutdown.wait_for_drain(timeout=self.shutdown_timeout)
+        if not drained:
+            remaining = self.shutdown.in_flight_count()
+            print(
+                f"TokenPak: shutdown drain timed out after {self.shutdown_timeout:.0f}s "
+                f"({remaining} request(s) still active — forcing close)",
+                flush=True,
+            )
+        else:
+            print("TokenPak: shutdown step 2/5 — all requests drained ✓", flush=True)
+
+        # ── Step 3: Flush telemetry buffer to disk ─────────────────────────
+        print("TokenPak: shutdown step 3/5 — flushing telemetry...", flush=True)
+        try:
+            self._flush_telemetry()
+            print("TokenPak: shutdown step 3/5 — telemetry flushed ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
+                  flush=True)
+
+        # ── Step 4: Close HTTP connection pool ────────────────────────────
+        print("TokenPak: shutdown step 4/5 — closing connection pool...", flush=True)
+        try:
+            self._connection_pool.close()
+            print("TokenPak: shutdown step 4/5 — connection pool closed ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}",
+                  flush=True)
+
+        # ── Step 5: Stop HTTP server ───────────────────────────────────────
+        print("TokenPak: shutdown step 5/5 — stopping HTTP server...", flush=True)
+        srv = self._server
+        self._server = None
+        try:
+            srv.shutdown()
+            print("TokenPak: shutdown step 5/5 — HTTP server stopped ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}",
+                  flush=True)
+
+        print("TokenPak: graceful shutdown complete.", flush=True)
+
+    def _flush_telemetry(self) -> None:
+        """
+        Flush any buffered telemetry to disk before process exit.
+
+        Writes a shutdown summary entry to the compression events JSONL file
+        so stats from the current session are preserved across restarts.
+        """
+        shutdown_record = {
+            "event": "shutdown",
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "session_requests": self.session.get("requests", 0),
+            "session_tokens_saved": self.session.get("saved_tokens", 0),
+            "session_cost_saved": round(self.session.get("cost_saved", 0.0), 6),
+            "session_cost_total": round(self.session.get("cost", 0.0), 6),
+            "session_errors": self.session.get("errors", 0),
+            "uptime_seconds": round(time.time() - self.session.get("start_time", time.time())),
+        }
+        # Delegate to the compression_stats recorder (writes to ~/.tokenpak/compression_events.jsonl)
+        self.compression_stats.flush_shutdown_record(shutdown_record)
 
     def is_running(self) -> bool:
         return self._server is not None
@@ -835,14 +1049,17 @@ class ProxyServer:
         pool_metrics = self._connection_pool.metrics()
         deg = get_degradation_tracker()
         is_degraded = deg.is_degraded()
+        is_shutting_down = self.shutdown.is_shutting_down
         return {
-            "status": "degraded" if is_degraded else "ok",
+            "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
             "version": "0.1.0",
             "requests_total": requests_total,
             "requests_errors": requests_errors,
             "compression_ratio_avg": compression_ratio_avg,
             "is_degraded": is_degraded,
+            "is_shutting_down": is_shutting_down,
+            "in_flight_requests": self.shutdown.in_flight_count(),
             "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "connection_pool": {
                 "http2_enabled": self._connection_pool.http2_enabled,
@@ -899,6 +1116,7 @@ def start_proxy(
     compilation_mode: Optional[str] = None,
     request_hook: Optional[Callable] = None,
     blocking: bool = True,
+    shutdown_timeout: Optional[float] = None,
 ) -> ProxyServer:
     """Create and start a ProxyServer. Returns the server instance."""
     server = ProxyServer(
@@ -906,6 +1124,7 @@ def start_proxy(
         port=port,
         compilation_mode=compilation_mode,
         request_hook=request_hook,
+        shutdown_timeout=shutdown_timeout,
     )
     server.start(blocking=blocking)
     return server
