@@ -45,6 +45,7 @@ from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
 from .stats import CompressionStats
 from .degradation import get_degradation_tracker, DegradationEventType
+from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
 from .startup import run_startup_checks, format_startup_report
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
@@ -305,6 +306,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             from .degradation import get_degradation_tracker
             self._send_json(get_degradation_tracker().summary())
             return
+        if path == "/circuit-breakers":
+            registry = get_circuit_breaker_registry()
+            self._send_json({
+                "enabled": registry.enabled,
+                "circuit_breakers": registry.all_statuses(),
+            })
+            return
         if path == "/stats":
             self._send_json(ps.stats())
             return
@@ -520,6 +528,40 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
 
+        # ── Circuit breaker check ──────────────────────────────────────────
+        # Fast-fail immediately if the target provider's circuit is OPEN.
+        if should_log and is_messages:
+            _cb_provider = provider_from_url(target_url)
+            _cb_registry = get_circuit_breaker_registry()
+            if not _cb_registry.allow_request(_cb_provider):
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "tokenpak: circuit breaker OPEN for %s — fast-failing request",
+                    _cb_provider,
+                )
+                err = json.dumps({
+                    "error": {
+                        "type": "circuit_breaker_open",
+                        "message": (
+                            f"Provider '{_cb_provider}' is currently unavailable. "
+                            "The circuit breaker is open due to recent failures. "
+                            "Request will be retried automatically after a brief cooldown."
+                        ),
+                        "provider": _cb_provider,
+                        "hint": "Check GET /circuit-breakers for current state.",
+                    }
+                }).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.send_header("Retry-After", "30")
+                self.end_headers()
+                self.wfile.write(err)
+                return
+        else:
+            _cb_provider = None
+            _cb_registry = None
+
         # Validate credentials for intercepted provider requests
         # Client-supplied key takes precedence over any environment-level key.
         if should_log and is_messages:
@@ -578,6 +620,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         try:
             pool = self.server.proxy_server._connection_pool
+            _cb_success = False  # track whether request succeeded for circuit breaker
 
             output_tokens = 0
             if is_streaming:
@@ -640,6 +683,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
             latency_ms = int((time.time() - t0) * 1000)
+            _cb_success = True  # reached here without exception → request succeeded
 
             if should_log and is_messages and input_tokens > 0:
                 cost = estimate_cost(model, sent_input_tokens, output_tokens,
@@ -712,7 +756,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                     print(render_footer_oneline(req_stats), file=sys.stderr)
 
+            # ── Circuit breaker: record outcome ───────────────────────────
+            if _cb_registry is not None and _cb_provider is not None:
+                if _cb_success:
+                    _cb_registry.record_success(_cb_provider)
+                # failure is recorded in except block
+
         except Exception as exc:
+            # ── Circuit breaker: record failure ───────────────────────────
+            if _cb_registry is not None and _cb_provider is not None:
+                _cb_registry.record_failure(_cb_provider)
+
             with ps._session_lock:
                 ps.session["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
@@ -1050,6 +1104,13 @@ class ProxyServer:
         deg = get_degradation_tracker()
         is_degraded = deg.is_degraded()
         is_shutting_down = self.shutdown.is_shutting_down
+        # Circuit breaker summary
+        cb_registry = get_circuit_breaker_registry()
+        cb_statuses = cb_registry.all_statuses()
+        cb_any_open = any(
+            s.get("state") in ("open", "half_open")
+            for s in cb_statuses.values()
+        )
         return {
             "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
@@ -1065,6 +1126,11 @@ class ProxyServer:
                 "http2_enabled": self._connection_pool.http2_enabled,
                 "active_providers": self._connection_pool.active_providers,
                 **pool_metrics,
+            },
+            "circuit_breakers": {
+                "enabled": cb_registry.enabled,
+                "any_open": cb_any_open,
+                "providers": cb_statuses,
             },
         }
 
