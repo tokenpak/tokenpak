@@ -41,6 +41,8 @@ from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
 from .stats import CompressionStats
+from .degradation import get_degradation_tracker, DegradationEventType
+from .startup import run_startup_checks, format_startup_report
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
@@ -232,6 +234,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/health":
             self._send_json(ps.health())
             return
+        if path == "/degradation":
+            from .degradation import get_degradation_tracker
+            self._send_json(get_degradation_tracker().summary())
+            return
         if path == "/stats":
             self._send_json(ps.stats())
             return
@@ -390,8 +396,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         body, model, trace
                     )
                 except Exception as hook_err:
-                    print(f"  ⚠ request_hook error: {hook_err}")
+                    # Graceful degradation: compression failed — forward original request unchanged.
+                    # The user still gets a response; we log and track the event.
+                    import logging as _logging
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak: compression failed (passthrough mode active): %s: %s — "
+                        "original request will be forwarded unchanged",
+                        type(hook_err).__name__, hook_err,
+                    )
+                    print(
+                        f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
+                        f"    → Forwarding original request (passthrough mode). "
+                        f"Run `tokenpak doctor` for diagnostics."
+                    )
+                    get_degradation_tracker().record_compression_failure(hook_err)
                     sent_input_tokens = input_tokens
+                    # body is unchanged (assignment failed, original value retained)
 
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
@@ -602,9 +622,46 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     latency_ms=latency_ms,
                     status="error",
                 )
-            print(f"  ✖ Proxy error [{method} {target_url[:60]}]: {type(exc).__name__}: {exc} | {latency_ms}ms")
+            exc_type = type(exc).__name__
+            exc_msg = str(exc)
+            # Build an actionable error message depending on the exception type
+            if "timeout" in exc_type.lower() or isinstance(exc, TimeoutError):
+                user_detail = (
+                    "The upstream LLM provider did not respond in time. "
+                    "Check your internet connection or try again in a moment."
+                )
+            elif "connection" in exc_type.lower() or "refused" in exc_msg.lower():
+                # Determine provider for a more useful message
+                _provider_hint = "the LLM provider"
+                if "anthropic" in target_url:
+                    _provider_hint = "api.anthropic.com"
+                elif "openai" in target_url:
+                    _provider_hint = "api.openai.com"
+                elif "googleapis" in target_url:
+                    _provider_hint = "generativelanguage.googleapis.com"
+                user_detail = (
+                    f"Cannot reach {_provider_hint}. "
+                    "Check your API key and internet connection. "
+                    "Run `tokenpak doctor` for diagnostics."
+                )
+            else:
+                user_detail = (
+                    f"Unexpected proxy error ({exc_type}). "
+                    "Check `tokenpak status` for recent errors or run `tokenpak doctor`."
+                )
+            print(
+                f"  ✖ Proxy error [{method} {target_url[:60]}]: {exc_type}: {exc_msg} | {latency_ms}ms\n"
+                f"    → {user_detail}"
+            )
             try:
-                err = json.dumps({"error": {"type": "proxy_error", "message": str(exc)}}).encode()
+                err = json.dumps({
+                    "error": {
+                        "type": "proxy_error",
+                        "message": user_detail,
+                        "detail": exc_msg,
+                        "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                    }
+                }).encode()
                 self.send_response(502)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -727,6 +784,18 @@ class ProxyServer:
 
     def start(self, blocking: bool = True) -> None:
         """Start the proxy server."""
+        # --- Startup self-test ---
+        _all_ok, _warnings = run_startup_checks(self.port)
+        if _warnings:
+            report = format_startup_report(_warnings, _all_ok)
+            print(report)
+            # Track non-fatal startup warnings in the degradation log
+            for w in _warnings:
+                get_degradation_tracker().record(
+                    DegradationEventType.STARTUP_WARNING, w, recovered=_all_ok
+                )
+        # --------------------------
+
         server = _ThreadedHTTPServer((self.host, self.port), _ProxyHandler)
         server.proxy_server = self  # inject back-reference
         self._server = server
@@ -764,13 +833,16 @@ class ProxyServer:
             ratios = list(self._compression_ratios)
         compression_ratio_avg = round(sum(ratios) / len(ratios), 4) if ratios else 0.0
         pool_metrics = self._connection_pool.metrics()
+        deg = get_degradation_tracker()
+        is_degraded = deg.is_degraded()
         return {
-            "status": "ok",
+            "status": "degraded" if is_degraded else "ok",
             "uptime_seconds": uptime,
             "version": "0.1.0",
             "requests_total": requests_total,
             "requests_errors": requests_errors,
             "compression_ratio_avg": compression_ratio_avg,
+            "is_degraded": is_degraded,
             "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "connection_pool": {
                 "http2_enabled": self._connection_pool.http2_enabled,
