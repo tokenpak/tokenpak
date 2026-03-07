@@ -56,6 +56,19 @@ from tokenpak.budget import BudgetBlock
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Agent Handoff Protocol
+# ---------------------------------------------------------------------------
+from tokenpak.agent.agentic.handoff import (
+    HandoffBlock,
+    TokenPak,
+    HandoffWire as Handoff,
+    HandoffManager,
+    ContextRef,
+    HandoffStatus,
+    REGISTERED_AGENTS,
+)
 from tokenpak.cli import main
 
 # ---------------------------------------------------------------------------

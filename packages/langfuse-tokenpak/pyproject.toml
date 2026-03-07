@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langfuse-tokenpak"
+version = "0.1.0"
+description = "TokenPak integration for Langfuse — observability and tracing for context packs"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+  { name = "TokenPak Team" }
+]
+keywords = ["langfuse", "tracing", "observability", "tokenpak", "context", "llm", "compression"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "tokenpak-sdk>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0"]
+langfuse = ["langfuse>=2.0.0"]
+langchain = ["langchain-core>=0.1.0", "langfuse>=2.0.0"]
+
+[project.urls]
+"Homepage" = "https://github.com/tokenpak/langfuse-tokenpak"
+"Documentation" = "https://tokenpak.dev/integrations/langfuse"
+"Repository" = "https://github.com/tokenpak/langfuse-tokenpak.git"
+"Bug Tracker" = "https://github.com/tokenpak/langfuse-tokenpak/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["langfuse_tokenpak*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"

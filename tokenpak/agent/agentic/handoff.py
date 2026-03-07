@@ -293,3 +293,212 @@ class HandoffManager:
     def get_handoff(self, handoff_id: str) -> Optional[Handoff]:
         """Get a single handoff by ID."""
         return self._load(handoff_id)
+
+
+# ---------------------------------------------------------------------------
+# TokenPak — high-level block container for agent-to-agent context exchange
+# ---------------------------------------------------------------------------
+
+@dataclass
+class HandoffBlock:
+    """A single content block inside a TokenPak.
+
+    Attributes:
+        type:     Semantic type label, e.g. "memory", "evidence", "task_state".
+        id:       Unique identifier within the pack.
+        content:  Text content.
+        metadata: Optional key/value metadata.
+    """
+    type: str
+    id: str
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "type": self.type,
+            "id": self.id,
+            "content": self.content,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "HandoffBlock":
+        return cls(
+            type=d["type"],
+            id=d["id"],
+            content=d["content"],
+            metadata=d.get("metadata", {}),
+        )
+
+
+class TokenPak:
+    """A lightweight container of :class:`HandoffBlock` objects.
+
+    Designed for passing structured context between agents.
+
+    Example::
+
+        pack = TokenPak()
+        pack.add(HandoffBlock(type="memory", id="task_state", content=state))
+        pack.add(HandoffBlock(type="evidence", id="findings", content=research))
+        prompt = pack.to_prompt()
+
+    """
+
+    def __init__(self, blocks: Optional[List[HandoffBlock]] = None):
+        self._blocks: List[HandoffBlock] = list(blocks or [])
+
+    # ------------------------------------------------------------------
+    # Mutation
+    # ------------------------------------------------------------------
+
+    def add(self, block: HandoffBlock) -> "TokenPak":
+        """Append a block to the pack. Returns self for chaining."""
+        self._blocks.append(block)
+        return self
+
+    def remove(self, block_id: str) -> bool:
+        """Remove a block by id. Returns True if found and removed."""
+        before = len(self._blocks)
+        self._blocks = [b for b in self._blocks if b.id != block_id]
+        return len(self._blocks) < before
+
+    # ------------------------------------------------------------------
+    # Access
+    # ------------------------------------------------------------------
+
+    def get(self, block_id: str) -> Optional[HandoffBlock]:
+        """Return the first block with the given id, or None."""
+        for b in self._blocks:
+            if b.id == block_id:
+                return b
+        return None
+
+    def blocks_by_type(self, block_type: str) -> List[HandoffBlock]:
+        """Return all blocks with the given type."""
+        return [b for b in self._blocks if b.type == block_type]
+
+    @property
+    def blocks(self) -> List[HandoffBlock]:
+        return list(self._blocks)
+
+    def __len__(self) -> int:
+        return len(self._blocks)
+
+    # ------------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict:
+        return {"blocks": [b.to_dict() for b in self._blocks]}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TokenPak":
+        blocks = [HandoffBlock.from_dict(b) for b in d.get("blocks", [])]
+        return cls(blocks=blocks)
+
+    # ------------------------------------------------------------------
+    # Prompt rendering
+    # ------------------------------------------------------------------
+
+    def to_prompt(self) -> str:
+        """Render all blocks as a structured prompt string.
+
+        Each block is rendered as::
+
+            === <TYPE> [<id>] ===
+            <content>
+
+        """
+        if not self._blocks:
+            return ""
+        parts = []
+        for block in self._blocks:
+            header = f"=== {block.type.upper()} [{block.id}] ==="
+            parts.append(f"{header}\n{block.content}")
+        return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Wire format for Handoff  — extends Handoff with pack + to_wire/from_wire
+# ---------------------------------------------------------------------------
+
+class HandoffWire:
+    """JSON-serialisable wire representation of a :class:`Handoff` + :class:`TokenPak`.
+
+    Usage::
+
+        wire_obj = HandoffWire(pack=pack, from_agent="research", to_agent="writer")
+        wire_str = wire_obj.to_wire()
+
+        wire_obj2 = HandoffWire.from_wire(wire_str)
+        context   = wire_obj2.pack.to_prompt()
+
+    This is intentionally separate from :class:`HandoffManager` (file-based
+    persistence) — the wire format is for direct in-process or network passing.
+    """
+
+    VERSION = "tokpak-handoff:1"
+
+    def __init__(
+        self,
+        pack: TokenPak,
+        from_agent: str,
+        to_agent: str,
+        summary: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+        handoff_id: Optional[str] = None,
+    ):
+        self.pack = pack
+        self.from_agent = from_agent
+        self.to_agent = to_agent
+        self.summary = summary
+        self.metadata = metadata or {}
+        self.id = handoff_id or str(uuid.uuid4())
+        self.created_at = time.time()
+
+    def to_wire(self) -> str:
+        """Serialise to a JSON string (the "wire" format)."""
+        payload = {
+            "version": self.VERSION,
+            "id": self.id,
+            "from_agent": self.from_agent,
+            "to_agent": self.to_agent,
+            "summary": self.summary,
+            "metadata": self.metadata,
+            "created_at": self.created_at,
+            "pack": self.pack.to_dict(),
+        }
+        return json.dumps(payload)
+
+    @classmethod
+    def from_wire(cls, wire: str) -> "HandoffWire":
+        """Deserialise from JSON wire string.
+
+        Raises:
+            ValueError: if the version header is missing or unrecognised.
+        """
+        try:
+            payload = json.loads(wire)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid wire format: {exc}") from exc
+
+        version = payload.get("version", "")
+        if not version.startswith("tokpak-handoff:"):
+            raise ValueError(f"Unrecognised wire version: {version!r}")
+
+        pack = TokenPak.from_dict(payload.get("pack", {}))
+        obj = cls(
+            pack=pack,
+            from_agent=payload["from_agent"],
+            to_agent=payload["to_agent"],
+            summary=payload.get("summary", ""),
+            metadata=payload.get("metadata", {}),
+            handoff_id=payload.get("id"),
+        )
+        obj.created_at = payload.get("created_at", time.time())
+        return obj
+
+    # Convenience alias — from tokenpak import Handoff → Handoff(pack=..., ...)
+    to_dict = lambda self: json.loads(self.to_wire())  # noqa: E731
