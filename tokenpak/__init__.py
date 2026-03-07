@@ -54,6 +54,12 @@ from tokenpak.budgeter import Budgeter
 from tokenpak.budget import BudgetBlock
 
 # ---------------------------------------------------------------------------
+# Compile Reports
+# ---------------------------------------------------------------------------
+from tokenpak.report import Action, CompileReport, Decision
+from tokenpak.pack import ContextPack, PackBlock, CompiledResult
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 from tokenpak.cli import main
@@ -89,6 +95,13 @@ __all__ = [
     # Budgeting
     "Budgeter",
     "BudgetBlock",
+    # Compile Reports
+    "Action",
+    "CompileReport",
+    "Decision",
+    "ContextPack",
+    "PackBlock",
+    "CompiledResult",
     # CLI
     "main",
     # Sub-packages
