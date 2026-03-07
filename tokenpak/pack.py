@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .report import Action, CompileReport, Decision
 
@@ -100,12 +100,141 @@ class PackBlock:
 
 @dataclass
 class CompiledResult:
-    """Return value of ContextPack.compile()."""
+    """Return value of ContextPack.compile().
+
+    Stack-neutral output methods allow the compiled result to be used
+    with any LLM provider without requiring the TokenPak gateway.
+    """
     text: str
     report: CompileReport
 
     def __str__(self) -> str:  # pragma: no cover
         return self.text
+
+    # ── Stack-neutral protocol outputs ────────────────────────────────
+
+    def to_prompt(self) -> str:
+        """Return compiled context as plain text.
+
+        Works anywhere: OpenAI, Anthropic, LiteLLM, Ollama, or as a
+        standalone string. Zero dependencies.
+
+        Example::
+
+            print(compiled.to_prompt())
+        """
+        return self.text
+
+    def to_messages(self) -> List[Dict[str, Any]]:
+        """Return compiled context as OpenAI-format messages list.
+
+        Compatible with OpenAI, LiteLLM, Ollama, and any provider that
+        accepts the ``messages`` parameter.
+
+        Example::
+
+            from openai import OpenAI
+            client = OpenAI()
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=compiled.to_messages(),
+            )
+        """
+        if not self.text:
+            return []
+        return [{"role": "user", "content": self.text}]
+
+    def to_messages_with_system(
+        self,
+        system: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return compiled context with an optional separate system message.
+
+        Useful when you want to split instructions from content.
+
+        Args:
+            system: Optional system prompt text. If None, returns a single
+                    user message containing the full compiled context.
+
+        Example::
+
+            messages = compiled.to_messages_with_system("You are a helpful assistant.")
+        """
+        msgs: List[Dict[str, Any]] = []
+        if system:
+            msgs.append({"role": "system", "content": system})
+        if self.text:
+            msgs.append({"role": "user", "content": self.text})
+        return msgs
+
+    def to_anthropic(self) -> Tuple[str, List[Dict[str, Any]]]:
+        """Return ``(system_prompt, messages)`` in Anthropic SDK format.
+
+        Example::
+
+            from anthropic import Anthropic
+            system, messages = compiled.to_anthropic()
+            Anthropic().messages.create(
+                model="claude-3-5-sonnet-latest",
+                max_tokens=1024,
+                system=system,
+                messages=messages,
+            )
+        """
+        return (self.text, [])
+
+    def to_json(self) -> Dict[str, Any]:
+        """Return the full compiled result as a JSON-serializable dict.
+
+        Includes the compiled text and the full compile report for
+        storage, transfer, or observability pipelines.
+
+        Example::
+
+            import json
+            payload = json.dumps(compiled.to_json())
+        """
+        return {
+            "text": self.text,
+            "report": self.report.to_json(),
+        }
+
+
+# ── Convenience helpers — incremental adoption ────────────────────────────
+
+def pack_prompt(
+    system: Optional[str] = None,
+    docs: Optional[str] = None,
+    history: Optional[str] = None,
+    budget: int = 8000,
+) -> str:
+    """Level 2 convenience helper — pack a prompt in one call.
+
+    No configuration required. Builds a ContextPack, adds your content as
+    priority-ranked blocks, compiles, and returns the plain-text result.
+
+    Args:
+        system:  System/instruction text (critical priority — always kept).
+        docs:    Knowledge/document text (high priority).
+        history: Conversation history (low priority — first to be trimmed).
+        budget:  Total token budget (default 8000).
+
+    Returns:
+        Compiled plain-text prompt ready for any LLM.
+
+    Example::
+
+        from tokenpak import pack_prompt
+        prompt = pack_prompt(system="You are helpful.", docs=my_docs, budget=4096)
+    """
+    pack = ContextPack(budget=budget)
+    if system:
+        pack.add(PackBlock(id="system", type="instructions", content=system, priority="critical"))
+    if docs:
+        pack.add(PackBlock(id="docs", type="knowledge", content=docs, priority="high"))
+    if history:
+        pack.add(PackBlock(id="history", type="conversation", content=history, priority="low"))
+    return pack.compile().to_prompt()
 
 
 # ── ContextPack — main class ──────────────────────────────────────────────
