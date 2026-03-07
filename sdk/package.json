@@ -10,9 +10,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node_modules/.bin/tsc || ./node_modules/.bin/tsc",
+    "build": "npx tsc",
     "prepublishOnly": "NODE_ENV=development npm install && npm run build",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test": "node ~/.npm-global/bin/jest",
     "clean": "rm -rf dist/"
   },
   "keywords": [
@@ -39,7 +39,10 @@
     "axios": "^1.7.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.19.15",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   },
   "engines": {
