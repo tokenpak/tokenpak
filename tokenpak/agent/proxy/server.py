@@ -411,6 +411,34 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(err_body)
                 return
+
+            # --- Request schema validation (strict/warn/off) ---
+            if body:
+                try:
+                    from tokenpak.validation.request_validator import (
+                        get_request_validator,
+                    )
+                    _rv = get_request_validator()
+                    if _rv.mode != "off":
+                        try:
+                            _route_for_validation = ps.router.route(
+                                target_url, dict(self.headers), body
+                            )
+                            _provider = _route_for_validation.provider
+                        except Exception:
+                            _provider = "unknown"
+                        _val_result = _rv.validate_bytes(body, target_url, _provider)
+                        if not _val_result.valid and _rv.mode == "strict":
+                            _err_payload = _val_result.to_error_response()
+                            _err_body = json.dumps(_err_payload).encode()
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.send_header("Content-Length", str(len(_err_body)))
+                            self.end_headers()
+                            self.wfile.write(_err_body)
+                            return
+                except Exception:
+                    pass  # validation errors must never break the proxy
         else:
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
