@@ -269,6 +269,7 @@ We welcome issues, pull requests, and feedback of all kinds!
 - 💡 **Feature requests** → [Request a feature](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
 - 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
 - 📖 **Full guide** → [CONTRIBUTING.md](CONTRIBUTING.md)
+- 📋 **Version history** → [CHANGELOG.md](CHANGELOG.md)
 
 ### Quick setup
 
@@ -296,6 +297,7 @@ This pushes to both remotes and SSH-verifies the commit hash landed. **Never use
 - Compression recipes live in `recipes/oss/` as YAML
 - Run `pytest tests/ -q` before opening a PR
 - See [ARCHITECTURE.md](ARCHITECTURE.md) for system design
+- See [CHANGELOG.md](CHANGELOG.md) for version history and release notes
 
 ---
 

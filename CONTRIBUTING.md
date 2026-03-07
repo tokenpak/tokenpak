@@ -35,7 +35,8 @@ Spotted a typo, outdated example, or confusing section? PRs for docs are always 
 1. Fork the repo and create a branch: `git checkout -b fix/your-fix`
 2. Make your change
 3. Run tests: `pytest tests/`
-4. Open a PR with a clear description of what and why
+4. **Update [CHANGELOG.md](CHANGELOG.md)** — add your change under `## [Unreleased]` in the correct section (Added / Changed / Fixed / Security). Link to your PR: `[#123](https://github.com/kaywhy331/tokenpak/pull/123)`
+5. Open a PR with a clear description of what and why
 
 ---
 
