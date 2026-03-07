@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenpak-vectordb"
+version = "0.1.0"
+description = "TokenPak adapters for vector databases — Pinecone, Weaviate, Qdrant, Chroma"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+  { name = "TokenPak Team" }
+]
+keywords = ["tokenpak", "pinecone", "weaviate", "qdrant", "chroma", "vectordb", "rag", "compression"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "tokenpak-sdk>=0.1.0",
+]
+
+[project.optional-dependencies]
+pinecone = ["pinecone-client>=3.0.0"]
+weaviate = ["weaviate-client>=4.0.0"]
+qdrant = ["qdrant-client>=1.6.0"]
+chroma = ["chromadb>=0.4.0"]
+all = [
+  "pinecone-client>=3.0.0",
+  "weaviate-client>=4.0.0",
+  "qdrant-client>=1.6.0",
+  "chromadb>=0.4.0",
+]
+dev = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21.0",
+]
+
+[project.urls]
+Homepage = "https://tokenpak.ai"
+Documentation = "https://tokenpak.ai/docs/vectordb"
+Repository = "https://github.com/tokenpak/tokenpak-vectordb"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tokenpak_vectordb*"]
