@@ -127,7 +127,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/env tokenpak serve --port 8766
+ExecStart=/usr/bin/env tokenpak serve --port 8766 --workers 4
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal

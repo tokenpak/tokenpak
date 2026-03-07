@@ -16,7 +16,7 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 
 ```bash
 pip install tokenpak          # install
-tokenpak serve --port 8766    # start proxy
+tokenpak serve --port 8766 --workers 4   # start proxy (4 CPU cores)
 tokenpak cost --week          # watch savings grow
 ```
 
@@ -277,7 +277,7 @@ Result: same semantic content, 20–60% fewer tokens.
 ### Core
 
 ```bash
-tokenpak serve --port 8766     # start proxy
+tokenpak serve --port 8766 [--workers N]  # start proxy (default: cpu_count//2 workers)
 tokenpak status [--full]       # proxy health
 tokenpak cost [--week|--month] # cost report
 tokenpak savings [--lifetime]  # token savings summary
