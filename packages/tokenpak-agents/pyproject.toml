@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenpak-agents"
+version = "0.1.0"
+description = "TokenPak integrations for multi-agent frameworks — CrewAI, AutoGen, Semantic Kernel"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "TokenPak Team" }]
+keywords = ["tokenpak", "crewai", "autogen", "semantic-kernel", "agents", "multi-agent", "context", "tokens"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["tokenpak-sdk>=0.1.0"]
+
+[project.optional-dependencies]
+crewai = ["crewai>=0.1.0"]
+autogen = ["pyautogen>=0.2.0"]
+semantic-kernel = ["semantic-kernel>=0.4.0"]
+dev = ["pytest>=7.0"]
+all = ["crewai>=0.1.0", "pyautogen>=0.2.0", "semantic-kernel>=0.4.0"]
+
+[project.urls]
+"Homepage" = "https://github.com/tokenpak/tokenpak-agents"
+"Documentation" = "https://tokenpak.dev/integrations/agents"
+"Repository" = "https://github.com/tokenpak/tokenpak-agents.git"
+"Bug Tracker" = "https://github.com/tokenpak/tokenpak-agents/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tokenpak_agents*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
