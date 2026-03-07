@@ -4,6 +4,10 @@ TokenPak Proxy Module
 Modular HTTP proxy with compression, context injection, and provider routing.
 """
 
+from .server import ProxyServer, start_proxy
+from .router import ProviderRouter, estimate_cost
+from .streaming import extract_sse_tokens, StreamHandler
+from .passthrough import forward_headers, PassthroughConfig
 from .circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
@@ -12,10 +16,6 @@ from .circuit_breaker import (
     get_circuit_breaker_registry,
     provider_from_url,
 )
-from .passthrough import PassthroughConfig, forward_headers
-from .router import ProviderRouter, estimate_cost
-from .server import ProxyServer, start_proxy
-from .streaming import StreamHandler, extract_sse_tokens
 
 __all__ = [
     "ProxyServer",

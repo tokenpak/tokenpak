@@ -16,50 +16,56 @@ Env vars (all optional):
 from __future__ import annotations
 
 import gzip
+import http.client
 import json
 import os
+import re
 import signal
 import socket
+import ssl
 import sys
 import threading
 import time
 import uuid
 from collections import deque
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
+import httpx
+
+from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
+
+from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
+from .streaming import extract_sse_tokens
+from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
+from .stats import CompressionStats
+from .degradation import get_degradation_tracker, DegradationEventType
+from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
+from .startup import run_startup_checks, format_startup_report
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
 from tokenpak.agent.dashboard.session_filter import (
-    FilterParams,
     SessionFilter,
+    FilterParams,
+    get_distinct_models,
 )
 from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
 
-from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
-from .connection_pool import ConnectionPool, PoolConfig
-from .degradation import DegradationEventType, get_degradation_tracker
-from .passthrough import PassthroughConfig, forward_headers, validate_auth
-from .router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
-from .startup import format_startup_report, run_startup_checks
-from .stats import CompressionStats
-from .streaming import extract_sse_tokens
 
 # ---------------------------------------------------------------------------
 # Pipeline trace types
 # ---------------------------------------------------------------------------
 
-
 @dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
-
     name: str
     enabled: bool = True
     input_tokens: int = 0
@@ -75,7 +81,6 @@ class StageTrace:
 @dataclass
 class PipelineTrace:
     """Complete trace for a single request through the pipeline."""
-
     request_id: str
     timestamp: str
     model: str = ""
@@ -126,7 +131,6 @@ class TraceStorage:
 # ---------------------------------------------------------------------------
 # Graceful shutdown manager
 # ---------------------------------------------------------------------------
-
 
 class GracefulShutdown:
     """
@@ -186,7 +190,6 @@ class GracefulShutdown:
 # Session state
 # ---------------------------------------------------------------------------
 
-
 def _new_session() -> Dict[str, Any]:
     return {
         "requests": 0,
@@ -209,7 +212,6 @@ def _new_session() -> Dict[str, Any]:
 # Threaded HTTP server
 # ---------------------------------------------------------------------------
 
-
 class _ThreadedHTTPServer(HTTPServer):
     """HTTP server that dispatches each request to a daemon thread."""
 
@@ -230,7 +232,6 @@ class _ThreadedHTTPServer(HTTPServer):
 # ---------------------------------------------------------------------------
 # Request handler
 # ---------------------------------------------------------------------------
-
 
 class _ProxyHandler(BaseHTTPRequestHandler):
     """
@@ -303,17 +304,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
-
             self._send_json(get_degradation_tracker().summary())
             return
         if path == "/circuit-breakers":
             registry = get_circuit_breaker_registry()
-            self._send_json(
-                {
-                    "enabled": registry.enabled,
-                    "circuit_breakers": registry.all_statuses(),
-                }
-            )
+            self._send_json({
+                "enabled": registry.enabled,
+                "circuit_breakers": registry.all_statuses(),
+            })
             return
         if path == "/stats":
             self._send_json(ps.stats())
@@ -427,17 +425,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _send_503_shutdown(self) -> None:
         """Return 503 Service Unavailable during graceful shutdown drain."""
-        body = json.dumps(
-            {
-                "error": {
-                    "type": "service_unavailable",
-                    "message": (
-                        "TokenPak proxy is shutting down. "
-                        "Please retry your request against a new proxy instance."
-                    ),
-                }
+        body = json.dumps({
+            "error": {
+                "type": "service_unavailable",
+                "message": (
+                    "TokenPak proxy is shutting down. "
+                    "Please retry your request against a new proxy instance."
+                ),
             }
-        ).encode()
+        }).encode()
         self.send_response(503)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -484,7 +480,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
         if _adapters_enabled and should_log and is_messages:
             import logging as _logging
-
             _adapter = detect_platform(dict(self.headers), dict(os.environ))
             _logging.debug(
                 "tokenpak.proxy: detected platform=%s for request to %s",
@@ -516,12 +511,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Graceful degradation: compression failed — forward original request unchanged.
                     # The user still gets a response; we log and track the event.
                     import logging as _logging
-
                     _logging.getLogger(__name__).warning(
                         "tokenpak: compression failed (passthrough mode active): %s: %s — "
                         "original request will be forwarded unchanged",
-                        type(hook_err).__name__,
-                        hook_err,
+                        type(hook_err).__name__, hook_err,
                     )
                     print(
                         f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
@@ -542,25 +535,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_registry = get_circuit_breaker_registry()
             if not _cb_registry.allow_request(_cb_provider):
                 import logging as _logging
-
                 _logging.getLogger(__name__).warning(
                     "tokenpak: circuit breaker OPEN for %s — fast-failing request",
                     _cb_provider,
                 )
-                err = json.dumps(
-                    {
-                        "error": {
-                            "type": "circuit_breaker_open",
-                            "message": (
-                                f"Provider '{_cb_provider}' is currently unavailable. "
-                                "The circuit breaker is open due to recent failures. "
-                                "Request will be retried automatically after a brief cooldown."
-                            ),
-                            "provider": _cb_provider,
-                            "hint": "Check GET /circuit-breakers for current state.",
-                        }
+                err = json.dumps({
+                    "error": {
+                        "type": "circuit_breaker_open",
+                        "message": (
+                            f"Provider '{_cb_provider}' is currently unavailable. "
+                            "The circuit breaker is open due to recent failures. "
+                            "Request will be retried automatically after a brief cooldown."
+                        ),
+                        "provider": _cb_provider,
+                        "hint": "Check GET /circuit-breakers for current state.",
                     }
-                ).encode()
+                }).encode()
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -579,15 +569,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
             if not auth_ok:
                 import json as _json
-
-                err_body = _json.dumps(
-                    {
-                        "error": {
-                            "type": "authentication_error",
-                            "message": auth_err,
-                        }
+                err_body = _json.dumps({
+                    "error": {
+                        "type": "authentication_error",
+                        "message": auth_err,
                     }
-                ).encode()
+                }).encode()
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err_body)))
@@ -601,7 +588,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.validation.request_validator import (
                         get_request_validator,
                     )
-
                     _rv = get_request_validator()
                     if _rv.mode != "off":
                         try:
@@ -643,29 +629,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
-                    _sse_content_type_set = False
-                    _sse_cache_control_set = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
-                        if h_lower in (
-                            "connection",
-                            "keep-alive",
-                            "transfer-encoding",
-                            "content-length",
-                        ):
+                        if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                             continue
-                        if h_lower == "content-type":
-                            _sse_content_type_set = True
-                        if h_lower == "cache-control":
-                            _sse_cache_control_set = True
                         self.send_header(h_key, h_val)
-                    # Enforce SSE-required headers even if upstream omits them
-                    if not _sse_content_type_set:
-                        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-                    if not _sse_cache_control_set:
-                        self.send_header("Cache-Control", "no-cache")
-                    # Disable nginx/reverse-proxy buffering so chunks reach the client immediately
-                    self.send_header("X-Accel-Buffering", "no")
                     self.end_headers()
 
                     for chunk in resp.iter_bytes(chunk_size=4096):
@@ -691,12 +659,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
-                    if h_lower in (
-                        "connection",
-                        "keep-alive",
-                        "transfer-encoding",
-                        "content-length",
-                    ):
+                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                         continue
                     self.send_header(h_key, h_val)
                 self.end_headers()
@@ -723,16 +686,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_success = True  # reached here without exception → request succeeded
 
             if should_log and is_messages and input_tokens > 0:
-                cost = estimate_cost(
-                    model,
-                    sent_input_tokens,
-                    output_tokens,
-                    cache_read_tokens,
-                    cache_creation_tokens,
-                )
-                cost_without = estimate_cost(
-                    model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
-                )
+                cost = estimate_cost(model, sent_input_tokens, output_tokens,
+                                     cache_read_tokens, cache_creation_tokens)
+                cost_without = estimate_cost(model, input_tokens, output_tokens,
+                                             cache_read_tokens, cache_creation_tokens)
                 saved = max(0, input_tokens - sent_input_tokens)
                 cost_saved = max(0.0, cost_without - cost)
 
@@ -783,9 +740,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "output_tokens": output_tokens,
                         "tokens_saved": saved,
                         "cost_saved": round(cost_saved, 6),
-                        "percent_saved": (
-                            round(saved / input_tokens * 100, 1) if input_tokens else 0.0
-                        ),
+                        "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
                     }
 
                 # ── Stats footer ──────────────────────────────────────────
@@ -857,16 +812,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 f"    → {user_detail}"
             )
             try:
-                err = json.dumps(
-                    {
-                        "error": {
-                            "type": "proxy_error",
-                            "message": user_detail,
-                            "detail": exc_msg,
-                            "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
-                        }
+                err = json.dumps({
+                    "error": {
+                        "type": "proxy_error",
+                        "message": user_detail,
+                        "detail": exc_msg,
+                        "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
                     }
-                ).encode()
+                }).encode()
                 self.send_response(502)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -888,7 +841,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
-
 
 def _estimate_tokens_from_body(body: bytes) -> int:
     try:
@@ -913,9 +865,9 @@ def _extract_response_tokens(body: bytes) -> int:
         data = json.loads(body)
         usage = data.get("usage", {})
         return (
-            usage.get("output_tokens")
-            or usage.get("completion_tokens")
-            or usage.get("total_tokens", 0)
+            usage.get("output_tokens") or
+            usage.get("completion_tokens") or
+            usage.get("total_tokens", 0)
         )
     except Exception:
         return 0
@@ -924,7 +876,6 @@ def _extract_response_tokens(body: bytes) -> int:
 # ---------------------------------------------------------------------------
 # ProxyServer — public API
 # ---------------------------------------------------------------------------
-
 
 class ProxyServer:
     """
@@ -972,8 +923,9 @@ class ProxyServer:
         # capsule stage so they still see the (potentially compressed) body.
         try:
             from .capsule_integration import get_capsule_request_hook
-
-            self.request_hook: Optional[Callable] = get_capsule_request_hook(base_hook=request_hook)
+            self.request_hook: Optional[Callable] = get_capsule_request_hook(
+                base_hook=request_hook
+            )
         except Exception:  # pragma: no cover — import failure falls back gracefully
             self.request_hook = request_hook
 
@@ -1036,11 +988,8 @@ class ProxyServer:
     def _handle_signal(self, signum: int, frame: Any) -> None:
         """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        print(
-            f"\nTokenPak: {sig_name} received — starting graceful shutdown "
-            f"(drain timeout: {self.shutdown_timeout:.0f}s)...",
-            flush=True,
-        )
+        print(f"\nTokenPak: {sig_name} received — starting graceful shutdown "
+              f"(drain timeout: {self.shutdown_timeout:.0f}s)...", flush=True)
         # Run stop() in a background thread so the signal handler returns quickly
         t = threading.Thread(target=self.stop, daemon=True)
         t.start()
@@ -1057,12 +1006,7 @@ class ProxyServer:
           5. Stop the HTTP server
         """
         if self._server is None:
-            # Server was never started — still close the connection pool if open
-            try:
-                self._connection_pool.close()
-            except Exception:
-                pass
-            return
+            return  # already stopped
 
         # ── Step 1: Stop accepting new proxy requests ─────────────────────
         self.shutdown.begin()
@@ -1096,10 +1040,8 @@ class ProxyServer:
             self._flush_telemetry()
             print("TokenPak: shutdown step 3/5 — telemetry flushed ✓", flush=True)
         except Exception as exc:
-            print(
-                f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
-                flush=True,
-            )
+            print(f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
+                  flush=True)
 
         # ── Step 4: Close HTTP connection pool ────────────────────────────
         print("TokenPak: shutdown step 4/5 — closing connection pool...", flush=True)
@@ -1107,7 +1049,8 @@ class ProxyServer:
             self._connection_pool.close()
             print("TokenPak: shutdown step 4/5 — connection pool closed ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}", flush=True)
+            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}",
+                  flush=True)
 
         # ── Step 5: Stop HTTP server ───────────────────────────────────────
         print("TokenPak: shutdown step 5/5 — stopping HTTP server...", flush=True)
@@ -1117,7 +1060,8 @@ class ProxyServer:
             srv.shutdown()
             print("TokenPak: shutdown step 5/5 — HTTP server stopped ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}", flush=True)
+            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}",
+                  flush=True)
 
         print("TokenPak: graceful shutdown complete.", flush=True)
 
@@ -1163,11 +1107,12 @@ class ProxyServer:
         # Circuit breaker summary
         cb_registry = get_circuit_breaker_registry()
         cb_statuses = cb_registry.all_statuses()
-        cb_any_open = any(s.get("state") in ("open", "half_open") for s in cb_statuses.values())
+        cb_any_open = any(
+            s.get("state") in ("open", "half_open")
+            for s in cb_statuses.values()
+        )
         return {
-            "status": (
-                "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok")
-            ),
+            "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
             "version": "0.1.0",
             "requests_total": requests_total,
@@ -1210,8 +1155,7 @@ class ProxyServer:
             "errors": s["errors"],
             "avg_savings_pct": (
                 round(s["saved_tokens"] / s["input_tokens"] * 100, 1)
-                if s["input_tokens"] > 0
-                else 0.0
+                if s["input_tokens"] > 0 else 0.0
             ),
         }
 
@@ -1231,7 +1175,6 @@ class ProxyServer:
 # ---------------------------------------------------------------------------
 # Convenience entry point
 # ---------------------------------------------------------------------------
-
 
 def start_proxy(
     host: str = "0.0.0.0",
