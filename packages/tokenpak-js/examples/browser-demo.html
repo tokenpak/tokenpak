@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TokenPak Browser Demo</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #e0e0e0; }
+    pre { background: #2a2a2a; padding: 12px; border-radius: 6px; overflow-x: auto; }
+    h2 { color: #4fc3f7; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }
+    .valid { background: #1b5e20; color: #a5d6a7; }
+    .invalid { background: #b71c1c; color: #ffcdd2; }
+  </style>
+</head>
+<body>
+  <h1>🗂️ TokenPak Browser Demo</h1>
+  <h2>Pack Info</h2>
+  <pre id="info">Loading...</pre>
+  <h2>Prompt Output</h2>
+  <pre id="prompt">Loading...</pre>
+  <h2>Validation</h2>
+  <pre id="validation">Loading...</pre>
+
+  <!-- When published to npm/CDN: -->
+  <!-- <script src="https://unpkg.com/tokenpak/dist/bundle.min.js"></script> -->
+  <!-- For demo: load from dist -->
+  <script type="module">
+    // Simulate SDK (inline for demo)
+    // In production: import { TokenPak, Block, validate } from 'tokenpak';
+
+    function estimateTokens(text) {
+      if (!text) return 0;
+      const words = text.trim().split(/\s+/).filter(Boolean).length;
+      const chars = text.length;
+      return Math.max(Math.ceil(words * 1.3), Math.ceil(chars / 4));
+    }
+
+    function generateId(prefix = 'pak') {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      return `${prefix}_${Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('')}`;
+    }
+
+    class Block {
+      constructor(opts) {
+        this.type = opts.type;
+        this.id = opts.id ?? generateId(opts.type.slice(0,4));
+        this.content = opts.content;
+        this.priority = opts.priority ?? 'medium';
+        this.tokens = opts.tokens ?? estimateTokens(opts.content);
+      }
+    }
+
+    class TokenPak {
+      constructor(opts = {}) {
+        this.id = opts.id ?? generateId('pak');
+        this._blocks = [];
+        this._budget = opts.budget;
+        this.metadata = opts.metadata ?? {};
+      }
+      add(b) { this._blocks.push(b instanceof Block ? b : new Block(b)); return this; }
+      get totalTokens() { return this._blocks.reduce((s,b) => s+b.tokens, 0); }
+      toPrompt() {
+        const parts = [`[TokenPak: ${this.metadata.task ?? 'demo'}]\n`];
+        for (const b of this._blocks) {
+          parts.push(`## [${b.type.toUpperCase()}] ${b.id}`);
+          parts.push(b.content);
+          parts.push('');
+        }
+        return parts.join('\n');
+      }
+      toJSON() {
+        return {
+          header: { version:'1.0', id:this.id, created:new Date().toISOString() },
+          metadata: { task: this.metadata.task??'demo', source: this.metadata.source??'browser' },
+          blocks: this._blocks.map(b => ({type:b.type,id:b.id,content:b.content,tokens:b.tokens,priority:b.priority}))
+        };
+      }
+    }
+
+    // Build a pack
+    const pack = new TokenPak({
+      budget: 8000,
+      metadata: { task: 'browser_demo', source: 'user:browser' }
+    });
+
+    pack
+      .add(new Block({ type:'instructions', id:'sys', content:'You are a helpful assistant.', priority:'critical' }))
+      .add(new Block({ type:'knowledge', id:'faq', content:'TokenPak is the context standard for AI.', priority:'high' }))
+      .add(new Block({ type:'conversation', id:'chat', content:'User: What is TokenPak?', priority:'medium' }));
+
+    const json = pack.toJSON();
+
+    document.getElementById('info').textContent = JSON.stringify({
+      id: pack.id,
+      blocks: pack._blocks.length,
+      totalTokens: pack.totalTokens,
+      budget: pack._budget,
+    }, null, 2);
+
+    document.getElementById('prompt').textContent = pack.toPrompt();
+
+    // Simple validation
+    const valid = json.header && json.metadata && json.blocks?.length > 0;
+    const valEl = document.getElementById('validation');
+    valEl.innerHTML = `<span class="badge ${valid?'valid':'invalid'}">${valid ? '✅ valid' : '❌ invalid'}</span>\n` + JSON.stringify(json, null, 2).slice(0, 400) + '...';
+  </script>
+</body>
+</html>
