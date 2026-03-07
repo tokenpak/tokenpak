@@ -1,31 +1,21 @@
-"""Example: CrewAI crew with TokenPak context management."""
+"""Example usage for tokenpak_agents.crewai."""
 
-from tokenpak_agents.crewai import TokenPakContext, TokenPakHandoff, TokenPakCrew
+from tokenpak_agents.crewai import TokenPakContext, TokenPakCrew, TokenPakHandoff
 
-# Example: Research + Writing workflow
 
-# Mock agent definitions
-agents = [
-    {"name": "researcher", "role": "Research Agent"},
-    {"name": "writer", "role": "Writing Agent"},
-]
+ctx = TokenPakContext(total_budget=8000)
+ctx.record_usage("researcher", 320)
 
-# Mock task definitions
-tasks = [
-    {"id": "research_task", "agent": "researcher"},
-    {"id": "write_task", "agent": "writer"},
-]
+crew = TokenPakCrew(agents=["researcher", "writer"], tasks=["research", "draft"], budget=8000)
+print(crew.kickoff(topic="TokenPak"))
 
-# Create crew with TokenPak
-crew = TokenPakCrew(
-    agents=agents,
-    tasks=tasks,
-    context_budget=8000,
-    compaction_mode="balanced",
-    verbose=True,
+handoff = TokenPakHandoff()
+wire = handoff.prepare_handoff(
+    state={"topic": "TokenPak", "status": "researched"},
+    from_agent="researcher",
+    to_agent="writer",
+    what_was_done="researched topic",
+    whats_next="write draft",
 )
 
-# Execute crew
-result = crew.kickoff()
-print(f"Crew execution result: {result['status']}")
-print(f"Context used: {result['context_used']} tokens")
+print(handoff.receive_handoff_wire(wire)["prompt"])

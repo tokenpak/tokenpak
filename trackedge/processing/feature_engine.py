@@ -212,3 +212,195 @@ def first_time_starter_reweight(horse: Dict) -> Dict[str, float]:
         return {"speed_score": 0.20, "class_fit": 0.10, "pace_fit": 0.10, "form_fitness": 0.40, "connections": 0.20}
     else:
         return {"speed_score": 0.10, "class_fit": 0.10, "pace_fit": 0.10, "form_fitness": 0.60, "connections": 0.10}
+
+
+def filter_comparable_races(past_performances: list, race: dict) -> list:
+    """
+    Filter past performances to races comparable to today's race.
+    
+    Criteria: similar distance, class, surface
+    """
+    if not past_performances:
+        return []
+    
+    target_distance = race.get("distance", 0)
+    target_class = race.get("class_rating", 50000)
+    target_surface = race.get("surface", "dirt")
+    
+    comparable = []
+    for pp in past_performances:
+        distance = pp.get("distance", 0)
+        class_rating = pp.get("class_rating", 50000)
+        surface = pp.get("surface", "dirt")
+        
+        # Within 0.5 furlongs, class within 20%, same surface
+        if (abs(distance - target_distance) < 0.5 and
+            abs(class_rating - target_class) < target_class * 0.2 and
+            surface == target_surface):
+            comparable.append(pp)
+    
+    return comparable
+
+
+def calculate_pace_metrics(horse: dict, race: dict) -> dict:
+    """
+    Calculate pace-related metrics from comparable past performances.
+    """
+    pps = horse.get("past_performances", [])
+    comparable = filter_comparable_races(pps, race)
+    
+    if len(comparable) < 1:
+        return {
+            "avg_pacefigure": 0,
+            "avg_lenback1": 0,
+            "avg_position1": 0,
+            "avg_position2": 0,
+        }
+    
+    # Average last 3 comparable races
+    pace_figs = [p.get("pacefigure", 0) for p in comparable[:3]]
+    lenbacks = [p.get("lenback1", 0) for p in comparable[:3]]
+    pos1s = [p.get("position1", 0) for p in comparable[:3]]
+    pos2s = [p.get("position2", 0) for p in comparable[:3]]
+    
+    return {
+        "avg_pacefigure": sum(pace_figs) / len(pace_figs) if pace_figs else 0,
+        "avg_lenback1": sum(lenbacks) / len(lenbacks) if lenbacks else 0,
+        "avg_position1": sum(pos1s) / len(pos1s) if pos1s else 0,
+        "avg_position2": sum(pos2s) / len(pos2s) if pos2s else 0,
+    }
+
+
+def classify_pace_style_improved(avg_lenback1: float) -> str:
+    """Classify horse's running style based on lengths back at first call."""
+    if avg_lenback1 <= 1.5:
+        return "E"
+    elif avg_lenback1 <= 4.0:
+        return "EP"
+    elif avg_lenback1 <= 7.0:
+        return "P"
+    else:
+        return "S"
+
+
+def race_pace_projection(race: dict) -> dict:
+    """
+    Analyze field's pace characteristics using top entrants.
+    """
+    horses = race.get("horses", [])
+    
+    # Get top 4 by pace figure
+    by_pace = sorted(
+        horses,
+        key=lambda h: h.get("pace_metrics", {}).get("avg_pacefigure", 0),
+        reverse=True
+    )[:4]
+    
+    if not by_pace:
+        return {"race_pace_index": 90, "pace_label": "Honest"}
+    
+    race_pace_index = sum(
+        h.get("pace_metrics", {}).get("avg_pacefigure", 0) for h in by_pace
+    ) / len(by_pace)
+    
+    # Classify
+    if race_pace_index < 85:
+        pace_label = "Slow"
+    elif race_pace_index < 95:
+        pace_label = "Honest"
+    elif race_pace_index < 105:
+        pace_label = "Fast"
+    else:
+        pace_label = "Meltdown"
+    
+    return {
+        "race_pace_index": race_pace_index,
+        "pace_label": pace_label,
+    }
+
+
+def pace_fit_adjustment(horse: dict, race_pace_label: str) -> float:
+    """
+    Adjust horse score based on pace fit.
+    
+    Returns: adjustment to add to power_score (capped -5 to +5)
+    """
+    style = horse.get("pace_style", "U")
+    adjustment = 0
+    
+    if race_pace_label == "Slow":
+        if style == "E":
+            adjustment = 2.0
+        elif style == "S":
+            adjustment = -1.0
+    
+    elif race_pace_label == "Honest":
+        adjustment = 0
+    
+    elif race_pace_label == "Fast":
+        if style in ["EP", "P"]:
+            adjustment = 2.0
+        elif style == "E":
+            adjustment = -1.0
+    
+    elif race_pace_label == "Meltdown":
+        if style in ["P", "S"]:
+            adjustment = 3.0
+        elif style == "E":
+            adjustment = -2.0
+    
+    return max(-5, min(5, adjustment))
+
+
+def speed_score_field_relative(horse: dict, race: dict) -> float:
+    """
+    Score horse's speed relative to today's field (z-score based).
+    
+    Prevents weak fields from producing artificial superhorses.
+    Returns score bounded 20-90.
+    """
+    pps = horse.get("past_performances", [])
+    comparable = filter_comparable_races(pps, race)[:3]
+    
+    speeds = [p.get("speedfigur", 0) for p in comparable]
+    if not speeds:
+        return 50
+    
+    # Weighted average of last 3
+    weighted_speed = (
+        0.5 * (speeds[0] if len(speeds) > 0 else 0) +
+        0.3 * (speeds[1] if len(speeds) > 1 else 0) +
+        0.2 * (speeds[2] if len(speeds) > 2 else 0)
+    )
+    
+    # Get field speeds
+    all_horse_speeds = []
+    for h in race.get("horses", []):
+        h_pps = h.get("past_performances", [])
+        h_comparable = filter_comparable_races(h_pps, race)[:3]
+        h_speeds = [p.get("speedfigur", 0) for p in h_comparable]
+        if h_speeds:
+            h_weighted = (
+                0.5 * h_speeds[0] +
+                0.3 * (h_speeds[1] if len(h_speeds) > 1 else 0) +
+                0.2 * (h_speeds[2] if len(h_speeds) > 2 else 0)
+            )
+            all_horse_speeds.append(h_weighted)
+    
+    if not all_horse_speeds or len(all_horse_speeds) < 2:
+        return 50
+    
+    field_mean = sum(all_horse_speeds) / len(all_horse_speeds)
+    field_std = (
+        sum((s - field_mean) ** 2 for s in all_horse_speeds) / len(all_horse_speeds)
+    ) ** 0.5
+    
+    # Z-score and convert to 20-90 scale
+    if field_std == 0:
+        z = 0
+    else:
+        z = (weighted_speed - field_mean) / field_std
+    
+    speed_score = 50 + (z * 15)
+    return max(20, min(90, speed_score))
+

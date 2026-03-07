@@ -1,53 +1,31 @@
-"""TokenPak-enabled AutoGen group chat."""
+"""TokenPakGroupChat for AutoGen-style group conversations."""
 
-from typing import List, Any, Dict, Optional
+from typing import Any, Dict, List
+
+from .message import TokenPakMessage
 
 
 class TokenPakGroupChat:
-    """
-    AutoGen GroupChat with TokenPak context management.
-    
-    Automatically compresses conversation history across all agents.
-    """
-    
-    def __init__(
-        self,
-        agents: List[Any],
-        context_budget: int = 8000,
-        handoff_format: str = "tokenpak",
-        max_messages: int = 50,
-    ):
-        """
-        Initialize TokenPak group chat.
-        
-        Args:
-            agents: List of agents in group
-            context_budget: Total token budget
-            handoff_format: Format for agent-to-agent messages
-            max_messages: Max messages to keep in memory
-        """
+    """Group chat container with optional budget-based compression."""
+
+    def __init__(self, agents: List[Any], budget: int = 8000, **kwargs):
         self.agents = agents
-        self.context_budget = context_budget
-        self.handoff_format = handoff_format
-        self.max_messages = max_messages
+        self.budget = budget
+        self.kwargs = kwargs
         self.messages: List[Dict[str, Any]] = []
-        self._context_tokens = 0
-    
-    def add_message(self, agent_name: str, content: str) -> None:
-        """Add message to group chat."""
-        msg = {
-            "agent": agent_name,
-            "content": content,
-        }
-        self.messages.append(msg)
-        
-        # Estimate tokens
-        self._context_tokens = sum(len(m.get("content", "")) // 4 for m in self.messages)
-        
-        # Enforce max messages
-        if len(self.messages) > self.max_messages:
-            self.messages = self.messages[-self.max_messages:]
-    
-    def get_history(self) -> List[Dict[str, Any]]:
-        """Get compressed chat history."""
-        return self.messages.copy()
+
+    def add_message(self, message: Dict[str, Any]) -> None:
+        """Append a message dict to history."""
+        self.messages.append(message)
+
+    def _compress_history(self) -> List[Dict[str, Any]]:
+        """Return history compressed to current budget."""
+        compressed: List[Dict[str, Any]] = []
+        token_estimate = 0
+        for message in reversed(self.messages):
+            est = len(message.get("content", "")) // 4
+            if token_estimate + est > self.budget:
+                break
+            compressed.insert(0, TokenPakMessage.compress_message(message, max_tokens=200))
+            token_estimate += est
+        return compressed

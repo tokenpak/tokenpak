@@ -218,3 +218,138 @@ class TestScoring:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestPaceMetricsAndSpeed:
+    """Tests for improved pace and field-relative speed."""
+    
+    def test_calculate_pace_metrics(self):
+        """Test pace metrics calculation from comparable races."""
+        from trackedge.processing.feature_engine import calculate_pace_metrics
+        
+        horse = {
+            "past_performances": [
+                {"pacefigure": 95, "lenback1": 2.0, "position1": 2, "position2": 3},
+                {"pacefigure": 93, "lenback1": 2.5, "position1": 2, "position2": 4},
+            ]
+        }
+        race = {"distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+        
+        metrics = calculate_pace_metrics(horse, race)
+        assert metrics["avg_pacefigure"] == pytest.approx(94.0, abs=0.1)
+        assert metrics["avg_lenback1"] == pytest.approx(2.25, abs=0.1)
+    
+    def test_classify_pace_style_improved(self):
+        """Test improved pace style classification."""
+        from trackedge.processing.feature_engine import classify_pace_style_improved
+        
+        assert classify_pace_style_improved(1.0) == "E"
+        assert classify_pace_style_improved(2.5) == "EP"
+        assert classify_pace_style_improved(5.5) == "P"
+        assert classify_pace_style_improved(8.0) == "S"
+    
+    def test_race_pace_projection(self):
+        """Test race pace index calculation."""
+        from trackedge.processing.feature_engine import race_pace_projection
+        
+        race = {
+            "horses": [
+                {"pace_metrics": {"avg_pacefigure": 95}},
+                {"pace_metrics": {"avg_pacefigure": 93}},
+                {"pace_metrics": {"avg_pacefigure": 90}},
+                {"pace_metrics": {"avg_pacefigure": 88}},
+            ]
+        }
+        
+        result = race_pace_projection(race)
+        assert "race_pace_index" in result
+        assert "pace_label" in result
+        assert result["pace_label"] in ["Slow", "Honest", "Fast", "Meltdown"]
+    
+    def test_pace_fit_adjustment_early_slow_pace(self):
+        """Test pace fit adjustment for early horse in slow pace."""
+        from trackedge.processing.feature_engine import pace_fit_adjustment
+        
+        horse = {"pace_style": "E"}
+        adj = pace_fit_adjustment(horse, "Slow")
+        assert adj == 2.0  # Boost for early in slow pace
+    
+    def test_pace_fit_adjustment_capping(self):
+        """Test pace adjustment is capped -5 to +5."""
+        from trackedge.processing.feature_engine import pace_fit_adjustment
+        
+        horse = {"pace_style": "P"}
+        
+        # All adjustments should be within bounds
+        for label in ["Slow", "Honest", "Fast", "Meltdown"]:
+            adj = pace_fit_adjustment(horse, label)
+            assert -5 <= adj <= 5
+    
+    def test_speed_score_field_relative_normalization(self):
+        """Test field-relative speed normalization."""
+        from trackedge.processing.feature_engine import speed_score_field_relative
+        
+        # Weak field (all horses ~70 speed)
+        race_weak = {
+            "horses": [
+                {
+                    "past_performances": [
+                        {"speedfigur": 70, "distance": 8.0, "class_rating": 40000, "surface": "dirt"},
+                    ]
+                },
+                {
+                    "past_performances": [
+                        {"speedfigur": 72, "distance": 8.0, "class_rating": 40000, "surface": "dirt"},
+                    ]
+                },
+            ]
+        }
+        
+        horse = {
+            "past_performances": [
+                {"speedfigur": 90, "distance": 8.0, "class_rating": 40000, "surface": "dirt"},
+            ]
+        }
+        
+        score = speed_score_field_relative(horse, race_weak)
+        # Even in weak field, 90 speed vs 71 field average should be well above 50
+        assert score > 60
+    
+    def test_speed_score_field_relative_bounds(self):
+        """Test speed score is bounded 20-90."""
+        from trackedge.processing.feature_engine import speed_score_field_relative
+        
+        race = {
+            "horses": [
+                {"past_performances": [{"speedfigur": 100, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
+                {"past_performances": [{"speedfigur": 95, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]},
+            ]
+        }
+        
+        # Very slow horse
+        slow_horse = {"past_performances": [{"speedfigur": 30, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        slow_score = speed_score_field_relative(slow_horse, race)
+        assert 20 <= slow_score <= 90
+        
+        # Very fast horse
+        fast_horse = {"past_performances": [{"speedfigur": 120, "distance": 8.0, "class_rating": 50000, "surface": "dirt"}]}
+        fast_score = speed_score_field_relative(fast_horse, race)
+        assert 20 <= fast_score <= 90
+    
+    def test_filter_comparable_races(self):
+        """Test comparable race filtering."""
+        from trackedge.processing.feature_engine import filter_comparable_races
+        
+        pps = [
+            {"distance": 8.0, "class_rating": 50000, "surface": "dirt"},  # Comparable
+            {"distance": 6.0, "class_rating": 50000, "surface": "dirt"},  # Wrong distance
+            {"distance": 8.0, "class_rating": 70000, "surface": "dirt"},  # Wrong class
+            {"distance": 8.0, "class_rating": 50000, "surface": "turf"},  # Wrong surface
+        ]
+        
+        race = {"distance": 8.0, "class_rating": 50000, "surface": "dirt"}
+        comparable = filter_comparable_races(pps, race)
+        
+        assert len(comparable) == 1
+        assert comparable[0]["distance"] == 8.0
+

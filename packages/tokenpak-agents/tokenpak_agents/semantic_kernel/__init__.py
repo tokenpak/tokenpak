@@ -1,4 +1,4 @@
-"""TokenPak Semantic Kernel integration."""
+"""Semantic Kernel integration for TokenPak."""
 
 from .memory import TokenPakMemory
 

@@ -1,24 +1,25 @@
-"""TokenPak messages for AutoGen."""
+"""TokenPakMessage utilities for AutoGen conversations."""
 
-from typing import Any, Optional, Dict
+from typing import Any, Dict
 
 
 class TokenPakMessage:
-    """Wraps TokenPak data as AutoGen message."""
-    
-    def __init__(
-        self,
-        pack: Optional[Dict[str, Any]] = None,
-        content: Optional[str] = None,
-    ):
-        self.pack = pack
-        self.content = content or ""
-    
-    def to_string(self) -> str:
-        """Convert to string representation."""
-        if self.pack:
-            return f"[TokenPak: {len(str(self.pack))} bytes]"
-        return self.content
-    
-    def __str__(self) -> str:
-        return self.to_string()
+    """Utilities for compressing AutoGen-style messages."""
+
+    @staticmethod
+    def compress_content(content: str, max_tokens: int = 200) -> str:
+        """Compress content with conservative truncation."""
+        if max_tokens <= 0:
+            return "..."
+        if len(content) // 4 <= max_tokens:
+            return content
+        new_len = max_tokens * 4
+        return content[:new_len] + "..."
+
+    @staticmethod
+    def compress_message(message: Dict[str, Any], max_tokens: int = 200) -> Dict[str, Any]:
+        """Compress a message dict while preserving existing keys."""
+        return {
+            **message,
+            "content": TokenPakMessage.compress_content(message.get("content", ""), max_tokens=max_tokens),
+        }

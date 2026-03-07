@@ -1,7 +1,7 @@
-"""TokenPak CrewAI integration."""
+"""CrewAI integration for TokenPak."""
 
 from .context import TokenPakContext
-from .handoff import TokenPakHandoff
 from .crew import TokenPakCrew
+from .handoff import TokenPakHandoff
 
-__all__ = ["TokenPakContext", "TokenPakHandoff", "TokenPakCrew"]
+__all__ = ["TokenPakContext", "TokenPakCrew", "TokenPakHandoff"]
