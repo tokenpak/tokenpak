@@ -1,0 +1,4 @@
+tokenpak>=0.1.0
+fastapi>=0.100.0
+# For Django integration:
+# django>=4.2

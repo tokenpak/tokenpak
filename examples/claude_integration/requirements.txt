@@ -1,0 +1,2 @@
+tokenpak>=0.1.0
+anthropic>=0.20.0

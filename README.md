@@ -263,7 +263,12 @@ Default config: `~/.tokenpak/config.json`
 
 ## Contributing
 
-We welcome issues and pull requests!
+We welcome issues, pull requests, and feedback of all kinds!
+
+- 🐛 **Bug reports** → [Open an issue](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Feature requests** → [Request a feature](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
+- 📖 **Full guide** → [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ### Quick setup
 
