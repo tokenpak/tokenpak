@@ -327,10 +327,21 @@ def main():
     # Delegate serve subcommand (Phase 5A: Ingest API)
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         import argparse as _ap
+        from tokenpak.agent.cli.commands.serve import _default_workers
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
         sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
         sp.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
+        sp.add_argument(
+            "--workers",
+            type=int,
+            default=None,
+            metavar="N",
+            help=(
+                f"Number of worker processes (default: max(1, cpu_count//2) = {_default_workers()}). "
+                "Workers restart on crash; graceful shutdown drains all workers."
+            ),
+        )
         sargs = sp.parse_args(sys.argv[2:])
         from tokenpak.agent.cli.commands.serve import run_serve_cmd
 
