@@ -1,0 +1,2 @@
+tokenpak>=0.1.0
+flask>=3.0.0
