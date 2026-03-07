@@ -37,7 +37,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -236,9 +236,29 @@ def create_app(
     # ──────────────────────────────────────────────────────────
 
     @app.get("/health", tags=["system"])
-    async def health() -> Dict[str, str]:
-        """Liveness probe — no auth required."""
-        return {"status": "ok", "version": _VERSION}
+    async def health(
+        deep: bool = Query(default=False, description="Run deep component checks"),
+    ) -> Any:
+        """
+        Health check — no auth required.
+
+        - ``GET /health`` → fast liveness probe, always <10 ms.
+        - ``GET /health?deep=true`` → full component check (providers, DB,
+          index, memory, disk). Returns 200 for ok/degraded, 503 for error.
+        """
+        if not deep:
+            # Fast path — liveness only
+            return {"status": "ok", "version": _VERSION}
+
+        # Deep path — run all checks
+        from .deep_health import get_checker
+        checker = get_checker()
+        result = checker.run()
+        response_body = {"version": _VERSION, **result.to_dict()}
+        return JSONResponse(
+            content=response_body,
+            status_code=result.http_status,
+        )
 
     @app.get(
         "/v1/status",
