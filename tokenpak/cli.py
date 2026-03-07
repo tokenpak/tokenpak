@@ -1,6 +1,7 @@
 """TokenPak CLI with parallel processing and optimized batch operations."""
 
 import argparse
+import difflib
 import hashlib
 import json
 import importlib.util
@@ -11,6 +12,171 @@ from typing import Optional, Tuple, List
 import os
 import sys
 import socket
+
+# ── Progressive Disclosure ────────────────────────────────────────────────────
+
+_FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
+
+# Commands shown in quick --help (beginner view)
+_QUICK_COMMANDS = ["start", "demo", "cost", "status"]
+
+# All commands grouped for `tokenpak help`
+_COMMAND_GROUPS = {
+    "Getting Started": [
+        ("start",       "Start the proxy (localhost:8766)"),
+        ("stop",        "Stop the running proxy"),
+        ("restart",     "Restart the proxy"),
+        ("demo",        "See compression in action"),
+        ("cost",        "View your API spend"),
+        ("status",      "Check proxy health"),
+        ("logs",        "Show recent proxy logs"),
+    ],
+    "Indexing": [
+        ("index",       "Index a directory for context retrieval"),
+        ("search",      "Search indexed content"),
+    ],
+    "Configuration": [
+        ("route",       "Manage model routing rules"),
+        ("recipe",      "Manage compression recipes"),
+        ("template",    "Manage prompt templates"),
+        ("budget",      "Set API budget limits"),
+    ],
+    "Operations": [
+        ("benchmark",   "Run compression benchmarks"),
+        ("calibrate",   "Calibrate worker count for this host"),
+        ("doctor",      "Run diagnostics"),
+        ("debug",       "Toggle verbose debug logging"),
+        ("learn",       "View/reset learned patterns"),
+    ],
+    "Advanced": [
+        ("trigger",     "Manage event triggers"),
+        ("macro",       "Manage and run macros"),
+        ("fingerprint", "Fingerprint sync and cache management"),
+        ("agent",       "Agent coordination (locks, registry)"),
+        ("lock",        "File lock management"),
+        ("run",         "Schedule and manage macro runs"),
+        ("replay",      "Inspect and re-run captured sessions"),
+        ("audit",       "Enterprise audit log management"),
+        ("compliance",  "Generate compliance reports"),
+        ("validate",    "Validate a TokenPak JSON file"),
+        ("stats",       "Show registry stats"),
+        ("serve",       "Start proxy/telemetry server (low-level)"),
+    ],
+}
+
+# All known command names (for typo detection)
+_ALL_COMMANDS = [cmd for group in _COMMAND_GROUPS.values() for cmd, _ in group]
+
+
+def _suggest_command(unknown: str) -> Optional[str]:
+    """Return the closest known command name, or None if no good match."""
+    matches = difflib.get_close_matches(unknown, _ALL_COMMANDS, n=1, cutoff=0.6)
+    return matches[0] if matches else None
+
+
+def _mark_intro_seen():
+    """Write the first-run flag so the welcome message shows only once."""
+    try:
+        _FIRST_RUN_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _FIRST_RUN_FLAG.touch()
+    except Exception:
+        pass
+
+
+def _is_first_run() -> bool:
+    return not _FIRST_RUN_FLAG.exists()
+
+
+def _print_quick_help():
+    """Print the beginner-friendly --help output."""
+    print(
+        "TokenPak — LLM Proxy with Context Compression\n"
+        "\n"
+        "Quick Start:\n"
+        "  start     Start the proxy (localhost:8766)\n"
+        "  demo      See compression in action\n"
+        "  cost      View your API spend\n"
+        "  status    Check proxy health\n"
+        "\n"
+        "Run `tokenpak help` for all commands.\n"
+        "Run `tokenpak <command> --help` for command details."
+    )
+
+
+def _print_full_help():
+    """Print the power-user grouped help output."""
+    print("TokenPak — LLM Proxy with Context Compression\n")
+    print("All Commands:\n")
+    for group_name, commands in _COMMAND_GROUPS.items():
+        print(f"  {group_name}:")
+        for cmd, desc in commands:
+            print(f"    {cmd:<14} {desc}")
+        print()
+    print("Run `tokenpak <command> --help` for command details.")
+
+
+def cmd_help(args):
+    """Show all commands grouped by category (power-user view)."""
+    _print_full_help()
+
+
+# ── Alias commands ────────────────────────────────────────────────────────────
+
+def cmd_start(args):
+    """Start the proxy on localhost:8766 (alias for `serve --port 8766`)."""
+    import types
+    serve_args = types.SimpleNamespace(port=8766, telemetry=False, ingest=False, workers=1)
+    cmd_serve(serve_args)
+
+
+def cmd_stop(args):
+    """Stop the running proxy."""
+    import signal as _signal
+    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    if not pid_path.exists():
+        print("No proxy PID file found. Is the proxy running?")
+        print("Tip: run `tokenpak status` to check.")
+        return
+    try:
+        pid = int(pid_path.read_text().strip())
+        os.kill(pid, _signal.SIGTERM)
+        pid_path.unlink(missing_ok=True)
+        print(f"Proxy stopped (PID {pid}).")
+    except ProcessLookupError:
+        pid_path.unlink(missing_ok=True)
+        print("Proxy was not running (stale PID removed).")
+    except Exception as e:
+        print(f"Error stopping proxy: {e}")
+
+
+def cmd_restart(args):
+    """Restart the proxy (stop + start)."""
+    cmd_stop(args)
+    time.sleep(1)
+    cmd_start(args)
+
+
+def cmd_logs(args):
+    """Show recent proxy logs."""
+    log_candidates = [
+        Path.home() / ".tokenpak" / "proxy.log",
+        Path("/tmp/tokenpak-proxy.log"),
+    ]
+    lines = getattr(args, "lines", 50)
+    for log_path in log_candidates:
+        if log_path.exists():
+            try:
+                all_lines = log_path.read_text(errors="replace").splitlines()
+                for line in all_lines[-lines:]:
+                    print(line)
+                return
+            except Exception as e:
+                print(f"Could not read {log_path}: {e}")
+                return
+    print("No proxy log file found.")
+    print("The proxy writes logs to ~/.tokenpak/proxy.log when running.")
+
+# ── End Progressive Disclosure ────────────────────────────────────────────────
 
 from .registry import BlockRegistry, Block
 from .walker import walk_directory
@@ -619,10 +785,36 @@ def cmd_doctor(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="tokenpak", description="TokenPak CLI")
+    parser = argparse.ArgumentParser(
+        prog="tokenpak",
+        description="TokenPak — LLM Proxy with Context Compression",
+        add_help=False,  # we handle --help ourselves for progressive disclosure
+    )
+    parser.add_argument("--help", "-h", action="store_true", default=False,
+                        help="Show quick-start help")
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=False)
+
+    # ── Progressive disclosure: help + aliases ────────────────────────────────
+    p_help = sub.add_parser("help", help="Show all commands grouped by category")
+    p_help.set_defaults(func=cmd_help)
+
+    p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
+    p_start.set_defaults(func=cmd_start)
+
+    p_stop = sub.add_parser("stop", help="Stop the running proxy")
+    p_stop.set_defaults(func=cmd_stop)
+
+    p_restart = sub.add_parser("restart", help="Restart the proxy")
+    p_restart.set_defaults(func=cmd_restart)
+
+    p_logs = sub.add_parser("logs", help="Show recent proxy logs")
+    p_logs.add_argument("--lines", "-n", type=int, default=50,
+                        help="Number of log lines to show (default: 50)")
+    p_logs.set_defaults(func=cmd_logs)
+    # ── End aliases ───────────────────────────────────────────────────────────
+
     _build_route_parser(sub)
     _build_validate_parser(sub)
 
@@ -1097,7 +1289,60 @@ def cmd_compliance_report(args):
 
 def main():
     parser = build_parser()
+
+    # ── Intercept bare --help / -h for progressive disclosure ─────────────────
+    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ("--help", "-h")):
+        _print_quick_help()
+        sys.exit(0)
+
+    # ── Intercept unknown commands for typo suggestions ───────────────────────
+    raw_cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    known_cmds = set(_ALL_COMMANDS) | {
+        # also include argparse-registered commands not in groups
+        "help", "start", "stop", "restart", "logs",
+    }
+    if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
+        suggestion = _suggest_command(raw_cmd)
+        print(f"Unknown command '{raw_cmd}'.")
+        if suggestion:
+            print(f"Did you mean: tokenpak {suggestion}?")
+        else:
+            # Check for a semantically confusing command
+            _COMMAND_HINTS = {
+                "compress": "Compression happens automatically through the proxy.\nRun `tokenpak demo` to see it in action.",
+                "run":      "Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
+                "proxy":    "Use `tokenpak start` to start the proxy on localhost:8766.",
+                "kill":     "Use `tokenpak stop` to stop the running proxy.",
+            }
+            hint = _COMMAND_HINTS.get(raw_cmd)
+            if hint:
+                print(hint)
+            else:
+                print("Run `tokenpak help` to see all available commands.")
+        sys.exit(1)
+
     args = parser.parse_args()
+
+    # No subcommand given (shouldn't normally happen after guards above)
+    if not args.command:
+        _print_quick_help()
+        sys.exit(0)
+
+    # ── First-run welcome ──────────────────────────────────────────────────────
+    if _is_first_run() and args.command not in ("help",):
+        print(
+            "👋 Welcome to TokenPak! It looks like this is your first time.\n"
+            "   Run `tokenpak demo` to see compression in action.\n"
+            "   Run `tokenpak help` to see all available commands.\n"
+        )
+        _mark_intro_seen()
+
+    # ── Smart defaults ─────────────────────────────────────────────────────────
+    # `tokenpak cost` with no period flags → default to today
+    if args.command == "cost":
+        if not getattr(args, "week", False) and not getattr(args, "month", False):
+            pass  # cmd_cost already defaults to "daily" when neither flag set
+
     args.func(args)
 
 
