@@ -1,0 +1,240 @@
+{
+  "_comment": "Full TokenPak — all 9 sections populated",
+  "header": {
+    "version": "1.0",
+    "id": "pak_full_example01",
+    "created": "2026-03-07T08:30:00Z",
+    "schema": "https://tokenpak.dev/schema/v1.0.json"
+  },
+  "metadata": {
+    "task": "debug_proxy_authentication_failure",
+    "source": "agent:orchestrator",
+    "target": "agent:coding_agent",
+    "tags": ["debugging", "proxy", "authentication", "urgent"],
+    "expires": "2026-03-08T08:30:00Z"
+  },
+  "blocks": [
+    {
+      "type": "instructions",
+      "id": "system_prompt",
+      "content": "You are an expert debugging assistant specializing in proxy authentication flows. Be precise and methodical. Always suggest a minimal reproducible fix.",
+      "tokens": 32,
+      "priority": "critical",
+      "compacted": false
+    },
+    {
+      "type": "code",
+      "id": "proxy_main",
+      "content": "# proxy.py\nclass ProxyServer:\n    def authenticate(self, token: str) -> bool:\n        # BUG: always returns False\n        return self.validate_jwt(token) and False\n\n    def validate_jwt(self, token: str) -> bool:\n        import jwt\n        payload = jwt.decode(token, self.secret, algorithms=['HS256'])\n        return 'sub' in payload",
+      "tokens": 65,
+      "priority": "high",
+      "compacted": false
+    },
+    {
+      "type": "knowledge",
+      "id": "auth_design_doc",
+      "content": "The proxy uses JWT HS256 for authentication. Tokens are issued by the auth service and must contain 'sub' and 'exp' claims. Tokens expire after 24 hours.",
+      "tokens": 38,
+      "priority": "high",
+      "quality": 0.95,
+      "compacted": false
+    },
+    {
+      "type": "memory",
+      "id": "agent_state",
+      "content": "Last session: identified JWT validation logic. user prefers Python fixes with type hints. Debug focus: auth module.",
+      "tokens": 22,
+      "priority": "medium",
+      "compacted": false
+    },
+    {
+      "type": "conversation",
+      "id": "recent_chat",
+      "content": "User: The proxy keeps rejecting valid tokens.\nAssistant: Let me look at the authentication flow. Can you share the proxy code?\nUser: Attached above. It worked last week.",
+      "tokens": 35,
+      "priority": "medium",
+      "compacted": false
+    },
+    {
+      "type": "evidence",
+      "id": "error_logs",
+      "content": "[2026-03-07 08:15:32] AUTH FAIL: token=eyJhb... reason=validation_returned_false\n[2026-03-07 08:15:33] AUTH FAIL: token=eyJhb... reason=validation_returned_false",
+      "tokens": 45,
+      "priority": "medium",
+      "quality": 0.88,
+      "compacted": false,
+      "provenance": {
+        "source_type": "file",
+        "source_id": "/var/log/proxy/auth.log",
+        "retrieved_at": "2026-03-07T08:20:00Z"
+      }
+    },
+    {
+      "type": "system",
+      "id": "routing_meta",
+      "content": "route=coding_agent priority=high deadline=2026-03-07T10:00:00Z",
+      "tokens": 12,
+      "priority": "internal",
+      "compacted": false
+    }
+  ],
+  "capabilities": {
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Read contents of a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string", "description": "Absolute file path"}
+          },
+          "required": ["path"]
+        },
+        "provider": "mcp:filesystem"
+      },
+      {
+        "name": "write_file",
+        "description": "Write content to a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"},
+            "content": {"type": "string"}
+          },
+          "required": ["path", "content"]
+        },
+        "provider": "mcp:filesystem"
+      },
+      {
+        "name": "run_tests",
+        "description": "Run pytest and return results",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "test_path": {"type": "string"},
+            "verbose": {"type": "boolean"}
+          },
+          "required": ["test_path"]
+        },
+        "provider": "local"
+      }
+    ],
+    "skills": [
+      {
+        "id": "code_review",
+        "name": "Code Review Skill",
+        "description": "Review code for bugs, security issues, and style",
+        "mcp_server": "mcp://localhost:3001/github"
+      }
+    ],
+    "mcp_servers": [
+      {
+        "uri": "mcp://localhost:3000/filesystem",
+        "name": "filesystem",
+        "capabilities": ["read", "write", "list"],
+        "authenticated": true
+      },
+      {
+        "uri": "mcp://localhost:3001/github",
+        "name": "github",
+        "capabilities": ["issues", "prs", "repos"]
+      }
+    ],
+    "resources": [
+      {
+        "uri": "mcp://filesystem/home/user/project/proxy",
+        "name": "Proxy Source Directory",
+        "mime_type": "inode/directory",
+        "readable": true,
+        "writable": true
+      }
+    ]
+  },
+  "constraints": {
+    "model": {
+      "min_context_window": 100000,
+      "requires_vision": false,
+      "requires_tools": true,
+      "preferred_models": ["claude-3-opus-20240229", "gpt-4-turbo"]
+    },
+    "permissions": {
+      "can_execute_code": true,
+      "can_access_network": false,
+      "can_modify_files": true,
+      "can_send_messages": false,
+      "allowed_domains": []
+    },
+    "guardrails": {
+      "max_cost_usd": 2.00,
+      "timeout_seconds": 300,
+      "max_tokens_output": 4096,
+      "require_human_approval": ["file_delete", "deploy"]
+    }
+  },
+  "state": {
+    "workflow_id": "wf_debug_proxy_auth_001",
+    "step_index": 1,
+    "total_steps": 3,
+    "checkpoints": [
+      {
+        "step": 0,
+        "pack_id": "pak_step0_gather_logs",
+        "timestamp": "2026-03-07T08:20:00Z"
+      }
+    ],
+    "parent_pack_id": "pak_original_debug_request",
+    "resumable": true,
+    "status": "in_progress"
+  },
+  "provenance": {
+    "source_packs": ["pak_step0_gather_logs"],
+    "transforms": [
+      {
+        "type": "enrich",
+        "timestamp": "2026-03-07T08:25:00Z",
+        "agent": "agent:orchestrator"
+      },
+      {
+        "type": "compact",
+        "mode": "balanced",
+        "timestamp": "2026-03-07T08:26:00Z",
+        "agent": "agent:orchestrator"
+      }
+    ],
+    "trust_level": "verified",
+    "signatures": [
+      {
+        "signer": "agent:orchestrator",
+        "algorithm": "ed25519",
+        "signature": "base64encodedplaceholder==",
+        "timestamp": "2026-03-07T08:26:00Z"
+      }
+    ]
+  },
+  "policies": {
+    "compaction": {
+      "mode": "balanced",
+      "max_tokens": 8000,
+      "priority_order": ["instructions", "code", "knowledge", "memory", "conversation", "evidence"],
+      "per_type_limits": {
+        "evidence": {"max_tokens": 1500, "mode": "aggressive"},
+        "conversation": {"max_tokens": 800, "hot_window": 3}
+      }
+    },
+    "budget": {
+      "total": 8000,
+      "per_block_max": 2000,
+      "reserve_for_output": 2000
+    }
+  },
+  "embeddings": {
+    "model": "text-embedding-3-small",
+    "dimensions": 3,
+    "block_vectors": {
+      "system_prompt": [0.023, -0.041, 0.087],
+      "proxy_main": [0.091, -0.015, 0.044],
+      "auth_design_doc": [0.078, 0.032, -0.019],
+      "error_logs": [0.055, -0.088, 0.021]
+    }
+  }
+}

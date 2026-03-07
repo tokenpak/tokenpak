@@ -1,0 +1,141 @@
+{
+  "_comment": "RAG pipeline output: retrieval results packaged for generation agent",
+  "header": {
+    "version": "1.0",
+    "id": "pak_rag_output_001",
+    "created": "2026-03-07T10:00:00Z",
+    "schema": "https://tokenpak.dev/schema/v1.0.json"
+  },
+  "metadata": {
+    "task": "answer_question_about_company_policy",
+    "source": "agent:rag_retrieval_agent",
+    "target": "agent:generation_agent",
+    "tags": ["rag", "retrieval", "policy", "qa", "enterprise"],
+    "expires": "2026-03-07T11:00:00Z"
+  },
+  "blocks": [
+    {
+      "type": "instructions",
+      "id": "generation_instructions",
+      "content": "Answer the user's question using ONLY the evidence blocks below. If the answer is not in the evidence, say 'I don't have information about that in the available documents.' Do not speculate. Cite document names when possible.",
+      "tokens": 55,
+      "priority": "critical",
+      "compacted": false
+    },
+    {
+      "type": "conversation",
+      "id": "user_query",
+      "content": "User: What is the company policy on remote work for employees hired after January 2025?\nAgent: Let me look that up in our policy documents.",
+      "tokens": 30,
+      "priority": "high",
+      "compacted": false
+    },
+    {
+      "type": "evidence",
+      "id": "policy_remote_work_2025",
+      "content": "Remote Work Policy (Updated Jan 2025): Employees hired on or after January 1, 2025 are eligible for hybrid remote work after completing a 90-day onboarding period. Standard hybrid schedule: 3 days in-office, 2 days remote. Fully remote requires VP approval and is reviewed annually. Home office stipend: $500/year for eligible employees.",
+      "tokens": 72,
+      "priority": "high",
+      "quality": 0.97,
+      "compacted": false,
+      "provenance": {
+        "source_type": "pinecone",
+        "source_id": "doc_policy_remote_v4_chunk_3",
+        "retrieved_at": "2026-03-07T09:58:00Z",
+        "url": "internal://hr-portal/policies/remote-work-2025",
+        "score": 0.97
+      }
+    },
+    {
+      "type": "evidence",
+      "id": "policy_remote_work_approval",
+      "content": "Approval Process for Fully Remote: (1) Employee submits request via HR portal. (2) Direct manager reviews within 5 business days. (3) VP signs off. (4) HR notified. Requests denied without VP signature are automatically appealed to HR Director.",
+      "tokens": 52,
+      "priority": "high",
+      "quality": 0.91,
+      "compacted": false,
+      "provenance": {
+        "source_type": "pinecone",
+        "source_id": "doc_policy_remote_v4_chunk_7",
+        "retrieved_at": "2026-03-07T09:58:00Z",
+        "url": "internal://hr-portal/policies/remote-work-2025",
+        "score": 0.91
+      }
+    },
+    {
+      "type": "evidence",
+      "id": "policy_equipment_stipend",
+      "content": "Equipment & Stipends (2025): All employees receive $500 annual home office stipend, disbursed in Q1. Eligible expenses: monitor, keyboard, chair, headset. Submit receipts via Concur by March 31st.",
+      "tokens": 45,
+      "priority": "medium",
+      "quality": 0.74,
+      "compacted": false,
+      "provenance": {
+        "source_type": "pinecone",
+        "source_id": "doc_policy_benefits_2025_chunk_2",
+        "retrieved_at": "2026-03-07T09:58:00Z",
+        "url": "internal://hr-portal/policies/benefits-2025",
+        "score": 0.74
+      }
+    },
+    {
+      "type": "evidence",
+      "id": "faq_remote_work",
+      "content": "FAQ: Q: Can I work remotely from another country? A: International remote work is not supported for non-VP employees. Q: Does the 90-day rule reset if I change roles? A: No, the 90-day clock starts from your original hire date.",
+      "tokens": 54,
+      "priority": "medium",
+      "quality": 0.83,
+      "compacted": false,
+      "provenance": {
+        "source_type": "database",
+        "source_id": "faq_hr_remote_q4_2025",
+        "retrieved_at": "2026-03-07T09:59:00Z",
+        "score": 0.83
+      }
+    },
+    {
+      "type": "system",
+      "id": "retrieval_metadata",
+      "content": "query_embedding_model=text-embedding-3-small index=hr-policy-prod top_k=5 reranker=cohere threshold=0.70 retrieved_at=2026-03-07T09:58:00Z",
+      "tokens": 28,
+      "priority": "internal",
+      "compacted": false
+    }
+  ],
+  "provenance": {
+    "source_packs": [],
+    "transforms": [
+      {
+        "type": "enrich",
+        "timestamp": "2026-03-07T09:58:00Z",
+        "agent": "agent:rag_retrieval_agent"
+      }
+    ],
+    "trust_level": "unverified"
+  },
+  "policies": {
+    "compaction": {
+      "mode": "balanced",
+      "max_tokens": 4000,
+      "priority_order": ["instructions", "conversation", "evidence"],
+      "per_type_limits": {
+        "evidence": {"max_tokens": 2000, "mode": "aggressive"}
+      }
+    },
+    "budget": {
+      "total": 4000,
+      "per_block_max": 800,
+      "reserve_for_output": 1500
+    }
+  },
+  "embeddings": {
+    "model": "text-embedding-3-small",
+    "dimensions": 3,
+    "block_vectors": {
+      "policy_remote_work_2025": [0.891, 0.234, -0.123],
+      "policy_remote_work_approval": [0.812, 0.198, -0.099],
+      "policy_equipment_stipend": [0.512, 0.411, 0.203],
+      "faq_remote_work": [0.743, 0.321, -0.087]
+    }
+  }
+}
