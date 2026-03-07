@@ -4,29 +4,27 @@ Fetches web pages, strips HTML to clean text, detects changes via ETag.
 Respects robots.txt before fetching. No third-party deps (stdlib only).
 """
 
-import hashlib
 import html
 import re
 import urllib.parse
 import urllib.request
 import urllib.robotparser
-from typing import Optional, Tuple
+from typing import Tuple
 
 from .base_source import Provenance, SourceAdapter, SourceFetchError
-
 
 # Timeout for HTTP requests (seconds)
 _HTTP_TIMEOUT = 10
 
 # Strip these common boilerplate tags (with their content)
 _STRIP_TAGS_WITH_CONTENT = re.compile(
-    r'<(script|style|noscript|header|footer|nav|aside)[^>]*>.*?</\1>',
+    r"<(script|style|noscript|header|footer|nav|aside)[^>]*>.*?</\1>",
     re.IGNORECASE | re.DOTALL,
 )
 # Remove remaining HTML tags
-_STRIP_TAGS = re.compile(r'<[^>]+>')
+_STRIP_TAGS = re.compile(r"<[^>]+>")
 # Collapse whitespace
-_COLLAPSE_WS = re.compile(r'\s{2,}')
+_COLLAPSE_WS = re.compile(r"\s{2,}")
 
 
 def _strip_html(raw_html: str) -> str:
@@ -34,17 +32,17 @@ def _strip_html(raw_html: str) -> str:
     # Decode HTML entities first
     text = html.unescape(raw_html)
     # Strip boilerplate sections
-    text = _STRIP_TAGS_WITH_CONTENT.sub(' ', text)
+    text = _STRIP_TAGS_WITH_CONTENT.sub(" ", text)
     # Remove remaining tags
-    text = _STRIP_TAGS.sub(' ', text)
+    text = _STRIP_TAGS.sub(" ", text)
     # Collapse whitespace
-    text = _COLLAPSE_WS.sub(' ', text)
+    text = _COLLAPSE_WS.sub(" ", text)
     return text.strip()
 
 
 def _extract_title(raw_html: str) -> str:
     """Extract <title> tag content."""
-    m = re.search(r'<title[^>]*>(.*?)</title>', raw_html, re.IGNORECASE | re.DOTALL)
+    m = re.search(r"<title[^>]*>(.*?)</title>", raw_html, re.IGNORECASE | re.DOTALL)
     if m:
         return html.unescape(m.group(1).strip())
     return ""

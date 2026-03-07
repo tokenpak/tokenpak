@@ -1,9 +1,9 @@
 """TokenPak Agent Vault — local file indexing, AST parsing, and block storage."""
 
-from .indexer import VaultIndexer
-from .blocks import BlockStore, BlockRecord, get_block_store
-from .symbols import SymbolTable, Symbol
 from .ast_parser import ASTParser
+from .blocks import BlockRecord, BlockStore, get_block_store
+from .indexer import VaultIndexer
+from .symbols import Symbol, SymbolTable
 
 __all__ = [
     "VaultIndexer",

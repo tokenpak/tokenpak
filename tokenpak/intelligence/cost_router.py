@@ -38,8 +38,7 @@ def _require_pro(request: Request) -> Optional[JSONResponse]:
             content={
                 "error": "Forbidden",
                 "detail": (
-                    "Cost Intelligence is a Pro+ feature. "
-                    "Upgrade at https://tokenpak.ai/pricing"
+                    "Cost Intelligence is a Pro+ feature. " "Upgrade at https://tokenpak.ai/pricing"
                 ),
             },
         )
@@ -49,6 +48,7 @@ def _require_pro(request: Request) -> Optional[JSONResponse]:
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
+
 
 class MetricRecord(BaseModel):
     """One day of aggregated cost/usage data submitted by the client."""
@@ -87,6 +87,7 @@ class AnalyzeRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # POST /v1/cost/analyze
 # ---------------------------------------------------------------------------
+
 
 @cost_router.post(
     "/cost/analyze",
@@ -130,6 +131,7 @@ async def cost_analyze(body: AnalyzeRequest, request: Request) -> Dict[str, Any]
 # GET /v1/cost/projections
 # ---------------------------------------------------------------------------
 
+
 @cost_router.get(
     "/cost/projections",
     summary="7d/30d cost projections (Pro+)",
@@ -172,6 +174,7 @@ async def cost_projections(
         )
 
     from datetime import date, timedelta
+
     today = date.today()
     metrics = [
         DailyMetric(
@@ -192,9 +195,11 @@ async def cost_projections(
         spent = projections["30d"].projected_cost_usd
         alert_obj = CostIntelligence.check_budget_alert(spent, monthly_budget)
         from dataclasses import asdict
+
         alert = asdict(alert_obj)
 
     from dataclasses import asdict as _asdict
+
     return {
         "projections": {k: _asdict(v) for k, v in projections.items()},
         "budget_alert": alert,
@@ -205,6 +210,7 @@ async def cost_projections(
 # ---------------------------------------------------------------------------
 # GET /v1/cost/recommendations
 # ---------------------------------------------------------------------------
+
 
 @cost_router.get(
     "/cost/recommendations",
@@ -249,6 +255,7 @@ async def cost_recommendations(
     )
 
     from dataclasses import asdict
+
     return {
         "model": model,
         "monthly_cost_usd": monthly_cost_usd,

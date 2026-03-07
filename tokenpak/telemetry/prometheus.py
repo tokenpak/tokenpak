@@ -11,11 +11,12 @@ Metrics exported:
 - tokenpak_compression_ratio     (gauge, labels: provider)
 - tokenpak_circuit_state         (gauge, labels: provider) — 0=closed, 1=open, 2=half-open
 """
+
 from __future__ import annotations
 
-import time
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from .storage import TelemetryDB
@@ -305,15 +306,11 @@ class PrometheusMetricsCollector:
 
         for provider, totals in by_prov.items():
             labels = _label_str(provider=provider)
-            lines.append(
-                f"tokenpak_cost_usd_total{labels} {_format_value(totals['cost'])}"
-            )
+            lines.append(f"tokenpak_cost_usd_total{labels} {_format_value(totals['cost'])}")
         lines.append("")
         for provider, totals in by_prov.items():
             labels = _label_str(provider=provider)
-            lines.append(
-                f"tokenpak_savings_usd_total{labels} {_format_value(totals['savings'])}"
-            )
+            lines.append(f"tokenpak_savings_usd_total{labels} {_format_value(totals['savings'])}")
         lines.append("")
 
     def _emit_duration_histogram(
@@ -332,17 +329,14 @@ class PrometheusMetricsCollector:
                 le_str = "+Inf" if le == float("inf") else str(le)
                 # Build label set with 'le' appended
                 raw_labels = f'provider="{_escape_label_value(provider)}",le="{le_str}"'
-                lines.append(
-                    f"tokenpak_request_duration_seconds_bucket{{{raw_labels}}} {count}"
-                )
+                lines.append(f"tokenpak_request_duration_seconds_bucket{{{raw_labels}}} {count}")
             # Emit sum and count
             lines.append(
                 f"tokenpak_request_duration_seconds_sum{labels_base}"
                 f" {_format_value(data['sum_seconds'])}"
             )
             lines.append(
-                f"tokenpak_request_duration_seconds_count{labels_base}"
-                f" {data['count']}"
+                f"tokenpak_request_duration_seconds_count{labels_base}" f" {data['count']}"
             )
         lines.append("")
 
@@ -359,9 +353,7 @@ class PrometheusMetricsCollector:
             provider = row["provider"] or "unknown"
             ratio = row["compression_ratio"]
             labels = _label_str(provider=provider)
-            lines.append(
-                f"tokenpak_compression_ratio{labels} {_format_value(ratio)}"
-            )
+            lines.append(f"tokenpak_compression_ratio{labels} {_format_value(ratio)}")
         lines.append("")
 
     def _emit_circuit_state(

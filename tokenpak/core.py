@@ -4,6 +4,7 @@ Provides index_directory() for the rebuild-vault-index.sh script.
 Output format: ~/vault/.tokenpak/index.json + blocks/*.txt
 Compatible with proxy_v4.py VaultIndex reader.
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -13,31 +14,71 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Callable
-
+from typing import Callable, Optional
 
 # ---------------------------------------------------------------------------
 # File classification
 # ---------------------------------------------------------------------------
 
 _CODE_EXTS = {
-    ".py", ".sh", ".bash", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
-    ".rb", ".java", ".c", ".cpp", ".h", ".sql", ".css", ".php", ".cs",
-    ".swift", ".kt",
+    ".py",
+    ".sh",
+    ".bash",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".go",
+    ".rs",
+    ".rb",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".sql",
+    ".css",
+    ".php",
+    ".cs",
+    ".swift",
+    ".kt",
 }
 _CONFIG_EXTS = {
-    ".yaml", ".yml", ".json", ".toml", ".cfg", ".ini", ".xml", ".env",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
+    ".cfg",
+    ".ini",
+    ".xml",
+    ".env",
 }
 _TEXT_EXTS = {
-    ".md", ".txt", ".html", ".htm", ".rst", ".adoc", ".org",
+    ".md",
+    ".txt",
+    ".html",
+    ".htm",
+    ".rst",
+    ".adoc",
+    ".org",
 }
 _LEGAL_NAMES = {"license", "copying", "licence", "notice", "patents"}
 
 # Dirs to always skip
 _SKIP_DIRS = {
-    "node_modules", ".git", "__pycache__", ".venv", "venv",
-    ".tox", ".mypy_cache", ".pytest_cache", "dist", "build",
-    ".next", ".nuxt", "target", ".cargo",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    "target",
+    ".cargo",
 }
 
 # Path patterns that indicate protected/sensitive content
@@ -120,6 +161,7 @@ def _estimate_tokens(text: str) -> int:
 # Registry (return value of index_directory)
 # ---------------------------------------------------------------------------
 
+
 class IndexRegistry:
     """Return value of index_directory(). Has .blocks and .tokenpak_dir."""
 
@@ -132,6 +174,7 @@ class IndexRegistry:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 def index_directory(
     vault: Path | str,
@@ -171,7 +214,8 @@ def index_directory(
     for dirpath, dirnames, filenames in os.walk(vault):
         # Prune skip dirs
         dirnames[:] = [
-            d for d in dirnames
+            d
+            for d in dirnames
             if d not in _SKIP_DIRS and not (d.startswith(".") and d != ".tokenpakignore")
         ]
         # Skip .tokenpak itself
@@ -213,7 +257,7 @@ def index_directory(
             # Read content
             try:
                 content = filepath.read_text(encoding="utf-8", errors="ignore")
-            except OSError as e:
+            except OSError:
                 stats["errors"] += 1
                 continue
 
@@ -234,7 +278,7 @@ def index_directory(
             # Write block content file
             try:
                 block_file.write_text(content, encoding="utf-8")
-            except OSError as e:
+            except OSError:
                 stats["errors"] += 1
                 continue
 

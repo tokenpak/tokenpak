@@ -29,10 +29,10 @@ import json
 import uuid
 from typing import Any, Dict, Iterator, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # SSE line helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_sse_line(line: str) -> Optional[Dict[str, Any]]:
     """Parse a 'data: {...}' SSE line. Returns None for non-data or [DONE]."""
@@ -61,6 +61,7 @@ def _sse_done() -> str:
 # Anthropic → OpenAI streaming
 # ---------------------------------------------------------------------------
 
+
 class _AnthropicToOpenAIStream:
     """
     Stateful converter: Anthropic SSE events → OpenAI SSE chunks.
@@ -74,7 +75,7 @@ class _AnthropicToOpenAIStream:
     def __init__(self, stream_id: Optional[str] = None) -> None:
         self._id = stream_id or f"chatcmpl-{uuid.uuid4().hex[:12]}"
         self._model: str = ""
-        self._block_type: str = "text"   # current content block type
+        self._block_type: str = "text"  # current content block type
         self._tool_call_index: int = -1
         self._tool_call_id: str = ""
         self._tool_call_name: str = ""
@@ -177,6 +178,7 @@ class _AnthropicToOpenAIStream:
 # OpenAI → Anthropic streaming
 # ---------------------------------------------------------------------------
 
+
 class _OpenAIToAnthropicStream:
     """
     Stateful converter: OpenAI SSE chunks → Anthropic SSE events.
@@ -201,18 +203,22 @@ class _OpenAIToAnthropicStream:
 
         if not self._started:
             self._model = chunk.get("model", "")
-            lines.append(_sse_line({
-                "type": "message_start",
-                "message": {
-                    "id": self._id,
-                    "type": "message",
-                    "role": "assistant",
-                    "model": self._model,
-                    "content": [],
-                    "stop_reason": None,
-                    "usage": {"input_tokens": 0, "output_tokens": 0},
-                },
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "message_start",
+                        "message": {
+                            "id": self._id,
+                            "type": "message",
+                            "role": "assistant",
+                            "model": self._model,
+                            "content": [],
+                            "stop_reason": None,
+                            "usage": {"input_tokens": 0, "output_tokens": 0},
+                        },
+                    }
+                )
+            )
             self._started = True
 
         choice = choices[0]
@@ -223,17 +229,25 @@ class _OpenAIToAnthropicStream:
         text = delta.get("content")
         if text:
             if not self._text_block_open:
-                lines.append(_sse_line({
-                    "type": "content_block_start",
-                    "index": 0,
-                    "content_block": {"type": "text", "text": ""},
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {"type": "text", "text": ""},
+                        }
+                    )
+                )
                 self._text_block_open = True
-            lines.append(_sse_line({
-                "type": "content_block_delta",
-                "index": 0,
-                "delta": {"type": "text_delta", "text": text},
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": text},
+                    }
+                )
+            )
 
         # Tool call deltas
         for tc in delta.get("tool_calls", []):
@@ -247,44 +261,60 @@ class _OpenAIToAnthropicStream:
                     "name": tc_name,
                     "block_index": idx + 1,  # 0 is text block
                 }
-                lines.append(_sse_line({
-                    "type": "content_block_start",
-                    "index": idx + 1,
-                    "content_block": {
-                        "type": "tool_use",
-                        "id": tc_id,
-                        "name": tc_name,
-                        "input": {},
-                    },
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_start",
+                            "index": idx + 1,
+                            "content_block": {
+                                "type": "tool_use",
+                                "id": tc_id,
+                                "name": tc_name,
+                                "input": {},
+                            },
+                        }
+                    )
+                )
             args_fragment = tc.get("function", {}).get("arguments", "")
             if args_fragment:
-                lines.append(_sse_line({
-                    "type": "content_block_delta",
-                    "index": idx + 1,
-                    "delta": {"type": "input_json_delta", "partial_json": args_fragment},
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_delta",
+                            "index": idx + 1,
+                            "delta": {"type": "input_json_delta", "partial_json": args_fragment},
+                        }
+                    )
+                )
 
         # Finish
         if finish_reason:
             if self._text_block_open:
                 lines.append(_sse_line({"type": "content_block_stop", "index": 0}))
             for idx, state in self._tool_call_blocks.items():
-                lines.append(_sse_line({
-                    "type": "content_block_stop",
-                    "index": state["block_index"],
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_stop",
+                            "index": state["block_index"],
+                        }
+                    )
+                )
             finish_map = {
                 "stop": "end_turn",
                 "tool_calls": "tool_use",
                 "length": "max_tokens",
             }
             ant_stop = finish_map.get(finish_reason, "end_turn")
-            lines.append(_sse_line({
-                "type": "message_delta",
-                "delta": {"stop_reason": ant_stop, "stop_sequence": None},
-                "usage": {"output_tokens": 0},
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "message_delta",
+                        "delta": {"stop_reason": ant_stop, "stop_sequence": None},
+                        "usage": {"output_tokens": 0},
+                    }
+                )
+            )
             lines.append(_sse_line({"type": "message_stop"}))
 
         return lines
@@ -293,6 +323,7 @@ class _OpenAIToAnthropicStream:
 # ---------------------------------------------------------------------------
 # Google → Anthropic streaming (best-effort)
 # ---------------------------------------------------------------------------
+
 
 class _GoogleToAnthropicStream:
     """
@@ -314,18 +345,22 @@ class _GoogleToAnthropicStream:
 
         if not self._started:
             self._model = chunk.get("modelVersion", "")
-            lines.append(_sse_line({
-                "type": "message_start",
-                "message": {
-                    "id": self._id,
-                    "type": "message",
-                    "role": "assistant",
-                    "model": self._model,
-                    "content": [],
-                    "stop_reason": None,
-                    "usage": {"input_tokens": 0, "output_tokens": 0},
-                },
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "message_start",
+                        "message": {
+                            "id": self._id,
+                            "type": "message",
+                            "role": "assistant",
+                            "model": self._model,
+                            "content": [],
+                            "stop_reason": None,
+                            "usage": {"input_tokens": 0, "output_tokens": 0},
+                        },
+                    }
+                )
+            )
             self._started = True
 
         candidates = chunk.get("candidates", [])
@@ -338,42 +373,58 @@ class _GoogleToAnthropicStream:
 
         # Extract text from parts (diff-based)
         current_text = "".join(p.get("text", "") for p in parts if "text" in p)
-        new_text = current_text[len(self._last_text):]
+        new_text = current_text[len(self._last_text) :]
         self._last_text = current_text
 
         if new_text:
             if not self._block_open:
-                lines.append(_sse_line({
-                    "type": "content_block_start",
-                    "index": 0,
-                    "content_block": {"type": "text", "text": ""},
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_start",
+                            "index": 0,
+                            "content_block": {"type": "text", "text": ""},
+                        }
+                    )
+                )
                 self._block_open = True
-            lines.append(_sse_line({
-                "type": "content_block_delta",
-                "index": 0,
-                "delta": {"type": "text_delta", "text": new_text},
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": new_text},
+                    }
+                )
+            )
 
         # Function calls in parts
         for part in parts:
             if "functionCall" in part:
                 fc = part["functionCall"]
                 block_idx = 1
-                lines.append(_sse_line({
-                    "type": "content_block_start",
-                    "index": block_idx,
-                    "content_block": {
-                        "type": "tool_use",
-                        "id": fc.get("name", ""),
-                        "name": fc.get("name", ""),
-                        "input": fc.get("args", {}),
-                    },
-                }))
-                lines.append(_sse_line({
-                    "type": "content_block_stop",
-                    "index": block_idx,
-                }))
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_start",
+                            "index": block_idx,
+                            "content_block": {
+                                "type": "tool_use",
+                                "id": fc.get("name", ""),
+                                "name": fc.get("name", ""),
+                                "input": fc.get("args", {}),
+                            },
+                        }
+                    )
+                )
+                lines.append(
+                    _sse_line(
+                        {
+                            "type": "content_block_stop",
+                            "index": block_idx,
+                        }
+                    )
+                )
 
         # Finish
         if finish_reason and finish_reason != "FINISH_REASON_UNSPECIFIED":
@@ -386,11 +437,15 @@ class _GoogleToAnthropicStream:
             }
             ant_stop = finish_map.get(finish_reason, "end_turn")
             usage_meta = chunk.get("usageMetadata", {})
-            lines.append(_sse_line({
-                "type": "message_delta",
-                "delta": {"stop_reason": ant_stop, "stop_sequence": None},
-                "usage": {"output_tokens": usage_meta.get("candidatesTokenCount", 0)},
-            }))
+            lines.append(
+                _sse_line(
+                    {
+                        "type": "message_delta",
+                        "delta": {"stop_reason": ant_stop, "stop_sequence": None},
+                        "usage": {"output_tokens": usage_meta.get("candidatesTokenCount", 0)},
+                    }
+                )
+            )
             lines.append(_sse_line({"type": "message_stop"}))
 
         return lines
@@ -399,6 +454,7 @@ class _GoogleToAnthropicStream:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 class StreamingTranslator:
     """

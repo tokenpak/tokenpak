@@ -16,16 +16,14 @@ Usage:
 
 from __future__ import annotations
 
-import json
-import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Action Enum
 # ---------------------------------------------------------------------------
+
 
 class Action(Enum):
     KEPT = "kept"
@@ -36,18 +34,18 @@ class Action(Enum):
     @property
     def icon(self) -> str:
         return {
-            Action.KEPT:      "✅",
+            Action.KEPT: "✅",
             Action.COMPACTED: "📦",
-            Action.REMOVED:   "❌",
+            Action.REMOVED: "❌",
             Action.TRUNCATED: "✂️",
         }[self]
 
     @property
     def label(self) -> str:
         return {
-            Action.KEPT:      "KEPT",
+            Action.KEPT: "KEPT",
             Action.COMPACTED: "COMPACTED",
-            Action.REMOVED:   "REMOVED",
+            Action.REMOVED: "REMOVED",
             Action.TRUNCATED: "TRUNCATED",
         }[self]
 
@@ -56,9 +54,11 @@ class Action(Enum):
 # Decision — per-block record
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Decision:
     """Record of what happened to a single block during compile."""
+
     block_id: str
     block_type: str
     action: Action
@@ -66,8 +66,8 @@ class Decision:
     priority: str = "medium"
     tokens_before: int = 0
     tokens_after: int = 0
-    quality: Optional[float] = None     # for REMOVED (quality threshold check)
-    method: Optional[str] = None        # for COMPACTED (e.g. "extractive_summarization")
+    quality: Optional[float] = None  # for REMOVED (quality threshold check)
+    method: Optional[str] = None  # for COMPACTED (e.g. "extractive_summarization")
 
     @property
     def tokens_saved(self) -> int:
@@ -75,13 +75,13 @@ class Decision:
 
     def to_dict(self) -> dict:
         d: dict = {
-            "block_id":     self.block_id,
-            "block_type":   self.block_type,
-            "action":       self.action.value,
-            "reason":       self.reason,
-            "priority":     self.priority,
+            "block_id": self.block_id,
+            "block_type": self.block_type,
+            "action": self.action.value,
+            "reason": self.reason,
+            "priority": self.priority,
             "tokens_before": self.tokens_before,
-            "tokens_after":  self.tokens_after,
+            "tokens_after": self.tokens_after,
         }
         if self.quality is not None:
             d["quality"] = round(self.quality, 3)
@@ -93,6 +93,7 @@ class Decision:
 # ---------------------------------------------------------------------------
 # CompileReport — summary + all decisions
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CompileReport:
@@ -213,17 +214,17 @@ class CompileReport:
         """Machine-readable dict. Suitable for json.dumps(), Langfuse metadata, etc."""
         return {
             "summary": {
-                "input_blocks":        self.input_blocks,
-                "output_blocks":       self.output_blocks,
-                "input_tokens":        self.input_tokens,
-                "output_tokens":       self.output_tokens,
-                "tokens_saved":        self.tokens_saved,
-                "budget":              self.budget,
+                "input_blocks": self.input_blocks,
+                "output_blocks": self.output_blocks,
+                "input_tokens": self.input_tokens,
+                "output_tokens": self.output_tokens,
+                "tokens_saved": self.tokens_saved,
+                "budget": self.budget,
                 "budget_used_percent": self.budget_used_percent,
-                "savings_percent":     self.savings_percent,
-                "compile_time_ms":     round(self.compile_time_ms, 2),
+                "savings_percent": self.savings_percent,
+                "compile_time_ms": round(self.compile_time_ms, 2),
             },
-            "decisions":   [d.to_dict() for d in self.decisions],
+            "decisions": [d.to_dict() for d in self.decisions],
             "final_order": self.final_order,
         }
 

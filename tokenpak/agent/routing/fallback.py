@@ -56,7 +56,6 @@ from tokenpak.agent.agentic.retry import (
 from tokenpak.agent.proxy.failover import (
     FailoverManager,
     FailoverResult,
-    load_failover_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -192,9 +191,7 @@ class FallbackRouter:
         original_model = context.get("model", "unknown")
         original_provider = context.get("provider", "anthropic")
 
-        provider_switch_hook = self._build_provider_switch_hook(
-            original_model, original_provider
-        )
+        provider_switch_hook = self._build_provider_switch_hook(original_model, original_provider)
 
         engine = RetryEngine(
             fn=fn,

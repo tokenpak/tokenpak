@@ -14,25 +14,25 @@ Ephemeral blocks:
 import json
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional
 
-from .reference_scanner import Reference, scan_for_references
 from .reference_fetcher import fetch_reference
-from .wire import pack, make_slice_id
-
+from .reference_scanner import Reference, scan_for_references
+from .wire import make_slice_id, pack
 
 DEFAULT_REF_CACHE_PATH = ".tokenpak/ref_cache.json"
-_CACHE_TTL_SECONDS = 3600   # 1 hour
-_MAX_PARALLEL      = 5      # max concurrent fetches
-_FETCH_TIMEOUT     = 8      # seconds per fetch (includes network)
+_CACHE_TTL_SECONDS = 3600  # 1 hour
+_MAX_PARALLEL = 5  # max concurrent fetches
+_FETCH_TIMEOUT = 8  # seconds per fetch (includes network)
 _EPHEMERAL_TOKENS_PER_CHAR = 0.25  # rough token estimate
 
 
 # ---------------------------------------------------------------------------
 # Cache layer
 # ---------------------------------------------------------------------------
+
 
 def _load_cache(cache_path: str) -> dict:
     p = Path(cache_path)
@@ -75,15 +75,13 @@ def _cache_put(ref: Reference, content: str, cache: dict) -> None:
 def _prune_stale(cache: dict) -> dict:
     """Remove entries older than TTL."""
     now = time.time()
-    return {
-        k: v for k, v in cache.items()
-        if now - v.get("fetched_at", 0) <= _CACHE_TTL_SECONDS
-    }
+    return {k: v for k, v in cache.items() if now - v.get("fetched_at", 0) <= _CACHE_TTL_SECONDS}
 
 
 # ---------------------------------------------------------------------------
 # Token estimation
 # ---------------------------------------------------------------------------
+
 
 def _estimate_tokens(text: str) -> int:
     return max(1, int(len(text) * _EPHEMERAL_TOKENS_PER_CHAR))
@@ -93,15 +91,16 @@ def _estimate_tokens(text: str) -> int:
 # Ephemeral block builder
 # ---------------------------------------------------------------------------
 
+
 def _build_ephemeral_block(ref: Reference, content: str) -> dict:
     """Wrap fetched reference content as an ephemeral wire block dict."""
     tokens = _estimate_tokens(content)
     return {
-        "ref":      ref.raw_match,
-        "type":     "EPHEMERAL",
-        "quality":  0.8,
-        "tokens":   tokens,
-        "content":  content,
+        "ref": ref.raw_match,
+        "type": "EPHEMERAL",
+        "quality": 0.8,
+        "tokens": tokens,
+        "content": content,
         "slice_id": make_slice_id(content, ref.raw_match),
         "ephemeral": True,
     }
@@ -110,6 +109,7 @@ def _build_ephemeral_block(ref: Reference, content: str) -> dict:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compile_with_refs(
     blocks: List[dict],
@@ -172,8 +172,8 @@ def compile_with_refs(
                     except Exception:
                         pass  # Fail silently
 
-            fetched   = len(results)
-            failed    = len(to_fetch) - fetched
+            fetched = len(results)
+            failed = len(to_fetch) - fetched
             cached_ct = len(fetched_blocks)
 
             print(
@@ -192,7 +192,7 @@ def compile_with_refs(
 
     # 4. Budget allocation: regular blocks first, then ephemeral
     regular_tokens = sum(b.get("tokens", 0) for b in blocks)
-    remaining      = budget - regular_tokens
+    remaining = budget - regular_tokens
 
     included_ephemeral = []
     for eb in fetched_blocks:

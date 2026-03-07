@@ -1,13 +1,13 @@
 """Usage/Cost CRUD, pricing, prune, backfill, stats, and export mixin."""
+
 from __future__ import annotations
 
 import json
 import sqlite3
-from dataclasses import asdict
-from typing import Any, Iterator, Optional
+from typing import Any, Optional
 
-from tokenpak.telemetry.models import Cost, TelemetryEvent, Usage
-from tokenpak.telemetry.storage_base import _row_to_dict, _now
+from tokenpak.telemetry.models import Cost, Usage
+from tokenpak.telemetry.storage_base import _now
 
 
 class UsageMixin:
@@ -93,9 +93,7 @@ class UsageMixin:
         self._conn.executemany(sql, rows)
         self._conn.commit()
 
-    def upsert_pricing_catalog(
-        self, version: str, catalog_json: str
-    ) -> None:
+    def upsert_pricing_catalog(self, version: str, catalog_json: str) -> None:
         """Store a JSON snapshot of the pricing catalog.
 
         Parameters
@@ -151,9 +149,7 @@ class UsageMixin:
         cur = self._conn.cursor()
 
         # Collect trace_ids to prune
-        cur.execute(
-            "SELECT DISTINCT trace_id FROM tp_events WHERE ts < ?", (cutoff,)
-        )
+        cur.execute("SELECT DISTINCT trace_id FROM tp_events WHERE ts < ?", (cutoff,))
         old_traces = [r[0] for r in cur.fetchall()]
 
         if not old_traces:
@@ -187,9 +183,7 @@ class UsageMixin:
     # Three-Stage Cost Ledger: backfill baseline costs
     # ------------------------------------------------------------------
 
-    def backfill_baseline_costs(
-        self, dry_run: bool = False
-    ) -> dict[str, int]:
+    def backfill_baseline_costs(self, dry_run: bool = False) -> dict[str, int]:
         """Populate ``baseline_input_tokens`` and ``baseline_cost`` for
         existing traces that were inserted without compression data.
 
@@ -309,7 +303,11 @@ class UsageMixin:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             result[table] = cur.fetchone()[0]
 
-        rollup_tables = ("tp_rollup_daily_model", "tp_rollup_daily_provider", "tp_rollup_daily_agent")
+        rollup_tables = (
+            "tp_rollup_daily_model",
+            "tp_rollup_daily_provider",
+            "tp_rollup_daily_agent",
+        )
         rollup_total = 0
         for table in rollup_tables:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
@@ -332,13 +330,17 @@ class UsageMixin:
     def get_unique_providers(self) -> list[str]:
         """Return list of unique provider names seen."""
         cur = self._conn.cursor()
-        cur.execute("SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider")
+        cur.execute(
+            "SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider"
+        )
         return [r[0] for r in cur.fetchall()]
 
     def get_unique_agents(self) -> list[str]:
         """Return list of unique agent identifiers seen."""
         cur = self._conn.cursor()
-        cur.execute("SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id")
+        cur.execute(
+            "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
+        )
         return [r[0] for r in cur.fetchall()]
 
     def export_trace(self, trace_id: str) -> dict[str, Any]:
@@ -357,4 +359,3 @@ class UsageMixin:
     # ------------------------------------------------------------------
     # Rollup computation (Phase 5B)
     # ------------------------------------------------------------------
-

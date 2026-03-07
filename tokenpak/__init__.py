@@ -23,16 +23,25 @@ __description__ = "Deterministic compression for multi-agent AI workflows"
 # ---------------------------------------------------------------------------
 # Telemetry
 # ---------------------------------------------------------------------------
-from tokenpak.telemetry.collector import TelemetryCollector
+# ---------------------------------------------------------------------------
+# Sub-packages (for advanced use)
+# ---------------------------------------------------------------------------
+from tokenpak import agent, connectors, proxy
 
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+from tokenpak.budget import BudgetBlock
 
 # ---------------------------------------------------------------------------
-# Cache
+# Budgeting
 # ---------------------------------------------------------------------------
-# CacheManager: semantic cache store (get/set/hit-rate tracking)
-from tokenpak.telemetry.cache import CacheStore as CacheManager
+from tokenpak.budgeter import Budgeter
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+from tokenpak.cli import main
+from tokenpak.engines import get_engine
 
 # ---------------------------------------------------------------------------
 # Compression / Compaction Engines
@@ -40,7 +49,7 @@ from tokenpak.telemetry.cache import CacheStore as CacheManager
 # CompressionEngine: abstract base for all compaction strategies
 from tokenpak.engines.base import CompactionEngine as CompressionEngine
 from tokenpak.engines.heuristic import HeuristicEngine
-from tokenpak.engines import get_engine
+from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
 
 # ---------------------------------------------------------------------------
 # Content Blocks
@@ -48,33 +57,21 @@ from tokenpak.engines import get_engine
 from tokenpak.registry import Block, BlockRegistry
 
 # ---------------------------------------------------------------------------
-# Budgeting
-# ---------------------------------------------------------------------------
-from tokenpak.budgeter import Budgeter
-from tokenpak.budget import BudgetBlock
-
-# ---------------------------------------------------------------------------
 # Compile Reports
 # ---------------------------------------------------------------------------
 from tokenpak.report import Action, CompileReport, Decision
-from tokenpak.pack import ContextPack, PackBlock, CompiledResult, pack_prompt
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+# CacheManager: semantic cache store (get/set/hit-rate tracking)
+from tokenpak.telemetry.cache import CacheStore as CacheManager
+from tokenpak.telemetry.collector import TelemetryCollector
 
 # ---------------------------------------------------------------------------
 # Token Counting (Level 1 — single import, zero config)
 # ---------------------------------------------------------------------------
 from tokenpak.tokens import count_tokens
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-from tokenpak.cli import main
-
-# ---------------------------------------------------------------------------
-# Sub-packages (for advanced use)
-# ---------------------------------------------------------------------------
-from tokenpak import connectors
-from tokenpak import agent
-from tokenpak import proxy
 
 # ---------------------------------------------------------------------------
 # Public API declaration

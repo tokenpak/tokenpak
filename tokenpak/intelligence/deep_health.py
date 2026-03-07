@@ -17,7 +17,6 @@ Status semantics:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
 import time
@@ -27,14 +26,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CheckResult:
-    status: str                          # ok | warning | error
+    status: str  # ok | warning | error
     latency_ms: Optional[float] = None  # provider checks
     error: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
@@ -51,7 +50,7 @@ class CheckResult:
 
 @dataclass
 class DeepHealthResult:
-    status: str                           # ok | degraded | error
+    status: str  # ok | degraded | error
     checks: Dict[str, CheckResult]
     duration_ms: float
 
@@ -71,6 +70,7 @@ class DeepHealthResult:
 # ---------------------------------------------------------------------------
 # Individual checkers
 # ---------------------------------------------------------------------------
+
 
 def _check_provider(
     name: str,
@@ -188,9 +188,7 @@ def check_index(index_path: Optional[str] = None, stale_hours: float = 24.0) -> 
     Marks stale if older than stale_hours.
     """
     if index_path is None:
-        index_path = os.path.expanduser(
-            "~/.openclaw/workspace/.ocp/pricing_index.json"
-        )
+        index_path = os.path.expanduser("~/.openclaw/workspace/.ocp/pricing_index.json")
 
     path = Path(index_path)
     if not path.exists():
@@ -220,6 +218,7 @@ def check_memory() -> CheckResult:
     """
     try:
         import psutil  # type: ignore
+
         vm = psutil.virtual_memory()
         percent = round(vm.percent, 1)
     except ImportError:
@@ -256,7 +255,7 @@ def check_disk(path: str = "/") -> CheckResult:
     try:
         usage = shutil.disk_usage(path)
         percent = round((usage.used / usage.total) * 100, 1)
-        free_gb = round(usage.free / (1024 ** 3), 1)
+        free_gb = round(usage.free / (1024**3), 1)
 
         if percent >= 95:
             return CheckResult(
@@ -277,6 +276,7 @@ def check_disk(path: str = "/") -> CheckResult:
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
 
 class DeepHealthChecker:
     """
@@ -325,15 +325,12 @@ class DeepHealthChecker:
 
         # Providers (network I/O — run concurrently via threads)
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             fut_anthropic = pool.submit(self._fn_anthropic, self.provider_timeout)
             fut_openai = pool.submit(self._fn_openai, self.provider_timeout)
-            fut_db = pool.submit(
-                self._fn_database, self.db_path
-            )
-            fut_index = pool.submit(
-                self._fn_index, self.index_path
-            )
+            fut_db = pool.submit(self._fn_database, self.db_path)
+            fut_index = pool.submit(self._fn_index, self.index_path)
             # Memory + disk are instant — no need for threads
             checks["memory"] = self._fn_memory()
             checks["disk"] = self._fn_disk()

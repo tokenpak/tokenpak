@@ -10,12 +10,12 @@ from typing import List
 
 
 class TaskType(str, Enum):
-    CODING       = "CODING"
-    REASONING    = "REASONING"
+    CODING = "CODING"
+    REASONING = "REASONING"
     SUMMARIZATION = "SUMMARIZATION"
-    QA           = "QA"
-    CREATIVE     = "CREATIVE"
-    UNKNOWN      = "UNKNOWN"
+    QA = "QA"
+    CREATIVE = "CREATIVE"
+    UNKNOWN = "UNKNOWN"
 
 
 # ---------------------------------------------------------------------------
@@ -24,97 +24,197 @@ class TaskType(str, Enum):
 
 # Coding signals
 _CODING_KEYWORDS = {
-    "def", "function", "class", "import", "return", "variable", "loop",
-    "array", "dict", "list", "tuple", "exception", "error", "bug",
-    "implement", "code", "script", "algorithm", "api", "endpoint",
-    "refactor", "optimize", "debug", "test", "unittest", "pytest",
-    "compile", "build", "deploy", "fix", "method", "module", "package",
-    "async", "await", "thread", "process", "query", "sql", "database",
-    "parse", "serialize", "format", "lint",
+    "def",
+    "function",
+    "class",
+    "import",
+    "return",
+    "variable",
+    "loop",
+    "array",
+    "dict",
+    "list",
+    "tuple",
+    "exception",
+    "error",
+    "bug",
+    "implement",
+    "code",
+    "script",
+    "algorithm",
+    "api",
+    "endpoint",
+    "refactor",
+    "optimize",
+    "debug",
+    "test",
+    "unittest",
+    "pytest",
+    "compile",
+    "build",
+    "deploy",
+    "fix",
+    "method",
+    "module",
+    "package",
+    "async",
+    "await",
+    "thread",
+    "process",
+    "query",
+    "sql",
+    "database",
+    "parse",
+    "serialize",
+    "format",
+    "lint",
 }
 
 # Reasoning / analysis signals
 _REASONING_KEYWORDS = {
-    "analyze", "compare", "evaluate", "assess", "tradeoff", "pros", "cons",
-    "explain", "reason", "why", "because", "therefore", "conclude",
-    "implication", "consequence", "cause", "effect", "difference",
-    "similarity", "relationship", "architecture", "design", "strategy",
-    "decision", "choose", "recommend", "suggest", "approach",
+    "analyze",
+    "compare",
+    "evaluate",
+    "assess",
+    "tradeoff",
+    "pros",
+    "cons",
+    "explain",
+    "reason",
+    "why",
+    "because",
+    "therefore",
+    "conclude",
+    "implication",
+    "consequence",
+    "cause",
+    "effect",
+    "difference",
+    "similarity",
+    "relationship",
+    "architecture",
+    "design",
+    "strategy",
+    "decision",
+    "choose",
+    "recommend",
+    "suggest",
+    "approach",
 }
 
 # Summarization signals
 _SUMMARIZATION_KEYWORDS = {
-    "summarize", "summary", "tldr", "tl;dr", "overview", "brief",
-    "highlight", "key points", "main points", "recap", "digest",
-    "condensed", "abstract", "synopsis",
+    "summarize",
+    "summary",
+    "tldr",
+    "tl;dr",
+    "overview",
+    "brief",
+    "highlight",
+    "key points",
+    "main points",
+    "recap",
+    "digest",
+    "condensed",
+    "abstract",
+    "synopsis",
 }
 
 # Q&A signals
 _QA_KEYWORDS = {
-    "what is", "what are", "how do", "how does", "how can", "when did",
-    "where is", "who is", "which", "tell me", "show me", "find",
-    "look up", "check", "verify", "confirm",
+    "what is",
+    "what are",
+    "how do",
+    "how does",
+    "how can",
+    "when did",
+    "where is",
+    "who is",
+    "which",
+    "tell me",
+    "show me",
+    "find",
+    "look up",
+    "check",
+    "verify",
+    "confirm",
 }
 
 # Creative signals
 _CREATIVE_KEYWORDS = {
-    "write", "draft", "compose", "generate", "create", "brainstorm",
-    "idea", "story", "email", "letter", "blog", "post", "tweet",
-    "caption", "name", "slogan", "tagline", "pitch",
+    "write",
+    "draft",
+    "compose",
+    "generate",
+    "create",
+    "brainstorm",
+    "idea",
+    "story",
+    "email",
+    "letter",
+    "blog",
+    "post",
+    "tweet",
+    "caption",
+    "name",
+    "slogan",
+    "tagline",
+    "pitch",
 }
 
 # Multi-step complexity signals
 _MULTISTEP_PATTERNS = [
-    re.compile(r'\bthen\b', re.IGNORECASE),
-    re.compile(r'\balso\b', re.IGNORECASE),
-    re.compile(r'\band then\b', re.IGNORECASE),
-    re.compile(r'\bafter that\b', re.IGNORECASE),
-    re.compile(r'\bfinally\b', re.IGNORECASE),
-    re.compile(r'\bstep \d+\b', re.IGNORECASE),
-    re.compile(r'\b(first|second|third|fourth|fifth)\b', re.IGNORECASE),
-    re.compile(r'\badditionally\b', re.IGNORECASE),
-    re.compile(r'\bmoreover\b', re.IGNORECASE),
-    re.compile(r'\bfurthermore\b', re.IGNORECASE),
+    re.compile(r"\bthen\b", re.IGNORECASE),
+    re.compile(r"\balso\b", re.IGNORECASE),
+    re.compile(r"\band then\b", re.IGNORECASE),
+    re.compile(r"\bafter that\b", re.IGNORECASE),
+    re.compile(r"\bfinally\b", re.IGNORECASE),
+    re.compile(r"\bstep \d+\b", re.IGNORECASE),
+    re.compile(r"\b(first|second|third|fourth|fifth)\b", re.IGNORECASE),
+    re.compile(r"\badditionally\b", re.IGNORECASE),
+    re.compile(r"\bmoreover\b", re.IGNORECASE),
+    re.compile(r"\bfurthermore\b", re.IGNORECASE),
 ]
 
 # Explicit high-complexity signals
 _COMPLEXITY_BOOSTERS = [
-    re.compile(r'\boptimize\b', re.IGNORECASE),
-    re.compile(r'\brefactor\b', re.IGNORECASE),
-    re.compile(r'\bdebug\b', re.IGNORECASE),
-    re.compile(r'\barchitect\b', re.IGNORECASE),
-    re.compile(r'\bdesign\b', re.IGNORECASE),
-    re.compile(r'\bscale\b', re.IGNORECASE),
-    re.compile(r'\bperformance\b', re.IGNORECASE),
-    re.compile(r'\bsecurity\b', re.IGNORECASE),
-    re.compile(r'\bmigrat\b', re.IGNORECASE),
-    re.compile(r'\bintegrat\b', re.IGNORECASE),
-    re.compile(r'\bdecompos\b', re.IGNORECASE),
-    re.compile(r'\bimplement\b', re.IGNORECASE),
-    re.compile(r'\banalyze\b', re.IGNORECASE),
-    re.compile(r'\banalyse\b', re.IGNORECASE),
-    re.compile(r'\brewrite\b', re.IGNORECASE),
-    re.compile(r'\bmulti.step\b', re.IGNORECASE),
+    re.compile(r"\boptimize\b", re.IGNORECASE),
+    re.compile(r"\brefactor\b", re.IGNORECASE),
+    re.compile(r"\bdebug\b", re.IGNORECASE),
+    re.compile(r"\barchitect\b", re.IGNORECASE),
+    re.compile(r"\bdesign\b", re.IGNORECASE),
+    re.compile(r"\bscale\b", re.IGNORECASE),
+    re.compile(r"\bperformance\b", re.IGNORECASE),
+    re.compile(r"\bsecurity\b", re.IGNORECASE),
+    re.compile(r"\bmigrat\b", re.IGNORECASE),
+    re.compile(r"\bintegrat\b", re.IGNORECASE),
+    re.compile(r"\bdecompos\b", re.IGNORECASE),
+    re.compile(r"\bimplement\b", re.IGNORECASE),
+    re.compile(r"\banalyze\b", re.IGNORECASE),
+    re.compile(r"\banalyse\b", re.IGNORECASE),
+    re.compile(r"\brewrite\b", re.IGNORECASE),
+    re.compile(r"\bmulti.step\b", re.IGNORECASE),
 ]
 
 # Question depth: subordinate clause markers
 _CLAUSE_MARKERS = re.compile(
-    r'\b(if|when|while|since|because|although|unless|whether|that|which|who)\b',
+    r"\b(if|when|while|since|because|although|unless|whether|that|which|who)\b",
     re.IGNORECASE,
 )
 
 # Code block detection in context
-_CODE_FENCE = re.compile(r'```[\w]*\n', re.MULTILINE)
-_INLINE_CODE = re.compile(r'`[^`]+`')
+_CODE_FENCE = re.compile(r"```[\w]*\n", re.MULTILINE)
+_INLINE_CODE = re.compile(r"`[^`]+`")
 
 
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
 
+
 def _word_set(text: str) -> set:
     """Lowercase word tokens from text."""
-    return set(re.findall(r'\b\w+\b', text.lower()))
+    return set(re.findall(r"\b\w+\b", text.lower()))
 
 
 def score_complexity(query: str, context_blocks: List[str] = None) -> tuple:
@@ -187,15 +287,15 @@ def score_complexity(query: str, context_blocks: List[str] = None) -> tuple:
 def _classify_task_type(query_lower: str, words: set, context: str) -> TaskType:
     """Classify into TaskType based on dominant signal."""
     scores = {
-        TaskType.CODING:        len(words & _CODING_KEYWORDS),
-        TaskType.REASONING:     len(words & _REASONING_KEYWORDS),
+        TaskType.CODING: len(words & _CODING_KEYWORDS),
+        TaskType.REASONING: len(words & _REASONING_KEYWORDS),
         TaskType.SUMMARIZATION: len(words & _SUMMARIZATION_KEYWORDS),
-        TaskType.QA:            sum(1 for kw in _QA_KEYWORDS if kw in query_lower),
-        TaskType.CREATIVE:      len(words & _CREATIVE_KEYWORDS),
+        TaskType.QA: sum(1 for kw in _QA_KEYWORDS if kw in query_lower),
+        TaskType.CREATIVE: len(words & _CREATIVE_KEYWORDS),
     }
 
     # Coding context boost
-    if "```" in context or re.search(r'\.(py|js|ts|go|rs|java|cpp)\b', query_lower):
+    if "```" in context or re.search(r"\.(py|js|ts|go|rs|java|cpp)\b", query_lower):
         scores[TaskType.CODING] += 3
 
     # Summarization boost if context is long

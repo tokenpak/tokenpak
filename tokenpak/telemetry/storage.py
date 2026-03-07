@@ -29,12 +29,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Iterator, Optional, Union
+from typing import Any, Optional, Union
 
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
-
 
 # ---------------------------------------------------------------------------
 # DDL
@@ -222,9 +220,7 @@ class TelemetryDB:
 
     def __init__(self, path: Union[str, Path] = ":memory:") -> None:
         self._path = str(path)
-        self._conn: sqlite3.Connection = sqlite3.connect(
-            self._path, check_same_thread=False
-        )
+        self._conn: sqlite3.Connection = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._apply_ddl()
 
@@ -286,49 +282,49 @@ class TelemetryDB:
         # ----------------------------------------------------------------
         # tp_events — legacy columns + PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_events", "api",        "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "stop_reason","TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "api", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "stop_reason", "TEXT NOT NULL DEFAULT ''")
         _add_col("tp_events", "session_id", "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "duration_ms","REAL NOT NULL DEFAULT 0")
+        _add_col("tp_events", "duration_ms", "REAL NOT NULL DEFAULT 0")
         # PRD additions
-        _add_col("tp_events", "span_id",    "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "node_id",    "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "span_id", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "node_id", "TEXT NOT NULL DEFAULT ''")
 
         # ----------------------------------------------------------------
         # tp_segments — PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_segments", "segment_source",  "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_segments", "content_type",    "TEXT NOT NULL DEFAULT 'text'")
-        _add_col("tp_segments", "raw_len_chars",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "raw_len_bytes",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "final_len_chars",  "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "final_len_bytes",  "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "debug_ref",        "TEXT")
+        _add_col("tp_segments", "segment_source", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_segments", "content_type", "TEXT NOT NULL DEFAULT 'text'")
+        _add_col("tp_segments", "raw_len_chars", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "raw_len_bytes", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "final_len_chars", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "final_len_bytes", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "debug_ref", "TEXT")
 
         # ----------------------------------------------------------------
         # tp_usage — legacy column + PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_usage", "total_tokens",        "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_usage", "total_tokens", "INTEGER NOT NULL DEFAULT 0")
         _add_col("tp_usage", "total_tokens_billed", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_usage", "total_tokens_est",    "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_usage", "provider_usage_raw",  "TEXT NOT NULL DEFAULT '{}'")
+        _add_col("tp_usage", "total_tokens_est", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_usage", "provider_usage_raw", "TEXT NOT NULL DEFAULT '{}'")
 
         # ----------------------------------------------------------------
         # tp_costs — legacy column + PRD additions
         # ----------------------------------------------------------------
         _add_col("tp_costs", "baseline_input_tokens", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "pricing_version",       "TEXT NOT NULL DEFAULT 'v1'")
-        _add_col("tp_costs", "actual_input_tokens",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "output_tokens",         "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "actual_cost",           "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "pricing_version", "TEXT NOT NULL DEFAULT 'v1'")
+        _add_col("tp_costs", "actual_input_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "output_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "actual_cost", "REAL NOT NULL DEFAULT 0")
 
         # ----------------------------------------------------------------
         # Rollup tables — PRD avg_* additions
         # ----------------------------------------------------------------
         for _tbl in ("tp_rollup_daily_model", "tp_rollup_daily_provider", "tp_rollup_daily_agent"):
-            _add_col(_tbl, "avg_raw_tokens",   "REAL NOT NULL DEFAULT 0")
+            _add_col(_tbl, "avg_raw_tokens", "REAL NOT NULL DEFAULT 0")
             _add_col(_tbl, "avg_final_tokens", "REAL NOT NULL DEFAULT 0")
-            _add_col(_tbl, "avg_cost",         "REAL NOT NULL DEFAULT 0")
+            _add_col(_tbl, "avg_cost", "REAL NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         """Close the underlying database connection."""
@@ -560,9 +556,7 @@ class TelemetryDB:
         """
         cur = self._conn.cursor()
 
-        cur.execute(
-            "SELECT * FROM tp_events WHERE trace_id = ? LIMIT 1", (trace_id,)
-        )
+        cur.execute("SELECT * FROM tp_events WHERE trace_id = ? LIMIT 1", (trace_id,))
         event_row = cur.fetchone()
         event = _row_to_dict(cur, event_row) if event_row else None
 
@@ -635,17 +629,19 @@ class TelemetryDB:
                 payload = json.loads(payload_str) if payload_str else {}
             except (json.JSONDecodeError, TypeError):
                 payload = {}
-            events.append({
-                "event_id": row_dict["request_id"],
-                "event_type": row_dict["event_type"],
-                "timestamp": row_dict["ts"],
-                "provider": row_dict.get("provider"),
-                "model": row_dict.get("model"),
-                "agent_id": row_dict.get("agent_id"),
-                "duration_ms": row_dict.get("duration_ms"),
-                "status": row_dict.get("status"),
-                "payload": payload,
-            })
+            events.append(
+                {
+                    "event_id": row_dict["request_id"],
+                    "event_type": row_dict["event_type"],
+                    "timestamp": row_dict["ts"],
+                    "provider": row_dict.get("provider"),
+                    "model": row_dict.get("model"),
+                    "agent_id": row_dict.get("agent_id"),
+                    "duration_ms": row_dict.get("duration_ms"),
+                    "status": row_dict.get("status"),
+                    "payload": payload,
+                }
+            )
         return events
 
     def list_traces(
@@ -724,9 +720,7 @@ class TelemetryDB:
     # Pricing catalog snapshot
     # ------------------------------------------------------------------
 
-    def upsert_pricing_catalog(
-        self, version: str, catalog_json: str
-    ) -> None:
+    def upsert_pricing_catalog(self, version: str, catalog_json: str) -> None:
         """Store a JSON snapshot of the pricing catalog.
 
         Parameters
@@ -782,9 +776,7 @@ class TelemetryDB:
         cur = self._conn.cursor()
 
         # Collect trace_ids to prune
-        cur.execute(
-            "SELECT DISTINCT trace_id FROM tp_events WHERE ts < ?", (cutoff,)
-        )
+        cur.execute("SELECT DISTINCT trace_id FROM tp_events WHERE ts < ?", (cutoff,))
         old_traces = [r[0] for r in cur.fetchall()]
 
         if not old_traces:
@@ -818,9 +810,7 @@ class TelemetryDB:
     # Three-Stage Cost Ledger: backfill baseline costs
     # ------------------------------------------------------------------
 
-    def backfill_baseline_costs(
-        self, dry_run: bool = False
-    ) -> dict[str, int]:
+    def backfill_baseline_costs(self, dry_run: bool = False) -> dict[str, int]:
         """Populate ``baseline_input_tokens`` and ``baseline_cost`` for
         existing traces that were inserted without compression data.
 
@@ -940,7 +930,11 @@ class TelemetryDB:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             result[table] = cur.fetchone()[0]
 
-        rollup_tables = ("tp_rollup_daily_model", "tp_rollup_daily_provider", "tp_rollup_daily_agent")
+        rollup_tables = (
+            "tp_rollup_daily_model",
+            "tp_rollup_daily_provider",
+            "tp_rollup_daily_agent",
+        )
         rollup_total = 0
         for table in rollup_tables:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
@@ -1136,13 +1130,17 @@ class TelemetryDB:
     def get_unique_providers(self) -> list[str]:
         """Return list of unique provider names seen."""
         cur = self._conn.cursor()
-        cur.execute("SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider")
+        cur.execute(
+            "SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider"
+        )
         return [r[0] for r in cur.fetchall()]
 
     def get_unique_agents(self) -> list[str]:
         """Return list of unique agent identifiers seen."""
         cur = self._conn.cursor()
-        cur.execute("SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id")
+        cur.execute(
+            "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
+        )
         return [r[0] for r in cur.fetchall()]
 
     def export_trace(self, trace_id: str) -> dict[str, Any]:
@@ -1293,8 +1291,10 @@ class TelemetryDB:
         }
         table = table_map.get(entity_type, "tp_rollup_daily_model")
         col = col_map.get(metric, "total_cost")
-        entity_col = "model" if entity_type == "model" else (
-            "provider" if entity_type == "provider" else "agent_id"
+        entity_col = (
+            "model"
+            if entity_type == "model"
+            else ("provider" if entity_type == "provider" else "agent_id")
         )
 
         cur = self._conn.cursor()

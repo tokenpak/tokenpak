@@ -11,6 +11,7 @@ from pathlib import Path
 
 class Colors:
     """ANSI color codes + emoji markers."""
+
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
     RED = "\033[91m"
@@ -76,13 +77,21 @@ def run_doctor(fix: bool = False) -> int:
                 print(Colors.ok(f"Vault index         {index_path} — {block_count} blocks"))
                 counts["pass"] += 1
             else:
-                print(Colors.warn(f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"))
+                print(
+                    Colors.warn(
+                        f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"
+                    )
+                )
                 counts["warn"] += 1
         except json.JSONDecodeError:
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
             counts["fail"] += 1
     else:
-        print(Colors.warn(f"Vault index         {index_path} — not found (run: tokenpak index <path>)"))
+        print(
+            Colors.warn(
+                f"Vault index         {index_path} — not found (run: tokenpak index <path>)"
+            )
+        )
         counts["warn"] += 1
 
     # --- Check 4: Proxy port ---------------------------------------------------
@@ -96,7 +105,11 @@ def run_doctor(fix: bool = False) -> int:
             print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK"))
             counts["pass"] += 1
         else:
-            print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak proxy restart)"))
+            print(
+                Colors.warn(
+                    f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak proxy restart)"
+                )
+            )
             counts["warn"] += 1
     except Exception:
         print(Colors.warn(f"Proxy reachable     port {proxy_port} — check failed"))
@@ -111,10 +124,14 @@ def run_doctor(fix: bool = False) -> int:
                 print(Colors.ok(f"Disk usage          {size_mb:.1f} MB — OK"))
                 counts["pass"] += 1
             else:
-                print(Colors.warn(f"Disk usage          {size_mb:.1f} MB — consider cleanup (tokenpak maintenance)"))
+                print(
+                    Colors.warn(
+                        f"Disk usage          {size_mb:.1f} MB — consider cleanup (tokenpak maintenance)"
+                    )
+                )
                 counts["warn"] += 1
         else:
-            print(Colors.warn(f"Disk usage          ~/.tokenpak not found"))
+            print(Colors.warn("Disk usage          ~/.tokenpak not found"))
             counts["warn"] += 1
     except Exception:
         print(Colors.warn("Disk usage          could not measure"))
@@ -128,7 +145,11 @@ def run_doctor(fix: bool = False) -> int:
         except ImportError:
             missing_deps.append(pkg)
     if missing_deps:
-        print(Colors.warn(f"Dependencies        missing: {', '.join(missing_deps)} (run: pip install tokenpak)"))
+        print(
+            Colors.warn(
+                f"Dependencies        missing: {', '.join(missing_deps)} (run: pip install tokenpak)"
+            )
+        )
         counts["warn"] += 1
     else:
         print(Colors.ok("Dependencies        all core packages present"))
@@ -146,9 +167,9 @@ def run_doctor(fix: bool = False) -> int:
 
     # --- Check 8: API key environment variables --------------------------------
     api_key_checks = [
-        ("ANTHROPIC_API_KEY",  "Anthropic"),
-        ("OPENAI_API_KEY",     "OpenAI"),
-        ("GOOGLE_API_KEY",     "Google"),
+        ("ANTHROPIC_API_KEY", "Anthropic"),
+        ("OPENAI_API_KEY", "OpenAI"),
+        ("GOOGLE_API_KEY", "Google"),
     ]
     found_keys = []
     missing_keys = []
@@ -163,23 +184,28 @@ def run_doctor(fix: bool = False) -> int:
         print(Colors.ok(f"API keys            {', '.join(found_keys)} — env vars set"))
         counts["pass"] += 1
     else:
-        print(Colors.warn(
-            "API keys            none found — set ANTHROPIC_API_KEY, "
-            "OPENAI_API_KEY, or GOOGLE_API_KEY"
-        ))
+        print(
+            Colors.warn(
+                "API keys            none found — set ANTHROPIC_API_KEY, "
+                "OPENAI_API_KEY, or GOOGLE_API_KEY"
+            )
+        )
         counts["warn"] += 1
 
     # --- Check 9: Proxy health endpoint (degradation) -------------------------
     try:
         import urllib.request as _urlreq
+
         with _urlreq.urlopen("http://127.0.0.1:8766/degradation", timeout=3) as _r:
             _deg = json.loads(_r.read())
         if _deg.get("is_degraded"):
             recent = _deg.get("recent_events", [])
             detail = recent[0].get("detail", "") if recent else ""
-            print(Colors.warn(
-                f"Proxy degradation   running in degraded mode — {detail[:60] or 'see tokenpak status'}"
-            ))
+            print(
+                Colors.warn(
+                    f"Proxy degradation   running in degraded mode — {detail[:60] or 'see tokenpak status'}"
+                )
+            )
             counts["warn"] += 1
         else:
             print(Colors.ok("Proxy degradation   not degraded — no recent issues"))
@@ -193,16 +219,23 @@ def run_doctor(fix: bool = False) -> int:
     if failover_cfg_path.exists():
         try:
             import yaml
+
             with open(failover_cfg_path) as _f:
                 _fc = yaml.safe_load(_f) or {}
             fo = _fc.get("failover", {})
             if fo.get("enabled") and fo.get("chain"):
-                print(Colors.ok(f"Failover config     {failover_cfg_path} — {len(fo['chain'])} provider(s)"))
+                print(
+                    Colors.ok(
+                        f"Failover config     {failover_cfg_path} — {len(fo['chain'])} provider(s)"
+                    )
+                )
             elif fo.get("enabled"):
-                print(Colors.warn(f"Failover config     enabled but no providers in chain"))
+                print(Colors.warn("Failover config     enabled but no providers in chain"))
                 counts["warn"] += 1
             else:
-                print(Colors.ok(f"Failover config     {failover_cfg_path} — disabled (no failover)"))
+                print(
+                    Colors.ok(f"Failover config     {failover_cfg_path} — disabled (no failover)")
+                )
             counts["pass"] += 1
         except Exception as _e:
             print(Colors.warn(f"Failover config     could not parse config.yaml: {_e}"))
@@ -257,5 +290,6 @@ try:
         sys.exit(rc)
 
 except ImportError:
+
     def doctor_cmd(*args, **kwargs):  # type: ignore
         print("click not installed; doctor command unavailable")

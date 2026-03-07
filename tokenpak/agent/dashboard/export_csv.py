@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 
 class ExportFormat(str, Enum):
-    FULL = "full"              # All columns
+    FULL = "full"  # All columns
     SIMPLIFIED = "simplified"  # Summary / high-value columns only
 
 
@@ -65,6 +65,7 @@ _STATS_COLUMNS = ["metric", "value"]
 # CSV helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_writer(buf: io.StringIO) -> csv.writer:
     """Return a csv.writer with standard dialect (no BOM, RFC-4180-ish)."""
     return csv.writer(buf, dialect="excel", lineterminator="\r\n")
@@ -79,6 +80,7 @@ def _format_filename(ts: Optional[datetime] = None) -> str:
 # ---------------------------------------------------------------------------
 # CSVExporter
 # ---------------------------------------------------------------------------
+
 
 class CSVExporter:
     """Generate CSV files from tokenpak proxy data.
@@ -160,9 +162,7 @@ class CSVExporter:
     def _trace_to_row(self, trace: Dict[str, Any], columns: List[str]) -> List[Any]:
         """Map a trace dict to a CSV row (in column order)."""
         stage_count = len(trace.get("stages", []))
-        stages_summary = "|".join(
-            s.get("name", "?") for s in trace.get("stages", [])
-        )
+        stages_summary = "|".join(s.get("name", "?") for s in trace.get("stages", []))
 
         mapping: Dict[str, Any] = {
             "request_id": trace.get("request_id", ""),

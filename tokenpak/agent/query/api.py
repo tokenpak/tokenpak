@@ -18,6 +18,7 @@ Endpoints:
   GET  /query/usage-summary    — daily summary across all agents
   POST /query/export           — export entries as CSV
 """
+
 from __future__ import annotations
 
 import csv
@@ -28,7 +29,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -63,6 +64,7 @@ def _date_range(start_date: str, end_date: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # EntryStore
 # ---------------------------------------------------------------------------
+
 
 class EntryStore:
     """Load and aggregate entries from JSONL date-partitioned files."""
@@ -116,9 +118,7 @@ class EntryStore:
         total_cost = sum(e.get("cost", 0.0) for e in entries)
 
         # Cache hit tokens come from extra.cache_tokens if present
-        cache_tokens = sum(
-            (e.get("extra") or {}).get("cache_tokens", 0) for e in entries
-        )
+        cache_tokens = sum((e.get("extra") or {}).get("cache_tokens", 0) for e in entries)
         cache_hit_pct = (cache_tokens / total_tokens * 100) if total_tokens else 0.0
 
         # Compression ratio: raw_tokens / final_tokens - 1 (pct reduction)
@@ -190,10 +190,7 @@ class EntryStore:
             agent_id = entry.get("agent") or "unknown"
             agent_stats[agent_id]["request_count"] += 1
             agent_stats[agent_id]["total_tokens"] += entry.get("tokens", 0)
-        result = [
-            {"agent_id": agent, **stats}
-            for agent, stats in agent_stats.items()
-        ]
+        result = [{"agent_id": agent, **stats} for agent, stats in agent_stats.items()]
         result.sort(key=lambda x: x["request_count"], reverse=True)
         return result[:limit]
 
@@ -212,16 +209,16 @@ class EntryStore:
             if not entries:
                 continue
             total_tokens = sum(e.get("tokens", 0) for e in entries)
-            cache_tokens = sum(
-                (e.get("extra") or {}).get("cache_tokens", 0) for e in entries
-            )
+            cache_tokens = sum((e.get("extra") or {}).get("cache_tokens", 0) for e in entries)
             hit_rate = (cache_tokens / total_tokens) if total_tokens else 0.0
             miss_rate = 1.0 - hit_rate
-            trends.append({
-                "timestamp": date_str,
-                "hit_rate": round(hit_rate, 4),
-                "miss_rate": round(miss_rate, 4),
-            })
+            trends.append(
+                {
+                    "timestamp": date_str,
+                    "hit_rate": round(hit_rate, 4),
+                    "miss_rate": round(miss_rate, 4),
+                }
+            )
         return trends
 
     def compression_ratios(self, date: str) -> list[dict[str, Any]]:
@@ -235,11 +232,13 @@ class EntryStore:
                 agent_data[agent_id].append(float(ratio))
         result = []
         for agent_id, ratios in agent_data.items():
-            result.append({
-                "agent_id": agent_id,
-                "avg_compression_ratio": round(sum(ratios) / len(ratios), 4),
-                "sample_count": len(ratios),
-            })
+            result.append(
+                {
+                    "agent_id": agent_id,
+                    "avg_compression_ratio": round(sum(ratios) / len(ratios), 4),
+                    "sample_count": len(ratios),
+                }
+            )
         result.sort(key=lambda x: x["agent_id"])
         return result
 
@@ -256,12 +255,8 @@ class EntryStore:
                 "unique_agents": 0,
             }
         total_tokens = sum(e.get("tokens", 0) for e in entries)
-        cache_tokens = sum(
-            (e.get("extra") or {}).get("cache_tokens", 0) for e in entries
-        )
-        compression_vals = [
-            (e.get("extra") or {}).get("compression_ratio", None) for e in entries
-        ]
+        cache_tokens = sum((e.get("extra") or {}).get("cache_tokens", 0) for e in entries)
+        compression_vals = [(e.get("extra") or {}).get("compression_ratio", None) for e in entries]
         valid_compression = [v for v in compression_vals if v is not None]
         avg_compression = (
             sum(valid_compression) / len(valid_compression) if valid_compression else 0.0
@@ -280,6 +275,7 @@ class EntryStore:
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
 
 class ExportRequest(BaseModel):
     start_date: str
@@ -322,7 +318,12 @@ def query_rollups(
 ) -> dict[str, Any]:
     """Return time-series rollup buckets."""
     rollups = _store.compute_rollups(start_date, end_date, window_minutes=window_minutes)
-    return {"status": "ok", "window_minutes": window_minutes, "count": len(rollups), "rollups": rollups}
+    return {
+        "status": "ok",
+        "window_minutes": window_minutes,
+        "count": len(rollups),
+        "rollups": rollups,
+    }
 
 
 @router.get("/query/top-users")
@@ -387,6 +388,7 @@ def query_export(body: ExportRequest) -> StreamingResponse:
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_query_app(prefix: str = "") -> Any:
     """Create a standalone FastAPI app with query routes."""

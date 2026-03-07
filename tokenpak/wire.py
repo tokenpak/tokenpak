@@ -1,7 +1,7 @@
 """TokenPak wire format generator."""
 
 import hashlib
-from typing import List, Dict
+from typing import Dict, List
 
 
 def make_slice_id(content: str, ref: str) -> str:
@@ -48,8 +48,8 @@ def pack(blocks: List[Dict], budget: int, metadata: Dict | None = None) -> str:
         prov = block.get("provenance")
         if prov is not None:
             src_type = getattr(prov, "source_type", None) or prov.get("source_type", "")
-            src_id   = getattr(prov, "source_id",   None) or prov.get("source_id",   "")
-            src_ver  = getattr(prov, "source_version", None) or prov.get("source_version", "")
+            src_id = getattr(prov, "source_id", None) or prov.get("source_id", "")
+            src_ver = getattr(prov, "source_version", None) or prov.get("source_version", "")
             if src_type and src_id:
                 header += f" [SOURCE: {src_type}:{src_id}]"
             if src_ver:

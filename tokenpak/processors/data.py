@@ -1,8 +1,8 @@
 """Data processor for JSON, CSV, YAML, and TOML files."""
 
 import csv
-import json
 import io
+import json
 from pathlib import Path
 
 
@@ -112,6 +112,7 @@ class DataProcessor:
         """Process YAML — try to parse, fallback to first 50 lines."""
         try:
             import yaml
+
             data = yaml.safe_load(content)
             if isinstance(data, (dict, list)):
                 schema = self._extract_json_schema(data, depth=0, max_depth=3)
@@ -126,6 +127,7 @@ class DataProcessor:
         """Process TOML — try to parse, fallback to first 50 lines."""
         try:
             import tomllib
+
             data = tomllib.loads(content)
             schema = self._extract_json_schema(data, depth=0, max_depth=3)
             return "[TOML Schema]\n" + json.dumps(schema, indent=2)

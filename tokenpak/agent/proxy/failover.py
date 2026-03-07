@@ -40,7 +40,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +50,14 @@ _CONFIG_PATH = Path(os.path.expanduser("~/.tokenpak/config.yaml"))
 # Config schema
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ProviderEntry:
     """Single provider entry in the failover chain."""
-    provider: str               # "anthropic" | "openai" | "google" | "ollama"
-    model_map: Dict[str, str]   # original-model → replacement-model
-    credential_env: str         # env var that holds the API key (never the key itself)
+
+    provider: str  # "anthropic" | "openai" | "google" | "ollama"
+    model_map: Dict[str, str]  # original-model → replacement-model
+    credential_env: str  # env var that holds the API key (never the key itself)
 
     def credential_available(self) -> bool:
         """True if the required env var is set and non-empty."""
@@ -73,6 +75,7 @@ class ProviderEntry:
 @dataclass
 class FailoverConfig:
     """Parsed failover configuration block."""
+
     enabled: bool
     chain: List[ProviderEntry] = field(default_factory=list)
 
@@ -84,6 +87,7 @@ class FailoverConfig:
 # ---------------------------------------------------------------------------
 # Config loader
 # ---------------------------------------------------------------------------
+
 
 def load_failover_config(path: Optional[Path] = None) -> FailoverConfig:
     """
@@ -136,11 +140,13 @@ def load_failover_config(path: Optional[Path] = None) -> FailoverConfig:
             continue
         model_map = entry.get("model_map") or {}
         credential_env = str(entry.get("credential_env", ""))
-        chain.append(ProviderEntry(
-            provider=provider,
-            model_map=model_map,
-            credential_env=credential_env,
-        ))
+        chain.append(
+            ProviderEntry(
+                provider=provider,
+                model_map=model_map,
+                credential_env=credential_env,
+            )
+        )
 
     return FailoverConfig(enabled=enabled, chain=chain)
 
@@ -149,9 +155,11 @@ def load_failover_config(path: Optional[Path] = None) -> FailoverConfig:
 # Failover Manager
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FailoverResult:
     """Result of a single failover attempt."""
+
     provider: str
     model: str
     credential_env: str
@@ -231,7 +239,9 @@ class FailoverManager:
             )
             skipped.append(entry.provider)
 
-    def get_provider_for(self, model: str, preferred: Optional[str] = None) -> Optional[FailoverResult]:
+    def get_provider_for(
+        self, model: str, preferred: Optional[str] = None
+    ) -> Optional[FailoverResult]:
         """
         Return the first available provider for the given model.
         Shortcut for when you just want the primary option.

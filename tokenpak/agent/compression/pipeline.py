@@ -7,19 +7,19 @@ in a single pass. Each stage is optional and toggled via constructor flags.
 
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from .segmentizer import segmentize, Segment
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
+from .segmentizer import Segment, segmentize
 
 
 @dataclass
 class PipelineResult:
     """Output of a CompressionPipeline.run() call."""
+
     messages: List[Dict[str, Any]]
     segments: List[Segment]
     tokens_raw: int
@@ -147,6 +147,7 @@ class CompressionPipeline:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _estimate_tokens(messages: List[Dict[str, Any]]) -> int:
     total = 0

@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 from typing import Dict, Optional, Union
 
-
 # ---------------------------------------------------------------------------
 # Known path patterns → provider
 # ---------------------------------------------------------------------------
@@ -117,6 +116,7 @@ def detect_provider(
     # Also scan path for hostname clues (full URL passed as path)
     if path.startswith("http"):
         from urllib.parse import urlparse
+
         parsed = urlparse(path)
         netloc_lower = parsed.netloc.lower().split(":")[0]
         for h, provider in _HOST_MAP.items():

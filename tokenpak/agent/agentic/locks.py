@@ -46,8 +46,7 @@ class LockConflictError(Exception):
         expires = lock_info.get("expires", 0)
         remaining = max(0, expires - time.time())
         super().__init__(
-            f"Lock conflict on '{path}': held by '{agent}', "
-            f"expires in {remaining:.0f}s"
+            f"Lock conflict on '{path}': held by '{agent}', " f"expires in {remaining:.0f}s"
         )
 
 
@@ -213,11 +212,8 @@ class FileLockManager:
         Given a list of candidate file paths, return those that are NOT
         currently locked — i.e. viable alternatives when *blocked_path* is taken.
         """
-        return [
-            str(c)
-            for c in candidates
-            if self.query(c) is None
-        ]
+        return [str(c) for c in candidates if self.query(c) is None]
+
     def renew(self, path: str | Path, timeout_s: Optional[int] = None) -> dict:
         """
         Renew (extend) an existing lock held by this agent.
@@ -250,4 +246,3 @@ class FileLockManager:
         updated["renewed"] = now
         self._write_lock(lock_file, updated)
         return updated
-

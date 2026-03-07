@@ -28,7 +28,6 @@ CLI commands:
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 from datetime import datetime
@@ -45,6 +44,7 @@ MACROS_DIR = Path.home() / ".tokenpak" / "macros"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _require_yaml() -> None:
     if yaml is None:
         raise RuntimeError(
@@ -54,6 +54,7 @@ def _require_yaml() -> None:
 
 def _resolve_vars(text: str, variables: Dict[str, Any]) -> str:
     """Substitute ${VAR} and $VAR placeholders with values from variables dict."""
+
     def replacer(match):
         key = match.group(1) or match.group(2)
         return str(variables.get(key, match.group(0)))
@@ -66,6 +67,7 @@ def _resolve_vars(text: str, variables: Dict[str, Any]) -> str:
 
 
 # ── Data model ────────────────────────────────────────────────────────────────
+
 
 class MacroStep:
     """A single step within a macro."""
@@ -143,6 +145,7 @@ class MacroDefinition:
 
 
 # ── Run result ────────────────────────────────────────────────────────────────
+
 
 class StepResult:
     def __init__(
@@ -248,6 +251,7 @@ class MacroResult:
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
+
 class MacroEngine:
     """
     Core YAML macro engine.
@@ -315,9 +319,7 @@ class MacroEngine:
         macro = MacroDefinition.from_yaml(yaml_text)
         path = self._path(macro.name)
         if path.exists() and not overwrite:
-            raise ValueError(
-                f"Macro '{macro.name}' already exists. Use overwrite=True to replace."
-            )
+            raise ValueError(f"Macro '{macro.name}' already exists. Use overwrite=True to replace.")
         self.macros_dir.mkdir(parents=True, exist_ok=True)
         path.write_text(yaml_text)
         return path
@@ -427,16 +429,18 @@ class MacroEngine:
             resolved_label = _resolve_vars(step.label, merged_vars)
 
             if dry_run:
-                step_results.append(StepResult(
-                    name=step.name,
-                    label=resolved_label,
-                    cmd=resolved_cmd,
-                    output="",
-                    error="",
-                    success=True,
-                    returncode=0,
-                    dry_run=True,
-                ))
+                step_results.append(
+                    StepResult(
+                        name=step.name,
+                        label=resolved_label,
+                        cmd=resolved_cmd,
+                        output="",
+                        error="",
+                        success=True,
+                        returncode=0,
+                        dry_run=True,
+                    )
+                )
                 continue
 
             result = self._run_step(step.name, resolved_label, resolved_cmd, step.timeout)
@@ -461,9 +465,7 @@ class MacroEngine:
             dry_run=dry_run,
         )
 
-    def _run_step(
-        self, name: str, label: str, cmd: str, timeout: int = 60
-    ) -> StepResult:
+    def _run_step(self, name: str, label: str, cmd: str, timeout: int = 60) -> StepResult:
         """Execute a single step command."""
         try:
             proc = subprocess.run(

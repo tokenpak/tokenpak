@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, List
+from typing import List, Optional
+
 from .collector import RequestStats, SessionStats
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def log_failover_event(chain: List[str], original: str, final: str, reason: str = "") -> None:
     """Log a failover event at INFO level.
-    
+
     Args:
         chain: List of providers tried (in order)
         original: Original provider that was requested
@@ -96,7 +97,7 @@ def render_footer_with_failover(
         return base
 
     lines = base.split("\n")
-    sep = lines[-1]  # last line is the separator
+    lines[-1]  # last line is the separator
     # Insert failover line before final separator
     lines.insert(-1, failover_indicator)
     return "\n".join(lines)

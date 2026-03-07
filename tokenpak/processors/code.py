@@ -10,23 +10,23 @@ import re
 # ============================================================
 
 # Python patterns
-_PY_IMPORT = re.compile(r'^(import\s|from\s)')
-_PY_CLASS = re.compile(r'^class\s+\w+')
-_PY_FUNC = re.compile(r'^(?:async\s+)?def\s+\w+')
-_PY_METHOD = re.compile(r'^\s+(?:async\s+)?def\s+\w+')
-_PY_CONST = re.compile(r'^[A-Z_][A-Z_0-9]*\s*=')
-_PY_TYPE_HINT = re.compile(r'^\w+\s*:\s*\w+')
-_PY_TYPE_ALIAS = re.compile(r'^(type\s+|TypeAlias)')
-_PY_CLASS_ATTR = re.compile(r'^\s+\w+\s*[=:]')
+_PY_IMPORT = re.compile(r"^(import\s|from\s)")
+_PY_CLASS = re.compile(r"^class\s+\w+")
+_PY_FUNC = re.compile(r"^(?:async\s+)?def\s+\w+")
+_PY_METHOD = re.compile(r"^\s+(?:async\s+)?def\s+\w+")
+_PY_CONST = re.compile(r"^[A-Z_][A-Z_0-9]*\s*=")
+_PY_TYPE_HINT = re.compile(r"^\w+\s*:\s*\w+")
+_PY_TYPE_ALIAS = re.compile(r"^(type\s+|TypeAlias)")
+_PY_CLASS_ATTR = re.compile(r"^\s+\w+\s*[=:]")
 
 # JavaScript/TypeScript patterns
-_JS_IMPORT = re.compile(r'^(import\s|const\s+\w+\s*=\s*require|export\s+(default\s+)?{)')
-_JS_EXPORT = re.compile(r'^export\s+')
+_JS_IMPORT = re.compile(r"^(import\s|const\s+\w+\s*=\s*require|export\s+(default\s+)?{)")
+_JS_EXPORT = re.compile(r"^export\s+")
 _JS_FUNC_CLASS = re.compile(
-    r'^(export\s+)?(async\s+)?function\s+\w+|^(export\s+)?class\s+\w+|^(export\s+)?(interface|type)\s+\w+'
+    r"^(export\s+)?(async\s+)?function\s+\w+|^(export\s+)?class\s+\w+|^(export\s+)?(interface|type)\s+\w+"
 )
-_JS_ARROW_CONST = re.compile(r'^(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(')
-_JS_CONST_UPPER = re.compile(r'^(export\s+)?(const|let|var)\s+[A-Z_]')
+_JS_ARROW_CONST = re.compile(r"^(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(")
+_JS_CONST_UPPER = re.compile(r"^(export\s+)?(const|let|var)\s+[A-Z_]")
 
 
 class CodeProcessor:
@@ -35,7 +35,7 @@ class CodeProcessor:
     def process(self, content: str, path: str = "") -> str:
         """
         Compress code by extracting structure.
-        
+
         Strategy:
         - Keep all imports/requires
         - Keep function/class signatures + docstrings

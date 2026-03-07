@@ -8,14 +8,21 @@ from datetime import datetime
 
 try:
     import click
+
     HAS_CLICK = True
 except ImportError:
     HAS_CLICK = False
 
 
-def run(proxy_base: str = "http://127.0.0.1:8766", oneline: bool = False, json_output: bool = False, no_session: bool = False) -> None:
+def run(
+    proxy_base: str = "http://127.0.0.1:8766",
+    oneline: bool = False,
+    json_output: bool = False,
+    no_session: bool = False,
+) -> None:
     """Print last request stats to stdout."""
     import urllib.request
+
     SEP = "────────────────────────"
 
     try:
@@ -48,16 +55,16 @@ def run(proxy_base: str = "http://127.0.0.1:8766", oneline: bool = False, json_o
             footer = "⚡ TokenPak: 0 tokens saved"
         else:
             footer = f"⚡ TokenPak: -{tokens_saved:,} tokens ({percent_saved:.0f}%) | ${cost_saved:.3f} saved"
-        
+
         if not no_session and session:
             session_total = session.get("session_total_cost_saved", 0)
             footer += f" | Session: ${session_total:.2f} total"
-        
+
         print(footer)
         return
 
     # Full format
-    print(f"TOKENPAK  |  Last Request")
+    print("TOKENPAK  |  Last Request")
     print(f"{SEP}")
     print()
     print(f"Request ID:              {request_id}")
@@ -66,14 +73,14 @@ def run(proxy_base: str = "http://127.0.0.1:8766", oneline: bool = False, json_o
         try:
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             print(f"Time:                    {dt.strftime('%H:%M:%S')}")
-        except:
+        except Exception:
             print(f"Time:                    {timestamp}")
     print()
 
     # Tokens section
     input_raw = request.get("input_tokens_raw", 0)
     input_sent = request.get("input_tokens_sent", 0)
-    
+
     print("Tokens:")
     print(f"  Raw Input:             {input_raw:,}")
     print(f"  Sent:                  {input_sent:,}")
@@ -83,11 +90,11 @@ def run(proxy_base: str = "http://127.0.0.1:8766", oneline: bool = False, json_o
     # Cost section
     print("Cost:")
     print(f"  This Request:          ${cost_saved:.3f} saved")
-    
+
     if session:
         session_total = session.get("session_total_cost_saved", 0)
         print(f"  Session Total:         ${session_total:.2f} saved")
-    
+
     print()
 
     # Session stats
@@ -106,7 +113,7 @@ if HAS_CLICK:
     @click.option("--no-session", is_flag=True, help="Omit session totals")
     def last_cmd(proxy, oneline, json_output, no_session):
         """Show last request stats with compression/cost savings.
-        
+
         Default shows detailed breakdown. Use --oneline for single-line footer.
         """
         run(proxy_base=proxy, oneline=oneline, json_output=json_output, no_session=no_session)

@@ -18,6 +18,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="tree_sitter")
 
 try:
     from tree_sitter_languages import get_parser as _ts_get_parser
+
     _TS_AVAILABLE = True
 except ImportError:
     _TS_AVAILABLE = False
@@ -28,19 +29,20 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 EXTENSION_TO_LANG = {
-    ".py":   "python",
-    ".js":   "javascript",
-    ".jsx":  "javascript",
-    ".ts":   "typescript",
-    ".tsx":  "typescript",
-    ".go":   "go",
-    ".rs":   "rust",
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".go": "go",
+    ".rs": "rust",
 }
 
 
 def _detect_language(path: str) -> Optional[str]:
     """Detect tree-sitter language from file extension."""
     from pathlib import Path
+
     suffix = Path(path).suffix.lower()
     return EXTENSION_TO_LANG.get(suffix)
 
@@ -53,6 +55,7 @@ def is_available() -> bool:
 # ---------------------------------------------------------------------------
 # Node helpers
 # ---------------------------------------------------------------------------
+
 
 def _text(node) -> str:
     """Decode a node's source text."""
@@ -97,14 +100,18 @@ _PY_MODULE_KEEP = {
     "import_statement",
     "import_from_statement",
     "comment",
-    "expression_statement",     # module-level constants / type aliases
+    "expression_statement",  # module-level constants / type aliases
     "type_alias_statement",
 }
 _PY_FN_TYPES = {"function_definition", "async_function_definition"}
 _PY_CLASS_TYPES = {"class_definition"}
 _PY_SKIP = {
-    "if_statement", "for_statement", "while_statement", "with_statement",
-    "try_statement", "match_statement",
+    "if_statement",
+    "for_statement",
+    "while_statement",
+    "with_statement",
+    "try_statement",
+    "match_statement",
 }
 
 
@@ -460,6 +467,7 @@ def _extract_rust(source: str) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def extract(source: str, path: str) -> Optional[str]:
     """
     Extract API surface from a code file using tree-sitter.
@@ -507,6 +515,7 @@ class TreeSitterProcessor:
     def __init__(self, fallback=None):
         # Import here to avoid circular imports
         from .code import CodeProcessor
+
         self._fallback = fallback or CodeProcessor()
 
     def process(self, content: str, path: str = "") -> str:

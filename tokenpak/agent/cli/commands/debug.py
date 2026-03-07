@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import os
-import sys
-from pathlib import Path
-
 
 def _state():
     from tokenpak.agent.debug.state import DebugState
+
     return DebugState()
 
 
 def debug_cmd(args) -> None:
     """Dispatch debug sub-commands."""
-    sub = getattr(args, "debug_cmd", None) or (args.debug_args[0] if getattr(args, "debug_args", None) else None)
+    sub = getattr(args, "debug_cmd", None) or (
+        args.debug_args[0] if getattr(args, "debug_args", None) else None
+    )
     if sub == "on":
         _cmd_on(args)
     elif sub == "off":

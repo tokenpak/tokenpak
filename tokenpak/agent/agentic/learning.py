@@ -16,7 +16,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -32,6 +32,7 @@ MIN_SAMPLES_THRESHOLD = 5
 # Schema helpers
 # ---------------------------------------------------------------------------
 
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -40,10 +41,10 @@ def _empty_store() -> dict:
     return {
         "version": 1,
         "updated": _now_iso(),
-        "model_performance": {},   # {task_type: {model: {acceptance_rate, samples}}}
-        "compression_modes": {},   # {risk_class: {mode: {retry_rate, event_count}}}
-        "block_utility": {},       # {slice_id: {score, hits, misses, last_cited}}
-        "context_gaps": {          # aggregated gap signal counts
+        "model_performance": {},  # {task_type: {model: {acceptance_rate, samples}}}
+        "compression_modes": {},  # {risk_class: {mode: {retry_rate, event_count}}}
+        "block_utility": {},  # {slice_id: {score, hits, misses, last_cited}}
+        "context_gaps": {  # aggregated gap signal counts
             "total": 0,
             "by_signal": {},
             "queries_with_gaps": 0,
@@ -74,6 +75,7 @@ def _save(data: dict, path: str) -> None:
 # ---------------------------------------------------------------------------
 # Extraction: routing_ledger → model performance
 # ---------------------------------------------------------------------------
+
 
 def _extract_model_performance(
     ledger_path: str,
@@ -131,6 +133,7 @@ def _extract_model_performance(
 # ---------------------------------------------------------------------------
 # Extraction: calibrator → compression mode effectiveness
 # ---------------------------------------------------------------------------
+
 
 def _extract_compression_modes(
     calibration_path: str,
@@ -193,6 +196,7 @@ def _extract_compression_modes(
 # Extraction: citation_tracker → block utility
 # ---------------------------------------------------------------------------
 
+
 def _extract_block_utility(
     utility_path: str,
     store: dict,
@@ -220,6 +224,7 @@ def _extract_block_utility(
 # ---------------------------------------------------------------------------
 # Extraction: miss_detector → context gap patterns
 # ---------------------------------------------------------------------------
+
 
 def _extract_context_gaps(
     gaps_path: str,
@@ -269,6 +274,7 @@ def _extract_context_gaps(
 # Public API: learn()
 # ---------------------------------------------------------------------------
 
+
 def learn(
     ledger_path: Optional[str] = None,
     calibration_path: Optional[str] = None,
@@ -311,6 +317,7 @@ def learn(
 # Public API: get_best_model()
 # ---------------------------------------------------------------------------
 
+
 def get_best_model(
     task_type: str,
     learning_path: str = DEFAULT_LEARNING_PATH,
@@ -351,6 +358,7 @@ def get_best_model(
 # ---------------------------------------------------------------------------
 # Public API: get_effective_compression()
 # ---------------------------------------------------------------------------
+
 
 def get_effective_compression(
     risk_class: str,
@@ -394,6 +402,7 @@ def get_effective_compression(
 # Public API: load() / reset()
 # ---------------------------------------------------------------------------
 
+
 def load(learning_path: str = DEFAULT_LEARNING_PATH) -> dict:
     """Load and return the current learning store."""
     return _load(learning_path)
@@ -409,12 +418,13 @@ def reset(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
 # CLI helpers (for `tokenpak learn status` / `tokenpak learn reset`)
 # ---------------------------------------------------------------------------
 
+
 def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
     """Print a human-readable summary of learned patterns."""
     store = _load(learning_path)
 
     SEP = "────────────────────────────────────────"
-    print(f"TOKENPAK  |  Learned Patterns")
+    print("TOKENPAK  |  Learned Patterns")
     print(SEP)
     print(f"{'Updated':<28}{store.get('updated', 'n/a')}")
     print()

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -14,11 +15,10 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from .registry import BlockRegistry, Block
-from .walker import walk_directory
 from .processors import get_processor
-from .tokens import count_tokens, clear_cache
-import hashlib
+from .registry import Block, BlockRegistry
+from .tokens import clear_cache, count_tokens
+from .walker import walk_directory
 
 PROFILE_PATH = Path.home() / ".tokenpak" / "calibration.json"
 
@@ -81,16 +81,20 @@ def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
             if not proc:
                 return None
             compressed = proc.process(content, path)
-            return path, content, Block(
-                path=path,
-                content_hash=hashlib.sha256(content.encode()).hexdigest(),
-                version=1,
-                file_type=file_type,
-                raw_tokens=count_tokens(content),
-                compressed_tokens=count_tokens(compressed),
-                compressed_content=compressed,
-                quality_score=1.0,
-                importance=5.0,
+            return (
+                path,
+                content,
+                Block(
+                    path=path,
+                    content_hash=hashlib.sha256(content.encode()).hexdigest(),
+                    version=1,
+                    file_type=file_type,
+                    raw_tokens=count_tokens(content),
+                    compressed_tokens=count_tokens(compressed),
+                    compressed_content=compressed,
+                    quality_score=1.0,
+                    importance=5.0,
+                ),
             )
 
         results = []

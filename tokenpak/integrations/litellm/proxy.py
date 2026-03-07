@@ -40,10 +40,9 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from .formatter import compile_pack, _dict_to_blocks
-from .parser import extract_budget_from_kwargs, extract_compaction_from_kwargs
+from .formatter import compile_pack
 
 
 class ProxyHandler:
@@ -107,15 +106,9 @@ class ProxyHandler:
 
         # Parse budget/compaction from pack policies or top-level keys
         policies = pack_data.get("policies", {}) if isinstance(pack_data, dict) else {}
-        budget = (
-            body.get("tokenpak_budget")
-            or policies.get("budget")
-            or self.budget
-        )
+        budget = body.get("tokenpak_budget") or policies.get("budget") or self.budget
         compaction = (
-            body.get("tokenpak_compaction")
-            or policies.get("compaction")
-            or self.compaction
+            body.get("tokenpak_compaction") or policies.get("compaction") or self.compaction
         )
 
         # Compile pack → messages
@@ -143,9 +136,7 @@ class ProxyHandler:
         try:
             usage = getattr(response, "usage", None)
             system_tokens = sum(
-                len(m.get("content", "")) // 4
-                for m in messages
-                if m.get("role") == "system"
+                len(m.get("content", "")) // 4 for m in messages if m.get("role") == "system"
             )
             response.tokenpak_stats = {
                 "compile_ms": compile_ms,

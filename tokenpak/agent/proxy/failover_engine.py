@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from .failover import FailoverConfig, FailoverManager, FailoverResult, load_failover_config
+from .failover import FailoverConfig, FailoverManager, load_failover_config
 
 logger = logging.getLogger(__name__)
 
@@ -37,21 +37,22 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-CIRCUIT_FAILURE_THRESHOLD = 3          # failures before opening circuit
-CIRCUIT_COOL_DOWN_SECONDS = 300        # 5 minutes
-RATE_LIMIT_WAIT_SECONDS = 2.0          # initial wait on 429 before retry/switch
-MAX_RETRY_SAME_PROVIDER = 1            # retries on same provider before switching
+CIRCUIT_FAILURE_THRESHOLD = 3  # failures before opening circuit
+CIRCUIT_COOL_DOWN_SECONDS = 300  # 5 minutes
+RATE_LIMIT_WAIT_SECONDS = 2.0  # initial wait on 429 before retry/switch
+MAX_RETRY_SAME_PROVIDER = 1  # retries on same provider before switching
 
 
 # ---------------------------------------------------------------------------
 # Error classification
 # ---------------------------------------------------------------------------
 
+
 class ErrorType:
-    RATE_LIMIT = "rate_limit"       # HTTP 429
-    SERVER_ERROR = "server_error"   # HTTP 500+
-    TIMEOUT = "timeout"             # socket/read timeout
-    AUTH_ERROR = "auth_error"       # HTTP 401/403
+    RATE_LIMIT = "rate_limit"  # HTTP 429
+    SERVER_ERROR = "server_error"  # HTTP 500+
+    TIMEOUT = "timeout"  # socket/read timeout
+    AUTH_ERROR = "auth_error"  # HTTP 401/403
     UNKNOWN = "unknown"
 
 
@@ -137,13 +138,14 @@ def classify_error(
 # Circuit breaker
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CircuitState:
     provider: str
     failure_count: int = 0
     last_failure_ts: float = 0.0
     is_open: bool = False
-    half_open_attempt: bool = False   # one probe allowed when cooling down
+    half_open_attempt: bool = False  # one probe allowed when cooling down
 
 
 class CircuitBreaker:
@@ -202,9 +204,10 @@ class CircuitBreaker:
             if state.failure_count >= self._threshold and not state.is_open:
                 state.is_open = True
                 logger.warning(
-                    "Circuit OPEN for provider %r after %d failures — "
-                    "will retry in %ds",
-                    provider, state.failure_count, int(self._cool_down),
+                    "Circuit OPEN for provider %r after %d failures — " "will retry in %ds",
+                    provider,
+                    state.failure_count,
+                    int(self._cool_down),
                 )
                 return True
             return False
@@ -225,10 +228,11 @@ class CircuitBreaker:
                 "provider": state.provider,
                 "is_open": state.is_open,
                 "failure_count": state.failure_count,
-                "seconds_until_retry": max(
-                    0,
-                    int(self._cool_down - (time.monotonic() - state.last_failure_ts))
-                ) if state.is_open else 0,
+                "seconds_until_retry": (
+                    max(0, int(self._cool_down - (time.monotonic() - state.last_failure_ts)))
+                    if state.is_open
+                    else 0
+                ),
             }
 
     def reset(self, provider: str) -> None:
@@ -240,6 +244,7 @@ class CircuitBreaker:
 # ---------------------------------------------------------------------------
 # Failover event log
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FailoverEvent:
@@ -272,6 +277,7 @@ class FailoverEventLog:
 
     def __init__(self) -> None:
         from collections import deque
+
         self._events: deque = deque(maxlen=self._MAX_EVENTS)
         self._lock = threading.Lock()
 
@@ -318,9 +324,11 @@ def get_event_log() -> FailoverEventLog:
 # Failover engine
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ProviderAttempt:
     """Information for one attempt in the failover loop."""
+
     provider: str
     model: str
     credential_env: str
@@ -331,7 +339,8 @@ class ProviderAttempt:
 @dataclass
 class FailoverDecision:
     """Result of evaluating an error against decision logic."""
-    action: str          # "retry_wait" | "switch" | "alert_abort" | "abort"
+
+    action: str  # "retry_wait" | "switch" | "alert_abort" | "abort"
     wait_seconds: float = 0.0
     reason: str = ""
 
@@ -550,6 +559,7 @@ class FailoverEngine:
 # Response normalization wrapper
 # ---------------------------------------------------------------------------
 
+
 def normalize_response(
     response_body: Dict[str, Any],
     source_provider: str,
@@ -572,17 +582,21 @@ def normalize_response(
         return response_body
 
     from .providers.translator import translate_response
+
     try:
         normalized = translate_response(response_body, source_provider, target_provider)
         logger.debug(
             "Normalized response from %r to %r format",
-            source_provider, target_provider,
+            source_provider,
+            target_provider,
         )
         return normalized
     except (ValueError, KeyError) as exc:
         logger.warning(
             "Could not normalize response %r → %r: %s — passing through raw",
-            source_provider, target_provider, exc,
+            source_provider,
+            target_provider,
+            exc,
         )
         return response_body
 
@@ -600,6 +614,7 @@ def normalize_stream(
         return None
 
     from .providers.stream_translator import StreamingTranslator
+
     try:
         return StreamingTranslator(source_provider, target_provider)
     except ValueError as exc:
@@ -610,6 +625,7 @@ def normalize_stream(
 # ---------------------------------------------------------------------------
 # Footer rendering
 # ---------------------------------------------------------------------------
+
 
 def render_failover_footer(
     original_provider: str,
@@ -623,7 +639,4 @@ def render_failover_footer(
     Example: '⚠️ failover:openai (anthropic 429 rate_limit)'
     """
     status_str = f" {http_status}" if http_status else ""
-    return (
-        f"⚠️ failover:{failover_provider} "
-        f"({original_provider}{status_str} {error_type})"
-    )
+    return f"⚠️ failover:{failover_provider} " f"({original_provider}{status_str} {error_type})"

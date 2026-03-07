@@ -33,6 +33,7 @@ dependencies = [
   "uvicorn>=0.27.0",
   "httpx>=0.26.0",
   "h2>=3,<5",
+  "watchdog>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -75,5 +76,14 @@ target-version = ["py310", "py311", "py312"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+ignore = [
+  "E501",   # line too long (handled by black)
+  "E701",   # multiple statements on one line (colon) — intentional compact style
+  "E702",   # multiple statements on one line (semicolon) — intentional compact style
+  "E402",   # module import not at top — conditional/optional imports
+  "E741",   # ambiguous variable name — acceptable in short-scope contexts
+  "F841",   # local variable assigned but never used — may be for side effects
+]

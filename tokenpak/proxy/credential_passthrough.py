@@ -57,27 +57,31 @@ from typing import Dict, Optional, Tuple
 # ---------------------------------------------------------------------------
 
 # Hop-by-hop and proxy-specific headers that must never be forwarded upstream.
-_HOP_BY_HOP: frozenset[str] = frozenset({
-    "connection",
-    "keep-alive",
-    "proxy-authenticate",
-    "proxy-authorization",
-    "proxy-connection",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
-    "host",
-    "content-length",
-    "accept-encoding",
-})
+_HOP_BY_HOP: frozenset[str] = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "proxy-authorization",
+        "proxy-connection",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "accept-encoding",
+    }
+)
 
 # Header names whose values are sensitive and must be redacted in logs.
-_SENSITIVE_HEADERS: frozenset[str] = frozenset({
-    "authorization",
-    "x-api-key",
-    "api-key",
-})
+_SENSITIVE_HEADERS: frozenset[str] = frozenset(
+    {
+        "authorization",
+        "x-api-key",
+        "api-key",
+    }
+)
 
 # Supported upstream providers.
 _SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"anthropic", "openai", "google"})
@@ -89,6 +93,7 @@ _BEARER_RE = re.compile(r"^Bearer\s+\S+$", re.IGNORECASE)
 # ---------------------------------------------------------------------------
 # CredentialPassthrough
 # ---------------------------------------------------------------------------
+
 
 class CredentialPassthrough:
     """
@@ -239,7 +244,11 @@ class CredentialPassthrough:
         if auth_value is not None:
             if provider_lc == "anthropic":
                 # Anthropic prefers x-api-key with the raw key value
-                raw = auth_value.removeprefix("Bearer ").strip() if auth_value.startswith("Bearer ") else auth_value
+                raw = (
+                    auth_value.removeprefix("Bearer ").strip()
+                    if auth_value.startswith("Bearer ")
+                    else auth_value
+                )
                 forwarded["x-api-key"] = raw
             else:
                 # openai / google — Authorization: Bearer <token>

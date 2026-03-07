@@ -16,22 +16,22 @@ Usage::
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from tokenpak.enterprise.audit import AuditLog, default_audit_path
-
 
 # ---------------------------------------------------------------------------
 # Report data model
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ComplianceControl:
     """A single compliance control with status and evidence."""
+
     id: str
     name: str
     description: str
@@ -43,7 +43,8 @@ class ComplianceControl:
 @dataclass
 class ComplianceReport:
     """Full compliance report for a given standard."""
-    standard: str        # "soc2" | "gdpr" | "ccpa"
+
+    standard: str  # "soc2" | "gdpr" | "ccpa"
     generated_at: str
     period_start: str
     period_end: str
@@ -118,6 +119,7 @@ class ComplianceReport:
 # Reporter
 # ---------------------------------------------------------------------------
 
+
 class ComplianceReporter:
     """Generate compliance reports from audit log + config.
 
@@ -164,8 +166,9 @@ class ComplianceReporter:
         now = datetime.now(tz=timezone.utc)
         period_end = until or now.strftime("%Y-%m-%d")
         period_start = since or (
-            datetime.fromtimestamp(now.timestamp() - 90 * 86400, tz=timezone.utc)
-            .strftime("%Y-%m-%d")
+            datetime.fromtimestamp(now.timestamp() - 90 * 86400, tz=timezone.utc).strftime(
+                "%Y-%m-%d"
+            )
         )
 
         # Pull stats from audit log
@@ -207,9 +210,11 @@ class ComplianceReporter:
     def _build_soc2_controls(self, stats: dict) -> list[ComplianceControl]:
         total = stats.get("total", 0)
         has_audit = total > 0
-        by_outcome = {r.get("outcome", r[0] if isinstance(r, tuple) else ""): r.get("n", 0)
-                      for r in stats.get("by_outcome", [])}
-        auth_failures = by_outcome.get("auth_failure", 0)
+        by_outcome = {
+            r.get("outcome", r[0] if isinstance(r, tuple) else ""): r.get("n", 0)
+            for r in stats.get("by_outcome", [])
+        }
+        by_outcome.get("auth_failure", 0)
 
         return [
             ComplianceControl(
@@ -217,97 +222,122 @@ class ComplianceReporter:
                 name="Control Environment — Integrity & Ethical Values",
                 description="Organization demonstrates commitment to integrity and ethical values.",
                 status="compliant",
-                evidence=["SOUL.md policy on private data handling",
-                          "Agent access control via API keys"],
+                evidence=[
+                    "SOUL.md policy on private data handling",
+                    "Agent access control via API keys",
+                ],
             ),
             ComplianceControl(
                 id="CC2.1",
                 name="Communication & Information — Internal Communication",
                 description="Organization communicates information internally to support control functions.",
                 status="compliant",
-                evidence=["Audit log captures all model interactions",
-                          f"Audit entries recorded: {total}"],
+                evidence=[
+                    "Audit log captures all model interactions",
+                    f"Audit entries recorded: {total}",
+                ],
             ),
             ComplianceControl(
                 id="CC3.2",
                 name="Risk Assessment — Fraud Risk",
                 description="Organization identifies and assesses fraud risks.",
                 status="compliant" if has_audit else "gap",
-                evidence=["Hash-chained audit log prevents tamper",
-                          "Auth failure tracking in audit log"] if has_audit else [],
-                notes="" if has_audit else "No audit data found — ensure proxy is recording events.",
+                evidence=(
+                    ["Hash-chained audit log prevents tamper", "Auth failure tracking in audit log"]
+                    if has_audit
+                    else []
+                ),
+                notes=(
+                    "" if has_audit else "No audit data found — ensure proxy is recording events."
+                ),
             ),
             ComplianceControl(
                 id="CC5.2",
                 name="Control Activities — Selection & Development",
                 description="Organization selects and develops control activities over technology.",
                 status="compliant",
-                evidence=["API key rotation support", "Per-user model access controls",
-                          "Budget enforcement (hard limits)"],
+                evidence=[
+                    "API key rotation support",
+                    "Per-user model access controls",
+                    "Budget enforcement (hard limits)",
+                ],
             ),
             ComplianceControl(
                 id="CC6.1",
                 name="Logical & Physical Access — Logical Access Security",
                 description="Access to systems is restricted to authorized users.",
                 status="compliant",
-                evidence=["API key authentication on all endpoints",
-                          "RBAC role enforcement (Admin/FinOps/Engineer/Auditor)"],
+                evidence=[
+                    "API key authentication on all endpoints",
+                    "RBAC role enforcement (Admin/FinOps/Engineer/Auditor)",
+                ],
             ),
             ComplianceControl(
                 id="CC6.2",
                 name="Logical & Physical Access — New Access Provisioning",
                 description="New logical access to infrastructure is restricted.",
                 status="compliant",
-                evidence=["Invite-token-based agent join flow",
-                          "User creation tracked in audit log"],
+                evidence=[
+                    "Invite-token-based agent join flow",
+                    "User creation tracked in audit log",
+                ],
             ),
             ComplianceControl(
                 id="CC6.3",
                 name="Logical & Physical Access — Modification / Removal",
                 description="Modifications and removals of access are controlled.",
                 status="compliant",
-                evidence=["User deactivation event recorded in audit log",
-                          "API key revocation supported"],
+                evidence=[
+                    "User deactivation event recorded in audit log",
+                    "API key revocation supported",
+                ],
             ),
             ComplianceControl(
                 id="CC6.7",
                 name="Logical & Physical Access — Data Transmission",
                 description="Data in transit is protected using encryption.",
                 status="compliant",
-                evidence=["HTTPS enforced for all proxy endpoints",
-                          "TLS 1.2+ required"],
+                evidence=["HTTPS enforced for all proxy endpoints", "TLS 1.2+ required"],
             ),
             ComplianceControl(
                 id="CC7.1",
                 name="System Operations — Vulnerability Management",
                 description="Vulnerabilities are identified and managed.",
                 status="compliant",
-                evidence=["tokenpak doctor runs security checks",
-                          "Dependency vulnerability scanning via CI"],
+                evidence=[
+                    "tokenpak doctor runs security checks",
+                    "Dependency vulnerability scanning via CI",
+                ],
             ),
             ComplianceControl(
                 id="CC7.2",
                 name="System Operations — Monitoring",
                 description="System components are monitored to detect anomalies.",
                 status="compliant",
-                evidence=["Telemetry pipeline captures all LLM calls",
-                          "Anomaly detection in telemetry/integrity/anomalies.py"],
+                evidence=[
+                    "Telemetry pipeline captures all LLM calls",
+                    "Anomaly detection in telemetry/integrity/anomalies.py",
+                ],
             ),
             ComplianceControl(
                 id="CC8.1",
                 name="Change Management — Authorized Changes",
                 description="Changes to infrastructure and software are authorized, tested, and approved.",
                 status="compliant",
-                evidence=["Git-based change tracking",
-                          "Config change events recorded in audit log"],
+                evidence=[
+                    "Git-based change tracking",
+                    "Config change events recorded in audit log",
+                ],
             ),
             ComplianceControl(
                 id="CC9.1",
                 name="Risk Mitigation — Vendor Management",
                 description="Vendor risks are identified and managed.",
                 status="compliant",
-                evidence=["Multi-provider failover reduces single-vendor risk",
-                          "OSS codebase with no proprietary lock-in"],
+                evidence=[
+                    "Multi-provider failover reduces single-vendor risk",
+                    "OSS codebase with no proprietary lock-in",
+                ],
             ),
         ]
 
@@ -324,56 +354,70 @@ class ComplianceReporter:
                 name="Lawfulness, Fairness & Transparency",
                 description="Personal data is processed lawfully, fairly, and transparently.",
                 status="compliant",
-                evidence=["Data classification field in every audit entry",
-                          "Privacy policy template provided"],
+                evidence=[
+                    "Data classification field in every audit entry",
+                    "Privacy policy template provided",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-5.1b",
                 name="Purpose Limitation",
                 description="Data collected for specified, explicit, legitimate purposes.",
                 status="compliant",
-                evidence=["Audit log records action + purpose metadata",
-                          "Model routing policies restrict data use"],
+                evidence=[
+                    "Audit log records action + purpose metadata",
+                    "Model routing policies restrict data use",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-5.1c",
                 name="Data Minimisation",
                 description="Only data necessary for the purpose is processed.",
                 status="compliant",
-                evidence=["Prompt compression reduces data volume",
-                          "PII stripping via segmentizer"],
+                evidence=[
+                    "Prompt compression reduces data volume",
+                    "PII stripping via segmentizer",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-5.1e",
                 name="Storage Limitation",
                 description="Data retained no longer than necessary.",
                 status="compliant",
-                evidence=["Configurable retention policy (default: 90 days)",
-                          "tokenpak audit prune --days <N> removes old entries"],
+                evidence=[
+                    "Configurable retention policy (default: 90 days)",
+                    "tokenpak audit prune --days <N> removes old entries",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-5.1f",
                 name="Integrity & Confidentiality",
                 description="Data is processed securely (appropriate technical/organisational measures).",
                 status="compliant",
-                evidence=["SQLite WAL + PRAGMA synchronous=FULL for audit durability",
-                          "Hash-chained entries detect tampering"],
+                evidence=[
+                    "SQLite WAL + PRAGMA synchronous=FULL for audit durability",
+                    "Hash-chained entries detect tampering",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-12",
                 name="Transparent Information — Rights Requests",
                 description="Data subjects can exercise rights (access, erasure, portability).",
                 status="compliant",
-                evidence=["tokenpak audit export --user <id> for portability",
-                          "Retention prune + targeted delete for erasure"],
+                evidence=[
+                    "tokenpak audit export --user <id> for portability",
+                    "Retention prune + targeted delete for erasure",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-25",
                 name="Data Protection by Design & Default",
                 description="Privacy considerations built into system design.",
                 status="compliant",
-                evidence=["Anonymised metrics by default (anon_metrics.py)",
-                          "Minimal data collection; no plaintext prompt storage by default"],
+                evidence=[
+                    "Anonymised metrics by default (anon_metrics.py)",
+                    "Minimal data collection; no plaintext prompt storage by default",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-30",
@@ -388,8 +432,11 @@ class ComplianceReporter:
                 name="Security of Processing",
                 description="Implement appropriate technical measures to ensure data security.",
                 status="compliant",
-                evidence=["Encryption in transit (TLS)", "API key authentication",
-                          "RBAC access controls"],
+                evidence=[
+                    "Encryption in transit (TLS)",
+                    "API key authentication",
+                    "RBAC access controls",
+                ],
             ),
             ComplianceControl(
                 id="GDPR-33",
@@ -414,32 +461,40 @@ class ComplianceReporter:
                 name="Right to Know — Data Collection Disclosure",
                 description="Consumers have the right to know what personal data is collected.",
                 status="compliant",
-                evidence=["Audit log records all data access with user_id + data_class",
-                          "tokenpak audit list --user <id> surfaces consumer data"],
+                evidence=[
+                    "Audit log records all data access with user_id + data_class",
+                    "tokenpak audit list --user <id> surfaces consumer data",
+                ],
             ),
             ComplianceControl(
                 id="CCPA-1798.105",
                 name="Right to Delete",
                 description="Consumers have the right to request deletion of personal data.",
                 status="compliant",
-                evidence=["tokenpak audit prune or targeted delete by user_id",
-                          "Retention policy clears data after configured window"],
+                evidence=[
+                    "tokenpak audit prune or targeted delete by user_id",
+                    "Retention policy clears data after configured window",
+                ],
             ),
             ComplianceControl(
                 id="CCPA-1798.110",
                 name="Right to Know — Categories & Specific Pieces",
                 description="Consumers can request specific data categories collected.",
                 status="compliant",
-                evidence=["tokenpak audit export --user <id> --format json",
-                          "data_class field categorises each audit entry"],
+                evidence=[
+                    "tokenpak audit export --user <id> --format json",
+                    "data_class field categorises each audit entry",
+                ],
             ),
             ComplianceControl(
                 id="CCPA-1798.115",
                 name="Right to Know — Data Sharing",
                 description="Consumers can request disclosure of data sold or disclosed.",
                 status="compliant",
-                evidence=["Audit log captures provider field (which LLM received data)",
-                          "No data sold; providers documented in audit entries"],
+                evidence=[
+                    "Audit log captures provider field (which LLM received data)",
+                    "No data sold; providers documented in audit entries",
+                ],
             ),
             ComplianceControl(
                 id="CCPA-1798.120",

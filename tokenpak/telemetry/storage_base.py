@@ -3,15 +3,14 @@
 This module is internal.  Import :class:`TelemetryDB` from
 ``tokenpak.telemetry.storage`` instead.
 """
+
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Union
 
-from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 _DDL = """
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
@@ -194,9 +193,7 @@ class TelemetryDBBase:
 
     def __init__(self, path: Union[str, Path] = ":memory:") -> None:
         self._path = str(path)
-        self._conn: sqlite3.Connection = sqlite3.connect(
-            self._path, check_same_thread=False
-        )
+        self._conn: sqlite3.Connection = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._apply_ddl()
 
@@ -258,49 +255,49 @@ class TelemetryDBBase:
         # ----------------------------------------------------------------
         # tp_events — legacy columns + PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_events", "api",        "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "stop_reason","TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "api", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "stop_reason", "TEXT NOT NULL DEFAULT ''")
         _add_col("tp_events", "session_id", "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "duration_ms","REAL NOT NULL DEFAULT 0")
+        _add_col("tp_events", "duration_ms", "REAL NOT NULL DEFAULT 0")
         # PRD additions
-        _add_col("tp_events", "span_id",    "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_events", "node_id",    "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "span_id", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_events", "node_id", "TEXT NOT NULL DEFAULT ''")
 
         # ----------------------------------------------------------------
         # tp_segments — PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_segments", "segment_source",  "TEXT NOT NULL DEFAULT ''")
-        _add_col("tp_segments", "content_type",    "TEXT NOT NULL DEFAULT 'text'")
-        _add_col("tp_segments", "raw_len_chars",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "raw_len_bytes",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "final_len_chars",  "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "final_len_bytes",  "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_segments", "debug_ref",        "TEXT")
+        _add_col("tp_segments", "segment_source", "TEXT NOT NULL DEFAULT ''")
+        _add_col("tp_segments", "content_type", "TEXT NOT NULL DEFAULT 'text'")
+        _add_col("tp_segments", "raw_len_chars", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "raw_len_bytes", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "final_len_chars", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "final_len_bytes", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_segments", "debug_ref", "TEXT")
 
         # ----------------------------------------------------------------
         # tp_usage — legacy column + PRD additions
         # ----------------------------------------------------------------
-        _add_col("tp_usage", "total_tokens",        "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_usage", "total_tokens", "INTEGER NOT NULL DEFAULT 0")
         _add_col("tp_usage", "total_tokens_billed", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_usage", "total_tokens_est",    "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_usage", "provider_usage_raw",  "TEXT NOT NULL DEFAULT '{}'")
+        _add_col("tp_usage", "total_tokens_est", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_usage", "provider_usage_raw", "TEXT NOT NULL DEFAULT '{}'")
 
         # ----------------------------------------------------------------
         # tp_costs — legacy column + PRD additions
         # ----------------------------------------------------------------
         _add_col("tp_costs", "baseline_input_tokens", "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "pricing_version",       "TEXT NOT NULL DEFAULT 'v1'")
-        _add_col("tp_costs", "actual_input_tokens",   "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "output_tokens",         "INTEGER NOT NULL DEFAULT 0")
-        _add_col("tp_costs", "actual_cost",           "REAL NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "pricing_version", "TEXT NOT NULL DEFAULT 'v1'")
+        _add_col("tp_costs", "actual_input_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "output_tokens", "INTEGER NOT NULL DEFAULT 0")
+        _add_col("tp_costs", "actual_cost", "REAL NOT NULL DEFAULT 0")
 
         # ----------------------------------------------------------------
         # Rollup tables — PRD avg_* additions
         # ----------------------------------------------------------------
         for _tbl in ("tp_rollup_daily_model", "tp_rollup_daily_provider", "tp_rollup_daily_agent"):
-            _add_col(_tbl, "avg_raw_tokens",   "REAL NOT NULL DEFAULT 0")
+            _add_col(_tbl, "avg_raw_tokens", "REAL NOT NULL DEFAULT 0")
             _add_col(_tbl, "avg_final_tokens", "REAL NOT NULL DEFAULT 0")
-            _add_col(_tbl, "avg_cost",         "REAL NOT NULL DEFAULT 0")
+            _add_col(_tbl, "avg_cost", "REAL NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         """Close the underlying database connection."""
@@ -315,4 +312,3 @@ class TelemetryDBBase:
     # ------------------------------------------------------------------
     # Insert helpers (single + batch)
     # ------------------------------------------------------------------
-

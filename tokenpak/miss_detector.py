@@ -7,12 +7,11 @@ asks for missing info, wrong signatures, uncertain answers. Logs gaps to
 
 import json
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional
-
 
 # Default gap store location (relative to project root)
 DEFAULT_GAPS_PATH = ".tokenpak/gaps.json"
@@ -21,6 +20,7 @@ DEFAULT_GAPS_PATH = ".tokenpak/gaps.json"
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
+
 
 class SignalType(str, Enum):
     EXPLICIT_ASK = "EXPLICIT_ASK"
@@ -34,7 +34,7 @@ class SignalType(str, Enum):
 class ContextGap:
     query: str
     signal_type: SignalType
-    evidence: str          # Substring that triggered detection
+    evidence: str  # Substring that triggered detection
     timestamp: str
     related_blocks: List[str] = field(default_factory=list)  # Block paths in context
 
@@ -92,6 +92,7 @@ _MISSING_INFO_RE = [re.compile(p, re.IGNORECASE) for p in _MISSING_INFO_PATTERNS
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _first_match(patterns: List[re.Pattern], text: str) -> Optional[str]:
     """Return the first matching substring, or None."""
     for pat in patterns:
@@ -108,11 +109,11 @@ def _extract_imports_from_response(response_text: str) -> List[str]:
     """Extract module names from import statements in the response."""
     modules = []
     # `import foo`, `import foo.bar`
-    for m in re.finditer(r'^\s*import\s+([\w.]+)', response_text, re.MULTILINE):
-        modules.append(m.group(1).split('.')[0])
+    for m in re.finditer(r"^\s*import\s+([\w.]+)", response_text, re.MULTILINE):
+        modules.append(m.group(1).split(".")[0])
     # `from foo import bar`, `from foo.bar import baz`
-    for m in re.finditer(r'^\s*from\s+([\w.]+)\s+import', response_text, re.MULTILINE):
-        modules.append(m.group(1).split('.')[0])
+    for m in re.finditer(r"^\s*from\s+([\w.]+)\s+import", response_text, re.MULTILINE):
+        modules.append(m.group(1).split(".")[0])
     return list(set(modules))
 
 
@@ -132,19 +133,19 @@ def _extract_fn_signatures(text: str) -> dict:
     """
     sigs = {}
     # Python: def foo(a, b, c):
-    for m in re.finditer(r'\bdef\s+(\w+)\s*\(([^)]*)\)', text):
+    for m in re.finditer(r"\bdef\s+(\w+)\s*\(([^)]*)\)", text):
         name = m.group(1)
         params_raw = m.group(2).strip()
         if not params_raw:
             count = 0
         else:
-            count = len([p for p in params_raw.split(',') if p.strip()])
+            count = len([p for p in params_raw.split(",") if p.strip()])
         sigs[name] = count
     # JS/TS/Go/Rust: function foo(a, b) / func foo(a, b) / fn foo(a, b)
-    for m in re.finditer(r'\b(?:function|func|fn)\s+(\w+)\s*\(([^)]*)\)', text):
+    for m in re.finditer(r"\b(?:function|func|fn)\s+(\w+)\s*\(([^)]*)\)", text):
         name = m.group(1)
         params_raw = m.group(2).strip()
-        count = len([p for p in params_raw.split(',') if p.strip()]) if params_raw else 0
+        count = len([p for p in params_raw.split(",") if p.strip()]) if params_raw else 0
         sigs[name] = count
     return sigs
 
@@ -156,15 +157,31 @@ def _extract_fn_calls(text: str) -> dict:
     Multiple calls to same fn → keep max param count.
     """
     calls = {}
-    for m in re.finditer(r'\b(\w+)\s*\(([^)]*)\)', text):
+    for m in re.finditer(r"\b(\w+)\s*\(([^)]*)\)", text):
         name = m.group(1)
         # Skip keywords and builtins
-        if name in {'if', 'while', 'for', 'def', 'class', 'return', 'import',
-                    'print', 'len', 'range', 'str', 'int', 'list', 'dict',
-                    'function', 'func', 'fn'}:
+        if name in {
+            "if",
+            "while",
+            "for",
+            "def",
+            "class",
+            "return",
+            "import",
+            "print",
+            "len",
+            "range",
+            "str",
+            "int",
+            "list",
+            "dict",
+            "function",
+            "func",
+            "fn",
+        }:
             continue
         args_raw = m.group(2).strip()
-        count = len([a for a in args_raw.split(',') if a.strip()]) if args_raw else 0
+        count = len([a for a in args_raw.split(",") if a.strip()]) if args_raw else 0
         # Track max observed arg count per function name
         calls[name] = max(calls.get(name, 0), count)
     return calls
@@ -173,20 +190,20 @@ def _extract_fn_calls(text: str) -> dict:
 def _has_file_or_fn_reference(text: str) -> bool:
     """Check if text contains a file path, function/class name, or code entity reference."""
     # File path (e.g. src/auth.py, ./utils/helper.js)
-    if re.search(r'[\w./\-]+\.\w{1,6}', text):
+    if re.search(r"[\w./\-]+\.\w{1,6}", text):
         return True
     # Backtick-quoted identifier
-    if re.search(r'`\w+`', text):
+    if re.search(r"`\w+`", text):
         return True
     # CamelCase or snake_case identifiers
-    if re.search(r'\b[A-Z][a-z]+[A-Z]\w*\b|\b\w+_\w+\b', text):
+    if re.search(r"\b[A-Z][a-z]+[A-Z]\w*\b|\b\w+_\w+\b", text):
         return True
     # Generic code entity nouns (plural or singular)
     if re.search(
-        r'\b(?:function|functions|class|classes|method|methods|'
-        r'file|files|module|modules|import|imports|type|types|'
-        r'interface|interfaces|struct|structs|variable|variables|'
-        r'constant|constants|definition|definitions|symbol|symbols)\b',
+        r"\b(?:function|functions|class|classes|method|methods|"
+        r"file|files|module|modules|import|imports|type|types|"
+        r"interface|interfaces|struct|structs|variable|variables|"
+        r"constant|constants|definition|definitions|symbol|symbols)\b",
         text,
         re.IGNORECASE,
     ):
@@ -197,6 +214,7 @@ def _has_file_or_fn_reference(text: str) -> bool:
 # ---------------------------------------------------------------------------
 # Main detection function
 # ---------------------------------------------------------------------------
+
 
 def detect_misses(
     response_text: str,
@@ -219,69 +237,132 @@ def detect_misses(
     gaps = []
     now = datetime.now(timezone.utc).isoformat()
     # Build list of block paths (lines that look like file paths)
-    block_paths = [b for b in context_blocks if '/' in b or b.endswith('.py')
-                   or b.endswith('.js') or b.endswith('.ts') or b.endswith('.go')]
+    block_paths = [
+        b
+        for b in context_blocks
+        if "/" in b
+        or b.endswith(".py")
+        or b.endswith(".js")
+        or b.endswith(".ts")
+        or b.endswith(".go")
+    ]
 
     # --- EXPLICIT_ASK ---
     evidence = _first_match(_EXPLICIT_ASK_RE, response_text)
     if evidence:
-        gaps.append(ContextGap(
-            query=query,
-            signal_type=SignalType.EXPLICIT_ASK,
-            evidence=evidence,
-            timestamp=now,
-            related_blocks=block_paths,
-        ))
+        gaps.append(
+            ContextGap(
+                query=query,
+                signal_type=SignalType.EXPLICIT_ASK,
+                evidence=evidence,
+                timestamp=now,
+                related_blocks=block_paths,
+            )
+        )
 
     # --- UNCERTAIN_ANSWER ---
     evidence = _first_match(_UNCERTAIN_RE, response_text)
     if evidence:
-        gaps.append(ContextGap(
-            query=query,
-            signal_type=SignalType.UNCERTAIN_ANSWER,
-            evidence=evidence,
-            timestamp=now,
-            related_blocks=block_paths,
-        ))
+        gaps.append(
+            ContextGap(
+                query=query,
+                signal_type=SignalType.UNCERTAIN_ANSWER,
+                evidence=evidence,
+                timestamp=now,
+                related_blocks=block_paths,
+            )
+        )
 
     # --- MISSING_INFO (must also reference a file or function) ---
     evidence = _first_match(_MISSING_INFO_RE, response_text)
     if evidence and _has_file_or_fn_reference(response_text):
-        gaps.append(ContextGap(
-            query=query,
-            signal_type=SignalType.MISSING_INFO,
-            evidence=evidence,
-            timestamp=now,
-            related_blocks=block_paths,
-        ))
+        gaps.append(
+            ContextGap(
+                query=query,
+                signal_type=SignalType.MISSING_INFO,
+                evidence=evidence,
+                timestamp=now,
+                related_blocks=block_paths,
+            )
+        )
 
     # --- HALLUCINATED_IMPORT ---
     imported_modules = _extract_imports_from_response(response_text)
     for module in imported_modules:
         # Skip stdlib / well-known packages — only flag project-specific modules
         _COMMON_STDLIB = {
-            'os', 'sys', 're', 'json', 'time', 'math', 'io', 'abc', 'enum',
-            'typing', 'pathlib', 'datetime', 'collections', 'functools',
-            'itertools', 'hashlib', 'threading', 'logging', 'unittest',
-            'dataclasses', 'contextlib', 'copy', 'random', 'string',
-            'subprocess', 'shutil', 'tempfile', 'traceback', 'warnings',
-            'argparse', 'struct', 'socket', 'http', 'urllib', 'email',
-            'csv', 'sqlite3', 'pickle', 'gzip', 'zipfile', 'tarfile',
+            "os",
+            "sys",
+            "re",
+            "json",
+            "time",
+            "math",
+            "io",
+            "abc",
+            "enum",
+            "typing",
+            "pathlib",
+            "datetime",
+            "collections",
+            "functools",
+            "itertools",
+            "hashlib",
+            "threading",
+            "logging",
+            "unittest",
+            "dataclasses",
+            "contextlib",
+            "copy",
+            "random",
+            "string",
+            "subprocess",
+            "shutil",
+            "tempfile",
+            "traceback",
+            "warnings",
+            "argparse",
+            "struct",
+            "socket",
+            "http",
+            "urllib",
+            "email",
+            "csv",
+            "sqlite3",
+            "pickle",
+            "gzip",
+            "zipfile",
+            "tarfile",
             # common third-party
-            'pytest', 'numpy', 'pandas', 'requests', 'flask', 'django',
-            'fastapi', 'pydantic', 'sqlalchemy', 'aiohttp', 'httpx',
-            'click', 'rich', 'tqdm', 'yaml', 'toml', 'dotenv',
+            "pytest",
+            "numpy",
+            "pandas",
+            "requests",
+            "flask",
+            "django",
+            "fastapi",
+            "pydantic",
+            "sqlalchemy",
+            "aiohttp",
+            "httpx",
+            "click",
+            "rich",
+            "tqdm",
+            "yaml",
+            "toml",
+            "dotenv",
         }
         if module in _COMMON_STDLIB:
             continue
         if not _is_module_in_context(module, context_blocks):
-            gaps.append(ContextGap(
-                query=query,
-                signal_type=SignalType.HALLUCINATED_IMPORT,
-                evidence=f"import {module}",
-                timestamp=now,
-                related_blocks=block_paths,
-            ))
+            gaps.append(
+                ContextGap(
+                    query=query,
+                    signal_type=SignalType.HALLUCINATED_IMPORT,
+                    evidence=f"import {module}",
+                    timestamp=now,
+                    related_blocks=block_paths,
+                )
+            )
 
     # --- WRONG_SIGNATURE ---
     # Build a combined context string for signature extraction
@@ -295,13 +376,15 @@ def detect_misses(
         def_argc = context_sigs[fn_name]
         # Allow for `self` offset (Python methods: def foo(self, a) → 1 param for callers)
         if def_argc > 0 and abs(call_argc - (def_argc - 1)) > 0 and abs(call_argc - def_argc) > 0:
-            gaps.append(ContextGap(
-                query=query,
-                signal_type=SignalType.WRONG_SIGNATURE,
-                evidence=f"{fn_name}(...) called with ~{call_argc} args; defined with {def_argc}",
-                timestamp=now,
-                related_blocks=block_paths,
-            ))
+            gaps.append(
+                ContextGap(
+                    query=query,
+                    signal_type=SignalType.WRONG_SIGNATURE,
+                    evidence=f"{fn_name}(...) called with ~{call_argc} args; defined with {def_argc}",
+                    timestamp=now,
+                    related_blocks=block_paths,
+                )
+            )
 
     return gaps
 
@@ -309,6 +392,7 @@ def detect_misses(
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
+
 
 def _load_gaps(gaps_path: str) -> List[dict]:
     """Load existing gaps from JSON store."""
@@ -345,13 +429,14 @@ def load_gaps(gaps_path: str = DEFAULT_GAPS_PATH) -> List[dict]:
 # Retrieval expansion check
 # ---------------------------------------------------------------------------
 
+
 def _word_overlap_ratio(query_a: str, query_b: str) -> float:
     """
     Compute word overlap ratio between two queries.
     Returns overlap_count / len(shorter_query_words).
     """
-    words_a = set(re.findall(r'\w+', query_a.lower()))
-    words_b = set(re.findall(r'\w+', query_b.lower()))
+    words_a = set(re.findall(r"\w+", query_a.lower()))
+    words_b = set(re.findall(r"\w+", query_b.lower()))
     if not words_a or not words_b:
         return 0.0
     overlap = words_a & words_b

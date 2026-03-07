@@ -6,12 +6,13 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
 
 @dataclass
 class RequestStats:
     """Stats for a single request through the TokenPak proxy."""
+
     request_id: str
     timestamp: datetime
     input_tokens_raw: int
@@ -71,6 +72,7 @@ class RequestStats:
 @dataclass
 class SessionStats:
     """Aggregated stats across all requests since the proxy started."""
+
     session_requests: int = 0
     session_total_tokens_raw: int = 0
     session_total_tokens_sent: int = 0

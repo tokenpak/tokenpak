@@ -21,8 +21,7 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 _DDL = """
 PRAGMA journal_mode=WAL;
@@ -235,17 +234,13 @@ class ReplayStore:
     def get(self, replay_id: str) -> Optional[ReplayEntry]:
         """Retrieve a single entry by id. Returns ``None`` if not found."""
         conn = self._conn()
-        row = conn.execute(
-            "SELECT * FROM tp_replay WHERE replay_id=?", (replay_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM tp_replay WHERE replay_id=?", (replay_id,)).fetchone()
         return ReplayEntry.from_row(row) if row else None
 
     def delete(self, replay_id: str) -> bool:
         """Delete an entry. Returns True if a row was removed."""
         conn = self._conn()
-        cursor = conn.execute(
-            "DELETE FROM tp_replay WHERE replay_id=?", (replay_id,)
-        )
+        cursor = conn.execute("DELETE FROM tp_replay WHERE replay_id=?", (replay_id,))
         conn.commit()
         return cursor.rowcount > 0
 

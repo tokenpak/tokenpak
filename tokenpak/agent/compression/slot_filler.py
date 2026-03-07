@@ -38,14 +38,14 @@ except ImportError:  # pragma: no cover
 
 _DURATION_PATTERNS = [
     (re.compile(r"\b(?:last|past)\s+(\d+)\s*days?\b", re.I), lambda m: f"{m.group(1)}d"),
-    (re.compile(r"\b(?:last|past)\s+week\b", re.I),           lambda _: "7d"),
-    (re.compile(r"\b(?:last|past)\s+month\b", re.I),          lambda _: "30d"),
-    (re.compile(r"\b(\d+)\s*(weeks?)\b", re.I),   lambda m: f"{m.group(1)} {m.group(2)}"),
-    (re.compile(r"\b(\d+)\s*days?\b", re.I),      lambda m: f"{m.group(1)}d"),
-    (re.compile(r"\b(\d+)\s*months?\b", re.I),    lambda m: f"{int(m.group(1))*30}d"),
-    (re.compile(r"\btoday\b", re.I),               lambda _: "1d"),
-    (re.compile(r"\bthis\s+week\b", re.I),         lambda _: "7d"),
-    (re.compile(r"\b(\d+)d\b", re.I),             lambda m: f"{m.group(1)}d"),
+    (re.compile(r"\b(?:last|past)\s+week\b", re.I), lambda _: "7d"),
+    (re.compile(r"\b(?:last|past)\s+month\b", re.I), lambda _: "30d"),
+    (re.compile(r"\b(\d+)\s*(weeks?)\b", re.I), lambda m: f"{m.group(1)} {m.group(2)}"),
+    (re.compile(r"\b(\d+)\s*days?\b", re.I), lambda m: f"{m.group(1)}d"),
+    (re.compile(r"\b(\d+)\s*months?\b", re.I), lambda m: f"{int(m.group(1))*30}d"),
+    (re.compile(r"\btoday\b", re.I), lambda _: "1d"),
+    (re.compile(r"\bthis\s+week\b", re.I), lambda _: "7d"),
+    (re.compile(r"\b(\d+)d\b", re.I), lambda m: f"{m.group(1)}d"),
 ]
 
 
@@ -61,21 +61,80 @@ def _extract_duration(text: str) -> Optional[str]:
 # Stop words for entity extraction
 # ---------------------------------------------------------------------------
 
-_STOP_WORDS = frozenset({
-    "for", "last", "past", "in", "on", "at", "to", "from", "as", "with",
-    "when", "before", "after", "and", "or", "but", "the", "a", "an",
-    "while", "during", "of", "by", "about", "into", "through", "next",
-    "this", "that", "these", "those", "is", "are", "was", "were", "be",
-    "been", "being", "have", "has", "had", "do", "does", "did", "will",
-    "would", "could", "should", "may", "might", "shall", "can", "then",
-    "than", "so", "if", "not", "no", "nor", "yet", "both", "either",
-    "quarter", "year",
-})
+_STOP_WORDS = frozenset(
+    {
+        "for",
+        "last",
+        "past",
+        "in",
+        "on",
+        "at",
+        "to",
+        "from",
+        "as",
+        "with",
+        "when",
+        "before",
+        "after",
+        "and",
+        "or",
+        "but",
+        "the",
+        "a",
+        "an",
+        "while",
+        "during",
+        "of",
+        "by",
+        "about",
+        "into",
+        "through",
+        "next",
+        "this",
+        "that",
+        "these",
+        "those",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "shall",
+        "can",
+        "then",
+        "than",
+        "so",
+        "if",
+        "not",
+        "no",
+        "nor",
+        "yet",
+        "both",
+        "either",
+        "quarter",
+        "year",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Entity extraction
 # ---------------------------------------------------------------------------
+
 
 def _extract_entity(text: str, examples: List[str]) -> Optional[str]:
     lowered = text.lower()
@@ -115,6 +174,7 @@ def _extract_entity(text: str, examples: List[str]) -> Optional[str]:
 # Enum extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_enum(text: str, values: List[str]) -> Optional[str]:
     lowered = text.lower()
     for v in values:
@@ -131,6 +191,7 @@ def _extract_enum(text: str, values: List[str]) -> Optional[str]:
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FilledSlots:
     intent: str
@@ -142,6 +203,7 @@ class FilledSlots:
 # ---------------------------------------------------------------------------
 # SlotFiller
 # ---------------------------------------------------------------------------
+
 
 class SlotFiller:
     """Extracts slot values from raw text for a given intent.
@@ -175,9 +237,7 @@ class SlotFiller:
         filled: Dict[str, Any] = {}
         missing: List[str] = []
         extracted_count = 0
-        total_required = sum(
-            1 for s in slots_schema.values() if s.get("required", False)
-        )
+        total_required = sum(1 for s in slots_schema.values() if s.get("required", False))
 
         for slot_name, slot_cfg in slots_schema.items():
             slot_type = slot_cfg.get("type", "str")

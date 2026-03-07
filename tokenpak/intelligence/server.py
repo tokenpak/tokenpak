@@ -35,13 +35,14 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from fastapi import FastAPI, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from ..security import sanitize_model_name
 from .auth import (
     APIKeyValidator,
     LicenseTier,
@@ -49,13 +50,13 @@ from .auth import (
     TokenPakAuthMiddleware,
 )
 from .license_endpoint import router as license_router
-from ..security import sanitize_model_name
 
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────
 # CORS
 # ──────────────────────────────────────────────────────────────
+
 
 def _cors_origins() -> List[str]:
     raw = os.environ.get("TOKENPAK_CORS_ORIGINS", "")
@@ -72,6 +73,7 @@ def _cors_origins() -> List[str]:
 # ──────────────────────────────────────────────────────────────
 # Request / response schemas
 # ──────────────────────────────────────────────────────────────
+
 
 class CompressRequest(BaseModel):
     """Request body for POST /v1/compress."""
@@ -154,10 +156,12 @@ class StatusResponse(BaseModel):
 # Token estimation helper (no hard dependency on tiktoken)
 # ──────────────────────────────────────────────────────────────
 
+
 def _estimate_tokens(text: str) -> int:
     """Quick approximation: ~4 chars per token."""
     try:
         import tiktoken  # type: ignore
+
         enc = tiktoken.encoding_for_model("gpt-4o")
         return len(enc.encode(text))
     except Exception:
@@ -222,10 +226,12 @@ def create_app(
 
     # ── Cost intelligence router ──────────────────────────────────
     from .cost_router import cost_router
+
     app.include_router(cost_router, prefix="/v1")
 
     # ── A/B Auto-Optimizer router ──────────────────────────────
     from .ab_router import ab_router
+
     app.include_router(ab_router, prefix="/v1")
 
     # ── License router ─────────────────────────────────────────
@@ -252,6 +258,7 @@ def create_app(
 
         # Deep path — run all checks
         from .deep_health import get_checker
+
         checker = get_checker()
         result = checker.run()
         response_body = {"version": _VERSION, **result.to_dict()}
@@ -269,6 +276,7 @@ def create_app(
     async def api_status(request: Request) -> StatusResponse:
         tier: LicenseTier = request.state.tier
         from .auth import TIER_RATE_LIMITS
+
         limit = TIER_RATE_LIMITS.get(tier)
         return StatusResponse(
             status="ok",
@@ -306,9 +314,7 @@ def create_app(
                 compressed = compressed[: int(len(compressed) * 0.9)]
 
         compressed_tokens = _estimate_tokens(compressed)
-        compression_ratio = round(
-            1.0 - compressed_tokens / max(1, original_tokens), 4
-        )
+        compression_ratio = round(1.0 - compressed_tokens / max(1, original_tokens), 4)
 
         return CompressResponse(
             compressed=compressed,

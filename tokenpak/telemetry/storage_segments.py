@@ -1,4 +1,5 @@
 """Segment CRUD mixin for TelemetryDB."""
+
 from __future__ import annotations
 
 import sqlite3

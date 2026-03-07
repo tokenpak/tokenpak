@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 if TYPE_CHECKING:
     from .server import PipelineTrace, StageTrace
@@ -47,32 +47,34 @@ _CAPSULE_BUILDER_ENABLED: Optional[bool] = None
 def _is_capsule_enabled() -> bool:
     """Check if capsule builder is enabled via env or config."""
     global _CAPSULE_BUILDER_ENABLED
-    
+
     # Cached for performance (checked on every request)
     if _CAPSULE_BUILDER_ENABLED is not None:
         return _CAPSULE_BUILDER_ENABLED
-    
+
     # Env var takes precedence
     env_val = os.environ.get("TOKENPAK_CAPSULE_BUILDER")
     if env_val is not None:
         _CAPSULE_BUILDER_ENABLED = env_val == "1"
         return _CAPSULE_BUILDER_ENABLED
-    
+
     # Check config file
     try:
         from tokenpak.agent.config import load_config
+
         config = load_config()
         capsule_cfg = config.get("capsule_builder", {})
         _CAPSULE_BUILDER_ENABLED = capsule_cfg.get("enabled", False)
     except Exception:
         _CAPSULE_BUILDER_ENABLED = False
-    
+
     return _CAPSULE_BUILDER_ENABLED
 
 
 def _create_stage_trace(name: str, enabled: bool = True) -> "StageTrace":
     """Create a StageTrace object (import deferred to avoid circular imports)."""
     from .server import StageTrace
+
     return StageTrace(name=name, enabled=enabled)
 
 
@@ -103,33 +105,33 @@ def capsule_request_hook(
         Modified body and token counts.
     """
     import time
-    
+
     raw_tokens = _estimate_tokens(body)
     sent_tokens = raw_tokens
     protected_tokens = 0
-    
+
     # Check feature flag
     if not _is_capsule_enabled():
         if trace:
             stage = _create_stage_trace("capsule_builder", enabled=False)
             stage.details["skip_reason"] = "disabled"
             trace.stages.append(stage)
-        
+
         # Chain to base hook if present
         if base_hook:
             return base_hook(body, model, trace)
         return body, sent_tokens, raw_tokens, protected_tokens
-    
+
     # Run capsule builder
     t0 = time.monotonic()
     try:
         from tokenpak.capsule.builder import CapsuleBuilder
-        
+
         builder = CapsuleBuilder(enabled=True)
         new_body, stats = builder.process(body)
-        
+
         duration_ms = (time.monotonic() - t0) * 1000
-        
+
         # Log at INFO level when capsules are created
         if stats.get("blocks_capsulized", 0) > 0:
             logger.info(
@@ -138,7 +140,7 @@ def capsule_request_hook(
                 stats["ratio"],
                 duration_ms,
             )
-        
+
         # Update trace if provided
         if trace:
             stage = _create_stage_trace("capsule_builder", enabled=True)
@@ -152,23 +154,23 @@ def capsule_request_hook(
                 "skip_reason": stats.get("skip_reason"),
             }
             trace.stages.append(stage)
-        
+
         # Update body if modified
         if not stats.get("skipped", True):
             body = new_body
             sent_tokens = _estimate_tokens(body)
-            
+
     except Exception as exc:
         logger.warning("Capsule builder error (falling back to original): %s", exc)
         if trace:
             stage = _create_stage_trace("capsule_builder", enabled=True)
             stage.details = {"error": str(exc)}
             trace.stages.append(stage)
-    
+
     # Chain to base hook if present
     if base_hook:
         return base_hook(body, model, trace)
-    
+
     return body, sent_tokens, raw_tokens, protected_tokens
 
 
@@ -188,8 +190,10 @@ def get_capsule_request_hook(
     callable
         Request hook suitable for ProxyServer.request_hook.
     """
+
     def hook(body: bytes, model: str, trace: Optional["PipelineTrace"] = None):
         return capsule_request_hook(body, model, trace, base_hook=base_hook)
+
     return hook
 
 
@@ -197,6 +201,7 @@ def _estimate_tokens(body: bytes) -> int:
     """Rough token estimate (chars / 4)."""
     try:
         import json
+
         data = json.loads(body)
         messages = data.get("messages", [])
         total_chars = 0

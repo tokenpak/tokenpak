@@ -14,9 +14,6 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from .complexity import TaskType
-
-
 DEFAULT_ELO_PATH = ".tokenpak/elo_ratings.json"
 
 INITIAL_RATING = 1200.0

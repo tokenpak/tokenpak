@@ -49,7 +49,7 @@ import hashlib
 import json
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -76,6 +76,7 @@ _RE_MULTI_SPACE = re.compile(r"[ \t]{2,}")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _capsule_id(content: str) -> str:
     """Return a short deterministic ID for *content* (8 hex chars)."""
@@ -153,12 +154,13 @@ def _compress_text(text: str) -> str:
 
             # Structure lines — keep verbatim
             if (
-                stripped.startswith("#")                          # heading
-                or re.match(r"^[-*+]\s", stripped)               # unordered bullet
-                or re.match(r"^\d+\.\s", stripped)               # ordered list
-                or stripped.startswith(">")                       # blockquote
-                or stripped == "---" or stripped == "==="        # hr / setext heading
-                or stripped == ""                                 # blank line within block
+                stripped.startswith("#")  # heading
+                or re.match(r"^[-*+]\s", stripped)  # unordered bullet
+                or re.match(r"^\d+\.\s", stripped)  # ordered list
+                or stripped.startswith(">")  # blockquote
+                or stripped == "---"
+                or stripped == "==="  # hr / setext heading
+                or stripped == ""  # blank line within block
             ):
                 out_lines.append(line)
                 continue
@@ -189,6 +191,7 @@ def _wrap_capsule(original: str, compressed: str) -> str:
 # ---------------------------------------------------------------------------
 # CapsuleBuilder
 # ---------------------------------------------------------------------------
+
 
 class CapsuleBuilder:
     """
@@ -340,9 +343,7 @@ class CapsuleBuilder:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _maybe_capsulise(
-        self, text: str
-    ) -> Tuple[str, int, int, int]:
+    def _maybe_capsulise(self, text: str) -> Tuple[str, int, int, int]:
         """
         Conditionally capsulise a single text block.
 

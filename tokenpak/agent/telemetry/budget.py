@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, date, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -23,13 +23,15 @@ import yaml
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class BudgetConfig:
     """User-configured budget limits."""
+
     daily_limit_usd: Optional[float] = None
     monthly_limit_usd: Optional[float] = None
-    alert_at_percent: float = 80.0   # Alert when this % of budget is consumed
-    hard_stop: bool = False          # If True, block requests when budget exceeded
+    alert_at_percent: float = 80.0  # Alert when this % of budget is consumed
+    hard_stop: bool = False  # If True, block requests when budget exceeded
 
     def to_dict(self) -> dict:
         return {
@@ -52,6 +54,7 @@ class BudgetConfig:
 @dataclass
 class SpendRecord:
     """One logged spend event."""
+
     request_id: str
     timestamp: datetime
     model: str
@@ -64,7 +67,8 @@ class SpendRecord:
 @dataclass
 class BudgetStatus:
     """Current budget consumption snapshot."""
-    period: str          # "daily" | "monthly"
+
+    period: str  # "daily" | "monthly"
     limit_usd: float
     spent_usd: float
     remaining_usd: float
@@ -108,6 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_spend_ts ON tp_spend(timestamp);
 # ---------------------------------------------------------------------------
 # BudgetTracker
 # ---------------------------------------------------------------------------
+
 
 class BudgetTracker:
     """Track actual API spend against configured budget limits.
@@ -214,10 +219,7 @@ class BudgetTracker:
 
     def get_status(self, period: str = "daily") -> Optional[BudgetStatus]:
         """Return BudgetStatus for the period, or None if no limit is configured."""
-        limit = (
-            self.config.daily_limit_usd if period == "daily"
-            else self.config.monthly_limit_usd
-        )
+        limit = self.config.daily_limit_usd if period == "daily" else self.config.monthly_limit_usd
         if limit is None:
             return None
         spent = self.total_spent(period)
@@ -274,9 +276,11 @@ class BudgetTracker:
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params.append(limit)
-        rows = self._conn().execute(
-            f"SELECT * FROM tp_spend {where} ORDER BY timestamp DESC LIMIT ?", params
-        ).fetchall()
+        rows = (
+            self._conn()
+            .execute(f"SELECT * FROM tp_spend {where} ORDER BY timestamp DESC LIMIT ?", params)
+            .fetchall()
+        )
         return [dict(r) for r in rows]
 
     def by_model_summary(self, period: Optional[str] = None) -> list[dict]:
@@ -291,8 +295,10 @@ class BudgetTracker:
             params.append(date.today().strftime("%Y-%m"))
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-        rows = self._conn().execute(
-            f"""
+        rows = (
+            self._conn()
+            .execute(
+                f"""
             SELECT model,
                    COUNT(*) AS requests,
                    SUM(tokens_input) AS tokens_input,
@@ -302,14 +308,17 @@ class BudgetTracker:
             GROUP BY model
             ORDER BY cost_usd DESC
             """,
-            params,
-        ).fetchall()
+                params,
+            )
+            .fetchall()
+        )
         return [dict(r) for r in rows]
 
     def export_csv(self, period: Optional[str] = None) -> str:
         """Return CSV string of spend records."""
-        import io
         import csv
+        import io
+
         rows = self.list_spend(limit=100_000, period=period)
         if not rows:
             return "request_id,timestamp,model,cost_usd,tokens_input,tokens_output,agent\n"
@@ -337,6 +346,7 @@ class BudgetTracker:
 # ---------------------------------------------------------------------------
 # Config persistence
 # ---------------------------------------------------------------------------
+
 
 def _budget_config_path() -> Path:
     return Path("~/.tokenpak/budget_config.yaml").expanduser()

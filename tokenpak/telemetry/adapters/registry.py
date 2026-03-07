@@ -118,9 +118,7 @@ class AdapterRegistry:
             If *adapter* is not a ``BaseAdapter`` instance.
         """
         if not isinstance(adapter, BaseAdapter):
-            raise TypeError(
-                f"Expected a BaseAdapter instance, got {type(adapter).__name__!r}."
-            )
+            raise TypeError(f"Expected a BaseAdapter instance, got {type(adapter).__name__!r}.")
         self._adapters.append(adapter)
 
     @property
@@ -182,8 +180,8 @@ class AdapterRegistry:
         """
         # Import here to avoid circular-import issues at module load time.
         from tokenpak.telemetry.adapters.anthropic import AnthropicAdapter
-        from tokenpak.telemetry.adapters.openai import OpenAIAdapter
         from tokenpak.telemetry.adapters.gemini import GeminiAdapter
+        from tokenpak.telemetry.adapters.openai import OpenAIAdapter
 
         registry = cls()
         registry.register(AnthropicAdapter())

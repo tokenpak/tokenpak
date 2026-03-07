@@ -87,14 +87,14 @@ logger = logging.getLogger(__name__)
 
 # Patterns that indicate a block contains dynamic/volatile content
 _VOLATILE_PATTERNS: list[re.Pattern] = [
-    re.compile(r'\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'),   # ISO timestamps
-    re.compile(r'\btoday is\b', re.IGNORECASE),
-    re.compile(r'\bcurrent time\b', re.IGNORECASE),
-    re.compile(r'\bcurrent date\b', re.IGNORECASE),
-    re.compile(r'<retrieved_context>', re.IGNORECASE),
-    re.compile(r'<vault_context>', re.IGNORECASE),
-    re.compile(r'\[vault injection\]', re.IGNORECASE),
-    re.compile(r'--- \[.*?\] \(relevance:', re.IGNORECASE),   # vault block headers
+    re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"),  # ISO timestamps
+    re.compile(r"\btoday is\b", re.IGNORECASE),
+    re.compile(r"\bcurrent time\b", re.IGNORECASE),
+    re.compile(r"\bcurrent date\b", re.IGNORECASE),
+    re.compile(r"<retrieved_context>", re.IGNORECASE),
+    re.compile(r"<vault_context>", re.IGNORECASE),
+    re.compile(r"\[vault injection\]", re.IGNORECASE),
+    re.compile(r"--- \[.*?\] \(relevance:", re.IGNORECASE),  # vault block headers
 ]
 
 
@@ -160,6 +160,7 @@ def _mark_last_block_cacheable(
 # Core API
 # ---------------------------------------------------------------------------
 
+
 def apply_stable_cache_control(body_bytes: bytes) -> bytes:
     """
     Ensure the stable system prefix has cache_control: ephemeral.
@@ -182,8 +183,7 @@ def apply_stable_cache_control(body_bytes: bytes) -> bytes:
     if isinstance(system, str):
         if not system.strip():
             return body_bytes
-        data["system"] = [{"type": "text", "text": system,
-                            "cache_control": {"type": "ephemeral"}}]
+        data["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
     if not isinstance(system, list):
@@ -191,10 +191,7 @@ def apply_stable_cache_control(body_bytes: bytes) -> bytes:
 
     # Already has cache_control somewhere? Check if it's on the last stable block.
     # If any block already has cache_control, respect existing placement.
-    has_cache_control = any(
-        isinstance(b, dict) and b.get("cache_control")
-        for b in system
-    )
+    has_cache_control = any(isinstance(b, dict) and b.get("cache_control") for b in system)
     if has_cache_control:
         return body_bytes  # already handled
 
@@ -257,9 +254,11 @@ def inject_with_cache_boundary(
 # PromptBuilder — higher-level builder for structured prompt assembly
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PromptParts:
     """Decomposed prompt parts for inspection and reassembly."""
+
     stable_blocks: list[dict[str, Any]] = field(default_factory=list)
     volatile_blocks: list[dict[str, Any]] = field(default_factory=list)
     tools: list[dict[str, Any]] = field(default_factory=list)
@@ -330,8 +329,7 @@ class PromptBuilder:
         stable_blocks, volatile_blocks = classify_system_blocks(clean_system)
 
         # Other fields (model, max_tokens, temperature, etc.)
-        other = {k: v for k, v in data.items()
-                 if k not in ("system", "tools", "messages")}
+        other = {k: v for k, v in data.items() if k not in ("system", "tools", "messages")}
 
         return PromptParts(
             stable_blocks=stable_blocks,
@@ -362,8 +360,9 @@ class PromptBuilder:
                     system[last_stable_idx] = blk
                     body["system"] = system
         elif isinstance(system, str) and system.strip():
-            body["system"] = [{"type": "text", "text": system,
-                                "cache_control": {"type": "ephemeral"}}]
+            body["system"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
 
         return json.dumps(body, ensure_ascii=False).encode("utf-8")
 
@@ -372,6 +371,7 @@ class PromptBuilder:
 # PromptCacheStats — per-session tracking
 # ---------------------------------------------------------------------------
 
+
 class PromptCacheStats:
     """Thread-safe per-session cache placement statistics."""
 
@@ -379,7 +379,7 @@ class PromptCacheStats:
         self._lock = threading.Lock()
         self.cache_markers_applied: int = 0
         self.cache_markers_skipped: int = 0  # body had no system prompt
-        self.already_marked: int = 0          # idempotent skip
+        self.already_marked: int = 0  # idempotent skip
         self.volatile_blocks_found: int = 0
         self.stable_blocks_found: int = 0
         self._started_at: float = time.time()
@@ -412,11 +412,13 @@ class PromptCacheStats:
                 "skipped_already_marked": self.already_marked,
                 "avg_stable_blocks": (
                     round(self.stable_blocks_found / self.cache_markers_applied, 1)
-                    if self.cache_markers_applied > 0 else 0
+                    if self.cache_markers_applied > 0
+                    else 0
                 ),
                 "avg_volatile_blocks": (
                     round(self.volatile_blocks_found / self.cache_markers_applied, 1)
-                    if self.cache_markers_applied > 0 else 0
+                    if self.cache_markers_applied > 0
+                    else 0
                 ),
                 "uptime_s": round(time.time() - self._started_at),
             }

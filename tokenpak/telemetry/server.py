@@ -4,37 +4,62 @@ TokenPak Telemetry Server — FastAPI ingest + query endpoints.
 Phase 5A: Ingest endpoint (/v1/telemetry/ingest)
 Phase 5B: Query endpoints (/v1/summary, /v1/timeseries, /v1/traces, etc.)
 """
+
 from __future__ import annotations
-import asyncio, json, logging, time
-from contextlib import asynccontextmanager
+
+import asyncio
+import json
+import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from typing import Any, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Response, Body
-from pydantic import BaseModel, Field, ConfigDict
+
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CapsuleBody(BaseModel):
     """Request body for POST /v1/capsule."""
+
     budget_tokens: int = Field(..., ge=1)
     segments: list[dict[str, Any]] = Field(default_factory=list)
     session_id: str = ""
     agent_id: str = ""
     coverage_score: float = 0.0
     retrieval_chunks: list[str] = Field(default_factory=list)
-from .pipeline import TelemetryPipeline, PipelineResult
-from .storage import TelemetryDB
-from .pricing import PricingCatalog
-from .rollups import RollupEngine
-from .cache import CacheStore, cache_key, get_cache, TTL_ROLLUP, TTL_SUMMARY, TTL_FILTER_OPTIONS, TTL_INSIGHTS
-from .insights import InsightEngine
-from .cost import CostEngine, CURRENT_PRICING_VERSION
-from .response_models import (
-    HealthResponse, StatsResponse, SummaryResponse, TimeseriesResponse,
-    TracesResponse, TraceDetailResponse, SegmentsResponse, TraceEventsResponse,
-    ModelsResponse, ProvidersResponse, AgentsResponse, PricingResponse,
-    RollupsComputeResponse, CapsuleResponse, RollupsStatusResponse,
-    RollupsRefreshResponse, TelemetryRefreshResponse,
+
+
+from .cache import (
+    TTL_FILTER_OPTIONS,
+    TTL_SUMMARY,
+    cache_key,
+    get_cache,
 )
+from .cost import CURRENT_PRICING_VERSION, CostEngine
+from .insights import InsightEngine
+from .pipeline import PipelineResult, TelemetryPipeline
+from .pricing import PricingCatalog
+from .response_models import (
+    AgentsResponse,
+    CapsuleResponse,
+    ModelsResponse,
+    PricingResponse,
+    ProvidersResponse,
+    RollupsComputeResponse,
+    RollupsRefreshResponse,
+    RollupsStatusResponse,
+    SegmentsResponse,
+    StatsResponse,
+    SummaryResponse,
+    TelemetryRefreshResponse,
+    TimeseriesResponse,
+    TraceDetailResponse,
+    TraceEventsResponse,
+    TracesResponse,
+)
+from .rollups import RollupEngine
+from .storage import TelemetryDB
 
 logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -43,6 +68,7 @@ _executor = ThreadPoolExecutor(max_workers=4)
 # ---------------------------------------------------------------------------
 # Filter DSL parser (Phase 5B)
 # ---------------------------------------------------------------------------
+
 
 def parse_filter(filter_str: Optional[str]) -> dict[str, str]:
     """Parse a filter DSL string into a dict of field:value pairs.
@@ -76,8 +102,10 @@ def parse_filter(filter_str: Optional[str]) -> dict[str, str]:
                     result[key] = value
     return result
 
+
 class TelemetryEvent(BaseModel):
     """A single inbound telemetry event from the OpenClaw plugin."""
+
     model_config = ConfigDict(extra="allow")
     provider: Optional[str] = None
     model: Optional[str] = None
@@ -88,12 +116,16 @@ class TelemetryEvent(BaseModel):
     session_id: Optional[str] = None
     raw: Optional[dict[str, Any]] = Field(default=None)
 
+
 class IngestRequest(BaseModel):
     """Request body for the /ingest endpoint containing a list of events."""
+
     events: list[TelemetryEvent] = Field(..., min_length=1, max_length=100)
+
 
 class EventResult(BaseModel):
     """Per-event ingestion result with ok flag or error message."""
+
     index: int
     success: bool
     event_id: Optional[str] = None
@@ -101,8 +133,10 @@ class EventResult(BaseModel):
     duration_ms: float = 0.0
     partial: bool = False
 
+
 class IngestResponse(BaseModel):
     """Response body for the /ingest endpoint."""
+
     success: bool
     total: int
     processed: int
@@ -110,9 +144,13 @@ class IngestResponse(BaseModel):
     results: list[EventResult]
     total_duration_ms: float
 
-def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = None,
-               pipeline: Optional[TelemetryPipeline] = None,
-               rollups: Optional[Any] = None) -> FastAPI:
+
+def create_app(
+    db_path: str = "telemetry.db",
+    storage: Optional[TelemetryDB] = None,
+    pipeline: Optional[TelemetryPipeline] = None,
+    rollups: Optional[Any] = None,
+) -> FastAPI:
     """Create the TokenPak telemetry FastAPI application.
 
     Args:
@@ -134,6 +172,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     async def health():
         """Rich health check — ingest status, error rate, last event, request counts."""
         import time as _t
+
         try:
             cur = _storage._conn.cursor()
             now = _t.time()
@@ -143,11 +182,17 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             last_event_iso = None
             if last_ts:
                 import datetime as _dt
-                last_event_iso = _dt.datetime.utcfromtimestamp(last_ts).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+                last_event_iso = _dt.datetime.utcfromtimestamp(last_ts).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                )
 
             # Error rate last 1h
             cutoff_1h = now - 3600
-            cur.execute("SELECT COUNT(*), SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) FROM tp_events WHERE ts >= ?", (cutoff_1h,))
+            cur.execute(
+                "SELECT COUNT(*), SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) FROM tp_events WHERE ts >= ?",
+                (cutoff_1h,),
+            )
             row = cur.fetchone()
             total_1h = row[0] or 0
             errors_1h = row[1] or 0
@@ -183,9 +228,15 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
 
     # Alert settings
     import pathlib as _pathlib
-    _settings_path = _pathlib.Path(db_path).parent / "alert_settings.json" if db_path else _pathlib.Path("/tmp/tp_alert_settings.json")
+
+    _settings_path = (
+        _pathlib.Path(db_path).parent / "alert_settings.json"
+        if db_path
+        else _pathlib.Path("/tmp/tp_alert_settings.json")
+    )
     try:
         from tokenpak.telemetry.settings import AlertSettings
+
         _alert_settings = AlertSettings(_settings_path)
     except ImportError:
         _alert_settings = None
@@ -202,6 +253,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """Update alert configuration."""
         if _alert_settings is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=503, detail="Settings store unavailable")
         try:
             body = await request.json()
@@ -209,15 +261,17 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             return {"status": "ok", "config": _alert_settings.load()}
         except ValueError as e:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=422, detail=str(e))
         except Exception as e:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/v1/settings/alerts/test")
     async def test_alert():
         """Send a test notification to all configured channels."""
-        cfg = _alert_settings.load() if _alert_settings else {}
+        _alert_settings.load() if _alert_settings else {}
         return {
             "status": "ok",
             "message": "Test alert sent",
@@ -236,24 +290,54 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
                 if event.raw:
                     raw_event.update(event.raw)
                 loop = asyncio.get_event_loop()
-                pipeline_result: PipelineResult = await loop.run_in_executor(_executor, _pipeline.process, raw_event)
+                pipeline_result: PipelineResult = await loop.run_in_executor(
+                    _executor, _pipeline.process, raw_event
+                )
                 duration_ms = (time.perf_counter() - event_start) * 1000
                 if pipeline_result.success:
                     processed += 1
-                    results.append(EventResult(index=idx, success=True, event_id=pipeline_result.event_id, duration_ms=duration_ms))
+                    results.append(
+                        EventResult(
+                            index=idx,
+                            success=True,
+                            event_id=pipeline_result.event_id,
+                            duration_ms=duration_ms,
+                        )
+                    )
                 else:
                     failed += 1
-                    results.append(EventResult(index=idx, success=False, event_id=pipeline_result.event_id,
-                        error=pipeline_result.error, duration_ms=duration_ms, partial=pipeline_result.partial_data_stored))
+                    results.append(
+                        EventResult(
+                            index=idx,
+                            success=False,
+                            event_id=pipeline_result.event_id,
+                            error=pipeline_result.error,
+                            duration_ms=duration_ms,
+                            partial=pipeline_result.partial_data_stored,
+                        )
+                    )
             except Exception as e:
                 failed += 1
-                results.append(EventResult(index=idx, success=False, error=str(e), duration_ms=(time.perf_counter() - event_start) * 1000))
+                results.append(
+                    EventResult(
+                        index=idx,
+                        success=False,
+                        error=str(e),
+                        duration_ms=(time.perf_counter() - event_start) * 1000,
+                    )
+                )
         if processed > 0:
             _cache.invalidate_prefix("kpi:")
             _cache.invalidate_prefix("rollup:")
             _cache.invalidate_prefix("filters:")
-        return IngestResponse(success=(failed == 0), total=len(request.events), processed=processed,
-            failed=failed, results=results, total_duration_ms=(time.perf_counter() - start_time) * 1000)
+        return IngestResponse(
+            success=(failed == 0),
+            total=len(request.events),
+            processed=processed,
+            failed=failed,
+            results=results,
+            total_duration_ms=(time.perf_counter() - start_time) * 1000,
+        )
 
     @app.get("/v1/telemetry/stats", response_model=StatsResponse)
     async def stats():
@@ -276,13 +360,17 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     ):
         """Return aggregate summary statistics. Cached 5 min per filter combo."""
         import json as _json_s
+
         try:
             filters = parse_filter(filter)
             ck = cache_key("summary", days, filters, prefix="kpi")
             hit, cached = _cache.get(ck)
             if hit:
-                return Response(content=cached, media_type="application/json",
-                                headers={"Cache-Control": "max-age=300", "X-Cache": "HIT"})
+                return Response(
+                    content=cached,
+                    media_type="application/json",
+                    headers={"Cache-Control": "max-age=300", "X-Cache": "HIT"},
+                )
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
                 _executor,
@@ -303,8 +391,11 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             }
             body = _json_s.dumps({"status": "ok", "summary": payload})
             _cache.set(ck, body, ttl=TTL_SUMMARY)
-            return Response(content=body, media_type="application/json",
-                            headers={"Cache-Control": "max-age=300", "X-Cache": "MISS"})
+            return Response(
+                content=body,
+                media_type="application/json",
+                headers={"Cache-Control": "max-age=300", "X-Cache": "MISS"},
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -364,8 +455,15 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             )
             tc = len(result)
             nxt = offset + limit if tc >= limit else None
-            return {"status": "ok", "limit": limit, "offset": offset, "count": tc,
-                    "has_more": nxt is not None, "next_offset": nxt, "traces": result}
+            return {
+                "status": "ok",
+                "limit": limit,
+                "offset": offset,
+                "count": tc,
+                "has_more": nxt is not None,
+                "next_offset": nxt,
+                "traces": result,
+            }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -374,6 +472,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """Return full trace details including events, usage, cost, segments."""
         try:
             from tokenpak.cache_report import format_cache_report
+
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(_executor, lambda: _storage.get_trace(trace_id))
             if not result.get("event"):
@@ -412,7 +511,9 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             trace = await loop.run_in_executor(_executor, lambda: _storage.get_trace(trace_id))
             if not trace.get("event"):
                 raise HTTPException(status_code=404, detail=f"Trace {trace_id} not found")
-            events = await loop.run_in_executor(_executor, lambda: _storage.get_trace_events(trace_id))
+            events = await loop.run_in_executor(
+                _executor, lambda: _storage.get_trace_events(trace_id)
+            )
             return {"trace_id": trace_id, "events": events}
         except HTTPException:
             raise
@@ -471,6 +572,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             if not result.get("event"):
                 raise HTTPException(status_code=404, detail=f"Trace not found: {trace_id}")
             import time as _time
+
             bundle = {
                 "export_version": "1.0",
                 "trace_id": trace_id,
@@ -506,6 +608,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """
         try:
             from .prometheus import PrometheusMetricsCollector
+
             collector = PrometheusMetricsCollector(storage=_storage)
             loop = asyncio.get_event_loop()
             text = await loop.run_in_executor(_executor, collector.collect)
@@ -536,7 +639,9 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """Build a ContextCapsule from segments within a token budget."""
         try:
             import dataclasses
+
             from tokenpak.capsule import CapsuleBuilder
+
             builder = CapsuleBuilder()
             capsule = builder.build(
                 segments=body.segments,
@@ -548,6 +653,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             )
             # Run ValidationGate before returning capsule
             from tokenpak.validation_gate import ValidationGate
+
             gate = ValidationGate()
             vresult = gate.validate(capsule, dry_run=False)
             if not vresult.valid:
@@ -592,6 +698,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """Manually trigger a rollup refresh."""
         try:
             import time as _time
+
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(_executor, _storage.compute_rollups)
             _rollup_state["last_refresh"] = _time.time()
@@ -608,18 +715,25 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         """On-demand telemetry refresh: re-run backfill from session JSONL files
         and recompute rollups. Triggered via dashboard button or CLI.
         Does NOT auto-commit to git — avoids conflict with agent work."""
-        import subprocess, os, sys
+        import os
+        import subprocess
+        import sys
 
         def _run_refresh():
             backfill_script = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                "..", "scripts", "backfill_telemetry.py"
+                "..",
+                "scripts",
+                "backfill_telemetry.py",
             )
             # Also try relative to package root
             if not os.path.exists(backfill_script):
                 backfill_script = os.path.join(
                     os.path.dirname(os.path.abspath(__file__)),
-                    "..", "..", "scripts", "backfill_telemetry.py"
+                    "..",
+                    "..",
+                    "scripts",
+                    "backfill_telemetry.py",
                 )
 
             result = {"backfill": "skipped", "rollups": "skipped", "agent_telemetry": "skipped"}
@@ -634,14 +748,18 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
                         args += ["--db", os.path.expanduser(str(db_path))]
                     proc = subprocess.run(
                         args,
-                        capture_output=True, text=True, timeout=120,
-                        cwd=os.path.dirname(backfill_script)
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        cwd=os.path.dirname(backfill_script),
                     )
-                    result["backfill"] = "ok" if proc.returncode == 0 else f"error: {proc.stderr[-200:]}"
+                    result["backfill"] = (
+                        "ok" if proc.returncode == 0 else f"error: {proc.stderr[-200:]}"
+                    )
                 except Exception as e:
                     result["backfill"] = f"error: {e}"
             else:
-                result["backfill"] = f"script not found"
+                result["backfill"] = "script not found"
 
             # 2. Recompute rollups
             try:
@@ -658,9 +776,13 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
                 try:
                     proc = subprocess.run(
                         [sys.executable, agent_telemetry_script],
-                        capture_output=True, text=True, timeout=30
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
                     )
-                    result["agent_telemetry"] = "ok" if proc.returncode == 0 else f"error: {proc.stderr[-200:]}"
+                    result["agent_telemetry"] = (
+                        "ok" if proc.returncode == 0 else f"error: {proc.stderr[-200:]}"
+                    )
                 except Exception as e:
                     result["agent_telemetry"] = f"error: {e}"
 
@@ -674,14 +796,18 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     # Dashboard (Phase 5C)
     # -----------------------------------------------------------------------
     try:
-        from .dashboard.dashboard import create_dashboard_router, _STATIC_DIR
         from fastapi.staticfiles import StaticFiles
+
+        from .dashboard.dashboard import _STATIC_DIR, create_dashboard_router
+
         _rollup_engine = rollups if isinstance(rollups, RollupEngine) else RollupEngine(_storage)
         _rollup_engine.ensure_tables()
         dashboard_router = create_dashboard_router(_storage, _rollup_engine)
         app.include_router(dashboard_router)
         # Static files must be mounted on app, not router
-        app.mount("/dashboard/static", StaticFiles(directory=str(_STATIC_DIR)), name="dashboard_static")
+        app.mount(
+            "/dashboard/static", StaticFiles(directory=str(_STATIC_DIR)), name="dashboard_static"
+        )
         logger.info("Dashboard mounted at /dashboard")
     except Exception as e:
         logger.warning(f"Dashboard not mounted (optional): {e}")
@@ -704,6 +830,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
                 # Log rollup completion to tp_events
                 try:
                     from .models import TelemetryEvent
+
                     rollup_event = TelemetryEvent(
                         trace_id="__system__",
                         request_id=f"rollup-{int(time.time())}",
@@ -730,9 +857,6 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             except asyncio.CancelledError:
                 pass
             logger.info("Auto-rollup background task stopped")
-
-
-
 
     # ---------------------------------------------------------------------------
     # Cost reprocessing + pricing endpoints
@@ -780,23 +904,32 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     async def get_filter_options():
         """Return available filter values. Cached 10 min."""
         import json as _json_f
+
         ck = cache_key("options", prefix="filters")
         hit, cached = _cache.get(ck)
         if hit:
-            return Response(content=cached, media_type="application/json",
-                            headers={"Cache-Control": "max-age=600", "X-Cache": "HIT"})
+            return Response(
+                content=cached,
+                media_type="application/json",
+                headers={"Cache-Control": "max-age=600", "X-Cache": "HIT"},
+            )
         loop = asyncio.get_event_loop()
 
         def _query():
             try:
                 import sqlite3 as _sqlite3
+
                 conn = _sqlite3.connect(db_path)
                 cur = conn.cursor()
-                cur.execute("SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider")
+                cur.execute(
+                    "SELECT DISTINCT provider FROM tp_events WHERE provider != '' ORDER BY provider"
+                )
                 providers = [r[0] for r in cur.fetchall()]
                 cur.execute("SELECT DISTINCT model FROM tp_events WHERE model != '' ORDER BY model")
                 models = [r[0] for r in cur.fetchall()]
-                cur.execute("SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id")
+                cur.execute(
+                    "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
+                )
                 agents = [r[0] for r in cur.fetchall()]
                 conn.close()
                 return providers, models, agents
@@ -807,8 +940,8 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
 
         resp_f = {
             "time_ranges": [
-                {"value": "1",  "label": "Last 24h"},
-                {"value": "7",  "label": "Last 7 days"},
+                {"value": "1", "label": "Last 24h"},
+                {"value": "7", "label": "Last 7 days"},
                 {"value": "30", "label": "Last 30 days"},
                 {"value": "90", "label": "Last 90 days"},
             ],
@@ -820,8 +953,11 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
         }
         body_f = _json_f.dumps(resp_f)
         _cache.set(ck, body_f, ttl=TTL_FILTER_OPTIONS)
-        return Response(content=body_f, media_type="application/json",
-                        headers={"Cache-Control": "max-age=600", "X-Cache": "MISS"})
+        return Response(
+            content=body_f,
+            media_type="application/json",
+            headers={"Cache-Control": "max-age=600", "X-Cache": "MISS"},
+        )
 
     # ---------------------------------------------------------------------------
     # Insights endpoint (Phase 8: Decision Support)
@@ -829,7 +965,9 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     _insight_engine: dict = {}  # lazy singleton per app instance
 
     @app.get("/v1/insights")
-    async def get_insights(days: int = Query(7, ge=1, le=90, description="Days of history to analyze")):
+    async def get_insights(
+        days: int = Query(7, ge=1, le=90, description="Days of history to analyze")
+    ):
         """
         Generate automatic insights and decision support suggestions.
 
@@ -850,7 +988,9 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
             "insights": insight_list,
             "days": days,
             "count": len(insight_list),
-            "generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+            "generated_at": __import__("datetime")
+            .datetime.now(__import__("datetime").timezone.utc)
+            .isoformat(),
         }
 
     @app.post("/v1/rollups/rebuild")
@@ -860,6 +1000,7 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     ):
         """Rebuild rollups for a date range (idempotent). Invalidates caches."""
         from datetime import date as _date
+
         try:
             fd = _date.fromisoformat(from_date)
             td = _date.fromisoformat(to_date)
@@ -909,5 +1050,6 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
     app.router.lifespan_context = _lifespan
 
     return app
+
 
 app = create_app()

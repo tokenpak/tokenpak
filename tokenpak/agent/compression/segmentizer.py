@@ -23,10 +23,9 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Inline model enums (self-contained — no tokenpak.telemetry dependency)
@@ -228,7 +227,7 @@ def jaccard_4gram(a: str, b: str) -> float:
     def ngrams(text: str, n: int = 4) -> set[str]:
         if len(text) < n:
             return set()
-        return set(text[i: i + n] for i in range(len(text) - n + 1))
+        return set(text[i : i + n] for i in range(len(text) - n + 1))
 
     sa, sb = ngrams(a), ngrams(b)
     if not sa and not sb:
@@ -257,10 +256,37 @@ def _extract_file_path(segment: Segment, content_map: dict[int, str]) -> str | N
 
 def _extract_memory_terms(content: str) -> set[str]:
     stopwords = {
-        "this", "that", "with", "from", "have", "will", "your", "what",
-        "when", "where", "which", "there", "their", "about", "would",
-        "could", "should", "been", "were", "more", "some", "than", "them",
-        "then", "into", "also", "only", "other", "over", "such", "each",
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "will",
+        "your",
+        "what",
+        "when",
+        "where",
+        "which",
+        "there",
+        "their",
+        "about",
+        "would",
+        "could",
+        "should",
+        "been",
+        "were",
+        "more",
+        "some",
+        "than",
+        "them",
+        "then",
+        "into",
+        "also",
+        "only",
+        "other",
+        "over",
+        "such",
+        "each",
     }
     words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
     return set(w for w in words if w not in stopwords)
@@ -376,8 +402,8 @@ BOILERPLATE_PATTERNS: list[str] = [
     "glad to help",
 ]
 
-_JSON_PATTERN = re.compile(r'^\s*[\[{]', re.MULTILINE)
-_XML_PATTERN = re.compile(r'^\s*<[a-zA-Z]', re.MULTILINE)
+_JSON_PATTERN = re.compile(r"^\s*[\[{]", re.MULTILINE)
+_XML_PATTERN = re.compile(r"^\s*<[a-zA-Z]", re.MULTILINE)
 
 
 def detect_anti_patterns(
@@ -395,7 +421,7 @@ def detect_anti_patterns(
                 system_contents.append((seg.order, content.lower()))
 
     for i, (order_a, content_a) in enumerate(system_contents):
-        for order_b, content_b in system_contents[i + 1:]:
+        for order_b, content_b in system_contents[i + 1 :]:
             if jaccard_4gram(content_a, content_b) > 0.9:
                 for seg in segments:
                     if seg.order == order_b and seg.anti_pattern == AntiPattern.NONE.value:
@@ -423,7 +449,7 @@ def detect_anti_patterns(
         if seg.anti_pattern != AntiPattern.NONE.value:
             continue
 
-        if (_JSON_PATTERN.search(content) or _XML_PATTERN.search(content)):
+        if _JSON_PATTERN.search(content) or _XML_PATTERN.search(content):
             if len(content) // 4 > 500:
                 seg.anti_pattern = AntiPattern.VERBOSE_STRUCTURED.value
                 continue
@@ -451,7 +477,7 @@ def detect_anti_patterns(
     for i, (order_a, content_a) in enumerate(non_system):
         if order_a in redundant_marked:
             continue
-        for order_b, content_b in non_system[i + 1:]:
+        for order_b, content_b in non_system[i + 1 :]:
             if order_b in redundant_marked:
                 continue
             if jaccard_4gram(content_a, content_b) > 0.8:
@@ -485,10 +511,9 @@ def segmentize(
     if not messages:
         return []
 
-    last_assistant_idx: int = -1
     for i, msg in enumerate(messages):
         if msg.get("role") == "assistant":
-            last_assistant_idx = i
+            pass
 
     has_tools = bool(tools)
     segments: list[Segment] = []

@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-
 # ── Schema location ──────────────────────────────────────────────────────────
 
 _SCHEMA_DIR = Path(__file__).parent.parent / "schemas"
@@ -20,12 +19,13 @@ _SCHEMA_PATH = _SCHEMA_DIR / "tokenpak-v1.0.json"
 
 # ── Result types ─────────────────────────────────────────────────────────────
 
+
 class ValidationIssue:
     """A single validation error or warning."""
 
     def __init__(self, level: str, field: str, message: str):
-        self.level = level      # "error" | "warning" | "info"
-        self.field = field      # JSON path, e.g. "header.version"
+        self.level = level  # "error" | "warning" | "info"
+        self.field = field  # JSON path, e.g. "header.version"
         self.message = message
 
     def __str__(self):
@@ -81,17 +81,26 @@ class ValidationResult:
 
 # ── Validator ─────────────────────────────────────────────────────────────────
 
+
 class TokenPakValidator:
     """Validates TokenPak packs against the v1.0 protocol spec."""
 
     SUPPORTED_VERSIONS = {"1.0"}
-    BLOCK_TYPES = {"instructions", "code", "knowledge", "memory", "conversation", "evidence", "system"}
+    BLOCK_TYPES = {
+        "instructions",
+        "code",
+        "knowledge",
+        "memory",
+        "conversation",
+        "evidence",
+        "system",
+    }
     PRIORITY_VALUES = {"critical", "high", "medium", "low", "internal"}
     TRUST_LEVELS = {"verified", "unverified", "generated"}
     TRANSFORM_TYPES = {"merge", "compact", "filter", "enrich", "sign"}
     COMPACTION_MODES = {"lossless", "balanced", "aggressive", "semantic"}
     WORKFLOW_STATUSES = {"not_started", "in_progress", "done", "failed"}
-    BLOCK_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+    BLOCK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
     def validate(self, pack: dict, verbose: bool = False) -> ValidationResult:
         """Validate a parsed pack dict. Returns a ValidationResult."""
@@ -148,14 +157,22 @@ class TokenPakValidator:
             v = h["version"]
             if not isinstance(v, str):
                 result.error("header.version", "Must be a string.")
-            elif not re.match(r'^\d+\.\d+$', v):
-                result.error("header.version", f"Invalid version format '{v}'. Expected 'MAJOR.MINOR'.")
+            elif not re.match(r"^\d+\.\d+$", v):
+                result.error(
+                    "header.version", f"Invalid version format '{v}'. Expected 'MAJOR.MINOR'."
+                )
             else:
                 major = v.split(".")[0]
                 if major != "1":
-                    result.error("header.version", f"Unsupported major version '{major}'. Only major version 1 is supported.")
+                    result.error(
+                        "header.version",
+                        f"Unsupported major version '{major}'. Only major version 1 is supported.",
+                    )
                 elif v not in self.SUPPORTED_VERSIONS:
-                    result.warning("header.version", f"Unknown minor version '{v}'. Processing with best-effort compatibility.")
+                    result.warning(
+                        "header.version",
+                        f"Unknown minor version '{v}'. Processing with best-effort compatibility.",
+                    )
 
         # id
         if "id" not in h:
@@ -222,7 +239,10 @@ class TokenPakValidator:
             if "type" not in block:
                 result.error(f"{prefix}.type", "Missing required field 'type'.")
             elif block["type"] not in self.BLOCK_TYPES:
-                result.error(f"{prefix}.type", f"Unknown block type '{block['type']}'. Valid: {sorted(self.BLOCK_TYPES)}")
+                result.error(
+                    f"{prefix}.type",
+                    f"Unknown block type '{block['type']}'. Valid: {sorted(self.BLOCK_TYPES)}",
+                )
 
             # id
             if "id" not in block:
@@ -244,7 +264,10 @@ class TokenPakValidator:
 
             # optional fields
             if "priority" in block and block["priority"] not in self.PRIORITY_VALUES:
-                result.error(f"{prefix}.priority", f"Unknown priority '{block['priority']}'. Valid: {sorted(self.PRIORITY_VALUES)}")
+                result.error(
+                    f"{prefix}.priority",
+                    f"Unknown priority '{block['priority']}'. Valid: {sorted(self.PRIORITY_VALUES)}",
+                )
 
             if "quality" in block:
                 q = block["quality"]
@@ -282,16 +305,25 @@ class TokenPakValidator:
             g = constraints["guardrails"]
             if "max_cost_usd" in g and not isinstance(g["max_cost_usd"], (int, float)):
                 result.error("constraints.guardrails.max_cost_usd", "Must be a number.")
-            if "timeout_seconds" in g and (not isinstance(g["timeout_seconds"], int) or g["timeout_seconds"] < 1):
-                result.error("constraints.guardrails.timeout_seconds", "Must be a positive integer.")
+            if "timeout_seconds" in g and (
+                not isinstance(g["timeout_seconds"], int) or g["timeout_seconds"] < 1
+            ):
+                result.error(
+                    "constraints.guardrails.timeout_seconds", "Must be a positive integer."
+                )
 
     def _check_state(self, state: dict, result: ValidationResult):
         if not isinstance(state, dict):
             result.error("state", "Must be an object.")
             return
         if "status" in state and state["status"] not in self.WORKFLOW_STATUSES:
-            result.error("state.status", f"Unknown status '{state['status']}'. Valid: {sorted(self.WORKFLOW_STATUSES)}")
-        if "step_index" in state and (not isinstance(state["step_index"], int) or state["step_index"] < 0):
+            result.error(
+                "state.status",
+                f"Unknown status '{state['status']}'. Valid: {sorted(self.WORKFLOW_STATUSES)}",
+            )
+        if "step_index" in state and (
+            not isinstance(state["step_index"], int) or state["step_index"] < 0
+        ):
             result.error("state.step_index", "Must be a non-negative integer.")
 
     def _check_provenance(self, prov: dict, result: ValidationResult):
@@ -299,13 +331,20 @@ class TokenPakValidator:
             result.error("provenance", "Must be an object.")
             return
         if "trust_level" in prov and prov["trust_level"] not in self.TRUST_LEVELS:
-            result.error("provenance.trust_level", f"Unknown trust level '{prov['trust_level']}'. Valid: {sorted(self.TRUST_LEVELS)}")
+            result.error(
+                "provenance.trust_level",
+                f"Unknown trust level '{prov['trust_level']}'. Valid: {sorted(self.TRUST_LEVELS)}",
+            )
         if "transforms" in prov:
             for i, t in enumerate(prov["transforms"]):
                 if "type" not in t:
-                    result.error(f"provenance.transforms[{i}].type", "Missing required field 'type'.")
+                    result.error(
+                        f"provenance.transforms[{i}].type", "Missing required field 'type'."
+                    )
                 elif t["type"] not in self.TRANSFORM_TYPES:
-                    result.warning(f"provenance.transforms[{i}].type", f"Unknown transform type '{t['type']}'.")
+                    result.warning(
+                        f"provenance.transforms[{i}].type", f"Unknown transform type '{t['type']}'."
+                    )
 
     def _check_policies(self, policies: dict, result: ValidationResult):
         if not isinstance(policies, dict):
@@ -314,7 +353,10 @@ class TokenPakValidator:
         if "compaction" in policies:
             c = policies["compaction"]
             if "mode" in c and c["mode"] not in self.COMPACTION_MODES:
-                result.error("policies.compaction.mode", f"Unknown mode '{c['mode']}'. Valid: {sorted(self.COMPACTION_MODES)}")
+                result.error(
+                    "policies.compaction.mode",
+                    f"Unknown mode '{c['mode']}'. Valid: {sorted(self.COMPACTION_MODES)}",
+                )
             if "max_tokens" in c and (not isinstance(c["max_tokens"], int) or c["max_tokens"] < 1):
                 result.error("policies.compaction.max_tokens", "Must be a positive integer.")
         if "budget" in policies:
@@ -322,7 +364,9 @@ class TokenPakValidator:
             if "total" in b and "per_block_max" in b:
                 if isinstance(b["total"], int) and isinstance(b["per_block_max"], int):
                     if b["per_block_max"] > b["total"]:
-                        result.warning("policies.budget.per_block_max", "per_block_max exceeds total budget.")
+                        result.warning(
+                            "policies.budget.per_block_max", "per_block_max exceeds total budget."
+                        )
 
     def _check_embeddings(self, pack: dict, result: ValidationResult):
         emb = pack.get("embeddings", {})
@@ -334,7 +378,10 @@ class TokenPakValidator:
             block_ids = {b.get("id") for b in blocks if isinstance(b, dict)}
             for vid in emb["block_vectors"]:
                 if vid not in block_ids:
-                    result.warning(f"embeddings.block_vectors.{vid}", f"Vector references unknown block id '{vid}'.")
+                    result.warning(
+                        f"embeddings.block_vectors.{vid}",
+                        f"Vector references unknown block id '{vid}'.",
+                    )
 
     def _check_quality_hints(self, pack: dict, result: ValidationResult):
         """Non-fatal quality checks shown in verbose mode."""
@@ -342,19 +389,30 @@ class TokenPakValidator:
         if not m.get("target"):
             result.info("metadata.target", "No target specified. Pack may be broadcast.")
         if not m.get("tags"):
-            result.info("metadata.tags", "No tags specified. Tags improve routing and searchability.")
+            result.info(
+                "metadata.tags", "No tags specified. Tags improve routing and searchability."
+            )
         if not m.get("expires"):
-            result.info("metadata.expires", "No expiry set. Consider adding TTL for time-sensitive packs.")
+            result.info(
+                "metadata.expires", "No expiry set. Consider adding TTL for time-sensitive packs."
+            )
         blocks = pack.get("blocks", [])
         if not any(b.get("type") == "instructions" for b in blocks):
-            result.info("blocks", "No 'instructions' block found. Consider adding one for agent context.")
+            result.info(
+                "blocks", "No 'instructions' block found. Consider adding one for agent context."
+            )
         has_evidence = any(b.get("type") == "evidence" for b in blocks)
         if has_evidence and "provenance" not in pack:
-            result.info("provenance", "Pack has evidence blocks but no provenance section. Consider adding trust_level.")
+            result.info(
+                "provenance",
+                "Pack has evidence blocks but no provenance section. Consider adding trust_level.",
+            )
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    def _check_iso8601(self, field: str, value: Any, result: ValidationResult, check_future: bool = False):
+    def _check_iso8601(
+        self, field: str, value: Any, result: ValidationResult, check_future: bool = False
+    ):
         if not isinstance(value, str):
             result.error(field, "Must be an ISO 8601 string.")
             return
@@ -363,7 +421,9 @@ class TokenPakValidator:
             if check_future:
                 now = datetime.now(timezone.utc)
                 if dt < now:
-                    result.warning(field, f"Timestamp '{value}' is in the past. Pack may be expired.")
+                    result.warning(
+                        field, f"Timestamp '{value}' is in the past. Pack may be expired."
+                    )
         except ValueError:
             result.error(field, f"Invalid ISO 8601 timestamp: '{value}'.")
 
@@ -373,30 +433,30 @@ class TokenPakValidator:
 VALID_PACK_MINIMAL = {
     "header": {"version": "1.0", "id": "pak_test001", "created": "2026-03-07T00:00:00Z"},
     "metadata": {"task": "test", "source": "agent:test"},
-    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test content"}]
+    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test content"}],
 }
 
 INVALID_PACK_MISSING_HEADER = {
     "metadata": {"task": "test", "source": "agent:test"},
-    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test"}]
+    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test"}],
 }
 
 INVALID_PACK_BAD_VERSION = {
     "header": {"version": "2.0", "id": "pak_test002", "created": "2026-03-07T00:00:00Z"},
     "metadata": {"task": "test", "source": "agent:test"},
-    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test"}]
+    "blocks": [{"type": "knowledge", "id": "ctx", "content": "test"}],
 }
 
 INVALID_PACK_NO_BLOCKS = {
     "header": {"version": "1.0", "id": "pak_test003", "created": "2026-03-07T00:00:00Z"},
     "metadata": {"task": "test", "source": "agent:test"},
-    "blocks": []
+    "blocks": [],
 }
 
 INVALID_PACK_BAD_BLOCK_TYPE = {
     "header": {"version": "1.0", "id": "pak_test004", "created": "2026-03-07T00:00:00Z"},
     "metadata": {"task": "test", "source": "agent:test"},
-    "blocks": [{"type": "unknown_type", "id": "ctx", "content": "test"}]
+    "blocks": [{"type": "unknown_type", "id": "ctx", "content": "test"}],
 }
 
 INVALID_PACK_DUPLICATE_BLOCK_IDS = {
@@ -405,5 +465,5 @@ INVALID_PACK_DUPLICATE_BLOCK_IDS = {
     "blocks": [
         {"type": "knowledge", "id": "same_id", "content": "block 1"},
         {"type": "knowledge", "id": "same_id", "content": "block 2"},
-    ]
+    ],
 }

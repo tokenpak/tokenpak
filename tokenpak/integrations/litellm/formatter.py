@@ -9,8 +9,7 @@ TOKPAK wire format, followed by any existing user messages.
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 # Lazy-import to avoid hard dependency on tokenpak internals at module load time.
 
@@ -63,6 +62,7 @@ def blocks_to_messages(
                 try:
                     from tokenpak.engines import get_engine
                     from tokenpak.engines.base import CompactionHints
+
                     engine = get_engine("heuristic")
                     remaining = max(50, budget - total_tokens)
                     hints = CompactionHints(target_tokens=remaining, aggressive=False)
@@ -73,17 +73,19 @@ def blocks_to_messages(
                     remaining = max(0, budget - total_tokens)
                     if remaining < 50:
                         break
-                    raw = raw[:remaining * 4] + "\n…"
+                    raw = raw[: remaining * 4] + "\n…"
                     tokens = _estimate_tokens(raw)
 
-        wire_blocks.append({
-            "ref": getattr(block, "path", "unknown"),
-            "type": getattr(block, "file_type", "text"),
-            "quality": getattr(block, "quality_score", 1.0),
-            "tokens": tokens,
-            "content": raw,
-            "slice_id": getattr(block, "slice_id", ""),
-        })
+        wire_blocks.append(
+            {
+                "ref": getattr(block, "path", "unknown"),
+                "type": getattr(block, "file_type", "text"),
+                "quality": getattr(block, "quality_score", 1.0),
+                "tokens": tokens,
+                "content": raw,
+                "slice_id": getattr(block, "slice_id", ""),
+            }
+        )
         total_tokens += tokens
 
     system_content = wire_pack(wire_blocks, budget)
@@ -124,9 +126,7 @@ def compile_pack(
         try:
             blocks = list(pack.all_blocks()) if hasattr(pack, "all_blocks") else []
         except Exception as exc:
-            raise TypeError(
-                f"Cannot compile TokenPak from {type(pack).__name__}: {exc}"
-            ) from exc
+            raise TypeError(f"Cannot compile TokenPak from {type(pack).__name__}: {exc}") from exc
 
     return blocks_to_messages(
         blocks,

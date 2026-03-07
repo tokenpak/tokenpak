@@ -34,63 +34,80 @@ SCHEMA_VERSION = "2026.02"
 # Token stage field names (in order of compression pipeline)
 # ---------------------------------------------------------------------------
 TOKEN_STAGE_ORDER = [
-    "raw_input_tokens",    # tokens before any processing
-    "qmd_tokens",          # tokens after QMD (quick markdown) pass
-    "tokenpak_tokens",     # tokens after TokenPak compression
+    "raw_input_tokens",  # tokens before any processing
+    "qmd_tokens",  # tokens after QMD (quick markdown) pass
+    "tokenpak_tokens",  # tokens after TokenPak compression
     "final_input_tokens",  # tokens actually sent to provider (billed)
 ]
 
 # ---------------------------------------------------------------------------
 # Required fields for a valid ingest event
 # ---------------------------------------------------------------------------
-REQUIRED_FIELDS = frozenset([
-    "trace_id",
-    "provider",
-    "model",
-    "status",
-    "final_input_tokens",
-])
+REQUIRED_FIELDS = frozenset(
+    [
+        "trace_id",
+        "provider",
+        "model",
+        "status",
+        "final_input_tokens",
+    ]
+)
 
 # ---------------------------------------------------------------------------
 # New columns to add to tp_events via migration
 # ---------------------------------------------------------------------------
 TP_EVENTS_MIGRATIONS: List[Tuple[str, str]] = [
     # Token pipeline stages
-    ("raw_input_tokens",   "INTEGER NOT NULL DEFAULT 0"),
-    ("qmd_tokens",         "INTEGER"),
-    ("tokenpak_tokens",    "INTEGER"),
+    ("raw_input_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("qmd_tokens", "INTEGER"),
+    ("tokenpak_tokens", "INTEGER"),
     ("final_input_tokens", "INTEGER NOT NULL DEFAULT 0"),
-    ("output_tokens",      "INTEGER NOT NULL DEFAULT 0"),
+    ("output_tokens", "INTEGER NOT NULL DEFAULT 0"),
     # Latency breakdown
-    ("latency_ms",         "INTEGER"),
-    ("provider_latency_ms","INTEGER"),
-    ("proxy_latency_ms",   "INTEGER"),
+    ("latency_ms", "INTEGER"),
+    ("provider_latency_ms", "INTEGER"),
+    ("proxy_latency_ms", "INTEGER"),
     # Retry tracking
-    ("retry_count",        "INTEGER NOT NULL DEFAULT 0"),
-    ("retry_reason",       "TEXT"),
-    ("task_type",          "TEXT"),
+    ("retry_count", "INTEGER NOT NULL DEFAULT 0"),
+    ("retry_reason", "TEXT"),
+    ("task_type", "TEXT"),
     # Cost fields (calculated at ingest)
-    ("pricing_version",    "TEXT NOT NULL DEFAULT 'unknown'"),
-    ("baseline_cost",      "REAL NOT NULL DEFAULT 0"),
-    ("actual_cost",        "REAL NOT NULL DEFAULT 0"),
-    ("savings_amount",     "REAL NOT NULL DEFAULT 0"),
-    ("savings_percent",    "REAL NOT NULL DEFAULT 0"),
+    ("pricing_version", "TEXT NOT NULL DEFAULT 'unknown'"),
+    ("baseline_cost", "REAL NOT NULL DEFAULT 0"),
+    ("actual_cost", "REAL NOT NULL DEFAULT 0"),
+    ("savings_amount", "REAL NOT NULL DEFAULT 0"),
+    ("savings_percent", "REAL NOT NULL DEFAULT 0"),
     # Version tracking
-    ("data_source",        "TEXT NOT NULL DEFAULT 'estimated'"),
-    ("proxy_version",      "TEXT"),
-    ("tokenpak_version",   "TEXT"),
-    ("qmd_version",        "TEXT"),
+    ("data_source", "TEXT NOT NULL DEFAULT 'estimated'"),
+    ("proxy_version", "TEXT"),
+    ("tokenpak_version", "TEXT"),
+    ("qmd_version", "TEXT"),
 ]
 
 # Performance indexes to create on tp_events
 TP_EVENTS_INDEXES = [
-    ("idx_tp_events_ts",       "CREATE INDEX IF NOT EXISTS idx_tp_events_ts ON tp_events(ts)"),
-    ("idx_tp_events_provider", "CREATE INDEX IF NOT EXISTS idx_tp_events_provider ON tp_events(provider)"),
-    ("idx_tp_events_model",    "CREATE INDEX IF NOT EXISTS idx_tp_events_model ON tp_events(model)"),
-    ("idx_tp_events_trace",    "CREATE INDEX IF NOT EXISTS idx_tp_events_trace ON tp_events(trace_id)"),
-    ("idx_tp_events_composite","CREATE INDEX IF NOT EXISTS idx_tp_events_composite ON tp_events(ts, provider, model)"),
-    ("idx_tp_events_status",   "CREATE INDEX IF NOT EXISTS idx_tp_events_status ON tp_events(status)"),
-    ("idx_tp_events_agent_id",  "CREATE INDEX IF NOT EXISTS idx_tp_events_agent_id ON tp_events(agent_id)"),
+    ("idx_tp_events_ts", "CREATE INDEX IF NOT EXISTS idx_tp_events_ts ON tp_events(ts)"),
+    (
+        "idx_tp_events_provider",
+        "CREATE INDEX IF NOT EXISTS idx_tp_events_provider ON tp_events(provider)",
+    ),
+    ("idx_tp_events_model", "CREATE INDEX IF NOT EXISTS idx_tp_events_model ON tp_events(model)"),
+    (
+        "idx_tp_events_trace",
+        "CREATE INDEX IF NOT EXISTS idx_tp_events_trace ON tp_events(trace_id)",
+    ),
+    (
+        "idx_tp_events_composite",
+        "CREATE INDEX IF NOT EXISTS idx_tp_events_composite ON tp_events(ts, provider, model)",
+    ),
+    (
+        "idx_tp_events_status",
+        "CREATE INDEX IF NOT EXISTS idx_tp_events_status ON tp_events(status)",
+    ),
+    (
+        "idx_tp_events_agent_id",
+        "CREATE INDEX IF NOT EXISTS idx_tp_events_agent_id ON tp_events(agent_id)",
+    ),
 ]
 
 
@@ -205,7 +222,8 @@ def migrate_tp_events(conn: sqlite3.Connection) -> dict:
 
     # 2. Create indexes
     existing_indexes = {
-        row[0] for row in cur.execute(
+        row[0]
+        for row in cur.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='tp_events'"
         ).fetchall()
     }
@@ -260,7 +278,8 @@ def verify_schema(conn: sqlite3.Connection) -> dict:
     missing_cols = expected_new_cols - existing_cols
 
     existing_indexes = {
-        row[0] for row in cur.execute(
+        row[0]
+        for row in cur.execute(
             "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='tp_events'"
         ).fetchall()
     }

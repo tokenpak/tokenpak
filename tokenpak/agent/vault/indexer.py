@@ -7,11 +7,11 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from tokenpak.walker import walk_directory, detect_file_type
 from tokenpak.processors import get_processor
 from tokenpak.tokens import count_tokens
+from tokenpak.walker import detect_file_type, walk_directory
 
-from .blocks import BlockStore, BlockRecord, get_block_store
+from .blocks import BlockRecord, BlockStore, get_block_store
 from .symbols import SymbolTable
 
 
@@ -151,6 +151,7 @@ class VaultIndexer:
     def stats_by_type(self) -> dict:
         """Return indexed file count broken down by file type and extension."""
         from collections import Counter
+
         blocks = self.blocks.all()
         by_type: Counter = Counter()
         by_ext: Counter = Counter()

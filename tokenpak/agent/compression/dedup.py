@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List
 
 # Similarity threshold above which two messages are considered near-duplicates
 DEDUP_JACCARD_THRESHOLD = 0.90
@@ -42,7 +41,7 @@ def _sha256(text: str) -> str:
 def _ngrams(text: str, n: int = 4) -> set[str]:
     if len(text) < n:
         return set()
-    return set(text[i: i + n] for i in range(len(text) - n + 1))
+    return set(text[i : i + n] for i in range(len(text) - n + 1))
 
 
 def _jaccard(a: str, b: str, n: int = 4) -> float:

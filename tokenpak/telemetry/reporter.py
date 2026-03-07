@@ -41,13 +41,14 @@ INGEST_URL = os.environ.get(
     "https://api.tokenpak.dev/v1/metrics/ingest",
 )
 MAX_RETRIES = 3
-BASE_BACKOFF_S = 2.0   # seconds; doubles each retry
-BATCH_LIMIT = 500      # max records per upload
+BASE_BACKOFF_S = 2.0  # seconds; doubles each retry
+BATCH_LIMIT = 500  # max records per upload
 
 
 # ---------------------------------------------------------------------------
 # Core sync
 # ---------------------------------------------------------------------------
+
 
 def _post(url: str, payload: dict, timeout: int = 15) -> int:
     """HTTP POST JSON. Returns HTTP status code."""
@@ -128,7 +129,7 @@ def sync_batch(
 # ---------------------------------------------------------------------------
 
 _lock = threading.Lock()
-_last_sync_date: str = ""   # "YYYY-MM-DD" of last successful sync
+_last_sync_date: str = ""  # "YYYY-MM-DD" of last successful sync
 
 
 def _should_sync_today() -> bool:
@@ -145,6 +146,7 @@ def _run_daily_sync() -> None:
             return
         try:
             from tokenpak.agent.config import get_metrics_enabled
+
             if not get_metrics_enabled():
                 return
         except Exception:
@@ -156,7 +158,8 @@ def _run_daily_sync() -> None:
             if result["uploaded"] > 0:
                 logger.info(
                     "metrics: synced %d records (errors: %s)",
-                    result["uploaded"], result["errors"],
+                    result["uploaded"],
+                    result["errors"],
                 )
             _last_sync_date = today
         except Exception as exc:

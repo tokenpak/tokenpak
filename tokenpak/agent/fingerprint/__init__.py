@@ -7,7 +7,7 @@ Public API:
     FingerprintSync       — send to intelligence server, receive directives
 """
 
-from .generator import FingerprintGenerator, Fingerprint, Segment
+from .generator import Fingerprint, FingerprintGenerator, Segment
 from .privacy import PrivacyLevel, apply_privacy
 from .sync import FingerprintSync, SyncResult
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,10 +12,11 @@ from typing import Any, Optional
 @dataclass
 class BlockRecord:
     """A compressed content block stored on disk."""
-    block_id: str           # Typically path#hash[:8]
-    path: str               # Source file path
-    content_hash: str       # SHA256 of original content
-    file_type: str          # "code" | "text" | "data"
+
+    block_id: str  # Typically path#hash[:8]
+    path: str  # Source file path
+    content_hash: str  # SHA256 of original content
+    file_type: str  # "code" | "text" | "data"
     raw_tokens: int
     compressed_tokens: int
     compressed_content: str

@@ -10,8 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from .complexity import score_complexity, TaskType
-
+from .complexity import score_complexity
 
 DEFAULT_LEDGER_PATH = ".tokenpak/routing_ledger.db"
 
@@ -109,19 +108,30 @@ class RoutingLedger:
 
         with self._lock:
             conn = self._connect()
-            cur = conn.execute("""
+            cur = conn.execute(
+                """
                 INSERT INTO transactions
                     (timestamp, model_used, task_type, complexity_score,
                      context_tokens, context_weight, response_tokens,
                      accepted, rejection_reason, latency_ms,
                      query_preview, routing_action)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                ts, model, task_type.value, complexity_score,
-                context_tokens, context_weight, response_tokens,
-                accepted_int, rejection_reason, latency_ms,
-                query_preview, routing_action,
-            ))
+            """,
+                (
+                    ts,
+                    model,
+                    task_type.value,
+                    complexity_score,
+                    context_tokens,
+                    context_weight,
+                    response_tokens,
+                    accepted_int,
+                    rejection_reason,
+                    latency_ms,
+                    query_preview,
+                    routing_action,
+                ),
+            )
             row_id = cur.lastrowid
             conn.commit()
             conn.close()
@@ -142,11 +152,14 @@ class RoutingLedger:
         accepted_int = 1 if accepted else 0
         with self._lock:
             conn = self._connect()
-            cur = conn.execute("""
+            cur = conn.execute(
+                """
                 UPDATE transactions
                 SET accepted = ?, rejection_reason = ?
                 WHERE id = ?
-            """, (accepted_int, rejection_reason, transaction_id))
+            """,
+                (accepted_int, rejection_reason, transaction_id),
+            )
             updated = cur.rowcount > 0
             conn.commit()
             conn.close()
@@ -159,9 +172,7 @@ class RoutingLedger:
     def get_transaction(self, transaction_id: int) -> Optional[dict]:
         """Fetch a single transaction by ID."""
         conn = self._connect()
-        row = conn.execute(
-            "SELECT * FROM transactions WHERE id = ?", (transaction_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
         conn.close()
         return dict(row) if row else None
 
@@ -204,23 +215,29 @@ class RoutingLedger:
     def sample_count(self, model: str, task_type: str) -> int:
         """Return number of transactions for (model, task_type) with known outcome."""
         conn = self._connect()
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT COUNT(*) FROM transactions
             WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
-        """, (model, task_type)).fetchone()
+        """,
+            (model, task_type),
+        ).fetchone()
         conn.close()
         return row[0] if row else 0
 
     def acceptance_rate(self, model: str, task_type: str) -> float:
         """Return acceptance rate for (model, task_type). Returns 0.0 if no data."""
         conn = self._connect()
-        row = conn.execute("""
+        row = conn.execute(
+            """
             SELECT
                 SUM(CASE WHEN accepted=1 THEN 1 ELSE 0 END) AS wins,
                 COUNT(*) AS total
             FROM transactions
             WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
-        """, (model, task_type)).fetchone()
+        """,
+            (model, task_type),
+        ).fetchone()
         conn.close()
         if not row or row["total"] == 0:
             return 0.0

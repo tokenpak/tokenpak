@@ -3,6 +3,7 @@
 Records per-request compression events to a rotating JSONL file and
 maintains an in-memory rolling window for fast aggregation.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,12 +23,13 @@ DEFAULT_LOG_DIR = os.path.expanduser("~/.tokenpak")
 DEFAULT_LOG_FILENAME = "compression_events.jsonl"
 DEFAULT_LOG_PATH = os.path.join(DEFAULT_LOG_DIR, DEFAULT_LOG_FILENAME)
 MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB rotation threshold
-ROLLING_WINDOW = 100              # events kept in memory for fast stats
+ROLLING_WINDOW = 100  # events kept in memory for fast stats
 
 
 # ---------------------------------------------------------------------------
 # CompressionStats
 # ---------------------------------------------------------------------------
+
 
 class CompressionStats:
     """
@@ -121,13 +123,9 @@ class CompressionStats:
 
         ok_events = [e for e in events if e.get("status") == "ok"]
         avg_ratio = (
-            round(sum(e["ratio"] for e in ok_events) / len(ok_events), 4)
-            if ok_events else 0.0
+            round(sum(e["ratio"] for e in ok_events) / len(ok_events), 4) if ok_events else 0.0
         )
-        avg_latency = (
-            int(sum(e["latency_ms"] for e in events) / len(events))
-            if events else 0
-        )
+        avg_latency = int(sum(e["latency_ms"] for e in events) / len(events)) if events else 0
         uptime_s = int(time.time() - self._start_time)
 
         return {
@@ -153,7 +151,7 @@ class CompressionStats:
         except OSError:
             return []
         events = []
-        for line in reversed(lines[-limit * 2:]):
+        for line in reversed(lines[-limit * 2 :]):
             line = line.strip()
             if not line:
                 continue
@@ -177,18 +175,16 @@ class CompressionStats:
         ok_events = [e for e in events if e.get("status") == "ok"]
         avg_ratio = (
             round(sum(e.get("ratio", 0) for e in ok_events) / len(ok_events), 4)
-            if ok_events else 0.0
+            if ok_events
+            else 0.0
         )
-        avg_latency = (
-            int(sum(e.get("latency_ms", 0) for e in events) / total)
-            if total else 0
-        )
+        avg_latency = int(sum(e.get("latency_ms", 0) for e in events) / total) if total else 0
         return {
             "requests_total": total,
             "requests_errors": errors,
             "avg_ratio": avg_ratio,
             "avg_latency_ms": avg_latency,
-            "uptime_seconds": None,   # not available from file alone
+            "uptime_seconds": None,  # not available from file alone
             "window_size": total,
         }
 

@@ -29,7 +29,7 @@ Budget overflow: lowest-priority blocks REMOVED until within budget.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from .report import Action, CompileReport, Decision
@@ -38,6 +38,7 @@ from .report import Action, CompileReport, Decision
 
 try:
     import tiktoken
+
     _enc = tiktoken.encoding_for_model("gpt-4")
 
     def _count_tokens(text: str) -> int:
@@ -50,6 +51,7 @@ try:
         return _enc.decode(tokens[:max_tokens]) + "..."
 
 except ImportError:
+
     def _count_tokens(text: str) -> int:  # type: ignore[misc]
         return max(1, len(text) // 4)
 
@@ -62,9 +64,9 @@ except ImportError:
 
 _PRIORITY_RANK: dict[str, int] = {
     "critical": 0,
-    "high":     1,
-    "medium":   2,
-    "low":      3,
+    "high": 1,
+    "medium": 2,
+    "low": 3,
 }
 
 
@@ -73,6 +75,7 @@ def _priority_rank(p: str) -> int:
 
 
 # ── PackBlock — input descriptor ─────────────────────────────────────────
+
 
 @dataclass
 class PackBlock:
@@ -88,6 +91,7 @@ class PackBlock:
         max_tokens: Per-block token cap. If set and block exceeds it,
                     the block is COMPACTED to fit.
     """
+
     id: str
     type: str
     content: str
@@ -98,6 +102,7 @@ class PackBlock:
 
 # ── CompiledResult — output of compile() ─────────────────────────────────
 
+
 @dataclass
 class CompiledResult:
     """Return value of ContextPack.compile().
@@ -105,6 +110,7 @@ class CompiledResult:
     Stack-neutral output methods allow the compiled result to be used
     with any LLM provider without requiring the TokenPak gateway.
     """
+
     text: str
     report: CompileReport
 
@@ -202,6 +208,7 @@ class CompiledResult:
 
 # ── Convenience helpers — incremental adoption ────────────────────────────
 
+
 def pack_prompt(
     system: Optional[str] = None,
     docs: Optional[str] = None,
@@ -238,6 +245,7 @@ def pack_prompt(
 
 
 # ── ContextPack — main class ──────────────────────────────────────────────
+
 
 class ContextPack:
     """Budget-aware context compiler with full transparency reports.
@@ -280,9 +288,7 @@ class ContextPack:
         t_start = time.perf_counter()
 
         # Measure raw token counts
-        block_tokens: dict[str, int] = {
-            b.id: _count_tokens(b.content) for b in self._blocks
-        }
+        block_tokens: dict[str, int] = {b.id: _count_tokens(b.content) for b in self._blocks}
         input_tokens_total = sum(block_tokens.values())
 
         decisions: list[Decision] = []
@@ -296,19 +302,21 @@ class ContextPack:
 
             # ── Quality filter (REMOVED) ──────────────────────────────
             if block.quality is not None and block.quality < self.quality_threshold:
-                decisions.append(Decision(
-                    block_id=block.id,
-                    block_type=block.type,
-                    action=Action.REMOVED,
-                    reason=(
-                        f"below quality threshold "
-                        f"({block.quality:.2f} < {self.quality_threshold:.2f})"
-                    ),
-                    priority=block.priority,
-                    tokens_before=raw_tokens,
-                    tokens_after=0,
-                    quality=block.quality,
-                ))
+                decisions.append(
+                    Decision(
+                        block_id=block.id,
+                        block_type=block.type,
+                        action=Action.REMOVED,
+                        reason=(
+                            f"below quality threshold "
+                            f"({block.quality:.2f} < {self.quality_threshold:.2f})"
+                        ),
+                        priority=block.priority,
+                        tokens_before=raw_tokens,
+                        tokens_after=0,
+                        quality=block.quality,
+                    )
+                )
                 continue
 
             text = block.content
@@ -317,16 +325,18 @@ class ContextPack:
             if block.max_tokens is not None and raw_tokens > block.max_tokens:
                 text = _truncate_to_tokens(text, block.max_tokens)
                 after_tokens = _count_tokens(text)
-                decisions.append(Decision(
-                    block_id=block.id,
-                    block_type=block.type,
-                    action=Action.COMPACTED,
-                    reason=f"exceeded block budget (max {block.max_tokens:,})",
-                    method="extractive_truncation",
-                    priority=block.priority,
-                    tokens_before=raw_tokens,
-                    tokens_after=after_tokens,
-                ))
+                decisions.append(
+                    Decision(
+                        block_id=block.id,
+                        block_type=block.type,
+                        action=Action.COMPACTED,
+                        reason=f"exceeded block budget (max {block.max_tokens:,})",
+                        method="extractive_truncation",
+                        priority=block.priority,
+                        tokens_before=raw_tokens,
+                        tokens_after=after_tokens,
+                    )
+                )
                 kept_blocks.append((block, text, after_tokens))
                 continue
 
@@ -337,7 +347,7 @@ class ContextPack:
         # Remove lowest-priority blocks until we fit within budget.
         # For blocks already in decisions (REMOVED/COMPACTED), they're done.
         # For kept_blocks, we may need to drop the lowest-priority ones.
-        tentative_total = sum(t for _, _, t in kept_blocks)
+        sum(t for _, _, t in kept_blocks)
 
         # Sort kept by priority DESCENDING (lowest priority last → drop first)
         kept_by_prio = sorted(
@@ -363,47 +373,54 @@ class ContextPack:
                     after_tokens = _count_tokens(truncated)
                     final_kept.append((block, truncated, after_tokens))
                     running_total += after_tokens
-                    decisions.append(Decision(
-                        block_id=block.id,
-                        block_type=block.type,
-                        action=Action.TRUNCATED,
-                        reason=f"conversation budget exceeded",
-                        priority=block.priority,
-                        tokens_before=tokens,
-                        tokens_after=after_tokens,
-                    ))
+                    decisions.append(
+                        Decision(
+                            block_id=block.id,
+                            block_type=block.type,
+                            action=Action.TRUNCATED,
+                            reason="conversation budget exceeded",
+                            priority=block.priority,
+                            tokens_before=tokens,
+                            tokens_after=after_tokens,
+                        )
+                    )
                 else:
                     # REMOVED due to budget
-                    decisions.append(Decision(
-                        block_id=block.id,
-                        block_type=block.type,
-                        action=Action.REMOVED,
-                        reason="over total budget — dropped lowest priority block",
-                        priority=block.priority,
-                        tokens_before=tokens,
-                        tokens_after=0,
-                        quality=block.quality,
-                    ))
+                    decisions.append(
+                        Decision(
+                            block_id=block.id,
+                            block_type=block.type,
+                            action=Action.REMOVED,
+                            reason="over total budget — dropped lowest priority block",
+                            priority=block.priority,
+                            tokens_before=tokens,
+                            tokens_after=0,
+                            quality=block.quality,
+                        )
+                    )
 
         # Blocks that were quietly KEPT (no special action) need decisions too
-        kept_ids = {b.id for b, _, _ in final_kept}
+        {b.id for b, _, _ in final_kept}
         decision_ids = {d.block_id for d in decisions}
 
         for block, text, tokens in final_kept:
             if block.id not in decision_ids:
-                decisions.append(Decision(
-                    block_id=block.id,
-                    block_type=block.type,
-                    action=Action.KEPT,
-                    reason=(
-                        "critical priority" if block.priority == "critical"
-                        else f"{block.priority} priority — within budget"
-                    ),
-                    priority=block.priority,
-                    tokens_before=block_tokens[block.id],
-                    tokens_after=tokens,
-                    quality=block.quality,
-                ))
+                decisions.append(
+                    Decision(
+                        block_id=block.id,
+                        block_type=block.type,
+                        action=Action.KEPT,
+                        reason=(
+                            "critical priority"
+                            if block.priority == "critical"
+                            else f"{block.priority} priority — within budget"
+                        ),
+                        priority=block.priority,
+                        tokens_before=block_tokens[block.id],
+                        tokens_after=tokens,
+                        quality=block.quality,
+                    )
+                )
 
         # Sort final_kept back into priority order for output
         priority_idx = {b.id: _priority_rank(b.priority) for b in self._blocks}

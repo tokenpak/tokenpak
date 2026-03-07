@@ -1,28 +1,27 @@
 """Comprehensive diagnostics for TokenPak installation."""
 
-import sys
-import os
 import json
-import subprocess
 import socket
+import sys
 from pathlib import Path
 
 
 class Colors:
     """ANSI color codes."""
+
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
     RED = "\033[91m"
     RESET = "\033[0m"
-    
+
     @staticmethod
     def ok(text):
         return f"{Colors.GREEN}✅{Colors.RESET}  {text}"
-    
+
     @staticmethod
     def warn(text):
         return f"{Colors.YELLOW}⚠️{Colors.RESET}   {text}"
-    
+
     @staticmethod
     def fail(text):
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
@@ -32,10 +31,10 @@ def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
     print("\nTOKENPAK  |  Doctor")
     print("──────────────────────────────\n")
-    
+
     results = {"pass": 0, "warn": 0, "fail": 0}
     fixes_needed = []
-    
+
     # Check 1: Python version
     py_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     if sys.version_info >= (3, 10):
@@ -44,7 +43,7 @@ def cmd_doctor(args):
     else:
         print(Colors.fail(f"Python version      {py_version} — requires ≥3.10"))
         results["fail"] += 1
-    
+
     # Check 2: Config file
     config_path = Path.home() / ".tokenpak" / "config.json"
     if config_path.exists():
@@ -61,7 +60,7 @@ def cmd_doctor(args):
         print(Colors.warn(f"Config file         {config_path} — not found"))
         results["warn"] += 1
         fixes_needed.append("create config")
-    
+
     # Check 3: Vault index
     index_path = Path.home() / ".tokenpak" / "index.json"
     if index_path.exists():
@@ -73,7 +72,11 @@ def cmd_doctor(args):
                 print(Colors.ok(f"Vault index         {index_path} — {block_count} blocks"))
                 results["pass"] += 1
             else:
-                print(Colors.warn(f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"))
+                print(
+                    Colors.warn(
+                        f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"
+                    )
+                )
                 results["warn"] += 1
         except json.JSONDecodeError:
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
@@ -81,7 +84,7 @@ def cmd_doctor(args):
     else:
         print(Colors.warn(f"Vault index         {index_path} — not found"))
         results["warn"] += 1
-    
+
     # Check 4: Proxy port
     proxy_port = 8765
     try:
@@ -99,7 +102,7 @@ def cmd_doctor(args):
     except Exception:
         print(Colors.warn(f"Proxy reachable     port {proxy_port} — check failed"))
         results["warn"] += 1
-    
+
     # Check 5: Disk usage
     tokenpak_dir = Path.home() / ".tokenpak"
     try:
@@ -112,9 +115,9 @@ def cmd_doctor(args):
             print(Colors.warn(f"Disk usage          {size_mb:.1f} MB — consider cleanup"))
             results["warn"] += 1
     except Exception:
-        print(Colors.warn(f"Disk usage          could not measure"))
+        print(Colors.warn("Disk usage          could not measure"))
         results["warn"] += 1
-    
+
     # Check 6: Log file
     log_path = Path.home() / ".tokenpak" / "debug.log"
     if log_path.exists():
@@ -122,15 +125,15 @@ def cmd_doctor(args):
         print(Colors.ok(f"Debug log           {log_path} — {log_size_mb:.2f} MB"))
         results["pass"] += 1
     else:
-        print(Colors.ok(f"Debug log           (not present)"))
+        print(Colors.ok("Debug log           (not present)"))
         results["pass"] += 1
-    
+
     # Summary
-    print(f"\n──────────────────────────────")
+    print("\n──────────────────────────────")
     summary = f"{results['fail']} error{'s' if results['fail'] != 1 else ''}, {results['warn']} warning{'s' if results['warn'] != 1 else ''}."
     print(summary)
-    
-    if hasattr(args, 'fix') and args.fix:
+
+    if hasattr(args, "fix") and args.fix:
         print("\nAuto-fix requested. Fixing issues...")
         for fix in fixes_needed:
             if fix == "create config":
@@ -139,7 +142,6 @@ def cmd_doctor(args):
                 with open(config_path, "w") as f:
                     json.dump(default_config, f, indent=2)
                 print(f"  ✓ Created {config_path}")
-    
+
     if results["fail"] > 0:
         sys.exit(1)
-

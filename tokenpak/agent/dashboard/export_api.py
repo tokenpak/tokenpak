@@ -110,9 +110,7 @@ class ExportAPI:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _error(
-        status: int, code: str, detail: str
-    ) -> Tuple[bytes, int, Dict[str, str]]:
+    def _error(status: int, code: str, detail: str) -> Tuple[bytes, int, Dict[str, str]]:
         body = json.dumps({"error": code, "detail": detail}, indent=2).encode("utf-8")
         headers = {
             "Content-Type": "application/json",

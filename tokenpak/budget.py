@@ -1,28 +1,29 @@
 """Budget allocation using quadratic importance weighting."""
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 
 @dataclass
 class BudgetBlock:
     """Block metadata for budget allocation."""
+
     ref: str
-    relevance_score: float = 0.5   # 0-1
-    recency_score: float = 0.5     # 0-1
-    quality_score: float = 1.0     # 0-1
-    type_weight: float = 0.5       # 0-1
-    slice_id: Optional[str] = None # For utility-score lookup
-    utility_weight: float = 1.0    # Multiplier from citation tracker (score/5.0)
+    relevance_score: float = 0.5  # 0-1
+    recency_score: float = 0.5  # 0-1
+    quality_score: float = 1.0  # 0-1
+    type_weight: float = 0.5  # 0-1
+    slice_id: Optional[str] = None  # For utility-score lookup
+    utility_weight: float = 1.0  # Multiplier from citation tracker (score/5.0)
 
     @property
     def importance(self) -> float:
         """Composite importance score (0-10), modulated by utility weight."""
         base = (
-            0.4 * self.relevance_score +
-            0.2 * self.recency_score +
-            0.2 * self.quality_score +
-            0.2 * self.type_weight
+            0.4 * self.relevance_score
+            + 0.2 * self.recency_score
+            + 0.2 * self.quality_score
+            + 0.2 * self.type_weight
         )
         raw = max(0.0, min(10.0, base * 10))
         # Apply utility multiplier; neutral weight=1.0 leaves score unchanged
@@ -52,6 +53,7 @@ def quadratic_allocate(
     if utility_path is not None:
         try:
             from tokenpak.citation_tracker import get_utility_weight
+
             for b in blocks:
                 if b.slice_id:
                     b.utility_weight = get_utility_weight(b.slice_id, utility_path)

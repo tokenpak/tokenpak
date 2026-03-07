@@ -22,7 +22,7 @@ jobs:
         run: pip install ruff black
 
       - name: Run ruff
-        run: ruff check tokenpak/ --select E,F,W,I --ignore E501
+        run: ruff check tokenpak/
 
       - name: Check black formatting
         run: black --check tokenpak/ --line-length 100

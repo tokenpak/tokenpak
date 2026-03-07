@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fnmatch
 import re
-from typing import Optional
 
 
 def match_event(pattern: str, event: str) -> bool:
@@ -28,12 +27,10 @@ def match_event(pattern: str, event: str) -> bool:
     # file events
     for kind in ("file:changed:", "file:created:"):
         if pattern.startswith(kind) and event.startswith(kind):
-            glob = pattern[len(kind):]
-            path = event[len(kind):]
+            glob = pattern[len(kind) :]
+            path = event[len(kind) :]
             # match on full path OR basename
-            return fnmatch.fnmatch(path, glob) or fnmatch.fnmatch(
-                path.split("/")[-1], glob
-            )
+            return fnmatch.fnmatch(path, glob) or fnmatch.fnmatch(path.split("/")[-1], glob)
 
     # cost threshold  cost:daily>10
     m = re.match(r"cost:daily>(\d+(?:\.\d+)?)", pattern)
@@ -48,8 +45,8 @@ def match_event(pattern: str, event: str) -> bool:
         if pattern == kind and event.startswith(kind):
             return True
         if pattern.startswith(kind + ":") and event.startswith(kind + ":"):
-            name_pat = pattern[len(kind) + 1:]
-            name_evt = event[len(kind) + 1:]
+            name_pat = pattern[len(kind) + 1 :]
+            name_evt = event[len(kind) + 1 :]
             return fnmatch.fnmatch(name_evt, name_pat)
 
     # git events: allow git:push or git:commit to match git:push:<branch> etc.

@@ -15,16 +15,16 @@ import json
 import math
 import sqlite3
 import threading
-import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     from scipy import stats as _scipy_stats
+
     _HAS_SCIPY = True
 except ImportError:
     _HAS_SCIPY = False
@@ -35,8 +35,8 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 DEFAULT_DB_PATH = Path.home() / ".tokenpak" / "ab_optimizer.db"
-MIN_SAMPLES = 50          # minimum samples per variant before significance check
-CONFIDENCE_LEVEL = 0.95   # 95% confidence → α = 0.05
+MIN_SAMPLES = 50  # minimum samples per variant before significance check
+CONFIDENCE_LEVEL = 0.95  # 95% confidence → α = 0.05
 ALPHA = 1.0 - CONFIDENCE_LEVEL
 
 
@@ -48,18 +48,20 @@ class ExperimentStatus(str, Enum):
 
 
 class PromotionAction(str, Enum):
-    AUTO = "auto"       # system auto-promoted winner
-    MANUAL = "manual"   # user forced promotion
-    NONE = "none"       # no promotion (tie / inconclusive)
+    AUTO = "auto"  # system auto-promoted winner
+    MANUAL = "manual"  # user forced promotion
+    NONE = "none"  # no promotion (tie / inconclusive)
 
 
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class VariantStats:
     """Running statistics for one variant."""
+
     name: str
     samples: int = 0
     # Token savings (ratio, higher is better)
@@ -89,7 +91,7 @@ class VariantStats:
             return 0.0
         mean = sum_ / self.samples
         # Welford variance: (sum_sq - n*mean²) / (n-1)
-        var = (sq_sum_ - self.samples * mean ** 2) / (self.samples - 1)
+        var = (sq_sum_ - self.samples * mean**2) / (self.samples - 1)
         return max(var, 0.0)
 
     @property
@@ -120,13 +122,14 @@ class VariantStats:
 @dataclass
 class SignificanceResult:
     """Result of significance test across all metrics."""
+
     significant: bool
     p_value_token_savings: float
     p_value_quality: float
     p_value_latency: float
-    winner: Optional[str]          # variant name of winner, or None
-    winner_metric: Optional[str]   # which metric drove the win
-    composite_advantage: float     # % composite advantage of winner
+    winner: Optional[str]  # variant name of winner, or None
+    winner_metric: Optional[str]  # which metric drove the win
+    composite_advantage: float  # % composite advantage of winner
     method: str = "welch_t_test"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -147,6 +150,7 @@ class SignificanceResult:
 @dataclass
 class Experiment:
     """An A/B experiment comparing two recipe variants."""
+
     id: str
     name: str
     description: str
@@ -157,7 +161,7 @@ class Experiment:
     completed_at: Optional[str]
     winner: Optional[str]
     promotion_action: PromotionAction
-    manual_override: Optional[str]   # forced winner variant name
+    manual_override: Optional[str]  # forced winner variant name
     tags: List[str]
     # Variant stats (serialized as JSON in DB)
     control_stats: VariantStats
@@ -184,9 +188,14 @@ class Experiment:
 # Statistical tests
 # ---------------------------------------------------------------------------
 
+
 def _welch_t_pvalue(
-    mean1: float, var1: float, n1: int,
-    mean2: float, var2: float, n2: int,
+    mean1: float,
+    var1: float,
+    n1: int,
+    mean2: float,
+    var2: float,
+    n2: int,
 ) -> float:
     """
     Welch's t-test p-value (two-tailed).
@@ -207,9 +216,7 @@ def _welch_t_pvalue(
     t_stat = (mean1 - mean2) / se
 
     # Welch-Satterthwaite degrees of freedom
-    df = (se1 + se2) ** 2 / (
-        (se1 ** 2 / (n1 - 1)) + (se2 ** 2 / (n2 - 1))
-    )
+    df = (se1 + se2) ** 2 / ((se1**2 / (n1 - 1)) + (se2**2 / (n2 - 1)))
     df = max(df, 1.0)
 
     if _HAS_SCIPY:
@@ -230,12 +237,8 @@ def _chi_squared_pvalue(observed: List[int], expected: List[float]) -> float:
         chi2, p = _scipy_stats.chisquare(observed, expected)
         return float(p)
     # Manual approximation
-    chi2 = sum(
-        (o - e) ** 2 / e
-        for o, e in zip(observed, expected)
-        if e > 0
-    )
-    df = len(observed) - 1
+    chi2 = sum((o - e) ** 2 / e for o, e in zip(observed, expected) if e > 0)
+    len(observed) - 1
     # Rough p-value via survival function approximation (not precise)
     # Use scipy if available; otherwise best-effort
     return max(0.0, math.exp(-0.5 * chi2))  # very rough
@@ -250,16 +253,28 @@ def compute_significance(control: VariantStats, treatment: VariantStats) -> Sign
 
     # p-values for each metric
     p_savings = _welch_t_pvalue(
-        control.token_savings_mean, control.token_savings_var, n_c,
-        treatment.token_savings_mean, treatment.token_savings_var, n_t,
+        control.token_savings_mean,
+        control.token_savings_var,
+        n_c,
+        treatment.token_savings_mean,
+        treatment.token_savings_var,
+        n_t,
     )
     p_quality = _welch_t_pvalue(
-        control.quality_mean, control.quality_var, n_c,
-        treatment.quality_mean, treatment.quality_var, n_t,
+        control.quality_mean,
+        control.quality_var,
+        n_c,
+        treatment.quality_mean,
+        treatment.quality_var,
+        n_t,
     )
     p_latency = _welch_t_pvalue(
-        control.latency_mean, control.latency_var, n_c,
-        treatment.latency_mean, treatment.latency_var, n_t,
+        control.latency_mean,
+        control.latency_var,
+        n_c,
+        treatment.latency_mean,
+        treatment.latency_var,
+        n_t,
     )
 
     # Determine significance on primary metric (token_savings)
@@ -272,14 +287,10 @@ def compute_significance(control: VariantStats, treatment: VariantStats) -> Sign
     t_lat_score = 1.0 - (treatment.latency_mean / max_lat)
 
     c_composite = (
-        0.40 * control.token_savings_mean
-        + 0.40 * control.quality_mean
-        + 0.20 * c_lat_score
+        0.40 * control.token_savings_mean + 0.40 * control.quality_mean + 0.20 * c_lat_score
     )
     t_composite = (
-        0.40 * treatment.token_savings_mean
-        + 0.40 * treatment.quality_mean
-        + 0.20 * t_lat_score
+        0.40 * treatment.token_savings_mean + 0.40 * treatment.quality_mean + 0.20 * t_lat_score
     )
 
     if not significant:
@@ -372,16 +383,18 @@ class ABOptimizerStore:
     # ------------------------------------------------------------------
 
     def _stats_to_json(self, stats: VariantStats) -> str:
-        return json.dumps({
-            "name": stats.name,
-            "samples": stats.samples,
-            "token_savings_sum": stats.token_savings_sum,
-            "token_savings_sq_sum": stats.token_savings_sq_sum,
-            "quality_sum": stats.quality_sum,
-            "quality_sq_sum": stats.quality_sq_sum,
-            "latency_sum": stats.latency_sum,
-            "latency_sq_sum": stats.latency_sq_sum,
-        })
+        return json.dumps(
+            {
+                "name": stats.name,
+                "samples": stats.samples,
+                "token_savings_sum": stats.token_savings_sum,
+                "token_savings_sq_sum": stats.token_savings_sq_sum,
+                "quality_sum": stats.quality_sum,
+                "quality_sq_sum": stats.quality_sq_sum,
+                "latency_sum": stats.latency_sum,
+                "latency_sq_sum": stats.latency_sq_sum,
+            }
+        )
 
     def _json_to_stats(self, blob: str, default_name: str) -> VariantStats:
         d = json.loads(blob) if blob else {}
@@ -454,10 +467,17 @@ class ABOptimizerStore:
                     manual_override, tags, control_stats, treatment_stats)
                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    exp.id, exp.name, exp.description,
-                    exp.control_name, exp.treatment_name,
-                    exp.status.value, exp.created_at, None, None,
-                    PromotionAction.NONE.value, None,
+                    exp.id,
+                    exp.name,
+                    exp.description,
+                    exp.control_name,
+                    exp.treatment_name,
+                    exp.status.value,
+                    exp.created_at,
+                    None,
+                    None,
+                    PromotionAction.NONE.value,
+                    None,
                     json.dumps(exp.tags),
                     self._stats_to_json(control_stats),
                     self._stats_to_json(treatment_stats),
@@ -467,9 +487,7 @@ class ABOptimizerStore:
 
     def get_experiment(self, exp_id: str) -> Optional[Experiment]:
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM experiments WHERE id = ?", (exp_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,)).fetchone()
         return self._row_to_experiment(row) if row else None
 
     def list_experiments(
@@ -483,9 +501,7 @@ class ABOptimizerStore:
                     (status_filter,),
                 ).fetchall()
             else:
-                rows = conn.execute(
-                    "SELECT * FROM experiments ORDER BY created_at DESC"
-                ).fetchall()
+                rows = conn.execute("SELECT * FROM experiments ORDER BY created_at DESC").fetchall()
         return [self._row_to_experiment(r) for r in rows]
 
     def record_observation(
@@ -502,17 +518,13 @@ class ABOptimizerStore:
         Automatically promotes winner when significance reached.
         """
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM experiments WHERE id = ?", (exp_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,)).fetchone()
             if not row:
                 raise ValueError(f"Experiment {exp_id} not found")
             exp = self._row_to_experiment(row)
 
             if exp.status != ExperimentStatus.ACTIVE:
-                raise ValueError(
-                    f"Experiment {exp_id} is {exp.status.value}, not active"
-                )
+                raise ValueError(f"Experiment {exp_id} is {exp.status.value}, not active")
             if variant not in (exp.control_name, exp.treatment_name):
                 raise ValueError(
                     f"Unknown variant '{variant}'. "
@@ -520,18 +532,14 @@ class ABOptimizerStore:
                 )
 
             # Update running stats
-            stats = (
-                exp.control_stats
-                if variant == exp.control_name
-                else exp.treatment_stats
-            )
+            stats = exp.control_stats if variant == exp.control_name else exp.treatment_stats
             stats.samples += 1
             stats.token_savings_sum += token_savings
-            stats.token_savings_sq_sum += token_savings ** 2
+            stats.token_savings_sq_sum += token_savings**2
             stats.quality_sum += quality_score
-            stats.quality_sq_sum += quality_score ** 2
+            stats.quality_sq_sum += quality_score**2
             stats.latency_sum += latency_ms
-            stats.latency_sq_sum += latency_ms ** 2
+            stats.latency_sq_sum += latency_ms**2
 
             # Persist updated stats
             ctrl_json = self._stats_to_json(exp.control_stats)
@@ -569,9 +577,7 @@ class ABOptimizerStore:
     def force_winner(self, exp_id: str, variant: str) -> Experiment:
         """Manual override: force a variant as the winner."""
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM experiments WHERE id = ?", (exp_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,)).fetchone()
             if not row:
                 raise ValueError(f"Experiment {exp_id} not found")
             exp = self._row_to_experiment(row)
@@ -598,9 +604,7 @@ class ABOptimizerStore:
     def cancel_experiment(self, exp_id: str) -> Experiment:
         """Cancel an active experiment."""
         with self._lock, self._connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM experiments WHERE id = ?", (exp_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,)).fetchone()
             if not row:
                 raise ValueError(f"Experiment {exp_id} not found")
             now = datetime.now(timezone.utc).isoformat()

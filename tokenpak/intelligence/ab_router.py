@@ -44,6 +44,7 @@ def _get_store() -> ABOptimizerStore:
 def _store() -> ABOptimizerStore:
     if not hasattr(ab_router, "_store_instance"):
         from .ab_optimizer import DEFAULT_DB_PATH
+
         db = _DB_PATH or str(DEFAULT_DB_PATH)
         ab_router._store_instance = ABOptimizerStore(db)  # type: ignore[attr-defined]
     return ab_router._store_instance  # type: ignore[attr-defined]
@@ -80,6 +81,7 @@ def _err(code: int, msg: str) -> JSONResponse:
 # Request schemas
 # ---------------------------------------------------------------------------
 
+
 class CreateExperimentRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: str = Field("", max_length=1000)
@@ -110,13 +112,14 @@ class PromoteRequest(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @ab_router.post("/ab/experiments", status_code=status.HTTP_201_CREATED)
 async def create_experiment(
     body: CreateExperimentRequest,
     request: Request,
 ) -> JSONResponse:
     """Create a new A/B experiment."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     try:
         exp = _store().create_experiment(
@@ -140,23 +143,25 @@ async def list_experiments(
     ),
 ) -> JSONResponse:
     """List all experiments, optionally filtered by status."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     valid = {s.value for s in ExperimentStatus}
     if filter and filter not in valid:
         return _err(400, f"Invalid filter '{filter}'. Choose from: {', '.join(sorted(valid))}")
     experiments = _store().list_experiments(status_filter=filter)
-    return JSONResponse(content={
-        "experiments": [e.to_dict() for e in experiments],
-        "count": len(experiments),
-        "filter": filter,
-    })
+    return JSONResponse(
+        content={
+            "experiments": [e.to_dict() for e in experiments],
+            "count": len(experiments),
+            "filter": filter,
+        }
+    )
 
 
 @ab_router.get("/ab/experiments/{exp_id}")
 async def get_experiment(exp_id: str, request: Request) -> JSONResponse:
     """Get experiment details."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     exp = _store().get_experiment(exp_id)
     if not exp:
@@ -171,7 +176,7 @@ async def report_observation(
     request: Request,
 ) -> JSONResponse:
     """Record one observation for a variant. Returns significance result when available."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     try:
         sig = _store().record_observation(
@@ -196,7 +201,7 @@ async def report_observation(
 @ab_router.get("/ab/experiments/{exp_id}/results")
 async def get_results(exp_id: str, request: Request) -> JSONResponse:
     """Get full significance results for an experiment."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     try:
         results = _store().get_results(exp_id)
@@ -212,15 +217,17 @@ async def promote_winner(
     request: Request,
 ) -> JSONResponse:
     """Manual override: force a variant as the winner."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     try:
         exp = _store().force_winner(exp_id=exp_id, variant=body.variant)
-        return JSONResponse(content={
-            "promoted": True,
-            "winner": body.variant,
-            "experiment": exp.to_dict(),
-        })
+        return JSONResponse(
+            content={
+                "promoted": True,
+                "winner": body.variant,
+                "experiment": exp.to_dict(),
+            }
+        )
     except ValueError as exc:
         return _err(400, str(exc))
 
@@ -228,7 +235,7 @@ async def promote_winner(
 @ab_router.post("/ab/experiments/{exp_id}/cancel")
 async def cancel_experiment(exp_id: str, request: Request) -> JSONResponse:
     """Cancel an active experiment."""
-    if (guard := _require_pro(request)):
+    if guard := _require_pro(request):
         return guard
     try:
         exp = _store().cancel_experiment(exp_id)

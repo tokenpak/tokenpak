@@ -5,20 +5,19 @@ from __future__ import annotations
 import os
 import sys
 
-
 TOKENPAK_VARS = [
-    ("TOKENPAK_PORT",                    "Proxy listen port"),
-    ("TOKENPAK_MODE",                    "Compilation mode (strict|hybrid|aggressive)"),
-    ("TOKENPAK_COMPACT",                 "Compaction on/off (0|1)"),
-    ("TOKENPAK_COMPACT_THRESHOLD_TOKENS","Compaction threshold (tokens)"),
-    ("TOKENPAK_COMPACT_MAX_CHARS",       "Max chars for compressed text"),
-    ("TOKENPAK_COMPACT_CACHE_SIZE",      "Compaction cache size"),
-    ("TOKENPAK_DB",                      "Monitor DB path"),
-    ("TOKENPAK_VAULT_INDEX",             "Vault index path"),
-    ("TOKENPAK_INJECT_BUDGET",           "Max vault inject tokens"),
-    ("TOKENPAK_INJECT_TOP_K",            "Max vault blocks to inject"),
-    ("TOKENPAK_PROXY_URL",               "Proxy URL override"),
-    ("TOKENPAK_STATS_FOOTER",            "Stats footer after each request (0|1)"),
+    ("TOKENPAK_PORT", "Proxy listen port"),
+    ("TOKENPAK_MODE", "Compilation mode (strict|hybrid|aggressive)"),
+    ("TOKENPAK_COMPACT", "Compaction on/off (0|1)"),
+    ("TOKENPAK_COMPACT_THRESHOLD_TOKENS", "Compaction threshold (tokens)"),
+    ("TOKENPAK_COMPACT_MAX_CHARS", "Max chars for compressed text"),
+    ("TOKENPAK_COMPACT_CACHE_SIZE", "Compaction cache size"),
+    ("TOKENPAK_DB", "Monitor DB path"),
+    ("TOKENPAK_VAULT_INDEX", "Vault index path"),
+    ("TOKENPAK_INJECT_BUDGET", "Max vault inject tokens"),
+    ("TOKENPAK_INJECT_TOP_K", "Max vault blocks to inject"),
+    ("TOKENPAK_PROXY_URL", "Proxy URL override"),
+    ("TOKENPAK_STATS_FOOTER", "Stats footer after each request (0|1)"),
 ]
 
 # Keys settable via `tokenpak config set <key> <value>`
@@ -29,7 +28,7 @@ _SETTABLE_KEYS: dict[str, tuple[str, str]] = {
 }
 
 _TRUTHY = {"1", "true", "on", "yes"}
-_FALSY  = {"0", "false", "off", "no"}
+_FALSY = {"0", "false", "off", "no"}
 
 
 def _parse_bool(raw: str) -> bool:
@@ -91,7 +90,7 @@ def run_set(key: str, value: str) -> None:
         else:
             print("  Anonymous metrics reporting disabled.")
     else:
-        print(f"  Note: restart proxy for changes to take effect if it is already running.")
+        print("  Note: restart proxy for changes to take effect if it is already running.")
 
 
 try:

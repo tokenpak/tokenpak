@@ -11,11 +11,11 @@ Each hook receives JSON context via stdin with relevant event fields.
 """
 
 import json
+import logging
 import os
 import subprocess
-import logging
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def hook_exists(hook_name: str) -> bool:
 def list_hooks() -> Dict[str, Dict[str, Any]]:
     """
     List all possible hooks and their current status.
-    
+
     Returns:
         Dict mapping hook_name → {path, exists, executable, description}
     """
@@ -68,25 +68,25 @@ def list_hooks() -> Dict[str, Dict[str, Any]]:
 def install_hook(hook_name: str, script_content: Optional[str] = None) -> Path:
     """
     Install a hook script.
-    
+
     Args:
         hook_name: Hook name (e.g., "on_request")
         script_content: Shell script content. If None, installs a stub.
-    
+
     Returns:
         Path to the installed hook file.
-    
+
     Raises:
         ValueError: If hook_name is not recognized.
     """
     if hook_name not in HOOK_NAMES:
         raise ValueError(f"Unknown hook: {hook_name}. Valid hooks: {list(HOOK_NAMES.keys())}")
-    
+
     hooks_dir = _hooks_dir()
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    
+
     path = get_hook_path(hook_name)
-    
+
     if script_content is None:
         # Install a stub
         desc = HOOK_NAMES[hook_name]
@@ -100,7 +100,7 @@ def install_hook(hook_name: str, script_content: Optional[str] = None) -> Path:
 context=$(cat)
 echo "[tokenpak:{hook_name}] $context" >> ~/.tokenpak/hooks/{hook_name}.log
 """
-    
+
     path.write_text(script_content)
     path.chmod(0o755)
     return path
@@ -113,28 +113,28 @@ def fire_hook(
 ) -> Optional[Dict[str, Any]]:
     """
     Fire a hook script with the given context.
-    
+
     Args:
         hook_name: Hook name (e.g., "on_request")
         context: Dictionary passed as JSON to hook's stdin
         timeout: Timeout in seconds
-    
+
     Returns:
         Dict with {success, stdout, stderr, returncode} or None if hook doesn't exist.
     """
     from datetime import datetime
-    
+
     # Always inject timestamp
     ctx = {"timestamp": datetime.now().isoformat(), **context}
-    
+
     path = get_hook_path(hook_name)
     if not path.exists():
         return None
-    
+
     if not os.access(path, os.X_OK):
         logger.warning(f"Hook {hook_name} exists but is not executable: {path}")
         return None
-    
+
     try:
         stdin_data = json.dumps(ctx)
         result = subprocess.run(
@@ -153,7 +153,12 @@ def fire_hook(
         }
     except subprocess.TimeoutExpired:
         logger.warning(f"Hook {hook_name} timed out after {timeout}s")
-        return {"success": False, "stdout": "", "stderr": f"Hook timed out ({timeout}s)", "returncode": -1}
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": f"Hook timed out ({timeout}s)",
+            "returncode": -1,
+        }
     except Exception as e:
         logger.error(f"Hook {hook_name} failed: {e}")
         return {"success": False, "stdout": "", "stderr": str(e), "returncode": -1}
@@ -161,12 +166,15 @@ def fire_hook(
 
 def fire_on_request(model: str, provider: str, messages_count: int, **extra) -> Optional[Dict]:
     """Fire the on_request hook."""
-    return fire_hook("on_request", {
-        "model": model,
-        "provider": provider,
-        "messages_count": messages_count,
-        **extra,
-    })
+    return fire_hook(
+        "on_request",
+        {
+            "model": model,
+            "provider": provider,
+            "messages_count": messages_count,
+            **extra,
+        },
+    )
 
 
 def fire_on_response(
@@ -178,25 +186,33 @@ def fire_on_response(
     **extra,
 ) -> Optional[Dict]:
     """Fire the on_response hook."""
-    return fire_hook("on_response", {
-        "model": model,
-        "provider": provider,
-        "tokens_used": tokens_used,
-        "cost_usd": cost_usd,
-        "latency_ms": latency_ms,
-        **extra,
-    })
+    return fire_hook(
+        "on_response",
+        {
+            "model": model,
+            "provider": provider,
+            "tokens_used": tokens_used,
+            "cost_usd": cost_usd,
+            "latency_ms": latency_ms,
+            **extra,
+        },
+    )
 
 
-def fire_on_error(model: str, provider: str, error_type: str, error_message: str, **extra) -> Optional[Dict]:
+def fire_on_error(
+    model: str, provider: str, error_type: str, error_message: str, **extra
+) -> Optional[Dict]:
     """Fire the on_error hook."""
-    return fire_hook("on_error", {
-        "model": model,
-        "provider": provider,
-        "error_type": error_type,
-        "error_message": error_message,
-        **extra,
-    })
+    return fire_hook(
+        "on_error",
+        {
+            "model": model,
+            "provider": provider,
+            "error_type": error_type,
+            "error_message": error_message,
+            **extra,
+        },
+    )
 
 
 def fire_on_budget_alert(
@@ -207,10 +223,13 @@ def fire_on_budget_alert(
 ) -> Optional[Dict]:
     """Fire the on_budget_alert hook."""
     pct_used = round((spent_usd / limit_usd * 100) if limit_usd > 0 else 0, 1)
-    return fire_hook("on_budget_alert", {
-        "budget_id": budget_id,
-        "limit_usd": limit_usd,
-        "spent_usd": spent_usd,
-        "pct_used": pct_used,
-        **extra,
-    })
+    return fire_hook(
+        "on_budget_alert",
+        {
+            "budget_id": budget_id,
+            "limit_usd": limit_usd,
+            "spent_usd": spent_usd,
+            "pct_used": pct_used,
+            **extra,
+        },
+    )

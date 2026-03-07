@@ -11,6 +11,7 @@ Endpoints:
 Storage:
   ~/vault/.tokenpak/entries/YYYY-MM-DD.jsonl  (append-only, one entry per line)
 """
+
 from __future__ import annotations
 
 import json
@@ -43,6 +44,7 @@ def _entries_file(date_str: Optional[str] = None) -> Path:
 def _write_entry(entry: dict[str, Any]) -> str:
     """Append a single entry to the JSONL file, return its id."""
     import uuid
+
     entry_id = entry.setdefault("id", str(uuid.uuid4()))
     date_str = None
     # Use timestamp date if provided, else today
@@ -66,8 +68,10 @@ def _write_entry(entry: dict[str, Any]) -> str:
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+
 class Entry(BaseModel):
     """A single ingest entry from an agent."""
+
     model: str = Field(..., description="Model name (e.g. claude-haiku)")
     tokens: int = Field(..., ge=0, description="Total tokens used")
     cost: float = Field(..., ge=0.0, description="Cost in USD")
@@ -145,6 +149,7 @@ def ingest_batch(entries: List[Entry]) -> IngestResponse:
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
+
 
 def create_ingest_app(prefix: str = "") -> Any:
     """Create a standalone FastAPI app with ingest routes."""

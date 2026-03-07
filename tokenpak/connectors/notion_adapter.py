@@ -14,10 +14,9 @@ from typing import Optional, Tuple
 
 from .base_source import Provenance, SourceAdapter, SourceFetchError
 
-
 _NOTION_API_BASE = "https://api.notion.com/v1"
-_NOTION_VERSION  = "2022-06-28"
-_HTTP_TIMEOUT    = 10
+_NOTION_VERSION = "2022-06-28"
+_HTTP_TIMEOUT = 10
 
 
 def _notion_headers(api_token: str) -> dict:
@@ -36,9 +35,7 @@ def _get(url: str, headers: dict) -> dict:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
-        raise SourceFetchError(
-            f"Notion API error {exc.code} for {url}: {body[:200]}"
-        ) from exc
+        raise SourceFetchError(f"Notion API error {exc.code} for {url}: {body[:200]}") from exc
     except Exception as exc:
         raise SourceFetchError(f"Notion request failed: {exc}") from exc
 
@@ -58,17 +55,17 @@ def _block_to_text(block: dict) -> str:
 
     if bt in ("heading_1", "heading_2", "heading_3"):
         level = bt[-1]  # "1", "2", "3"
-        text  = _extract_rich_text(data.get("rich_text", []))
+        text = _extract_rich_text(data.get("rich_text", []))
         return f"{'#' * int(level)} {text}"
 
     if bt in ("bulleted_list_item", "numbered_list_item", "to_do"):
-        text    = _extract_rich_text(data.get("rich_text", []))
+        text = _extract_rich_text(data.get("rich_text", []))
         checked = data.get("checked", False)
-        prefix  = "- [x]" if (bt == "to_do" and checked) else ("- [ ]" if bt == "to_do" else "-")
+        prefix = "- [x]" if (bt == "to_do" and checked) else ("- [ ]" if bt == "to_do" else "-")
         return f"{prefix} {text}"
 
     if bt == "code":
-        lang    = data.get("language", "")
+        lang = data.get("language", "")
         snippet = _extract_rich_text(data.get("rich_text", []))
         return f"```{lang}\n{snippet}\n```"
 
@@ -95,13 +92,15 @@ def _block_to_text(block: dict) -> str:
 def _fetch_all_blocks(page_id: str, headers: dict) -> list:
     """Fetch all blocks for a page (handles pagination)."""
     blocks = []
-    url    = f"{_NOTION_API_BASE}/blocks/{page_id}/children?page_size=100"
+    url = f"{_NOTION_API_BASE}/blocks/{page_id}/children?page_size=100"
     while url:
-        data   = _get(url, headers)
+        data = _get(url, headers)
         blocks.extend(data.get("results", []))
         if data.get("has_more"):
             cursor = data.get("next_cursor", "")
-            url    = f"{_NOTION_API_BASE}/blocks/{page_id}/children?start_cursor={cursor}&page_size=100"
+            url = (
+                f"{_NOTION_API_BASE}/blocks/{page_id}/children?start_cursor={cursor}&page_size=100"
+            )
         else:
             url = None
     return blocks
@@ -144,18 +143,18 @@ class NotionAdapter(SourceAdapter):
         Returns:
             (content, Provenance)
         """
-        page_id   = source_id.replace("-", "")
-        token     = self._resolve_token(kwargs)
-        headers   = _notion_headers(token)
+        page_id = source_id.replace("-", "")
+        token = self._resolve_token(kwargs)
+        headers = _notion_headers(token)
 
         # Fetch page metadata
         page_data = _get(f"{_NOTION_API_BASE}/pages/{page_id}", headers)
-        title     = _page_title(page_data)
+        title = _page_title(page_data)
         last_edited = page_data.get("last_edited_time", "")
 
         # Fetch all block content
-        blocks  = _fetch_all_blocks(page_id, headers)
-        lines   = [f"# {title}"] if title else []
+        blocks = _fetch_all_blocks(page_id, headers)
+        lines = [f"# {title}"] if title else []
         for block in blocks:
             text = _block_to_text(block)
             if text:
@@ -177,10 +176,10 @@ class NotionAdapter(SourceAdapter):
         Returns True if last_edited_time differs.
         """
         page_id = source_id.replace("-", "")
-        token   = self._resolve_token(kwargs)
+        token = self._resolve_token(kwargs)
         headers = _notion_headers(token)
         try:
-            page_data   = _get(f"{_NOTION_API_BASE}/pages/{page_id}", headers)
+            page_data = _get(f"{_NOTION_API_BASE}/pages/{page_id}", headers)
             last_edited = page_data.get("last_edited_time", "")
             return last_edited != cached_version
         except SourceFetchError:
