@@ -57,7 +57,12 @@ from tokenpak.budget import BudgetBlock
 # Compile Reports
 # ---------------------------------------------------------------------------
 from tokenpak.report import Action, CompileReport, Decision
-from tokenpak.pack import ContextPack, PackBlock, CompiledResult
+from tokenpak.pack import ContextPack, PackBlock, CompiledResult, pack_prompt
+
+# ---------------------------------------------------------------------------
+# Token Counting (Level 1 — single import, zero config)
+# ---------------------------------------------------------------------------
+from tokenpak.tokens import count_tokens
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -102,6 +107,9 @@ __all__ = [
     "ContextPack",
     "PackBlock",
     "CompiledResult",
+    # Incremental adoption helpers
+    "count_tokens",
+    "pack_prompt",
     # CLI
     "main",
     # Sub-packages

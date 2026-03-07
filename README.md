@@ -147,6 +147,90 @@ Search latency:       22.7ms/query
 
 ---
 
+## Adoption Ladder — Use One Feature First
+
+TokenPak is designed for incremental adoption. You don't need to adopt the full system.
+Start with one feature and grow from there.
+
+| Level | What you get | Import |
+|-------|-------------|--------|
+| **1 — Token counting** | Count tokens in any string | `from tokenpak import count_tokens` |
+| **2 — Simple packing** | Pack a prompt in one call | `from tokenpak import pack_prompt` |
+| **3 — Block-based context** | Priority + quality control | `from tokenpak import ContextPack, PackBlock` |
+| **4 — Full protocol** | Compile reports + all output formats | `compiled.to_messages()` / `compiled.to_anthropic()` |
+| **5 — Wire format** | Serialize for cross-agent transfer | `compiled.to_json()` |
+
+### Level 1: Token counting (zero config)
+
+```python
+from tokenpak import count_tokens
+
+tokens = count_tokens("My prompt text")
+print(f"{tokens} tokens")
+```
+
+### Level 2: Simple packing (one function)
+
+```python
+from tokenpak import pack_prompt
+
+prompt = pack_prompt(
+    system="You are a helpful assistant.",
+    docs=my_large_docs,       # high priority — kept first
+    history=chat_history,     # low priority — trimmed if needed
+    budget=8000,
+)
+```
+
+### Level 3: Block-based context
+
+```python
+from tokenpak import ContextPack, PackBlock
+
+pack = ContextPack(budget=8000)
+pack.add(PackBlock(id="system", type="instructions", content=system_prompt, priority="critical"))
+pack.add(PackBlock(id="docs",   type="knowledge",    content=api_docs,      priority="high"))
+pack.add(PackBlock(id="search", type="evidence",     content=results,       priority="medium", quality=0.8))
+```
+
+### Level 4: Full protocol
+
+```python
+compiled = pack.compile()
+
+# Works with OpenAI
+from openai import OpenAI
+OpenAI().chat.completions.create(model="gpt-4o", messages=compiled.to_messages())
+
+# Works with Anthropic
+from anthropic import Anthropic
+system, messages = compiled.to_anthropic()
+Anthropic().messages.create(model="claude-3-5-sonnet-latest", system=system, messages=messages)
+
+# Works with LiteLLM / Ollama (same format)
+from litellm import completion
+completion(model="ollama/mistral", messages=compiled.to_messages())
+
+# Inspect every decision
+print(compiled.report)
+```
+
+### Level 5: Wire format
+
+```python
+import json
+
+payload = json.dumps(compiled.to_json())   # serialize
+recovered = json.loads(payload)            # deserialize anywhere
+print(recovered["text"])                   # compiled prompt
+print(recovered["report"]["summary"])      # compile stats
+```
+
+> **Key guarantee:** Every level works independently. Level 3 does not require Level 4.
+> The SDK works with no gateway, no cloud, and no required external dependencies.
+
+---
+
 ## How Compression Works
 
 TokenPak intercepts requests before they reach the LLM and applies a multi-stage pipeline:
