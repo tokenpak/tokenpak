@@ -884,6 +884,9 @@ class ProxyServer:
         self._last_lock = threading.Lock()
         self._server: Optional[_ThreadedHTTPServer] = None
         self._server_thread: Optional[threading.Thread] = None
+        # Async backend handles (set by _start_async)
+        self._async_shutdown_event: Optional[threading.Event] = None
+        self._async_thread: Optional[threading.Thread] = None
         # Rolling window of per-request compression ratios (last 100)
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
@@ -895,7 +898,16 @@ class ProxyServer:
     # ------------------------------------------------------------------
 
     def start(self, blocking: bool = True) -> None:
-        """Start the proxy server."""
+        """
+        Start the proxy server.
+
+        Prefers the async Starlette/uvicorn backend when available (default).
+        Falls back to the legacy threaded BaseHTTPRequestHandler server when
+        starlette or uvicorn are not installed.
+
+        Environment variables:
+            TOKENPAK_ASYNC_PROXY=0   — force legacy synchronous backend
+        """
         # --- Startup self-test ---
         _all_ok, _warnings = run_startup_checks(self.port)
         if _warnings:
@@ -908,6 +920,54 @@ class ProxyServer:
                 )
         # --------------------------
 
+        # Try async backend first (Starlette + uvicorn + httpx)
+        _force_sync = os.environ.get("TOKENPAK_ASYNC_PROXY", "1").lower() in ("0", "false", "no")
+        _async_available = False
+        if not _force_sync:
+            try:
+                import starlette  # noqa: F401
+                import uvicorn    # noqa: F401
+                import httpx      # noqa: F401
+                _async_available = True
+            except ImportError:
+                pass
+
+        if _async_available and not _force_sync:
+            self._start_async(blocking=blocking)
+            return
+
+        # Legacy: ThreadedHTTPServer / BaseHTTPRequestHandler
+        self._start_legacy(blocking=blocking)
+
+    def _start_async(self, blocking: bool = True) -> None:
+        """Start the async Starlette/uvicorn proxy backend."""
+        from tokenpak.agent.proxy.server_async import start_async_proxy_in_thread
+
+        self._async_shutdown_event = threading.Event()
+        self._async_thread = start_async_proxy_in_thread(
+            proxy_server=self,
+            host=self.host,
+            port=self.port,
+            shutdown_event=self._async_shutdown_event,
+        )
+        print(
+            f"TokenPak async proxy listening on {self.host}:{self.port} "
+            f"[{self.compilation_mode}] (Starlette+uvicorn)"
+        )
+        if blocking:
+            # Install signal handlers only in the main thread
+            if threading.current_thread() is threading.main_thread():
+                signal.signal(signal.SIGTERM, self._handle_signal)
+                signal.signal(signal.SIGINT, self._handle_signal)
+            try:
+                self._async_thread.join()
+            except KeyboardInterrupt:
+                pass
+            finally:
+                self.stop()
+
+    def _start_legacy(self, blocking: bool = True) -> None:
+        """Start the legacy threaded BaseHTTPRequestHandler proxy backend."""
         server = _ThreadedHTTPServer((self.host, self.port), _ProxyHandler)
         server.proxy_server = self  # inject back-reference
         self._server = server
@@ -951,6 +1011,24 @@ class ProxyServer:
           4. Close the HTTP connection pool
           5. Stop the HTTP server
         """
+        # Async backend shutdown path
+        if hasattr(self, "_async_shutdown_event") and self._async_shutdown_event is not None:
+            print("TokenPak: async proxy shutdown — signalling uvicorn...", flush=True)
+            try:
+                self._flush_telemetry()
+            except Exception:
+                pass
+            try:
+                self._connection_pool.close()
+            except Exception:
+                pass
+            self._async_shutdown_event.set()
+            if hasattr(self, "_async_thread") and self._async_thread is not None:
+                self._async_thread.join(timeout=self.shutdown_timeout + 5)
+            self._async_shutdown_event = None
+            print("TokenPak: async proxy shutdown complete.", flush=True)
+            return
+
         if self._server is None:
             return  # already stopped
 
