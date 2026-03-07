@@ -107,10 +107,13 @@ graph LR
 | Shared vault (team) | — | — | ✅ |
 | RBAC + audit logs | — | — | ✅ |
 | Seat management | — | — | ✅ |
-| SSO / enterprise auth | — | — | 🔜 |
-| **Price** | **Free** | **$19/mo** | **$49/mo** |
+| SSO / enterprise auth | — | — | ✅ |
+| On-premises deployment | — | — | ✅ |
+| **Price** | **Free** | **$99/mo** | **$299/mo** |
 
-[→ Get a Pro or Team key](https://portal.tokenpak.dev)
+**Enterprise:** Custom pricing for large organizations. [Contact sales](mailto:sales@tokenpak.ai).
+
+[→ View full pricing](docs/PRODUCT_STRATEGY.md#product-tiers) | [→ License details](LICENSE_COMMERCIAL.md)
 
 ---
 
