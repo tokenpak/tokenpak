@@ -492,36 +492,28 @@ def create_app(db_path: str = "telemetry.db", storage: Optional[TelemetryDB] = N
 
     @app.get("/metrics")
     async def prometheus_metrics():
-        """Return Prometheus-format metrics."""
+        """
+        Return Prometheus text exposition format metrics.
+
+        Metrics:
+          - tokenpak_requests_total{provider, status}
+          - tokenpak_tokens_total{provider, direction}
+          - tokenpak_cost_usd_total{provider}
+          - tokenpak_savings_usd_total{provider}
+          - tokenpak_request_duration_seconds{provider} (histogram)
+          - tokenpak_compression_ratio{provider} (gauge, last 24h)
+          - tokenpak_circuit_state{provider} (gauge: 0=closed, 1=open)
+        """
         try:
+            from .prometheus import PrometheusMetricsCollector
+            collector = PrometheusMetricsCollector(storage=_storage)
             loop = asyncio.get_event_loop()
-            stats = await loop.run_in_executor(_executor, _storage.stats)
-            summary = await loop.run_in_executor(
-                _executor,
-                lambda: _storage.get_summary(),
+            text = await loop.run_in_executor(_executor, collector.collect)
+            return Response(
+                content=text,
+                media_type="text/plain; version=0.0.4; charset=utf-8",
+                headers={"Cache-Control": "no-cache"},
             )
-            lines = [
-                "# HELP tokenpak_telemetry_events_total Total number of telemetry events",
-                "# TYPE tokenpak_telemetry_events_total counter",
-                f"tokenpak_telemetry_events_total {stats.get('tp_events', 0)}",
-                "",
-                "# HELP tokenpak_total_requests Total number of LLM requests",
-                "# TYPE tokenpak_total_requests counter",
-                f"tokenpak_total_requests {summary.get('total_requests', 0)}",
-                "",
-                "# HELP tokenpak_total_tokens Total tokens processed",
-                "# TYPE tokenpak_total_tokens counter",
-                f"tokenpak_total_tokens {summary.get('total_tokens', 0)}",
-                "",
-                "# HELP tokenpak_total_cost_usd Total cost in USD",
-                "# TYPE tokenpak_total_cost_usd counter",
-                f"tokenpak_total_cost_usd {summary.get('total_cost', 0)}",
-                "",
-                "# HELP tokenpak_total_savings_usd Total savings in USD",
-                "# TYPE tokenpak_total_savings_usd counter",
-                f"tokenpak_total_savings_usd {summary.get('total_savings', 0)}",
-            ]
-            return Response(content="\n".join(lines) + "\n", media_type="text/plain; charset=utf-8")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 

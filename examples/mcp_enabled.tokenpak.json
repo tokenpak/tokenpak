@@ -1,0 +1,209 @@
+{
+  "_comment": "MCP-enabled pack: agent with full MCP server ecosystem",
+  "header": {
+    "version": "1.0",
+    "id": "pak_mcp_enabled_001",
+    "created": "2026-03-07T09:30:00Z",
+    "schema": "https://tokenpak.dev/schema/v1.0.json"
+  },
+  "metadata": {
+    "task": "review_open_prs_and_fix_failing_tests",
+    "source": "agent:ci_agent",
+    "target": "agent:coding_agent",
+    "tags": ["github", "ci", "testing", "mcp", "code-review"]
+  },
+  "blocks": [
+    {
+      "type": "instructions",
+      "id": "system_prompt",
+      "content": "You are a CI/CD automation agent. Review open PRs, identify failing tests, and submit fixes. Use the github MCP server for PR operations and the filesystem MCP server for local file edits. Always run tests before submitting a fix PR.",
+      "tokens": 48,
+      "priority": "critical",
+      "compacted": false
+    },
+    {
+      "type": "knowledge",
+      "id": "repo_context",
+      "content": "Repository: github.com/acmecorp/api-gateway. Main branch: main. CI: GitHub Actions. Test runner: pytest. Coverage threshold: 85%. Active PRs with failing tests: #142 (auth middleware), #158 (rate limiter).",
+      "tokens": 45,
+      "priority": "high",
+      "compacted": false
+    },
+    {
+      "type": "memory",
+      "id": "pr_142_context",
+      "content": "PR #142: auth middleware refactor. Failing test: test_jwt_expiry_check. Root cause suspected: timezone handling in token validation. Last touched by @sarah 2 days ago.",
+      "tokens": 36,
+      "priority": "medium",
+      "compacted": false
+    }
+  ],
+  "capabilities": {
+    "tools": [
+      {
+        "name": "list_prs",
+        "description": "List open pull requests with filter options",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "repo": {"type": "string"},
+            "state": {"type": "string", "enum": ["open", "closed", "all"]},
+            "labels": {"type": "array", "items": {"type": "string"}}
+          },
+          "required": ["repo"]
+        },
+        "provider": "mcp:github"
+      },
+      {
+        "name": "get_pr_diff",
+        "description": "Get the diff for a specific PR",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "repo": {"type": "string"},
+            "pr_number": {"type": "integer"}
+          },
+          "required": ["repo", "pr_number"]
+        },
+        "provider": "mcp:github"
+      },
+      {
+        "name": "create_pr",
+        "description": "Create a new pull request",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "repo": {"type": "string"},
+            "title": {"type": "string"},
+            "body": {"type": "string"},
+            "head": {"type": "string"},
+            "base": {"type": "string"}
+          },
+          "required": ["repo", "title", "head", "base"]
+        },
+        "provider": "mcp:github"
+      },
+      {
+        "name": "read_file",
+        "description": "Read a file from the local filesystem",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"}
+          },
+          "required": ["path"]
+        },
+        "provider": "mcp:filesystem"
+      },
+      {
+        "name": "write_file",
+        "description": "Write content to a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"},
+            "content": {"type": "string"}
+          },
+          "required": ["path", "content"]
+        },
+        "provider": "mcp:filesystem"
+      },
+      {
+        "name": "run_shell",
+        "description": "Execute a shell command and return output",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {"type": "string"},
+            "cwd": {"type": "string"}
+          },
+          "required": ["command"]
+        },
+        "provider": "local"
+      }
+    ],
+    "skills": [
+      {
+        "id": "pr_review",
+        "name": "PR Review Skill",
+        "description": "Automated PR review: fetch diff, run linter, suggest fixes",
+        "mcp_server": "mcp://localhost:3001/github"
+      },
+      {
+        "id": "test_runner",
+        "name": "Test Runner Skill",
+        "description": "Run test suites and parse failures into structured reports",
+        "mcp_server": "mcp://localhost:3002/ci"
+      }
+    ],
+    "mcp_servers": [
+      {
+        "uri": "mcp://localhost:3000/filesystem",
+        "name": "filesystem",
+        "capabilities": ["read", "write", "list", "delete"],
+        "authenticated": true
+      },
+      {
+        "uri": "mcp://localhost:3001/github",
+        "name": "github",
+        "capabilities": ["issues", "prs", "repos", "actions", "reviews"],
+        "authenticated": true
+      },
+      {
+        "uri": "mcp://localhost:3002/ci",
+        "name": "ci",
+        "capabilities": ["run_tests", "get_logs", "trigger_workflow"],
+        "authenticated": true
+      }
+    ],
+    "resources": [
+      {
+        "uri": "mcp://filesystem/home/runner/work/api-gateway",
+        "name": "API Gateway Repository",
+        "mime_type": "inode/directory",
+        "readable": true,
+        "writable": true
+      },
+      {
+        "uri": "mcp://github/acmecorp/api-gateway",
+        "name": "GitHub Repository",
+        "mime_type": "application/vnd.github.repo",
+        "readable": true,
+        "writable": false
+      }
+    ]
+  },
+  "constraints": {
+    "model": {
+      "min_context_window": 200000,
+      "requires_vision": false,
+      "requires_tools": true,
+      "preferred_models": ["claude-3-opus-20240229"]
+    },
+    "permissions": {
+      "can_execute_code": true,
+      "can_access_network": true,
+      "can_modify_files": true,
+      "can_send_messages": false,
+      "allowed_domains": ["github.com", "api.github.com"]
+    },
+    "guardrails": {
+      "max_cost_usd": 10.00,
+      "timeout_seconds": 600,
+      "max_tokens_output": 8192,
+      "require_human_approval": ["merge_pr", "close_pr", "deploy"]
+    }
+  },
+  "policies": {
+    "compaction": {
+      "mode": "balanced",
+      "max_tokens": 16000,
+      "priority_order": ["instructions", "code", "knowledge", "memory"]
+    },
+    "budget": {
+      "total": 16000,
+      "per_block_max": 4000,
+      "reserve_for_output": 4000
+    }
+  }
+}

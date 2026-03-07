@@ -24,6 +24,14 @@ Point your LLM client's base URL at `http://localhost:8766`. That's it — **zer
 
 ---
 
+## See It In Action
+
+![TokenPak compression demo](docs/demo/demo.gif)
+
+> **48.9% token reduction** — across real payloads, zero config. 5,074 → 2,594 tokens in <1ms.
+
+---
+
 ## What It Does
 
 - **Compresses context** before it hits the API — fewer tokens, lower cost
@@ -99,10 +107,13 @@ graph LR
 | Shared vault (team) | — | — | ✅ |
 | RBAC + audit logs | — | — | ✅ |
 | Seat management | — | — | ✅ |
-| SSO / enterprise auth | — | — | 🔜 |
-| **Price** | **Free** | **$19/mo** | **$49/mo** |
+| SSO / enterprise auth | — | — | ✅ |
+| On-premises deployment | — | — | ✅ |
+| **Price** | **Free** | **$99/mo** | **$299/mo** |
 
-[→ Get a Pro or Team key](https://portal.tokenpak.dev)
+**Enterprise:** Custom pricing for large organizations. [Contact sales](mailto:sales@tokenpak.ai).
+
+[→ View full pricing](docs/PRODUCT_STRATEGY.md#product-tiers) | [→ License details](LICENSE_COMMERCIAL.md)
 
 ---
 

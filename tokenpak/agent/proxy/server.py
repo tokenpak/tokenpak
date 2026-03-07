@@ -33,6 +33,10 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
+import httpx
+
+from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
+
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
@@ -134,6 +138,9 @@ def _new_session() -> Dict[str, Any]:
         "cost_saved": 0.0,
         "errors": 0,
         "start_time": time.time(),
+        # Anthropic prompt caching stats
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
     }
 
 
@@ -408,6 +415,34 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(err_body)
                 return
+
+            # --- Request schema validation (strict/warn/off) ---
+            if body:
+                try:
+                    from tokenpak.validation.request_validator import (
+                        get_request_validator,
+                    )
+                    _rv = get_request_validator()
+                    if _rv.mode != "off":
+                        try:
+                            _route_for_validation = ps.router.route(
+                                target_url, dict(self.headers), body
+                            )
+                            _provider = _route_for_validation.provider
+                        except Exception:
+                            _provider = "unknown"
+                        _val_result = _rv.validate_bytes(body, target_url, _provider)
+                        if not _val_result.valid and _rv.mode == "strict":
+                            _err_payload = _val_result.to_error_response()
+                            _err_body = json.dumps(_err_payload).encode()
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.send_header("Content-Length", str(len(_err_body)))
+                            self.end_headers()
+                            self.wfile.write(_err_body)
+                            return
+                except Exception:
+                    pass  # validation errors must never break the proxy
         else:
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
@@ -418,55 +453,57 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Content-Length"] = str(len(body))
 
         try:
-            if parsed.scheme == "https":
-                ctx = ssl.create_default_context()
-                conn = http.client.HTTPSConnection(parsed.netloc, timeout=300, context=ctx)
-            else:
-                conn = http.client.HTTPConnection(parsed.netloc, timeout=300)
-
-            path = parsed.path
-            if parsed.query:
-                path += "?" + parsed.query
-            conn.request(method, path, body=body, headers=fwd_headers)
-            resp = conn.getresponse()
-
-            content_type = resp.getheader("Content-Type", "")
-            is_sse = "text/event-stream" in content_type
-
-            self.send_response(resp.status)
-            for h_key, h_val in resp.getheaders():
-                h_lower = h_key.lower()
-                if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
-                    continue
-                self.send_header(h_key, h_val)
-            self.end_headers()
+            pool = self.server.proxy_server._connection_pool
 
             output_tokens = 0
-            if is_sse:
+            if is_streaming:
+                # ── Streaming (SSE) path ──────────────────────────────────
+                # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
-                while True:
-                    chunk = resp.read(4096)
-                    if not chunk:
-                        break
-                    try:
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        break
-                    if should_log and is_messages:
-                        sse_buffer += chunk
+                with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
+                    self.send_response(resp.status_code)
+                    for h_key, h_val in resp.headers.items():
+                        h_lower = h_key.lower()
+                        if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                            continue
+                        self.send_header(h_key, h_val)
+                    self.end_headers()
+
+                    for chunk in resp.iter_bytes(chunk_size=4096):
+                        if not chunk:
+                            continue
+                        try:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
+                        if should_log and is_messages:
+                            sse_buffer += chunk
+
                 if should_log and is_messages and sse_buffer:
                     sse_usage = extract_sse_tokens(sse_buffer)
                     output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
-                resp_body = resp.read()
+                # ── Non-streaming path ────────────────────────────────────
+                resp = pool.request(method, target_url, content=body, headers=fwd_headers)
+
+                self.send_response(resp.status_code)
+                for h_key, h_val in resp.headers.items():
+                    h_lower = h_key.lower()
+                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                        continue
+                    self.send_header(h_key, h_val)
+                self.end_headers()
+
+                resp_body = resp.content
                 self.wfile.write(resp_body)
                 self.wfile.flush()
+
                 if should_log and is_messages:
                     body_for_metrics = resp_body
-                    if "gzip" in resp.getheader("Content-Encoding", ""):
+                    if "gzip" in resp.headers.get("content-encoding", ""):
                         try:
                             body_for_metrics = gzip.decompress(resp_body)
                         except Exception:
@@ -478,8 +515,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
                     except Exception:
                         pass
-
-            conn.close()
             latency_ms = int((time.time() - t0) * 1000)
 
             if should_log and is_messages and input_tokens > 0:
@@ -499,6 +534,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["output_tokens"] += output_tokens
                     ps.session["cost"] += cost
                     ps.session["cost_saved"] += cost_saved
+                    ps.session["cache_read_tokens"] += cache_read_tokens
+                    ps.session["cache_creation_tokens"] += cache_creation_tokens
                 # Track per-request compression ratio for rolling average
                 if input_tokens > 0:
                     ratio = round(saved / input_tokens, 4)
@@ -653,7 +690,21 @@ class ProxyServer:
         self.host = host
         self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
         self.compilation_mode = compilation_mode or os.environ.get("TOKENPAK_MODE", "hybrid")
-        self.request_hook = request_hook
+
+        # Connection pool — shared across all handler threads
+        self._connection_pool = ConnectionPool(PoolConfig.from_env())
+
+        # Auto-wire the capsule builder hook.  When TOKENPAK_CAPSULE_BUILDER=0
+        # (the default) the hook is a no-op, so this is safe for all deployments.
+        # If a caller supplies their own request_hook it is chained *after* the
+        # capsule stage so they still see the (potentially compressed) body.
+        try:
+            from .capsule_integration import get_capsule_request_hook
+            self.request_hook: Optional[Callable] = get_capsule_request_hook(
+                base_hook=request_hook
+            )
+        except Exception:  # pragma: no cover — import failure falls back gracefully
+            self.request_hook = request_hook
 
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
@@ -695,6 +746,7 @@ class ProxyServer:
         if self._server:
             self._server.shutdown()
             self._server = None
+        self._connection_pool.close()
 
     def is_running(self) -> bool:
         return self._server is not None
@@ -711,6 +763,7 @@ class ProxyServer:
         with self._compression_lock:
             ratios = list(self._compression_ratios)
         compression_ratio_avg = round(sum(ratios) / len(ratios), 4) if ratios else 0.0
+        pool_metrics = self._connection_pool.metrics()
         return {
             "status": "ok",
             "uptime_seconds": uptime,
@@ -719,6 +772,11 @@ class ProxyServer:
             "requests_errors": requests_errors,
             "compression_ratio_avg": compression_ratio_avg,
             "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "connection_pool": {
+                "http2_enabled": self._connection_pool.http2_enabled,
+                "active_providers": self._connection_pool.active_providers,
+                **pool_metrics,
+            },
         }
 
     def stats(self) -> dict:

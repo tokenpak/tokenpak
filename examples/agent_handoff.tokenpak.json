@@ -1,0 +1,118 @@
+{
+  "_comment": "Agent-to-agent handoff example: research agent → writing agent",
+  "header": {
+    "version": "1.0",
+    "id": "pak_handoff_research01",
+    "created": "2026-03-07T09:00:00Z",
+    "schema": "https://tokenpak.dev/schema/v1.0.json"
+  },
+  "metadata": {
+    "task": "write_technical_blog_post_on_mcp",
+    "source": "agent:research_agent",
+    "target": "agent:writing_agent",
+    "tags": ["handoff", "research", "blog", "mcp", "technical-writing"],
+    "expires": "2026-03-07T17:00:00Z"
+  },
+  "blocks": [
+    {
+      "type": "instructions",
+      "id": "writing_instructions",
+      "content": "Write a 1200-word technical blog post about Model Context Protocol (MCP). Audience: senior engineers. Tone: authoritative but accessible. Include: what MCP is, why it matters, a simple code example, and adoption tips. Do not include marketing fluff.",
+      "tokens": 55,
+      "priority": "critical",
+      "compacted": false
+    },
+    {
+      "type": "knowledge",
+      "id": "mcp_overview",
+      "content": "Model Context Protocol (MCP) is an open standard by Anthropic (Nov 2024) that lets AI models securely connect to external data sources and tools via a client-server architecture. Clients are LLM apps; servers expose tools and resources. Transport: stdio, HTTP+SSE. Authentication: OAuth 2.0. Key primitives: Resources (data), Tools (functions), Prompts (templates).",
+      "tokens": 68,
+      "priority": "high",
+      "quality": 0.97,
+      "compacted": false,
+      "provenance": {
+        "source_type": "web",
+        "source_id": "https://modelcontextprotocol.io/introduction",
+        "retrieved_at": "2026-03-07T08:45:00Z"
+      }
+    },
+    {
+      "type": "knowledge",
+      "id": "mcp_adoption_stats",
+      "content": "As of Q1 2026: 500+ community MCP servers on GitHub. Major integrations: Cursor, Zed, Claude Desktop, Continue.dev. Anthropic, Google DeepMind, and OpenAI all shipping MCP-compatible clients. Enterprise adoption accelerating in financial services and healthcare verticals.",
+      "tokens": 52,
+      "priority": "high",
+      "quality": 0.91,
+      "compacted": false
+    },
+    {
+      "type": "code",
+      "id": "mcp_server_example",
+      "content": "# Minimal MCP server in Python\nfrom mcp.server import Server\nfrom mcp.types import Tool, TextContent\n\nserver = Server('my-tools')\n\n@server.list_tools()\nasync def list_tools():\n    return [Tool(name='get_weather', description='Get current weather', inputSchema={...})]\n\n@server.call_tool()\nasync def call_tool(name: str, arguments: dict):\n    if name == 'get_weather':\n        return [TextContent(type='text', text=f\"Weather for {arguments['city']}: Sunny, 72°F\")]\n\nif __name__ == '__main__':\n    import asyncio\n    asyncio.run(server.run())",
+      "tokens": 98,
+      "priority": "high",
+      "compacted": false
+    },
+    {
+      "type": "memory",
+      "id": "research_notes",
+      "content": "Key angle: MCP solves the N×M integration problem. Each AI app no longer needs custom connectors for every tool. Pain point for engineers: tool sprawl. Competitor context: LangChain's tool ecosystem is fragmented; MCP offers standardization.",
+      "tokens": 43,
+      "priority": "medium",
+      "compacted": false
+    },
+    {
+      "type": "evidence",
+      "id": "hacker_news_sentiment",
+      "content": "HN thread 2025-03-01: Top comments positive about standardization. Main concerns: server security, auth complexity. Upvote ratio 94%. 340 comments.",
+      "tokens": 33,
+      "priority": "low",
+      "quality": 0.72,
+      "compacted": false,
+      "provenance": {
+        "source_type": "web",
+        "source_id": "https://news.ycombinator.com/item?id=39234567",
+        "retrieved_at": "2026-03-07T08:50:00Z",
+        "score": 0.72
+      }
+    }
+  ],
+  "state": {
+    "workflow_id": "wf_blog_pipeline_mcp_001",
+    "step_index": 1,
+    "total_steps": 3,
+    "checkpoints": [
+      {
+        "step": 0,
+        "pack_id": "pak_research_gather_001",
+        "timestamp": "2026-03-07T08:55:00Z"
+      }
+    ],
+    "parent_pack_id": "pak_editorial_request_001",
+    "resumable": true,
+    "status": "in_progress"
+  },
+  "provenance": {
+    "source_packs": ["pak_research_gather_001"],
+    "transforms": [
+      {
+        "type": "merge",
+        "timestamp": "2026-03-07T08:58:00Z",
+        "agent": "agent:research_agent"
+      }
+    ],
+    "trust_level": "unverified"
+  },
+  "policies": {
+    "compaction": {
+      "mode": "balanced",
+      "max_tokens": 6000,
+      "priority_order": ["instructions", "code", "knowledge", "memory", "evidence"]
+    },
+    "budget": {
+      "total": 6000,
+      "per_block_max": 1500,
+      "reserve_for_output": 3000
+    }
+  }
+}

@@ -1,99 +1,114 @@
 # TokenPak Roadmap
 
-> **Transparency:** This roadmap reflects current priorities and may shift. Timelines are estimates, not guarantees.  
-> **Last updated:** 2026-03-06 (v1.0 launch day)  
-> **Vote on features:** [GitHub Discussions →](https://github.com/kaywhy331/tokenpak/discussions)
+This document outlines the planned development of TokenPak.
+
+## Current Release: v0.1.0 (OSS)
+
+✅ **Shipped:**
+- Deterministic compression engine
+- Multi-mode compression (hybrid, aggressive, minimal)
+- Vault context injection (BM25)
+- CANON deduplication
+- Prompt caching integration
+- CLI tools (`tokenpak compress`, `tokenpak cost`, `tokenpak doctor`)
+- Local telemetry and monitoring
+- HTTP proxy server
+- systemd service support
+- MIT licensed
 
 ---
 
-## Philosophy
-- Optimize for measurable token savings
-- Keep compression auditable and deterministic
-- Prioritize developer experience and documentation
-- Community feedback shapes prioritization — features with 5+ votes go to v1.2 minimum
+## Q2 2026: v0.2.0 (OSS) + Pro Beta
+
+### OSS Improvements
+- [ ] Performance optimization (10x faster compression)
+- [ ] Plugin system for custom compressors
+- [ ] WebSocket support
+- [ ] OpenTelemetry export
+- [ ] Docker official image
+
+### Pro Beta (Invite Only)
+- [ ] Cloud dashboard (read-only)
+- [ ] Usage analytics
+- [ ] Cost tracking across projects
+- [ ] Early adopter pricing ($49/mo)
 
 ---
 
-## v1.1 (April–May 2026)
-**Theme: Security hardening + developer ergonomics**
+## Q3 2026: v1.0.0 (OSS) + Pro GA
 
-### Security
-- [ ] **Fix `query_preview`** — replace 200-char prompt snippet in routing ledger with short hash (privacy improvement)
-- [ ] **DB permission enforcement** — new installs auto-create `.db` files at `0o600`
+### OSS v1.0
+- [ ] Stable API (no breaking changes)
+- [ ] Multi-provider support (Anthropic, OpenAI, Google, Mistral)
+- [ ] Streaming compression
+- [ ] Batch processing mode
+- [ ] Comprehensive test suite
 
-### Performance
-- [ ] **20% faster compression** — profile + optimize hot path in `Compiler.compile()`
-- [ ] **Compression benchmarks** — publish baseline + v1.1 comparison
-
-### API Ergonomics
-- [ ] **`tokenpak.compress()` shorthand** — one-liner API for 80% of use cases
-- [ ] **`TokenPakSession` context manager** — simplify multi-turn conversation handling
-- [ ] **Async support** — `compress_async()` and `Session.send_async()`
-
-### Documentation
-- [ ] **FAQ expansion** — 4 new entries: compression ratios, routing decisions, SDK migration, LangChain
-- [ ] **Routing decisions guide** — explain complexity scoring formula transparently
-- [ ] **Migration guide** — step-by-step from direct OpenAI SDK to TokenPak proxy
+### Pro General Availability
+- [ ] Full cloud dashboard
+- [ ] Managed proxy service
+- [ ] API key management
+- [ ] Team invites (preview)
+- [ ] Stripe billing
 
 ---
 
-## v1.2 (June–July 2026)
-**Theme: Multi-language + streaming + advanced compression**
+## Q4 2026: Team Edition
 
-### Multi-Language SDKs
-- [ ] **TypeScript SDK** — `npm install tokenpak-js` — full API parity with Python
-- [ ] **Go SDK** — `github.com/kaywhy331/tokenpak-go` — compress, route, cache
-
-### Streaming
-- [ ] **Streaming compression API** — real-time token reduction as content generates
-- [ ] **Async streaming** — `async for chunk in session.stream("...")`
-
-### Advanced Compression
-- [ ] **Context-aware heuristics** — detect code vs prose vs conversation; apply optimal recipe
-- [ ] **Near-duplicate block detection** — improve cache hit rate for similar (not identical) prompts
-- [ ] **PII masking** — `redact_pii=True` flag; masks before compression, transparent on response
-
-### Community-Driven (TBD — update 2026-03-13)
-- [ ] *Feature from community with 5+ votes — TBD*
-- [ ] *Feature from community with 5+ votes — TBD*
-- [ ] *Bug fixes from community reports — TBD*
+### Team Features
+- [ ] Multi-user workspaces
+- [ ] Role-based access control
+- [ ] Shared dashboards
+- [ ] Team billing and invoicing
+- [ ] Audit logs
+- [ ] Slack/Discord integrations
 
 ---
 
-## v2.0 (Q4 2026)
-**Theme: TokenPak as platform infrastructure**
+## 2027: Enterprise Edition
 
-- [ ] **Web dashboard** — GUI for routing policy and registry management
-- [ ] **Distributed compression** — multi-node shared registry for team deployments
-- [ ] **Enterprise auth** — OAuth2 / API key management for team server
-- [ ] **PostgreSQL backend** — migrate from SQLite for multi-user scalability
-- [ ] **GraphQL API** — only if registry query complexity warrants it
-
----
-
-## Backlog (Community Requests)
-- Rust SDK
-- Offline registry replication
-- Redaction rules (PII masking) ← moved to v1.2
-- IDE plugins (VSCode/JetBrains)
-- Optional prompt-level A/B testing
+### Enterprise Features
+- [ ] On-premises deployment
+- [ ] SSO/SAML authentication
+- [ ] Custom integrations
+- [ ] Compliance documentation (SOC2, HIPAA)
+- [ ] Dedicated support
+- [ ] SLA guarantees
 
 ---
 
-## Not Planned (For Now)
-- Closed-source server-only offering
-- Proprietary model-specific lock-in
-- Storing user prompts on any remote server
+## Feature Requests
+
+Have an idea? Open an issue on GitHub with the `feature-request` label.
+
+### Under Consideration
+- GraphQL support
+- gRPC compression
+- Browser extension
+- VS Code extension
+- Prometheus metrics exporter
+- Kubernetes operator
+
+### Not Planned
+- Model hosting (out of scope)
+- Fine-tuning (out of scope)
+- Prompt engineering (separate tool)
 
 ---
 
-## Roadmap Rules
-- Items may move between releases
-- Community feedback shapes priority — vote in [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
-- Monthly roadmap updates posted in Discussions
-- Features with 5+ community votes get v1.2 minimum priority
-- Security fixes ship in the next patch regardless of planned release
+## Release Cadence
 
----
+- **OSS:** Monthly releases (patch), quarterly features (minor)
+- **Pro/Team:** Continuous deployment
+- **Enterprise:** Quarterly releases with LTS option
 
-*See the [v1.1 planning doc](vault/Projects/tokenpak-oss/docs/ROADMAP-V2-PLAN.md) for full rationale.*
+## Versioning
+
+We follow [Semantic Versioning](https://semver.org/):
+- MAJOR: Breaking API changes
+- MINOR: New features, backward compatible
+- PATCH: Bug fixes, backward compatible
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to get involved in development.

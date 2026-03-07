@@ -624,6 +624,7 @@ def build_parser():
 
     sub = parser.add_subparsers(dest="command", required=True)
     _build_route_parser(sub)
+    _build_validate_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
@@ -3070,6 +3071,48 @@ def cmd_fingerprint_clear_cache(args):
 
     deleted = client.clear_cache(fingerprint_id=fp_id)
     print(f"✓ Cleared {deleted} cache file(s).")
+
+
+# ── Validate command ──────────────────────────────────────────────────────────
+
+def cmd_validate(args):
+    """Validate a TokenPak JSON file against the v1.0 protocol schema."""
+    import json as _json
+    import sys as _sys
+    from tokenpak.validator import TokenPakValidator
+
+    validator = TokenPakValidator()
+    result = validator.validate_file(args.file, verbose=getattr(args, "verbose", False))
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(result.to_dict(), indent=2))
+        _sys.exit(0 if result.valid else 1)
+
+    # Human-readable output
+    print(f"\nTokenPak Validator v1.0")
+    print(f"File : {args.file}")
+    print(f"─" * 50)
+
+    if not result.issues:
+        print(f"  ✓ No issues found.")
+    else:
+        for issue in result.issues:
+            print(str(issue))
+
+    print(f"─" * 50)
+    print(f"{result.summary()}\n")
+
+    if not result.valid:
+        _sys.exit(1)
+
+
+def _build_validate_parser(sub):
+    p = sub.add_parser("validate", help="Validate a TokenPak JSON file against the v1.0 schema")
+    p.add_argument("file", help="Path to the .json TokenPak file")
+    p.add_argument("--verbose", "-v", action="store_true", help="Show quality hints in addition to errors/warnings")
+    p.add_argument("--json", dest="json_output", action="store_true", help="Output validation result as JSON")
+    p.set_defaults(func=cmd_validate)
+    return p
 
 
 if __name__ == "__main__":

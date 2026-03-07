@@ -15,7 +15,7 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "1.0.0-rc1"
 __author__ = "Kevin Yang"
 __license__ = "MIT"
 __description__ = "Deterministic compression for multi-agent AI workflows"
@@ -56,19 +56,6 @@ from tokenpak.budget import BudgetBlock
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Agent Handoff Protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    HandoffBlock,
-    TokenPak,
-    HandoffWire as Handoff,
-    HandoffManager,
-    ContextRef,
-    HandoffStatus,
-    REGISTERED_AGENTS,
-)
 from tokenpak.cli import main
 
 # ---------------------------------------------------------------------------

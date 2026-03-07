@@ -1,0 +1,19 @@
+{
+  "_comment": "Minimal valid TokenPak — only required fields",
+  "header": {
+    "version": "1.0",
+    "id": "pak_minimal0001",
+    "created": "2026-03-07T08:00:00Z"
+  },
+  "metadata": {
+    "task": "answer_user_question",
+    "source": "agent:assistant"
+  },
+  "blocks": [
+    {
+      "type": "knowledge",
+      "id": "context",
+      "content": "The user is asking about TokenPak. TokenPak is an open context packaging format."
+    }
+  ]
+}

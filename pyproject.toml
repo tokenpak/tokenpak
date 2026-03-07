@@ -4,18 +4,56 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenpak"
-version = "0.1.0"
-description = "Universal content compiler for LLM context optimization"
+version = "1.0.0-rc1"
+description = "Universal LLM proxy — context compression, smart routing, cost tracking"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
-  { name = "TokenPak Team" }
+  { name = "TokenPak Contributors" }
 ]
-dependencies = []
+keywords = ["llm", "ai", "proxy", "token-optimization", "openai", "anthropic", "compression"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+dependencies = [
+  "aiohttp>=3.9.0",
+  "pyyaml>=6.0",
+  "click>=8.1.0",
+  "starlette>=0.36.0",
+  "uvicorn>=0.27.0",
+  "httpx>=0.26.0",
+  "h2>=3,<5",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = [
+  "pytest>=7.0",
+  "pytest-asyncio>=0.23.0",
+  "pytest-cov>=4.1.0",
+  "black>=24.0.0",
+  "ruff>=0.2.0",
+]
 tokens = ["tiktoken>=0.5.0"]
+docs = [
+  "mkdocs>=1.5.0",
+  "mkdocs-material>=9.5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/kaywhy331/tokenpak"
+Documentation = "https://github.com/kaywhy331/tokenpak/blob/master/README.md"
+"Bug Reports" = "https://github.com/kaywhy331/tokenpak/issues"
+"Source Code" = "https://github.com/kaywhy331/tokenpak"
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
@@ -28,3 +66,13 @@ include = ["tokenpak*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

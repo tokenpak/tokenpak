@@ -1,0 +1,509 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tokenpak.dev/schema/v1.0.json",
+  "title": "TokenPak v1.0",
+  "description": "TokenPak Protocol v1.0 — The Context Standard. An open format for exchanging structured AI context between any systems.",
+  "type": "object",
+  "required": ["header", "metadata", "blocks"],
+  "additionalProperties": false,
+  "properties": {
+    "header": {
+      "type": "object",
+      "description": "Pack identity and versioning. Required.",
+      "required": ["version", "id", "created"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Protocol version. Must be '1.0' for this schema.",
+          "pattern": "^1\\.\\d+$",
+          "examples": ["1.0"]
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique pack identifier. Recommended prefix: pak_",
+          "minLength": 4,
+          "maxLength": 128,
+          "examples": ["pak_a1b2c3d4e5f6"]
+        },
+        "created": {
+          "type": "string",
+          "description": "ISO 8601 UTC creation timestamp.",
+          "format": "date-time",
+          "examples": ["2026-03-07T08:30:00Z"]
+        },
+        "schema": {
+          "type": "string",
+          "description": "URL of the JSON Schema used for validation.",
+          "format": "uri",
+          "examples": ["https://tokenpak.dev/schema/v1.0.json"]
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Task context and routing. Required.",
+      "required": ["task", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "task": {
+          "type": "string",
+          "description": "Human-readable description of what this pack is for.",
+          "minLength": 1,
+          "maxLength": 512,
+          "examples": ["debug_proxy_issue"]
+        },
+        "source": {
+          "type": "string",
+          "description": "Creator identifier. Format: agent:id, user:id, service:name, system:id",
+          "minLength": 1,
+          "maxLength": 256,
+          "examples": ["agent:research_agent", "user:kevin"]
+        },
+        "target": {
+          "type": "string",
+          "description": "Intended recipient. Same format as source.",
+          "maxLength": 256,
+          "examples": ["agent:coding_agent"]
+        },
+        "tags": {
+          "type": "array",
+          "description": "Searchable labels for filtering and routing.",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "maxItems": 50,
+          "uniqueItems": true,
+          "examples": [["debugging", "proxy", "urgent"]]
+        },
+        "expires": {
+          "type": "string",
+          "description": "ISO 8601 TTL. Recipients should reject packs past this timestamp.",
+          "format": "date-time",
+          "examples": ["2026-03-08T08:30:00Z"]
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "description": "Content blocks. At least one required.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/block"
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "What tools, skills, MCP servers, and resources the agent has access to.",
+      "additionalProperties": false,
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/tool"},
+          "description": "Function/tool definitions available to the agent."
+        },
+        "skills": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/skill"},
+          "description": "MCP skills or complex pre-built workflows."
+        },
+        "mcp_servers": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/mcp_server"},
+          "description": "Available MCP server connections."
+        },
+        "resources": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/resource"},
+          "description": "MCP resources the agent can access."
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "description": "Model requirements, runtime permissions, and safety guardrails.",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_context_window": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Minimum context window (tokens) required."
+            },
+            "requires_vision": {
+              "type": "boolean",
+              "description": "Whether the model must support vision/image input."
+            },
+            "requires_tools": {
+              "type": "boolean",
+              "description": "Whether the model must support tool/function calling."
+            },
+            "preferred_models": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Ordered list of preferred model identifiers."
+            }
+          }
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "can_execute_code": {"type": "boolean"},
+            "can_access_network": {"type": "boolean"},
+            "can_modify_files": {"type": "boolean"},
+            "can_send_messages": {"type": "boolean"},
+            "allowed_domains": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Allowlist of domains the agent may contact."
+            }
+          }
+        },
+        "guardrails": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_cost_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Maximum spend allowed in USD."
+            },
+            "timeout_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Hard timeout for execution."
+            },
+            "max_tokens_output": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum output tokens allowed."
+            },
+            "require_human_approval": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Actions that require human confirmation before execution."
+            }
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "description": "Workflow position for multi-step, resumable pipelines.",
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "description": "Identifier for the overall workflow run."
+        },
+        "step_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current step (0-indexed)."
+        },
+        "total_steps": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total number of steps in the workflow."
+        },
+        "checkpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step", "pack_id"],
+            "additionalProperties": false,
+            "properties": {
+              "step": {"type": "integer", "minimum": 0},
+              "pack_id": {"type": "string"},
+              "timestamp": {"type": "string", "format": "date-time"}
+            }
+          }
+        },
+        "parent_pack_id": {
+          "type": "string",
+          "description": "Pack ID that originated this workflow."
+        },
+        "resumable": {
+          "type": "boolean",
+          "description": "Whether the workflow can be resumed mid-step."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "in_progress", "done", "failed"],
+          "description": "Current workflow status."
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Origin tracking, transform history, and trust level.",
+      "additionalProperties": false,
+      "properties": {
+        "source_packs": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "IDs of packs this pack was derived from."
+        },
+        "transforms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["merge", "compact", "filter", "enrich", "sign"],
+                "description": "Transform operation applied."
+              },
+              "timestamp": {"type": "string", "format": "date-time"},
+              "agent": {"type": "string"},
+              "mode": {"type": "string"}
+            }
+          }
+        },
+        "trust_level": {
+          "type": "string",
+          "enum": ["verified", "unverified", "generated"],
+          "description": "How much to trust this pack's content."
+        },
+        "signatures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["signer", "algorithm", "signature"],
+            "additionalProperties": false,
+            "properties": {
+              "signer": {"type": "string"},
+              "algorithm": {
+                "type": "string",
+                "examples": ["ed25519", "rsa-sha256"]
+              },
+              "signature": {"type": "string"},
+              "timestamp": {"type": "string", "format": "date-time"}
+            }
+          }
+        }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "description": "Compaction and token budget policies.",
+      "additionalProperties": false,
+      "properties": {
+        "compaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["lossless", "balanced", "aggressive", "semantic"],
+              "description": "Default compaction mode for this pack."
+            },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum total tokens after compaction."
+            },
+            "priority_order": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Block types in order of preservation priority."
+            },
+            "per_type_limits": {
+              "type": "object",
+              "description": "Per-block-type compaction overrides.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "max_tokens": {"type": "integer"},
+                  "mode": {"type": "string"},
+                  "hot_window": {"type": "integer"}
+                }
+              }
+            }
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Total token budget for all blocks."
+            },
+            "per_block_max": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum tokens for any single block."
+            },
+            "reserve_for_output": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Tokens reserved for the model's output."
+            }
+          }
+        }
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "description": "Pre-computed embedding vectors for semantic operations.",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Embedding model used.",
+          "examples": ["text-embedding-3-small", "text-embedding-ada-002"]
+        },
+        "dimensions": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Vector dimensionality."
+        },
+        "block_vectors": {
+          "type": "object",
+          "description": "Map of block_id to embedding vector.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {"type": "number"}
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "block": {
+      "type": "object",
+      "required": ["type", "id", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["instructions", "code", "knowledge", "memory", "conversation", "evidence", "system"],
+          "description": "Block content type."
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique block identifier within this pack.",
+          "pattern": "^[a-zA-Z0-9_\\-\\.]+$",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "content": {
+          "type": "string",
+          "description": "Text content of the block.",
+          "minLength": 0
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Estimated token count. Computed if omitted."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "internal"],
+          "description": "Compaction priority."
+        },
+        "quality": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Relevance score. Used to prioritize compaction order."
+        },
+        "compacted": {
+          "type": "boolean",
+          "description": "Whether content has been compressed."
+        },
+        "provenance": {
+          "type": "object",
+          "description": "Source tracking, especially for evidence blocks.",
+          "additionalProperties": false,
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "examples": ["pinecone", "weaviate", "web", "file", "database"]
+            },
+            "source_id": {"type": "string"},
+            "retrieved_at": {"type": "string", "format": "date-time"},
+            "url": {"type": "string", "format": "uri"},
+            "score": {"type": "number", "minimum": 0.0, "maximum": 1.0}
+          }
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool function name.",
+          "pattern": "^[a-zA-Z0-9_]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this tool does."
+        },
+        "parameters": {
+          "type": "object",
+          "description": "JSON Schema for tool parameters."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Where this tool comes from. 'local' or 'mcp:server_name'.",
+          "examples": ["local", "mcp:filesystem", "mcp:github"]
+        }
+      }
+    },
+    "skill": {
+      "type": "object",
+      "required": ["id", "name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "mcp_server": {"type": "string"},
+        "parameters_schema": {"type": "object"}
+      }
+    },
+    "mcp_server": {
+      "type": "object",
+      "required": ["uri", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "MCP server URI.",
+          "examples": ["mcp://localhost:3000/filesystem"]
+        },
+        "name": {"type": "string"},
+        "capabilities": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "authenticated": {"type": "boolean"}
+      }
+    },
+    "resource": {
+      "type": "object",
+      "required": ["uri", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": {"type": "string"},
+        "name": {"type": "string"},
+        "mime_type": {"type": "string"},
+        "readable": {"type": "boolean"},
+        "writable": {"type": "boolean"}
+      }
+    }
+  }
+}
