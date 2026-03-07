@@ -131,6 +131,33 @@ Consistent **~43% additional savings** on top of QMD across writing, coding, leg
 
 ## Performance
 
+TokenPak is engineered for speed. Compilation must feel free — if it adds perceptible latency, developers won't adopt it.
+
+### Compile Latency Targets
+
+| Pack Size | Blocks | Tokens | p50 target | p95 hard limit |
+|-----------|--------|--------|------------|----------------|
+| **Small** | 2–3 | ~500 | < 20ms | < 30ms |
+| **Medium** | ~10 | ~5,000 | < 30ms | < 50ms |
+| **Large** | ~50 | ~50,000 | < 50ms | < 100ms |
+
+Latency gates are **enforced in CI on every PR** — p95 breaches block merge.
+
+### Run Benchmarks
+
+```bash
+# Full benchmark suite with pytest-benchmark
+pytest tests/benchmarks/ -v --benchmark-json=benchmark.json
+
+# Check thresholds (CI gate)
+python scripts/check_benchmark_thresholds.py benchmark.json
+
+# View latency summary
+pytest tests/benchmarks/test_compile_performance.py::TestCompilePerformancePlain::test_all_three_packs_summary -s
+```
+
+### Internal Optimizations
+
 | Optimization | Improvement |
 |---|---|
 | LRU token cache | **25x** faster repeated counting |
