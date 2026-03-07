@@ -8,11 +8,11 @@ This module re-exports everything so that both import paths work:
 """
 
 from tokenpak.routing.rules import (  # noqa: F401
+    DEFAULT_ROUTES_PATH,
+    RouteEngine,
     RoutePattern,
     RouteRule,
     RouteStore,
-    RouteEngine,
-    DEFAULT_ROUTES_PATH,
 )
 
 __all__ = [

@@ -21,25 +21,30 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 try:
-    from fastapi import APIRouter, HTTPException, status, Request
-    from fastapi.responses import JSONResponse
+    from fastapi import APIRouter, HTTPException, status
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
+
     # Stub so file is importable without FastAPI (e.g. in tests)
     class APIRouter:  # type: ignore
         def post(self, *a, **kw):
-            def decorator(fn): return fn
+            def decorator(fn):
+                return fn
+
             return decorator
 
-from ..agent.license.validator import LicenseValidator, LicenseTier, LicenseStatus, ValidationResult
+
 from ..agent.license.store import LicenseStore
+from ..agent.license.validator import LicenseStatus, LicenseValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
 # Shared instances (initialised at import time)
 # ─────────────────────────────────────────────
+
 
 def _load_public_pem() -> Optional[bytes]:
     """Load RSA public key from env or file."""
@@ -65,6 +70,7 @@ router = APIRouter(tags=["license"])
 # Request / response schemas
 # ─────────────────────────────────────────────
 
+
 class LicenseValidateRequest(BaseModel):
     token: str = Field(..., description="Signed license token (<payload>.<sig>)")
     agent_id: Optional[str] = Field(None, description="Agent ID for seat counting (Team tier)")
@@ -84,6 +90,7 @@ class LicenseValidateResponse(BaseModel):
 # ─────────────────────────────────────────────
 # Endpoint
 # ─────────────────────────────────────────────
+
 
 @router.post(
     "/license/validate",
@@ -130,7 +137,7 @@ async def validate_license(request: LicenseValidateRequest) -> LicenseValidateRe
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail=f"Seat limit reached ({result.seats_used}/{result.seats}). "
-                   "Upgrade to Team+ or free up a seat.",
+            "Upgrade to Team+ or free up a seat.",
         )
 
     return LicenseValidateResponse(**result.to_dict())
@@ -139,6 +146,7 @@ async def validate_license(request: LicenseValidateRequest) -> LicenseValidateRe
 # ─────────────────────────────────────────────
 # Offline grace check (internal helper used by agent)
 # ─────────────────────────────────────────────
+
 
 def check_offline_grace() -> dict:
     """

@@ -9,13 +9,13 @@ import os
 import urllib.request
 from typing import Optional
 
+from .connectors.url_adapter import SourceFetchError as URLFetchError
+from .connectors.url_adapter import URLAdapter
 from .reference_scanner import Reference, RefType
-from .connectors.url_adapter import URLAdapter, SourceFetchError as URLFetchError
 
-
-_GITHUB_API   = "https://api.github.com"
-_FETCH_TIMEOUT = 5   # seconds
-_MAX_COMMENTS  = 3   # first N comments included
+_GITHUB_API = "https://api.github.com"
+_FETCH_TIMEOUT = 5  # seconds
+_MAX_COMMENTS = 3  # first N comments included
 
 _url_adapter = URLAdapter()
 
@@ -23,6 +23,7 @@ _url_adapter = URLAdapter()
 # ---------------------------------------------------------------------------
 # GitHub fetcher
 # ---------------------------------------------------------------------------
+
 
 def _github_headers() -> dict:
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -48,15 +49,13 @@ def _gh_get(url: str) -> Optional[dict]:
 
 def _format_issue(data: dict, comments: list) -> str:
     """Format a GitHub issue/PR as readable text."""
-    title  = data.get("title", "")
-    state  = data.get("state", "")
-    body   = (data.get("body") or "").strip()[:2000]
+    title = data.get("title", "")
+    state = data.get("state", "")
+    body = (data.get("body") or "").strip()[:2000]
     labels = ", ".join(l.get("name", "") for l in data.get("labels", []))
-    assignees = ", ".join(
-        a.get("login", "") for a in data.get("assignees", [])
-    )
+    assignees = ", ".join(a.get("login", "") for a in data.get("assignees", []))
     number = data.get("number", "")
-    url    = data.get("html_url", "")
+    url = data.get("html_url", "")
 
     lines = [
         f"## #{number}: {title}",
@@ -75,7 +74,7 @@ def _format_issue(data: dict, comments: list) -> str:
         lines.append("\n### Comments")
         for c in comments[:_MAX_COMMENTS]:
             author = c.get("user", {}).get("login", "unknown")
-            cbody  = (c.get("body") or "").strip()[:500]
+            cbody = (c.get("body") or "").strip()[:500]
             lines.append(f"**@{author}:** {cbody}")
 
     return "\n".join(lines)
@@ -86,6 +85,7 @@ def _fetch_github(ref: Reference) -> Optional[str]:
     if not os.environ.get("GITHUB_TOKEN"):
         # Warn but still try — public repos work without token (rate-limited)
         import sys
+
         print("[ref-inject] GITHUB_TOKEN not set — rate limits apply", file=sys.stderr)
 
     data = _gh_get(ref.resolved_url)
@@ -107,6 +107,7 @@ def _fetch_github(ref: Reference) -> Optional[str]:
 # URL fetcher (delegates to URLAdapter)
 # ---------------------------------------------------------------------------
 
+
 def _fetch_url(ref: Reference) -> Optional[str]:
     """Fetch a bare URL via the URL adapter."""
     try:
@@ -119,6 +120,7 @@ def _fetch_url(ref: Reference) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def fetch_reference(ref: Reference) -> Optional[str]:
     """
@@ -137,6 +139,7 @@ def fetch_reference(ref: Reference) -> Optional[str]:
             return _fetch_url(ref)
         elif ref.ref_type in (RefType.LINEAR_TICKET, RefType.JIRA_TICKET):
             import sys
+
             print(
                 f"[ref-inject] {ref.ref_type} ({ref.raw_match}) not yet supported",
                 file=sys.stderr,

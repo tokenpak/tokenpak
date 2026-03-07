@@ -24,9 +24,8 @@ Rule format:
 from __future__ import annotations
 
 import fnmatch
-import re
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -34,6 +33,7 @@ from typing import Any, Dict, List, Optional
 # Try PyYAML first, fall back to a minimal JSON-based store if unavailable.
 try:
     import yaml as _yaml  # type: ignore
+
     _HAS_YAML = True
 except ImportError:
     _HAS_YAML = False
@@ -50,16 +50,18 @@ DEFAULT_ROUTES_PATH = str(Path.home() / ".tokenpak" / "routes.yaml")
 # Data structures
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RoutePattern:
     """Pattern conditions for a routing rule.
 
     At least one field must be set.  All set fields must match (AND logic).
     """
-    model: Optional[str] = None        # glob, e.g. "gpt-4*" or "openai/*"
-    prefix: Optional[str] = None       # prompt must start with this string (case-insensitive)
-    min_tokens: Optional[int] = None   # estimated input token floor (inclusive)
-    max_tokens: Optional[int] = None   # estimated input token ceiling (inclusive)
+
+    model: Optional[str] = None  # glob, e.g. "gpt-4*" or "openai/*"
+    prefix: Optional[str] = None  # prompt must start with this string (case-insensitive)
+    min_tokens: Optional[int] = None  # estimated input token floor (inclusive)
+    max_tokens: Optional[int] = None  # estimated input token ceiling (inclusive)
 
     def is_empty(self) -> bool:
         return all(v is None for v in (self.model, self.prefix, self.min_tokens, self.max_tokens))
@@ -89,10 +91,11 @@ class RoutePattern:
 @dataclass
 class RouteRule:
     """A single routing rule."""
+
     id: str
     pattern: RoutePattern
-    target: str                        # "provider/model" or just "model"
-    priority: int = 100                # lower = higher priority
+    target: str  # "provider/model" or just "model"
+    priority: int = 100  # lower = higher priority
     enabled: bool = True
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     description: str = ""
@@ -130,6 +133,7 @@ class RouteRule:
 # ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------
+
 
 class RouteStore:
     """Persist routing rules to ~/.tokenpak/routes.yaml."""
@@ -224,6 +228,7 @@ class RouteStore:
 # ---------------------------------------------------------------------------
 # Matching engine
 # ---------------------------------------------------------------------------
+
 
 def _count_tokens_approx(text: str) -> int:
     """Very cheap token estimator: ~4 chars per token."""
@@ -331,6 +336,7 @@ class RouteEngine:
 # ---------------------------------------------------------------------------
 # Helpers for CLI
 # ---------------------------------------------------------------------------
+
 
 def parse_pattern_args(
     model: Optional[str] = None,

@@ -57,7 +57,6 @@ from tokenpak.telemetry.canonical import (
     UsageSource,
 )
 
-
 # Gemini finishReason → canonical finish_reason
 _FINISH_REASON_MAP: dict[str, str] = {
     "STOP": "stop",

@@ -46,15 +46,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict
 
 # ---------------------------------------------------------------------------
 # Auth type constants
 # ---------------------------------------------------------------------------
 
-AUTH_TYPE_APIKEY = "apikey"       # Static API key (sk-...)
-AUTH_TYPE_OAUTH  = "oauth"        # OAuth Bearer token (JWT / opaque)
-AUTH_TYPE_NONE   = "none"         # No auth header
+AUTH_TYPE_APIKEY = "apikey"  # Static API key (sk-...)
+AUTH_TYPE_OAUTH = "oauth"  # OAuth Bearer token (JWT / opaque)
+AUTH_TYPE_NONE = "none"  # No auth header
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ AUTH_TYPE_NONE   = "none"         # No auth header
 # Responses API (newer, preferred for Codex models):
 CODEX_RESPONSES_PATH = "/v1/responses"
 # Chat Completions API (also supported):
-CODEX_CHAT_PATH      = "/v1/chat/completions"
+CODEX_CHAT_PATH = "/v1/chat/completions"
 
 # Model name patterns that indicate a Codex subscription model
 _CODEX_MODEL_RE = re.compile(
@@ -86,6 +86,7 @@ _JWT_RE = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
 # ---------------------------------------------------------------------------
 # OAuthRequest — detected auth context for a single request
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class OAuthContext:
@@ -108,6 +109,7 @@ class OAuthContext:
         Shape hint: "jwt", "opaque", "apikey", "unknown"
         Never contains actual token value.
     """
+
     auth_type: str = AUTH_TYPE_NONE
     is_codex: bool = False
     is_oauth_anthropic: bool = False
@@ -118,6 +120,7 @@ class OAuthContext:
 # ---------------------------------------------------------------------------
 # Core detection functions
 # ---------------------------------------------------------------------------
+
 
 def detect_auth_type(headers: Dict[str, str]) -> str:
     """
@@ -221,16 +224,12 @@ def analyze_request(
     # Detect Anthropic OAuth (Claude Code subscription)
     # Anthropic OAuth uses Bearer token but hits /v1/messages
     lower_path = path.lower()
-    is_anthropic_path = (
-        "/v1/messages" in lower_path
-        or "/messages" in lower_path
-    )
+    is_anthropic_path = "/v1/messages" in lower_path or "/messages" in lower_path
     lower_headers = {k.lower(): v for k, v in headers.items()}
     has_anthropic_version = "anthropic-version" in lower_headers
 
-    is_oauth_anthropic = (
-        auth_type == AUTH_TYPE_OAUTH
-        and (is_anthropic_path or has_anthropic_version)
+    is_oauth_anthropic = auth_type == AUTH_TYPE_OAUTH and (
+        is_anthropic_path or has_anthropic_version
     )
 
     # Codex = OAuth + OpenAI path OR model name contains codex
@@ -241,7 +240,7 @@ def analyze_request(
     )
 
     # OAuth tokens should never share cache keys across sessions
-    skip_cache_keying = (auth_type == AUTH_TYPE_OAUTH)
+    skip_cache_keying = auth_type == AUTH_TYPE_OAUTH
 
     return OAuthContext(
         auth_type=auth_type,
@@ -255,6 +254,7 @@ def analyze_request(
 # ---------------------------------------------------------------------------
 # Telemetry helpers (safe for logging — no credential values)
 # ---------------------------------------------------------------------------
+
 
 def oauth_telemetry_tags(ctx: OAuthContext) -> Dict[str, str]:
     """

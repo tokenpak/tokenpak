@@ -2,12 +2,13 @@
 
 Adapted from TokenPak recipe_engine.py. No external package references.
 """
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
-import logging
 
 import yaml
 
@@ -33,8 +34,12 @@ class Recipe:
             raise ValueError(f"Recipe in {source} must be a mapping")
 
         required_fields = [
-            "intent", "description", "required_blocks",
-            "optional_blocks", "max_tokens", "priority_order",
+            "intent",
+            "description",
+            "required_blocks",
+            "optional_blocks",
+            "max_tokens",
+            "priority_order",
         ]
         for f in required_fields:
             if f not in data:
@@ -51,13 +56,19 @@ class Recipe:
             raise ValueError(f"Recipe in {source} has invalid intent")
         if not isinstance(description, str) or not description.strip():
             raise ValueError(f"Recipe in {source} has invalid description")
-        if not isinstance(required_blocks, list) or not all(isinstance(b, str) for b in required_blocks):
+        if not isinstance(required_blocks, list) or not all(
+            isinstance(b, str) for b in required_blocks
+        ):
             raise ValueError(f"Recipe in {source} required_blocks must be list[str]")
-        if not isinstance(optional_blocks, list) or not all(isinstance(b, str) for b in optional_blocks):
+        if not isinstance(optional_blocks, list) or not all(
+            isinstance(b, str) for b in optional_blocks
+        ):
             raise ValueError(f"Recipe in {source} optional_blocks must be list[str]")
         if not isinstance(max_tokens, int) or max_tokens <= 0:
             raise ValueError(f"Recipe in {source} max_tokens must be positive int")
-        if not isinstance(priority_order, list) or not all(isinstance(p, str) for p in priority_order):
+        if not isinstance(priority_order, list) or not all(
+            isinstance(p, str) for p in priority_order
+        ):
             raise ValueError(f"Recipe in {source} priority_order must be list[str]")
 
         return cls(
@@ -261,6 +272,7 @@ class CompressionRecipe:
             return any(kw in content_sample for kw in keywords)
         if mode == "path_pattern":
             import re
+
             path_patterns = self.pattern.get("path_patterns", [])
             return any(re.search(p, filename) for p in path_patterns)
         # Unknown mode: conservative — skip
@@ -318,7 +330,8 @@ class CompressionRecipeEngine:
         """Return recipes applicable to a given file, sorted by compression_hint desc."""
         self._ensure_loaded()
         applicable = [
-            r for r in self._recipes.values()
+            r
+            for r in self._recipes.values()
             if r.matches(filename=filename, content_sample=content_sample)
         ]
         return sorted(applicable, key=lambda r: r.compression_hint, reverse=True)
@@ -372,10 +385,10 @@ import re
 from enum import Enum
 from typing import List
 
-
 # ---------------------------------------------------------------------------
 # Token counter (cheap, deterministic — matches rest of codebase)
 # ---------------------------------------------------------------------------
+
 
 def _count_tokens(text: str) -> int:
     """Approximate token count: 1 token ≈ 4 characters."""
@@ -385,6 +398,7 @@ def _count_tokens(text: str) -> int:
 # ---------------------------------------------------------------------------
 # RecipeType
 # ---------------------------------------------------------------------------
+
 
 class RecipeType(Enum):
     WHITESPACE_COLLAPSE = "whitespace_collapse"
@@ -398,12 +412,13 @@ class RecipeType(Enum):
 # ContentSegment — text-bearing segment used by CompressionRuleEngine
 # ---------------------------------------------------------------------------
 
+
 @dataclasses.dataclass
 class ContentSegment:
     """Lightweight segment that carries raw text and its classification."""
 
     raw_content: str
-    segment_type: str          # uses SegmentType string values
+    segment_type: str  # uses SegmentType string values
     raw_tokens: int = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
@@ -504,9 +519,7 @@ class CompressionRuleEngine:
 
         return recipes
 
-    def apply_recipes(
-        self, segment: ContentSegment, recipes: List[RecipeType]
-    ) -> ContentSegment:
+    def apply_recipes(self, segment: ContentSegment, recipes: List[RecipeType]) -> ContentSegment:
         """Apply *recipes* in order; return new ContentSegment with updated tokens."""
         content = segment.raw_content
         for recipe in recipes:

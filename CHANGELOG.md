@@ -11,7 +11,11 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- _(place new items here with PR links)_
+- **Streaming SSE passthrough** — `stream: true` requests are now forwarded chunk-by-chunk with zero buffering. Supports Anthropic and OpenAI SSE formats. Output tokens extracted from stream for full telemetry coverage.
+- Streaming responses enforce `Content-Type: text/event-stream`, `Cache-Control: no-cache`, and `X-Accel-Buffering: no` headers even when upstream omits them.
+- `StreamHandler` class for gzip-aware chunk buffering and usage extraction.
+- `iter_sse_events()` helper for iterating parsed events from raw SSE bytes.
+- Comprehensive test coverage for streaming: `tests/test_streaming.py`.
 
 ### Changed
 - _(breaking or behavioral changes)_

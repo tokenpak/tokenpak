@@ -13,9 +13,9 @@ Usage::
 """
 
 from .base import BaseAdapter
-from .openclaw import OpenClawAdapter
 from .claude_cli import ClaudeCLIAdapter
 from .generic import GenericAdapter
+from .openclaw import OpenClawAdapter
 from .registry import detect_platform
 
 __all__ = [

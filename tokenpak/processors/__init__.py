@@ -1,12 +1,14 @@
 """Content processors for different file types."""
 
-from .text import TextProcessor
 from .code import CodeProcessor
 from .data import DataProcessor
+from .text import TextProcessor
 
 # Tree-sitter processor (optional — graceful fallback if unavailable)
 try:
-    from .code_treesitter import TreeSitterProcessor, is_available as _ts_available
+    from .code_treesitter import TreeSitterProcessor
+    from .code_treesitter import is_available as _ts_available
+
     _HAS_TREESITTER = _ts_available()
 except ImportError:
     _HAS_TREESITTER = False

@@ -11,10 +11,9 @@ from __future__ import annotations
 import json
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 
 STALE_TIMEOUT_SECONDS = 60  # mark agent stale after this many seconds of no heartbeat
 
@@ -22,8 +21,9 @@ STALE_TIMEOUT_SECONDS = 60  # mark agent stale after this many seconds of no hea
 @dataclass
 class AgentRecord:
     """A registered team agent."""
+
     name: str
-    status: str = "online"          # "online" | "stale" | "offline"
+    status: str = "online"  # "online" | "stale" | "offline"
     capabilities: List[str] = field(default_factory=list)
     last_heartbeat: float = field(default_factory=time.time)
     metadata: Dict[str, Any] = field(default_factory=dict)

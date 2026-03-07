@@ -9,10 +9,9 @@ Mode hierarchy (can only downgrade, never upgrade automatically):
 """
 
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -38,6 +37,7 @@ _MODE_ORDER = ["aggressive", "hybrid", "strict"]
 # ---------------------------------------------------------------------------
 # Calibration store helpers
 # ---------------------------------------------------------------------------
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -69,6 +69,7 @@ def _save(data: dict, path: str) -> None:
 # ---------------------------------------------------------------------------
 # Event age helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_ts(ts: str) -> Optional[datetime]:
     """Parse ISO timestamp to datetime (UTC-aware)."""
@@ -102,6 +103,7 @@ def _event_weight(age_days: float) -> float:
 # ---------------------------------------------------------------------------
 # Core logging API
 # ---------------------------------------------------------------------------
+
 
 def log_retry(
     query: str,
@@ -174,6 +176,7 @@ def log_success(
 # Retry rate computation
 # ---------------------------------------------------------------------------
 
+
 def compute_retry_rate(
     risk_class: str,
     mode: str,
@@ -235,6 +238,7 @@ def compute_retry_rate(
 # Auto-downgrade logic
 # ---------------------------------------------------------------------------
 
+
 def _downgrade_mode(current_mode: str) -> Optional[str]:
     """
     Return the next-lower mode, or None if already at STRICT.
@@ -279,8 +283,9 @@ def _recompute_overrides(data: dict, now: Optional[datetime] = None) -> None:
             if rate > RETRY_RATE_THRESHOLD:
                 candidate = _downgrade_mode(check_mode)
                 if candidate:
-                    if (effective_override is None or
-                            _MODE_ORDER.index(candidate) > _MODE_ORDER.index(effective_override)):
+                    if effective_override is None or _MODE_ORDER.index(
+                        candidate
+                    ) > _MODE_ORDER.index(effective_override):
                         effective_override = candidate
 
         if effective_override is not None:
@@ -293,6 +298,7 @@ def _recompute_overrides(data: dict, now: Optional[datetime] = None) -> None:
 # ---------------------------------------------------------------------------
 # Public API: get_effective_mode
 # ---------------------------------------------------------------------------
+
 
 def get_effective_mode(
     base_mode: str,
@@ -332,6 +338,7 @@ def get_effective_mode(
 # ---------------------------------------------------------------------------
 # Utility: load raw calibration data (for inspection / tests)
 # ---------------------------------------------------------------------------
+
 
 def load_calibration(path: str = DEFAULT_CALIBRATION_PATH) -> dict:
     """Load calibration.json and return raw dict."""

@@ -1,16 +1,18 @@
 """TokenPak Pipeline Trace — Capture compression pipeline execution for demo/debugging."""
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Dict, List, Any, Optional
-from collections import deque
+
 import threading
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
+
     name: str  # capsule, segmentizer, recipe_engine, slot_filler, validation_gate
     enabled: bool
     input_tokens: int
@@ -23,6 +25,7 @@ class StageTrace:
 @dataclass
 class PipelineTrace:
     """Complete trace for one request through the compression pipeline."""
+
     request_id: str
     timestamp: datetime
     input_tokens: int

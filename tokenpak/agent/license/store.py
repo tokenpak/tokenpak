@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -24,7 +24,7 @@ STORE_FILE_NAME = "license_cache.json"
 @dataclass
 class CachedLicense:
     token: str
-    cached_at: float       # unix timestamp
+    cached_at: float  # unix timestamp
     last_validated: float  # unix timestamp of last successful online validation
     tier: str
     expires_at: Optional[str]
@@ -73,6 +73,7 @@ class LicenseStore:
 
     def __init__(self, store_dir: Optional[Path] = None):
         import os
+
         if store_dir:
             self._dir = Path(store_dir)
         else:

@@ -19,7 +19,7 @@ import threading
 import time
 from typing import Optional
 
-from .routing_ledger import RoutingLedger, DEFAULT_LEDGER_PATH
+from .routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
 
 
 class ShadowHook:
@@ -38,6 +38,7 @@ class ShadowHook:
                 self._ledger = RoutingLedger(ledger_path)
             except Exception as e:
                 import sys
+
                 print(f"[shadow-mode] init failed: {e}", file=sys.stderr)
                 self.enabled = False
 
@@ -67,6 +68,7 @@ class ShadowHook:
             return txn_key
         except Exception as e:
             import sys
+
             print(f"[shadow-mode] record_request error: {e}", file=sys.stderr)
             return None
 
@@ -107,13 +109,14 @@ class ShadowHook:
                 query=pending["query"],
                 context_blocks=context_blocks or [],
                 response=response_text,
-                accepted=None,          # unreviewed until feedback arrives
+                accepted=None,  # unreviewed until feedback arrives
                 latency_ms=actual_latency,
                 context_tokens=pending["context_tokens"],
                 response_tokens=response_tokens,
             )
         except Exception as e:
             import sys
+
             print(f"[shadow-mode] record_response error: {e}", file=sys.stderr)
             return None
 
@@ -134,10 +137,12 @@ class ShadowHook:
             if txn:
                 # Update Elo rating
                 from .elo import update_elo
+
                 update_elo(txn["model_used"], txn["task_type"], accepted)
             return self._ledger.record_outcome(transaction_id, accepted, reason)
         except Exception as e:
             import sys
+
             print(f"[shadow-mode] record_feedback error: {e}", file=sys.stderr)
             return False
 

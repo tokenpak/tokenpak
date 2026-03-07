@@ -24,23 +24,40 @@ def fingerprint_cmd():
 
 # ── sync ─────────────────────────────────────────────────────────────────────
 
+
 @fingerprint_cmd.command("sync", help="Generate and sync a fingerprint, receive directives.")
 @click.argument("text", required=False)
-@click.option("--file", "-f", "input_file", type=click.Path(exists=True),
-              help="Read prompt from file instead of stdin/arg.")
-@click.option("--messages", "messages_file", type=click.Path(exists=True),
-              help="Read OpenAI-style messages JSON from file.")
-@click.option("--dry-run", is_flag=True, default=False,
-              help="Show what would be sent without transmitting.")
-@click.option("--privacy", type=click.Choice(["minimal", "standard", "full"]),
-              default="standard", show_default=True,
-              help="Privacy level for the fingerprint payload.")
-@click.option("--ttl", type=int, default=3600, show_default=True,
-              help="Cache TTL in seconds.")
-@click.option("--skip-cache", is_flag=True, default=False,
-              help="Bypass local cache and always contact server.")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output result as JSON.")
+@click.option(
+    "--file",
+    "-f",
+    "input_file",
+    type=click.Path(exists=True),
+    help="Read prompt from file instead of stdin/arg.",
+)
+@click.option(
+    "--messages",
+    "messages_file",
+    type=click.Path(exists=True),
+    help="Read OpenAI-style messages JSON from file.",
+)
+@click.option(
+    "--dry-run", is_flag=True, default=False, help="Show what would be sent without transmitting."
+)
+@click.option(
+    "--privacy",
+    type=click.Choice(["minimal", "standard", "full"]),
+    default="standard",
+    show_default=True,
+    help="Privacy level for the fingerprint payload.",
+)
+@click.option("--ttl", type=int, default=3600, show_default=True, help="Cache TTL in seconds.")
+@click.option(
+    "--skip-cache",
+    is_flag=True,
+    default=False,
+    help="Bypass local cache and always contact server.",
+)
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output result as JSON.")
 def fingerprint_sync(
     text: Optional[str],
     input_file: Optional[str],
@@ -52,8 +69,8 @@ def fingerprint_sync(
     output_json: bool,
 ) -> None:
     from tokenpak.agent.fingerprint.generator import FingerprintGenerator
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
     from tokenpak.agent.fingerprint.privacy import PrivacyLevel
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -79,13 +96,19 @@ def fingerprint_sync(
 
     if dry_run:
         from tokenpak.agent.fingerprint.privacy import apply_privacy
+
         payload = apply_privacy(fingerprint.to_dict(), privacy_level)
         if output_json:
-            click.echo(json.dumps({
-                "dry_run": True,
-                "fingerprint_id": fingerprint.fingerprint_id,
-                "payload_preview": payload,
-            }, indent=2))
+            click.echo(
+                json.dumps(
+                    {
+                        "dry_run": True,
+                        "fingerprint_id": fingerprint.fingerprint_id,
+                        "payload_preview": payload,
+                    },
+                    indent=2,
+                )
+            )
         else:
             click.echo("── Dry Run ─────────────────────────────────")
             click.echo(f"  Fingerprint ID : {fingerprint.fingerprint_id}")
@@ -104,15 +127,20 @@ def fingerprint_sync(
         sys.exit(1)
 
     if output_json:
-        click.echo(json.dumps({
-            "success": result.success,
-            "source": result.source,
-            "fingerprint_id": fingerprint.fingerprint_id,
-            "directives": [d.to_dict() for d in result.directives],
-            "cached_at": result.cached_at,
-            "expires_at": result.expires_at,
-            "error": result.error,
-        }, indent=2))
+        click.echo(
+            json.dumps(
+                {
+                    "success": result.success,
+                    "source": result.source,
+                    "fingerprint_id": fingerprint.fingerprint_id,
+                    "directives": [d.to_dict() for d in result.directives],
+                    "cached_at": result.cached_at,
+                    "expires_at": result.expires_at,
+                    "error": result.error,
+                },
+                indent=2,
+            )
+        )
         return
 
     status_icon = "✓" if result.success else "⚠"
@@ -139,10 +167,12 @@ def fingerprint_sync(
 
 # ── cache ─────────────────────────────────────────────────────────────────────
 
+
 @fingerprint_cmd.command("cache", help="Show local directive cache status.")
 @click.option("--json", "output_json", is_flag=True, default=False)
 def fingerprint_cache(output_json: bool) -> None:
     from tokenpak.agent.fingerprint.sync import FingerprintSync
+
     client = FingerprintSync()
     status = client.cache_status()
 
@@ -160,13 +190,15 @@ def fingerprint_cache(output_json: bool) -> None:
 
 # ── clear-cache ───────────────────────────────────────────────────────────────
 
+
 @fingerprint_cmd.command("clear-cache", help="Clear cached directives.")
-@click.option("--id", "fp_id", default=None,
-              help="Clear only this fingerprint ID (default: clear all).")
-@click.option("--yes", "-y", is_flag=True, default=False,
-              help="Skip confirmation prompt.")
+@click.option(
+    "--id", "fp_id", default=None, help="Clear only this fingerprint ID (default: clear all)."
+)
+@click.option("--yes", "-y", is_flag=True, default=False, help="Skip confirmation prompt.")
 def fingerprint_clear_cache(fp_id: Optional[str], yes: bool) -> None:
     from tokenpak.agent.fingerprint.sync import FingerprintSync
+
     client = FingerprintSync()
 
     scope = f"fingerprint {fp_id}" if fp_id else "ALL cached directives"

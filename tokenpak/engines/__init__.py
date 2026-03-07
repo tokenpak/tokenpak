@@ -6,6 +6,7 @@ from .heuristic import HeuristicEngine
 # LLMLingua engines will be imported conditionally when available
 try:
     from .llmlingua import LLMLinguaEngine
+
     LLMLINGUA_AVAILABLE = True
 except ImportError:
     LLMLINGUA_AVAILABLE = False

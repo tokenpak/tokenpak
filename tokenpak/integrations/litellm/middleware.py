@@ -31,10 +31,14 @@ for use with plain ``litellm.completion()``::
 from __future__ import annotations
 
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict
 
 from .formatter import compile_pack
-from .parser import parse_tokenpak_request, extract_budget_from_kwargs, extract_compaction_from_kwargs
+from .parser import (
+    extract_budget_from_kwargs,
+    extract_compaction_from_kwargs,
+    parse_tokenpak_request,
+)
 
 
 class TokenPakMiddleware:
@@ -86,7 +90,9 @@ class TokenPakMiddleware:
 
         existing = cleaned.get("messages", [])
         t0 = time.perf_counter()
-        messages = compile_pack(pack, budget=budget, compaction=compaction, existing_messages=existing)
+        messages = compile_pack(
+            pack, budget=budget, compaction=compaction, existing_messages=existing
+        )
         compile_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         cleaned["messages"] = messages
@@ -98,9 +104,7 @@ class TokenPakMiddleware:
                 "budget": budget,
                 "compaction": compaction,
                 "system_tokens": sum(
-                    len(m.get("content", "")) // 4
-                    for m in messages
-                    if m.get("role") == "system"
+                    len(m.get("content", "")) // 4 for m in messages if m.get("role") == "system"
                 ),
             }
 

@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 # Tiers
 # ──────────────────────────────────────────────────────────────
 
+
 class LicenseTier(str, Enum):
     FREE = "free"
     PRO = "pro"
@@ -102,6 +103,7 @@ _intel_logger.addFilter(PIIScrubFilter())
 # ──────────────────────────────────────────────────────────────
 # API key validator
 # ──────────────────────────────────────────────────────────────
+
 
 class APIKeyValidator:
     """
@@ -158,6 +160,7 @@ class APIKeyValidator:
 # Sliding-window rate limiter (in-memory, per-key)
 # ──────────────────────────────────────────────────────────────
 
+
 class RateLimiter:
     """
     Fixed-window (per-minute) rate limiter.
@@ -178,9 +181,7 @@ class RateLimiter:
         """Hash the raw key so it never appears in memory in plain text."""
         return hashlib.sha256(key.encode()).hexdigest()
 
-    def check(
-        self, key: str, tier: LicenseTier
-    ) -> Tuple[bool, int, int]:
+    def check(self, key: str, tier: LicenseTier) -> Tuple[bool, int, int]:
         """
         Returns ``(allowed, remaining, reset_ts)``.
 
@@ -284,7 +285,7 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
                 content={
                     "error": "Too Many Requests",
                     "detail": f"Rate limit exceeded for tier '{tier}'. "
-                              f"Retry after {retry_after}s.",
+                    f"Retry after {retry_after}s.",
                 },
                 headers={
                     "X-Request-ID": request_id,

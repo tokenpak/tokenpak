@@ -13,30 +13,32 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
-
 # ─────────────────────────────────────────────
 # Data models
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class Segment:
     """A structural unit within a prompt."""
-    type: str          # e.g. "system", "user", "code", "list", "prose"
+
+    type: str  # e.g. "system", "user", "code", "list", "prose"
     token_estimate: int
-    depth: int = 0     # nesting depth (e.g. code inside a message)
+    depth: int = 0  # nesting depth (e.g. code inside a message)
     content_hash: Optional[str] = None  # SHA-256 of content (optional, for dedup)
 
 
 @dataclass
 class Fingerprint:
     """Structural fingerprint of a prompt — no raw content."""
+
     fingerprint_id: str
     schema_version: int = 1
     total_tokens: int = 0
     segment_count: int = 0
     segments: list[Segment] = field(default_factory=list)
     language: Optional[str] = None
-    model_hint: Optional[str] = None   # e.g. "gpt-4", "claude-3"
+    model_hint: Optional[str] = None  # e.g. "gpt-4", "claude-3"
 
     def to_dict(self) -> dict:
         return {
@@ -61,6 +63,7 @@ class Fingerprint:
 # ─────────────────────────────────────────────
 # Token estimation
 # ─────────────────────────────────────────────
+
 
 def _estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token (conservative)."""
@@ -104,6 +107,7 @@ def _detect_language(text: str) -> Optional[str]:
 # Generator
 # ─────────────────────────────────────────────
 
+
 class FingerprintGenerator:
     """
     Generates a structural Fingerprint from prompt text or message lists.
@@ -131,15 +135,15 @@ class FingerprintGenerator:
             seg_type = _classify_text(block)
             tok = _estimate_tokens(block)
             content_hash = (
-                hashlib.sha256(block.encode()).hexdigest()[:16]
-                if self.include_hashes
-                else None
+                hashlib.sha256(block.encode()).hexdigest()[:16] if self.include_hashes else None
             )
-            segments.append(Segment(
-                type=seg_type,
-                token_estimate=tok,
-                content_hash=content_hash,
-            ))
+            segments.append(
+                Segment(
+                    type=seg_type,
+                    token_estimate=tok,
+                    content_hash=content_hash,
+                )
+            )
 
         total = sum(s.token_estimate for s in segments)
         lang = _detect_language(text)
@@ -167,9 +171,7 @@ class FingerprintGenerator:
             content = msg.get("content", "")
             if not isinstance(content, str):
                 # Handle content arrays (vision, tool use, etc.)
-                content = " ".join(
-                    c.get("text", "") for c in content if isinstance(c, dict)
-                )
+                content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
 
             full_text += content + "\n"
             tok = _estimate_tokens(content)
@@ -182,11 +184,13 @@ class FingerprintGenerator:
                 if prose_toks > 0:
                     segments.append(Segment(type=role, token_estimate=prose_toks))
                 for cb in code_blocks:
-                    segments.append(Segment(
-                        type="code",
-                        token_estimate=_estimate_tokens(cb),
-                        depth=1,
-                    ))
+                    segments.append(
+                        Segment(
+                            type="code",
+                            token_estimate=_estimate_tokens(cb),
+                            depth=1,
+                        )
+                    )
             else:
                 segments.append(Segment(type=role, token_estimate=tok))
 

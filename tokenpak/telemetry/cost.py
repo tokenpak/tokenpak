@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -40,27 +40,135 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 SEED_PRICING: List[dict] = [
     # Anthropic
-    {"provider": "anthropic", "model": "claude-opus-4-6",     "input_rate": 15.00, "output_rate": 75.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-opus-4-5",     "input_rate": 15.00, "output_rate": 75.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-sonnet-4-6",   "input_rate":  3.00, "output_rate": 15.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-sonnet-4-5",   "input_rate":  3.00, "output_rate": 15.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-haiku-4-6",    "input_rate":  0.80, "output_rate":  4.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-haiku-4-5",    "input_rate":  0.80, "output_rate":  4.00,  "source": "official"},
-    {"provider": "anthropic", "model": "claude-haiku-3-5",    "input_rate":  0.80, "output_rate":  4.00,  "source": "official"},
+    {
+        "provider": "anthropic",
+        "model": "claude-opus-4-6",
+        "input_rate": 15.00,
+        "output_rate": 75.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-opus-4-5",
+        "input_rate": 15.00,
+        "output_rate": 75.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
+        "input_rate": 3.00,
+        "output_rate": 15.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "input_rate": 3.00,
+        "output_rate": 15.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-6",
+        "input_rate": 0.80,
+        "output_rate": 4.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5",
+        "input_rate": 0.80,
+        "output_rate": 4.00,
+        "source": "official",
+    },
+    {
+        "provider": "anthropic",
+        "model": "claude-haiku-3-5",
+        "input_rate": 0.80,
+        "output_rate": 4.00,
+        "source": "official",
+    },
     # OpenAI
-    {"provider": "openai",    "model": "gpt-4o",              "input_rate":  5.00, "output_rate": 15.00,  "source": "official"},
-    {"provider": "openai",    "model": "gpt-4o-mini",         "input_rate":  0.15, "output_rate":  0.60,  "source": "official"},
-    {"provider": "openai",    "model": "gpt-4-turbo",         "input_rate": 10.00, "output_rate": 30.00,  "source": "official"},
-    {"provider": "openai",    "model": "gpt-3.5-turbo",       "input_rate":  0.50, "output_rate":  1.50,  "source": "official"},
-    {"provider": "openai",    "model": "o1",                  "input_rate": 15.00, "output_rate": 60.00,  "source": "official"},
-    {"provider": "openai",    "model": "o1-mini",             "input_rate":  3.00, "output_rate": 12.00,  "source": "official"},
+    {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "input_rate": 5.00,
+        "output_rate": 15.00,
+        "source": "official",
+    },
+    {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "input_rate": 0.15,
+        "output_rate": 0.60,
+        "source": "official",
+    },
+    {
+        "provider": "openai",
+        "model": "gpt-4-turbo",
+        "input_rate": 10.00,
+        "output_rate": 30.00,
+        "source": "official",
+    },
+    {
+        "provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "input_rate": 0.50,
+        "output_rate": 1.50,
+        "source": "official",
+    },
+    {
+        "provider": "openai",
+        "model": "o1",
+        "input_rate": 15.00,
+        "output_rate": 60.00,
+        "source": "official",
+    },
+    {
+        "provider": "openai",
+        "model": "o1-mini",
+        "input_rate": 3.00,
+        "output_rate": 12.00,
+        "source": "official",
+    },
     # Google
-    {"provider": "google",    "model": "gemini-2.0-flash",    "input_rate":  0.10, "output_rate":  0.40,  "source": "official"},
-    {"provider": "google",    "model": "gemini-2.0-pro",      "input_rate":  3.50, "output_rate": 10.50,  "source": "official"},
-    {"provider": "google",    "model": "gemini-1.5-pro",      "input_rate":  3.50, "output_rate": 10.50,  "source": "official"},
-    {"provider": "google",    "model": "gemini-1.5-flash",    "input_rate":  0.075,"output_rate":  0.30,  "source": "official"},
+    {
+        "provider": "google",
+        "model": "gemini-2.0-flash",
+        "input_rate": 0.10,
+        "output_rate": 0.40,
+        "source": "official",
+    },
+    {
+        "provider": "google",
+        "model": "gemini-2.0-pro",
+        "input_rate": 3.50,
+        "output_rate": 10.50,
+        "source": "official",
+    },
+    {
+        "provider": "google",
+        "model": "gemini-1.5-pro",
+        "input_rate": 3.50,
+        "output_rate": 10.50,
+        "source": "official",
+    },
+    {
+        "provider": "google",
+        "model": "gemini-1.5-flash",
+        "input_rate": 0.075,
+        "output_rate": 0.30,
+        "source": "official",
+    },
     # Fallback (unknown model)
-    {"provider": "unknown",   "model": "_fallback",           "input_rate":  3.00, "output_rate": 15.00,  "source": "estimated"},
+    {
+        "provider": "unknown",
+        "model": "_fallback",
+        "input_rate": 3.00,
+        "output_rate": 15.00,
+        "source": "estimated",
+    },
 ]
 
 CURRENT_PRICING_VERSION = "2026.02"
@@ -73,16 +181,17 @@ CURRENT_EFFECTIVE_DATE = "2026-02-01"
 @dataclass
 class CostResult:
     """Result of a cost calculation for a single event."""
+
     model: str
     pricing_version: str
     raw_input_tokens: int
     final_input_tokens: int
     output_tokens: int
-    baseline_cost: float       # cost if no compression applied
-    actual_cost: float         # cost after compression
-    savings_amount: float      # baseline - actual (never negative)
-    savings_pct: float         # savings_amount / baseline_cost * 100
-    data_source: str           # "official" | "estimated" | "fallback"
+    baseline_cost: float  # cost if no compression applied
+    actual_cost: float  # cost after compression
+    savings_amount: float  # baseline - actual (never negative)
+    savings_pct: float  # savings_amount / baseline_cost * 100
+    data_source: str  # "official" | "estimated" | "fallback"
 
     def to_dict(self) -> dict:
         return {
@@ -102,10 +211,11 @@ class CostResult:
 @dataclass
 class Pricing:
     """A single model pricing record."""
+
     provider: str
     model: str
-    input_rate: float      # USD per 1K tokens
-    output_rate: float     # USD per 1K tokens
+    input_rate: float  # USD per 1K tokens
+    output_rate: float  # USD per 1K tokens
     version: str
     effective_date: str
     source: str = "official"
@@ -150,7 +260,7 @@ class CostEngine:
     """
 
     # Fallback rates for unknown models
-    _FALLBACK_INPUT_RATE  = 3.00   # USD/1K (sonnet-tier estimate)
+    _FALLBACK_INPUT_RATE = 3.00  # USD/1K (sonnet-tier estimate)
     _FALLBACK_OUTPUT_RATE = 15.00
 
     def __init__(self, db_path: str = "telemetry.db"):
@@ -190,12 +300,20 @@ class CostEngine:
                 """INSERT INTO tp_pricing
                    (version, effective_date, provider, model, input_rate, output_rate, source)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (CURRENT_PRICING_VERSION, CURRENT_EFFECTIVE_DATE,
-                 row["provider"], row["model"],
-                 row["input_rate"], row["output_rate"], row["source"]),
+                (
+                    CURRENT_PRICING_VERSION,
+                    CURRENT_EFFECTIVE_DATE,
+                    row["provider"],
+                    row["model"],
+                    row["input_rate"],
+                    row["output_rate"],
+                    row["source"],
+                ),
             )
         conn.commit()
-        logger.info(f"tp_pricing seeded with {len(SEED_PRICING)} rows (version {CURRENT_PRICING_VERSION})")
+        logger.info(
+            f"tp_pricing seeded with {len(SEED_PRICING)} rows (version {CURRENT_PRICING_VERSION})"
+        )
 
     # ------------------------------------------------------------------
     # Pricing resolution
@@ -319,25 +437,15 @@ class CostEngine:
         pricing = self.get_pricing(model, event_ts)
 
         # Baseline: what would have been billed without compression
-        baseline_cost = (
-            raw * pricing.input_per_token
-            + out * pricing.output_per_token
-        )
+        baseline_cost = raw * pricing.input_per_token + out * pricing.output_per_token
 
         # Actual: billed tokens after compression
         effective_input = max(0, final - cache_read_tokens)
-        actual_cost = (
-            effective_input * pricing.input_per_token
-            + out * pricing.output_per_token
-        )
+        actual_cost = effective_input * pricing.input_per_token + out * pricing.output_per_token
 
         # Savings (never negative — rounding artifacts clamped)
         savings_amount = max(0.0, baseline_cost - actual_cost)
-        savings_pct = (
-            (savings_amount / baseline_cost * 100.0)
-            if baseline_cost > 0
-            else 0.0
-        )
+        savings_pct = (savings_amount / baseline_cost * 100.0) if baseline_cost > 0 else 0.0
 
         return CostResult(
             model=model,
@@ -472,9 +580,14 @@ class CostEngine:
                                savings_total = ?, pricing_version = ?,
                                cost_source = ?
                                WHERE trace_id = ?""",
-                            (result.baseline_cost, result.actual_cost,
-                             result.savings_amount, result.pricing_version,
-                             result.data_source, event["trace_id"]),
+                            (
+                                result.baseline_cost,
+                                result.actual_cost,
+                                result.savings_amount,
+                                result.pricing_version,
+                                result.data_source,
+                                event["trace_id"],
+                            ),
                         )
                         rows_updated += 1
                 except Exception as e:
@@ -509,9 +622,12 @@ class CostEngine:
         ).fetchone()
         if row:
             return Pricing(
-                provider=row["provider"], model=row["model"],
-                input_rate=row["input_rate"], output_rate=row["output_rate"],
-                version=row["version"], effective_date=row["effective_date"],
+                provider=row["provider"],
+                model=row["model"],
+                input_rate=row["input_rate"],
+                output_rate=row["output_rate"],
+                version=row["version"],
+                effective_date=row["effective_date"],
                 source=row["source"],
             )
         return None
@@ -522,20 +638,17 @@ class CostEngine:
 # ---------------------------------------------------------------------------
 def calculate_baseline(raw_input_tokens: int, output_tokens: int, pricing: Pricing) -> float:
     """Compute baseline cost (no compression applied)."""
-    return max(0.0,
-        raw_input_tokens * pricing.input_per_token
-        + output_tokens * pricing.output_per_token
+    return max(
+        0.0, raw_input_tokens * pricing.input_per_token + output_tokens * pricing.output_per_token
     )
 
 
-def calculate_actual(final_input_tokens: int, output_tokens: int, pricing: Pricing,
-                     cache_read_tokens: int = 0) -> float:
+def calculate_actual(
+    final_input_tokens: int, output_tokens: int, pricing: Pricing, cache_read_tokens: int = 0
+) -> float:
     """Compute actual cost (after compression)."""
     effective = max(0, final_input_tokens - cache_read_tokens)
-    return max(0.0,
-        effective * pricing.input_per_token
-        + output_tokens * pricing.output_per_token
-    )
+    return max(0.0, effective * pricing.input_per_token + output_tokens * pricing.output_per_token)
 
 
 def calculate_savings(baseline: float, actual: float) -> tuple[float, float]:

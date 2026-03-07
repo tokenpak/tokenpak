@@ -11,14 +11,21 @@ Provides the compression pipeline and supporting utilities:
 - DirectiveApplier     — directive application stub (directives.py)
 """
 
-from .pipeline import CompressionPipeline
-from .segmentizer import segmentize, Segment, SegmentType
-from .slot_filler import SlotFiller, FilledSlots
-from .recipes import RecipeEngine, Recipe, MissingBlockError
-from .recipes import RecipeType, ContentSegment, CompressionRuleEngine, PHRASE_MAP
-from .canon import validate, apply_fallback, ValidationResult
+from .canon import ValidationResult, apply_fallback, validate
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
+from .pipeline import CompressionPipeline
+from .recipes import (
+    PHRASE_MAP,
+    CompressionRuleEngine,
+    ContentSegment,
+    MissingBlockError,
+    Recipe,
+    RecipeEngine,
+    RecipeType,
+)
+from .segmentizer import Segment, SegmentType, segmentize
+from .slot_filler import FilledSlots, SlotFiller
 
 __all__ = [
     "CompressionPipeline",

@@ -1,4 +1,5 @@
 """Rollup computation, timeseries, and summary query mixin."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -316,8 +317,10 @@ class RollupsMixin:
         }
         table = table_map.get(entity_type, "tp_rollup_daily_model")
         col = col_map.get(metric, "total_cost")
-        entity_col = "model" if entity_type == "model" else (
-            "provider" if entity_type == "provider" else "agent_id"
+        entity_col = (
+            "model"
+            if entity_type == "model"
+            else ("provider" if entity_type == "provider" else "agent_id")
         )
 
         cur = self._conn.cursor()

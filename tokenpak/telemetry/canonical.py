@@ -18,11 +18,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Enum-like string literals (kept as plain strings to avoid stdlib Enum
 # overhead; validated in CanonicalUsage.__post_init__ for safety)
 # ---------------------------------------------------------------------------
+
 
 class UsageSource:
     """Controlled vocabulary for ``CanonicalUsage.usage_source``."""
@@ -43,10 +43,7 @@ class UsageSource:
     def validate(cls, value: str) -> str:
         """Return *value* if valid, else raise ``ValueError``."""
         if value not in cls._values:
-            raise ValueError(
-                f"Invalid usage_source {value!r}. "
-                f"Must be one of {cls._values}."
-            )
+            raise ValueError(f"Invalid usage_source {value!r}. " f"Must be one of {cls._values}.")
         return value
 
 
@@ -63,16 +60,14 @@ class Confidence:
     def validate(cls, value: str) -> str:
         """Return *value* if valid, else raise ``ValueError``."""
         if value not in cls._values:
-            raise ValueError(
-                f"Invalid confidence {value!r}. "
-                f"Must be one of {cls._values}."
-            )
+            raise ValueError(f"Invalid confidence {value!r}. " f"Must be one of {cls._values}.")
         return value
 
 
 # ---------------------------------------------------------------------------
 # Canonical data-classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CanonicalRequest:

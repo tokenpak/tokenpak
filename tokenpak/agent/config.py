@@ -88,6 +88,7 @@ def get_stats_footer_enabled() -> bool:
 # Capsule Builder
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def get_capsule_builder_enabled() -> bool:
     """Return True if capsule builder is enabled.
 
@@ -124,6 +125,7 @@ def load_config() -> dict:
 # Debug Mode
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def get_debug_enabled() -> bool:
     """Return True if debug mode is enabled.
 
@@ -146,16 +148,16 @@ def set_debug_enabled(enabled: bool) -> None:
 
 def debug_log(message: str, **context: Any) -> None:
     """Log a debug message if debug mode is enabled.
-    
+
     Context kwargs are appended as key=value pairs.
     Output goes to stderr to avoid interfering with proxy responses.
     """
     if not get_debug_enabled():
         return
-    
+
     import sys
     import time
-    
+
     ts = time.strftime("%H:%M:%S")
     ctx_str = " ".join(f"{k}={v}" for k, v in context.items()) if context else ""
     line = f"[DEBUG {ts}] {message}"

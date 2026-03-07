@@ -20,12 +20,11 @@ import json
 import os
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from tokenpak.telemetry.models import AntiPattern, ANTI_PATTERN_PENALTIES, StaleReason
-
+from tokenpak.telemetry.models import ANTI_PATTERN_PENALTIES, AntiPattern, StaleReason
 
 # ---------------------------------------------------------------------------
 # Segment type taxonomy
@@ -157,9 +156,7 @@ def _has_image_block(content: Any) -> bool:
     """Return True if *content* is a list containing at least one image block."""
     if not isinstance(content, list):
         return False
-    return any(
-        isinstance(b, dict) and b.get("type") == "image" for b in content
-    )
+    return any(isinstance(b, dict) and b.get("type") == "image" for b in content)
 
 
 def _content_has_str(content: Any, marker: str) -> bool:
@@ -392,7 +389,9 @@ def compute_coverage_score(
 
     # must_hit_factor: all query terms present in at least one chunk
     all_text = " ".join(c.get("text", "").lower() for c in chunks)
-    must_hit_satisfied = all(term.lower() in all_text for term in query_terms) if query_terms else True
+    must_hit_satisfied = (
+        all(term.lower() in all_text for term in query_terms) if query_terms else True
+    )
     must_hit_factor = 0.45 if must_hit_satisfied else 0.0
 
     # concentration_factor: fewer unique source paths = more focused
@@ -438,6 +437,7 @@ def jaccard_4gram(a: str, b: str) -> float:
         Returns 1.0 if both strings are empty.
         Returns 0.0 if either string is too short for 4-grams.
     """
+
     def ngrams(text: str, n: int = 4) -> set[str]:
         """Yield all n-grams of length n from the token list."""
         if len(text) < n:
@@ -497,10 +497,37 @@ def _extract_memory_terms(content: str) -> set[str]:
     Extracts words >= 4 chars, lowercased, excluding common stopwords.
     """
     stopwords = {
-        "this", "that", "with", "from", "have", "will", "your", "what",
-        "when", "where", "which", "there", "their", "about", "would",
-        "could", "should", "been", "were", "more", "some", "than", "them",
-        "then", "into", "also", "only", "other", "over", "such", "each",
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "will",
+        "your",
+        "what",
+        "when",
+        "where",
+        "which",
+        "there",
+        "their",
+        "about",
+        "would",
+        "could",
+        "should",
+        "been",
+        "were",
+        "more",
+        "some",
+        "than",
+        "them",
+        "then",
+        "into",
+        "also",
+        "only",
+        "other",
+        "over",
+        "such",
+        "each",
     }
     words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
     return set(w for w in words if w not in stopwords)
@@ -661,8 +688,8 @@ BOILERPLATE_PATTERNS: list[str] = [
 ]
 
 # JSON/XML detection patterns
-_JSON_PATTERN = re.compile(r'^\s*[\[{]', re.MULTILINE)
-_XML_PATTERN = re.compile(r'^\s*<[a-zA-Z]', re.MULTILINE)
+_JSON_PATTERN = re.compile(r"^\s*[\[{]", re.MULTILINE)
+_XML_PATTERN = re.compile(r"^\s*<[a-zA-Z]", re.MULTILINE)
 
 
 def detect_anti_patterns(
@@ -699,7 +726,7 @@ def detect_anti_patterns(
 
     # Detect REPEATED_SYSTEM_PROMPT (Jaccard >0.9 between system segments)
     for i, (order_a, content_a) in enumerate(system_contents):
-        for order_b, content_b in system_contents[i + 1:]:
+        for order_b, content_b in system_contents[i + 1 :]:
             similarity = jaccard_4gram(content_a, content_b)
             if similarity > 0.9:
                 # Mark the later one as repeated
@@ -734,7 +761,7 @@ def detect_anti_patterns(
             continue
 
         # VERBOSE_STRUCTURED: large JSON/XML blob (>500 tokens)
-        if (_JSON_PATTERN.search(content) or _XML_PATTERN.search(content)):
+        if _JSON_PATTERN.search(content) or _XML_PATTERN.search(content):
             estimated_tokens = len(content) // 4
             if estimated_tokens > 500:
                 seg.anti_pattern = AntiPattern.VERBOSE_STRUCTURED.value
@@ -768,7 +795,7 @@ def detect_anti_patterns(
     for i, (order_a, content_a) in enumerate(non_system):
         if order_a in redundant_marked:
             continue
-        for order_b, content_b in non_system[i + 1:]:
+        for order_b, content_b in non_system[i + 1 :]:
             if order_b in redundant_marked:
                 continue
             similarity = jaccard_4gram(content_a, content_b)
@@ -817,11 +844,13 @@ def summarize_anti_patterns(segments: list[Segment]) -> dict[str, object]:
         if pattern == AntiPattern.NONE.value:
             continue
         counts[pattern] = counts.get(pattern, 0) + 1
-        offenders.append({
-            "segment_id": seg.segment_id,
-            "anti_pattern": pattern,
-            "order": seg.order,
-        })
+        offenders.append(
+            {
+                "segment_id": seg.segment_id,
+                "anti_pattern": pattern,
+                "order": seg.order,
+            }
+        )
 
     offenders.sort(key=lambda item: int(item.get("order", 0)))
     return {
@@ -889,10 +918,9 @@ def segmentize(
 
     # Pre-compute the index of the *last* assistant message so prior ones
     # become ``assistant_context``.
-    last_assistant_idx: int = -1
     for i, msg in enumerate(messages):
         if msg.get("role") == "assistant":
-            last_assistant_idx = i
+            pass
 
     has_tools = bool(tools)
     segments: list[Segment] = []

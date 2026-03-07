@@ -10,19 +10,21 @@ Usage::
 
     from tokenpak.telemetry.response_models import HealthResponse, StatsResponse
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # /health
 # ---------------------------------------------------------------------------
 
+
 class HealthResponse(BaseModel):
     """Health check response with status and optional diagnostics."""
+
     status: str = "ok"
     service: str = "tokenpak-telemetry"
 
@@ -31,8 +33,10 @@ class HealthResponse(BaseModel):
 # /v1/telemetry/stats
 # ---------------------------------------------------------------------------
 
+
 class StatsResponse(BaseModel):
     """Aggregated statistics response (counts and summaries)."""
+
     status: str = "ok"
     stats: Dict[str, Any] = Field(default_factory=dict)
 
@@ -41,8 +45,10 @@ class StatsResponse(BaseModel):
 # /v1/summary
 # ---------------------------------------------------------------------------
 
+
 class SummaryTotals(BaseModel):
     """Aggregate totals (tokens, costs, etc) for the summary."""
+
     total_requests: int = 0
     total_tokens: int = 0
     total_cost: float = 0.0
@@ -54,6 +60,7 @@ class SummaryTotals(BaseModel):
 
 class SummaryData(BaseModel):
     """Summary data including totals and breakdown by dimension."""
+
     totals: SummaryTotals = Field(default_factory=SummaryTotals)
     by_provider: List[Dict[str, Any]] = Field(default_factory=list)
     by_model: List[Dict[str, Any]] = Field(default_factory=list)
@@ -63,6 +70,7 @@ class SummaryData(BaseModel):
 
 class SummaryResponse(BaseModel):
     """Cost summary response with aggregated totals and trends."""
+
     status: str = "ok"
     summary: SummaryData = Field(default_factory=SummaryData)
 
@@ -71,8 +79,10 @@ class SummaryResponse(BaseModel):
 # /v1/timeseries
 # ---------------------------------------------------------------------------
 
+
 class TimeseriesResponse(BaseModel):
     """Timeseries data (daily or hourly aggregates)."""
+
     status: str = "ok"
     metric: str
     interval: str
@@ -83,8 +93,10 @@ class TimeseriesResponse(BaseModel):
 # /v1/traces
 # ---------------------------------------------------------------------------
 
+
 class TracesResponse(BaseModel):
     """Paginated list of trace records."""
+
     status: str = "ok"
     limit: int
     offset: int
@@ -98,8 +110,10 @@ class TracesResponse(BaseModel):
 # /v1/trace/{trace_id}
 # ---------------------------------------------------------------------------
 
+
 class TraceDetailResponse(BaseModel):
     """Detailed trace record with full context."""
+
     status: str = "ok"
     trace_id: str
     trace: Dict[str, Any] = Field(default_factory=dict)
@@ -109,8 +123,10 @@ class TraceDetailResponse(BaseModel):
 # /v1/trace/{trace_id}/segments
 # ---------------------------------------------------------------------------
 
+
 class SegmentsResponse(BaseModel):
     """Paginated list of segment records."""
+
     status: str = "ok"
     trace_id: str
     count: int
@@ -121,8 +137,10 @@ class SegmentsResponse(BaseModel):
 # /v1/trace/{trace_id}/events
 # ---------------------------------------------------------------------------
 
+
 class TraceEventsResponse(BaseModel):
     """List of trace events."""
+
     trace_id: str
     events: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -131,8 +149,10 @@ class TraceEventsResponse(BaseModel):
 # /v1/models  /v1/providers  /v1/agents
 # ---------------------------------------------------------------------------
 
+
 class ModelsResponse(BaseModel):
     """List of LLM models used."""
+
     status: str = "ok"
     count: int
     models: List[str] = Field(default_factory=list)
@@ -140,6 +160,7 @@ class ModelsResponse(BaseModel):
 
 class ProvidersResponse(BaseModel):
     """List of LLM providers used."""
+
     status: str = "ok"
     count: int
     providers: List[str] = Field(default_factory=list)
@@ -147,6 +168,7 @@ class ProvidersResponse(BaseModel):
 
 class AgentsResponse(BaseModel):
     """List of agents by name."""
+
     status: str = "ok"
     count: int
     agents: List[str] = Field(default_factory=list)
@@ -156,8 +178,10 @@ class AgentsResponse(BaseModel):
 # /v1/pricing
 # ---------------------------------------------------------------------------
 
+
 class PricingResponse(BaseModel):
     """Per-model pricing information."""
+
     status: str = "ok"
     version: str = ""
     models: List[str] = Field(default_factory=list)
@@ -167,8 +191,10 @@ class PricingResponse(BaseModel):
 # /v1/rollups/compute
 # ---------------------------------------------------------------------------
 
+
 class RollupsComputeResponse(BaseModel):
     """Status/result of a compute rollup operation."""
+
     status: str = "ok"
     rows_written: Union[int, Dict[str, Any]] = 0
 
@@ -177,8 +203,10 @@ class RollupsComputeResponse(BaseModel):
 # /v1/capsule
 # ---------------------------------------------------------------------------
 
+
 class CapsuleResponse(BaseModel):
     """Capsule (snapshot) response."""
+
     status: str = "ok"
     capsule: Dict[str, Any] = Field(default_factory=dict)
 
@@ -187,8 +215,10 @@ class CapsuleResponse(BaseModel):
 # /v1/rollups/status
 # ---------------------------------------------------------------------------
 
+
 class RollupsStatusResponse(BaseModel):
     """Status of rollup operations."""
+
     status: str = "ok"
     last_refresh: Optional[float] = None
 
@@ -197,8 +227,10 @@ class RollupsStatusResponse(BaseModel):
 # /v1/rollups/refresh
 # ---------------------------------------------------------------------------
 
+
 class RollupsRefreshResponse(BaseModel):
     """Result of refreshing rollup tables."""
+
     status: str = "ok"
     refreshed: bool = True
     days: int = 30
@@ -209,8 +241,10 @@ class RollupsRefreshResponse(BaseModel):
 # /v1/telemetry/refresh
 # ---------------------------------------------------------------------------
 
+
 class TelemetryRefreshDetail(BaseModel):
     """Detail of a single refresh operation."""
+
     backfill: str = "skipped"
     rollups: str = "skipped"
     agent_telemetry: str = "skipped"
@@ -220,5 +254,6 @@ class TelemetryRefreshDetail(BaseModel):
 
 class TelemetryRefreshResponse(BaseModel):
     """Response summarizing telemetry refresh results."""
+
     status: str = "ok"
     refresh: TelemetryRefreshDetail = Field(default_factory=TelemetryRefreshDetail)

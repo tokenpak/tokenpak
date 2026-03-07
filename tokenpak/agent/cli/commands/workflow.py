@@ -1,38 +1,67 @@
 """tokenpak.agent.cli.commands.workflow — Workflow state machine CLI."""
+
 from __future__ import annotations
-import json, math
+
+import json
 from datetime import datetime
+
 import click
+
 from tokenpak.agent.agentic.workflow import (
-    WorkflowManager, WorkflowStatus, WorkflowStep,
-    list_templates, template_steps, get_manager, WORKFLOW_TEMPLATES,
+    WORKFLOW_TEMPLATES,
+    WorkflowStatus,
+    WorkflowStep,
+    get_manager,
+    list_templates,
+    template_steps,
 )
 
 SEP = "─" * 64
 
+
 def _status_icon(s):
-    return {"pending": "⏳", "running": "🔄", "completed": "✅",
-            "failed": "❌", "cancelled": "🚫", "paused": "⏸️ "}.get(str(s), "❓")
+    return {
+        "pending": "⏳",
+        "running": "🔄",
+        "completed": "✅",
+        "failed": "❌",
+        "cancelled": "🚫",
+        "paused": "⏸️ ",
+    }.get(str(s), "❓")
+
 
 def _step_icon(s):
-    return {"pending": "⬜", "running": "🔄", "completed": "✅",
-            "failed": "❌", "skipped": "⏭️ "}.get(str(s), "❓")
+    return {
+        "pending": "⬜",
+        "running": "🔄",
+        "completed": "✅",
+        "failed": "❌",
+        "skipped": "⏭️ ",
+    }.get(str(s), "❓")
+
 
 def _fmt_ts(ts):
-    if ts is None: return "—"
+    if ts is None:
+        return "—"
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
 
+
 def _fmt_dur(sec):
-    if sec is None: return "—"
+    if sec is None:
+        return "—"
     sec = int(sec)
-    if sec < 60: return f"{sec}s"
-    m, s = divmod(sec, 60); return f"{m}m {s}s"
+    if sec < 60:
+        return f"{sec}s"
+    m, s = divmod(sec, 60)
+    return f"{m}m {s}s"
+
 
 def _progress_bar(pct, width=30):
     """Render a text progress bar: [████████░░░░░░░░░░░░░░░░░░░░░░] 45%"""
     filled = int(pct / 100 * width)
     bar = "█" * filled + "░" * (width - filled)
     return f"[{bar}] {pct:.0f}%"
+
 
 def _eta_str(wf):
     """Estimate remaining time based on average step duration so far."""
@@ -47,20 +76,26 @@ def _eta_str(wf):
     m, s = divmod(eta_s, 60)
     return f"~{m}m {s}s remaining"
 
+
 def _resolve(mgr, wf_id):
     wf = mgr.load(wf_id)
-    if wf: return wf
+    if wf:
+        return wf
     matches = [w for w in mgr.list_workflows() if w.id.startswith(wf_id)]
-    if len(matches) == 1: return matches[0]
+    if len(matches) == 1:
+        return matches[0]
     if len(matches) > 1:
-        click.echo(f"Ambiguous ID prefix '{wf_id}'.", err=True); raise SystemExit(1)
-    click.echo(f"Workflow '{wf_id}' not found.", err=True); raise SystemExit(1)
+        click.echo(f"Ambiguous ID prefix '{wf_id}'.", err=True)
+        raise SystemExit(1)
+    click.echo(f"Workflow '{wf_id}' not found.", err=True)
+    raise SystemExit(1)
+
 
 # Map --filter aliases to WorkflowStatus values
 _FILTER_MAP = {
-    "active":    [WorkflowStatus.RUNNING, WorkflowStatus.PENDING, WorkflowStatus.PAUSED],
+    "active": [WorkflowStatus.RUNNING, WorkflowStatus.PENDING, WorkflowStatus.PAUSED],
     "completed": [WorkflowStatus.COMPLETED],
-    "failed":    [WorkflowStatus.FAILED, WorkflowStatus.CANCELLED],
+    "failed": [WorkflowStatus.FAILED, WorkflowStatus.CANCELLED],
 }
 
 
@@ -70,14 +105,23 @@ def workflow_cmd():
 
 
 @workflow_cmd.command("list")
-@click.option("--status", "filter_status", default=None,
-              type=click.Choice([s.value for s in WorkflowStatus], case_sensitive=False))
-@click.option("--filter", "filter_preset", default=None,
-              type=click.Choice(["active", "completed", "failed"], case_sensitive=False),
-              help="Shorthand filter: active (running/pending/paused), completed, failed")
+@click.option(
+    "--status",
+    "filter_status",
+    default=None,
+    type=click.Choice([s.value for s in WorkflowStatus], case_sensitive=False),
+)
+@click.option(
+    "--filter",
+    "filter_preset",
+    default=None,
+    type=click.Choice(["active", "completed", "failed"], case_sensitive=False),
+    help="Shorthand filter: active (running/pending/paused), completed, failed",
+)
 @click.option("--tag", "tags", multiple=True)
-@click.option("--type", "filter_type", default=None,
-              help="Filter by workflow template/type (e.g. 'proxy')")
+@click.option(
+    "--type", "filter_type", default=None, help="Filter by workflow template/type (e.g. 'proxy')"
+)
 @click.option("--limit", default=20, show_default=True, type=int)
 @click.option("--json", "output_json", is_flag=True, default=False)
 def list_cmd(filter_status, filter_preset, tags, filter_type, limit, output_json):
@@ -115,18 +159,22 @@ def list_cmd(filter_status, filter_preset, tags, filter_type, limit, output_json
         records = mgr.list_workflows(tags=all_tags if all_tags else None, limit=limit)
 
     if output_json:
-        click.echo(json.dumps([r.to_dict() for r in records], indent=2)); return
+        click.echo(json.dumps([r.to_dict() for r in records], indent=2))
+        return
     if not records:
         type_msg = f" (type={filter_type})" if filter_type else ""
         preset_msg = f" (filter={filter_preset})" if filter_preset else ""
-        click.echo(f"No workflows found{type_msg}{preset_msg}."); return
+        click.echo(f"No workflows found{type_msg}{preset_msg}.")
+        return
     click.echo(SEP)
     click.echo(f"  {'STATUS':<12} {'NAME':<28} {'PCT':>5}  CREATED")
     click.echo(SEP)
     for wf in records:
         pct = f"{wf.completion_pct():.0f}%"
         created = datetime.fromtimestamp(wf.created_at).strftime("%m-%d %H:%M")
-        click.echo(f"  {_status_icon(wf.status.value)} {wf.status.value:<10} {wf.name:<28} {pct:>5}  {created}  [{wf.id[:8]}]")
+        click.echo(
+            f"  {_status_icon(wf.status.value)} {wf.status.value:<10} {wf.name:<28} {pct:>5}  {created}  [{wf.id[:8]}]"
+        )
     click.echo(SEP)
     click.echo(f"  {len(records)} workflow(s)")
 
@@ -139,7 +187,8 @@ def status_cmd(wf_id, output_json):
     mgr = get_manager()
     wf = _resolve(mgr, wf_id)
     if output_json:
-        click.echo(json.dumps(wf.to_dict(), indent=2)); return
+        click.echo(json.dumps(wf.to_dict(), indent=2))
+        return
     done_count = sum(1 for s in wf.steps if s.is_done())
     total = len(wf.steps)
     pct = wf.completion_pct()
@@ -156,15 +205,19 @@ def status_cmd(wf_id, output_json):
     click.echo(f"  Started    : {_fmt_ts(wf.started_at)}")
     click.echo(f"  Completed  : {_fmt_ts(wf.completed_at)}")
     click.echo(f"  Duration   : {_fmt_dur(wf.duration_seconds())}")
-    if wf.tags: click.echo(f"  Tags       : {', '.join(wf.tags)}")
+    if wf.tags:
+        click.echo(f"  Tags       : {', '.join(wf.tags)}")
     click.echo(f"  Full ID    : {wf.id}")
     click.echo()
     click.echo("  Steps:")
     for step in wf.steps:
         dur = f"  ({_fmt_dur(step.duration_seconds())})" if step.duration_seconds() else ""
         deps = f"  ← {', '.join(step.depends_on)}" if step.depends_on else ""
-        click.echo(f"    {_step_icon(step.status.value)} {step.name:<28} {step.status.value:<12}{dur}{deps}")
-        if step.error: click.echo(f"       ⚠️  {step.error}")
+        click.echo(
+            f"    {_step_icon(step.status.value)} {step.name:<28} {step.status.value:<12}{dur}{deps}"
+        )
+        if step.error:
+            click.echo(f"       ⚠️  {step.error}")
     click.echo(SEP)
 
 
@@ -180,15 +233,19 @@ def create_cmd(name, template, step_names, tags, meta_pairs, output_json):
     mgr = get_manager()
     metadata = {}
     for pair in meta_pairs:
-        if "=" in pair: k, v = pair.split("=", 1); metadata[k.strip()] = v.strip()
+        if "=" in pair:
+            k, v = pair.split("=", 1)
+            metadata[k.strip()] = v.strip()
     steps = None
     if not template:
         if not step_names:
-            click.echo("Provide --template or --steps.", err=True); raise SystemExit(1)
+            click.echo("Provide --template or --steps.", err=True)
+            raise SystemExit(1)
         steps = [WorkflowStep(name=n.strip()) for n in step_names.split(",") if n.strip()]
     wf = mgr.create(name=name, template=template, steps=steps, metadata=metadata, tags=list(tags))
     if output_json:
-        click.echo(json.dumps(wf.to_dict(), indent=2)); return
+        click.echo(json.dumps(wf.to_dict(), indent=2))
+        return
     click.echo(f"✅ Created workflow '{wf.name}' [{wf.id[:8]}]")
     click.echo(f"   Template: {wf.template or '—'}  |  Steps: {len(wf.steps)}")
     click.echo(f"   Resume: tokenpak workflow resume {wf.id[:8]}")
@@ -209,8 +266,8 @@ def resume_cmd(wf_id, yes):
     # Show plan before confirming
     done_count = sum(1 for s in wf.steps if s.is_done())
     total = len(wf.steps)
-    failed_steps = [s for s in wf.steps if s.status.value == "failed"]
-    pending_steps = [s for s in wf.steps if s.status.value in ("pending",)]
+    [s for s in wf.steps if s.status.value == "failed"]
+    [s for s in wf.steps if s.status.value in ("pending",)]
     next_step = wf.next_pending_step()
 
     click.echo(SEP)
@@ -239,7 +296,8 @@ def resume_cmd(wf_id, yes):
     try:
         wf = mgr.resume(wf.id)
     except ValueError as e:
-        click.echo(f"⚠️  {e}", err=True); raise SystemExit(1)
+        click.echo(f"⚠️  {e}", err=True)
+        raise SystemExit(1)
 
     nxt = wf.next_pending_step()
     click.echo(f"🔄 Resumed '{wf.name}' [{wf.id[:8]}]")
@@ -282,15 +340,19 @@ def history_cmd(limit, name_filter, output_json):
     mgr = get_manager()
     records = mgr.history(limit=limit, name_filter=name_filter)
     if output_json:
-        click.echo(json.dumps([r.to_dict() for r in records], indent=2)); return
+        click.echo(json.dumps([r.to_dict() for r in records], indent=2))
+        return
     if not records:
-        click.echo("No workflow history."); return
+        click.echo("No workflow history.")
+        return
     click.echo(SEP)
     click.echo(f"  {'STATUS':<12} {'NAME':<28} {'PCT':>5}  {'DUR':>7}  CREATED")
     click.echo(SEP)
     for wf in records:
         pct = f"{wf.completion_pct():.0f}%"
-        click.echo(f"  {_status_icon(wf.status.value)} {wf.status.value:<10} {wf.name:<28} {pct:>5}  {_fmt_dur(wf.duration_seconds()):>7}  {_fmt_ts(wf.created_at)}  [{wf.id[:8]}]")
+        click.echo(
+            f"  {_status_icon(wf.status.value)} {wf.status.value:<10} {wf.name:<28} {pct:>5}  {_fmt_dur(wf.duration_seconds()):>7}  {_fmt_ts(wf.created_at)}  [{wf.id[:8]}]"
+        )
     click.echo(SEP)
 
 
@@ -301,13 +363,15 @@ def templates_cmd(show_name):
     names = list_templates()
     if show_name:
         if show_name not in names:
-            click.echo(f"Unknown template '{show_name}'.", err=True); raise SystemExit(1)
+            click.echo(f"Unknown template '{show_name}'.", err=True)
+            raise SystemExit(1)
         steps = template_steps(show_name)
         click.echo(f"\nTemplate: {show_name} ({len(steps)} steps)\n")
         for i, s in enumerate(steps, 1):
             deps = f" ← {', '.join(s.depends_on)}" if s.depends_on else ""
             click.echo(f"  {i}. {s.name}{deps}")
-            if s.description: click.echo(f"       {s.description}")
+            if s.description:
+                click.echo(f"       {s.description}")
         return
     click.echo("\nAvailable templates:\n")
     for name in names:
@@ -322,14 +386,19 @@ def delete_cmd(wf_id, yes):
     """Delete a workflow record from disk."""
     mgr = get_manager()
     wf = _resolve(mgr, wf_id)
-    if not yes: click.confirm(f"Permanently delete workflow '{wf.name}'?", abort=True)
+    if not yes:
+        click.confirm(f"Permanently delete workflow '{wf.name}'?", abort=True)
     mgr.delete(wf.id)
     click.echo(f"🗑️  Deleted '{wf.name}' [{wf.id[:8]}]")
 
 
 @workflow_cmd.command("recover")
-@click.option("--type", "filter_type", default=None,
-              help="Filter to a specific workflow type/template (e.g. 'proxy')")
+@click.option(
+    "--type",
+    "filter_type",
+    default=None,
+    help="Filter to a specific workflow type/template (e.g. 'proxy')",
+)
 def recover_cmd(filter_type):
     """Detect and list interrupted workflows that can be resumed.
 
@@ -341,14 +410,19 @@ def recover_cmd(filter_type):
         incomplete = [wf for wf in incomplete if filter_type in wf.tags]
     if not incomplete:
         type_msg = f" (type={filter_type})" if filter_type else ""
-        click.echo(f"✅ No incomplete workflows found{type_msg}."); return
+        click.echo(f"✅ No incomplete workflows found{type_msg}.")
+        return
     type_msg = f" [{filter_type}]" if filter_type else ""
     click.echo(f"⚠️  Found {len(incomplete)} incomplete workflow(s){type_msg}:\n")
     for wf in incomplete:
         nxt = wf.next_pending_step()
         running_step = next((s.name for s in wf.steps if s.status.value == "running"), None)
-        click.echo(f"  {_status_icon(wf.status.value)} {wf.name}  [{wf.id[:8]}]  — {wf.status.value}")
-        if running_step: click.echo(f"       Last running step: {running_step}")
-        if nxt: click.echo(f"       Next step: {nxt.name}")
+        click.echo(
+            f"  {_status_icon(wf.status.value)} {wf.name}  [{wf.id[:8]}]  — {wf.status.value}"
+        )
+        if running_step:
+            click.echo(f"       Last running step: {running_step}")
+        if nxt:
+            click.echo(f"       Next step: {nxt.name}")
     click.echo()
     click.echo("Run: tokenpak workflow resume <ID>")

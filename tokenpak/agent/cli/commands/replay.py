@@ -29,6 +29,7 @@ from pathlib import Path
 # Store helpers
 # ---------------------------------------------------------------------------
 
+
 def _replay_store_path() -> str:
     """Return the default replay store path."""
     return str(Path.home() / ".tokenpak" / "replay.db")
@@ -36,12 +37,14 @@ def _replay_store_path() -> str:
 
 def _get_replay_store():
     from tokenpak.agent.telemetry.replay import get_replay_store
+
     return get_replay_store(_replay_store_path())
 
 
 # ---------------------------------------------------------------------------
 # Command handlers
 # ---------------------------------------------------------------------------
+
 
 def cmd_replay_list(args):
     """List recent replay entries.
@@ -66,7 +69,9 @@ def cmd_replay_list(args):
         print(json.dumps([e.to_dict() for e in entries], indent=2, default=str))
         return
 
-    header = f"{'':2} {'ID':<10} {'Timestamp':<20} {'Provider/Model':<30} {'Tokens':>12} {'Saved':>6}"
+    header = (
+        f"{'':2} {'ID':<10} {'Timestamp':<20} {'Provider/Model':<30} {'Tokens':>12} {'Saved':>6}"
+    )
     print(header)
     print("─" * len(header))
     for e in entries:
@@ -74,8 +79,12 @@ def cmd_replay_list(args):
         pm = f"{e.provider}/{e.model}"
         tokens_str = f"{e.input_tokens_raw}→{e.input_tokens_sent}"
         has_content = "📦" if e.messages is not None else "  "
-        print(f"{has_content} {e.replay_id:<10} {ts:<20} {pm:<30} {tokens_str:>12} {e.savings_pct:>6.1f}%")
-    print(f"\n{len(entries)} entr{'y' if len(entries) == 1 else 'ies'}  (📦 = content captured, eligible for replay)")
+        print(
+            f"{has_content} {e.replay_id:<10} {ts:<20} {pm:<30} {tokens_str:>12} {e.savings_pct:>6.1f}%"
+        )
+    print(
+        f"\n{len(entries)} entr{'y' if len(entries) == 1 else 'ies'}  (📦 = content captured, eligible for replay)"
+    )
 
 
 def cmd_replay_show(args):
@@ -170,11 +179,11 @@ def cmd_replay_run(args):
         print(f"  Est. sent    : ~{e.input_tokens_raw} tokens (no compression)")
 
     if show_diff:
-        print(f"\n  Diff vs. original:")
+        print("\n  Diff vs. original:")
         print(f"    Original model : {e.provider}/{e.model}")
         print(f"    Replay model   : {target_model}")
         if new_model:
-            print(f"    Model changed  : ✓")
+            print("    Model changed  : ✓")
         if no_compress:
             orig_saved = e.tokens_saved
             print(f"    Tokens delta   : +{orig_saved} (compression disabled)")
@@ -196,6 +205,7 @@ def cmd_replay_clear(args):
 # ---------------------------------------------------------------------------
 # Parser builder
 # ---------------------------------------------------------------------------
+
 
 def build_replay_parser(sub):
     """Register the ``replay`` subcommand under an argparse subparsers object.
@@ -227,8 +237,12 @@ def build_replay_parser(sub):
     p_run.add_argument("id", help="Replay entry ID")
     p_run.add_argument("--model", metavar="MODEL", help="Override model for replay")
     p_run.add_argument("--diff", action="store_true", help="Show diff vs. original")
-    p_run.add_argument("--no-compress", dest="no_compress", action="store_true",
-                       help="Disable compression on replay")
+    p_run.add_argument(
+        "--no-compress",
+        dest="no_compress",
+        action="store_true",
+        help="Disable compression on replay",
+    )
     p_run.set_defaults(func=cmd_replay_run)
 
     # clear

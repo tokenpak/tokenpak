@@ -1,11 +1,11 @@
 """TokenPak Agent Telemetry — local stats collection, SQLite storage, and reporting."""
 
-from .collector import TelemetryCollector, RequestStats, SessionStats, get_collector
+from .budget import BudgetConfig, BudgetStatus, BudgetTracker, get_budget_tracker
+from .collector import RequestStats, SessionStats, TelemetryCollector, get_collector
+from .demo import print_demo, run_demo
+from .footer import render_footer, render_footer_compact, render_footer_oneline
+from .replay import ReplayEntry, ReplayStore, get_replay_store
 from .storage import TelemetryStorage, get_telemetry_storage
-from .footer import render_footer, render_footer_oneline, render_footer_compact
-from .demo import run_demo, print_demo
-from .replay import ReplayStore, ReplayEntry, get_replay_store
-from .budget import BudgetTracker, BudgetConfig, BudgetStatus, get_budget_tracker
 
 __all__ = [
     # collector

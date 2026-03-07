@@ -24,8 +24,8 @@ Quick start::
 
 """
 
+from .formatter import blocks_to_messages, compile_pack
 from .middleware import TokenPakMiddleware
-from .formatter import compile_pack, blocks_to_messages
 from .parser import parse_tokenpak_request
 from .proxy import ProxyHandler
 

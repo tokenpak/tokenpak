@@ -7,9 +7,9 @@ Starts the ingest API server on the specified port.
 Usage:
     tokenpak serve [--port PORT] [--host HOST]
 """
+
 from __future__ import annotations
 
-import argparse
 import logging
 import sys
 
@@ -34,9 +34,9 @@ def run_serve_cmd(args) -> None:
     port = getattr(args, "port", 8765) or 8765
 
     print(f"TokenPak Ingest API — http://{host}:{port}")
-    print(f"  POST /ingest         single entry")
-    print(f"  POST /ingest/batch   batch entries")
-    print(f"  GET  /health         health check")
+    print("  POST /ingest         single entry")
+    print("  POST /ingest/batch   batch entries")
+    print("  GET  /health         health check")
     print()
 
     app = create_ingest_app()

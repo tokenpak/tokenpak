@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -14,11 +14,12 @@ from .ast_parser import ASTParser, ParsedNode
 @dataclass
 class Symbol:
     """A named code symbol (function, class, constant, etc.)."""
+
     name: str
-    kind: str           # "function" | "class" | "method" | "import" | "constant"
-    path: str           # File path (relative or absolute)
-    line: int           # Line number where defined
-    signature: str      # Declaration text
+    kind: str  # "function" | "class" | "method" | "import" | "constant"
+    path: str  # File path (relative or absolute)
+    line: int  # Line number where defined
+    signature: str  # Declaration text
     docstring: Optional[str] = None
     qualified_name: str = ""  # module.ClassName.method
 
@@ -91,13 +92,15 @@ class SymbolTable:
             if not m:
                 continue
             header = m.group(2).strip()
-            nodes.append(ParsedNode(
-                kind="header",
-                name=header,
-                line_start=i,
-                line_end=i,
-                signature=line.strip(),
-            ))
+            nodes.append(
+                ParsedNode(
+                    kind="header",
+                    name=header,
+                    line_start=i,
+                    line_end=i,
+                    signature=line.strip(),
+                )
+            )
         return nodes
 
     def _parse_data_top_keys(self, path: str, content: str) -> list[ParsedNode]:
@@ -112,6 +115,7 @@ class SymbolTable:
         else:
             try:
                 import yaml
+
                 payload = yaml.safe_load(content)
             except Exception:
                 return []
@@ -123,13 +127,15 @@ class SymbolTable:
         lines = content.splitlines()
         for key in payload.keys():
             line_no = self._find_key_line(lines, str(key))
-            nodes.append(ParsedNode(
-                kind="key",
-                name=str(key),
-                line_start=line_no,
-                line_end=line_no,
-                signature=f"{key}: ...",
-            ))
+            nodes.append(
+                ParsedNode(
+                    kind="key",
+                    name=str(key),
+                    line_start=line_no,
+                    line_end=line_no,
+                    signature=f"{key}: ...",
+                )
+            )
         return nodes
 
     def _find_key_line(self, lines: list[str], key: str) -> int:

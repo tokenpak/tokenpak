@@ -1,16 +1,15 @@
 """Integration point for proxy to capture and expose pipeline traces."""
 
-from tokenpak.telemetry.pipeline_trace import (
-    PipelineTrace, StageTrace, TraceStorage, get_trace_storage
-)
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 import uuid
+from datetime import datetime
+from typing import List, Optional
+
+from tokenpak.telemetry.pipeline_trace import PipelineTrace, StageTrace, get_trace_storage
 
 
 class ProxyTraceCapture:
     """Helps proxy capture trace data as request flows through pipeline."""
-    
+
     def __init__(self, request_id: Optional[str] = None):
         self.request_id = request_id or f"req-{uuid.uuid4().hex[:8]}"
         self.timestamp = datetime.now()
@@ -20,7 +19,7 @@ class ProxyTraceCapture:
         self.tokens_saved = 0
         self.cost_saved = 0.0
         self.start_time = datetime.now()
-    
+
     def record_capsule_stage(
         self,
         input_tokens: int,
@@ -32,7 +31,7 @@ class ProxyTraceCapture:
     ) -> None:
         """Record capsule/vault injection stage."""
         self.input_tokens_raw = input_tokens
-        
+
         stage = StageTrace(
             name="capsule",
             enabled=tokens_injected > 0,
@@ -47,7 +46,7 @@ class ProxyTraceCapture:
             duration_ms=duration_ms,
         )
         self.stages.append(stage)
-    
+
     def record_segmentizer_stage(
         self,
         input_tokens: int,
@@ -72,7 +71,7 @@ class ProxyTraceCapture:
             duration_ms=duration_ms,
         )
         self.stages.append(stage)
-    
+
     def record_recipe_engine_stage(
         self,
         input_tokens: int,
@@ -98,7 +97,7 @@ class ProxyTraceCapture:
             duration_ms=duration_ms,
         )
         self.stages.append(stage)
-    
+
     def record_slot_filler_stage(
         self,
         input_tokens: int,
@@ -123,7 +122,7 @@ class ProxyTraceCapture:
             duration_ms=duration_ms,
         )
         self.stages.append(stage)
-    
+
     def record_validation_gate_stage(
         self,
         input_tokens: int,
@@ -147,12 +146,12 @@ class ProxyTraceCapture:
         )
         self.stages.append(stage)
         self.output_tokens = output_tokens
-    
+
     def finalize(self, cost_saved: float = 0.0) -> PipelineTrace:
         """Finalize the trace and calculate summary stats."""
         self.tokens_saved = max(0, self.input_tokens_raw - self.output_tokens)
         self.cost_saved = cost_saved
-        
+
         trace = PipelineTrace(
             request_id=self.request_id,
             timestamp=self.timestamp,
@@ -163,9 +162,9 @@ class ProxyTraceCapture:
             cost_saved=cost_saved,
             duration_ms=(datetime.now() - self.start_time).total_seconds() * 1000,
         )
-        
+
         # Store in global trace storage
         storage = get_trace_storage()
         storage.add(trace)
-        
+
         return trace

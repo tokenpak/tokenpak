@@ -20,23 +20,22 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 from .keys import (
+    LicensePayload,
+    format_license_key,
     generate_keypair,
     sign_license,
-    verify_license,
-    format_license_key,
-    LicensePayload,
 )
-from .validator import LicenseValidator, TIER_FEATURES
-
+from .validator import LicenseValidator
 
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
+
 
 def _load_private_pem(path: Optional[str]) -> bytes:
     """Load private key from file or TOKENPAK_PRIVATE_KEY env var."""
@@ -72,6 +71,7 @@ def _load_public_pem(path: Optional[str]) -> bytes:
 # Command: keygen
 # ─────────────────────────────────────────────
 
+
 def cmd_keygen(args: argparse.Namespace) -> None:
     """Generate a signed license key."""
     private_pem = _load_private_pem(args.private_key)
@@ -79,7 +79,10 @@ def cmd_keygen(args: argparse.Namespace) -> None:
     # Validate tier
     valid_tiers = {"oss", "pro", "team", "enterprise"}
     if args.tier not in valid_tiers:
-        print(f"ERROR: Unknown tier {args.tier!r}. Valid: {', '.join(sorted(valid_tiers))}", file=sys.stderr)
+        print(
+            f"ERROR: Unknown tier {args.tier!r}. Valid: {', '.join(sorted(valid_tiers))}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Compute expiry
@@ -143,6 +146,7 @@ def cmd_keygen(args: argparse.Namespace) -> None:
 # Command: verify
 # ─────────────────────────────────────────────
 
+
 def cmd_verify(args: argparse.Namespace) -> None:
     """Verify a license token."""
     public_pem = _load_public_pem(args.public_key)
@@ -179,6 +183,7 @@ def cmd_verify(args: argparse.Namespace) -> None:
 # Command: genkeys
 # ─────────────────────────────────────────────
 
+
 def cmd_genkeys(args: argparse.Namespace) -> None:
     """Generate a fresh RSA-4096 keypair."""
     out_dir = Path(args.out_dir)
@@ -201,14 +206,15 @@ def cmd_genkeys(args: argparse.Namespace) -> None:
     print(f"✅ Public key : {pub_path}   (embed in agent)")
     print()
     print("Next steps:")
-    print(f"  1. Store private key securely (e.g., env TOKENPAK_PRIVATE_KEY)")
-    print(f"  2. Embed public key in agent (TOKENPAK_PUBLIC_KEY or bake into binary)")
-    print(f"  3. Run: tokenpak-admin keygen --tier pro --seats 1 --customer <id>")
+    print("  1. Store private key securely (e.g., env TOKENPAK_PRIVATE_KEY)")
+    print("  2. Embed public key in agent (TOKENPAK_PUBLIC_KEY or bake into binary)")
+    print("  3. Run: tokenpak-admin keygen --tier pro --seats 1 --customer <id>")
 
 
 # ─────────────────────────────────────────────
 # CLI entrypoint
 # ─────────────────────────────────────────────
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(

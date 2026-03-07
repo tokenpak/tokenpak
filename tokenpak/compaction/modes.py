@@ -21,25 +21,26 @@ import re
 from enum import Enum
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
+
 class CompactionMode(str, Enum):
     """The four standard compaction modes."""
-    LOSSLESS   = "lossless"
-    BALANCED   = "balanced"
+
+    LOSSLESS = "lossless"
+    BALANCED = "balanced"
     AGGRESSIVE = "aggressive"
-    SEMANTIC   = "semantic"
+    SEMANTIC = "semantic"
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_MULTI_BLANK  = re.compile(r"\n{3,}")
-_TRAILING_WS  = re.compile(r"[ \t]+$", re.MULTILINE)
+_MULTI_BLANK = re.compile(r"\n{3,}")
+_TRAILING_WS = re.compile(r"[ \t]+$", re.MULTILINE)
 _LEADING_TABS = re.compile(r"^\t+", re.MULTILINE)
 
 
@@ -54,6 +55,7 @@ def _normalise_whitespace(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Per-mode compaction functions
 # ---------------------------------------------------------------------------
+
 
 def compact_lossless(text: str) -> str:
     """
@@ -152,8 +154,8 @@ def compact_semantic(text: str, target_tokens: Optional[int] = None) -> str:
     Non-deterministic (LLMLingua path).
     """
     try:
-        from ..engines.llmlingua import LLMLinguaEngine
         from ..engines.base import CompactionHints
+        from ..engines.llmlingua import LLMLinguaEngine
 
         engine = LLMLinguaEngine()
         hints = CompactionHints()
@@ -171,10 +173,10 @@ def compact_semantic(text: str, target_tokens: Optional[int] = None) -> str:
 # ---------------------------------------------------------------------------
 
 _COMPACT_FN = {
-    CompactionMode.LOSSLESS:   compact_lossless,
-    CompactionMode.BALANCED:   compact_balanced,
+    CompactionMode.LOSSLESS: compact_lossless,
+    CompactionMode.BALANCED: compact_balanced,
     CompactionMode.AGGRESSIVE: compact_aggressive,
-    CompactionMode.SEMANTIC:   compact_semantic,
+    CompactionMode.SEMANTIC: compact_semantic,
 }
 
 
@@ -208,6 +210,7 @@ def compact(
 # ---------------------------------------------------------------------------
 # Internal utilities
 # ---------------------------------------------------------------------------
+
 
 def _multi_blank_sub(text: str) -> str:
     return _MULTI_BLANK.sub("\n\n", text)

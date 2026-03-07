@@ -12,11 +12,12 @@ from typing import Optional
 @dataclass
 class ParsedNode:
     """A parsed code construct (function, class, import, etc.)."""
-    kind: str          # "function" | "class" | "method" | "import" | "constant"
+
+    kind: str  # "function" | "class" | "method" | "import" | "constant"
     name: str
     line_start: int
     line_end: int
-    signature: str     # The declaration line(s)
+    signature: str  # The declaration line(s)
     docstring: Optional[str] = None
     decorators: list = field(default_factory=list)
 
@@ -64,48 +65,56 @@ class ASTParser:
                 sig = self._python_signature(node, lines)
                 docstring = ast.get_docstring(node)
                 decorators = [f"@{self._unparse(d)}" for d in node.decorator_list]
-                nodes.append(ParsedNode(
-                    kind=kind,
-                    name=node.name,
-                    line_start=node.lineno,
-                    line_end=node.end_lineno or node.lineno,
-                    signature=sig,
-                    docstring=docstring,
-                    decorators=decorators,
-                ))
+                nodes.append(
+                    ParsedNode(
+                        kind=kind,
+                        name=node.name,
+                        line_start=node.lineno,
+                        line_end=node.end_lineno or node.lineno,
+                        signature=sig,
+                        docstring=docstring,
+                        decorators=decorators,
+                    )
+                )
             elif isinstance(node, ast.ClassDef):
                 sig = f"class {node.name}({', '.join(self._unparse(b) for b in node.bases)}):"
                 docstring = ast.get_docstring(node)
-                nodes.append(ParsedNode(
-                    kind="class",
-                    name=node.name,
-                    line_start=node.lineno,
-                    line_end=node.end_lineno or node.lineno,
-                    signature=sig,
-                    docstring=docstring,
-                ))
+                nodes.append(
+                    ParsedNode(
+                        kind="class",
+                        name=node.name,
+                        line_start=node.lineno,
+                        line_end=node.end_lineno or node.lineno,
+                        signature=sig,
+                        docstring=docstring,
+                    )
+                )
 
         # Capture module-level assignments as variables/constants.
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     for name in self._extract_python_target_names(target):
-                        nodes.append(ParsedNode(
+                        nodes.append(
+                            ParsedNode(
+                                kind="variable",
+                                name=name,
+                                line_start=node.lineno,
+                                line_end=node.end_lineno or node.lineno,
+                                signature=f"{name} = ...",
+                            )
+                        )
+            elif isinstance(node, ast.AnnAssign):
+                for name in self._extract_python_target_names(node.target):
+                    nodes.append(
+                        ParsedNode(
                             kind="variable",
                             name=name,
                             line_start=node.lineno,
                             line_end=node.end_lineno or node.lineno,
-                            signature=f"{name} = ...",
-                        ))
-            elif isinstance(node, ast.AnnAssign):
-                for name in self._extract_python_target_names(node.target):
-                    nodes.append(ParsedNode(
-                        kind="variable",
-                        name=name,
-                        line_start=node.lineno,
-                        line_end=node.end_lineno or node.lineno,
-                        signature=f"{name}: ...",
-                    ))
+                            signature=f"{name}: ...",
+                        )
+                    )
 
         return sorted(nodes, key=lambda n: n.line_start)
 
@@ -172,13 +181,15 @@ class ASTParser:
             for pattern, kind in patterns:
                 m = re.match(pattern, stripped)
                 if m:
-                    nodes.append(ParsedNode(
-                        kind=kind,
-                        name=m.group(1),
-                        line_start=i,
-                        line_end=i,
-                        signature=stripped[:120],
-                    ))
+                    nodes.append(
+                        ParsedNode(
+                            kind=kind,
+                            name=m.group(1),
+                            line_start=i,
+                            line_end=i,
+                            signature=stripped[:120],
+                        )
+                    )
                     break
 
         return nodes
@@ -195,14 +206,18 @@ class ASTParser:
         for i, line in enumerate(lines, start=1):
             stripped = line.strip()
             # Any line that looks like a definition
-            m = re.match(r"^(?:pub\s+)?(?:fn|def|func|function|class|struct|enum)\s+(\w+)", stripped)
+            m = re.match(
+                r"^(?:pub\s+)?(?:fn|def|func|function|class|struct|enum)\s+(\w+)", stripped
+            )
             if m:
-                nodes.append(ParsedNode(
-                    kind="definition",
-                    name=m.group(1),
-                    line_start=i,
-                    line_end=i,
-                    signature=stripped[:120],
-                ))
+                nodes.append(
+                    ParsedNode(
+                        kind="definition",
+                        name=m.group(1),
+                        line_start=i,
+                        line_end=i,
+                        signature=stripped[:120],
+                    )
+                )
 
         return nodes

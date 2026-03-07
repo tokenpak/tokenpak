@@ -39,7 +39,6 @@ from tokenpak.telemetry.canonical import (
     UsageSource,
 )
 
-
 # Mapping from OpenAI finish_reason → canonical finish_reason
 _FINISH_REASON_MAP: dict[str, str] = {
     "stop": "stop",
@@ -103,8 +102,7 @@ class OpenAIAdapter(BaseAdapter):
         # model name starting with "gpt", "o1", "o3", "text-davinci", etc.
         model: str = raw_payload.get("model", "")
         if score == 0.0 and any(
-            model.lower().startswith(pfx)
-            for pfx in ("gpt-", "o1", "o3", "text-davinci", "codex")
+            model.lower().startswith(pfx) for pfx in ("gpt-", "o1", "o3", "text-davinci", "codex")
         ):
             score = 0.5
 

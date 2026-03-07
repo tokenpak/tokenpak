@@ -13,7 +13,7 @@ All endpoints require Pro+ license tier.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -22,18 +22,18 @@ from typing import Dict, List, Optional, Tuple
 # ---------------------------------------------------------------------------
 
 MODEL_COSTS: Dict[str, Dict[str, float]] = {
-    "claude-opus-4-5":    {"input": 15.00, "output": 75.00},
-    "claude-opus-4-6":    {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-5":  {"input": 3.00,  "output": 15.00},
-    "claude-sonnet-4-6":  {"input": 3.00,  "output": 15.00},
-    "claude-haiku-3-5":   {"input": 0.25,  "output": 1.25},
-    "claude-haiku-4-5":   {"input": 0.25,  "output": 1.25},
-    "gpt-4o":             {"input": 2.50,  "output": 10.00},
-    "gpt-4o-mini":        {"input": 0.15,  "output": 0.60},
-    "gemini-2-flash":     {"input": 0.075, "output": 0.30},
-    "gemini-pro":         {"input": 1.25,  "output": 5.00},
-    "codex":              {"input": 3.00,  "output": 12.00},
-    "_fallback":          {"input": 1.00,  "output": 3.00},
+    "claude-opus-4-5": {"input": 15.00, "output": 75.00},
+    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
+    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    "claude-haiku-3-5": {"input": 0.25, "output": 1.25},
+    "claude-haiku-4-5": {"input": 0.25, "output": 1.25},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gemini-2-flash": {"input": 0.075, "output": 0.30},
+    "gemini-pro": {"input": 1.25, "output": 5.00},
+    "codex": {"input": 3.00, "output": 12.00},
+    "_fallback": {"input": 1.00, "output": 3.00},
 }
 
 # Cheaper alternatives for recommendations: model → [(alt_model, reason), ...]
@@ -71,9 +71,11 @@ MODEL_ALTERNATIVES: Dict[str, List[Tuple[str, str]]] = {
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DailyMetric:
     """One day of aggregated cost + usage data."""
+
     date_utc: str
     cost_usd: float
     input_tokens: int
@@ -86,7 +88,8 @@ class DailyMetric:
 @dataclass
 class Trend:
     """Period trend summary."""
-    period: str                   # daily / weekly / monthly
+
+    period: str  # daily / weekly / monthly
     total_cost_usd: float
     avg_daily_cost_usd: float
     total_tokens: int
@@ -98,6 +101,7 @@ class Trend:
 @dataclass
 class Anomaly:
     """Detected cost spike."""
+
     date_utc: str
     cost_usd: float
     baseline_usd: float
@@ -108,16 +112,18 @@ class Anomaly:
 @dataclass
 class Projection:
     """Cost projection for a future window."""
+
     period_days: int
     projected_cost_usd: float
-    confidence: str          # low / medium / high
+    confidence: str  # low / medium / high
     based_on_days: int
-    method: str              # linear / average
+    method: str  # linear / average
 
 
 @dataclass
 class ModelRecommendation:
     """Model switch recommendation."""
+
     current_model: str
     recommended_model: str
     reason: str
@@ -128,7 +134,8 @@ class ModelRecommendation:
 @dataclass
 class BudgetAlert:
     """Budget usage alert."""
-    level: str               # ok / warn / critical
+
+    level: str  # ok / warn / critical
     budget_usd: float
     spent_usd: float
     pct_used: float
@@ -139,6 +146,7 @@ class BudgetAlert:
 # Core engine
 # ---------------------------------------------------------------------------
 
+
 class CostIntelligence:
     """Stateless cost intelligence analysis engine."""
 
@@ -147,7 +155,10 @@ class CostIntelligence:
     @staticmethod
     def compute_trends(metrics: List[DailyMetric]) -> Dict[str, Trend]:
         """Compute daily, weekly, and monthly trends."""
-        _empty = lambda period: Trend(period, 0.0, 0.0, 0, 0, 0.0, 0)
+
+        def _empty(period):
+            return Trend(period, 0.0, 0.0, 0, 0, 0.0, 0)
+
         if not metrics:
             return {p: _empty(p) for p in ("daily", "weekly", "monthly")}
 
@@ -169,7 +180,8 @@ class CostIntelligence:
             comp_days = [m for m in subset if m.input_tokens > 0]
             avg_compression = (
                 sum(m.tokens_saved / m.input_tokens for m in comp_days) / len(comp_days)
-                if comp_days else 0.0
+                if comp_days
+                else 0.0
             )
             return Trend(
                 period=period,
@@ -182,8 +194,8 @@ class CostIntelligence:
             )
 
         return {
-            "daily":   _trend("daily",   1),
-            "weekly":  _trend("weekly",  7),
+            "daily": _trend("daily", 1),
+            "weekly": _trend("weekly", 7),
             "monthly": _trend("monthly", 30),
         }
 
@@ -219,9 +231,7 @@ class CostIntelligence:
             t["cost_usd"] = round(t["cost_usd"], 6)
             t["pct_of_total"] = round(t["cost_usd"] / grand_total * 100, 1)
             inp = t["input_tokens"]
-            t["avg_compression_ratio"] = (
-                round(t["tokens_saved"] / inp, 4) if inp > 0 else 0.0
-            )
+            t["avg_compression_ratio"] = round(t["tokens_saved"] / inp, 4) if inp > 0 else 0.0
             result.append(t)
         return result
 
@@ -267,7 +277,10 @@ class CostIntelligence:
     @staticmethod
     def compute_projections(metrics: List[DailyMetric]) -> Dict[str, Projection]:
         """Compute 7d and 30d cost projections."""
-        _empty = lambda d: Projection(d, 0.0, "low", 0, "average")
+
+        def _empty(d):
+            return Projection(d, 0.0, "low", 0, "average")
+
         if not metrics:
             return {"7d": _empty(7), "30d": _empty(30)}
 
@@ -374,14 +387,12 @@ class CostIntelligence:
         elif pct >= 80:
             level = "warn"
             message = (
-                f"WARNING: {pct:.1f}% of budget consumed "
-                f"(${spent_usd:.2f} / ${budget_usd:.2f})"
+                f"WARNING: {pct:.1f}% of budget consumed " f"(${spent_usd:.2f} / ${budget_usd:.2f})"
             )
         else:
             level = "ok"
             message = (
-                f"OK: {pct:.1f}% of budget consumed "
-                f"(${spent_usd:.2f} / ${budget_usd:.2f})"
+                f"OK: {pct:.1f}% of budget consumed " f"(${spent_usd:.2f} / ${budget_usd:.2f})"
             )
 
         return BudgetAlert(

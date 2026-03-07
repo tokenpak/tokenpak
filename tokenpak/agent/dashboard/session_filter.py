@@ -30,7 +30,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -41,9 +40,9 @@ _MAX_LIMIT = 500
 
 # Status filter → SQL fragment
 _STATUS_SQL: Dict[str, str] = {
-    "all":     "",
+    "all": "",
     "success": "AND status_code BETWEEN 200 AND 299",
-    "error":   "AND status_code >= 400",
+    "error": "AND status_code >= 400",
     "partial": "AND status_code BETWEEN 300 AND 399",
 }
 
@@ -69,6 +68,7 @@ SESSION_COLUMNS = [
 # DB path helper
 # ---------------------------------------------------------------------------
 
+
 def _db_path() -> Path:
     """Resolve the monitor DB path (env override or default)."""
     env = os.environ.get("TOKENPAK_DB", "")
@@ -78,6 +78,7 @@ def _db_path() -> Path:
 # ---------------------------------------------------------------------------
 # FilterParams — validated input
 # ---------------------------------------------------------------------------
+
 
 class FilterParams:
     """Parsed and validated filter parameters."""
@@ -107,6 +108,7 @@ class FilterParams:
     def from_query_string(cls, qs: str) -> "FilterParams":
         """Parse from a URL query string (e.g. 'model=gpt-4o&status=success')."""
         from urllib.parse import parse_qs
+
         params = parse_qs(qs, keep_blank_values=False)
 
         def _first(key: str) -> Optional[str]:
@@ -126,6 +128,7 @@ class FilterParams:
 # ---------------------------------------------------------------------------
 # SessionFilter — main query engine
 # ---------------------------------------------------------------------------
+
 
 class SessionFilter:
     """Server-side session filter backed by SQLite.

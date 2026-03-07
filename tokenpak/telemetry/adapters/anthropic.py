@@ -31,7 +31,6 @@ from tokenpak.telemetry.canonical import (
     UsageSource,
 )
 
-
 # Mapping from Anthropic stop_reason → canonical finish_reason
 _STOP_REASON_MAP: dict[str, str] = {
     "end_turn": "stop",
@@ -191,7 +190,7 @@ class AnthropicAdapter(BaseAdapter):
         return CanonicalUsage(
             input_billed=input_billed,
             output_billed=output_billed,
-            input_est=input_billed,   # provider-reported is our best estimate
+            input_est=input_billed,  # provider-reported is our best estimate
             output_est=output_billed,
             cache_read=cache_read,
             cache_write=cache_write,

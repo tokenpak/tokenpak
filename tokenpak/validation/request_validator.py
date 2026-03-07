@@ -35,8 +35,9 @@ VALIDATION_MODES = ("strict", "warn", "off")
 
 # Try to import jsonschema for full validation
 try:
-    import jsonschema
+    import jsonschema  # noqa: F401
     from jsonschema import Draft202012Validator
+
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
@@ -46,6 +47,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # ValidationResult
 # ---------------------------------------------------------------------------
+
 
 class RequestValidationResult:
     """Result of a request validation check."""
@@ -106,6 +108,7 @@ class RequestValidationResult:
 # RequestValidator
 # ---------------------------------------------------------------------------
 
+
 class RequestValidator:
     """Validates incoming LLM proxy requests against provider schemas.
 
@@ -152,17 +155,13 @@ class RequestValidator:
                 "field": "(body)",
                 "error": f"Invalid JSON: {exc}",
             }
-            result = RequestValidationResult(
-                valid=False, provider=provider, errors=[err]
-            )
+            result = RequestValidationResult(valid=False, provider=provider, errors=[err])
             self._log_result(result)
             return result
 
         if not isinstance(data, dict):
             err = {"field": "(body)", "error": "Request body must be a JSON object"}
-            result = RequestValidationResult(
-                valid=False, provider=provider, errors=[err]
-            )
+            result = RequestValidationResult(valid=False, provider=provider, errors=[err])
             self._log_result(result)
             return result
 
@@ -199,10 +198,7 @@ class RequestValidator:
         Only validates /messages and /chat/completions endpoints.
         Other endpoints are passed through as valid.
         """
-        is_messages_endpoint = (
-            "/v1/messages" in target_url
-            or "/chat/completions" in target_url
-        )
+        is_messages_endpoint = "/v1/messages" in target_url or "/chat/completions" in target_url
         if not is_messages_endpoint or not body:
             return RequestValidationResult(valid=True, provider=provider)
 
@@ -251,10 +247,12 @@ class RequestValidator:
         # Check required fields
         for field in required:
             if field not in data:
-                errors.append({
-                    "field": field,
-                    "error": f"required field missing",
-                })
+                errors.append(
+                    {
+                        "field": field,
+                        "error": "required field missing",
+                    }
+                )
 
         # Basic type checks for present fields
         for field, value in data.items():
@@ -263,60 +261,76 @@ class RequestValidator:
                 continue
             expected_type = prop.get("type")
             if expected_type and not self._check_type(value, expected_type):
-                errors.append({
-                    "field": field,
-                    "error": f"expected {expected_type}, got {type(value).__name__}",
-                })
+                errors.append(
+                    {
+                        "field": field,
+                        "error": f"expected {expected_type}, got {type(value).__name__}",
+                    }
+                )
                 continue
             # Numeric bounds
             if expected_type in ("integer", "number") and isinstance(value, (int, float)):
                 if "minimum" in prop and value < prop["minimum"]:
-                    errors.append({
-                        "field": field,
-                        "error": f"value {value} is below minimum {prop['minimum']}",
-                    })
+                    errors.append(
+                        {
+                            "field": field,
+                            "error": f"value {value} is below minimum {prop['minimum']}",
+                        }
+                    )
                 if "maximum" in prop and value > prop["maximum"]:
-                    errors.append({
-                        "field": field,
-                        "error": f"value {value} exceeds maximum {prop['maximum']}",
-                    })
+                    errors.append(
+                        {
+                            "field": field,
+                            "error": f"value {value} exceeds maximum {prop['maximum']}",
+                        }
+                    )
             # String length
             if expected_type == "string" and isinstance(value, str):
                 if "minLength" in prop and len(value) < prop["minLength"]:
-                    errors.append({
-                        "field": field,
-                        "error": f"string too short (min {prop['minLength']} chars)",
-                    })
+                    errors.append(
+                        {
+                            "field": field,
+                            "error": f"string too short (min {prop['minLength']} chars)",
+                        }
+                    )
             # Array min items
             if expected_type == "array" and isinstance(value, list):
                 if "minItems" in prop and len(value) < prop["minItems"]:
-                    errors.append({
-                        "field": field,
-                        "error": f"array must have at least {prop['minItems']} item(s)",
-                    })
+                    errors.append(
+                        {
+                            "field": field,
+                            "error": f"array must have at least {prop['minItems']} item(s)",
+                        }
+                    )
             # Enum
             if "enum" in prop and value not in prop["enum"]:
-                errors.append({
-                    "field": field,
-                    "error": f"must be one of {prop['enum']}",
-                })
+                errors.append(
+                    {
+                        "field": field,
+                        "error": f"must be one of {prop['enum']}",
+                    }
+                )
 
         # Validate messages array items (role + content required)
         messages = data.get("messages", [])
         if isinstance(messages, list):
             for i, msg in enumerate(messages):
                 if not isinstance(msg, dict):
-                    errors.append({
-                        "field": f"messages[{i}]",
-                        "error": "must be an object",
-                    })
+                    errors.append(
+                        {
+                            "field": f"messages[{i}]",
+                            "error": "must be an object",
+                        }
+                    )
                     continue
                 for required_key in ("role", "content"):
                     if required_key not in msg:
-                        errors.append({
-                            "field": f"messages[{i}].{required_key}",
-                            "error": "required field missing",
-                        })
+                        errors.append(
+                            {
+                                "field": f"messages[{i}].{required_key}",
+                                "error": "required field missing",
+                            }
+                        )
 
         return errors
 
@@ -348,10 +362,12 @@ class RequestValidator:
         if messages and isinstance(messages, list):
             first = messages[0]
             if isinstance(first, dict) and first.get("role") == "assistant":
-                errors.append({
-                    "field": "messages[0].role",
-                    "error": "first message must have role 'user', not 'assistant'",
-                })
+                errors.append(
+                    {
+                        "field": "messages[0].role",
+                        "error": "first message must have role 'user', not 'assistant'",
+                    }
+                )
 
             # Roles must alternate
             for i in range(1, len(messages)):
@@ -362,21 +378,25 @@ class RequestValidator:
                     and isinstance(curr, dict)
                     and prev.get("role") == curr.get("role")
                 ):
-                    errors.append({
-                        "field": f"messages[{i}].role",
-                        "error": (
-                            f"consecutive messages with same role '{curr.get('role')}'; "
-                            "Anthropic requires alternating user/assistant turns"
-                        ),
-                    })
+                    errors.append(
+                        {
+                            "field": f"messages[{i}].role",
+                            "error": (
+                                f"consecutive messages with same role '{curr.get('role')}'; "
+                                "Anthropic requires alternating user/assistant turns"
+                            ),
+                        }
+                    )
 
         # Model should look like claude-*
         model = data.get("model", "")
         if model and not model.startswith("claude"):
-            warnings.append({
-                "field": "model",
-                "error": f"model '{model}' doesn't look like an Anthropic model (expected claude-*)",
-            })
+            warnings.append(
+                {
+                    "field": "model",
+                    "error": f"model '{model}' doesn't look like an Anthropic model (expected claude-*)",
+                }
+            )
 
         return errors
 
@@ -396,10 +416,12 @@ class RequestValidator:
                     continue
                 role = msg.get("role")
                 if role and role not in valid_roles:
-                    errors.append({
-                        "field": f"messages[{i}].role",
-                        "error": f"invalid role '{role}'; must be one of {sorted(valid_roles)}",
-                    })
+                    errors.append(
+                        {
+                            "field": f"messages[{i}].role",
+                            "error": f"invalid role '{role}'; must be one of {sorted(valid_roles)}",
+                        }
+                    )
 
         # Model should look like gpt-* or a known name
         model = data.get("model", "")
@@ -409,10 +431,12 @@ class RequestValidator:
             or model.startswith("o3")
             or "ft:" in model
         ):
-            warnings.append({
-                "field": "model",
-                "error": f"model '{model}' doesn't look like an OpenAI model (expected gpt-* or o1/o3)",
-            })
+            warnings.append(
+                {
+                    "field": "model",
+                    "error": f"model '{model}' doesn't look like an OpenAI model (expected gpt-* or o1/o3)",
+                }
+            )
 
         return errors
 
@@ -460,6 +484,7 @@ class RequestValidator:
 # Module-level helpers
 # ---------------------------------------------------------------------------
 
+
 def get_validation_mode() -> str:
     """Read validation mode from env var or config.json.
 
@@ -475,6 +500,7 @@ def get_validation_mode() -> str:
     # Fall back to config file
     try:
         from tokenpak.agent.config import _load as _load_config
+
         cfg = _load_config()
         file_val = str(cfg.get("request_validation", "")).lower().strip()
         if file_val in VALIDATION_MODES:

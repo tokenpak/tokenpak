@@ -16,13 +16,14 @@ Default TTLs:
   insights:             5 minutes
   trace search:         no cache (real-time)
 """
+
 from __future__ import annotations
 
-import time
-import threading
 import hashlib
 import json
 import logging
+import threading
+import time
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -31,16 +32,17 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # TTL constants (seconds)
 # ---------------------------------------------------------------------------
-TTL_ROLLUP = 300        # 5 minutes
-TTL_SUMMARY = 300       # 5 minutes
+TTL_ROLLUP = 300  # 5 minutes
+TTL_SUMMARY = 300  # 5 minutes
 TTL_FILTER_OPTIONS = 600  # 10 minutes
-TTL_INSIGHTS = 300      # 5 minutes
-TTL_PRICING = 3600      # 1 hour
+TTL_INSIGHTS = 300  # 5 minutes
+TTL_PRICING = 3600  # 1 hour
 
 
 # ---------------------------------------------------------------------------
 # Cache entry
 # ---------------------------------------------------------------------------
+
 
 class _CacheEntry:
     __slots__ = ("value", "expires_at")
@@ -57,6 +59,7 @@ class _CacheEntry:
 # ---------------------------------------------------------------------------
 # CacheStore
 # ---------------------------------------------------------------------------
+
 
 class CacheStore:
     """Thread-safe in-memory cache with per-entry TTL.
@@ -158,6 +161,7 @@ class CacheStore:
 # ---------------------------------------------------------------------------
 # Cache key builder
 # ---------------------------------------------------------------------------
+
 
 def cache_key(*parts: Any, prefix: str = "") -> str:
     """Build a deterministic cache key from parts.

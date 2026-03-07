@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import uuid
 import datetime
-from dataclasses import dataclass, field, asdict
+import uuid
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
 import yaml
-
 
 DEFAULT_CONFIG = Path.home() / ".tokenpak" / "triggers.yaml"
 
@@ -27,8 +26,8 @@ class TriggerLog:
 @dataclass
 class Trigger:
     id: str
-    event: str          # e.g. "file:changed:*.py", "timer:5m", "cost:daily>10"
-    action: str         # tokenpak sub-command or shell script path
+    event: str  # e.g. "file:changed:*.py", "timer:5m", "cost:daily>10"
+    action: str  # tokenpak sub-command or shell script path
     enabled: bool = True
     created_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
 
@@ -57,7 +56,7 @@ class TriggerStore:
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "triggers": [asdict(t) for t in self._triggers],
-            "logs": [asdict(lg) for lg in self._logs[-200:]],   # keep last 200
+            "logs": [asdict(lg) for lg in self._logs[-200:]],  # keep last 200
         }
         self.config_path.write_text(yaml.dump(data, sort_keys=False))
 

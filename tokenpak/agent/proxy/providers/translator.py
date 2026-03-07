@@ -20,10 +20,10 @@ import copy
 import json
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def translate_request(
     data: Dict[str, Any],
@@ -75,15 +75,14 @@ def translate_response(
     key = (source_provider, target_provider)
     translator = _RESPONSE_TRANSLATORS.get(key)
     if translator is None:
-        raise ValueError(
-            f"No response translator for {source_provider!r} → {target_provider!r}."
-        )
+        raise ValueError(f"No response translator for {source_provider!r} → {target_provider!r}.")
     return translator(copy.deepcopy(data))
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers — content normalisation
 # ---------------------------------------------------------------------------
+
 
 def _text_of(content: Any) -> str:
     """Extract plain text from Anthropic/OpenAI content (str or list)."""
@@ -162,14 +161,16 @@ def _tool_use_anthropic_to_openai(content: Any) -> tuple[Optional[str], List[Dic
         if block.get("type") == "text":
             text_parts.append(block.get("text", ""))
         elif block.get("type") == "tool_use":
-            tool_calls.append({
-                "id": block.get("id", f"call_{idx}"),
-                "type": "function",
-                "function": {
-                    "name": block.get("name", ""),
-                    "arguments": json.dumps(block.get("input", {})),
-                },
-            })
+            tool_calls.append(
+                {
+                    "id": block.get("id", f"call_{idx}"),
+                    "type": "function",
+                    "function": {
+                        "name": block.get("name", ""),
+                        "arguments": json.dumps(block.get("input", {})),
+                    },
+                }
+            )
 
     text = "\n".join(text_parts) if text_parts else None
     return text, tool_calls
@@ -186,18 +187,21 @@ def _tool_calls_openai_to_anthropic(
             input_data = json.loads(fn.get("arguments", "{}"))
         except (json.JSONDecodeError, TypeError):
             input_data = {}
-        blocks.append({
-            "type": "tool_use",
-            "id": tc.get("id", ""),
-            "name": fn.get("name", ""),
-            "input": input_data,
-        })
+        blocks.append(
+            {
+                "type": "tool_use",
+                "id": tc.get("id", ""),
+                "name": fn.get("name", ""),
+                "input": input_data,
+            }
+        )
     return blocks
 
 
 # ---------------------------------------------------------------------------
 # Anthropic → OpenAI
 # ---------------------------------------------------------------------------
+
 
 def _anthropic_to_openai_request(data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Anthropic /v1/messages request to OpenAI chat completions."""
@@ -217,8 +221,12 @@ def _anthropic_to_openai_request(data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Convert tool_use blocks
         if isinstance(content, list):
-            tool_use_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"]
-            tool_result_blocks = [b for b in content if isinstance(b, dict) and b.get("type") == "tool_result"]
+            tool_use_blocks = [
+                b for b in content if isinstance(b, dict) and b.get("type") == "tool_use"
+            ]
+            tool_result_blocks = [
+                b for b in content if isinstance(b, dict) and b.get("type") == "tool_result"
+            ]
 
             if tool_use_blocks:
                 text, tool_calls = _tool_use_anthropic_to_openai(content)
@@ -231,11 +239,13 @@ def _anthropic_to_openai_request(data: Dict[str, Any]) -> Dict[str, Any]:
             if tool_result_blocks:
                 # Anthropic tool_result → OpenAI tool message (one per block)
                 for block in tool_result_blocks:
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": block.get("tool_use_id", ""),
-                        "content": _text_of(block.get("content", "")),
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": block.get("tool_use_id", ""),
+                            "content": _text_of(block.get("content", "")),
+                        }
+                    )
                 continue
 
         messages.append({"role": role, "content": _text_of(content)})
@@ -267,6 +277,7 @@ def _anthropic_to_openai_request(data: Dict[str, Any]) -> Dict[str, Any]:
 # OpenAI → Anthropic
 # ---------------------------------------------------------------------------
 
+
 def _openai_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate OpenAI chat completions request to Anthropic /v1/messages."""
     system_parts: List[str] = []
@@ -283,16 +294,18 @@ def _openai_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
 
         if role == "tool":
             # OpenAI tool message → Anthropic tool_result block in a user message
-            messages.append({
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id", ""),
-                        "content": _text_of(content),
-                    }
-                ],
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg.get("tool_call_id", ""),
+                            "content": _text_of(content),
+                        }
+                    ],
+                }
+            )
             continue
 
         if role == "assistant" and tool_calls:
@@ -320,9 +333,7 @@ def _openai_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
     if "top_p" in data:
         out["top_p"] = data["top_p"]
     if "stop" in data:
-        out["stop_sequences"] = (
-            data["stop"] if isinstance(data["stop"], list) else [data["stop"]]
-        )
+        out["stop_sequences"] = data["stop"] if isinstance(data["stop"], list) else [data["stop"]]
 
     # Tools
     tools = data.get("tools")
@@ -335,6 +346,7 @@ def _openai_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Anthropic → Google
 # ---------------------------------------------------------------------------
+
 
 def _anthropic_to_google_request(data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Anthropic request to Google generateContent format."""
@@ -352,19 +364,23 @@ def _anthropic_to_google_request(data: Dict[str, Any]) -> Dict[str, Any]:
             if btype == "text":
                 parts.append({"text": block.get("text", "")})
             elif btype == "tool_use":
-                parts.append({
-                    "functionCall": {
-                        "name": block.get("name", ""),
-                        "args": block.get("input", {}),
+                parts.append(
+                    {
+                        "functionCall": {
+                            "name": block.get("name", ""),
+                            "args": block.get("input", {}),
+                        }
                     }
-                })
+                )
             elif btype == "tool_result":
-                parts.append({
-                    "functionResponse": {
-                        "name": block.get("tool_use_id", ""),
-                        "response": {"content": block.get("content", "")},
+                parts.append(
+                    {
+                        "functionResponse": {
+                            "name": block.get("tool_use_id", ""),
+                            "response": {"content": block.get("content", "")},
+                        }
                     }
-                })
+                )
             else:
                 # Pass through unknown block types as-is
                 parts.append(block)
@@ -399,11 +415,13 @@ def _anthropic_to_google_request(data: Dict[str, Any]) -> Dict[str, Any]:
     if tools:
         fn_decls = []
         for tool in tools:
-            fn_decls.append({
-                "name": tool.get("name", ""),
-                "description": tool.get("description", ""),
-                "parameters": tool.get("input_schema", {}),
-            })
+            fn_decls.append(
+                {
+                    "name": tool.get("name", ""),
+                    "description": tool.get("description", ""),
+                    "parameters": tool.get("input_schema", {}),
+                }
+            )
         out["tools"] = [{"functionDeclarations": fn_decls}]
 
     return out
@@ -412,6 +430,7 @@ def _anthropic_to_google_request(data: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Google → Anthropic
 # ---------------------------------------------------------------------------
+
 
 def _google_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate Google generateContent request to Anthropic format."""
@@ -429,19 +448,23 @@ def _google_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
                 ant_content.append({"type": "text", "text": part["text"]})
             elif "functionCall" in part:
                 fc = part["functionCall"]
-                ant_content.append({
-                    "type": "tool_use",
-                    "id": fc.get("name", ""),
-                    "name": fc.get("name", ""),
-                    "input": fc.get("args", {}),
-                })
+                ant_content.append(
+                    {
+                        "type": "tool_use",
+                        "id": fc.get("name", ""),
+                        "name": fc.get("name", ""),
+                        "input": fc.get("args", {}),
+                    }
+                )
             elif "functionResponse" in part:
                 fr = part["functionResponse"]
-                ant_content.append({
-                    "type": "tool_result",
-                    "tool_use_id": fr.get("name", ""),
-                    "content": str(fr.get("response", {}).get("content", "")),
-                })
+                ant_content.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": fr.get("name", ""),
+                        "content": str(fr.get("response", {}).get("content", "")),
+                    }
+                )
             else:
                 # Pass through unknown parts
                 ant_content.append({"type": "text", "text": str(part)})
@@ -485,11 +508,13 @@ def _google_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
         ant_tools: List[Dict[str, Any]] = []
         for tool_group in tools:
             for fn_decl in tool_group.get("functionDeclarations", []):
-                ant_tools.append({
-                    "name": fn_decl.get("name", ""),
-                    "description": fn_decl.get("description", ""),
-                    "input_schema": fn_decl.get("parameters", {}),
-                })
+                ant_tools.append(
+                    {
+                        "name": fn_decl.get("name", ""),
+                        "description": fn_decl.get("description", ""),
+                        "input_schema": fn_decl.get("parameters", {}),
+                    }
+                )
         if ant_tools:
             out["tools"] = ant_tools
 
@@ -499,6 +524,7 @@ def _google_to_anthropic_request(data: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Response translators
 # ---------------------------------------------------------------------------
+
 
 def _anthropic_to_openai_response(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic response to OpenAI chat completion format."""
@@ -513,14 +539,16 @@ def _anthropic_to_openai_response(data: Dict[str, Any]) -> Dict[str, Any]:
         if block.get("type") == "text":
             text_parts.append(block.get("text", ""))
         elif block.get("type") == "tool_use":
-            tool_calls.append({
-                "id": block.get("id", f"call_{idx}"),
-                "type": "function",
-                "function": {
-                    "name": block.get("name", ""),
-                    "arguments": json.dumps(block.get("input", {})),
-                },
-            })
+            tool_calls.append(
+                {
+                    "id": block.get("id", f"call_{idx}"),
+                    "type": "function",
+                    "function": {
+                        "name": block.get("name", ""),
+                        "arguments": json.dumps(block.get("input", {})),
+                    },
+                }
+            )
 
     message: Dict[str, Any] = {"role": "assistant", "content": "\n".join(text_parts) or None}
     if tool_calls:
@@ -570,12 +598,14 @@ def _openai_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
             input_data = json.loads(fn.get("arguments", "{}"))
         except (json.JSONDecodeError, TypeError):
             input_data = {}
-        content.append({
-            "type": "tool_use",
-            "id": tc.get("id", ""),
-            "name": fn.get("name", ""),
-            "input": input_data,
-        })
+        content.append(
+            {
+                "type": "tool_use",
+                "id": tc.get("id", ""),
+                "name": fn.get("name", ""),
+                "input": input_data,
+            }
+        )
 
     finish_reason = choice.get("finish_reason", "stop")
     stop_reason = "end_turn"
@@ -622,6 +652,7 @@ _RESPONSE_TRANSLATORS = {
 # Google → Anthropic (response)
 # ---------------------------------------------------------------------------
 
+
 def _google_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Google generateContent response to Anthropic /v1/messages format."""
     candidates = data.get("candidates", [{}])
@@ -638,12 +669,14 @@ def _google_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
             content.append({"type": "text", "text": part["text"]})
         elif "functionCall" in part:
             fc = part["functionCall"]
-            content.append({
-                "type": "tool_use",
-                "id": fc.get("name", ""),
-                "name": fc.get("name", ""),
-                "input": fc.get("args", {}),
-            })
+            content.append(
+                {
+                    "type": "tool_use",
+                    "id": fc.get("name", ""),
+                    "name": fc.get("name", ""),
+                    "input": fc.get("args", {}),
+                }
+            )
         else:
             # Unknown part type → convert to text
             content.append({"type": "text", "text": str(part)})
@@ -681,6 +714,7 @@ def _google_to_anthropic_response(data: Dict[str, Any]) -> Dict[str, Any]:
 # Anthropic → Google (response)
 # ---------------------------------------------------------------------------
 
+
 def _anthropic_to_google_response(data: Dict[str, Any]) -> Dict[str, Any]:
     """Convert Anthropic /v1/messages response to Google generateContent format."""
     content_blocks = data.get("content", [])
@@ -693,12 +727,14 @@ def _anthropic_to_google_response(data: Dict[str, Any]) -> Dict[str, Any]:
         if btype == "text":
             parts.append({"text": block.get("text", "")})
         elif btype == "tool_use":
-            parts.append({
-                "functionCall": {
-                    "name": block.get("name", ""),
-                    "args": block.get("input", {}),
+            parts.append(
+                {
+                    "functionCall": {
+                        "name": block.get("name", ""),
+                        "args": block.get("input", {}),
+                    }
                 }
-            })
+            )
         elif btype == "thinking":
             # Thinking blocks → gracefully skip (Google doesn't support this)
             pass
@@ -734,9 +770,15 @@ def _anthropic_to_google_response(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # Update response translator dispatch table with Google support
-_RESPONSE_TRANSLATORS.update({
-    ("google", "anthropic"): _google_to_anthropic_response,
-    ("anthropic", "google"): _anthropic_to_google_response,
-    ("google", "openai"): lambda d: _anthropic_to_openai_response(_google_to_anthropic_response(d)),
-    ("openai", "google"): lambda d: _anthropic_to_google_response(_openai_to_anthropic_response(d)),
-})
+_RESPONSE_TRANSLATORS.update(
+    {
+        ("google", "anthropic"): _google_to_anthropic_response,
+        ("anthropic", "google"): _anthropic_to_google_response,
+        ("google", "openai"): lambda d: _anthropic_to_openai_response(
+            _google_to_anthropic_response(d)
+        ),
+        ("openai", "google"): lambda d: _anthropic_to_google_response(
+            _openai_to_anthropic_response(d)
+        ),
+    }
+)

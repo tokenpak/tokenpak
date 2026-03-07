@@ -28,33 +28,40 @@ Usage:
 import copy
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 try:
     import tiktoken
+
     _enc = tiktoken.encoding_for_model("gpt-4")
+
     def _count_tokens(text: str) -> int:
         return len(_enc.encode(text))
+
     def _truncate_tokens(text: str, max_tokens: int) -> str:
         tokens = _enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
         return _enc.decode(tokens[:max_tokens]) + "..."
+
 except ImportError:
+
     def _count_tokens(text: str) -> int:
         return max(1, len(text) // 4)
+
     def _truncate_tokens(text: str, max_tokens: int) -> str:
         approx_chars = max_tokens * 4
         return text[:approx_chars] + ("..." if len(text) > approx_chars else "")
+
 
 # Default config (used when budget_config.yaml is unavailable)
 _DEFAULT_CONFIG = {
     "total_tokens": 12000,
     "buckets": {
-        "state":    {"min_pct": 8,  "max_pct": 15, "priority": "critical"},
-        "recent":   {"min_pct": 10, "max_pct": 20, "priority": "high"},
+        "state": {"min_pct": 8, "max_pct": 15, "priority": "critical"},
+        "recent": {"min_pct": 10, "max_pct": 20, "priority": "high"},
         "evidence": {"min_pct": 50, "max_pct": 70, "priority": "medium"},
-        "tools":    {"min_pct": 0,  "max_pct": 25, "priority": "variable"},
+        "tools": {"min_pct": 0, "max_pct": 25, "priority": "variable"},
     },
     "trim_order": [
         "older_history",
@@ -88,6 +95,7 @@ def _load_config(config_path: str) -> dict:
     # Try YAML if pyyaml is available
     try:
         import yaml  # type: ignore
+
         return yaml.safe_load(text)
     except ImportError:
         pass
@@ -113,17 +121,17 @@ def _parse_simple_yaml(text: str) -> dict:
 
         for raw_line in lines:
             line = raw_line.rstrip()
-            if not line or line.lstrip().startswith('#'):
+            if not line or line.lstrip().startswith("#"):
                 continue
 
             indent = len(line) - len(line.lstrip())
             stripped = line.strip()
 
-            if stripped.startswith('- '):
+            if stripped.startswith("- "):
                 # List item (strip inline comment)
                 value = stripped[2:].strip()
-                if '  #' in value:
-                    value = value[:value.index('  #')].strip()
+                if "  #" in value:
+                    value = value[: value.index("  #")].strip()
                 if current_section and current_sub and indent >= 4:
                     section = result.setdefault(current_section, {})
                     sub = section.setdefault(current_sub, [])
@@ -135,15 +143,15 @@ def _parse_simple_yaml(text: str) -> dict:
                         target.append(value)
                 continue
 
-            if ':' not in stripped:
+            if ":" not in stripped:
                 continue
 
-            key, _, val = stripped.partition(':')
+            key, _, val = stripped.partition(":")
             key = key.strip()
             val = val.strip()
             # Strip inline comments (  # comment)
-            if '  #' in val:
-                val = val[:val.index('  #')].strip()
+            if "  #" in val:
+                val = val[: val.index("  #")].strip()
 
             if indent == 0:
                 if not val:
@@ -174,9 +182,9 @@ def _parse_simple_yaml(text: str) -> dict:
 
 def _cast(val: str):
     """Cast string to int, float, or string."""
-    if val.lower() in ('true', 'yes'):
+    if val.lower() in ("true", "yes"):
         return True
-    if val.lower() in ('false', 'no'):
+    if val.lower() in ("false", "no"):
         return False
     try:
         return int(val)
@@ -205,14 +213,8 @@ class Budgeter:
 
         self.config = _load_config(config_path)
         self.total_tokens: int = int(self.config.get("total_tokens", 12000))
-        self.trim_order: List[str] = self.config.get(
-            "trim_order",
-            _DEFAULT_CONFIG["trim_order"]
-        )
-        self.thresholds: dict = self.config.get(
-            "thresholds",
-            _DEFAULT_CONFIG["thresholds"]
-        )
+        self.trim_order: List[str] = self.config.get("trim_order", _DEFAULT_CONFIG["trim_order"])
+        self.thresholds: dict = self.config.get("thresholds", _DEFAULT_CONFIG["thresholds"])
 
     # ── Token counting ───────────────────────────────────────────────────────
 
@@ -221,9 +223,7 @@ class Budgeter:
         if "items" in comp:
             # Evidence bucket: list of EvidenceItem-like objects
             return sum(
-                _count_tokens(
-                    ev.text if hasattr(ev, "text") else ev.get("text", "")
-                )
+                _count_tokens(ev.text if hasattr(ev, "text") else ev.get("text", ""))
                 for ev in comp["items"]
             )
         return _count_tokens(comp.get("text", ""))
@@ -257,8 +257,7 @@ class Budgeter:
         keep_pct = float(self.thresholds.get("evidence_keep_pct", 0.80))
         items = list(evidence["items"])
         items.sort(
-            key=lambda x: x.score if hasattr(x, "score") else x.get("score", 0),
-            reverse=True
+            key=lambda x: x.score if hasattr(x, "score") else x.get("score", 0), reverse=True
         )
         keep_count = max(1, int(len(items) * keep_pct))
         components["evidence"] = {**evidence, "items": items[:keep_count]}
@@ -276,6 +275,7 @@ class Budgeter:
             if hasattr(ev, "text"):
                 # EvidenceItem object — create a copy-like proxy
                 from .evidence_pack import EvidenceItem
+
                 new_ev = EvidenceItem(
                     src=ev.src,
                     ref=ev.ref,
@@ -285,10 +285,7 @@ class Budgeter:
                 )
             else:
                 # Plain dict
-                new_ev = {
-                    **ev,
-                    "text": _truncate_tokens(ev.get("text", ""), max_span)
-                }
+                new_ev = {**ev, "text": _truncate_tokens(ev.get("text", ""), max_span)}
             new_items.append(new_ev)
 
         components["evidence"] = {**evidence, "items": new_items}
@@ -309,7 +306,7 @@ class Budgeter:
         if _count_tokens(text) > 200:
             components["tools"] = {
                 **tools,
-                "text": "[tool schemas omitted — send ref only; request full schemas if needed]"
+                "text": "[tool schemas omitted — send ref only; request full schemas if needed]",
             }
         return components
 
@@ -356,11 +353,11 @@ class Budgeter:
         )
 
         trim_actions = {
-            "older_history":       self._trim_history,
-            "low_score_evidence":  self._trim_evidence_by_score,
-            "verbose_evidence":    self._trim_evidence_verbosity,
+            "older_history": self._trim_history,
+            "low_score_evidence": self._trim_evidence_by_score,
+            "verbose_evidence": self._trim_evidence_verbosity,
             "nonessential_skills": self._trim_skills,
-            "prose_background":    self._trim_prose_background,
+            "prose_background": self._trim_prose_background,
         }
 
         for action_name in self.trim_order:
@@ -390,7 +387,7 @@ class Budgeter:
                 items = evidence["items"]
                 items.sort(
                     key=lambda x: x.score if hasattr(x, "score") else x.get("score", 0),
-                    reverse=True
+                    reverse=True,
                 )
                 components["evidence"] = {**evidence, "items": items[:1]}
 

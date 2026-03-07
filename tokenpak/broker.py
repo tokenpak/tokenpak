@@ -15,13 +15,12 @@ Decision flow:
 import json
 import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .routing_ledger import RoutingLedger, DEFAULT_LEDGER_PATH
-from .elo import EloRatings, DEFAULT_ELO_PATH
-
+from .elo import DEFAULT_ELO_PATH, EloRatings
+from .routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
 
 # ---------------------------------------------------------------------------
 # Config
@@ -32,8 +31,8 @@ MIN_SAMPLES = int(os.environ.get("TOKENPAK_BROKER_MIN_SAMPLES", "50"))
 
 # Thresholds
 DOWNGRADE_ACCEPTANCE_THRESHOLD = 0.95  # cheap model must beat this to get traffic
-UPGRADE_COMPLEXITY_THRESHOLD   = 7.0   # score above which we consider upgrading
-UPGRADE_ACCEPTANCE_FLOOR       = 0.50  # below this → upgrade
+UPGRADE_COMPLEXITY_THRESHOLD = 7.0  # score above which we consider upgrading
+UPGRADE_ACCEPTANCE_FLOOR = 0.50  # below this → upgrade
 
 # Cooldown: after a rejected downgrade, skip N transactions before trying again
 DOWNGRADE_COOLDOWN = 10
@@ -46,19 +45,21 @@ DEFAULT_TIERS_PATH = str(Path(__file__).parent.parent / "model_tiers.json")
 # Data types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RoutingDecision:
     original_model: str
     selected_model: str
-    action: str           # passthrough | downgrade | upgrade
-    confidence: float     # sample-based confidence score (0.0–1.0)
+    action: str  # passthrough | downgrade | upgrade
+    confidence: float  # sample-based confidence score (0.0–1.0)
     reason: str
-    badge: str = ""       # Badge text to inject into response
+    badge: str = ""  # Badge text to inject into response
 
 
 # ---------------------------------------------------------------------------
 # Model tier helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_tiers(tiers_path: str = DEFAULT_TIERS_PATH) -> Dict[str, int]:
     """Load model cost tiers from JSON. Returns empty dict on failure."""
@@ -80,26 +81,21 @@ def get_tier(model: str, tiers: Dict[str, int]) -> int:
 def cheaper_models(model: str, tiers: Dict[str, int]) -> List[str]:
     """Return all known models with a lower tier than the given model, sorted cheapest first."""
     current_tier = get_tier(model, tiers)
-    candidates = [
-        (m, t) for m, t in tiers.items()
-        if not m.startswith("_") and t < current_tier
-    ]
+    candidates = [(m, t) for m, t in tiers.items() if not m.startswith("_") and t < current_tier]
     return [m for m, _ in sorted(candidates, key=lambda x: x[1])]
 
 
 def more_capable_models(model: str, tiers: Dict[str, int]) -> List[str]:
     """Return all known models with a higher tier, sorted most capable first."""
     current_tier = get_tier(model, tiers)
-    candidates = [
-        (m, t) for m, t in tiers.items()
-        if not m.startswith("_") and t > current_tier
-    ]
+    candidates = [(m, t) for m, t in tiers.items() if not m.startswith("_") and t > current_tier]
     return [m for m, _ in sorted(candidates, key=lambda x: x[1], reverse=True)]
 
 
 # ---------------------------------------------------------------------------
 # Broker
 # ---------------------------------------------------------------------------
+
 
 class Broker:
     """
@@ -112,15 +108,15 @@ class Broker:
     def __init__(
         self,
         ledger_path: str = DEFAULT_LEDGER_PATH,
-        elo_path:    str = DEFAULT_ELO_PATH,
-        tiers_path:  str = DEFAULT_TIERS_PATH,
+        elo_path: str = DEFAULT_ELO_PATH,
+        tiers_path: str = DEFAULT_TIERS_PATH,
         min_samples: int = MIN_SAMPLES,
     ):
-        self._ledger  = RoutingLedger(ledger_path)
-        self._elo     = EloRatings(elo_path)
-        self._tiers   = _load_tiers(tiers_path)
+        self._ledger = RoutingLedger(ledger_path)
+        self._elo = EloRatings(elo_path)
+        self._tiers = _load_tiers(tiers_path)
         self._min_samples = min_samples
-        self._lock    = threading.Lock()
+        self._lock = threading.Lock()
 
         # Cooldown tracker: model → remaining cooldown count
         # Cooldown is decremented on each passthrough after a rejected downgrade.
@@ -199,7 +195,7 @@ class Broker:
         Record outcome and update Elo. Trigger cooldown on rejected downgrade.
         """
         txn = self._ledger.get_transaction(transaction_id)
-        ok  = self._ledger.record_outcome(transaction_id, accepted, reason)
+        ok = self._ledger.record_outcome(transaction_id, accepted, reason)
         if ok and txn:
             self._elo.update_elo(txn["model_used"], txn["task_type"], accepted)
             # If this was a downgraded transaction and it was rejected → start cooldown
@@ -232,9 +228,7 @@ class Broker:
         if self._cooldown.get(model, 0) > 0:
             self._cooldown[model] -= 1
 
-    def _try_downgrade(
-        self, model: str, task_type: str
-    ) -> Optional[RoutingDecision]:
+    def _try_downgrade(self, model: str, task_type: str) -> Optional[RoutingDecision]:
         """
         Attempt to downgrade to a cheaper model.
         Returns RoutingDecision if downgrade is warranted, else None.
@@ -286,7 +280,7 @@ class Broker:
             return None
 
         target = candidates[0]  # Most capable first
-        badge  = (
+        badge = (
             f"[🔵 TokenPak: upgraded to {target} "
             f"(complexity {complexity_score:.1f}/10, {current_rate:.0%} acceptance on {model})]"
         )

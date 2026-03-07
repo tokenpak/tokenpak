@@ -54,6 +54,25 @@ curl http://localhost:8766/v1/chat/completions \
   }'
 ```
 
+**Streaming example:**
+
+```bash
+curl -N http://localhost:8766/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "stream": true,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+When `"stream": true` is set:
+- Response is `Content-Type: text/event-stream` (SSE)
+- Chunks are forwarded immediately with no buffering
+- `Cache-Control: no-cache` and `X-Accel-Buffering: no` are enforced
+- Output token telemetry is captured from the stream's usage events
+
 ---
 
 ### POST /v1/messages
@@ -71,6 +90,23 @@ curl http://localhost:8766/v1/messages \
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
+
+**Streaming example:**
+
+```bash
+curl -N http://localhost:8766/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-opus-4-5",
+    "max_tokens": 1024,
+    "stream": true,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+SSE events are forwarded verbatim from Anthropic: `message_start`, `content_block_delta`, `message_delta` (with output token count), and `message_stop`. Output and cache token telemetry is captured from the stream automatically.
 
 ---
 

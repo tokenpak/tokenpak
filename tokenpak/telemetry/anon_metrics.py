@@ -15,7 +15,6 @@ Batch sync via MetricsReporter → /v1/metrics/ingest
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import uuid
@@ -34,6 +33,7 @@ SCHEMA_VERSION = "1.0"
 # Record
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MetricsRecord:
     """One anonymised request record. No content fields allowed."""
@@ -42,9 +42,7 @@ class MetricsRecord:
     local_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     # Timing — day-only bucket preserves privacy
-    date_utc: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    )
+    date_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
     # Token counts
     input_tokens: int = 0
@@ -52,7 +50,7 @@ class MetricsRecord:
     tokens_saved: int = 0
 
     # Derived
-    compression_ratio: float = 0.0   # tokens_saved / input_tokens
+    compression_ratio: float = 0.0  # tokens_saved / input_tokens
 
     # Performance
     latency_ms: float = 0.0
@@ -94,11 +92,20 @@ class MetricsRecord:
         )
 
     # Guard: ensure no content fields are ever added accidentally
-    _ALLOWED_FIELDS = frozenset({
-        "local_id", "date_utc", "input_tokens", "output_tokens",
-        "tokens_saved", "compression_ratio", "latency_ms", "model",
-        "schema_version", "synced",
-    })
+    _ALLOWED_FIELDS = frozenset(
+        {
+            "local_id",
+            "date_utc",
+            "input_tokens",
+            "output_tokens",
+            "tokens_saved",
+            "compression_ratio",
+            "latency_ms",
+            "model",
+            "schema_version",
+            "synced",
+        }
+    )
 
     def __post_init__(self):
         # Validate no unexpected fields snuck in
@@ -110,6 +117,7 @@ class MetricsRecord:
 # ---------------------------------------------------------------------------
 # Local store
 # ---------------------------------------------------------------------------
+
 
 class MetricsStore:
     """SQLite-backed local metrics store."""
@@ -153,9 +161,15 @@ class MetricsStore:
                 VALUES (?,?,?,?,?,?,?,?,?,0)
                 """,
                 (
-                    rec.local_id, rec.date_utc, rec.input_tokens, rec.output_tokens,
-                    rec.tokens_saved, rec.compression_ratio, rec.latency_ms,
-                    rec.model, rec.schema_version,
+                    rec.local_id,
+                    rec.date_utc,
+                    rec.input_tokens,
+                    rec.output_tokens,
+                    rec.tokens_saved,
+                    rec.compression_ratio,
+                    rec.latency_ms,
+                    rec.model,
+                    rec.schema_version,
                 ),
             )
             conn.commit()
@@ -243,11 +257,10 @@ def record_request(
     """Record one request. No-op if metrics are disabled. Never raises."""
     try:
         from tokenpak.agent.config import get_metrics_enabled
+
         if not get_metrics_enabled():
             return
-        compression_ratio = (
-            round(tokens_saved / input_tokens, 4) if input_tokens > 0 else 0.0
-        )
+        compression_ratio = round(tokens_saved / input_tokens, 4) if input_tokens > 0 else 0.0
         rec = MetricsRecord(
             input_tokens=input_tokens,
             output_tokens=output_tokens,

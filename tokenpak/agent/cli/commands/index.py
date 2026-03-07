@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
 
 def _get_indexer():
     """Lazy import to keep startup fast."""
     from tokenpak.agent.vault import VaultIndexer
     from tokenpak.agent.vault.blocks import BlockStore
+
     store_path = os.environ.get(
         "TOKENPAK_VAULT_INDEX",
         os.path.expanduser("~/.tokenpak/vault_index.json"),
@@ -24,7 +24,7 @@ def run_index_status() -> None:
     indexer = _get_indexer()
     stats = indexer.stats_by_type()
     total = stats["total_files"]
-    print(f"Vault Index Status")
+    print("Vault Index Status")
     print(f"{'─' * 40}")
     print(f"  Total indexed files: {total}")
     if total == 0:

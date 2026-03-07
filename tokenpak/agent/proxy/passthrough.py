@@ -33,10 +33,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PassthroughConfig:
@@ -56,25 +56,29 @@ class PassthroughConfig:
         are rejected with HTTP 401 before reaching the upstream provider.
     """
 
-    strip_headers: Set[str] = field(default_factory=lambda: {
-        "host",
-        "proxy-connection",
-        "proxy-authorization",
-        "connection",
-        "keep-alive",
-        "transfer-encoding",
-        "te",
-        "trailer",
-        "upgrade",
-        "content-length",
-        "accept-encoding",
-    })
+    strip_headers: Set[str] = field(
+        default_factory=lambda: {
+            "host",
+            "proxy-connection",
+            "proxy-authorization",
+            "connection",
+            "keep-alive",
+            "transfer-encoding",
+            "te",
+            "trailer",
+            "upgrade",
+            "content-length",
+            "accept-encoding",
+        }
+    )
 
-    safe_to_log: Set[str] = field(default_factory=lambda: {
-        "content-type",
-        "anthropic-version",
-        "user-agent",
-    })
+    safe_to_log: Set[str] = field(
+        default_factory=lambda: {
+            "content-type",
+            "anthropic-version",
+            "user-agent",
+        }
+    )
 
     require_auth: bool = True
 
@@ -90,6 +94,7 @@ _AUTH_HEADERS = frozenset({"authorization", "x-api-key"})
 # ---------------------------------------------------------------------------
 # CredentialPassthrough — primary class
 # ---------------------------------------------------------------------------
+
 
 class CredentialPassthrough:
     """

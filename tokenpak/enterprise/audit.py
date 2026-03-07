@@ -31,11 +31,9 @@ import json
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Optional, Union
-
+from typing import Any, Optional, Union
 
 # ---------------------------------------------------------------------------
 # DDL
@@ -73,11 +71,19 @@ INSERT OR IGNORE INTO tp_audit_config VALUES ('schema_version',  '1');
 """
 
 # Actions that should always be recorded even in low-verbosity mode
-_ALWAYS_RECORD = frozenset({
-    "auth_success", "auth_failure", "permission_denied",
-    "config_change", "user_created", "user_deactivated",
-    "data_export", "key_rotation", "compliance_report",
-})
+_ALWAYS_RECORD = frozenset(
+    {
+        "auth_success",
+        "auth_failure",
+        "permission_denied",
+        "config_change",
+        "user_created",
+        "user_deactivated",
+        "data_export",
+        "key_rotation",
+        "compliance_report",
+    }
+)
 
 
 def _now() -> float:
@@ -149,8 +155,16 @@ class AuditLog:
             return "0" * 64  # genesis
         return row["entry_hash"] if isinstance(row, dict) else row[0]
 
-    def _compute_hash(self, entry_id: str, ts: float, user_id: str, action: str,
-                      model: str, data_class: str, prev_hash: str) -> str:
+    def _compute_hash(
+        self,
+        entry_id: str,
+        ts: float,
+        user_id: str,
+        action: str,
+        model: str,
+        data_class: str,
+        prev_hash: str,
+    ) -> str:
         payload = f"{entry_id}:{ts}:{user_id}:{action}:{model}:{data_class}:{prev_hash}"
         return hashlib.sha256(payload.encode()).hexdigest()
 
@@ -175,18 +189,29 @@ class AuditLog:
         entry_id = str(uuid.uuid4())
         ts = _now()
         prev_hash = self._last_hash()
-        entry_hash = self._compute_hash(entry_id, ts, user_id, action, model,
-                                        data_classification, prev_hash)
+        entry_hash = self._compute_hash(
+            entry_id, ts, user_id, action, model, data_classification, prev_hash
+        )
         self._conn.execute(
             """INSERT INTO tp_audit_log
                (id, ts, ts_iso, user_id, agent_id, action, model, provider,
                 data_class, outcome, source_ip, session_id, prev_hash, entry_hash, metadata)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
-                entry_id, ts, _ts_iso(ts),
-                user_id, agent_id, action, model, provider,
-                data_classification, outcome, source_ip, session_id,
-                prev_hash, entry_hash,
+                entry_id,
+                ts,
+                _ts_iso(ts),
+                user_id,
+                agent_id,
+                action,
+                model,
+                provider,
+                data_classification,
+                outcome,
+                source_ip,
+                session_id,
+                prev_hash,
+                entry_hash,
                 json.dumps(metadata or {}),
             ),
         )
@@ -249,7 +274,9 @@ class AuditLog:
             clauses.append("user_id = ?")
             params.append(user_id)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
-        row = self._conn.execute(f"SELECT COUNT(*) as n FROM tp_audit_log {where}", params).fetchone()
+        row = self._conn.execute(
+            f"SELECT COUNT(*) as n FROM tp_audit_log {where}", params
+        ).fetchone()
         return row["n"] if isinstance(row, dict) else row[0]
 
     def export(self, path: Union[str, Path], fmt: str = "json", **list_kwargs) -> int:
@@ -281,21 +308,22 @@ class AuditLog:
 
         Returns ``(ok, errors)`` where *errors* is a list of violation messages.
         """
-        rows = self._conn.execute(
-            "SELECT * FROM tp_audit_log ORDER BY ts ASC"
-        ).fetchall()
+        rows = self._conn.execute("SELECT * FROM tp_audit_log ORDER BY ts ASC").fetchall()
         errors: list[str] = []
         prev_hash = "0" * 64
 
         for row in rows:
             expected = self._compute_hash(
-                row["id"], row["ts"], row["user_id"], row["action"],
-                row["model"], row["data_class"], prev_hash,
+                row["id"],
+                row["ts"],
+                row["user_id"],
+                row["action"],
+                row["model"],
+                row["data_class"],
+                prev_hash,
             )
             if row["entry_hash"] != expected:
-                errors.append(
-                    f"Hash mismatch on entry {row['id']} (ts={row['ts_iso']})"
-                )
+                errors.append(f"Hash mismatch on entry {row['id']} (ts={row['ts_iso']})")
             if row["prev_hash"] != prev_hash:
                 errors.append(
                     f"Chain break on entry {row['id']}: "
@@ -309,9 +337,7 @@ class AuditLog:
         """Delete entries older than *retention_days*. Returns rows deleted."""
         days = retention_days or self._retention_days
         cutoff = _now() - (days * 86400)
-        cur = self._conn.execute(
-            "DELETE FROM tp_audit_log WHERE ts < ?", (cutoff,)
-        )
+        cur = self._conn.execute("DELETE FROM tp_audit_log WHERE ts < ?", (cutoff,))
         self._conn.commit()
         return cur.rowcount
 
@@ -359,6 +385,7 @@ class AuditLog:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_date(s: str) -> float:
     """Parse ISO date/datetime string to UNIX timestamp."""
     fmts = [
@@ -381,5 +408,6 @@ def _parse_date(s: str) -> float:
 def default_audit_path() -> Path:
     """Return the default audit DB path (.tokenpak/audit.db)."""
     import os
+
     base = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
     return base / "audit.db"

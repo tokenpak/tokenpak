@@ -15,9 +15,9 @@ or TOKENPAK_TEAM_VAULT env var).
 from __future__ import annotations
 
 import json
-import time
 import threading
-from dataclasses import dataclass, field, asdict
+import time
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,11 +25,12 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class SharedVaultBlock:
     """A block contributed to the shared team vault."""
-    block_id: str           # "<agent>:<path>#<hash[:8]>"
-    contributor: str        # agent name that contributed this block
-    path: str               # source file path (relative or full)
-    content_hash: str       # SHA256 of original content
-    file_type: str          # "code" | "text" | "data"
+
+    block_id: str  # "<agent>:<path>#<hash[:8]>"
+    contributor: str  # agent name that contributed this block
+    path: str  # source file path (relative or full)
+    content_hash: str  # SHA256 of original content
+    file_type: str  # "code" | "text" | "data"
     raw_tokens: int
     compressed_tokens: int
     compressed_content: str
@@ -119,9 +120,7 @@ class SharedVault:
     # Merge
     # ------------------------------------------------------------------
 
-    def merge_with_local(
-        self, local_blocks: List[Any]
-    ) -> List[Any]:
+    def merge_with_local(self, local_blocks: List[Any]) -> List[Any]:
         """Merge team blocks with local blocks.
 
         Local blocks take priority: if a local block covers the same path

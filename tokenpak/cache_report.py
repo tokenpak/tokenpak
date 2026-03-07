@@ -4,7 +4,8 @@ Cache report formatting for telemetry trace detail endpoint.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, Optional
+
+from typing import Any, Dict
 
 
 def format_cache_report(

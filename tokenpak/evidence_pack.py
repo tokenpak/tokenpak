@@ -47,7 +47,7 @@ class EvidenceItem:
         return (
             f"- E{index} "
             f"{{src:{self.src}, ref:{self.ref}, span:{self.span}, "
-            f"score:{self.score:.2f}, text:\"{escaped_text}\"}}"
+            f'score:{self.score:.2f}, text:"{escaped_text}"}}'
         )
 
     def to_dict(self) -> dict:
@@ -105,13 +105,15 @@ class EvidencePack:
             chunk_id = chunk.get("id") or chunk.get("chunk_id", "M-unknown")
             span_data = self.extractor.extract_span(chunk_text, query, max_tokens_each)
 
-            self.items.append(EvidenceItem(
-                src="MEMORY",
-                ref=str(chunk_id),
-                span=span_data["span"],
-                score=float(span_data["score"]),
-                text=span_data["text"],
-            ))
+            self.items.append(
+                EvidenceItem(
+                    src="MEMORY",
+                    ref=str(chunk_id),
+                    span=span_data["span"],
+                    score=float(span_data["score"]),
+                    text=span_data["text"],
+                )
+            )
 
     def add_from_file(
         self,
@@ -136,13 +138,15 @@ class EvidencePack:
         content = path.read_text(encoding="utf-8", errors="replace")
         span_data = self.extractor.extract_span(content, query, max_tokens_each)
 
-        self.items.append(EvidenceItem(
-            src="FILE",
-            ref=ref_override or file_path,
-            span=span_data["span"],
-            score=float(span_data["score"]),
-            text=span_data["text"],
-        ))
+        self.items.append(
+            EvidenceItem(
+                src="FILE",
+                ref=ref_override or file_path,
+                span=span_data["span"],
+                score=float(span_data["score"]),
+                text=span_data["text"],
+            )
+        )
 
     def add_from_log(
         self,
@@ -164,13 +168,15 @@ class EvidencePack:
         span_data = self.extractor.extract_span(log_text, query, max_tokens_each)
         span_ref = turn_range or span_data["span"]
 
-        self.items.append(EvidenceItem(
-            src="LOG",
-            ref=log_ref,
-            span=span_ref,
-            score=float(span_data["score"]),
-            text=span_data["text"],
-        ))
+        self.items.append(
+            EvidenceItem(
+                src="LOG",
+                ref=log_ref,
+                span=span_ref,
+                score=float(span_data["score"]),
+                text=span_data["text"],
+            )
+        )
 
     def add_item(
         self,
@@ -181,9 +187,7 @@ class EvidencePack:
         span: str = "manual",
     ) -> None:
         """Manually add a pre-extracted evidence item."""
-        self.items.append(EvidenceItem(
-            src=src, ref=ref, span=span, score=score, text=text
-        ))
+        self.items.append(EvidenceItem(src=src, ref=ref, span=span, score=score, text=text))
 
     # ── Wire format ──────────────────────────────────────────────────────────
 
@@ -218,6 +222,7 @@ class EvidencePack:
         """Estimate total tokens in all evidence items."""
         try:
             import tiktoken
+
             enc = tiktoken.encoding_for_model("gpt-4")
             return sum(len(enc.encode(it.text)) for it in self.items)
         except ImportError:

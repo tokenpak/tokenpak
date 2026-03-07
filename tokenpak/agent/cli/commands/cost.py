@@ -62,9 +62,10 @@ def _fmt_n(n: int) -> str:
 # Core query functions
 # ---------------------------------------------------------------------------
 
+
 def query_summary(period: str = "today", model: Optional[str] = None) -> dict:
     """Return aggregated cost summary for the period.
-    
+
     Args:
         period: Time period (today, yesterday, week, month)
         model: Optional model name filter
@@ -193,13 +194,16 @@ def export_csv_data(period: str = "today") -> str:
     w = csv.writer(buf)
     w.writerow(["timestamp", "model", "input_tokens", "output_tokens", "estimated_cost"])
     for r in rows:
-        w.writerow([r["timestamp"], r["model"], r["input_tokens"], r["output_tokens"], r["estimated_cost"]])
+        w.writerow(
+            [r["timestamp"], r["model"], r["input_tokens"], r["output_tokens"], r["estimated_cost"]]
+        )
     return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
 # Display functions
 # ---------------------------------------------------------------------------
+
 
 def _period_label(period: str) -> str:
     labels = {
@@ -247,7 +251,9 @@ def print_by_model(period: str = "today", raw: bool = False) -> None:
     print(f"  {'Model':<32}{'Requests':>10}{'Tokens':>12}{'Cost':>12}")
     print(f"  {'-'*32}{'-'*10}{'-'*12}{'-'*12}")
     for r in rows:
-        print(f"  {r['model']:<32}{_fmt_n(r['requests']):>10}{_fmt_n(r['total_tokens']):>12}{_fmt_cost(r['cost_usd']):>12}")
+        print(
+            f"  {r['model']:<32}{_fmt_n(r['requests']):>10}{_fmt_n(r['total_tokens']):>12}{_fmt_cost(r['cost_usd']):>12}"
+        )
     total_cost = sum(r["cost_usd"] for r in rows)
     print(f"  {'':32}{'':10}{'':12}{_fmt_cost(total_cost):>12}")
     print()
@@ -276,6 +282,7 @@ def print_by_agent(period: str = "today", raw: bool = False) -> None:
 # ---------------------------------------------------------------------------
 # CLI (argparse-based, wired into main.py)
 # ---------------------------------------------------------------------------
+
 
 def run_cost_cmd(args) -> None:
     """Dispatch handler for 'tokenpak cost' from main.py argparse."""
@@ -310,6 +317,7 @@ def run_cost_cmd(args) -> None:
         data = query_summary(period, model=model_filter)
         if raw:
             import json
+
             print(json.dumps(data, indent=2))
         else:
             label = _period_label(period)

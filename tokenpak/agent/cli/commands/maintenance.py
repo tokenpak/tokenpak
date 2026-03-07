@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-
+import time
 
 PROXY_SERVICE = "tokenpak-proxy.service"
 
@@ -12,7 +12,7 @@ PROXY_SERVICE = "tokenpak-proxy.service"
 def restart_proxy() -> None:
     try:
         subprocess.run(["systemctl", "--user", "restart", PROXY_SERVICE], check=True)
-        import time; time.sleep(2)
+        time.sleep(2)
         print("✓ Proxy service restarted")
     except subprocess.CalledProcessError as e:
         print(f"✖ Restart failed: {e}")
@@ -22,7 +22,8 @@ def restart_proxy() -> None:
 def show_logs(n: int = 30) -> None:
     r = subprocess.run(
         ["journalctl", "--user", "-u", PROXY_SERVICE, f"-n{n}", "--no-pager"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     print(r.stdout or r.stderr)
 

@@ -4,17 +4,16 @@ TokenPak License Validator — tier validation, seat counting, grace period.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from .keys import LicensePayload, verify_license
+from .keys import verify_license
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +21,21 @@ logger = logging.getLogger(__name__)
 # Enums
 # ─────────────────────────────────────────────
 
+
 class LicenseTier(str, Enum):
-    OSS        = "oss"
-    PRO        = "pro"
-    TEAM       = "team"
+    OSS = "oss"
+    PRO = "pro"
+    TEAM = "team"
     ENTERPRISE = "enterprise"
 
 
 class LicenseStatus(str, Enum):
-    VALID        = "valid"
-    EXPIRED      = "expired"
-    INVALID      = "invalid"       # bad signature / malformed
-    GRACE        = "grace"         # past expiry but within grace window
-    OFFLINE      = "offline"       # can't reach server, using cached
-    SEAT_LIMIT   = "seat_limit"    # team seats exhausted
+    VALID = "valid"
+    EXPIRED = "expired"
+    INVALID = "invalid"  # bad signature / malformed
+    GRACE = "grace"  # past expiry but within grace window
+    OFFLINE = "offline"  # can't reach server, using cached
+    SEAT_LIMIT = "seat_limit"  # team seats exhausted
 
 
 # ─────────────────────────────────────────────
@@ -96,12 +96,13 @@ GRACE_PERIOD_DAYS = 7
 # Validation result
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class ValidationResult:
     status: LicenseStatus
     tier: LicenseTier
     features: list[str]
-    seats: int              # 0 = unlimited
+    seats: int  # 0 = unlimited
     seats_used: int
     expires_at: Optional[str]
     grace_expires_at: Optional[str]
@@ -128,9 +129,11 @@ class ValidationResult:
 # Seat counter (in-memory + optional persisted)
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class SeatRegistry:
     """Track active seat claims for Team tier."""
+
     _seats: dict[str, float] = field(default_factory=dict)  # agent_id → last_seen timestamp
     _ttl_seconds: int = 3600  # seat lease expires after 1h of inactivity
 
@@ -153,6 +156,7 @@ class SeatRegistry:
 # ─────────────────────────────────────────────
 # Main validator
 # ─────────────────────────────────────────────
+
 
 class LicenseValidator:
     """

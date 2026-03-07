@@ -31,14 +31,13 @@ Or via the feature-flag-aware factory:
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 # Re-export the canonical implementation so callers can do:
 #   from tokenpak.agent.proxy.capsule_builder import CapsuleBuilder
 from tokenpak.capsule.builder import (
-    CapsuleBuilder,
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,
+    CapsuleBuilder,
 )
 
 __all__ = [

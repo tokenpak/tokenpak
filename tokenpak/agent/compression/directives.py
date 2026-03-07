@@ -18,7 +18,6 @@ Directive format (from Intelligence Server):
 
 from __future__ import annotations
 
-
 import hashlib
 import json
 import logging
@@ -97,10 +96,10 @@ class DirectiveCache:
 _directive_cache: DirectiveCache = DirectiveCache()
 
 
-
 @dataclass
 class DirectiveResult:
     """Result returned after applying all directives."""
+
     segments: list[Segment] = field(default_factory=list)
     vault_blocks: list[VaultBlock] = field(default_factory=list)
     model_route: dict[str, Any] = field(default_factory=dict)
@@ -114,7 +113,16 @@ class DirectiveResult:
 # Parsing
 # ---------------------------------------------------------------------------
 
-KNOWN_ACTIONS = {"prune", "collapse", "dedup", "reorder", "prune_turns", "compression_mode_change", "recipe_override", "budget_adjustment"}
+KNOWN_ACTIONS = {
+    "prune",
+    "collapse",
+    "dedup",
+    "reorder",
+    "prune_turns",
+    "compression_mode_change",
+    "recipe_override",
+    "budget_adjustment",
+}
 
 
 def parse_directives(raw: dict[str, Any]) -> dict[str, Any]:
@@ -133,12 +141,16 @@ def parse_directives(raw: dict[str, Any]) -> dict[str, Any]:
         else:
             for entry in compression:
                 if not isinstance(entry, dict):
-                    logger.warning("directives: compression entry is not a dict — skipping: %r", entry)
+                    logger.warning(
+                        "directives: compression entry is not a dict — skipping: %r", entry
+                    )
                     continue
                 action = entry.get("action")
                 target = entry.get("target")
                 if not action or not target:
-                    logger.warning("directives: compression entry missing action/target — skipping: %r", entry)
+                    logger.warning(
+                        "directives: compression entry missing action/target — skipping: %r", entry
+                    )
                     continue
                 if action not in KNOWN_ACTIONS:
                     logger.warning("directives: unknown action %r — skipping", action)
@@ -183,6 +195,7 @@ def parse_directives(raw: dict[str, Any]) -> dict[str, Any]:
 # Segment-level compression actions
 # ---------------------------------------------------------------------------
 
+
 def _target_index(target: str):
     m = re.fullmatch(r"segment_(\d+)", target)
     return int(m.group(1)) if m else None
@@ -204,7 +217,7 @@ def _apply_collapse(segment: Segment, params: dict) -> Segment:
     content = segment.get("content", "")
     if keep_signature:
         lines = [l for l in content.splitlines() if l.strip()]
-        collapsed = (lines[0] + "\n    ..." if lines else "...")
+        collapsed = lines[0] + "\n    ..." if lines else "..."
     else:
         collapsed = "..."
     tokens_after = max(1, len(collapsed.split()))
@@ -253,7 +266,13 @@ def _apply_prune_turns(segment: Segment, params: dict) -> Segment:
             content_parts.append(f"{role}: {msg}" if role else msg)
         content = "\n".join(content_parts)
         tokens_after = max(1, len(content.split()))
-        return {**segment, "content": content, "turns": kept, "tokens": tokens_after, "_compressed": "prune_turns"}
+        return {
+            **segment,
+            "content": content,
+            "turns": kept,
+            "tokens": tokens_after,
+            "_compressed": "prune_turns",
+        }
     else:
         raw_turns = segment.get("content", "").split("\n\n")
         kept = [t for i, t in enumerate(raw_turns) if i not in remove_indices]
@@ -282,24 +301,39 @@ def _apply_compression_mode_change(segment: Segment, params: dict) -> Segment:
         if len(lines) > 1:
             summary += f"\n[…{len(lines)-1} lines omitted]"
         tokens_after = max(1, len(summary.split()))
-        return {**segment, "content": summary, "tokens": tokens_after,
-                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+        return {
+            **segment,
+            "content": summary,
+            "tokens": tokens_after,
+            "_compression_mode": mode,
+            "_compressed": "compression_mode_change",
+        }
     elif mode == "conservative":
         keep_ratio = float(params.get("keep_ratio", 0.85))
         lines = content.splitlines()
         keep_n = max(1, int(len(lines) * keep_ratio))
         pruned = "\n".join(lines[:keep_n])
         tokens_after = max(1, int(tokens_before * keep_ratio))
-        return {**segment, "content": pruned, "tokens": tokens_after,
-                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+        return {
+            **segment,
+            "content": pruned,
+            "tokens": tokens_after,
+            "_compression_mode": mode,
+            "_compressed": "compression_mode_change",
+        }
     else:  # aggressive
         keep_ratio = float(params.get("keep_ratio", 0.5))
         lines = content.splitlines()
         keep_n = max(1, int(len(lines) * keep_ratio))
         pruned = "\n".join(lines[:keep_n])
         tokens_after = max(1, int(tokens_before * keep_ratio))
-        return {**segment, "content": pruned, "tokens": tokens_after,
-                "_compression_mode": mode, "_compressed": "compression_mode_change"}
+        return {
+            **segment,
+            "content": pruned,
+            "tokens": tokens_after,
+            "_compression_mode": mode,
+            "_compressed": "compression_mode_change",
+        }
 
 
 def _apply_recipe_override(segment: Segment, params: dict) -> Segment:
@@ -339,8 +373,13 @@ def _apply_budget_adjustment(segment: Segment, params: dict) -> Segment:
             keep_n = max(1, int(len(lines) * ratio))
             content = "\n".join(lines[:keep_n])
             tokens = new_budget
-        return {**segment, "content": content, "tokens": tokens,
-                "_budget_cap": new_budget, "_compressed": "budget_adjustment"}
+        return {
+            **segment,
+            "content": content,
+            "tokens": tokens,
+            "_budget_cap": new_budget,
+            "_compressed": "budget_adjustment",
+        }
 
     elif reduction_pct is not None:
         reduction_pct = max(0.0, min(1.0, float(reduction_pct)))
@@ -349,8 +388,13 @@ def _apply_budget_adjustment(segment: Segment, params: dict) -> Segment:
         lines = content.splitlines()
         keep_n = max(1, int(len(lines) * ratio))
         content = "\n".join(lines[:keep_n])
-        return {**segment, "content": content, "tokens": new_tokens,
-                "_budget_reduction": reduction_pct, "_compressed": "budget_adjustment"}
+        return {
+            **segment,
+            "content": content,
+            "tokens": new_tokens,
+            "_budget_reduction": reduction_pct,
+            "_compressed": "budget_adjustment",
+        }
 
     # No change if no parameters
     return {**segment, "_compressed": "budget_adjustment"}
@@ -419,7 +463,10 @@ def apply_compression_directives(
 # Context plan
 # ---------------------------------------------------------------------------
 
-def apply_context_plan(vault_blocks: list[VaultBlock], context_plan: dict[str, Any]) -> list[VaultBlock]:
+
+def apply_context_plan(
+    vault_blocks: list[VaultBlock], context_plan: dict[str, Any]
+) -> list[VaultBlock]:
     """Reorder and drop vault blocks per context_plan directive."""
     if not context_plan:
         return vault_blocks
@@ -450,7 +497,9 @@ def extract_model_route(directives: dict[str, Any]) -> dict[str, Any]:
     return directives.get("model_route", {})
 
 
-def apply_agent_dedup(vault_blocks: list[VaultBlock], agent_dedup: dict[str, Any]) -> list[VaultBlock]:
+def apply_agent_dedup(
+    vault_blocks: list[VaultBlock], agent_dedup: dict[str, Any]
+) -> list[VaultBlock]:
     """Skip vault blocks flagged by agent_dedup.skip_blocks."""
     skip_set: set[Any] = set(agent_dedup.get("skip_blocks", []))
     if not skip_set:
@@ -462,12 +511,13 @@ def apply_agent_dedup(vault_blocks: list[VaultBlock], agent_dedup: dict[str, Any
 # Top-level pipeline entrypoint
 # ---------------------------------------------------------------------------
 
+
 def apply_directives(
     segments: list[Segment],
     vault_blocks: list[VaultBlock],
     raw_directives: dict[str, Any],
     local_recipe_fn=None,
-    cache: 'DirectiveCache | None' = None,
+    cache: "DirectiveCache | None" = None,
 ) -> DirectiveResult:
     """
     Apply all server directives to segments and vault blocks.

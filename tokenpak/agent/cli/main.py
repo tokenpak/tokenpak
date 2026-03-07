@@ -14,6 +14,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -30,6 +31,7 @@ DB_PATH = os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db")
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+
 
 def header(title: str) -> str:
     return f"TOKENPAK  |  {title}\n{SEP}\n"
@@ -55,6 +57,7 @@ def fmt_c(c: float) -> str:
 # Proxy helpers
 # ---------------------------------------------------------------------------
 
+
 def proxy_get(path: str):
     try:
         with urllib.request.urlopen(f"{PROXY_BASE}{path}", timeout=5) as r:
@@ -65,13 +68,16 @@ def proxy_get(path: str):
 
 def proxy_err():
     print(header("Error"))
-    print(f"✖ Proxy Not Responding\nReason: {PROXY_BASE} unreachable\nAction: tokenpak proxy restart")
+    print(
+        f"✖ Proxy Not Responding\nReason: {PROXY_BASE} unreachable\nAction: tokenpak proxy restart"
+    )
     sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
+
 
 def _db_connect():
     if not os.path.exists(DB_PATH):
@@ -93,7 +99,8 @@ def _db_usage(days=None, model=None):
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     row = conn.execute(
         f"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(estimated_cost) "
-        f"FROM requests {where}", params
+        f"FROM requests {where}",
+        params,
     ).fetchone()
     conn.close()
     return (row[0] or 0, row[1] or 0, row[2] or 0, row[3] or 0.0)
@@ -113,7 +120,8 @@ def _db_savings(days=None, model=None):
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     row = conn.execute(
         f"SELECT COUNT(*), SUM(input_tokens), SUM(compressed_tokens), SUM(estimated_cost) "
-        f"FROM requests {where}", params
+        f"FROM requests {where}",
+        params,
     ).fetchone()
     conn.close()
     return (row[0] or 0, row[1] or 0, row[2] or 0, row[3] or 0.0)
@@ -122,6 +130,7 @@ def _db_savings(days=None, model=None):
 # ---------------------------------------------------------------------------
 # Command implementations
 # ---------------------------------------------------------------------------
+
 
 def cmd_status(args):
     d = proxy_get("/health") or proxy_err()
@@ -148,6 +157,7 @@ def cmd_status(args):
 def cmd_version(args):
     try:
         import importlib.metadata
+
         ver = importlib.metadata.version("tokenpak")
         print(f"TOKENPAK  |  v{ver}")
     except Exception:
@@ -172,14 +182,17 @@ def cmd_proxy_status(args):
     try:
         r = subprocess.run(
             ["systemctl", "--user", "is-active", PROXY_SERVICE],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         state = r.stdout.strip()
     except Exception:
         state = "unknown"
     d = proxy_get("/health")
     if args.minimal:
-        print(f"{'●' if state == 'active' else '○'} {state} | port 8766 {'responding' if d else 'unreachable'}")
+        print(
+            f"{'●' if state == 'active' else '○'} {state} | port 8766 {'responding' if d else 'unreachable'}"
+        )
         return
     print(header("Proxy Status"))
     print(kv("Service:", f"{'●' if state == 'active' else '○'} {state}"))
@@ -193,7 +206,7 @@ def cmd_proxy_restart(args):
     print(header("Proxy Restart"))
     try:
         subprocess.run(["systemctl", "--user", "restart", PROXY_SERVICE], check=True)
-        import time; time.sleep(2)
+        time.sleep(2)
         d = proxy_get("/health")
         print("✓ Restarted and healthy" if d else "⚠ Restarted — health check pending")
     except subprocess.CalledProcessError as e:
@@ -206,7 +219,8 @@ def cmd_logs(args):
     print(header(f"Logs (last {n})"))
     r = subprocess.run(
         ["journalctl", "--user", "-u", PROXY_SERVICE, f"-n{n}", "--no-pager"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     print(r.stdout or r.stderr)
 
@@ -220,18 +234,24 @@ def cmd_reset(args):
 def cmd_help(args):
     target = getattr(args, "command_name", None)
     CMDS = [
-        ("VISIBILITY", [
-            ("status",        "Proxy state, router, compression"),
-            ("version",       "Show installed version"),
-        ]),
-        ("SYSTEM", [
-            ("config",        "Show TOKENPAK_* env vars"),
-            ("proxy status",  "Check proxy service"),
-            ("proxy restart", "Restart tokenpak-proxy.service"),
-            ("logs [N]",      "Show last N proxy log lines"),
-            ("reset",         "Reset session stats"),
-            ("help",          "This help"),
-        ]),
+        (
+            "VISIBILITY",
+            [
+                ("status", "Proxy state, router, compression"),
+                ("version", "Show installed version"),
+            ],
+        ),
+        (
+            "SYSTEM",
+            [
+                ("config", "Show TOKENPAK_* env vars"),
+                ("proxy status", "Check proxy service"),
+                ("proxy restart", "Restart tokenpak-proxy.service"),
+                ("logs [N]", "Show last N proxy log lines"),
+                ("reset", "Reset session stats"),
+                ("help", "This help"),
+            ],
+        ),
     ]
     if target:
         flat = {cmd: desc for _, grp in CMDS for cmd, desc in grp}
@@ -254,8 +274,10 @@ def cmd_help(args):
 # cost / budget argparse helpers
 # ---------------------------------------------------------------------------
 
+
 def _cost_argparse(argv: list) -> None:
     from tokenpak.agent.cli.commands.cost import run_cost_cmd
+
     cp = argparse.ArgumentParser(prog="tokenpak cost", add_help=True)
     cp.add_argument("--yesterday", action="store_true", help="Yesterday's spend")
     cp.add_argument("--week", action="store_true", help="Last 7 days")
@@ -270,6 +292,7 @@ def _cost_argparse(argv: list) -> None:
 
 def _budget_argparse(argv: list) -> None:
     from tokenpak.agent.cli.commands.budget import run_budget_cmd
+
     bp = argparse.ArgumentParser(prog="tokenpak budget", add_help=True)
     bsub = bp.add_subparsers(dest="budget_cmd")
 
@@ -295,20 +318,22 @@ def _budget_argparse(argv: list) -> None:
     run_budget_cmd(args)
 
 
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     # Delegate serve subcommand (Phase 5A: Ingest API)
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         import argparse as _ap
+
         sp = _ap.ArgumentParser(prog="tokenpak serve")
         sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
         sp.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
         sargs = sp.parse_args(sys.argv[2:])
         from tokenpak.agent.cli.commands.serve import run_serve_cmd
+
         run_serve_cmd(sargs)
         return
 
@@ -316,6 +341,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "trigger":
         try:
             from tokenpak.agent.cli.commands.trigger import trigger_group
+
             sys.argv = sys.argv[1:]
             trigger_group(standalone_mode=True)
         except ImportError as e:
@@ -327,6 +353,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "workflow":
         try:
             from tokenpak.agent.cli.commands.workflow import workflow_cmd
+
             sys.argv = sys.argv[1:]
             workflow_cmd(standalone_mode=True)
         except ImportError as e:
@@ -338,6 +365,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "index":
         try:
             from tokenpak.agent.cli.commands.index import index_cmd
+
             sys.argv = sys.argv[1:]
             index_cmd(standalone_mode=True)
         except ImportError as e:
@@ -349,6 +377,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "fingerprint":
         try:
             from tokenpak.agent.cli.commands.fingerprint import fingerprint_cmd
+
             sys.argv = sys.argv[1:]
             fingerprint_cmd(standalone_mode=True)
         except ImportError as e:
@@ -360,6 +389,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "doctor":
         try:
             from tokenpak.agent.cli.commands.doctor import doctor_cmd
+
             sys.argv = sys.argv[1:]
             doctor_cmd(standalone_mode=True)
         except ImportError as e:
@@ -369,10 +399,15 @@ def main():
 
     # Delegate metrics subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "metrics":
-        from tokenpak.agent.cli.commands.metrics import (
-            cmd_history, cmd_preview, cmd_status, cmd_sync,
-        )
         import argparse as _ap
+
+        from tokenpak.agent.cli.commands.metrics import (
+            cmd_history,
+            cmd_preview,
+            cmd_status,
+            cmd_sync,
+        )
+
         mp = _ap.ArgumentParser(prog="tokenpak metrics", add_help=True)
         msub = mp.add_subparsers(dest="metrics_cmd")
         msub.add_parser("status")
@@ -398,7 +433,6 @@ def main():
 
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
-        from tokenpak.agent.cli.commands.cost import run_cost_cmd as _cost_cmd
         _cost_argparse(sys.argv[2:])
         return
 
@@ -426,7 +460,6 @@ def main():
     lastp = sub.add_parser("last")
     lastp.add_argument("--oneline", action="store_true")
     lastp.add_argument("--no-session", action="store_true")
-
 
     lp = sub.add_parser("logs")
     lp.add_argument("lines", nargs="?", type=int, default=30)
@@ -463,11 +496,17 @@ def main():
     createp = handoff_sub.add_parser("create", help="Create a context handoff")
     createp.add_argument("--from", dest="handoff_from", required=True, help="Sending agent name")
     createp.add_argument("--to", dest="handoff_to", required=True, help="Receiving agent name")
-    createp.add_argument("--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)")
+    createp.add_argument(
+        "--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)"
+    )
     createp.add_argument("--done", metavar="TEXT", help="What was done")
     createp.add_argument("--next", dest="next", metavar="TEXT", help="What comes next")
-    createp.add_argument("--file", action="append", metavar="PATH", help="Relevant file path (repeatable)")
-    createp.add_argument("--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)")
+    createp.add_argument(
+        "--file", action="append", metavar="PATH", help="Relevant file path (repeatable)"
+    )
+    createp.add_argument(
+        "--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)"
+    )
     # receive
     receivep = handoff_sub.add_parser("receive", help="Receive and validate a handoff")
     receivep.add_argument("handoff_id", help="Handoff ID")
@@ -489,7 +528,9 @@ def main():
 
     if args.cmd == "proxy":
         dispatch = {"status": cmd_proxy_status, "restart": cmd_proxy_restart}
-        dispatch.get(args.proxy_cmd, lambda a: print("Usage: tokenpak proxy <status|restart>"))(args)
+        dispatch.get(args.proxy_cmd, lambda a: print("Usage: tokenpak proxy <status|restart>"))(
+            args
+        )
     elif args.cmd == "learn":
         _dispatch_learn(args)
     elif args.cmd in ("activate", "deactivate", "plan"):
@@ -522,44 +563,44 @@ if __name__ == "__main__":
 def cmd_last(args):
     """Show last request stats."""
     from datetime import datetime
-    
+
     oneline = getattr(args, "oneline", False)
     no_session = getattr(args, "no_session", False)
     raw = getattr(args, "raw", False)
-    
+
     d = proxy_get("/stats/last") or proxy_err()
-    
+
     if raw:
         print(json.dumps(d, indent=2))
         return
-    
+
     request = d.get("request")
     session = d.get("session", {})
-    
+
     if not request:
         print("⚠ No requests captured yet")
         return
-    
+
     tokens_saved = request.get("tokens_saved", 0)
     percent_saved = request.get("percent_saved", 0)
     cost_saved = request.get("cost_saved", 0)
     request_id = request.get("request_id", "unknown")
     timestamp = request.get("timestamp", "")
-    
+
     if oneline:
         # Format: ⚡ TokenPak: -312 tokens (18%) | $0.003 saved | Session: $1.24 total
         if tokens_saved == 0:
             footer = "⚡ TokenPak: 0 tokens saved"
         else:
             footer = f"⚡ TokenPak: -{tokens_saved:,} tokens ({percent_saved:.0f}%) | ${cost_saved:.3f} saved"
-        
+
         if not no_session and session:
             session_total = session.get("session_total_cost_saved", 0)
             footer += f" | Session: ${session_total:.2f} total"
-        
+
         print(footer)
         return
-    
+
     # Full format
     print(header("Last Request"))
     print()
@@ -568,30 +609,30 @@ def cmd_last(args):
         try:
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             print(f"Time:                    {dt.strftime('%H:%M:%S')}")
-        except:
+        except Exception:
             print(f"Time:                    {timestamp}")
     print()
-    
+
     # Tokens section
     input_raw = request.get("input_tokens_raw", 0)
     input_sent = request.get("input_tokens_sent", 0)
-    
+
     print("Tokens:")
     print(f"  Raw Input:             {input_raw:,}")
     print(f"  Sent:                  {input_sent:,}")
     print(f"  Saved:                 {tokens_saved:,} ({percent_saved:.1f}%)")
     print()
-    
+
     # Cost section
     print("Cost:")
     print(f"  This Request:          ${cost_saved:.3f} saved")
-    
+
     if session:
         session_total = session.get("session_total_cost_saved", 0)
         print(f"  Session Total:         ${session_total:.2f} saved")
-    
+
     print()
-    
+
     # Session stats
     if session and not no_session:
         requests = session.get("session_requests", 0)
@@ -601,6 +642,7 @@ def cmd_last(args):
 def _dispatch_license(args) -> None:
     """Handle tokenpak activate / deactivate / plan."""
     from tokenpak.agent.cli.commands.license import _run_activate, _run_deactivate, _run_plan
+
     if args.cmd == "activate":
         _run_activate(args.key)
     elif args.cmd == "deactivate":
@@ -611,6 +653,7 @@ def _dispatch_license(args) -> None:
 
 def _dispatch_debug(args) -> None:
     from tokenpak.agent.cli.commands.debug import debug_cmd
+
     debug_cmd(args)
 
 

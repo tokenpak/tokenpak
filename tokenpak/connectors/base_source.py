@@ -6,19 +6,19 @@ Separate from the sync-oriented Connector (base.py) which is Pro-tier.
 
 import hashlib
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
 
 
 @dataclass
 class Provenance:
     """Records the origin of a content block."""
-    source_type: str          # filesystem | url | notion | git | confluence | sql | s3
-    source_id:   str          # Unique identifier (path, URL, page-id, query-hash, etc.)
-    source_version: str       # Change-detection token (hash, etag, commit-sha, updated_at)
-    fetched_at:  str          # ISO-8601 UTC timestamp when content was fetched
-    title:       str = ""     # Human-readable title if available
+
+    source_type: str  # filesystem | url | notion | git | confluence | sql | s3
+    source_id: str  # Unique identifier (path, URL, page-id, query-hash, etc.)
+    source_version: str  # Change-detection token (hash, etag, commit-sha, updated_at)
+    fetched_at: str  # ISO-8601 UTC timestamp when content was fetched
+    title: str = ""  # Human-readable title if available
 
 
 class SourceAdapter(ABC):

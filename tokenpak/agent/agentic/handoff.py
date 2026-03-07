@@ -21,7 +21,6 @@ Public API:
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -35,20 +34,21 @@ REGISTERED_AGENTS = {"cali", "sue", "trix", "kevin"}
 
 
 class HandoffStatus(str, Enum):
-    PENDING = "pending"       # created, not yet received
-    RECEIVED = "received"     # validated and acknowledged
-    APPLIED = "applied"       # context loaded into working set
-    EXPIRED = "expired"       # TTL passed without being applied
-    INVALID = "invalid"       # refs could not be validated
+    PENDING = "pending"  # created, not yet received
+    RECEIVED = "received"  # validated and acknowledged
+    APPLIED = "applied"  # context loaded into working set
+    EXPIRED = "expired"  # TTL passed without being applied
+    INVALID = "invalid"  # refs could not be validated
 
 
 @dataclass
 class ContextRef:
     """A single context reference passed in a handoff."""
-    type: str           # "file", "note", "url", "snippet", "task"
-    path: str           # path, URL, or identifier
+
+    type: str  # "file", "note", "url", "snippet", "task"
+    path: str  # path, URL, or identifier
     description: str = ""
-    valid: Optional[bool] = None   # set during receive_handoff validation
+    valid: Optional[bool] = None  # set during receive_handoff validation
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -61,6 +61,7 @@ class ContextRef:
 @dataclass
 class Handoff:
     """A context handoff record."""
+
     id: str
     from_agent: str
     to_agent: str
@@ -159,9 +160,13 @@ class HandoffManager:
             ValueError: if from_agent or to_agent are not registered agents.
         """
         if from_agent not in REGISTERED_AGENTS:
-            raise ValueError(f"Unknown from_agent '{from_agent}'. Registered: {sorted(REGISTERED_AGENTS)}")
+            raise ValueError(
+                f"Unknown from_agent '{from_agent}'. Registered: {sorted(REGISTERED_AGENTS)}"
+            )
         if to_agent not in REGISTERED_AGENTS:
-            raise ValueError(f"Unknown to_agent '{to_agent}'. Registered: {sorted(REGISTERED_AGENTS)}")
+            raise ValueError(
+                f"Unknown to_agent '{to_agent}'. Registered: {sorted(REGISTERED_AGENTS)}"
+            )
 
         refs = context_refs or []
         files = relevant_files or []
@@ -260,7 +265,10 @@ class HandoffManager:
         for p in self.handoff_dir.glob("*.json"):
             try:
                 h = Handoff.from_dict(json.loads(p.read_text()))
-                if h.status not in (HandoffStatus.APPLIED, HandoffStatus.EXPIRED) and h.is_expired():
+                if (
+                    h.status not in (HandoffStatus.APPLIED, HandoffStatus.EXPIRED)
+                    and h.is_expired()
+                ):
                     h.status = HandoffStatus.EXPIRED
                     p.write_text(json.dumps(h.to_dict(), indent=2))
                     expired += 1
@@ -276,7 +284,9 @@ class HandoffManager:
     ) -> List[Handoff]:
         """List handoffs, optionally filtered by agent or status."""
         results = []
-        for p in sorted(self.handoff_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
+        for p in sorted(
+            self.handoff_dir.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True
+        ):
             try:
                 h = Handoff.from_dict(json.loads(p.read_text()))
             except Exception:
@@ -299,6 +309,7 @@ class HandoffManager:
 # TokenPak — high-level block container for agent-to-agent context exchange
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class HandoffBlock:
     """A single content block inside a TokenPak.
@@ -309,6 +320,7 @@ class HandoffBlock:
         content:  Text content.
         metadata: Optional key/value metadata.
     """
+
     type: str
     id: str
     content: str
@@ -423,6 +435,7 @@ class TokenPak:
 # ---------------------------------------------------------------------------
 # Wire format for Handoff  — extends Handoff with pack + to_wire/from_wire
 # ---------------------------------------------------------------------------
+
 
 class HandoffWire:
     """JSON-serialisable wire representation of a :class:`Handoff` + :class:`TokenPak`.

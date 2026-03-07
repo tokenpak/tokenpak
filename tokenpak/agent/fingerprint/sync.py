@@ -31,21 +31,23 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────
 
 _DEFAULT_CACHE_DIR = Path.home() / ".tokenpak" / "fingerprint_cache"
-_DEFAULT_TTL = 3600            # 1 hour
+_DEFAULT_TTL = 3600  # 1 hour
 _DEFAULT_SERVER = "https://intelligence.tokenpak.ai"
 _SYNC_ENDPOINT = "/v1/fingerprint/sync"
-_REQUEST_TIMEOUT = 10          # seconds
+_REQUEST_TIMEOUT = 10  # seconds
 
 
 # ─────────────────────────────────────────────
 # Data models
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class Directive:
     """A recipe/strategy directive received from the intelligence server."""
+
     directive_id: str
-    action: str                       # e.g. "compress", "route", "summarize"
+    action: str  # e.g. "compress", "route", "summarize"
     params: dict[str, Any] = field(default_factory=dict)
     priority: int = 0
     description: str = ""
@@ -73,8 +75,9 @@ class Directive:
 @dataclass
 class SyncResult:
     """Result of a fingerprint sync operation."""
+
     success: bool
-    source: str                        # "server" | "cache" | "oss_fallback"
+    source: str  # "server" | "cache" | "oss_fallback"
     directives: list[Directive] = field(default_factory=list)
     cached_at: Optional[float] = None
     expires_at: Optional[float] = None
@@ -94,12 +97,14 @@ class SyncResult:
 # Cache helpers
 # ─────────────────────────────────────────────
 
+
 def _cache_path(fingerprint_id: str, cache_dir: Path) -> Path:
     return cache_dir / f"{fingerprint_id}.json"
 
 
-def _write_cache(fingerprint_id: str, directives: list[Directive],
-                 ttl: int, cache_dir: Path) -> None:
+def _write_cache(
+    fingerprint_id: str, directives: list[Directive], ttl: int, cache_dir: Path
+) -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     now = time.time()
     payload = {
@@ -145,6 +150,7 @@ def _oss_fallback_directives() -> list[Directive]:
 # Sync client
 # ─────────────────────────────────────────────
 
+
 class FingerprintSync:
     """
     Syncs fingerprints to the intelligence server and caches returned directives.
@@ -168,8 +174,7 @@ class FingerprintSync:
         timeout: int = _REQUEST_TIMEOUT,
     ):
         self.server_url = (
-            server_url
-            or os.environ.get("TOKENPAK_INTELLIGENCE_URL", _DEFAULT_SERVER)
+            server_url or os.environ.get("TOKENPAK_INTELLIGENCE_URL", _DEFAULT_SERVER)
         ).rstrip("/")
         self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
         self.ttl = ttl
@@ -182,6 +187,7 @@ class FingerprintSync:
         """Raise if not Pro+. Import guard so OSS installs skip cleanly."""
         try:
             from tokenpak.agent.license.activation import is_pro
+
             if not is_pro():
                 raise PermissionError(
                     "Fingerprint sync requires a Pro+ license. "
@@ -304,7 +310,13 @@ class FingerprintSync:
     def cache_status(self) -> dict[str, Any]:
         """Return a summary of the local directive cache."""
         if not self.cache_dir.exists():
-            return {"entries": 0, "valid": 0, "expired": 0, "cache_dir": str(self.cache_dir), "ttl_seconds": self.ttl}
+            return {
+                "entries": 0,
+                "valid": 0,
+                "expired": 0,
+                "cache_dir": str(self.cache_dir),
+                "ttl_seconds": self.ttl,
+            }
         entries = list(self.cache_dir.glob("*.json"))
         now = time.time()
         valid = 0

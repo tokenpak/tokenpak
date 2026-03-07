@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -55,9 +54,9 @@ def sort_retrieval_results(
     return sorted(
         results,
         key=lambda item: (
-            -item[1],                                    # score desc
-            item[0].get("source_path", ""),              # path asc
-            item[0].get("block_id", ""),                 # chunk_id asc
+            -item[1],  # score desc
+            item[0].get("source_path", ""),  # path asc
+            item[0].get("block_id", ""),  # chunk_id asc
         ),
     )
 
@@ -88,10 +87,12 @@ def inject_retrieved_context(
     if count_tokens_fn is None:
         try:
             from tokenpak.tokens import count_tokens  # type: ignore
+
             count_tokens_fn = count_tokens
         except ImportError:
             # Rough fallback: 4 chars ≈ 1 token
-            count_tokens_fn = lambda t: max(1, len(t) // 4)
+            def count_tokens_fn(t):
+                return max(1, len(t) // 4)
 
     sorted_results = sort_retrieval_results(results)
 

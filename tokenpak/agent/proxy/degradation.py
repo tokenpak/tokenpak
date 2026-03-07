@@ -18,30 +18,31 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List
 
 # ---------------------------------------------------------------------------
 # Event types
 # ---------------------------------------------------------------------------
 
+
 class DegradationEventType:
-    COMPRESSION_FAILURE = "compression_failure"   # Hook raised, original forwarded
-    PROVIDER_FAILOVER   = "provider_failover"     # Primary failed, fallback used
-    CONFIG_FALLBACK     = "config_fallback"       # Bad config, defaults applied
-    STARTUP_WARNING     = "startup_warning"       # Non-fatal startup issue
+    COMPRESSION_FAILURE = "compression_failure"  # Hook raised, original forwarded
+    PROVIDER_FAILOVER = "provider_failover"  # Primary failed, fallback used
+    CONFIG_FALLBACK = "config_fallback"  # Bad config, defaults applied
+    STARTUP_WARNING = "startup_warning"  # Non-fatal startup issue
 
 
 # ---------------------------------------------------------------------------
 # Degradation event
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DegradationEvent:
     timestamp: str
     event_type: str
     detail: str
-    recovered: bool = True   # True = user still got a response (graceful)
+    recovered: bool = True  # True = user still got a response (graceful)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -55,6 +56,7 @@ class DegradationEvent:
 # ---------------------------------------------------------------------------
 # Tracker
 # ---------------------------------------------------------------------------
+
 
 class DegradationTracker:
     """
@@ -163,8 +165,8 @@ class DegradationTracker:
             "message": (
                 "⚠️  Proxy is running in degraded mode — some features reduced, "
                 "but requests are still being served."
-                if is_deg else
-                "✅  Proxy is running normally."
+                if is_deg
+                else "✅  Proxy is running normally."
             ),
         }
 

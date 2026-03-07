@@ -1,4 +1,5 @@
 """Events CRUD and query methods mixin for TelemetryDB."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import sqlite3
 from typing import Any, Optional
 
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
-from tokenpak.telemetry.storage_base import _row_to_dict, _now
+from tokenpak.telemetry.storage_base import _now, _row_to_dict
 
 
 class EventsMixin:
@@ -102,9 +103,7 @@ class EventsMixin:
         """
         cur = self._conn.cursor()
 
-        cur.execute(
-            "SELECT * FROM tp_events WHERE trace_id = ? LIMIT 1", (trace_id,)
-        )
+        cur.execute("SELECT * FROM tp_events WHERE trace_id = ? LIMIT 1", (trace_id,))
         event_row = cur.fetchone()
         event = _row_to_dict(cur, event_row) if event_row else None
 
@@ -124,8 +123,6 @@ class EventsMixin:
             "cost": cost,
             "segments": segments,
         }
-
-
 
     def get_trace_events(self, trace_id: str) -> list[dict[str, Any]]:
         """Return all pipeline events for a trace in chronological order.
@@ -156,17 +153,19 @@ class EventsMixin:
                 payload = json.loads(payload_str) if payload_str else {}
             except (json.JSONDecodeError, TypeError):
                 payload = {}
-            events.append({
-                "event_id": row_dict["request_id"],
-                "event_type": row_dict["event_type"],
-                "timestamp": row_dict["ts"],
-                "provider": row_dict.get("provider"),
-                "model": row_dict.get("model"),
-                "agent_id": row_dict.get("agent_id"),
-                "duration_ms": row_dict.get("duration_ms"),
-                "status": row_dict.get("status"),
-                "payload": payload,
-            })
+            events.append(
+                {
+                    "event_id": row_dict["request_id"],
+                    "event_type": row_dict["event_type"],
+                    "timestamp": row_dict["ts"],
+                    "provider": row_dict.get("provider"),
+                    "model": row_dict.get("model"),
+                    "agent_id": row_dict.get("agent_id"),
+                    "duration_ms": row_dict.get("duration_ms"),
+                    "status": row_dict.get("status"),
+                    "payload": payload,
+                }
+            )
         return events
 
     def list_traces(
@@ -223,4 +222,3 @@ class EventsMixin:
     # ------------------------------------------------------------------
     # Pricing catalog snapshot
     # ------------------------------------------------------------------
-

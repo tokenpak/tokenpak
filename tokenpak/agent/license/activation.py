@@ -15,13 +15,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .validator import (
-    LicenseValidator,
-    LicenseTier,
     LicenseStatus,
+    LicenseTier,
+    LicenseValidator,
     ValidationResult,
-    TIER_FEATURES,
 )
-from .keys import verify_license
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +52,7 @@ def _cache_path() -> Path:
 # Public key loader
 # ─────────────────────────────────────────────
 
+
 def _load_public_key() -> Optional[bytes]:
     """Load the RSA public key from env var or None."""
     env = os.environ.get("TOKENPAK_PUBLIC_KEY", "").strip()
@@ -65,6 +64,7 @@ def _load_public_key() -> Optional[bytes]:
 # ─────────────────────────────────────────────
 # Activate
 # ─────────────────────────────────────────────
+
 
 def activate(token: str) -> ValidationResult:
     """
@@ -85,8 +85,7 @@ def activate(token: str) -> ValidationResult:
 
     if not result.is_usable:
         raise ValueError(
-            f"License activation failed: {result.message} "
-            f"(status={result.status.value})"
+            f"License activation failed: {result.message} " f"(status={result.status.value})"
         )
 
     # Write the token
@@ -105,6 +104,7 @@ def activate(token: str) -> ValidationResult:
 # Deactivate
 # ─────────────────────────────────────────────
 
+
 def deactivate() -> None:
     """
     Remove the stored license key and plan cache, reverting to OSS.
@@ -122,6 +122,7 @@ def deactivate() -> None:
 # ─────────────────────────────────────────────
 # Plan
 # ─────────────────────────────────────────────
+
 
 def get_plan() -> ValidationResult:
     """
@@ -146,18 +147,15 @@ def get_plan() -> ValidationResult:
 # Tier helpers — with 24h cache
 # ─────────────────────────────────────────────
 
+
 def is_pro() -> bool:
     """True if current license is Pro, Team, or Enterprise (24h cache). Safe — never raises."""
-    return _tier_check(
-        lambda t: t in (LicenseTier.PRO, LicenseTier.TEAM, LicenseTier.ENTERPRISE)
-    )
+    return _tier_check(lambda t: t in (LicenseTier.PRO, LicenseTier.TEAM, LicenseTier.ENTERPRISE))
 
 
 def is_team() -> bool:
     """True if current license is Team or Enterprise (24h cache). Safe — never raises."""
-    return _tier_check(
-        lambda t: t in (LicenseTier.TEAM, LicenseTier.ENTERPRISE)
-    )
+    return _tier_check(lambda t: t in (LicenseTier.TEAM, LicenseTier.ENTERPRISE))
 
 
 def is_enterprise() -> bool:
@@ -185,6 +183,7 @@ def _tier_check(predicate: Callable[[LicenseTier], bool]) -> bool:
 # Token I/O
 # ─────────────────────────────────────────────
 
+
 def _load_stored_token() -> Optional[str]:
     """Read persisted token or None."""
     kp = _key_path()
@@ -200,6 +199,7 @@ def _load_stored_token() -> Optional[str]:
 # ─────────────────────────────────────────────
 # Plan cache (24h)
 # ─────────────────────────────────────────────
+
 
 def _load_plan_cache() -> Optional[ValidationResult]:
     """Return cached ValidationResult if within 24h, else None."""

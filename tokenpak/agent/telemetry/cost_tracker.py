@@ -20,13 +20,13 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 
 MODEL_COSTS: dict[str, dict[str, float]] = {
-    "claude-sonnet-4-5":  {"input": 3.00,  "output": 15.00},
-    "claude-haiku-3-5":   {"input": 0.25,  "output": 1.25},
-    "gpt-4o":             {"input": 2.50,  "output": 10.00},
-    "gemini-2-flash":     {"input": 0.075, "output": 0.30},
-    "codex":              {"input": 3.00,  "output": 12.00},
+    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
+    "claude-haiku-3-5": {"input": 0.25, "output": 1.25},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
+    "gemini-2-flash": {"input": 0.075, "output": 0.30},
+    "codex": {"input": 3.00, "output": 12.00},
     # Generic fallback (used when model not in table)
-    "_fallback":          {"input": 1.00,  "output": 3.00},
+    "_fallback": {"input": 1.00, "output": 3.00},
 }
 
 
@@ -71,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_cost_model ON cost_requests(model);
 # CostTracker
 # ---------------------------------------------------------------------------
 
+
 class CostTracker:
     """Track per-request LLM cost with SQLite persistence.
 
@@ -82,9 +83,7 @@ class CostTracker:
     """
 
     def __init__(self, db_path: str = ":memory:"):
-        self._db_path = (
-            str(Path(db_path).expanduser()) if db_path != ":memory:" else db_path
-        )
+        self._db_path = str(Path(db_path).expanduser()) if db_path != ":memory:" else db_path
         if self._db_path != ":memory:":
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
@@ -97,9 +96,7 @@ class CostTracker:
 
     def _conn(self) -> sqlite3.Connection:
         if not hasattr(self._local, "conn") or self._local.conn is None:
-            self._local.conn = sqlite3.connect(
-                self._db_path, check_same_thread=False
-            )
+            self._local.conn = sqlite3.connect(self._db_path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
         return self._local.conn
 
@@ -172,8 +169,10 @@ class CostTracker:
             }
         """
         where, params = self._period_clause(period)
-        row = self._conn().execute(
-            f"""
+        row = (
+            self._conn()
+            .execute(
+                f"""
             SELECT
                 COUNT(*)                         AS total_requests,
                 COALESCE(SUM(prompt_tokens), 0)  AS prompt_tokens,
@@ -182,8 +181,10 @@ class CostTracker:
             FROM cost_requests
             WHERE {where}
             """,
-            params,
-        ).fetchone()
+                params,
+            )
+            .fetchone()
+        )
         return {
             "period": period,
             "total_requests": row["total_requests"],
@@ -200,8 +201,10 @@ class CostTracker:
             model, requests, prompt_tokens, completion_tokens, total_tokens, cost_usd
         """
         where, params = self._period_clause(period)
-        rows = self._conn().execute(
-            f"""
+        rows = (
+            self._conn()
+            .execute(
+                f"""
             SELECT
                 model,
                 COUNT(*)                              AS requests,
@@ -213,8 +216,10 @@ class CostTracker:
             GROUP BY model
             ORDER BY cost_usd DESC
             """,
-            params,
-        ).fetchall()
+                params,
+            )
+            .fetchall()
+        )
         return [
             {
                 "model": r["model"],

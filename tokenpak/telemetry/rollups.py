@@ -4,7 +4,7 @@ This module provides query interfaces over the rollup tables created by
 storage.py. The tables are:
 
 - `tp_rollup_daily_model` — aggregated by date + model
-- `tp_rollup_daily_provider` — aggregated by date + provider  
+- `tp_rollup_daily_provider` — aggregated by date + provider
 - `tp_rollup_daily_agent` — aggregated by date + agent_id
 
 Rollups are refreshed via TelemetryDB.refresh_rollups().
@@ -16,7 +16,7 @@ Usage::
 
     db = TelemetryDB("telemetry.db")
     engine = RollupEngine(db)
-    
+
     # Refresh rollups (calls db.refresh_rollups())
     engine.refresh_all()
 
@@ -29,12 +29,10 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from tokenpak.telemetry.storage import TelemetryDB
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -97,7 +95,7 @@ class RollupEngine:
 
     def ensure_tables(self) -> None:
         """Create state table if it doesn't exist.
-        
+
         Note: Rollup tables are created by TelemetryDB._apply_ddl().
         This only creates the state tracking table.
         """
@@ -205,14 +203,10 @@ class RollupEngine:
         """
         if interval == "hour":
             # Query raw events for hourly granularity
-            return self._get_hourly_timeseries(
-                metric, days, provider, model, agent_id
-            )
+            return self._get_hourly_timeseries(metric, days, provider, model, agent_id)
         else:
             # Use rollups for daily
-            return self._get_daily_timeseries(
-                metric, days, provider, model, agent_id
-            )
+            return self._get_daily_timeseries(metric, days, provider, model, agent_id)
 
     def _get_hourly_timeseries(
         self,
@@ -250,7 +244,7 @@ class RollupEngine:
             agg = "COUNT(DISTINCT e.trace_id)"
 
         sql = f"""
-        SELECT 
+        SELECT
             strftime('%Y-%m-%dT%H:00:00', datetime(e.ts, 'unixepoch')) as bucket,
             {agg} as value
         FROM tp_events e
@@ -336,7 +330,7 @@ class RollupEngine:
         # Total across all dimensions
         cur.execute(
             """
-            SELECT 
+            SELECT
                 SUM(total_requests) as total_requests,
                 SUM(total_tokens) as total_tokens,
                 SUM(total_cost) as total_cost,
@@ -369,7 +363,7 @@ class RollupEngine:
         # By provider
         cur.execute(
             """
-            SELECT provider, SUM(total_requests) as requests, 
+            SELECT provider, SUM(total_requests) as requests,
                    SUM(total_cost) as cost, SUM(total_savings) as savings,
                    CASE WHEN SUM(total_requests) > 0
                        THEN SUM(avg_raw_tokens * total_requests) / SUM(total_requests)
@@ -473,29 +467,45 @@ class RollupEngine:
         """Return cost breakdown by component."""
         cutoff = _now() - days * 86400
         cur = self._conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COALESCE(SUM(c.cost_input),0), COALESCE(SUM(c.cost_output),0),
                    COALESCE(SUM(c.cost_cache_read),0), COALESCE(SUM(c.cost_cache_write),0),
                    COALESCE(SUM(c.cost_total),0)
             FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id
             WHERE e.ts >= ? AND e.event_type='request'
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
         r = cur.fetchone()
-        return {"cost_input":r[0],"cost_output":r[1],"cost_cache_read":r[2],"cost_cache_write":r[3],"cost_total":r[4]}
+        return {
+            "cost_input": r[0],
+            "cost_output": r[1],
+            "cost_cache_read": r[2],
+            "cost_cache_write": r[3],
+            "cost_total": r[4],
+        }
 
     def get_cache_stats(self, days: int = 30) -> dict[str, float]:
         """Return cache efficiency stats."""
         cutoff = _now() - days * 86400
         cur = self._conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             SELECT COALESCE(SUM(u.cache_read),0), COALESCE(SUM(u.input_billed),0)
             FROM tp_usage u JOIN tp_events e ON u.trace_id=e.trace_id
             WHERE e.ts >= ? AND e.event_type='request'
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
         r = cur.fetchone()
         cr, inp = r[0] or 0, r[1] or 0
         total = cr + inp
-        return {"cache_read_tokens":cr,"input_tokens":inp,"cache_hit_rate":(cr/total*100) if total else 0}
+        return {
+            "cache_read_tokens": cr,
+            "input_tokens": inp,
+            "cache_hit_rate": (cr / total * 100) if total else 0,
+        }
 
     # ------------------------------------------------------------------
     # Date-targeted rollup computation (Phase 7H)
@@ -507,12 +517,13 @@ class RollupEngine:
         cur = self._conn.cursor()
         total = 0
         for table, group_field in [
-            ("tp_rollup_daily_model",    "model"),
+            ("tp_rollup_daily_model", "model"),
             ("tp_rollup_daily_provider", "provider"),
-            ("tp_rollup_daily_agent",    "agent_id"),
+            ("tp_rollup_daily_agent", "agent_id"),
         ]:
             cur.execute(f"DELETE FROM {table} WHERE date = ?", (date_str,))
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 INSERT INTO {table} (date, {group_field}, total_requests, total_tokens,
                     total_cost, total_savings, avg_raw_tokens, avg_final_tokens, avg_cost)
                 SELECT
@@ -531,7 +542,9 @@ class RollupEngine:
                 LEFT JOIN tp_segments s ON e.trace_id = s.trace_id
                 WHERE strftime('%Y-%m-%d', datetime(e.ts, 'unixepoch')) = ?
                 GROUP BY date, e.{group_field}
-            """, (date_str,))
+            """,
+                (date_str,),
+            )
             total += cur.rowcount
         self._conn.commit()
         self._set_state("last_refresh", str(_now()))
@@ -542,7 +555,8 @@ class RollupEngine:
         date_str = date.isoformat() if hasattr(date, "isoformat") else str(date)
         cur = self._conn.cursor()
         cur.execute("DELETE FROM tp_rollup_daily_model WHERE date LIKE ?", (f"{date_str}T%",))
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO tp_rollup_daily_model
                 (date, model, total_requests, total_tokens,
                  total_cost, total_savings, avg_raw_tokens, avg_final_tokens, avg_cost)
@@ -562,7 +576,9 @@ class RollupEngine:
             LEFT JOIN tp_segments s ON e.trace_id = s.trace_id
             WHERE strftime('%Y-%m-%d', datetime(e.ts, 'unixepoch')) = ?
             GROUP BY date, e.model
-        """, (date_str,))
+        """,
+            (date_str,),
+        )
         total = cur.rowcount
         self._conn.commit()
         return total
@@ -570,6 +586,7 @@ class RollupEngine:
     def rebuild_all_rollups(self, from_date, to_date) -> dict:
         """Rebuild daily rollups for a date range. Returns {dates_processed, total_rows}."""
         from datetime import timedelta
+
         current = from_date
         total_rows = 0
         dates_processed = 0
@@ -581,7 +598,10 @@ class RollupEngine:
 
     def check_consistency(self, days: int = 7) -> dict:
         """Verify rollup totals match raw event aggregates."""
-        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        from datetime import datetime as _dt
+        from datetime import timedelta as _td
+        from datetime import timezone as _tz
+
         cutoff_date = (_dt.now(tz=_tz.utc) - _td(days=days)).strftime("%Y-%m-%d")
         cur = self._conn.cursor()
         cur.execute(
@@ -602,7 +622,9 @@ class RollupEngine:
         tol = max((raw_cost or 0) * 0.01, 0.0001)
         discrepancies = []
         if delta_cost > tol:
-            discrepancies.append(f"Cost mismatch: raw={raw_cost:.6f}, rollup={rollup_cost:.6f}, delta={delta_cost:.6f}")
+            discrepancies.append(
+                f"Cost mismatch: raw={raw_cost:.6f}, rollup={rollup_cost:.6f}, delta={delta_cost:.6f}"
+            )
         if delta_req != 0:
             discrepancies.append(f"Request count mismatch: raw={raw_req}, rollup={rollup_req}")
         return {

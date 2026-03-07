@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Phase 7D: Stale Segment Detection
 # ---------------------------------------------------------------------------

@@ -12,10 +12,8 @@ Usage:
 from __future__ import annotations
 
 import sys
-import time
 from datetime import datetime, timezone
 from typing import List, Optional
-
 
 SEP = "────────────────────────────────────"
 
@@ -62,7 +60,7 @@ def _print_handoff(h) -> None:
     if h.whats_next:
         print(f"  Next:    {h.whats_next}")
     if h.relevant_files:
-        print(f"\n  Relevant files:")
+        print("\n  Relevant files:")
         for f in h.relevant_files:
             print(f"    • {f}")
 
@@ -81,7 +79,7 @@ def _print_handoff(h) -> None:
 
 def handoff_cmd(args) -> None:
     """Dispatch handoff subcommand."""
-    from tokenpak.agent.agentic.handoff import HandoffManager, ContextRef, HandoffStatus
+    from tokenpak.agent.agentic.handoff import ContextRef, HandoffManager, HandoffStatus
 
     manager = HandoffManager()
     subcmd = getattr(args, "handoff_cmd", None)
@@ -91,11 +89,14 @@ def handoff_cmd(args) -> None:
     # ------------------------------------------------------------------
     if subcmd == "create":
         refs: List[ContextRef] = []
-        for raw in (getattr(args, "ref", None) or []):
+        for raw in getattr(args, "ref", None) or []:
             # Format: type:path[:description]
             parts = raw.split(":", 2)
             if len(parts) < 2:
-                print(f"✖ Bad ref format '{raw}' — use type:path or type:path:description", file=sys.stderr)
+                print(
+                    f"✖ Bad ref format '{raw}' — use type:path or type:path:description",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             rtype, rpath = parts[0], parts[1]
             rdesc = parts[2] if len(parts) > 2 else ""
@@ -118,7 +119,7 @@ def handoff_cmd(args) -> None:
             print(f"✖ {e}", file=sys.stderr)
             sys.exit(1)
 
-        print(f"✅ Handoff created")
+        print("✅ Handoff created")
         print(f"   ID:   {h.id}")
         print(f"   From: {h.from_agent}  →  To: {h.to_agent}")
         print(f"   TTL:  {ttl}h  (expires {_fmt_time(h.expires_at)})")
@@ -176,6 +177,7 @@ def handoff_cmd(args) -> None:
         if getattr(args, "status", None):
             try:
                 from tokenpak.agent.agentic.handoff import HandoffStatus
+
                 status_filter = HandoffStatus(args.status)
             except ValueError:
                 print(f"✖ Unknown status '{args.status}'", file=sys.stderr)
@@ -191,13 +193,21 @@ def handoff_cmd(args) -> None:
             print("(no handoffs found)")
             return
 
-        status_icons = {"pending": "⏳", "received": "📥", "applied": "✅", "expired": "💀", "invalid": "❌"}
+        status_icons = {
+            "pending": "⏳",
+            "received": "📥",
+            "applied": "✅",
+            "expired": "💀",
+            "invalid": "❌",
+        }
         print(f"\n{'ID':<38} {'STATUS':<10} {'FROM':<8} {'TO':<8} {'SUMMARY'}")
         print(SEP + SEP)
         for h in handoffs:
             icon = status_icons.get(h.status.value, "?")
             summary = (h.summary or "")[:50]
-            print(f"{h.id:<38} {icon} {h.status.value:<8} {h.from_agent:<8} {h.to_agent:<8} {summary}")
+            print(
+                f"{h.id:<38} {icon} {h.status.value:<8} {h.from_agent:<8} {h.to_agent:<8} {summary}"
+            )
 
     # ------------------------------------------------------------------
     # show

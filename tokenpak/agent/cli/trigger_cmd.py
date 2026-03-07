@@ -19,12 +19,11 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import click
 
-from tokenpak.agent.triggers.store import TriggerStore, DEFAULT_CONFIG
 from tokenpak.agent.triggers.matcher import match_event
+from tokenpak.agent.triggers.store import DEFAULT_CONFIG, TriggerStore
 
 SEP = "─" * 64
 
@@ -37,6 +36,7 @@ def _store() -> TriggerStore:
 # Group
 # ---------------------------------------------------------------------------
 
+
 @click.group("trigger")
 def trigger_group():
     """Manage event triggers: list, add, remove, test, log."""
@@ -46,26 +46,35 @@ def trigger_group():
 # list
 # ---------------------------------------------------------------------------
 
+
 @trigger_group.command("list")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output raw JSON")
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output raw JSON")
 def list_cmd(output_json: bool) -> None:
     """List all configured triggers."""
     store = _store()
     triggers = store.list()
 
     if output_json:
-        click.echo(json.dumps(
-            [dict(id=t.id, event=t.event, action=t.action,
-                  enabled=t.enabled, created_at=t.created_at)
-             for t in triggers],
-            indent=2,
-        ))
+        click.echo(
+            json.dumps(
+                [
+                    dict(
+                        id=t.id,
+                        event=t.event,
+                        action=t.action,
+                        enabled=t.enabled,
+                        created_at=t.created_at,
+                    )
+                    for t in triggers
+                ],
+                indent=2,
+            )
+        )
         return
 
     if not triggers:
         click.echo("No triggers configured.")
-        click.echo(f"Tip: tokenpak trigger add --event <event> --action <action>")
+        click.echo("Tip: tokenpak trigger add --event <event> --action <action>")
         return
 
     click.echo(SEP)
@@ -82,23 +91,33 @@ def list_cmd(output_json: bool) -> None:
 # add
 # ---------------------------------------------------------------------------
 
+
 @trigger_group.command("add")
-@click.option("--event", required=True,
-              help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)")
-@click.option("--action", required=True,
-              help="Shell command or tokenpak sub-command to run")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output raw JSON")
+@click.option(
+    "--event",
+    required=True,
+    help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)",
+)
+@click.option("--action", required=True, help="Shell command or tokenpak sub-command to run")
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output raw JSON")
 def add_cmd(event: str, action: str, output_json: bool) -> None:
     """Add a new event trigger."""
     store = _store()
     t = store.add(event=event, action=action)
 
     if output_json:
-        click.echo(json.dumps(dict(
-            id=t.id, event=t.event, action=t.action,
-            enabled=t.enabled, created_at=t.created_at,
-        ), indent=2))
+        click.echo(
+            json.dumps(
+                dict(
+                    id=t.id,
+                    event=t.event,
+                    action=t.action,
+                    enabled=t.enabled,
+                    created_at=t.created_at,
+                ),
+                indent=2,
+            )
+        )
         return
 
     click.echo(f"✓ Trigger added  [{t.id}]")
@@ -111,10 +130,10 @@ def add_cmd(event: str, action: str, output_json: bool) -> None:
 # remove
 # ---------------------------------------------------------------------------
 
+
 @trigger_group.command("remove")
 @click.argument("trigger_id")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output raw JSON")
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output raw JSON")
 def remove_cmd(trigger_id: str, output_json: bool) -> None:
     """Remove a trigger by ID."""
     store = _store()
@@ -136,32 +155,62 @@ def remove_cmd(trigger_id: str, output_json: bool) -> None:
 # ---------------------------------------------------------------------------
 
 # Known tokenpak sub-commands (for action prefixing in execute mode)
-_TOKENPAK_SUBCMDS = frozenset([
-    "status", "version", "config", "reset", "logs", "proxy", "debug", "learn",
-    "trigger", "workflow", "index", "doctor", "metrics", "cost", "budget",
-    "last", "help", "stats", "serve", "benchmark", "calibrate", "lock",
-    "agent", "replay", "recipe", "demo", "run", "macro", "search",
-])
+_TOKENPAK_SUBCMDS = frozenset(
+    [
+        "status",
+        "version",
+        "config",
+        "reset",
+        "logs",
+        "proxy",
+        "debug",
+        "learn",
+        "trigger",
+        "workflow",
+        "index",
+        "doctor",
+        "metrics",
+        "cost",
+        "budget",
+        "last",
+        "help",
+        "stats",
+        "serve",
+        "benchmark",
+        "calibrate",
+        "lock",
+        "agent",
+        "replay",
+        "recipe",
+        "demo",
+        "run",
+        "macro",
+        "search",
+    ]
+)
 
 
 def _build_cmd(action: str) -> str:
     """Prefix tokenpak sub-commands; leave shell commands as-is."""
     first_word = action.split()[0] if action.split() else action
-    if (
-        not action.startswith(("/", "./", "~"))
-        and first_word in _TOKENPAK_SUBCMDS
-    ):
+    if not action.startswith(("/", "./", "~")) and first_word in _TOKENPAK_SUBCMDS:
         return f"tokenpak {action}"
     return action
 
 
 @trigger_group.command("test")
-@click.option("--event", required=True,
-              help="Simulate this event string (e.g. file:changed:/home/user/foo.py)")
-@click.option("--dry-run/--execute", "dry_run", default=True,
-              help="--dry-run (default): simulate only. --execute: run matching actions.")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output raw JSON")
+@click.option(
+    "--event",
+    required=True,
+    help="Simulate this event string (e.g. file:changed:/home/user/foo.py)",
+)
+@click.option(
+    "--dry-run/--execute",
+    "dry_run",
+    default=True,
+    help="--dry-run (default): simulate only. --execute: run matching actions.",
+)
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output raw JSON")
 def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
     """Test which triggers would fire for a given event.
 
@@ -176,14 +225,16 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
         results = []
         for t in matches:
             entry: dict = dict(
-                id=t.id, event=t.event, action=t.action,
-                would_fire=True, dry_run=dry_run,
+                id=t.id,
+                event=t.event,
+                action=t.action,
+                would_fire=True,
+                dry_run=dry_run,
             )
             if not dry_run:
                 cmd = _build_cmd(t.action)
                 try:
-                    r = subprocess.run(cmd, shell=True, capture_output=True,
-                                       text=True, timeout=30)
+                    r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                     entry["exit_code"] = r.returncode
                     entry["output"] = (r.stdout + r.stderr).strip()
                     store.log_fire(t, r.returncode, entry["output"])
@@ -209,8 +260,7 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
         if not dry_run:
             cmd = _build_cmd(t.action)
             try:
-                r = subprocess.run(cmd, shell=True, capture_output=True,
-                                   text=True, timeout=30)
+                r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                 out = (r.stdout + r.stderr).strip()
                 store.log_fire(t, r.returncode, out)
                 click.echo(f"    Exit:   {r.returncode}")
@@ -224,13 +274,13 @@ def test_cmd(event: str, dry_run: bool, output_json: bool) -> None:
 # log
 # ---------------------------------------------------------------------------
 
+
 @trigger_group.command("log")
-@click.option("--limit", default=20, show_default=True, type=int,
-              help="Number of recent log entries to show")
-@click.option("--trigger-id", default=None,
-              help="Filter log to a specific trigger ID")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output raw JSON")
+@click.option(
+    "--limit", default=20, show_default=True, type=int, help="Number of recent log entries to show"
+)
+@click.option("--trigger-id", default=None, help="Filter log to a specific trigger ID")
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output raw JSON")
 def log_cmd(limit: int, trigger_id: str | None, output_json: bool) -> None:
     """Show recent trigger fire log."""
     store = _store()
@@ -240,13 +290,22 @@ def log_cmd(limit: int, trigger_id: str | None, output_json: bool) -> None:
         logs = [lg for lg in logs if lg.trigger_id == trigger_id]
 
     if output_json:
-        click.echo(json.dumps(
-            [dict(trigger_id=lg.trigger_id, event=lg.event, action=lg.action,
-                  fired_at=lg.fired_at, exit_code=lg.exit_code,
-                  output=lg.output)
-             for lg in logs],
-            indent=2,
-        ))
+        click.echo(
+            json.dumps(
+                [
+                    dict(
+                        trigger_id=lg.trigger_id,
+                        event=lg.event,
+                        action=lg.action,
+                        fired_at=lg.fired_at,
+                        exit_code=lg.exit_code,
+                        output=lg.output,
+                    )
+                    for lg in logs
+                ],
+                indent=2,
+            )
+        )
         return
 
     if not logs:

@@ -26,10 +26,10 @@ from typing import Any, Dict, List, Optional
 
 from .modes import CompactionMode, compact
 
-
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BlockPolicy:
@@ -83,9 +83,7 @@ class CompactionPolicy:
         return cls(
             mode=CompactionMode(inner.get("mode", CompactionMode.BALANCED)),
             max_tokens=inner.get("max_tokens"),
-            priority_order=inner.get(
-                "priority_order", ["instructions", "code", "knowledge"]
-            ),
+            priority_order=inner.get("priority_order", ["instructions", "code", "knowledge"]),
             per_block_limits=per_block,
         )
 
@@ -106,9 +104,7 @@ class CompactionPolicy:
         if self.priority_order:
             d["priority_order"] = self.priority_order
         if self.per_block_limits:
-            d["per_block_limits"] = {
-                bt: bp.to_dict() for bt, bp in self.per_block_limits.items()
-            }
+            d["per_block_limits"] = {bt: bp.to_dict() for bt, bp in self.per_block_limits.items()}
         return {"compaction": d}
 
     # ------------------------------------------------------------------ #
@@ -135,7 +131,7 @@ class CompactionPolicy:
             Compacted text.
         """
         bp = self.per_block_limits.get(block_type or "")
-        mode       = bp.mode       if bp else self.mode
+        mode = bp.mode if bp else self.mode
         max_tokens = bp.max_tokens if (bp and bp.max_tokens is not None) else self.max_tokens
         return compact(text, mode=mode, target_tokens=max_tokens)
 

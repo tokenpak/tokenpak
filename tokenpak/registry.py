@@ -7,17 +7,18 @@ Hardened for stability:
 - Graceful error recovery
 """
 
+import atexit
 import hashlib
 import sqlite3
-import time
 import threading
-import atexit
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, Generator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Generator, List, Optional
+
 if TYPE_CHECKING:
-    from .connectors.base_source import Provenance
+    pass
 
 # Global registry of all instances for cleanup
 _REGISTRIES: List["BlockRegistry"] = []
@@ -36,6 +37,7 @@ def _cleanup_all_registries():
 @dataclass
 class Block:
     """A processed content block."""
+
     path: str
     content_hash: str
     version: int
@@ -52,23 +54,21 @@ class Block:
     def __post_init__(self):
         """Auto-generate slice_id if not provided."""
         if not self.slice_id:
-            digest = hashlib.sha256(
-                f"{self.path}:{self.content_hash}".encode()
-            ).hexdigest()[:8]
+            digest = hashlib.sha256(f"{self.path}:{self.content_hash}".encode()).hexdigest()[:8]
             self.slice_id = f"s_{digest}"
 
 
 class BlockRegistry:
     """
     SQLite-backed registry with connection pooling and batch transactions.
-    
+
     Optimizations:
     - Connection pooling (reuse instead of open/close per operation)
     - WAL mode for better concurrent read/write
     - Batch transaction context manager
     - Busy timeout for lock contention
     - Prepared statement caching (SQLite handles this)
-    
+
     Stability:
     - Thread-local connections
     - Graceful cleanup on exit
@@ -77,13 +77,13 @@ class BlockRegistry:
 
     def __init__(self, db_path: str = ".tokenpak/registry.db"):
         global _CLEANUP_REGISTERED
-        
+
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()
         self._closed = False
         self._init_db()
-        
+
         # Register for cleanup
         _REGISTRIES.append(self)
         if not _CLEANUP_REGISTERED:
@@ -94,12 +94,12 @@ class BlockRegistry:
         """Get thread-local connection (pooling)."""
         if self._closed:
             raise RuntimeError("Registry is closed")
-        
-        if not hasattr(self._local, 'conn') or self._local.conn is None:
+
+        if not hasattr(self._local, "conn") or self._local.conn is None:
             conn = sqlite3.connect(
                 self.db_path,
                 check_same_thread=False,
-                timeout=30.0  # 30s busy timeout for lock contention
+                timeout=30.0,  # 30s busy timeout for lock contention
             )
             # Performance pragmas
             conn.execute("PRAGMA journal_mode=WAL")
@@ -142,10 +142,10 @@ class BlockRegistry:
     def batch_transaction(self) -> Generator[sqlite3.Connection, None, None]:
         """
         Context manager for batched writes.
-        
+
         All operations within the context share one transaction,
         committing only at the end. ~60% faster for bulk indexing.
-        
+
         Usage:
             with registry.batch_transaction() as conn:
                 for file in files:
@@ -156,7 +156,7 @@ class BlockRegistry:
             conn.execute("BEGIN IMMEDIATE")  # Acquire write lock early
             yield conn
             conn.commit()
-        except Exception as e:
+        except Exception:
             try:
                 conn.rollback()
             except Exception:
@@ -167,9 +167,7 @@ class BlockRegistry:
         """Check if file content has changed since last processing."""
         new_hash = hashlib.sha256(content.encode()).hexdigest()
         conn = self._get_connection()
-        row = conn.execute(
-            "SELECT content_hash FROM blocks WHERE path = ?", (path,)
-        ).fetchone()
+        row = conn.execute("SELECT content_hash FROM blocks WHERE path = ?", (path,)).fetchone()
         if row is None:
             return True  # New file
         return row[0] != new_hash
@@ -191,26 +189,36 @@ class BlockRegistry:
         existing = conn.execute(
             "SELECT version FROM blocks WHERE path = ?", (block.path,)
         ).fetchone()
-        
+
         if existing:
             block.version = existing[0] + 1
         else:
             block.version = 1
-        
+
         # Use INSERT OR REPLACE for atomic upsert
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO blocks
                 (path, content_hash, version, file_type, raw_tokens,
                  compressed_tokens, compressed_content, quality_score,
                  importance, processed_at, slice_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            block.path, block.content_hash, block.version, block.file_type,
-            block.raw_tokens, block.compressed_tokens,
-            block.compressed_content, block.quality_score,
-            block.importance, block.processed_at, block.slice_id
-        ))
-        
+        """,
+            (
+                block.path,
+                block.content_hash,
+                block.version,
+                block.file_type,
+                block.raw_tokens,
+                block.compressed_tokens,
+                block.compressed_content,
+                block.quality_score,
+                block.importance,
+                block.processed_at,
+                block.slice_id,
+            ),
+        )
+
         return block
 
     def get_block(self, path: str) -> Optional[Block]:
@@ -243,7 +251,7 @@ class BlockRegistry:
         terms = query.lower().split()
         if not terms:
             return []
-        
+
         rows = conn.execute("SELECT * FROM blocks").fetchall()
         conn.row_factory = None
 
@@ -252,10 +260,7 @@ class BlockRegistry:
             block = Block(**dict(row))
             content_lower = block.compressed_content.lower()
             path_lower = block.path.lower()
-            score = sum(
-                1 for term in terms
-                if term in content_lower or term in path_lower
-            )
+            score = sum(1 for term in terms if term in content_lower or term in path_lower)
             if score > 0:
                 scored.append((score / len(terms), block))
 
@@ -275,17 +280,14 @@ class BlockRegistry:
         stats["total_files"] = row[0]
         stats["total_raw_tokens"] = row[1]
         stats["total_compressed_tokens"] = row[2]
-        stats["compression_ratio"] = (
-            round(row[1] / row[2], 2) if row[2] > 0 else 0
-        )
+        stats["compression_ratio"] = round(row[1] / row[2], 2) if row[2] > 0 else 0
 
         type_rows = conn.execute("""
             SELECT file_type, COUNT(*), SUM(raw_tokens), SUM(compressed_tokens)
             FROM blocks GROUP BY file_type ORDER BY COUNT(*) DESC
         """).fetchall()
         stats["by_type"] = {
-            r[0]: {"files": r[1], "raw_tokens": r[2], "compressed_tokens": r[3]}
-            for r in type_rows
+            r[0]: {"files": r[1], "raw_tokens": r[2], "compressed_tokens": r[3]} for r in type_rows
         }
 
         return stats
@@ -301,13 +303,13 @@ class BlockRegistry:
         if self._closed:
             return
         self._closed = True
-        if hasattr(self._local, 'conn') and self._local.conn:
+        if hasattr(self._local, "conn") and self._local.conn:
             try:
                 self._local.conn.close()
             except Exception:
                 pass
             self._local.conn = None
-        
+
         # Remove from global registry
         try:
             _REGISTRIES.remove(self)

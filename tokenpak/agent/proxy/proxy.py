@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Feature flag — set TOKENPAK_COST_TRACKING=0 to disable
 import os as _os
+
 _COST_TRACKING_ENABLED = _os.environ.get("TOKENPAK_COST_TRACKING", "1") != "0"
 
 
@@ -48,6 +49,7 @@ def record_proxy_request(
         return 0.0
     try:
         from tokenpak.agent.telemetry.cost_tracker import get_cost_tracker
+
         tracker = get_cost_tracker()
         return tracker.record_request(
             model=model,

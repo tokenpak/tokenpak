@@ -16,10 +16,9 @@ from __future__ import annotations
 import json
 import threading
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 
 # Roles
 ROLE_ADMIN = "admin"
@@ -29,9 +28,10 @@ ROLE_MEMBER = "member"
 @dataclass
 class Template:
     """A shared team prompt template."""
+
     name: str
     content: str
-    created_by: str                 # agent/user name
+    created_by: str  # agent/user name
     role_required: str = ROLE_MEMBER  # minimum role to use
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
@@ -82,9 +82,7 @@ class TemplateStore:
     @staticmethod
     def _require_admin(actor_role: str) -> None:
         if actor_role != ROLE_ADMIN:
-            raise PermissionError(
-                f"Only admins can perform this action (role: {actor_role!r})"
-            )
+            raise PermissionError(f"Only admins can perform this action (role: {actor_role!r})")
 
     # ------------------------------------------------------------------
     # CRUD
@@ -161,9 +159,7 @@ class TemplateStore:
             return None
         # Check RBAC
         if template.role_required == ROLE_ADMIN and actor_role != ROLE_ADMIN:
-            raise PermissionError(
-                f"Template {name!r} requires admin role."
-            )
+            raise PermissionError(f"Template {name!r} requires admin role.")
         return template
 
     def list_templates(

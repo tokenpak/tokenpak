@@ -13,10 +13,9 @@ import os
 from typing import Dict, List, Optional, Type
 
 from .base import BaseAdapter
-from .openclaw import OpenClawAdapter
 from .claude_cli import ClaudeCLIAdapter
 from .generic import GenericAdapter
-
+from .openclaw import OpenClawAdapter
 
 # Ordered list of adapter classes — first match wins.
 _ADAPTER_PRIORITY: List[Type[BaseAdapter]] = [

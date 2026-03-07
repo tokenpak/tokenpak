@@ -286,13 +286,15 @@ class RetryEngine:
         """If exception maps to 'alert' behavior, raise ImmediateAlertError."""
         status = _extract_http_status(exc)
         if status and self._per_error.get(status) == "alert":
-            _append_retry_event({
-                "event": "immediate_alert",
-                "http_status": status,
-                "error": str(exc),
-                "task_id": self.context.get("task_id"),
-                "timestamp": time.time(),
-            })
+            _append_retry_event(
+                {
+                    "event": "immediate_alert",
+                    "http_status": status,
+                    "error": str(exc),
+                    "task_id": self.context.get("task_id"),
+                    "timestamp": time.time(),
+                }
+            )
             raise ImmediateAlertError(status, exc)
 
     # ── default hooks ─────────────────────────────────────────────────────────
@@ -373,12 +375,14 @@ class RetryEngine:
                 self._maybe_immediate_alert(exc)
                 behavior = self._error_behavior(exc)
                 actual_wait = wait if behavior in ("wait", None) else 0
-                self.attempts.append(RetryAttempt(
-                    level=0,
-                    description=f"wait-retry attempt {i+1}/{len(self.wait_seconds)}, waited {actual_wait}s",
-                    error=str(exc),
-                    http_status=_extract_http_status(exc),
-                ))
+                self.attempts.append(
+                    RetryAttempt(
+                        level=0,
+                        description=f"wait-retry attempt {i+1}/{len(self.wait_seconds)}, waited {actual_wait}s",
+                        error=str(exc),
+                        http_status=_extract_http_status(exc),
+                    )
+                )
                 self._log_event(
                     "level0_retry",
                     attempt=i + 1,
@@ -386,7 +390,9 @@ class RetryEngine:
                     error=str(exc),
                     http_status=_extract_http_status(exc),
                 )
-                logger.warning("Level 0 attempt %d failed: %s — waiting %.1fs", i + 1, exc, actual_wait)
+                logger.warning(
+                    "Level 0 attempt %d failed: %s — waiting %.1fs", i + 1, exc, actual_wait
+                )
                 if actual_wait > 0:
                     time.sleep(actual_wait)
         # Final attempt after last wait
@@ -398,7 +404,9 @@ class RetryEngine:
         if next_model == self._current_model:
             raise RuntimeError(f"No model downgrade available from '{self._current_model}'")
         logger.info("Level 1: downgrading model %s → %s", self._current_model, next_model)
-        self._log_event("level1_model_downgrade", from_model=self._current_model, to_model=next_model)
+        self._log_event(
+            "level1_model_downgrade", from_model=self._current_model, to_model=next_model
+        )
         self._current_model = next_model
         self.context = {**self.context, "model": next_model}
         return self.fn(self.context, self.partial_state)
@@ -409,7 +417,11 @@ class RetryEngine:
         if next_provider == self._current_provider:
             raise RuntimeError(f"No provider fallback available from '{self._current_provider}'")
         logger.info("Level 2: switching provider %s → %s", self._current_provider, next_provider)
-        self._log_event("level2_provider_switch", from_provider=self._current_provider, to_provider=next_provider)
+        self._log_event(
+            "level2_provider_switch",
+            from_provider=self._current_provider,
+            to_provider=next_provider,
+        )
         self._current_provider = next_provider
         self.context = {**self.context, "provider": next_provider}
         return self.fn(self.context, self.partial_state)
@@ -421,7 +433,9 @@ class RetryEngine:
         logger.info("Level 3: attempting agent handoff")
         state_path = self._save_state()
         self._log_event("level3_handoff_attempt", state_file=str(state_path))
-        accepted = self.on_handoff(self.context, {**self.partial_state, "_state_file": str(state_path)})
+        accepted = self.on_handoff(
+            self.context, {**self.partial_state, "_state_file": str(state_path)}
+        )
         if not accepted:
             self._log_event("level3_handoff_rejected")
             raise RuntimeError("Handoff rejected by all available agents")
@@ -480,24 +494,29 @@ class RetryEngine:
                 # Auth/fatal errors: skip escalation chain, go directly to Level 4
                 logger.error(
                     "Immediate alert triggered (HTTP %s): %s",
-                    exc.status_code, exc.original,
+                    exc.status_code,
+                    exc.original,
                 )
                 last_exc = exc.original
-                self.attempts.append(RetryAttempt(
-                    level=level,
-                    description=f"immediate alert (HTTP {exc.status_code})",
-                    error=str(exc.original),
-                    http_status=exc.status_code,
-                ))
+                self.attempts.append(
+                    RetryAttempt(
+                        level=level,
+                        description=f"immediate alert (HTTP {exc.status_code})",
+                        error=str(exc.original),
+                        http_status=exc.status_code,
+                    )
+                )
                 break
             except Exception as exc:
                 last_exc = exc
-                self.attempts.append(RetryAttempt(
-                    level=level,
-                    description=description,
-                    error=str(exc),
-                    http_status=_extract_http_status(exc),
-                ))
+                self.attempts.append(
+                    RetryAttempt(
+                        level=level,
+                        description=description,
+                        error=str(exc),
+                        http_status=_extract_http_status(exc),
+                    )
+                )
                 logger.warning("Level %d (%s) failed: %s", level, description, exc)
 
         # Level 4: save + alert

@@ -5,10 +5,9 @@ Uses `git show` via subprocess — no gitpython dependency.
 """
 
 import subprocess
-from typing import Optional, Tuple
+from typing import Tuple
 
 from .base_source import Provenance, SourceAdapter, SourceFetchError
-
 
 _GIT_TIMEOUT = 15  # seconds
 
@@ -24,9 +23,7 @@ def _run_git(args: list, cwd: str) -> str:
             timeout=_GIT_TIMEOUT,
         )
         if result.returncode != 0:
-            raise SourceFetchError(
-                f"git {' '.join(args)} failed: {result.stderr.strip()}"
-            )
+            raise SourceFetchError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
         return result.stdout
     except FileNotFoundError as exc:
         raise SourceFetchError("git not found on PATH") from exc
@@ -65,7 +62,7 @@ class GitAdapter(SourceAdapter):
         Returns:
             (content, Provenance)
         """
-        repo_path  = kwargs.get("repo_path")
+        repo_path = kwargs.get("repo_path")
         commit_sha = kwargs.get("commit_sha", "HEAD")
         if not repo_path:
             raise SourceFetchError("repo_path is required for GitAdapter.ingest()")
@@ -78,6 +75,7 @@ class GitAdapter(SourceAdapter):
 
         # Title: repo_basename/file_path@short_sha
         import os
+
         repo_name = os.path.basename(repo_path.rstrip("/"))
         title = f"{repo_name}/{source_id}@{full_sha[:8]}"
 

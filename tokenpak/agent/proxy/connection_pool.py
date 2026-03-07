@@ -43,20 +43,21 @@ from __future__ import annotations
 
 import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Optional
 
 import httpx
-
 
 # ---------------------------------------------------------------------------
 # HTTP/2 availability check
 # ---------------------------------------------------------------------------
 
+
 def _http2_available() -> bool:
     """Return True if the ``h2`` package is installed."""
     try:
         import h2  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -68,6 +69,7 @@ _H2_AVAILABLE: bool = _http2_available()
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PoolConfig:
@@ -112,6 +114,7 @@ class PoolConfig:
 # Pool metrics — lightweight counters (no deps)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PoolMetrics:
     """Rolling counters for connection pool health checks."""
@@ -141,6 +144,7 @@ class PoolMetrics:
 # ---------------------------------------------------------------------------
 # ConnectionPool
 # ---------------------------------------------------------------------------
+
 
 class ConnectionPool:
     """
@@ -275,7 +279,10 @@ class ConnectionPool:
             # when keep-alive is confirmed.
             with self._metrics_lock:
                 proto = response.http_version  # "HTTP/1.1" or "HTTP/2"
-                if proto == "HTTP/2" or response.headers.get("connection", "").lower() == "keep-alive":
+                if (
+                    proto == "HTTP/2"
+                    or response.headers.get("connection", "").lower() == "keep-alive"
+                ):
                     self._metrics.reused_connections += 1
                 else:
                     self._metrics.new_connections += 1
@@ -316,7 +323,9 @@ class ConnectionPool:
         with self._metrics_lock:
             self._metrics.total_requests += 1
 
-        return _StreamingContext(client, method, url, content, headers, self._metrics, self._metrics_lock)
+        return _StreamingContext(
+            client, method, url, content, headers, self._metrics, self._metrics_lock
+        )
 
     # ------------------------------------------------------------------
     # Introspection
@@ -370,6 +379,7 @@ class ConnectionPool:
 # Streaming context helper
 # ---------------------------------------------------------------------------
 
+
 class _StreamingContext:
     """
     Thin wrapper that tracks metrics around ``httpx.Client.stream()``.
@@ -397,7 +407,10 @@ class _StreamingContext:
         self._response = self._ctx.__enter__()
         with self._lock:
             proto = self._response.http_version
-            if proto == "HTTP/2" or self._response.headers.get("connection", "").lower() == "keep-alive":
+            if (
+                proto == "HTTP/2"
+                or self._response.headers.get("connection", "").lower() == "keep-alive"
+            ):
                 self._metrics.reused_connections += 1
             else:
                 self._metrics.new_connections += 1

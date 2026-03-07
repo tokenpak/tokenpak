@@ -7,18 +7,19 @@ This is a stub implementation for format translation readiness.
 
 import json
 from dataclasses import dataclass
-from typing import Dict, List, Any, Optional, Union
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class GoogleContent:
     """Represents content in Google format."""
+
     role: str  # "user", "model"
     parts: List[Dict[str, Any]]
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {"role": self.role, "parts": self.parts}
-    
+
     def get_text(self) -> str:
         """Extract text content."""
         parts = []
@@ -31,18 +32,18 @@ class GoogleContent:
 class GoogleFormat:
     """
     Handler for Google Gemini API format (stub).
-    
+
     Google uses:
     - "contents" array instead of "messages"
     - "parts" array within each content
     - "systemInstruction" for system prompt
     - Different role names ("model" instead of "assistant")
-    
+
     TODO: Full implementation for multi-provider support.
     """
-    
+
     PROVIDER = "google"
-    
+
     @staticmethod
     def parse_request(body: bytes) -> Dict[str, Any]:
         """Parse a Google API request body."""
@@ -50,7 +51,7 @@ class GoogleFormat:
             return json.loads(body)
         except (json.JSONDecodeError, UnicodeDecodeError):
             return {}
-    
+
     @staticmethod
     def extract_model(data: Dict[str, Any]) -> str:
         """
@@ -58,7 +59,7 @@ class GoogleFormat:
         Note: Google embeds model in URL path, not body.
         """
         return data.get("model", "gemini-pro")
-    
+
     @staticmethod
     def extract_system(data: Dict[str, Any]) -> str:
         """Extract system instruction."""
@@ -68,31 +69,33 @@ class GoogleFormat:
             texts = [p.get("text", "") for p in parts if isinstance(p, dict)]
             return "\n".join(texts)
         return ""
-    
+
     @staticmethod
     def extract_contents(data: Dict[str, Any]) -> List[GoogleContent]:
         """Extract contents from request."""
         contents = []
         for c in data.get("contents", []):
             if isinstance(c, dict):
-                contents.append(GoogleContent(
-                    role=c.get("role", "user"),
-                    parts=c.get("parts", []),
-                ))
+                contents.append(
+                    GoogleContent(
+                        role=c.get("role", "user"),
+                        parts=c.get("parts", []),
+                    )
+                )
         return contents
-    
+
     @staticmethod
     def count_tokens_approx(data: Dict[str, Any]) -> int:
         """Approximate token count."""
         total = 0
-        
+
         # System instruction
         system = data.get("systemInstruction", {})
         if isinstance(system, dict):
             for part in system.get("parts", []):
                 if "text" in part:
                     total += len(part["text"]) // 4
-        
+
         # Contents
         for content in data.get("contents", []):
             for part in content.get("parts", []):
@@ -101,15 +104,15 @@ class GoogleFormat:
                         total += len(part["text"]) // 4
                     if "inline_data" in part:
                         total += 1000  # Approximate for media
-        
+
         return total
-    
+
     @staticmethod
     def is_streaming(data: Dict[str, Any]) -> bool:
         """Check if request is streaming (determined by URL, not body)."""
         # Google uses ?alt=sse for streaming
         return False  # Must be determined from URL
-    
+
     @staticmethod
     def build_request(
         contents: List[Dict[str, Any]],
@@ -119,19 +122,17 @@ class GoogleFormat:
     ) -> bytes:
         """Build a Google API request body."""
         data = {"contents": contents}
-        
+
         if system_instruction:
-            data["systemInstruction"] = {
-                "parts": [{"text": system_instruction}]
-            }
-        
+            data["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
         if generation_config:
             data["generationConfig"] = generation_config
-        
+
         data.update(kwargs)
-        
+
         return json.dumps(data, ensure_ascii=False).encode("utf-8")
-    
+
     @staticmethod
     def extract_response_tokens(body: bytes) -> int:
         """Extract output token count from response."""

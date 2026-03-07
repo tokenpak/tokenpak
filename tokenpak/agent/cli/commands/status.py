@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 
 try:
     import click
+
     HAS_CLICK = True
 except ImportError:
     HAS_CLICK = False
@@ -23,7 +24,9 @@ def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
         return None
 
 
-def run(proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: bool = False) -> None:
+def run(
+    proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: bool = False
+) -> None:
     """Print proxy status to stdout."""
     SEP = "────────────────────────────────────"
 
@@ -31,10 +34,10 @@ def run(proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: b
     health = _fetch(f"{proxy_base}/health")
     if health is None:
         print(f"⛔️  TokenPak proxy unreachable at {proxy_base}")
-        print(f"    What happened:  The proxy is not running or crashed.")
+        print("    What happened:  The proxy is not running or crashed.")
         print(f"    Why:            Connection refused on port {proxy_base.split(':')[-1]}.")
-        print(f"    What to do:     Run `tokenpak serve` to start it, or")
-        print(f"                    `tokenpak doctor` to diagnose the issue.")
+        print("    What to do:     Run `tokenpak serve` to start it, or")
+        print("                    `tokenpak doctor` to diagnose the issue.")
         sys.exit(1)
 
     if raw:
@@ -72,7 +75,7 @@ def run(proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: b
         print(f"{mark} | {requests:,} req | {pct}")
         return
 
-    print(f"\nTOKENPAK  |  Status")
+    print("\nTOKENPAK  |  Status")
     print(SEP)
 
     print(f"{'Proxy:':<28}{status_icon} {status_text}")
@@ -92,7 +95,7 @@ def run(proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: b
     if is_degraded or deg.get("recent_events"):
         print()
         print(SEP)
-        deg_status = deg.get("status", "unknown")
+        deg.get("status", "unknown")
         deg_msg = deg.get("message", "")
         print(f"{'Degradation:':<28}{deg_msg}")
 
@@ -123,8 +126,12 @@ if HAS_CLICK:
     import click
 
     @click.command("status")
-    @click.option("--proxy", default="http://127.0.0.1:8766", envvar="TOKENPAK_PROXY_URL",
-                  help="Proxy base URL")
+    @click.option(
+        "--proxy",
+        default="http://127.0.0.1:8766",
+        envvar="TOKENPAK_PROXY_URL",
+        help="Proxy base URL",
+    )
     @click.option("--raw", is_flag=True, help="Dump raw JSON")
     @click.option("--minimal", is_flag=True, help="One-line summary")
     def status_cmd(proxy: str, raw: bool, minimal: bool) -> None:

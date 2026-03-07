@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import sys
 
-
 # ─────────────────────────────────────────────
 # Plain-Python runner (no click)
 # ─────────────────────────────────────────────
 
+
 def _run_activate(token: str) -> None:
     from tokenpak.agent.license.activation import activate
+
     try:
         result = activate(token)
         print("✅ License activated!")
@@ -35,12 +36,14 @@ def _run_activate(token: str) -> None:
 
 def _run_deactivate() -> None:
     from tokenpak.agent.license.activation import deactivate
+
     deactivate()
     print("✅ License removed. Reverted to OSS (free).")
 
 
 def _run_plan() -> None:
     from tokenpak.agent.license.activation import get_plan
+
     result = get_plan()
     print("TOKENPAK  |  Plan")
     print("────────────────────────")

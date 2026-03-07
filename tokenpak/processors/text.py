@@ -11,17 +11,34 @@ import re
 
 _BULLET = re.compile(r"^[\s]*[-*+•]\s")
 _NUMBERED = re.compile(r"^[\s]*\d+\.\s")
-_SENTENCE_END = re.compile(r'[.!?](?:\s|$)')
-_HTML_SCRIPT_STYLE = re.compile(r'<(script|style)[^>]*>.*?</\1>', re.DOTALL | re.IGNORECASE)
-_HTML_TAG = re.compile(r'<[^>]+>')
-_WHITESPACE = re.compile(r'\s+')
+_SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+_HTML_SCRIPT_STYLE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
+_HTML_TAG = re.compile(r"<[^>]+>")
+_WHITESPACE = re.compile(r"\s+")
 
 # High-signal keywords for aggressive mode
-_HIGH_SIGNAL_KEYWORDS = frozenset([
-    "critical", "risk", "decision", "result", "metric", "cost", 
-    "error", "warning", "important", "action", "deadline", "budget",
-    "requirement", "blocker", "priority", "todo", "fix", "bug"
-])
+_HIGH_SIGNAL_KEYWORDS = frozenset(
+    [
+        "critical",
+        "risk",
+        "decision",
+        "result",
+        "metric",
+        "cost",
+        "error",
+        "warning",
+        "important",
+        "action",
+        "deadline",
+        "budget",
+        "requirement",
+        "blocker",
+        "priority",
+        "todo",
+        "fix",
+        "bug",
+    ]
+)
 
 
 class TextProcessor:
@@ -33,7 +50,7 @@ class TextProcessor:
     def process(self, content: str, path: str = "") -> str:
         """
         Compress text content while preserving meaning.
-        
+
         Aggressive strategy (default):
         - Keep all headers (# ## ###)
         - Keep bullet points, truncate to 80 chars
@@ -87,7 +104,7 @@ class TextProcessor:
             prev_blank = False
 
             # In aggressive mode, cap detail per section
-            if self.aggressive and kept_in_section >= 5 and not stripped.startswith('#'):
+            if self.aggressive and kept_in_section >= 5 and not stripped.startswith("#"):
                 # Still allow occasional bullet with strong signal
                 if _BULLET.match(line) and self._has_signal(stripped):
                     pass  # Allow through
@@ -123,7 +140,9 @@ class TextProcessor:
             # Regular paragraphs — aggressively keep first sentence
             para_limit = 80 if self.aggressive else 150
             if len(stripped) > para_limit:
-                first_sentence = self._first_sentence(stripped, max_chars=100 if self.aggressive else 150)
+                first_sentence = self._first_sentence(
+                    stripped, max_chars=100 if self.aggressive else 150
+                )
                 result.append(first_sentence)
             else:
                 result.append(line)
@@ -140,7 +159,7 @@ class TextProcessor:
         """Extract the first sentence from text with max length."""
         match = _SENTENCE_END.search(text)
         if match:
-            sent = text[:match.end()].strip()
+            sent = text[: match.end()].strip()
             if len(sent) > max_chars:
                 return sent[:max_chars].rsplit(" ", 1)[0] + "…"
             return sent
@@ -168,9 +187,9 @@ class TextProcessor:
     def _strip_html(self, content: str) -> str:
         """Remove HTML tags, keeping text content."""
         # Remove script and style blocks (using compiled pattern)
-        content = _HTML_SCRIPT_STYLE.sub('', content)
+        content = _HTML_SCRIPT_STYLE.sub("", content)
         # Remove tags
-        content = _HTML_TAG.sub(' ', content)
+        content = _HTML_TAG.sub(" ", content)
         # Collapse whitespace
-        content = _WHITESPACE.sub(' ', content)
+        content = _WHITESPACE.sub(" ", content)
         return content.strip()

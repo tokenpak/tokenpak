@@ -7,12 +7,14 @@ CONNECTORS = {}
 
 try:
     from .local import LocalConnector
+
     CONNECTORS["local"] = LocalConnector
 except ImportError:
     pass
 
 try:
     from .obsidian import ObsidianConnector
+
     CONNECTORS["obsidian"] = ObsidianConnector
 except ImportError:
     pass

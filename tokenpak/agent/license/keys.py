@@ -8,18 +8,17 @@ Underlying:  RSA-4096, SHA-256, base64url payload + signature
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import secrets
 import string
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa, padding
     from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
     _CRYPTO_AVAILABLE = True
 except ImportError:
     _CRYPTO_AVAILABLE = False
@@ -37,11 +36,12 @@ KEY_SEGMENTS = 3  # produces TPAK-XXXX-XXXX-XXXX
 @dataclass
 class LicensePayload:
     """The decoded payload embedded in a license."""
+
     key_id: str
-    tier: str                    # oss | pro | team | enterprise
-    seats: int                   # 0 = unlimited
-    issued_at: str               # ISO-8601
-    expires_at: Optional[str]    # ISO-8601 or None = perpetual
+    tier: str  # oss | pro | team | enterprise
+    seats: int  # 0 = unlimited
+    issued_at: str  # ISO-8601
+    expires_at: Optional[str]  # ISO-8601 or None = perpetual
     features: list[str]
     customer_id: Optional[str] = None  # opaque customer hash (never plaintext PII)
 
@@ -64,6 +64,7 @@ class LicensePayload:
 # ─────────────────────────────────────────────
 # Keypair generation
 # ─────────────────────────────────────────────
+
 
 def generate_keypair() -> tuple[bytes, bytes]:
     """
@@ -95,6 +96,7 @@ def generate_keypair() -> tuple[bytes, bytes]:
 # License key format helpers
 # ─────────────────────────────────────────────
 
+
 def _random_segment(length: int = KEY_SEGMENT_LEN) -> str:
     return "".join(secrets.choice(KEY_SEGMENT_CHARS) for _ in range(length))
 
@@ -111,6 +113,7 @@ def format_license_key() -> str:
 # ─────────────────────────────────────────────
 # Sign / verify
 # ─────────────────────────────────────────────
+
 
 def sign_license(payload: LicensePayload, private_pem: bytes) -> str:
     """

@@ -11,30 +11,38 @@ Usage:
 """
 
 import re
-from typing import List, Optional
+from typing import List
 
 try:
     import tiktoken
+
     _enc = tiktoken.encoding_for_model("gpt-4")
+
     def _count_tokens(text: str) -> int:
         return len(_enc.encode(text))
+
     def _truncate_tokens(text: str, max_tokens: int) -> str:
         tokens = _enc.encode(text)
         if len(tokens) <= max_tokens:
             return text
         return _enc.decode(tokens[:max_tokens]) + "..."
+
 except ImportError:
     _enc = None
+
     def _count_tokens(text: str) -> int:
         # Rough approximation: 1 token ≈ 4 chars
         return max(1, len(text) // 4)
+
     def _truncate_tokens(text: str, max_tokens: int) -> str:
         approx_chars = max_tokens * 4
         return text[:approx_chars] + ("..." if len(text) > approx_chars else "")
 
+
 # Optional: cross-encoder reranker
 try:
     from sentence_transformers.cross_encoder import CrossEncoder as _CrossEncoder
+
     _CROSS_ENCODER_AVAILABLE = True
 except ImportError:
     _CROSS_ENCODER_AVAILABLE = False
@@ -43,7 +51,7 @@ except ImportError:
 def _split_sentences(text: str) -> List[str]:
     """Split text into sentences using simple regex."""
     # Split on ., !, ? followed by whitespace/newline, or on newlines
-    sentences = re.split(r'(?<=[.!?])\s+|\n{2,}', text.strip())
+    sentences = re.split(r"(?<=[.!?])\s+|\n{2,}", text.strip())
     # Filter empty, strip whitespace
     return [s.strip() for s in sentences if s.strip()]
 
@@ -57,8 +65,8 @@ def _heuristic_score(query: str, sentence: str) -> float:
     - Exact phrase match (+0.2)
     - Higher term density (terms / sentence_words)
     """
-    query_terms = set(re.findall(r'\b\w+\b', query.lower()))
-    sent_words = re.findall(r'\b\w+\b', sentence.lower())
+    query_terms = set(re.findall(r"\b\w+\b", query.lower()))
+    sent_words = re.findall(r"\b\w+\b", sentence.lower())
     sent_set = set(sent_words)
 
     if not query_terms or not sent_words:
@@ -105,9 +113,7 @@ class SpanExtractor:
             except Exception:
                 self.use_reranker = False
 
-    def _score_sentences(
-        self, sentences: List[str], query: str
-    ) -> List[float]:
+    def _score_sentences(self, sentences: List[str], query: str) -> List[float]:
         """Score sentences against query. Returns parallel list of scores."""
         if self.use_reranker and self._reranker:
             pairs = [(query, s) for s in sentences]
@@ -211,8 +217,10 @@ class SpanExtractor:
         for chunk in chunks:
             text = chunk.get("text", "")
             span_data = self.extract_span(text, query, max_tokens_each)
-            results.append({
-                **span_data,
-                "chunk_id": chunk.get("id", "unknown"),
-            })
+            results.append(
+                {
+                    **span_data,
+                    "chunk_id": chunk.get("id", "unknown"),
+                }
+            )
         return results

@@ -8,13 +8,12 @@ Supports:
 """
 
 import json
-import os
 import subprocess
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 DEFAULT_SCHEDULE_PATH = Path.home() / ".tokenpak" / "scheduled.json"
 CRON_COMMENT_TAG = "# tokenpak-schedule"
@@ -23,11 +22,12 @@ CRON_COMMENT_TAG = "# tokenpak-schedule"
 @dataclass
 class ScheduledMacro:
     """A scheduled macro run."""
+
     id: str
     name: str
     schedule_type: str  # "cron" or "at"
-    schedule: str       # cron expr or ISO datetime
-    command: str        # full command to run
+    schedule: str  # cron expr or ISO datetime
+    command: str  # full command to run
     description: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     enabled: bool = True
@@ -43,7 +43,7 @@ class ScheduledMacro:
 class MacroScheduler:
     """
     Scheduler for macros using system cron and at-style one-shots.
-    
+
     Persists schedule info in ~/.tokenpak/scheduled.json.
     """
 
@@ -75,10 +75,7 @@ class MacroScheduler:
     def _crontab_lines(self) -> List[str]:
         """Read current crontab lines."""
         try:
-            result = subprocess.run(
-                ["crontab", "-l"],
-                capture_output=True, text=True
-            )
+            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
             if result.returncode == 0:
                 return result.stdout.splitlines()
             return []
@@ -89,11 +86,7 @@ class MacroScheduler:
         """Write lines to crontab."""
         try:
             content = "\n".join(lines) + "\n"
-            proc = subprocess.run(
-                ["crontab", "-"],
-                input=content, text=True,
-                capture_output=True
-            )
+            proc = subprocess.run(["crontab", "-"], input=content, text=True, capture_output=True)
             return proc.returncode == 0
         except FileNotFoundError:
             return False
@@ -237,11 +230,15 @@ def _get_scheduler() -> MacroScheduler:
     return _scheduler
 
 
-def schedule_cron(name: str, cron_expr: str, command: Optional[str] = None, description: str = "") -> ScheduledMacro:
+def schedule_cron(
+    name: str, cron_expr: str, command: Optional[str] = None, description: str = ""
+) -> ScheduledMacro:
     return _get_scheduler().schedule_cron(name, cron_expr, command, description)
 
 
-def schedule_at(name: str, run_at: str, command: Optional[str] = None, description: str = "") -> ScheduledMacro:
+def schedule_at(
+    name: str, run_at: str, command: Optional[str] = None, description: str = ""
+) -> ScheduledMacro:
     return _get_scheduler().schedule_at(name, run_at, command, description)
 
 

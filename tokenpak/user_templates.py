@@ -31,6 +31,7 @@ VARIABLE_RE = re.compile(r"\{\{(\w+)\}\}")
 
 # ── Storage helpers ──────────────────────────────────────────────────────────
 
+
 def _templates_dir() -> Path:
     d = TEMPLATES_DIR
     d.mkdir(parents=True, exist_ok=True)
@@ -47,6 +48,7 @@ def _now() -> str:
 
 
 # ── Core CRUD ────────────────────────────────────────────────────────────────
+
 
 def list_templates() -> List[Dict]:
     """Return all templates sorted by name."""
@@ -115,6 +117,7 @@ def variables_in(name: str) -> Optional[List[str]]:
 
 # ── CLI helpers (argparse-based, wired into cli.py) ──────────────────────────
 
+
 def cmd_template_list(args) -> None:
     templates = list_templates()
     if not templates:
@@ -145,13 +148,15 @@ def cmd_template_add(args) -> None:
         print("❌ No content provided.")
         return
 
-    template = add(name, content)
+    add(name, content)
     vars_found = sorted(set(VARIABLE_RE.findall(content)))
     print(f"✅ Template '{name}' saved.")
     if vars_found:
         print(f"   Variables: {', '.join(f'{{{{{v}}}}}' for v in vars_found)}")
-    print(f"   Use with: tokenpak template use {name}" +
-          ("".join(f" --var {v}=<value>" for v in vars_found)))
+    print(
+        f"   Use with: tokenpak template use {name}"
+        + ("".join(f" --var {v}=<value>" for v in vars_found))
+    )
 
 
 def cmd_template_show(args) -> None:

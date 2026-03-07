@@ -4,22 +4,24 @@ TokenPak Telemetry Pipeline — orchestrates processing stages.
 Pipeline stages:
 INGRESS → DETECT_PROVIDER → NORMALIZE → STORE
 """
+
 from __future__ import annotations
 
+import json
 import logging
 import time
-import json
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
 
-from .storage import TelemetryDB
 from .models import TelemetryEvent
+from .storage import TelemetryDB
 
 logger = logging.getLogger(__name__)
 # --- Shadow hook + intent classifier (fail-silent) ---
 try:
     from tokenpak.shadow_hook import ShadowHook as _ShadowHookClass
+
     _shadow_hook = _ShadowHookClass()
 except Exception:
     _shadow_hook = None  # type: ignore
@@ -35,9 +37,9 @@ except Exception:
     _shadow_validate = None  # type: ignore
 
 
-
 class PipelineStage(str, Enum):
     """Pipeline processing stages."""
+
     INGRESS = "ingress"
     DETECT_PROVIDER = "detect_provider"
     NORMALIZE = "normalize"
@@ -47,6 +49,7 @@ class PipelineStage(str, Enum):
 @dataclass
 class StageResult:
     """Result from a pipeline stage."""
+
     stage: PipelineStage
     success: bool
     data: Any = None
@@ -57,6 +60,7 @@ class StageResult:
 @dataclass
 class PipelineResult:
     """Complete pipeline execution result."""
+
     success: bool
     event_id: Optional[str] = None
     stages: list[StageResult] = field(default_factory=list)
@@ -68,13 +72,13 @@ class PipelineResult:
 class TelemetryPipeline:
     """
     Orchestrates telemetry event processing through stages.
-    
+
     Errors at any stage don't block storage of partial data.
     """
-    
+
     def __init__(self, storage: TelemetryDB):
         self.storage = storage
-        
+
     def process(self, raw_event: dict[str, Any]) -> PipelineResult:
         """Process a raw telemetry event through all pipeline stages."""
         start_time = time.perf_counter()
@@ -82,26 +86,32 @@ class TelemetryPipeline:
         current_data = raw_event
         event_id = None
         partial_stored = False
-        
+
         stage_handlers: list[tuple[PipelineStage, Callable]] = [
             (PipelineStage.INGRESS, self._stage_ingress),
             (PipelineStage.DETECT_PROVIDER, self._stage_detect_provider),
             (PipelineStage.NORMALIZE, self._stage_normalize),
             (PipelineStage.STORE, self._stage_store),
         ]
-        
+
         for stage, handler in stage_handlers:
             stage_start = time.perf_counter()
             try:
                 current_data = handler(current_data)
                 duration_ms = (time.perf_counter() - stage_start) * 1000
-                stages.append(StageResult(stage=stage, success=True, data=current_data, duration_ms=duration_ms))
+                stages.append(
+                    StageResult(
+                        stage=stage, success=True, data=current_data, duration_ms=duration_ms
+                    )
+                )
                 if stage == PipelineStage.STORE and current_data:
                     event_id = current_data.get("event_id")
             except Exception as e:
                 duration_ms = (time.perf_counter() - stage_start) * 1000
                 logger.warning(f"Pipeline stage {stage.value} failed: {e}")
-                stages.append(StageResult(stage=stage, success=False, error=str(e), duration_ms=duration_ms))
+                stages.append(
+                    StageResult(stage=stage, success=False, error=str(e), duration_ms=duration_ms)
+                )
                 if stage != PipelineStage.STORE:
                     try:
                         partial_result = self._store_partial(current_data, stage)
@@ -110,20 +120,29 @@ class TelemetryPipeline:
                             event_id = partial_result.get("event_id")
                     except Exception:
                         pass
-                return PipelineResult(success=False, event_id=event_id, stages=stages,
+                return PipelineResult(
+                    success=False,
+                    event_id=event_id,
+                    stages=stages,
                     total_duration_ms=(time.perf_counter() - start_time) * 1000,
-                    partial_data_stored=partial_stored, error=str(e))
-        
-        return PipelineResult(success=True, event_id=event_id, stages=stages,
-            total_duration_ms=(time.perf_counter() - start_time) * 1000)
-    
+                    partial_data_stored=partial_stored,
+                    error=str(e),
+                )
+
+        return PipelineResult(
+            success=True,
+            event_id=event_id,
+            stages=stages,
+            total_duration_ms=(time.perf_counter() - start_time) * 1000,
+        )
+
     def _stage_ingress(self, raw_event: dict) -> dict:
         if not isinstance(raw_event, dict):
             raise ValueError("Event must be a dictionary")
         if "ingress_ts" not in raw_event:
             raw_event["ingress_ts"] = time.time()
         return raw_event
-    
+
     def _stage_detect_provider(self, event: dict) -> dict:
         provider = "unknown"
         # Prefer explicit provider when caller supplies it (e.g. openai-codex)
@@ -134,13 +153,15 @@ class TelemetryPipeline:
             return event
         if event.get("type") == "message" or "claude" in str(event.get("model", "")).lower():
             provider = "anthropic"
-        elif event.get("object") == "chat.completion" or "gpt" in str(event.get("model", "")).lower():
+        elif (
+            event.get("object") == "chat.completion" or "gpt" in str(event.get("model", "")).lower()
+        ):
             provider = "openai"
         elif "gemini" in str(event.get("model", "")).lower():
             provider = "google"
         event["_detected_provider"] = provider
         return event
-    
+
     def _stage_normalize(self, event: dict) -> dict:
         provider = event.get("_detected_provider", "unknown")
         usage = event.get("usage", {})
@@ -174,15 +195,19 @@ class TelemetryPipeline:
             output_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
             cache_read = cache_write = 0
         event["_normalized"] = {
-            "provider": provider, "model": event.get("model", "unknown"),
-            "input_tokens": input_tokens, "output_tokens": output_tokens,
+            "provider": provider,
+            "model": event.get("model", "unknown"),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "total_tokens": input_tokens + output_tokens,
-            "cache_read_tokens": cache_read, "cache_write_tokens": cache_write,
+            "cache_read_tokens": cache_read,
+            "cache_write_tokens": cache_write,
         }
         return event
-    
+
     def _stage_store(self, event: dict) -> dict:
         import uuid
+
         normalized = event.get("_normalized", {})
         model = normalized.get("model", "unknown")
 
@@ -233,10 +258,10 @@ class TelemetryPipeline:
             session_id=session_id,
             duration_ms=duration_ms,
             payload={
-                "input_tokens":       normalized.get("input_tokens", 0),
-                "output_tokens":      normalized.get("output_tokens", 0),
-                "total_tokens":       normalized.get("total_tokens", 0),
-                "cache_read_tokens":  normalized.get("cache_read_tokens", 0),
+                "input_tokens": normalized.get("input_tokens", 0),
+                "output_tokens": normalized.get("output_tokens", 0),
+                "total_tokens": normalized.get("total_tokens", 0),
+                "cache_read_tokens": normalized.get("cache_read_tokens", 0),
                 "cache_write_tokens": normalized.get("cache_write_tokens", 0),
                 "intent": intent,
                 "raw": event,
@@ -246,12 +271,21 @@ class TelemetryPipeline:
 
         # Also persist usage + cost rows so dashboard tables can show tokens/$.
         try:
-            from .models import Usage, Cost
+            from .models import Cost, Usage
+
             usage_raw = event.get("usage") or {}
             u = Usage(
                 trace_id=trace_id,
-                usage_source="provider_reported" if (normalized.get("input_tokens") or normalized.get("output_tokens")) else "unknown",
-                confidence="high" if (normalized.get("input_tokens") or normalized.get("output_tokens")) else "low",
+                usage_source=(
+                    "provider_reported"
+                    if (normalized.get("input_tokens") or normalized.get("output_tokens"))
+                    else "unknown"
+                ),
+                confidence=(
+                    "high"
+                    if (normalized.get("input_tokens") or normalized.get("output_tokens"))
+                    else "low"
+                ),
                 input_billed=int(normalized.get("input_tokens") or 0),
                 output_billed=int(normalized.get("output_tokens") or 0),
                 input_est=int(normalized.get("input_tokens") or 0),
@@ -307,18 +341,23 @@ class TelemetryPipeline:
                     pass
 
         return {"event_id": telemetry_event.trace_id, "stored": True, "intent": intent}
-    
+
     def _store_partial(self, event: dict, failed_stage: PipelineStage) -> Optional[dict]:
         import uuid
+
         try:
             normalized = event.get("_normalized", {})
             partial_event = TelemetryEvent(
-                trace_id=str(uuid.uuid4()), request_id=str(uuid.uuid4()),
-                event_type="partial", ts=event.get("ingress_ts", time.time()),
+                trace_id=str(uuid.uuid4()),
+                request_id=str(uuid.uuid4()),
+                event_type="partial",
+                ts=event.get("ingress_ts", time.time()),
                 provider=event.get("_detected_provider", "unknown"),
                 model=normalized.get("model", event.get("model", "unknown")),
-                agent_id="tokenpak", status="partial",
-                payload={"partial": True, "failed_stage": failed_stage.value, "raw": event})
+                agent_id="tokenpak",
+                status="partial",
+                payload={"partial": True, "failed_stage": failed_stage.value, "raw": event},
+            )
             self.storage.insert_event(partial_event)
             return {"event_id": partial_event.trace_id, "partial": True}
         except Exception:

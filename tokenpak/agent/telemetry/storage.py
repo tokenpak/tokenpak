@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Optional
 
 from .collector import RequestStats, SessionStats
@@ -118,8 +116,7 @@ class TelemetryStorage:
     def lifetime_totals(self) -> dict[str, Any]:
         """Return all-time aggregates across persisted sessions."""
         conn = self._conn()
-        row = conn.execute(
-            """
+        row = conn.execute("""
             SELECT
                 COUNT(*) AS sessions,
                 COALESCE(SUM(requests), 0) AS total_requests,
@@ -127,8 +124,7 @@ class TelemetryStorage:
                 COALESCE(SUM(tokens_saved), 0) AS total_tokens_saved,
                 COALESCE(SUM(cost_saved), 0.0) AS total_cost_saved
             FROM tp_sessions
-            """
-        ).fetchone()
+            """).fetchone()
         return dict(row) if row else {}
 
     def prune(self, days: int = 30) -> int:

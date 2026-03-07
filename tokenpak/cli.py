@@ -4,14 +4,13 @@ import argparse
 import difflib
 import hashlib
 import json
-import importlib.util
-import time
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Tuple, List
 import os
-import sys
 import socket
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Optional, Tuple
 
 # ── Progressive Disclosure ────────────────────────────────────────────────────
 
@@ -23,49 +22,49 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
-        ("start",       "Start the proxy (localhost:8766)"),
-        ("stop",        "Stop the running proxy"),
-        ("restart",     "Restart the proxy"),
-        ("demo",        "See compression in action"),
-        ("cost",        "View your API spend"),
-        ("status",      "Check proxy health"),
-        ("logs",        "Show recent proxy logs"),
+        ("start", "Start the proxy (localhost:8766)"),
+        ("stop", "Stop the running proxy"),
+        ("restart", "Restart the proxy"),
+        ("demo", "See compression in action"),
+        ("cost", "View your API spend"),
+        ("status", "Check proxy health"),
+        ("logs", "Show recent proxy logs"),
     ],
     "Indexing": [
-        ("index",       "Index a directory for context retrieval"),
-        ("search",      "Search indexed content"),
+        ("index", "Index a directory for context retrieval"),
+        ("search", "Search indexed content"),
     ],
     "Configuration": [
-        ("route",       "Manage model routing rules"),
-        ("recipe",      "Manage compression recipes"),
-        ("template",    "Manage prompt templates"),
-        ("budget",      "Set API budget limits"),
-        ("config",      "Config sync, pull, validate (version control)"),
+        ("route", "Manage model routing rules"),
+        ("recipe", "Manage compression recipes"),
+        ("template", "Manage prompt templates"),
+        ("budget", "Set API budget limits"),
+        ("config", "Config sync, pull, validate (version control)"),
     ],
     "Versioning": [
-        ("version",     "Show current versions (proxy, config, cli)"),
-        ("update",      "Update TokenPak to latest from git/pypi"),
+        ("version", "Show current versions (proxy, config, cli)"),
+        ("update", "Update TokenPak to latest from git/pypi"),
     ],
     "Operations": [
-        ("benchmark",   "Run compression benchmarks"),
-        ("calibrate",   "Calibrate worker count for this host"),
-        ("doctor",      "Run diagnostics"),
-        ("debug",       "Toggle verbose debug logging"),
-        ("learn",       "View/reset learned patterns"),
+        ("benchmark", "Run compression benchmarks"),
+        ("calibrate", "Calibrate worker count for this host"),
+        ("doctor", "Run diagnostics"),
+        ("debug", "Toggle verbose debug logging"),
+        ("learn", "View/reset learned patterns"),
     ],
     "Advanced": [
-        ("trigger",     "Manage event triggers"),
-        ("macro",       "Manage and run macros"),
+        ("trigger", "Manage event triggers"),
+        ("macro", "Manage and run macros"),
         ("fingerprint", "Fingerprint sync and cache management"),
-        ("agent",       "Agent coordination (locks, registry)"),
-        ("lock",        "File lock management"),
-        ("run",         "Schedule and manage macro runs"),
-        ("replay",      "Inspect and re-run captured sessions"),
-        ("audit",       "Enterprise audit log management"),
-        ("compliance",  "Generate compliance reports"),
-        ("validate",    "Validate a TokenPak JSON file"),
-        ("stats",       "Show registry stats"),
-        ("serve",       "Start proxy/telemetry server (low-level)"),
+        ("agent", "Agent coordination (locks, registry)"),
+        ("lock", "File lock management"),
+        ("run", "Schedule and manage macro runs"),
+        ("replay", "Inspect and re-run captured sessions"),
+        ("audit", "Enterprise audit log management"),
+        ("compliance", "Generate compliance reports"),
+        ("validate", "Validate a TokenPak JSON file"),
+        ("stats", "Show registry stats"),
+        ("serve", "Start proxy/telemetry server (low-level)"),
     ],
 }
 
@@ -127,9 +126,11 @@ def cmd_help(args):
 
 # ── Alias commands ────────────────────────────────────────────────────────────
 
+
 def cmd_start(args):
     """Start the proxy on localhost:8766 (alias for `serve --port 8766`)."""
     import types
+
     serve_args = types.SimpleNamespace(port=8766, telemetry=False, ingest=False, workers=1)
     cmd_serve(serve_args)
 
@@ -137,6 +138,7 @@ def cmd_start(args):
 def cmd_stop(args):
     """Stop the running proxy."""
     import signal as _signal
+
     pid_path = Path.home() / ".tokenpak" / "proxy.pid"
     if not pid_path.exists():
         print("No proxy PID file found. Is the proxy running?")
@@ -181,23 +183,21 @@ def cmd_logs(args):
     print("No proxy log file found.")
     print("The proxy writes logs to ~/.tokenpak/proxy.log when running.")
 
+
 # ── End Progressive Disclosure ────────────────────────────────────────────────
 
-from .registry import BlockRegistry, Block
-from .walker import walk_directory
-from .tokens import count_tokens, truncate_to_tokens, cache_info, estimate_tokens
-from .processors import get_processor
 from .budget import BudgetBlock, quadratic_allocate
+from .calibration import calibrate_workers, get_recommended_workers
+from .miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
+from .processors import get_processor
+from .registry import Block, BlockRegistry
+from .security import secure_write_config
+from .tokens import cache_info, count_tokens, truncate_to_tokens
+from .walker import walk_directory
 from .wire import pack
-from .calibration import calibrate_workers, get_recommended_workers, load_profile
-from .miss_detector import should_expand_retrieval, DEFAULT_GAPS_PATH
-from .security import secure_write_config, sanitize_model_name, sanitize_cli_arg
-
 
 # Batch size for SQLite transactions
 BATCH_SIZE = 100
-
-
 
 
 def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
@@ -223,9 +223,9 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
     processor = get_processor(file_type, no_treesitter=no_treesitter)
     if not processor:
         return None
-    
+
     compressed = processor.process(content, path)
-    
+
     block = Block(
         path=path,
         content_hash=hashlib.sha256(content.encode()).hexdigest(),
@@ -245,8 +245,10 @@ def cmd_index(args):
     # --status mode: show stats from BlockRegistry
     if getattr(args, "status", False):
         import os
+
         from tokenpak.registry import BlockRegistry
-        db_path = getattr(args, 'db', os.path.join(os.getcwd(), '.tokenpak', 'registry.db'))
+
+        db_path = getattr(args, "db", os.path.join(os.getcwd(), ".tokenpak", "registry.db"))
         if not os.path.exists(db_path):
             print(f"No index found at {db_path}. Run `tokenpak index <directory>` first.")
             return
@@ -282,18 +284,19 @@ def cmd_index(args):
 
     if not args.directory:
         import argparse
+
         raise argparse.ArgumentError(None, "directory is required when --status is not set")
 
-
     # --watch mode: initial index then watch for changes
-    if getattr(args, 'watch', False):
+    if getattr(args, "watch", False):
         from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
+
         # Run initial full index first
         _do_index(args)
         # Then start watcher
         config = WatcherConfig(
             watch_paths=[args.directory],
-            debounce_ms=getattr(args, 'debounce', 500),
+            debounce_ms=getattr(args, "debounce", 500),
         )
         watcher = VaultWatcher(config)
         watcher.start(blocking=True)
@@ -308,26 +311,34 @@ def _do_index(args):
     """Core index logic (used by cmd_index and watch mode)."""
     registry = BlockRegistry(args.db)
     files = list(walk_directory(args.directory))
-    
+
     start_time = time.perf_counter()
     processed = 0
     skipped = 0
     unchanged = 0
-    
-    workers = getattr(args, 'workers', 1) or 1
 
-    if getattr(args, 'recalibrate', False):
-        result = calibrate_workers(args.directory, max_workers=getattr(args, 'max_workers', 8), rounds=getattr(args, 'calibration_rounds', 2))
+    workers = getattr(args, "workers", 1) or 1
+
+    if getattr(args, "recalibrate", False):
+        result = calibrate_workers(
+            args.directory,
+            max_workers=getattr(args, "max_workers", 8),
+            rounds=getattr(args, "calibration_rounds", 2),
+        )
         if "error" in result:
             print(f"Calibration skipped: {result['error']}")
         else:
-            print(f"Calibration complete: best_workers={result['best_workers']} on {result['sample_files']} files")
+            print(
+                f"Calibration complete: best_workers={result['best_workers']} on {result['sample_files']} files"
+            )
 
-    if getattr(args, 'auto_workers', False):
-        workers = get_recommended_workers(default_workers=max(1, workers), max_workers=getattr(args, 'max_workers', 8))
+    if getattr(args, "auto_workers", False):
+        workers = get_recommended_workers(
+            default_workers=max(1, workers), max_workers=getattr(args, "max_workers", 8)
+        )
         print(f"Auto workers selected: {workers}")
 
-    no_treesitter = getattr(args, 'no_treesitter', False)
+    no_treesitter = getattr(args, "no_treesitter", False)
 
     if workers > 1:
         # Parallel processing path
@@ -336,7 +347,7 @@ def _do_index(args):
         # Phase 1: Parallel file processing (CPU-bound)
         file_args = [(path, file_type, no_treesitter) for path, file_type, _ in files]
         results = []
-        
+
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {executor.submit(_process_file, fa): fa for fa in file_args}
             for future in as_completed(futures):
@@ -345,7 +356,7 @@ def _do_index(args):
                     results.append(result)
                 else:
                     skipped += 1
-        
+
         # Phase 2: Serial DB writes (I/O-bound, needs locking)
         with registry.batch_transaction() as conn:
             batch_count = 0
@@ -353,11 +364,11 @@ def _do_index(args):
                 if not registry.has_changed(path, content):
                     unchanged += 1
                     continue
-                
+
                 registry.add_block_batch(block, conn)
                 processed += 1
                 batch_count += 1
-                
+
                 if batch_count >= BATCH_SIZE:
                     conn.commit()
                     conn.execute("BEGIN IMMEDIATE")
@@ -366,22 +377,22 @@ def _do_index(args):
         # Single-threaded path (original behavior)
         with registry.batch_transaction() as conn:
             batch_count = 0
-            
+
             for path, file_type, _ in files:
                 try:
                     content = Path(path).read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     skipped += 1
                     continue
-                
+
                 if not content.strip():
                     skipped += 1
                     continue
-                
+
                 if not registry.has_changed(path, content):
                     unchanged += 1
                     continue
-                
+
                 processor = get_processor(file_type, no_treesitter=no_treesitter)
                 if not processor:
                     skipped += 1
@@ -403,16 +414,18 @@ def _do_index(args):
                 registry.add_block_batch(block, conn)
                 processed += 1
                 batch_count += 1
-                
+
                 if batch_count >= BATCH_SIZE:
                     conn.commit()
                     conn.execute("BEGIN IMMEDIATE")
                     batch_count = 0
-    
+
     elapsed = time.perf_counter() - start_time
     stats = registry.get_stats()
-    
-    print(f"Indexed: {processed} files in {elapsed:.2f}s ({processed/max(elapsed,0.001):.1f} files/sec)")
+
+    print(
+        f"Indexed: {processed} files in {elapsed:.2f}s ({processed/max(elapsed,0.001):.1f} files/sec)"
+    )
     print(f"Skipped: {skipped} | Unchanged: {unchanged}")
     print(f"Token cache: {cache_info()}")
     print(json.dumps(stats, indent=2))
@@ -424,7 +437,7 @@ def cmd_search(args):
 
     # Retrieval expansion: if query overlaps with a prior miss, double top_k
     top_k = args.top_k
-    gaps_path = getattr(args, 'gaps', DEFAULT_GAPS_PATH)
+    gaps_path = getattr(args, "gaps", DEFAULT_GAPS_PATH)
     if should_expand_retrieval(args.query, gaps_path=gaps_path):
         top_k = top_k * 2
         print(f"[miss-detector] expanded due to prior miss: top_k={top_k}", flush=True)
@@ -438,13 +451,15 @@ def cmd_search(args):
     type_weights = {"text": 0.8, "code": 0.7, "data": 0.6, "pdf": 0.7}
 
     for m in matches:
-        budget_blocks.append(BudgetBlock(
-            ref=f"{m.path}#v{m.version}",
-            relevance_score=0.8,
-            recency_score=0.6,
-            quality_score=m.quality_score,
-            type_weight=type_weights.get(m.file_type, 0.5),
-        ))
+        budget_blocks.append(
+            BudgetBlock(
+                ref=f"{m.path}#v{m.version}",
+                relevance_score=0.8,
+                recency_score=0.6,
+                quality_score=m.quality_score,
+                type_weight=type_weights.get(m.file_type, 0.5),
+            )
+        )
 
     alloc = quadratic_allocate(budget_blocks, args.budget)
 
@@ -453,16 +468,19 @@ def cmd_search(args):
         ref = f"{m.path}#v{m.version}"
         max_tokens = alloc.get(ref, 200)
         content, token_count = truncate_to_tokens(m.compressed_content, max_tokens)
-        wire_blocks.append({
-            "ref": ref,
-            "type": m.file_type,
-            "quality": m.quality_score,
-            "tokens": token_count,
-            "content": content,
-        })
+        wire_blocks.append(
+            {
+                "ref": ref,
+                "type": m.file_type,
+                "quality": m.quality_score,
+                "tokens": token_count,
+                "content": content,
+            }
+        )
 
-    if getattr(args, 'inject_refs', False):
+    if getattr(args, "inject_refs", False):
         from .compiler import compile_with_refs
+
         output = compile_with_refs(wire_blocks, args.query, args.budget)
     else:
         output = pack(wire_blocks, args.budget, {"query": args.query})
@@ -477,6 +495,7 @@ def cmd_stats(args):
     proxy_data = None
     try:
         import urllib.request as _urlreq
+
         proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
         with _urlreq.urlopen(f"{proxy_base}/health", timeout=3) as r:
             proxy_data = json.loads(r.read())
@@ -485,6 +504,7 @@ def cmd_stats(args):
 
     # Also read from the JSONL file for accurate rolling stats
     from tokenpak.agent.proxy.stats import CompressionStats
+
     cs = CompressionStats()
     file_stats = cs.stats_from_file(limit=100)
 
@@ -511,16 +531,21 @@ def cmd_stats(args):
         uptime_str = "n/a (proxy not running)"
 
     if getattr(args, "raw", False):
-        print(json.dumps({
-            "requests_total": requests_total,
-            "requests_errors": requests_errors,
-            "avg_ratio": avg_ratio,
-            "avg_latency_ms": avg_latency,
-            "uptime": uptime_str,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "requests_total": requests_total,
+                    "requests_errors": requests_errors,
+                    "avg_ratio": avg_ratio,
+                    "avg_latency_ms": avg_latency,
+                    "uptime": uptime_str,
+                },
+                indent=2,
+            )
+        )
         return
 
-    print(f"TokenPak Compression Stats (last 100 requests)")
+    print("TokenPak Compression Stats (last 100 requests)")
     print(SEP)
     print(f"{'Requests:':<17}{requests_total} total, {requests_errors} errors")
     print(f"{'Avg ratio:':<17}{avg_ratio} ({pct_reduction}% token reduction)")
@@ -530,36 +555,42 @@ def cmd_stats(args):
 
 def cmd_serve(args):
     """Start monitoring proxy or telemetry server (if available)."""
-    if getattr(args, 'telemetry', False):
+    if getattr(args, "telemetry", False):
         import uvicorn
+
         from .telemetry.server import create_app
-        watch_path = str(Path.home() / ".openclaw" / "workspace" / "session.jsonl")
+
+        str(Path.home() / ".openclaw" / "workspace" / "session.jsonl")
         app = create_app()
         # Phase 5A: register ingest router
         try:
             from .agent.ingest.api import router as ingest_router
+
             app.include_router(ingest_router)
         except Exception as _ingest_err:
             print(f"[warn] Ingest router not loaded: {_ingest_err}")
-        workers = getattr(args, 'workers', 1)
+        workers = getattr(args, "workers", 1)
         print(f"Starting TokenPak telemetry server on port {args.port} (workers={workers})")
         uvicorn.run(app, host="0.0.0.0", port=args.port, workers=workers)
         return
-    if getattr(args, 'ingest', False):
+    if getattr(args, "ingest", False):
         import uvicorn
+
         from .agent.ingest.api import create_ingest_app
+
         app = create_ingest_app()
         port = args.port
         print(f"TokenPak Ingest API — http://127.0.0.1:{port}")
-        print(f"  POST /ingest")
-        print(f"  POST /ingest/batch")
-        print(f"  GET  /health")
+        print("  POST /ingest")
+        print("  POST /ingest/batch")
+        print("  GET  /health")
         uvicorn.run(app, host="127.0.0.1", port=port)
         return
     # Default: start the TokenPak proxy server
     shutdown_timeout = getattr(args, "shutdown_timeout", None)
     try:
         from .agent.proxy.server import start_proxy
+
         start_proxy(
             host="127.0.0.1",
             port=args.port,
@@ -570,10 +601,12 @@ def cmd_serve(args):
         # Fallback for legacy proxy.py deployments
         try:
             import sys
+
             proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
             if proxy_path not in sys.path:
                 sys.path.insert(0, proxy_path)
             import proxy
+
             proxy.run_proxy(args.port)
         except Exception:
             print(f"Serve mode unavailable: {e}")
@@ -591,10 +624,12 @@ def cmd_benchmark(args):
         # Legacy latency benchmark — requires a directory
         directory = getattr(args, "directory", None) or "."
         from .benchmark import run_benchmark
+
         run_benchmark(directory, args.iterations, compare=args.compare)
     else:
         # Compression benchmark (new default)
         from .benchmark import run_compression_benchmark
+
         run_compression_benchmark(file=file_arg, use_samples=use_samples, as_json=as_json)
 
 
@@ -604,22 +639,22 @@ def cmd_calibrate(args):
     print(json.dumps(result, indent=2))
 
 
-
 class Colors:
     """ANSI color codes."""
+
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
     RED = "\033[91m"
     RESET = "\033[0m"
-    
+
     @staticmethod
     def ok(text):
         return f"{Colors.GREEN}✅{Colors.RESET}  {text}"
-    
+
     @staticmethod
     def warn(text):
         return f"{Colors.YELLOW}⚠️{Colors.RESET}   {text}"
-    
+
     @staticmethod
     def fail(text):
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
@@ -629,10 +664,10 @@ def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
     print("\nTOKENPAK  |  Doctor")
     print("──────────────────────────────\n")
-    
+
     results = {"pass": 0, "warn": 0, "fail": 0}
     fixes_needed = []
-    
+
     # Check 1: Python version
     py_major, py_minor, py_micro = sys.version_info[:3]
     py_version = f"{py_major}.{py_minor}.{py_micro}"
@@ -642,7 +677,7 @@ def cmd_doctor(args):
     else:
         print(Colors.fail(f"Python version      {py_version} — requires ≥3.10"))
         results["fail"] += 1
-    
+
     # Check 2: Config file
     config_path = Path.home() / ".tokenpak" / "config.json"
     if config_path.exists():
@@ -659,7 +694,7 @@ def cmd_doctor(args):
         print(Colors.warn(f"Config file         {config_path} — not found"))
         results["warn"] += 1
         fixes_needed.append(("create config", config_path))
-    
+
     # Check 3: Vault index
     index_path = Path.home() / ".tokenpak" / "index.json"
     if index_path.exists():
@@ -671,7 +706,11 @@ def cmd_doctor(args):
                 print(Colors.ok(f"Vault index         {index_path} — {block_count} blocks"))
                 results["pass"] += 1
             else:
-                print(Colors.warn(f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"))
+                print(
+                    Colors.warn(
+                        f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"
+                    )
+                )
                 results["warn"] += 1
         except json.JSONDecodeError:
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
@@ -679,7 +718,7 @@ def cmd_doctor(args):
     else:
         print(Colors.warn(f"Vault index         {index_path} — not found"))
         results["warn"] += 1
-    
+
     # Check 4: Proxy port
     proxy_port = 8765
     try:
@@ -691,12 +730,16 @@ def cmd_doctor(args):
             print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK"))
             results["pass"] += 1
         else:
-            print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"))
+            print(
+                Colors.warn(
+                    f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"
+                )
+            )
             results["warn"] += 1
     except Exception:
         print(Colors.warn(f"Proxy reachable     port {proxy_port} — check failed"))
         results["warn"] += 1
-    
+
     # Check 5: Disk usage
     tokenpak_dir = Path.home() / ".tokenpak"
     try:
@@ -709,9 +752,9 @@ def cmd_doctor(args):
             print(Colors.warn(f"Disk usage          {size_mb:.1f} MB — consider cleanup"))
             results["warn"] += 1
     except Exception:
-        print(Colors.warn(f"Disk usage          could not measure"))
+        print(Colors.warn("Disk usage          could not measure"))
         results["warn"] += 1
-    
+
     # Check 6: Log file
     log_path = Path.home() / ".tokenpak" / "debug.log"
     if log_path.exists():
@@ -719,9 +762,9 @@ def cmd_doctor(args):
         print(Colors.ok(f"Debug log           {log_path} — {log_size_mb:.2f} MB"))
         results["pass"] += 1
     else:
-        print(Colors.ok(f"Debug log           (not present)"))
+        print(Colors.ok("Debug log           (not present)"))
         results["pass"] += 1
-    
+
     # Check 7: Required directories exist
     required_dirs = [
         Path.home() / ".tokenpak",
@@ -736,7 +779,7 @@ def cmd_doctor(args):
         print(Colors.warn(f"Required dirs       missing: {missing_list}"))
         results["warn"] += 1
         fixes_needed.append(("create dirs", missing_dirs))
-    
+
     # Check 8: Python dependencies installed
     missing_deps = []
     optional_deps = []
@@ -749,6 +792,7 @@ def cmd_doctor(args):
         ("uvicorn", False),
     ]
     import importlib
+
     for pkg, is_required in required_packages:
         spec = importlib.util.find_spec(pkg)
         if spec is None:
@@ -756,25 +800,33 @@ def cmd_doctor(args):
                 missing_deps.append(pkg)
             else:
                 optional_deps.append(pkg)
-    
+
     if not missing_deps and not optional_deps:
-        print(Colors.ok(f"Dependencies        all packages present"))
+        print(Colors.ok("Dependencies        all packages present"))
         results["pass"] += 1
     elif not missing_deps and optional_deps:
         opt_list = ", ".join(optional_deps)
-        print(Colors.warn(f"Dependencies        optional missing: {opt_list} (run: pip install tokenpak[full])"))
+        print(
+            Colors.warn(
+                f"Dependencies        optional missing: {opt_list} (run: pip install tokenpak[full])"
+            )
+        )
         results["warn"] += 1
     else:
         dep_list = ", ".join(missing_deps)
-        print(Colors.fail(f"Dependencies        required missing: {dep_list} (run: pip install tokenpak)"))
+        print(
+            Colors.fail(
+                f"Dependencies        required missing: {dep_list} (run: pip install tokenpak)"
+            )
+        )
         results["fail"] += 1
-    
+
     # Summary
-    print(f"\n──────────────────────────────")
+    print("\n──────────────────────────────")
     summary = f"{results['fail']} error{'s' if results['fail'] != 1 else ''}, {results['warn']} warning{'s' if results['warn'] != 1 else ''}."
     print(summary)
-    
-    if hasattr(args, 'fix') and args.fix and fixes_needed:
+
+    if hasattr(args, "fix") and args.fix and fixes_needed:
         print("\nAuto-fix requested. Fixing issues...")
         for fix_type, fix_path in fixes_needed:
             if fix_type == "create config":
@@ -796,7 +848,7 @@ def cmd_doctor(args):
                 for d in fix_path:
                     d.mkdir(parents=True, exist_ok=True)
                     print(f"  ✓ Created {d}")
-    
+
     if results["fail"] > 0:
         sys.exit(1)
 
@@ -807,8 +859,9 @@ def build_parser():
         description="TokenPak — LLM Proxy with Context Compression",
         add_help=False,  # we handle --help ourselves for progressive disclosure
     )
-    parser.add_argument("--help", "-h", action="store_true", default=False,
-                        help="Show quick-start help")
+    parser.add_argument(
+        "--help", "-h", action="store_true", default=False, help="Show quick-start help"
+    )
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
 
     sub = parser.add_subparsers(dest="command", required=False)
@@ -827,8 +880,9 @@ def build_parser():
     p_restart.set_defaults(func=cmd_restart)
 
     p_logs = sub.add_parser("logs", help="Show recent proxy logs")
-    p_logs.add_argument("--lines", "-n", type=int, default=50,
-                        help="Number of log lines to show (default: 50)")
+    p_logs.add_argument(
+        "--lines", "-n", type=int, default=50, help="Number of log lines to show (default: 50)"
+    )
     p_logs.set_defaults(func=cmd_logs)
     # ── End aliases ───────────────────────────────────────────────────────────
 
@@ -839,32 +893,56 @@ def build_parser():
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
     p_index.add_argument("--status", action="store_true", help="Show indexed file count by type")
     p_index.add_argument("--budget", type=int, default=8000)
-    p_index.add_argument("--workers", "-w", type=int, default=4,
-                         help="Parallel workers (default: 4)")
-    p_index.add_argument("--auto-workers", action="store_true",
-                         help="Use hybrid calibration (static baseline + dynamic adjustment)")
-    p_index.add_argument("--recalibrate", action="store_true",
-                         help="Run static calibration before indexing")
-    p_index.add_argument("--calibration-rounds", type=int, default=2,
-                         help="Calibration rounds per candidate worker count")
-    p_index.add_argument("--max-workers", type=int, default=8,
-                         help="Upper worker cap for auto/recalibration")
-    p_index.add_argument("--watch", action="store_true",
-                         help="Watch directory and auto-reindex on file changes")
-    p_index.add_argument("--debounce", type=int, default=500,
-                         help="Debounce delay in ms for watch mode (default: 500)")
-    p_index.add_argument("--no-treesitter", action="store_true",
-                         help="Force regex-based code processing (skip tree-sitter)")
+    p_index.add_argument(
+        "--workers", "-w", type=int, default=4, help="Parallel workers (default: 4)"
+    )
+    p_index.add_argument(
+        "--auto-workers",
+        action="store_true",
+        help="Use hybrid calibration (static baseline + dynamic adjustment)",
+    )
+    p_index.add_argument(
+        "--recalibrate", action="store_true", help="Run static calibration before indexing"
+    )
+    p_index.add_argument(
+        "--calibration-rounds",
+        type=int,
+        default=2,
+        help="Calibration rounds per candidate worker count",
+    )
+    p_index.add_argument(
+        "--max-workers", type=int, default=8, help="Upper worker cap for auto/recalibration"
+    )
+    p_index.add_argument(
+        "--watch", action="store_true", help="Watch directory and auto-reindex on file changes"
+    )
+    p_index.add_argument(
+        "--debounce",
+        type=int,
+        default=500,
+        help="Debounce delay in ms for watch mode (default: 500)",
+    )
+    p_index.add_argument(
+        "--no-treesitter",
+        action="store_true",
+        help="Force regex-based code processing (skip tree-sitter)",
+    )
     p_index.set_defaults(func=cmd_index)
 
     p_search = sub.add_parser("search", help="Search indexed content")
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("--budget", type=int, default=8000)
     p_search.add_argument("--top-k", type=int, default=10)
-    p_search.add_argument("--gaps", default=DEFAULT_GAPS_PATH,
-                          help="Path to gaps.json for miss-based retrieval expansion")
-    p_search.add_argument("--inject-refs", action="store_true",
-                          help="Enable compile-time reference injection (GitHub, URLs)")
+    p_search.add_argument(
+        "--gaps",
+        default=DEFAULT_GAPS_PATH,
+        help="Path to gaps.json for miss-based retrieval expansion",
+    )
+    p_search.add_argument(
+        "--inject-refs",
+        action="store_true",
+        help="Enable compile-time reference injection (GitHub, URLs)",
+    )
     p_search.set_defaults(func=cmd_search)
 
     p_stats = sub.add_parser("stats", help="Show registry stats")
@@ -887,21 +965,35 @@ def build_parser():
     )
     p_serve.set_defaults(func=cmd_serve)
 
-    p_bench = sub.add_parser("benchmark", help="Benchmark compression performance on sample or real data")
-    p_bench.add_argument("directory", nargs="?", default=None,
-                         help="Directory to benchmark (used with --latency mode)")
-    p_bench.add_argument("--file", default=None, metavar="PATH",
-                         help="Benchmark a specific file")
-    p_bench.add_argument("--samples", action="store_true",
-                         help="Use built-in sample data (default when no file/directory given)")
-    p_bench.add_argument("--json", dest="json", action="store_true", default=False,
-                         help="Output results as JSON")
-    p_bench.add_argument("--latency", action="store_true",
-                         help="Run latency/indexing benchmark instead of compression benchmark")
-    p_bench.add_argument("--iterations", type=int, default=3,
-                         help="Iterations for latency benchmark (default: 3)")
-    p_bench.add_argument("--compare", action="store_true",
-                         help="Compare baseline vs optimized (latency mode only)")
+    p_bench = sub.add_parser(
+        "benchmark", help="Benchmark compression performance on sample or real data"
+    )
+    p_bench.add_argument(
+        "directory",
+        nargs="?",
+        default=None,
+        help="Directory to benchmark (used with --latency mode)",
+    )
+    p_bench.add_argument("--file", default=None, metavar="PATH", help="Benchmark a specific file")
+    p_bench.add_argument(
+        "--samples",
+        action="store_true",
+        help="Use built-in sample data (default when no file/directory given)",
+    )
+    p_bench.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output results as JSON"
+    )
+    p_bench.add_argument(
+        "--latency",
+        action="store_true",
+        help="Run latency/indexing benchmark instead of compression benchmark",
+    )
+    p_bench.add_argument(
+        "--iterations", type=int, default=3, help="Iterations for latency benchmark (default: 3)"
+    )
+    p_bench.add_argument(
+        "--compare", action="store_true", help="Compare baseline vs optimized (latency mode only)"
+    )
     p_bench.set_defaults(func=cmd_benchmark)
 
     p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
@@ -940,6 +1032,7 @@ def build_parser():
 def cmd_status(args):
     """Show system status including recent retry events."""
     import time as _time
+
     from .agent.agentic.retry import load_recent_retry_events
 
     print("TokenPak Status\n" + "─" * 40)
@@ -974,6 +1067,7 @@ def cmd_status(args):
     # ── Failover events ──
     try:
         from .agent.proxy.failover_engine import get_event_log
+
         flog = get_event_log()
         failover_events = flog.get_recent(limit=n)
         if not failover_events:
@@ -996,6 +1090,7 @@ def cmd_status(args):
     # ── Budget status (if available) ──
     try:
         from .budgeter import BudgetTracker
+
         tracker = BudgetTracker()
         any_budget = False
         for period in ("daily", "weekly", "monthly"):
@@ -1034,6 +1129,7 @@ def _build_debug_parser(sub):
 def cmd_debug_on(args):
     """Enable debug mode."""
     from .agent.config import set_debug_enabled
+
     set_debug_enabled(True)
     print("✅ Debug mode enabled")
     print("   Debug logs will appear on stderr during proxy requests.")
@@ -1043,6 +1139,7 @@ def cmd_debug_on(args):
 def cmd_debug_off(args):
     """Disable debug mode."""
     from .agent.config import set_debug_enabled
+
     set_debug_enabled(False)
     print("✅ Debug mode disabled")
 
@@ -1050,14 +1147,15 @@ def cmd_debug_off(args):
 def cmd_debug_status(args):
     """Show debug mode state."""
     import os
-    from .agent.config import get_debug_enabled, CONFIG_PATH
-    
+
+    from .agent.config import CONFIG_PATH, get_debug_enabled
+
     enabled = get_debug_enabled()
     env_override = os.environ.get("TOKENPAK_DEBUG")
-    
+
     status = "🟢 ON" if enabled else "⚪ OFF"
     print(f"Debug mode: {status}")
-    
+
     if env_override is not None:
         print(f"  Source: TOKENPAK_DEBUG env var = {env_override}")
     else:
@@ -1068,13 +1166,17 @@ def _build_learn_parser(sub):
     """Build `tokenpak learn` subcommand parser."""
     p_learn = sub.add_parser("learn", help="Show or reset learned patterns from telemetry")
     lsub = p_learn.add_subparsers(dest="learn_cmd", required=True)
-    lsub.add_parser("status", help="Show learned patterns summary").set_defaults(func=cmd_learn_status)
+    lsub.add_parser("status", help="Show learned patterns summary").set_defaults(
+        func=cmd_learn_status
+    )
     lsub.add_parser("reset", help="Clear all learned data").set_defaults(func=cmd_learn_reset)
 
 
 def cmd_learn_status(args):
     """Show learned patterns from routing, compression, and context data."""
-    from .agent.agentic.learning import cmd_learn_status as _learn_status, learn
+    from .agent.agentic.learning import cmd_learn_status as _learn_status
+    from .agent.agentic.learning import learn
+
     learn()
     _learn_status()
 
@@ -1082,6 +1184,7 @@ def cmd_learn_status(args):
 def cmd_learn_reset(args):
     """Clear all learned data."""
     from .agent.agentic.learning import reset
+
     reset()
     print("✓ Learning store cleared.")
 
@@ -1089,8 +1192,11 @@ def cmd_learn_reset(args):
 def _build_user_template_parser(sub):
     """Build `tokenpak template` subcommand parser for local user templates."""
     from .user_templates import (
-        cmd_template_list, cmd_template_add, cmd_template_show,
-        cmd_template_remove, cmd_template_use,
+        cmd_template_add,
+        cmd_template_list,
+        cmd_template_remove,
+        cmd_template_show,
+        cmd_template_use,
     )
 
     p_tmpl = sub.add_parser("template", help="Manage local user prompt templates")
@@ -1102,7 +1208,9 @@ def _build_user_template_parser(sub):
     # add
     p_add = tsub.add_parser("add", help="Add or update a template")
     p_add.add_argument("name", help="Template name")
-    p_add.add_argument("--content", default=None, help="Template content (use {{var}} for variables)")
+    p_add.add_argument(
+        "--content", default=None, help="Template content (use {{var}} for variables)"
+    )
     p_add.set_defaults(func=cmd_template_add)
 
     # show
@@ -1118,25 +1226,33 @@ def _build_user_template_parser(sub):
     # use
     p_use = tsub.add_parser("use", help="Expand a template with variables")
     p_use.add_argument("name", help="Template name")
-    p_use.add_argument("--var", action="append", default=[], metavar="KEY=VALUE",
-                       help="Variable substitution (repeatable)")
+    p_use.add_argument(
+        "--var",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Variable substitution (repeatable)",
+    )
     p_use.set_defaults(func=cmd_template_use)
-
 
 
 # ---------------------------------------------------------------------------
 # Enterprise Audit commands
 # ---------------------------------------------------------------------------
 
+
 def _build_audit_parser(sub):
     p_audit = sub.add_parser("audit", help="Enterprise audit log management")
     asub = p_audit.add_subparsers(dest="audit_cmd", required=True)
 
     p_list = asub.add_parser("list", help="List audit log entries")
-    p_list.add_argument("--since", default=None, metavar="DATE",
-                        help="Filter entries since date (ISO format, e.g. 2026-01-01)")
-    p_list.add_argument("--until", default=None, metavar="DATE",
-                        help="Filter entries until date")
+    p_list.add_argument(
+        "--since",
+        default=None,
+        metavar="DATE",
+        help="Filter entries since date (ISO format, e.g. 2026-01-01)",
+    )
+    p_list.add_argument("--until", default=None, metavar="DATE", help="Filter entries until date")
     p_list.add_argument("--user", dest="user_id", default=None, help="Filter by user ID")
     p_list.add_argument("--action", default=None, help="Filter by action type")
     p_list.add_argument("--model", default=None, help="Filter by model name")
@@ -1148,8 +1264,13 @@ def _build_audit_parser(sub):
 
     p_export = asub.add_parser("export", help="Export audit log to file")
     p_export.add_argument("output", help="Output file path")
-    p_export.add_argument("--format", dest="fmt", choices=["json", "csv"], default="json",
-                          help="Export format (default: json)")
+    p_export.add_argument(
+        "--format",
+        dest="fmt",
+        choices=["json", "csv"],
+        default="json",
+        help="Export format (default: json)",
+    )
     p_export.add_argument("--since", default=None, metavar="DATE")
     p_export.add_argument("--until", default=None, metavar="DATE")
     p_export.add_argument("--user", dest="user_id", default=None)
@@ -1161,8 +1282,9 @@ def _build_audit_parser(sub):
     p_verify.set_defaults(func=cmd_audit_verify)
 
     p_prune = asub.add_parser("prune", help="Remove entries older than retention window")
-    p_prune.add_argument("--days", type=int, default=90,
-                         help="Retention window in days (default: 90)")
+    p_prune.add_argument(
+        "--days", type=int, default=90, help="Retention window in days (default: 90)"
+    )
     p_prune.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
     p_prune.set_defaults(func=cmd_audit_prune)
 
@@ -1175,6 +1297,7 @@ def _build_audit_parser(sub):
 def _get_audit_db(args) -> str:
     import os
     from pathlib import Path
+
     if hasattr(args, "audit_db") and args.audit_db:
         return args.audit_db
     home = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
@@ -1182,8 +1305,10 @@ def _get_audit_db(args) -> str:
 
 
 def cmd_audit_list(args):
-    from tokenpak.enterprise.audit import AuditLog
     import json as _json
+
+    from tokenpak.enterprise.audit import AuditLog
+
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
         rows = log.list(
@@ -1206,16 +1331,19 @@ def cmd_audit_list(args):
         print(header)
         print("-" * len(header))
         for r in rows:
-            print(f"{r.get('ts_iso','')[:25]:<26} "
-                  f"{(r.get('user_id','') or '-'):<16} "
-                  f"{r.get('action',''):<24} "
-                  f"{(r.get('model','') or '-'):<28} "
-                  f"{r.get('outcome',''):<10}")
+            print(
+                f"{r.get('ts_iso','')[:25]:<26} "
+                f"{(r.get('user_id','') or '-'):<16} "
+                f"{r.get('action',''):<24} "
+                f"{(r.get('model','') or '-'):<28} "
+                f"{r.get('outcome',''):<10}"
+            )
         print(f"\n{len(rows)} entries")
 
 
 def cmd_audit_export(args):
     from tokenpak.enterprise.audit import AuditLog
+
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
         n = log.export(
@@ -1230,6 +1358,7 @@ def cmd_audit_export(args):
 
 def cmd_audit_verify(args):
     from tokenpak.enterprise.audit import AuditLog
+
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
         ok, errors = log.verify_chain()
@@ -1239,11 +1368,12 @@ def cmd_audit_verify(args):
         print(f"❌ Audit chain integrity: FAILED ({len(errors)} violation(s))")
         for e in errors:
             print(f"  • {e}")
-        import sys; sys.exit(1)
+        sys.exit(1)
 
 
 def cmd_audit_prune(args):
     from tokenpak.enterprise.audit import AuditLog
+
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
         n = log.prune(retention_days=args.days)
@@ -1251,8 +1381,8 @@ def cmd_audit_prune(args):
 
 
 def cmd_audit_summary(args):
-    import json as _json
     from tokenpak.enterprise.audit import AuditLog
+
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
         stats = log.summary(since=getattr(args, "since", None))
@@ -1276,21 +1406,30 @@ def cmd_audit_summary(args):
 # Enterprise Compliance commands
 # ---------------------------------------------------------------------------
 
+
 def _build_compliance_parser(sub):
     p_comp = sub.add_parser("compliance", help="Generate compliance reports (SOC2, GDPR, CCPA)")
     csub = p_comp.add_subparsers(dest="compliance_cmd", required=True)
 
     p_report = csub.add_parser("report", help="Generate a compliance report")
-    p_report.add_argument("--standard", choices=["soc2", "gdpr", "ccpa"], required=True,
-                          help="Compliance standard to report against")
-    p_report.add_argument("--since", default=None, metavar="DATE",
-                          help="Report period start date (ISO)")
-    p_report.add_argument("--until", default=None, metavar="DATE",
-                          help="Report period end date (ISO)")
-    p_report.add_argument("--org", dest="organization", default=None,
-                          help="Organization name for the report")
-    p_report.add_argument("--output", default=None, metavar="FILE",
-                          help="Save report to file (.json or .txt)")
+    p_report.add_argument(
+        "--standard",
+        choices=["soc2", "gdpr", "ccpa"],
+        required=True,
+        help="Compliance standard to report against",
+    )
+    p_report.add_argument(
+        "--since", default=None, metavar="DATE", help="Report period start date (ISO)"
+    )
+    p_report.add_argument(
+        "--until", default=None, metavar="DATE", help="Report period end date (ISO)"
+    )
+    p_report.add_argument(
+        "--org", dest="organization", default=None, help="Organization name for the report"
+    )
+    p_report.add_argument(
+        "--output", default=None, metavar="FILE", help="Save report to file (.json or .txt)"
+    )
     p_report.add_argument("--format", dest="fmt", choices=["json", "text"], default="text")
     p_report.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
     p_report.set_defaults(func=cmd_compliance_report)
@@ -1298,7 +1437,9 @@ def _build_compliance_parser(sub):
 
 def cmd_compliance_report(args):
     import os
+
     from tokenpak.enterprise.compliance import ComplianceReporter
+
     org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
     db_path = _get_audit_db(args)
     reporter = ComplianceReporter(audit_db=db_path, organization=org)
@@ -1327,6 +1468,7 @@ _PROXY_URL = "http://localhost:8766"
 
 def _compute_config_hash(cfg: dict) -> str:
     import hashlib as _hl
+
     normalized = {k: v for k, v in sorted(cfg.items()) if k != "meta"}
     raw = json.dumps(normalized, sort_keys=True).encode()
     return "sha256:" + _hl.sha256(raw).hexdigest()[:12]
@@ -1335,6 +1477,7 @@ def _compute_config_hash(cfg: dict) -> str:
 def _get_proxy_version() -> dict:
     """Query proxy /version endpoint. Returns dict or raises."""
     import urllib.request as _ur
+
     try:
         with _ur.urlopen(f"{_PROXY_URL}/version", timeout=3) as resp:
             return json.loads(resp.read())
@@ -1371,7 +1514,9 @@ def cmd_version(args):
     else:
         uptime = proxy_info.get("uptime", 0)
         h, m = divmod(uptime // 60, 60)
-        print(f"Proxy (running)  : {proxy_info.get('version', '?')}  uptime={h}h{m:02d}m  python={proxy_info.get('pythonVersion', '?')}")
+        print(
+            f"Proxy (running)  : {proxy_info.get('version', '?')}  uptime={h}h{m:02d}m  python={proxy_info.get('pythonVersion', '?')}"
+        )
         print(f"Proxy config hash: {proxy_info.get('configHash', '?')}")
 
     # openclaw.json meta
@@ -1396,7 +1541,7 @@ def cmd_version(args):
             cfg = json.loads(_OPENCLAW_CFG.read_text())
             current_hash = _compute_config_hash(cfg)
             if lock.get("configHash") and lock["configHash"] != current_hash:
-                print(f"\n  ⚠️  Config drift detected!")
+                print("\n  ⚠️  Config drift detected!")
                 print(f"  Lock hash    : {lock['configHash']}")
                 print(f"  Current hash : {current_hash}")
                 print("  Run `tokenpak config sync` to reconcile.")
@@ -1424,6 +1569,7 @@ def cmd_update(args):
     print("Checking for updates...")
     try:
         import urllib.request as _ur
+
         with _ur.urlopen("https://pypi.org/pypi/tokenpak/json", timeout=5) as resp:
             data = json.loads(resp.read())
             latest = data["info"]["version"]
@@ -1432,6 +1578,7 @@ def cmd_update(args):
         latest = None
 
     from tokenpak import __version__ as current_ver
+
     print(f"  Current : {current_ver}")
     if latest:
         print(f"  Latest  : {latest}")
@@ -1457,7 +1604,8 @@ def cmd_update(args):
     print("\nUpdating TokenPak...")
     result = _sp.run(
         [sys.executable, "-m", "pip", "install", "--upgrade", "tokenpak"],
-        capture_output=True, text=True
+        capture_output=True,
+        text=True,
     )
     if result.returncode == 0:
         print("  ✓ tokenpak updated")
@@ -1469,8 +1617,11 @@ def cmd_update(args):
     if proxy_running and not core_only:
         print("\nRestarting proxy...")
         try:
-            _sp.Popen([sys.executable, "-m", "tokenpak", "restart"],
-                      stdout=_sp.DEVNULL, stderr=_sp.DEVNULL)
+            _sp.Popen(
+                [sys.executable, "-m", "tokenpak", "restart"],
+                stdout=_sp.DEVNULL,
+                stderr=_sp.DEVNULL,
+            )
             print("  ✓ Proxy restart initiated")
         except Exception as e:
             print(f"  ⚠ Could not restart proxy: {e}")
@@ -1479,6 +1630,7 @@ def cmd_update(args):
     try:
         cfg = json.loads(_OPENCLAW_CFG.read_text())
         import datetime as _dt
+
         lock = {
             "proxyVersion": latest or current_ver,
             "configVersion": cfg.get("meta", {}).get("configVersion", "unknown"),
@@ -1497,6 +1649,7 @@ def cmd_update(args):
 def cmd_config_sync(args):
     """Pull latest config from canonical source (git/vault)."""
     import subprocess as _sp
+
     source = getattr(args, "source", "git")
     dry_run = getattr(args, "dry_run", False)
 
@@ -1510,7 +1663,9 @@ def cmd_config_sync(args):
         # Pull latest vault
         result = _sp.run(
             ["bash", str(vault_dir / "scripts" / "vault-sync.sh")],
-            capture_output=True, text=True, cwd=str(vault_dir)
+            capture_output=True,
+            text=True,
+            cwd=str(vault_dir),
         )
         if result.returncode == 0:
             print("  ✓ Vault synced")
@@ -1524,7 +1679,7 @@ def cmd_config_sync(args):
             current_hash = _compute_config_hash(cfg)
             lock_hash = lock.get("configHash", "")
             if lock_hash and lock_hash != current_hash:
-                print(f"\n  Config drift detected:")
+                print("\n  Config drift detected:")
                 print(f"    Lock hash    : {lock_hash}")
                 print(f"    Current hash : {current_hash}")
                 if dry_run:
@@ -1543,6 +1698,7 @@ def cmd_config_sync(args):
             return
         try:
             import urllib.request as _ur
+
             with _ur.urlopen(url, timeout=10) as resp:
                 remote_cfg = json.loads(resp.read())
             print(f"  ✓ Fetched config from {url}")
@@ -1616,6 +1772,7 @@ def cmd_config_pull(args):
 
 # ── Parser builders for new commands ─────────────────────────────────────────
 
+
 def _build_version_parser(sub):
     p = sub.add_parser("version", help="Show current versions (proxy, config, cli)")
     p.set_defaults(func=cmd_version)
@@ -1625,10 +1782,18 @@ def _build_update_parser(sub):
     p = sub.add_parser("update", help="Update TokenPak to latest from git/pypi")
     p.add_argument("--check", action="store_true", help="Check for updates without installing")
     p.add_argument("--force", action="store_true", help="Force update even if already up to date")
-    p.add_argument("--core-only", action="store_true", dest="core_only",
-                   help="Update core only, skip config merge")
-    p.add_argument("--dry-run", action="store_true", dest="dry_run",
-                   help="Show what would change without applying")
+    p.add_argument(
+        "--core-only",
+        action="store_true",
+        dest="core_only",
+        help="Update core only, skip config merge",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Show what would change without applying",
+    )
     p.set_defaults(func=cmd_update)
 
 
@@ -1638,8 +1803,9 @@ def _build_config_mgmt_parser(sub):
 
     # sync
     p_sync = csub.add_parser("sync", help="Sync config from canonical source")
-    p_sync.add_argument("--source", choices=["git", "url"], default="git",
-                        help="Config source: git (vault) or url")
+    p_sync.add_argument(
+        "--source", choices=["git", "url"], default="git", help="Config source: git (vault) or url"
+    )
     p_sync.add_argument("--url", help="URL for source=url")
     p_sync.add_argument("--dry-run", action="store_true", dest="dry_run")
     p_sync.set_defaults(func=cmd_config_sync)
@@ -1649,8 +1815,9 @@ def _build_config_mgmt_parser(sub):
     p_pull.add_argument("--source", choices=["git", "url"], default="git")
     p_pull.add_argument("--url", help="URL for source=url")
     p_pull.add_argument("--dry-run", action="store_true", dest="dry_run")
-    p_pull.add_argument("--merge", choices=["replace", "merge", "diff"], default="merge",
-                        help="Merge strategy")
+    p_pull.add_argument(
+        "--merge", choices=["replace", "merge", "diff"], default="merge", help="Merge strategy"
+    )
     p_pull.set_defaults(func=cmd_config_pull)
 
     # validate
@@ -1673,8 +1840,14 @@ def main():
     raw_cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     known_cmds = set(_ALL_COMMANDS) | {
         # also include argparse-registered commands not in groups
-        "help", "start", "stop", "restart", "logs",
-        "version", "update", "config",
+        "help",
+        "start",
+        "stop",
+        "restart",
+        "logs",
+        "version",
+        "update",
+        "config",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
@@ -1685,9 +1858,9 @@ def main():
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
                 "compress": "Compression happens automatically through the proxy.\nRun `tokenpak demo` to see it in action.",
-                "run":      "Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
-                "proxy":    "Use `tokenpak start` to start the proxy on localhost:8766.",
-                "kill":     "Use `tokenpak stop` to stop the running proxy.",
+                "run": "Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
+                "proxy": "Use `tokenpak start` to start the proxy on localhost:8766.",
+                "kill": "Use `tokenpak stop` to stop the running proxy.",
             }
             hint = _COMMAND_HINTS.get(raw_cmd)
             if hint:
@@ -1723,8 +1896,10 @@ def main():
 
 # ── Route commands ────────────────────────────────────────────────────────────
 
+
 def _get_route_store(args=None):
-    from .routing.rules import RouteStore, DEFAULT_ROUTES_PATH
+    from .routing.rules import DEFAULT_ROUTES_PATH, RouteStore
+
     path = getattr(args, "routes", None) or DEFAULT_ROUTES_PATH
     return RouteStore(path=path)
 
@@ -1735,7 +1910,9 @@ def cmd_route_list(args):
     rules = store.list()
     if not rules:
         print("No routing rules defined.")
-        print("Add one with: tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307")
+        print(
+            "Add one with: tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307"
+        )
         return
     print(f"{'ID':<10} {'PRI':>4} {'EN':<4} {'PATTERN':<45} TARGET")
     print("-" * 90)
@@ -1757,7 +1934,7 @@ def cmd_route_list(args):
 
 def cmd_route_add(args):
     """Add a routing rule."""
-    from .routing.rules import RouteStore, parse_pattern_args, DEFAULT_ROUTES_PATH
+    from .routing.rules import parse_pattern_args
 
     store = _get_route_store(args)
     try:
@@ -1806,7 +1983,7 @@ def cmd_route_remove(args):
 
 def cmd_route_test(args):
     """Show which rule would match a given prompt."""
-    from .routing.rules import RouteEngine, RouteStore, _count_tokens_approx
+    from .routing.rules import RouteEngine, _count_tokens_approx
 
     store = _get_route_store(args)
     engine = RouteEngine(store=store)
@@ -1818,7 +1995,9 @@ def cmd_route_test(args):
     if token_count is None and prompt:
         token_count = _count_tokens_approx(prompt)
 
-    print(f"Testing: model={model!r}  prompt={prompt[:60]!r}{'...' if len(prompt) > 60 else ''}  tokens≈{token_count}")
+    print(
+        f"Testing: model={model!r}  prompt={prompt[:60]!r}{'...' if len(prompt) > 60 else ''}  tokens≈{token_count}"
+    )
     print()
 
     match = engine.match(model=model, prompt=prompt, token_count=token_count)
@@ -1838,6 +2017,7 @@ def cmd_route_test(args):
         print("All rules evaluated:")
         for r in rules:
             from .routing.rules import RouteEngine as _RE
+
             did_match = _RE._matches(r.pattern, model=model, prompt=prompt, token_count=token_count)
             tag = "✓" if (did_match and r.enabled) else ("skip" if not r.enabled else "✗")
             print(f"  [{tag}] {r.id}  {r.target}")
@@ -1874,18 +2054,35 @@ def _build_route_parser(sub):
 
     # route add
     p_add = rsub.add_parser("add", help="Add a routing rule")
-    p_add.add_argument("--model", default=None,
-                       help="Model glob pattern (e.g. 'gpt-4*', 'openai/*')")
-    p_add.add_argument("--prefix", default=None,
-                       help="Prompt prefix match (case-insensitive)")
-    p_add.add_argument("--min-tokens", dest="min_tokens", type=int, default=None,
-                       help="Minimum token count (inclusive)")
-    p_add.add_argument("--max-tokens", dest="max_tokens", type=int, default=None,
-                       help="Maximum token count (inclusive)")
-    p_add.add_argument("--target", required=True,
-                       help="Target model/provider (e.g. 'anthropic/claude-3-haiku-20240307')")
-    p_add.add_argument("--priority", type=int, default=100,
-                       help="Rule priority (lower = higher priority, default 100)")
+    p_add.add_argument(
+        "--model", default=None, help="Model glob pattern (e.g. 'gpt-4*', 'openai/*')"
+    )
+    p_add.add_argument("--prefix", default=None, help="Prompt prefix match (case-insensitive)")
+    p_add.add_argument(
+        "--min-tokens",
+        dest="min_tokens",
+        type=int,
+        default=None,
+        help="Minimum token count (inclusive)",
+    )
+    p_add.add_argument(
+        "--max-tokens",
+        dest="max_tokens",
+        type=int,
+        default=None,
+        help="Maximum token count (inclusive)",
+    )
+    p_add.add_argument(
+        "--target",
+        required=True,
+        help="Target model/provider (e.g. 'anthropic/claude-3-haiku-20240307')",
+    )
+    p_add.add_argument(
+        "--priority",
+        type=int,
+        default=100,
+        help="Rule priority (lower = higher priority, default 100)",
+    )
     p_add.add_argument("--description", default="", help="Optional description")
     p_add.add_argument("--routes", default=None, help="Path to routes.yaml")
     p_add.set_defaults(func=cmd_route_add)
@@ -1900,10 +2097,12 @@ def _build_route_parser(sub):
     p_test = rsub.add_parser("test", help="Show which rule matches a prompt")
     p_test.add_argument("prompt", nargs="?", default="", help="Prompt text to test")
     p_test.add_argument("--model", default="", help="Model name to test against")
-    p_test.add_argument("--tokens", type=int, default=None,
-                        help="Token count override (default: auto-estimated)")
-    p_test.add_argument("--verbose", "-v", action="store_true",
-                        help="Show all rules and their match status")
+    p_test.add_argument(
+        "--tokens", type=int, default=None, help="Token count override (default: auto-estimated)"
+    )
+    p_test.add_argument(
+        "--verbose", "-v", action="store_true", help="Show all rules and their match status"
+    )
     p_test.add_argument("--routes", default=None, help="Path to routes.yaml")
     p_test.set_defaults(func=cmd_route_test)
 
@@ -1921,22 +2120,34 @@ def _build_route_parser(sub):
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
 
+
 def _trigger_store():
     from .agent.triggers.store import TriggerStore
+
     return TriggerStore()
 
 
 def cmd_trigger_list(args):
     import json as _json
+
     store = _trigger_store()
     triggers = store.list()
     if getattr(args, "json", False):
-        print(_json.dumps(
-            [dict(id=t.id, event=t.event, action=t.action,
-                  enabled=t.enabled, created_at=t.created_at)
-             for t in triggers],
-            indent=2,
-        ))
+        print(
+            _json.dumps(
+                [
+                    dict(
+                        id=t.id,
+                        event=t.event,
+                        action=t.action,
+                        enabled=t.enabled,
+                        created_at=t.created_at,
+                    )
+                    for t in triggers
+                ],
+                indent=2,
+            )
+        )
         return
     if not triggers:
         print("No triggers registered.")
@@ -1950,19 +2161,29 @@ def cmd_trigger_list(args):
 
 def cmd_trigger_add(args):
     import json as _json
+
     store = _trigger_store()
     t = store.add(event=args.event, action=args.action)
     if getattr(args, "json", False):
-        print(_json.dumps(dict(
-            id=t.id, event=t.event, action=t.action,
-            enabled=t.enabled, created_at=t.created_at,
-        ), indent=2))
+        print(
+            _json.dumps(
+                dict(
+                    id=t.id,
+                    event=t.event,
+                    action=t.action,
+                    enabled=t.enabled,
+                    created_at=t.created_at,
+                ),
+                indent=2,
+            )
+        )
         return
     print(f"Trigger added: id={t.id}  event={t.event}  action={t.action}")
 
 
 def cmd_trigger_remove(args):
     import json as _json
+
     store = _trigger_store()
     removed = store.remove(args.id)
     if getattr(args, "json", False):
@@ -1977,16 +2198,19 @@ def cmd_trigger_remove(args):
 def cmd_trigger_test(args):
     """Dry-run: show which registered triggers would fire for a given event."""
     import json as _json
+
     from .agent.triggers.matcher import match_event
+
     store = _trigger_store()
     event = args.event
     matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
     if getattr(args, "json", False):
-        print(_json.dumps(
-            [dict(id=t.id, event=t.event, action=t.action, would_fire=True)
-             for t in matched],
-            indent=2,
-        ))
+        print(
+            _json.dumps(
+                [dict(id=t.id, event=t.event, action=t.action, would_fire=True) for t in matched],
+                indent=2,
+            )
+        )
         return
     print(f"Testing event: {event}")
     if not matched:
@@ -1997,15 +2221,26 @@ def cmd_trigger_test(args):
 
 def cmd_trigger_log(args):
     import json as _json
+
     store = _trigger_store()
     logs = store.list_logs(limit=args.limit)
     if getattr(args, "json", False):
-        print(_json.dumps(
-            [dict(trigger_id=lg.trigger_id, event=lg.event, action=lg.action,
-                  fired_at=lg.fired_at, exit_code=lg.exit_code, output=lg.output)
-             for lg in logs],
-            indent=2,
-        ))
+        print(
+            _json.dumps(
+                [
+                    dict(
+                        trigger_id=lg.trigger_id,
+                        event=lg.event,
+                        action=lg.action,
+                        fired_at=lg.fired_at,
+                        exit_code=lg.exit_code,
+                        output=lg.output,
+                    )
+                    for lg in logs
+                ],
+                indent=2,
+            )
+        )
         return
     if not logs:
         print("No trigger log entries.")
@@ -2019,16 +2254,18 @@ def cmd_trigger_log(args):
 
 def cmd_trigger_daemon(args):
     from .agent.triggers.daemon import TriggerDaemon
+
     store = _trigger_store()
     daemon = TriggerDaemon(store=store)
     daemon.run()
 
 
-
 def cmd_trigger_fire(args):
     """Fire an event string immediately — executes all matching enabled triggers."""
     import subprocess
+
     from .agent.triggers.matcher import match_event
+
     store = _trigger_store()
     event = args.event
     matched = [t for t in store.list() if t.enabled and match_event(t.event, event)]
@@ -2093,7 +2330,9 @@ def cmd_trigger_hook(args):
                 print(f"  {name}: appended to existing hook")
             else:
                 hook_path.write_text(body)
-                hook_path.chmod(hook_path.stat().st_mode | _stat.S_IEXEC | _stat.S_IXGRP | _stat.S_IXOTH)
+                hook_path.chmod(
+                    hook_path.stat().st_mode | _stat.S_IEXEC | _stat.S_IXGRP | _stat.S_IXOTH
+                )
                 print(f"  {name}: installed")
         print("Git hooks installed. Events: git:commit, git:push")
 
@@ -2104,7 +2343,11 @@ def cmd_trigger_hook(args):
                 continue
             body = hook_path.read_text()
             lines = body.splitlines(keepends=True)
-            filtered = [l for l in lines if "tokenpak trigger fire" not in l and "Installed by: tokenpak" not in l]
+            filtered = [
+                l
+                for l in lines
+                if "tokenpak trigger fire" not in l and "Installed by: tokenpak" not in l
+            ]
             new_body = "".join(filtered).strip()
             if new_body:
                 hook_path.write_text(new_body + "\n")
@@ -2119,38 +2362,49 @@ def _build_trigger_parser(sub):
     tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
 
     p_list = tsub.add_parser("list", help="List all triggers")
-    p_list.add_argument("--json", dest="json", action="store_true", default=False,
-                        help="Output raw JSON")
+    p_list.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output raw JSON"
+    )
     p_list.set_defaults(func=cmd_trigger_list)
 
     p_add = tsub.add_parser("add", help="Register a new trigger")
-    p_add.add_argument("--event", required=True,
-                       help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)")
-    p_add.add_argument("--action", required=True,
-                       help="Action: tokenpak sub-command or shell script path")
-    p_add.add_argument("--json", dest="json", action="store_true", default=False,
-                       help="Output raw JSON")
+    p_add.add_argument(
+        "--event",
+        required=True,
+        help="Event pattern (e.g. file:changed:*.py, git:commit, cost:daily>5)",
+    )
+    p_add.add_argument(
+        "--action", required=True, help="Action: tokenpak sub-command or shell script path"
+    )
+    p_add.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output raw JSON"
+    )
     p_add.set_defaults(func=cmd_trigger_add)
 
     p_rm = tsub.add_parser("remove", help="Remove a trigger by id")
     p_rm.add_argument("id", help="Trigger ID")
-    p_rm.add_argument("--json", dest="json", action="store_true", default=False,
-                      help="Output raw JSON")
+    p_rm.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output raw JSON"
+    )
     p_rm.set_defaults(func=cmd_trigger_remove)
 
     p_test = tsub.add_parser("test", help="Dry-run: show which triggers match an event")
     p_test.add_argument("--event", required=True, help="Event string to test")
-    p_test.add_argument("--json", dest="json", action="store_true", default=False,
-                        help="Output raw JSON")
+    p_test.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output raw JSON"
+    )
     p_test.set_defaults(func=cmd_trigger_test)
 
     p_log = tsub.add_parser("log", help="Show recent trigger fire log")
     p_log.add_argument("--limit", type=int, default=20)
-    p_log.add_argument("--json", dest="json", action="store_true", default=False,
-                       help="Output raw JSON")
+    p_log.add_argument(
+        "--json", dest="json", action="store_true", default=False, help="Output raw JSON"
+    )
     p_log.set_defaults(func=cmd_trigger_log)
 
-    tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(func=cmd_trigger_daemon)
+    tsub.add_parser("daemon", help="Start background trigger daemon").set_defaults(
+        func=cmd_trigger_daemon
+    )
 
     p_fire = tsub.add_parser("fire", help="Fire an event string and execute matching triggers")
     p_fire.add_argument("event", help="Event string to fire (e.g. git:push, agent:finished:cali)")
@@ -2158,8 +2412,12 @@ def _build_trigger_parser(sub):
 
     p_hook = tsub.add_parser("hook", help="Install/uninstall git hooks for trigger events")
     hsub = p_hook.add_subparsers(dest="hook_cmd", required=True)
-    hsub.add_parser("install", help="Install post-commit and post-push git hooks").set_defaults(func=cmd_trigger_hook)
-    hsub.add_parser("uninstall", help="Remove tokenpak git hooks").set_defaults(func=cmd_trigger_hook)
+    hsub.add_parser("install", help="Install post-commit and post-push git hooks").set_defaults(
+        func=cmd_trigger_hook
+    )
+    hsub.add_parser("uninstall", help="Remove tokenpak git hooks").set_defaults(
+        func=cmd_trigger_hook
+    )
 
     p_watch = tsub.add_parser("watch", help="Start file watcher for file:changed events")
     p_watch.add_argument("paths", nargs="*", help="Paths to watch (default: .)")
@@ -2168,8 +2426,9 @@ def _build_trigger_parser(sub):
 
 def cmd_trigger_watch(args):
     """Start file watcher for file:changed events."""
-    from .agent.macros.hooks import start_file_watcher, stop_file_watcher, is_file_watcher_running
     import signal
+
+    from .agent.macros.hooks import is_file_watcher_running, start_file_watcher, stop_file_watcher
 
     paths = args.paths if args.paths else ["."]
 
@@ -2192,14 +2451,17 @@ def cmd_trigger_watch(args):
     signal.signal(signal.SIGINT, handle_sigint)
 
     import time
+
     while True:
         time.sleep(1)
 
 
 # ── Cost / Budget commands ────────────────────────────────────────────────────
 
+
 def _budget_tracker():
     from .agent.telemetry.budget import get_budget_tracker
+
     return get_budget_tracker()
 
 
@@ -2223,7 +2485,7 @@ def cmd_cost(args):
                 f"{r['tokens_output']:>9,} "
                 f"${r['cost_usd']:>9.4f}"
             )
-        total = sum(r['cost_usd'] for r in rows)
+        total = sum(r["cost_usd"] for r in rows)
         print(f"\nTotal: ${total:.4f}")
         return
 
@@ -2250,6 +2512,7 @@ def cmd_cost(args):
 
 def cmd_budget_set(args):
     from .agent.telemetry.budget import load_budget_config, save_budget_config
+
     cfg = load_budget_config()
     changed = False
     if args.daily is not None:
@@ -2268,7 +2531,9 @@ def cmd_budget_set(args):
         save_budget_config(cfg)
         print("Budget config saved.")
     print(f"  Daily limit:   {f'${cfg.daily_limit_usd:.2f}' if cfg.daily_limit_usd else 'not set'}")
-    print(f"  Monthly limit: {f'${cfg.monthly_limit_usd:.2f}' if cfg.monthly_limit_usd else 'not set'}")
+    print(
+        f"  Monthly limit: {f'${cfg.monthly_limit_usd:.2f}' if cfg.monthly_limit_usd else 'not set'}"
+    )
     print(f"  Alert at:      {cfg.alert_at_percent:.0f}%")
     print(f"  Hard stop:     {'yes' if cfg.hard_stop else 'no'}")
 
@@ -2285,7 +2550,9 @@ def cmd_budget_status(args):
             alert_tag = " ⚠️  ALERT" if status.alert_triggered else ""
             print(f"{period.capitalize()} budget{alert_tag}")
             print(f"  [{bar}] {status.percent_used:.1f}%")
-            print(f"  ${status.spent_usd:.4f} / ${status.limit_usd:.2f} (${status.remaining_usd:.4f} remaining)")
+            print(
+                f"  ${status.spent_usd:.4f} / ${status.limit_usd:.2f} (${status.remaining_usd:.4f} remaining)"
+            )
             printed = True
     if not printed:
         print("No budget limits configured. Use `tokenpak budget set --daily N` to set one.")
@@ -2326,12 +2593,20 @@ def _build_budget_parser(sub):
     p_set = bsub.add_parser("set", help="Configure budget limits")
     p_set.add_argument("--daily", type=float, metavar="USD", help="Daily spend limit in USD")
     p_set.add_argument("--monthly", type=float, metavar="USD", help="Monthly spend limit in USD")
-    p_set.add_argument("--alert-at", type=float, metavar="PCT", help="Alert threshold %% (default 80)")
-    p_set.add_argument("--hard-stop", action="store_true", default=None, help="Block requests when limit exceeded")
+    p_set.add_argument(
+        "--alert-at", type=float, metavar="PCT", help="Alert threshold %% (default 80)"
+    )
+    p_set.add_argument(
+        "--hard-stop", action="store_true", default=None, help="Block requests when limit exceeded"
+    )
     p_set.set_defaults(func=cmd_budget_set)
 
-    bsub.add_parser("status", help="Show current budget status").set_defaults(func=cmd_budget_status)
-    bsub.add_parser("show", help="Alias for status — show current budget status").set_defaults(func=cmd_budget_status)
+    bsub.add_parser("status", help="Show current budget status").set_defaults(
+        func=cmd_budget_status
+    )
+    bsub.add_parser("show", help="Alias for status — show current budget status").set_defaults(
+        func=cmd_budget_status
+    )
 
     p_hist = bsub.add_parser("history", help="Show recent spend records")
     p_hist.add_argument("--limit", type=int, default=20)
@@ -2339,19 +2614,20 @@ def _build_budget_parser(sub):
     p_hist.set_defaults(func=cmd_budget_history)
 
 
-
-
 # ── top-level lock subcommand ─────────────────────────────────────────────────
 
+
 def cmd_lock_claim(args):
-    from .agent.agentic.locks import FileLockManager, LockConflictError
     import time as _time
+
+    from .agent.agentic.locks import FileLockManager, LockConflictError
+
     mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
     try:
         record = mgr.claim(args.path, timeout_s=args.timeout)
         print(f"✅ Lock claimed: {record['path']}")
         print(f"   Agent:      {record['agent']}")
-        exp = record['expires']
+        exp = record["expires"]
         print(f"   Expires in: {exp - _time.time():.0f}s  (at epoch {exp:.0f})")
     except LockConflictError as e:
         print(f"❌ {e}")
@@ -2360,6 +2636,7 @@ def cmd_lock_claim(args):
 
 def cmd_lock_release(args):
     from .agent.agentic.locks import FileLockManager
+
     mgr = FileLockManager(agent_id=args.agent or None)
     released = mgr.release(args.path)
     if released:
@@ -2369,8 +2646,10 @@ def cmd_lock_release(args):
 
 
 def cmd_lock_query(args):
-    from .agent.agentic.locks import FileLockManager
     import time as _time
+
+    from .agent.agentic.locks import FileLockManager
+
     mgr = FileLockManager(agent_id=args.agent or None)
     record = mgr.query(args.path)
     if record is None:
@@ -2384,8 +2663,10 @@ def cmd_lock_query(args):
 
 
 def cmd_lock_list(args):
-    from .agent.agentic.locks import FileLockManager
     import time as _time
+
+    from .agent.agentic.locks import FileLockManager
+
     mgr = FileLockManager(agent_id=args.agent or None)
     mgr.prune_expired()
     locks = mgr.locks()
@@ -2404,8 +2685,10 @@ def cmd_lock_list(args):
 
 
 def cmd_lock_renew(args):
-    from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
     import time as _time
+
+    from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
+
     mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
     try:
         record = mgr.renew(args.path, timeout_s=args.timeout)
@@ -2428,8 +2711,13 @@ def _build_lock_parser(sub):
     # claim
     p_claim = lsub.add_parser("claim", help="Claim a lock on a file or directory")
     p_claim.add_argument("path", help="File or directory path to lock")
-    p_claim.add_argument("--timeout", type=int, default=1800, metavar="SECONDS",
-                         help="Lock TTL in seconds (default 1800 = 30 min)")
+    p_claim.add_argument(
+        "--timeout",
+        type=int,
+        default=1800,
+        metavar="SECONDS",
+        help="Lock TTL in seconds (default 1800 = 30 min)",
+    )
     p_claim.add_argument("--agent", default=None, help="Agent id override")
     p_claim.set_defaults(func=cmd_lock_claim)
 
@@ -2453,21 +2741,31 @@ def _build_lock_parser(sub):
     # renew (heartbeat)
     p_renew = lsub.add_parser("renew", help="Renew (heartbeat) a held lock to extend its TTL")
     p_renew.add_argument("path", help="File or directory path to renew")
-    p_renew.add_argument("--timeout", type=int, default=1800, metavar="SECONDS",
-                         help="New TTL in seconds (default 1800 = 30 min)")
+    p_renew.add_argument(
+        "--timeout",
+        type=int,
+        default=1800,
+        metavar="SECONDS",
+        help="New TTL in seconds (default 1800 = 30 min)",
+    )
     p_renew.add_argument("--agent", default=None, help="Agent id override")
     p_renew.set_defaults(func=cmd_lock_renew)
 
+
 # ── agent lock/unlock/locks commands ─────────────────────────────────────────
+
 
 def cmd_agent_lock(args):
     from .agent.agentic.locks import FileLockManager, LockConflictError
+
     mgr = FileLockManager(agent_id=args.agent or None)
     try:
         record = mgr.claim(args.path, timeout_s=args.timeout)
         print(f"✅ Lock acquired: {record['path']}")
         print(f"   Agent:   {record['agent']}")
-        print(f"   Expires: {record['expires']:.0f} (in {record['expires'] - __import__('time').time():.0f}s)")
+        print(
+            f"   Expires: {record['expires']:.0f} (in {record['expires'] - __import__('time').time():.0f}s)"
+        )
     except LockConflictError as e:
         print(f"❌ {e}")
         raise SystemExit(1)
@@ -2475,6 +2773,7 @@ def cmd_agent_lock(args):
 
 def cmd_agent_unlock(args):
     from .agent.agentic.locks import FileLockManager
+
     mgr = FileLockManager(agent_id=args.agent or None)
     released = mgr.release(args.path)
     if released:
@@ -2484,8 +2783,10 @@ def cmd_agent_unlock(args):
 
 
 def cmd_agent_locks(args):
-    from .agent.agentic.locks import FileLockManager
     import time
+
+    from .agent.agentic.locks import FileLockManager
+
     mgr = FileLockManager(agent_id=args.agent or None)
     mgr.prune_expired()
     locks = mgr.locks()
@@ -2506,21 +2807,23 @@ def cmd_agent_locks(args):
 def cmd_agent_list(args):
     """List registered agents."""
     import json as json_mod
+
     from .agent.agentic.registry import AgentRegistry
+
     registry = AgentRegistry()
     if args.all:
         agents = registry.list_all()
     else:
         agents = registry.list_active()
-    
+
     if args.json:
         print(json_mod.dumps([a.to_dict() for a in agents], indent=2))
         return
-    
+
     if not agents:
         print("No registered agents.")
         return
-    
+
     print(f"{'ID':<10} {'Name':<12} {'Hostname':<15} {'Status':<10} {'Heartbeat':<12}")
     print("-" * 65)
     for a in agents:
@@ -2539,8 +2842,9 @@ def cmd_agent_register(args):
     """Register this agent."""
     import json as json_mod
     import socket
+
     from .agent.agentic.registry import AgentRegistry
-    
+
     hostname = args.hostname or socket.gethostname()
     capabilities = {
         "gpu": args.gpu,
@@ -2549,10 +2853,10 @@ def cmd_agent_register(args):
         "provider_access": args.providers,
         "max_concurrent": 1,
     }
-    
+
     registry = AgentRegistry()
     agent_id = registry.register(args.name, hostname, capabilities)
-    
+
     if args.json:
         agent = registry.get(agent_id)
         print(json_mod.dumps(agent.to_dict(), indent=2))
@@ -2563,6 +2867,7 @@ def cmd_agent_register(args):
 def cmd_agent_deregister(args):
     """Remove agent from registry."""
     from .agent.agentic.registry import AgentRegistry
+
     registry = AgentRegistry()
     if registry.deregister(args.agent_id):
         print(f"✅ Deregistered: {args.agent_id}")
@@ -2573,6 +2878,7 @@ def cmd_agent_deregister(args):
 def cmd_agent_heartbeat(args):
     """Send heartbeat for agent."""
     from .agent.agentic.registry import AgentRegistry
+
     registry = AgentRegistry()
     if registry.heartbeat(args.agent_id, status=args.status, current_task=args.task):
         print(f"✅ Heartbeat: {args.agent_id}")
@@ -2583,26 +2889,27 @@ def cmd_agent_heartbeat(args):
 def cmd_agent_match(args):
     """Find agents matching requirements."""
     import json as json_mod
+
     from .agent.agentic.capabilities import CapabilityMatcher, TaskRequirements
-    
+
     requirements = TaskRequirements(
         requires_gpu=True if args.gpu else None,
         min_memory_gb=args.memory,
         required_specialties=args.specialty or [],
         required_providers=args.provider or [],
     )
-    
+
     matcher = CapabilityMatcher()
     matches = matcher.match(requirements)
-    
+
     if args.json:
         print(json_mod.dumps([m.to_dict() for m in matches], indent=2))
         return
-    
+
     if not matches:
         print("No matching agents found.")
         return
-    
+
     print(f"{'Score':<8} {'ID':<10} {'Name':<12} {'Reasons'}")
     print("-" * 60)
     for m in matches:
@@ -2613,6 +2920,7 @@ def cmd_agent_match(args):
 def cmd_agent_prune(args):
     """Remove stale agents."""
     from .agent.agentic.registry import AgentRegistry
+
     registry = AgentRegistry()
     count = registry.prune_stale()
     if count:
@@ -2620,9 +2928,11 @@ def cmd_agent_prune(args):
     else:
         print("No stale agents to prune.")
 
+
 def cmd_agent_handoff(args):
     """Dispatch to handoff command handler."""
     from .agent.cli.commands.handoff import handoff_cmd
+
     handoff_cmd(args)
 
 
@@ -2633,7 +2943,13 @@ def _build_agent_parser(sub):
     # --- Lock commands ---
     p_lock = asub.add_parser("lock", help="Claim a file lock")
     p_lock.add_argument("path", help="File path to lock")
-    p_lock.add_argument("--timeout", type=int, default=600, metavar="SECONDS", help="Lock TTL in seconds (default 600)")
+    p_lock.add_argument(
+        "--timeout",
+        type=int,
+        default=600,
+        metavar="SECONDS",
+        help="Lock TTL in seconds (default 600)",
+    )
     p_lock.add_argument("--agent", default=None, help="Agent id override")
     p_lock.set_defaults(func=cmd_agent_lock)
 
@@ -2657,7 +2973,9 @@ def _build_agent_parser(sub):
     p_register.add_argument("--hostname", default=None, help="Hostname (default: auto-detect)")
     p_register.add_argument("--gpu", action="store_true", help="Has GPU")
     p_register.add_argument("--memory", type=float, default=4.0, help="Memory in GB")
-    p_register.add_argument("--specialties", nargs="*", default=[], help="Specialties (e.g., code research)")
+    p_register.add_argument(
+        "--specialties", nargs="*", default=[], help="Specialties (e.g., code research)"
+    )
     p_register.add_argument("--providers", nargs="*", default=["anthropic"], help="Provider access")
     p_register.add_argument("--json", action="store_true", help="JSON output")
     p_register.set_defaults(func=cmd_agent_register)
@@ -2668,7 +2986,9 @@ def _build_agent_parser(sub):
 
     p_heartbeat = asub.add_parser("heartbeat", help="Send heartbeat for an agent")
     p_heartbeat.add_argument("agent_id", help="Agent ID")
-    p_heartbeat.add_argument("--status", choices=["active", "busy", "draining"], help="Update status")
+    p_heartbeat.add_argument(
+        "--status", choices=["active", "busy", "draining"], help="Update status"
+    )
     p_heartbeat.add_argument("--task", default=None, help="Current task name")
     p_heartbeat.set_defaults(func=cmd_agent_heartbeat)
 
@@ -2690,11 +3010,15 @@ def _build_agent_parser(sub):
     hc = hsub.add_parser("create", help="Create a context handoff")
     hc.add_argument("--from", dest="handoff_from", required=True, help="Sending agent")
     hc.add_argument("--to", dest="handoff_to", required=True, help="Receiving agent")
-    hc.add_argument("--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)")
+    hc.add_argument(
+        "--ref", action="append", metavar="TYPE:PATH[:DESC]", help="Context ref (repeatable)"
+    )
     hc.add_argument("--done", metavar="TEXT", help="What was done")
     hc.add_argument("--next", dest="whats_next", metavar="TEXT", help="What comes next")
     hc.add_argument("--file", action="append", metavar="PATH", help="Relevant file (repeatable)")
-    hc.add_argument("--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)")
+    hc.add_argument(
+        "--ttl", type=float, default=24.0, metavar="HOURS", help="TTL in hours (default 24)"
+    )
     hc.set_defaults(func=cmd_agent_handoff)
 
     hr = hsub.add_parser("receive", help="Receive and validate a handoff")
@@ -2721,6 +3045,7 @@ def _build_agent_parser(sub):
 
 # ── Replay commands ───────────────────────────────────────────────────────────
 
+
 def _replay_store_path() -> str:
     """Return the default replay store path (honouring XDG convention)."""
     return str(Path.home() / ".tokenpak" / "replay.db")
@@ -2728,6 +3053,7 @@ def _replay_store_path() -> str:
 
 def _get_replay_store():
     from .agent.telemetry.replay import get_replay_store
+
     return get_replay_store(_replay_store_path())
 
 
@@ -2747,8 +3073,12 @@ def cmd_replay_list(args):
         if len(pm) > 29:
             pm = pm[:26] + "..."
         tokens_str = f"{e.input_tokens_raw}→{e.input_tokens_sent}"
-        print(f"{has_content} {e.replay_id:<10} {ts:<20} {pm:<30} {tokens_str:>12} {e.savings_pct:>6.1f}%")
-    print(f"\n{len(entries)} entr{'y' if len(entries)==1 else 'ies'}  (📦 = content captured, eligible for replay)")
+        print(
+            f"{has_content} {e.replay_id:<10} {ts:<20} {pm:<30} {tokens_str:>12} {e.savings_pct:>6.1f}%"
+        )
+    print(
+        f"\n{len(entries)} entr{'y' if len(entries)==1 else 'ies'}  (📦 = content captured, eligible for replay)"
+    )
 
 
 def cmd_replay_show(args):
@@ -2772,18 +3102,18 @@ def cmd_replay_show(args):
         print(f"  Metadata  : {json.dumps(e.metadata)}")
     if e.messages is not None:
         print(f"\n  Messages  : {len(e.messages)} message(s) captured")
-        if getattr(args, 'show_messages', False):
+        if getattr(args, "show_messages", False):
             print(json.dumps(e.messages, indent=2))
     else:
-        print(f"\n  Messages  : not captured (content capture was disabled)")
-    if e.response is not None and getattr(args, 'show_messages', False):
+        print("\n  Messages  : not captured (content capture was disabled)")
+    if e.response is not None and getattr(args, "show_messages", False):
         print(f"\n  Response:\n{json.dumps(e.response, indent=2)}")
 
 
 def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, int]:
     """Compress message content and return (compressed_text, token_count)."""
-    from .tokens import count_tokens
     from .processors.text import TextProcessor
+    from .tokens import count_tokens
 
     proc = TextProcessor(aggressive=aggressive)
     parts = []
@@ -2792,7 +3122,11 @@ def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, i
         content = msg.get("content", "")
         if isinstance(content, list):
             # multi-part content (vision etc.)
-            text_parts = [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+            text_parts = [
+                c.get("text", "")
+                for c in content
+                if isinstance(c, dict) and c.get("type") == "text"
+            ]
             content = "\n".join(text_parts)
         compressed = proc.process(content) if content else ""
         parts.append({"role": role, "content": compressed})
@@ -2817,9 +3151,9 @@ def cmd_replay_run(args):
         raise SystemExit(1)
 
     model_label = args.model or e.model
-    aggressive = getattr(args, 'aggressive', False)
-    no_compress = getattr(args, 'no_compress', False)
-    show_diff = getattr(args, 'diff', False)
+    aggressive = getattr(args, "aggressive", False)
+    no_compress = getattr(args, "no_compress", False)
+    show_diff = getattr(args, "diff", False)
 
     raw_combined = json.dumps(e.messages)
     raw_tokens = count_tokens(raw_combined)
@@ -2849,7 +3183,9 @@ def cmd_replay_run(args):
     print(f"  Result tokens : {result_tokens:,}")
     print(f"  Saved         : {saved:,} ({pct}%)")
     print()
-    print(f"  Original run  : {e.input_tokens_raw:,} → {e.input_tokens_sent:,} (-{orig_saved_pct}%)")
+    print(
+        f"  Original run  : {e.input_tokens_raw:,} → {e.input_tokens_sent:,} (-{orig_saved_pct}%)"
+    )
 
     delta = e.input_tokens_sent - result_tokens
     if delta > 0:
@@ -2857,7 +3193,7 @@ def cmd_replay_run(args):
     elif delta < 0:
         print(f"  Delta vs orig : +{abs(delta):,} tokens (original was more compressed)")
     else:
-        print(f"  Delta vs orig : no change")
+        print("  Delta vs orig : no change")
 
     if show_diff and not no_compress:
         print()
@@ -2865,13 +3201,18 @@ def cmd_replay_run(args):
         orig_first = e.messages[0].get("content", "") if e.messages else ""
         comp_first = compressed_messages[0].get("content", "") if compressed_messages else ""
         if isinstance(orig_first, list):
-            orig_first = " ".join(c.get("text","") for c in orig_first if isinstance(c, dict))
+            orig_first = " ".join(c.get("text", "") for c in orig_first if isinstance(c, dict))
         if isinstance(comp_first, list):
-            comp_first = " ".join(c.get("text","") for c in comp_first if isinstance(c, dict))
+            comp_first = " ".join(c.get("text", "") for c in comp_first if isinstance(c, dict))
         orig_lines = orig_first.splitlines()
         comp_lines = comp_first.splitlines()
         import difflib
-        diff = list(difflib.unified_diff(orig_lines, comp_lines, fromfile="original", tofile="compressed", lineterm=""))
+
+        diff = list(
+            difflib.unified_diff(
+                orig_lines, comp_lines, fromfile="original", tofile="compressed", lineterm=""
+            )
+        )
         if diff:
             for line in diff[:60]:
                 print(line)
@@ -2901,20 +3242,30 @@ def _build_replay_parser(sub):
     # show
     p_show = rsub.add_parser("show", help="Show full details of a captured session")
     p_show.add_argument("id", help="Replay entry ID")
-    p_show.add_argument("--messages", dest="show_messages", action="store_true",
-                        help="Print captured message content")
+    p_show.add_argument(
+        "--messages",
+        dest="show_messages",
+        action="store_true",
+        help="Print captured message content",
+    )
     p_show.set_defaults(func=cmd_replay_show)
 
     # run (default when an id is passed directly to 'replay')
     p_run = rsub.add_parser("run", help="Re-run a session with different settings (zero API cost)")
     p_run.add_argument("id", help="Replay entry ID")
     p_run.add_argument("--model", default=None, help="Label as a different model")
-    p_run.add_argument("--no-compress", dest="no_compress", action="store_true",
-                       help="Simulate sending uncompressed")
-    p_run.add_argument("--aggressive", action="store_true",
-                       help="Apply aggressive compression mode")
-    p_run.add_argument("--diff", action="store_true",
-                       help="Show unified diff of original vs compressed messages")
+    p_run.add_argument(
+        "--no-compress",
+        dest="no_compress",
+        action="store_true",
+        help="Simulate sending uncompressed",
+    )
+    p_run.add_argument(
+        "--aggressive", action="store_true", help="Apply aggressive compression mode"
+    )
+    p_run.add_argument(
+        "--diff", action="store_true", help="Show unified diff of original vs compressed messages"
+    )
     p_run.set_defaults(func=cmd_replay_run)
 
     # clear
@@ -2932,24 +3283,43 @@ def _build_replay_parser(sub):
 
 # ── Demo command ──────────────────────────────────────────────────────────────
 
+
 def _build_demo_parser(sub):
     # ── Recipe SDK ─────────────────────────────────────────────────────────────
-    p_recipe = sub.add_parser("recipe", help="Custom recipe development tooling (create/test/validate/benchmark)")
+    p_recipe = sub.add_parser(
+        "recipe", help="Custom recipe development tooling (create/test/validate/benchmark)"
+    )
     rsub2 = p_recipe.add_subparsers(dest="recipe_cmd", required=True)
 
     # recipe create
     p_rcreate = rsub2.add_parser("create", help="Scaffold a new custom recipe YAML file")
     p_rcreate.add_argument("name", help="Recipe name (e.g. my-legal-cleanup)")
-    p_rcreate.add_argument("--output-dir", default=".", metavar="DIR",
-                           help="Directory to write the recipe file (default: current dir)")
-    p_rcreate.add_argument("--category", default="general",
-                           help="Recipe category: python, markdown, legal, medical, etc.")
+    p_rcreate.add_argument(
+        "--output-dir",
+        default=".",
+        metavar="DIR",
+        help="Directory to write the recipe file (default: current dir)",
+    )
+    p_rcreate.add_argument(
+        "--category",
+        default="general",
+        help="Recipe category: python, markdown, legal, medical, etc.",
+    )
     p_rcreate.add_argument("--description", default="", help="Short description")
-    p_rcreate.add_argument("--match-mode", default="extension",
-                           help="Pattern match mode: any|extension|filename|content|path_pattern")
-    p_rcreate.add_argument("--ext", default="txt", help="File extension hint (for extension match mode)")
-    p_rcreate.add_argument("--domain-example", default=None, metavar="DOMAIN",
-                           help="Use a domain-specific template: legal | medical")
+    p_rcreate.add_argument(
+        "--match-mode",
+        default="extension",
+        help="Pattern match mode: any|extension|filename|content|path_pattern",
+    )
+    p_rcreate.add_argument(
+        "--ext", default="txt", help="File extension hint (for extension match mode)"
+    )
+    p_rcreate.add_argument(
+        "--domain-example",
+        default=None,
+        metavar="DOMAIN",
+        help="Use a domain-specific template: legal | medical",
+    )
     p_rcreate.set_defaults(func=cmd_recipe_create)
 
     # recipe validate
@@ -2961,25 +3331,41 @@ def _build_demo_parser(sub):
     p_rtest = rsub2.add_parser("test", help="Test a recipe against sample input")
     p_rtest.add_argument("file", help="Path to recipe YAML file")
     p_rtest.add_argument("--input-text", default=None, help="Raw text to test against")
-    p_rtest.add_argument("--input-file", default=None, metavar="FILE",
-                         help="Path to a file to use as test input")
-    p_rtest.add_argument("--filename-hint", default="", metavar="FILENAME",
-                         help="Filename to check pattern matching against (e.g. script.py)")
+    p_rtest.add_argument(
+        "--input-file", default=None, metavar="FILE", help="Path to a file to use as test input"
+    )
+    p_rtest.add_argument(
+        "--filename-hint",
+        default="",
+        metavar="FILENAME",
+        help="Filename to check pattern matching against (e.g. script.py)",
+    )
     p_rtest.set_defaults(func=cmd_recipe_test)
 
     # recipe benchmark
-    p_rbench = rsub2.add_parser("benchmark", help="Benchmark compression ratio and speed for a recipe")
+    p_rbench = rsub2.add_parser(
+        "benchmark", help="Benchmark compression ratio and speed for a recipe"
+    )
     p_rbench.add_argument("file", help="Path to recipe YAML file")
-    p_rbench.add_argument("--samples-file", default=None, metavar="FILE",
-                          help="JSON file with list of sample strings (default: auto-generated)")
-    p_rbench.add_argument("--runs", type=int, default=5,
-                          help="Repetitions per sample for timing (default: 5)")
+    p_rbench.add_argument(
+        "--samples-file",
+        default=None,
+        metavar="FILE",
+        help="JSON file with list of sample strings (default: auto-generated)",
+    )
+    p_rbench.add_argument(
+        "--runs", type=int, default=5, help="Repetitions per sample for timing (default: 5)"
+    )
     p_rbench.set_defaults(func=cmd_recipe_benchmark)
 
     # ── Demo ───────────────────────────────────────────────────────────────────
     p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
     p_demo.add_argument("--list", action="store_true", help="List all 50 baked-in recipes")
-    p_demo.add_argument("--category", default=None, help="Filter by category (general, python, javascript, markdown, config, common_patterns)")
+    p_demo.add_argument(
+        "--category",
+        default=None,
+        help="Filter by category (general, python, javascript, markdown, config, common_patterns)",
+    )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
     p_demo.set_defaults(func=cmd_demo)
@@ -3003,7 +3389,7 @@ def cmd_demo(args):
         print(f"│  Description: {recipe.description}")
         print(f"│  Match mode : {recipe.match_mode}")
         print(f"│  Compression: ~{int(recipe.compression_hint * 100)}% reduction expected")
-        print(f"│  Operations :")
+        print("│  Operations :")
         for op in recipe.operations:
             op_type = op.get("type", "?")
             params = {k: v for k, v in op.items() if k != "type"}
@@ -3047,9 +3433,11 @@ def cmd_demo(args):
 
 # ── Recipe SDK CLI commands ────────────────────────────────────────────────────
 
+
 def cmd_recipe_create(args):
     """Scaffold a new custom recipe file."""
     from .agent.recipe_sdk import RecipeSDK
+
     sdk = RecipeSDK()
     out = sdk.create(
         args.name,
@@ -3068,6 +3456,7 @@ def cmd_recipe_create(args):
 def cmd_recipe_validate(args):
     """Validate a recipe YAML file against the schema."""
     from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+
     sdk = RecipeSDK()
     try:
         warnings = sdk.validate(args.file)
@@ -3085,6 +3474,7 @@ def cmd_recipe_validate(args):
 def cmd_recipe_test(args):
     """Test a recipe against sample input and show compression result."""
     from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+
     sdk = RecipeSDK()
     try:
         result = sdk.test(
@@ -3102,12 +3492,14 @@ def cmd_recipe_test(args):
     if result["warnings"]:
         for w in result["warnings"]:
             print(f"  ⚠️  {w}")
-    print(f"  Pattern match  : {'✅ yes' if result['pattern_match'] else '❌ no (check pattern settings)'}")
+    print(
+        f"  Pattern match  : {'✅ yes' if result['pattern_match'] else '❌ no (check pattern settings)'}"
+    )
     print(f"  Filename hint  : {result['filename_hint']}")
     print(f"  Ops applied    : {', '.join(result['ops_applied']) or '(none)'}")
     print(f"  Input chars    : {result['input_chars']}")
     print(f"  Output chars   : {result['output_chars']}")
-    ratio_pct = round(result['compression_ratio'] * 100, 1)
+    ratio_pct = round(result["compression_ratio"] * 100, 1)
     print(f"  Compression    : {ratio_pct}% removed")
     if result.get("compression_hint") is not None:
         hint_pct = round(result["compression_hint"] * 100, 1)
@@ -3121,11 +3513,13 @@ def cmd_recipe_test(args):
 def cmd_recipe_benchmark(args):
     """Benchmark a recipe's compression ratio and throughput."""
     from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+
     sdk = RecipeSDK()
 
     samples = None
     if args.samples_file:
         import json as _json
+
         raw = open(args.samples_file).read()
         try:
             loaded = _json.loads(raw)
@@ -3149,8 +3543,10 @@ def cmd_recipe_benchmark(args):
     print(f"  Total chars processed : {result['total_chars_processed']:,}")
     print()
     c = result["compression"]
-    print(f"  Compression (mean)    : {round(c['mean']*100, 1)}%  "
-          f"[min {round(c['min']*100, 1)}% – max {round(c['max']*100, 1)}%]")
+    print(
+        f"  Compression (mean)    : {round(c['mean']*100, 1)}%  "
+        f"[min {round(c['min']*100, 1)}% – max {round(c['max']*100, 1)}%]"
+    )
     if result["hint_vs_actual"]["hint"] is not None:
         hint_pct = round(result["hint_vs_actual"]["hint"] * 100, 1)
         actual_pct = round(result["hint_vs_actual"]["actual_mean"] * 100, 1)
@@ -3158,14 +3554,19 @@ def cmd_recipe_benchmark(args):
         sign = "+" if delta >= 0 else ""
         print(f"  Hint vs actual        : {hint_pct}% → {actual_pct}%  ({sign}{delta:.1f}% delta)")
     t = result["timing_ms"]
-    print(f"  Timing ms (mean)      : {t['mean']:.3f} ms  "
-          f"[min {t['min']:.3f} – max {t['max']:.3f}]")
+    print(
+        f"  Timing ms (mean)      : {t['mean']:.3f} ms  "
+        f"[min {t['min']:.3f} – max {t['max']:.3f}]"
+    )
+
 
 # ── run: Macro scheduler CLI ──────────────────────────────────────────────────
+
 
 def cmd_run_cron(args):
     """Schedule a macro to run on a cron expression."""
     from .agent.macros.scheduler import schedule_cron
+
     scheduled = schedule_cron(
         name=args.name,
         cron_expr=args.cron,
@@ -3179,6 +3580,7 @@ def cmd_run_cron(args):
 def cmd_run_at(args):
     """Schedule a macro to run once at a given time."""
     from .agent.macros.scheduler import schedule_at
+
     scheduled = schedule_at(
         name=args.name,
         run_at=args.at,
@@ -3192,6 +3594,7 @@ def cmd_run_at(args):
 def cmd_run_list_scheduled(args):
     """List all scheduled macro runs."""
     from .agent.macros.scheduler import list_scheduled
+
     schedules = list_scheduled()
     if not schedules:
         print("No scheduled macros.")
@@ -3205,6 +3608,7 @@ def cmd_run_list_scheduled(args):
 def cmd_run_cancel(args):
     """Cancel a scheduled macro run."""
     from .agent.macros.scheduler import cancel_schedule
+
     ok = cancel_schedule(args.id)
     if ok:
         print(f"✅ Cancelled scheduled run: {args.id}")
@@ -3219,14 +3623,21 @@ def _build_run_parser(sub):
     # run <name> --cron "<expr>"
     p_cron = rsub.add_parser("cron", help="Schedule a macro on a cron expression")
     p_cron.add_argument("name", help="Macro name")
-    p_cron.add_argument("--cron", required=True, metavar="EXPR", help='Cron expression e.g. "0 9 * * 1-5"')
+    p_cron.add_argument(
+        "--cron", required=True, metavar="EXPR", help='Cron expression e.g. "0 9 * * 1-5"'
+    )
     p_cron.add_argument("--description", default="", help="Optional description")
     p_cron.set_defaults(func=cmd_run_cron)
 
     # run <name> --at "<time>"
     p_at = rsub.add_parser("at", help="Schedule a one-shot macro run at a specific time")
     p_at.add_argument("name", help="Macro name")
-    p_at.add_argument("--at", required=True, metavar="TIME", help='Time string e.g. "2026-03-06 09:00" or "now + 1 hour"')
+    p_at.add_argument(
+        "--at",
+        required=True,
+        metavar="TIME",
+        help='Time string e.g. "2026-03-06 09:00" or "now + 1 hour"',
+    )
     p_at.add_argument("--description", default="", help="Optional description")
     p_at.set_defaults(func=cmd_run_at)
 
@@ -3242,9 +3653,11 @@ def _build_run_parser(sub):
 
 # ── macro: Premade macro CLI ──────────────────────────────────────────────────
 
+
 def cmd_macro_install(args):
     """Install a premade macro."""
     from .agent.macros.premade_macros import install_macro
+
     try:
         path = install_macro(args.name)
         print(f"✅ Installed macro '{args.name}' → {path}")
@@ -3255,8 +3668,9 @@ def cmd_macro_install(args):
 def cmd_macro_run(args):
     """Run a user-defined YAML macro or a premade macro."""
     import json as _json
+
     from .agent.macros.engine import MacroEngine
-    from .agent.macros.premade_macros import run_macro, format_macro_output, PREMADE_MACROS
+    from .agent.macros.premade_macros import PREMADE_MACROS, format_macro_output, run_macro
 
     name = args.name
     dry_run = getattr(args, "dry_run", False)
@@ -3275,8 +3689,12 @@ def cmd_macro_run(args):
     # Try user-defined YAML macro first
     engine = MacroEngine()
     if engine.exists(name):
-        result = engine.run(name, variables=runtime_vars or None, dry_run=dry_run,
-                            continue_on_error=continue_on_error)
+        result = engine.run(
+            name,
+            variables=runtime_vars or None,
+            dry_run=dry_run,
+            continue_on_error=continue_on_error,
+        )
         if getattr(args, "json", False):
             print(_json.dumps(result.to_dict(), indent=2))
         else:
@@ -3286,7 +3704,9 @@ def cmd_macro_run(args):
     # Fall back to premade macros
     if name in PREMADE_MACROS:
         if dry_run:
-            print(f"[DRY RUN] Would run premade macro '{name}' ({len(PREMADE_MACROS[name]['steps'])} steps)")
+            print(
+                f"[DRY RUN] Would run premade macro '{name}' ({len(PREMADE_MACROS[name]['steps'])} steps)"
+            )
             for step in PREMADE_MACROS[name]["steps"]:
                 print(f"  🔍 {step['label']}: {step['cmd']}")
             return
@@ -3325,13 +3745,13 @@ def cmd_macro_list(args):
         print(f"{m.name:<25} {'yaml':<10} {m.description}")
 
     if not user_macros:
-        print(f"  (no user macros — use `tokenpak macro create` to add one)")
+        print("  (no user macros — use `tokenpak macro create` to add one)")
 
 
 def cmd_macro_create(args):
     """Create a user-defined YAML macro."""
-    import sys as _sys
     from pathlib import Path as _Path
+
     from .agent.macros.engine import MacroEngine
 
     engine = MacroEngine()
@@ -3392,6 +3812,7 @@ def cmd_macro_create(args):
 def cmd_macro_show(args):
     """Show a macro definition."""
     import json as _json
+
     from .agent.macros.engine import MacroEngine
     from .agent.macros.premade_macros import PREMADE_MACROS
 
@@ -3405,9 +3826,11 @@ def cmd_macro_show(args):
         else:
             print(f"Name:         {macro.name}")
             print(f"Description:  {macro.description or '(none)'}")
-            print(f"Fail mode:    {'continue-on-error' if macro.continue_on_error else 'fail-fast'}")
+            print(
+                f"Fail mode:    {'continue-on-error' if macro.continue_on_error else 'fail-fast'}"
+            )
             if macro.variables:
-                print(f"Variables:")
+                print("Variables:")
                 for k, v in macro.variables.items():
                     print(f"  {k} = {v}")
             print(f"Steps ({len(macro.steps)}):")
@@ -3457,7 +3880,8 @@ def cmd_macro_delete(args):
 
 def cmd_macro_hooks(args):
     """List, install, or check hook scripts."""
-    from .agent.macros.script_hooks import list_hooks, install_hook, HOOK_NAMES
+    from .agent.macros.script_hooks import install_hook, list_hooks
+
     if args.hook_action == "list":
         hooks = list_hooks()
         print(f"{'HOOK':<20} {'EXISTS':<8} {'EXEC':<8} PATH")
@@ -3470,42 +3894,71 @@ def cmd_macro_hooks(args):
         try:
             path = install_hook(args.hook_name)
             print(f"✅ Installed hook stub: {path}")
-            print(f"   Edit this file to customize the hook behavior.")
+            print("   Edit this file to customize the hook behavior.")
         except ValueError as e:
             print(f"❌ {e}")
 
 
 def _build_macro_parser(sub):
-    p_macro = sub.add_parser("macro", help="Premade macros, user-defined YAML macros, and script hooks")
+    p_macro = sub.add_parser(
+        "macro", help="Premade macros, user-defined YAML macros, and script hooks"
+    )
     msub = p_macro.add_subparsers(dest="macro_cmd", required=True)
 
     # macro list
-    msub.add_parser("list", help="List all macros (premade + user-defined)").set_defaults(func=cmd_macro_list)
+    msub.add_parser("list", help="List all macros (premade + user-defined)").set_defaults(
+        func=cmd_macro_list
+    )
 
     # macro create
     p_create = msub.add_parser("create", help="Create a user-defined YAML macro")
     p_create.add_argument("--name", help="Macro name (e.g., my-deploy)")
     p_create.add_argument("--description", default="", help="Short description")
-    p_create.add_argument("--step", action="append", metavar="LABEL:CMD",
-                          help="Add a step (repeatable). Format: 'Label:command'")
-    p_create.add_argument("--var", action="append", metavar="KEY=VALUE",
-                          help="Default variable (repeatable). Format: KEY=VALUE")
-    p_create.add_argument("--continue-on-error", action="store_true", default=False,
-                          help="Keep running if a step fails (default: fail-fast)")
+    p_create.add_argument(
+        "--step",
+        action="append",
+        metavar="LABEL:CMD",
+        help="Add a step (repeatable). Format: 'Label:command'",
+    )
+    p_create.add_argument(
+        "--var",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Default variable (repeatable). Format: KEY=VALUE",
+    )
+    p_create.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        default=False,
+        help="Keep running if a step fails (default: fail-fast)",
+    )
     p_create.add_argument("--file", help="Load macro definition from a YAML file")
-    p_create.add_argument("--overwrite", action="store_true", default=False,
-                          help="Overwrite an existing macro with the same name")
+    p_create.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=False,
+        help="Overwrite an existing macro with the same name",
+    )
     p_create.set_defaults(func=cmd_macro_create)
 
     # macro run <name>
     p_run = msub.add_parser("run", help="Run a macro (YAML or premade)")
     p_run.add_argument("name", help="Macro name")
-    p_run.add_argument("--dry-run", action="store_true", default=False,
-                       help="Print commands without executing them")
-    p_run.add_argument("--continue-on-error", action="store_true", default=False,
-                       help="Keep running if a step fails")
-    p_run.add_argument("--var", action="append", metavar="KEY=VALUE",
-                       help="Runtime variable override (repeatable)")
+    p_run.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print commands without executing them",
+    )
+    p_run.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        default=False,
+        help="Keep running if a step fails",
+    )
+    p_run.add_argument(
+        "--var", action="append", metavar="KEY=VALUE", help="Runtime variable override (repeatable)"
+    )
     p_run.add_argument("--json", action="store_true", help="Output raw JSON")
     p_run.set_defaults(func=cmd_macro_run)
 
@@ -3518,8 +3971,9 @@ def _build_macro_parser(sub):
     # macro delete <name>
     p_delete = msub.add_parser("delete", help="Delete a user-defined YAML macro")
     p_delete.add_argument("name", help="Macro name")
-    p_delete.add_argument("--yes", "-y", action="store_true", default=False,
-                          help="Skip confirmation prompt")
+    p_delete.add_argument(
+        "--yes", "-y", action="store_true", default=False, help="Skip confirmation prompt"
+    )
     p_delete.set_defaults(func=cmd_macro_delete)
 
     # macro install <name>  (premade shortcut)
@@ -3530,12 +3984,18 @@ def _build_macro_parser(sub):
     # macro hooks list / install <name>
     p_hooks = msub.add_parser("hooks", help="Manage proxy lifecycle script hooks")
     hsub = p_hooks.add_subparsers(dest="hook_action", required=True)
-    hsub.add_parser("list", help="List all hook scripts and their status").set_defaults(func=cmd_macro_hooks)
+    hsub.add_parser("list", help="List all hook scripts and their status").set_defaults(
+        func=cmd_macro_hooks
+    )
     p_hook_install = hsub.add_parser("install", help="Install a hook stub script")
-    p_hook_install.add_argument("hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)")
+    p_hook_install.add_argument(
+        "hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)"
+    )
     p_hook_install.set_defaults(func=cmd_macro_hooks)
 
+
 # ── Fingerprint commands ──────────────────────────────────────────────────────
+
 
 def _build_fingerprint_parser(sub):
     p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management (Pro+)")
@@ -3546,8 +4006,12 @@ def _build_fingerprint_parser(sub):
     p_sync.add_argument("text", nargs="?", help="Prompt text (or omit to read from stdin)")
     p_sync.add_argument("--file", "-f", dest="input_file", help="Read prompt from file")
     p_sync.add_argument("--messages", dest="messages_file", help="OpenAI messages JSON file")
-    p_sync.add_argument("--dry-run", action="store_true", default=False,
-                        help="Show what would be sent without transmitting")
+    p_sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Show what would be sent without transmitting",
+    )
     p_sync.add_argument("--privacy", choices=["minimal", "standard", "full"], default="standard")
     p_sync.add_argument("--ttl", type=int, default=3600, help="Cache TTL in seconds (default 3600)")
     p_sync.add_argument("--skip-cache", action="store_true", default=False)
@@ -3561,10 +4025,12 @@ def _build_fingerprint_parser(sub):
 
     # fingerprint clear-cache
     p_clear = fpsub.add_parser("clear-cache", help="Clear cached directives")
-    p_clear.add_argument("--id", dest="fp_id", default=None,
-                         help="Clear only this fingerprint ID (default: all)")
-    p_clear.add_argument("--yes", "-y", action="store_true", default=False,
-                         help="Skip confirmation prompt")
+    p_clear.add_argument(
+        "--id", dest="fp_id", default=None, help="Clear only this fingerprint ID (default: all)"
+    )
+    p_clear.add_argument(
+        "--yes", "-y", action="store_true", default=False, help="Skip confirmation prompt"
+    )
     p_clear.set_defaults(func=cmd_fingerprint_clear_cache)
 
 
@@ -3572,9 +4038,10 @@ def cmd_fingerprint_sync(args):
     import json as _json
     import sys as _sys
     from pathlib import Path as _Path
+
     from tokenpak.agent.fingerprint.generator import FingerprintGenerator
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
     from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
+    from tokenpak.agent.fingerprint.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -3600,11 +4067,16 @@ def cmd_fingerprint_sync(args):
     if args.dry_run:
         payload = apply_privacy(fingerprint.to_dict(), privacy_level)
         if args.output_json:
-            print(_json.dumps({
-                "dry_run": True,
-                "fingerprint_id": fingerprint.fingerprint_id,
-                "payload_preview": payload,
-            }, indent=2))
+            print(
+                _json.dumps(
+                    {
+                        "dry_run": True,
+                        "fingerprint_id": fingerprint.fingerprint_id,
+                        "payload_preview": payload,
+                    },
+                    indent=2,
+                )
+            )
         else:
             print("── Dry Run ─────────────────────────────────")
             print(f"  Fingerprint ID : {fingerprint.fingerprint_id}")
@@ -3623,15 +4095,20 @@ def cmd_fingerprint_sync(args):
         _sys.exit(1)
 
     if args.output_json:
-        print(_json.dumps({
-            "success": result.success,
-            "source": result.source,
-            "fingerprint_id": fingerprint.fingerprint_id,
-            "directives": [d.to_dict() for d in result.directives],
-            "cached_at": result.cached_at,
-            "expires_at": result.expires_at,
-            "error": result.error,
-        }, indent=2))
+        print(
+            _json.dumps(
+                {
+                    "success": result.success,
+                    "source": result.source,
+                    "fingerprint_id": fingerprint.fingerprint_id,
+                    "directives": [d.to_dict() for d in result.directives],
+                    "cached_at": result.cached_at,
+                    "expires_at": result.expires_at,
+                    "error": result.error,
+                },
+                indent=2,
+            )
+        )
         return
 
     status_icon = "✓" if result.success else "⚠"
@@ -3658,7 +4135,9 @@ def cmd_fingerprint_sync(args):
 
 def cmd_fingerprint_cache(args):
     import json as _json
+
     from tokenpak.agent.fingerprint.sync import FingerprintSync
+
     client = FingerprintSync()
     status = client.cache_status()
 
@@ -3676,7 +4155,9 @@ def cmd_fingerprint_cache(args):
 
 def cmd_fingerprint_clear_cache(args):
     import sys as _sys
+
     from tokenpak.agent.fingerprint.sync import FingerprintSync
+
     client = FingerprintSync()
 
     fp_id = getattr(args, "fp_id", None)
@@ -3695,10 +4176,12 @@ def cmd_fingerprint_clear_cache(args):
 
 # ── Validate command ──────────────────────────────────────────────────────────
 
+
 def cmd_validate(args):
     """Validate a TokenPak JSON file against the v1.0 protocol schema."""
     import json as _json
     import sys as _sys
+
     from tokenpak.validator import TokenPakValidator
 
     validator = TokenPakValidator()
@@ -3709,17 +4192,17 @@ def cmd_validate(args):
         _sys.exit(0 if result.valid else 1)
 
     # Human-readable output
-    print(f"\nTokenPak Validator v1.0")
+    print("\nTokenPak Validator v1.0")
     print(f"File : {args.file}")
-    print(f"─" * 50)
+    print("─" * 50)
 
     if not result.issues:
-        print(f"  ✓ No issues found.")
+        print("  ✓ No issues found.")
     else:
         for issue in result.issues:
             print(str(issue))
 
-    print(f"─" * 50)
+    print("─" * 50)
     print(f"{result.summary()}\n")
 
     if not result.valid:
@@ -3729,8 +4212,15 @@ def cmd_validate(args):
 def _build_validate_parser(sub):
     p = sub.add_parser("validate", help="Validate a TokenPak JSON file against the v1.0 schema")
     p.add_argument("file", help="Path to the .json TokenPak file")
-    p.add_argument("--verbose", "-v", action="store_true", help="Show quality hints in addition to errors/warnings")
-    p.add_argument("--json", dest="json_output", action="store_true", help="Output validation result as JSON")
+    p.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Show quality hints in addition to errors/warnings",
+    )
+    p.add_argument(
+        "--json", dest="json_output", action="store_true", help="Output validation result as JSON"
+    )
     p.set_defaults(func=cmd_validate)
     return p
 

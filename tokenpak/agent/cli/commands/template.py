@@ -5,9 +5,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from pathlib import Path
-from typing import Optional
-
 
 try:
     import click
@@ -30,8 +27,8 @@ try:
             tokenpak template list --team
             tokenpak template list --tag summarise
         """
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         server_url = server or os.environ.get("TOKENPAK_SERVER", "http://localhost:8766")
         url = f"{server_url}/v1/team/templates"
@@ -71,7 +68,9 @@ try:
     @template_cmd.command("use")
     @click.argument("name")
     @click.option("--team", is_flag=True, default=True, help="Use a team template (default)")
-    @click.option("--var", multiple=True, metavar="KEY=VALUE", help="Template variable substitutions")
+    @click.option(
+        "--var", multiple=True, metavar="KEY=VALUE", help="Template variable substitutions"
+    )
     @click.option("--role", default="member", help="Actor role (member|admin)")
     @click.option("--server", default=None, help="Team server URL (default: http://localhost:8766)")
     def template_use(name, team, var, role, server):
@@ -82,8 +81,8 @@ try:
             tokenpak template use summarise --var content="Hello world"
 
         """
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         server_url = server or os.environ.get("TOKENPAK_SERVER", "http://localhost:8766")
 
@@ -130,7 +129,9 @@ try:
     @click.option("--created-by", default=None, help="Creator name (defaults to $USER)")
     @click.option("--actor-role", default="admin", help="Your role (must be admin)")
     @click.option("--server", default=None, help="Team server URL (default: http://localhost:8766)")
-    def template_create(name, content, description, tag, role_required, created_by, actor_role, server):
+    def template_create(
+        name, content, description, tag, role_required, created_by, actor_role, server
+    ):
         """Create a new team template (admin only).
 
         Example:
@@ -138,21 +139,23 @@ try:
                 --content "Summarise this in 3 bullets: {{content}}" \\
                 --description "Bullet summariser"
         """
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         server_url = server or os.environ.get("TOKENPAK_SERVER", "http://localhost:8766")
         created_by = created_by or os.environ.get("USER", "unknown")
 
-        payload = json.dumps({
-            "name": name,
-            "content": content,
-            "created_by": created_by,
-            "actor_role": actor_role,
-            "description": description,
-            "tags": list(tag),
-            "role_required": role_required,
-        }).encode()
+        payload = json.dumps(
+            {
+                "name": name,
+                "content": content,
+                "created_by": created_by,
+                "actor_role": actor_role,
+                "description": description,
+                "tags": list(tag),
+                "role_required": role_required,
+            }
+        ).encode()
 
         req = urllib.request.Request(
             f"{server_url}/v1/team/templates",
@@ -162,7 +165,7 @@ try:
         )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read())
+                json.loads(resp.read())
             click.echo(f"✓ Template {name!r} created")
         except urllib.error.HTTPError as exc:
             body = exc.read().decode()
@@ -178,8 +181,8 @@ try:
     @click.option("--server", default=None, help="Team server URL (default: http://localhost:8766)")
     def template_delete(name, actor_role, server):
         """Delete a team template (admin only)."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         server_url = server or os.environ.get("TOKENPAK_SERVER", "http://localhost:8766")
         payload = json.dumps({"name": name, "actor_role": actor_role}).encode()
@@ -191,7 +194,7 @@ try:
         )
         try:
             with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read())
+                json.loads(resp.read())
             click.echo(f"✓ Template {name!r} deleted")
         except urllib.error.URLError as exc:
             click.echo(f"✗ Failed to reach team server: {exc}", err=True)

@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _normalize_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Recursively sort dict keys for deterministic JSON output."""
     if isinstance(schema, dict):
@@ -80,6 +81,7 @@ def _count_tokens_approx(text: str) -> int:
 # ToolSchemaRegistry
 # ---------------------------------------------------------------------------
 
+
 class ToolSchemaRegistry:
     """
     Singleton registry that freezes tool schemas for prompt-cache stability.
@@ -103,9 +105,7 @@ class ToolSchemaRegistry:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def normalize_request(
-        self, body_bytes: bytes
-    ) -> tuple[bytes, bool]:
+    def normalize_request(self, body_bytes: bytes) -> tuple[bytes, bool]:
         """
         Parse the request body, normalize its ``tools`` array (if present),
         and return (new_body_bytes, changed) where ``changed`` is True if the
@@ -154,7 +154,7 @@ class ToolSchemaRegistry:
                 )
 
             # Replace tools with frozen copy (byte-for-byte identical every request)
-            original_len = len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
+            len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
             data["tools"] = self._frozen_tools
             new_body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 

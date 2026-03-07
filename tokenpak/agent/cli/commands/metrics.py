@@ -10,15 +10,15 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _metrics_enabled() -> bool:
     from tokenpak.agent.config import get_metrics_enabled
+
     return get_metrics_enabled()
 
 
@@ -36,6 +36,7 @@ SEP = "────────────────────────"
 # ---------------------------------------------------------------------------
 # Subcommands
 # ---------------------------------------------------------------------------
+
 
 def cmd_status(_args=None) -> None:
     """Show metrics opt-in status and pending record count."""
@@ -79,7 +80,9 @@ def cmd_preview(_args=None) -> None:
         print("  No pending records. All caught up!")
         return
 
-    print(f"  {'DATE':<12} {'MODEL':<30} {'INPUT':>8} {'OUTPUT':>8} {'SAVED':>8} {'RATIO':>7} {'LATENCY':>9}")
+    print(
+        f"  {'DATE':<12} {'MODEL':<30} {'INPUT':>8} {'OUTPUT':>8} {'SAVED':>8} {'RATIO':>7} {'LATENCY':>9}"
+    )
     print(f"  {'─'*12} {'─'*30} {'─'*8} {'─'*8} {'─'*8} {'─'*7} {'─'*9}")
 
     for r in records:
@@ -118,7 +121,9 @@ def cmd_history(args=None) -> None:
             print("    tokenpak config set metrics.enabled true")
         return
 
-    print(f"  {'DATE':<12} {'REQS':>6} {'INPUT':>10} {'SAVED':>10} {'AVG RATIO':>10} {'AVG LATENCY':>12} {'SYNCED':>8}")
+    print(
+        f"  {'DATE':<12} {'REQS':>6} {'INPUT':>10} {'SAVED':>10} {'AVG RATIO':>10} {'AVG LATENCY':>12} {'SYNCED':>8}"
+    )
     print(f"  {'─'*12} {'─'*6} {'─'*10} {'─'*10} {'─'*10} {'─'*12} {'─'*8}")
 
     for row in summary:
@@ -139,7 +144,9 @@ def cmd_history(args=None) -> None:
     total_saved = sum(r["tokens_saved"] or 0 for r in summary)
     total_input = sum(r["input_tokens"] or 0 for r in summary)
     overall_ratio = total_saved / total_input if total_input else 0.0
-    print(f"  Total: {total_reqs} requests, {_fmt_tokens(total_saved)} tokens saved ({_fmt_ratio(overall_ratio)} avg compression)")
+    print(
+        f"  Total: {total_reqs} requests, {_fmt_tokens(total_saved)} tokens saved ({_fmt_ratio(overall_ratio)} avg compression)"
+    )
     print()
 
 

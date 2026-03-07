@@ -18,6 +18,7 @@ Programmatic usage::
     result = sdk.test("my_recipe.yaml", input_text="...")
     bench  = sdk.benchmark("my_recipe.yaml", samples=[...])
 """
+
 from __future__ import annotations
 
 import json
@@ -60,9 +61,21 @@ RECIPE_SCHEMA: dict[str, Any] = {
         "keyword_filter",
     ],
     "known_categories": [
-        "python", "javascript", "typescript", "markdown", "yaml",
-        "json", "sql", "html", "css", "general", "legal", "medical",
-        "config", "logs", "git",
+        "python",
+        "javascript",
+        "typescript",
+        "markdown",
+        "yaml",
+        "json",
+        "sql",
+        "html",
+        "css",
+        "general",
+        "legal",
+        "medical",
+        "config",
+        "logs",
+        "git",
     ],
 }
 
@@ -170,6 +183,7 @@ DOMAIN_EXAMPLE_RECIPES: dict[str, dict[str, Any]] = {
 
 
 # ── RecipeSDK ─────────────────────────────────────────────────────────────────
+
 
 class RecipeValidationError(ValueError):
     """Raised when a recipe file fails schema validation."""
@@ -279,7 +293,9 @@ class RecipeSDK:
                 "This is allowed but may reduce discoverability."
             )
         if not str(raw.get("description", "")).strip():
-            warnings.append("Field 'description' is empty — add a short description for discoverability.")
+            warnings.append(
+                "Field 'description' is empty — add a short description for discoverability."
+            )
 
         # pattern
         pattern = raw.get("pattern", {})
@@ -335,9 +351,7 @@ class RecipeSDK:
                 try:
                     h = float(hint)
                     if not (lo <= h <= hi):
-                        errors.append(
-                            f"action.compression_hint {h} out of range [{lo}, {hi}]."
-                        )
+                        errors.append(f"action.compression_hint {h} out of range [{lo}, {hi}].")
                 except (TypeError, ValueError):
                     errors.append("action.compression_hint must be a float.")
 
@@ -387,11 +401,14 @@ class RecipeSDK:
 
         # Pattern matching check
         from tokenpak.agent.compression.recipes import CompressionRecipe
+
         recipe_obj = CompressionRecipe.from_dict(raw, source=str(path))
         pattern_match = recipe_obj.matches(filename=filename_hint, content_sample=text[:2000])
 
         # Apply operations (best-effort simulation)
-        result_text, ops_applied = _apply_operations(text, raw.get("action", {}).get("operations", []))
+        result_text, ops_applied = _apply_operations(
+            text, raw.get("action", {}).get("operations", [])
+        )
 
         input_size = len(text)
         output_size = len(result_text)
@@ -481,6 +498,7 @@ class RecipeSDK:
 
 # ── Operation dispatcher ──────────────────────────────────────────────────────
 
+
 def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str, list[str]]:
     """Apply a list of recipe operations to text. Returns (result, applied_op_names)."""
     applied: list[str] = []
@@ -525,7 +543,9 @@ def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str,
 
         elif op_type == "remove_empty_lines":
             max_consecutive = int(op.get("max_consecutive", 1))
-            result = re.sub(r"\n{" + str(max_consecutive + 1) + r",}", "\n" * max_consecutive, result)
+            result = re.sub(
+                r"\n{" + str(max_consecutive + 1) + r",}", "\n" * max_consecutive, result
+            )
             applied.append(op_type)
 
         elif op_type == "collapse_whitespace":
@@ -539,11 +559,13 @@ def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str,
                 result = re.sub(r'"""[\s\S]*?"""', '""""""', result)
                 result = re.sub(r"'''[\s\S]*?'''", "''''''", result)
             elif mode == "keep_summary":
+
                 def _compress_docstring(m: re.Match) -> str:
                     inner = m.group(0)[3:-3].strip()
                     first_line = inner.split("\n")[0].strip()
                     quote = m.group(0)[:3]
-                    return f'{quote}{first_line}{quote}'
+                    return f"{quote}{first_line}{quote}"
+
                 result = re.sub(r'"""[\s\S]*?"""', _compress_docstring, result)
             applied.append(op_type)
 
@@ -573,8 +595,7 @@ def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str,
             keep_keywords = op.get("keep_keywords", [])
             if keep_keywords:
                 lines = [
-                    line for line in result.splitlines()
-                    if any(kw in line for kw in keep_keywords)
+                    line for line in result.splitlines() if any(kw in line for kw in keep_keywords)
                 ]
                 result = "\n".join(lines)
                 applied.append(op_type)
@@ -583,6 +604,7 @@ def _apply_operations(text: str, operations: list[dict[str, Any]]) -> tuple[str,
 
 
 # ── Sample generator ──────────────────────────────────────────────────────────
+
 
 def _default_sample_for_category(category: str) -> str:
     """Return a representative text sample for a given recipe category."""
@@ -608,7 +630,7 @@ def calculate_total(items: list[dict]) -> float:
         total += item["price"] * item["qty"]
     return total
 ''',
-        "legal": '''\
+        "legal": """\
 AGREEMENT
 
 WHEREAS, Company A ("Client") desires to engage the services of Company B;
@@ -619,8 +641,8 @@ NOW, THEREFORE, in consideration of the mutual covenants herein, the parties agr
 2. PAYMENT. Client shall pay $5,000 per month.
 
 IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
-''',
-        "medical": '''\
+""",
+        "medical": """\
 Patient Name: John Doe
 DOB: 01/15/1970
 MRN: 12345678
@@ -632,8 +654,8 @@ CHIEF COMPLAINT: Patient presents with chest pain.
 HISTORY: 3-day history of intermittent chest discomfort.
 ASSESSMENT: Rule out cardiac etiology.
 PLAN: Order EKG, troponin levels. Refer to cardiology.
-''',
-        "markdown": '''\
+""",
+        "markdown": """\
 # Introduction
 
 In conclusion, this document describes the setup process.
@@ -650,8 +672,8 @@ It should be noted that the configuration is optional.
 ## Conclusion
 
 Clearly, the process is straightforward.
-''',
-        "general": '''\
+""",
+        "general": """\
 This document contains information about the system.
 This document contains information about the system.
 
@@ -660,6 +682,6 @@ This document contains information about the system.
 In conclusion, the system works as described.
 It is worth noting that configuration is required.
 It should be noted that defaults are provided.
-''',
+""",
     }
     return samples.get(category, samples["general"])

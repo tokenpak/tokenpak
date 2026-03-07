@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from jsonschema import validate, ValidationError
+    from jsonschema import ValidationError, validate  # noqa: F401
+
     _HAS_JSONSCHEMA = True
 except ImportError:
     _HAS_JSONSCHEMA = False
@@ -58,7 +59,7 @@ class StateManager:
             "done": [],
             "open": [],
             "next": [],
-            "defs": {}
+            "defs": {},
         }
 
     # ── Validation ───────────────────────────────────────────────────────────

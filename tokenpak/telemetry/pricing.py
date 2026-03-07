@@ -173,16 +173,12 @@ class PricingCatalog:
         """
         catalog_path = Path(path) if path is not None else _CATALOG_PATH
         if not catalog_path.exists():
-            raise FileNotFoundError(
-                f"Pricing catalog not found: {catalog_path}"
-            )
+            raise FileNotFoundError(f"Pricing catalog not found: {catalog_path}")
         with catalog_path.open("r", encoding="utf-8") as fh:
             raw: dict[str, Any] = json.load(fh)
 
         if "models" not in raw:
-            raise ValueError(
-                f"Pricing catalog at {catalog_path} is missing a 'models' key."
-            )
+            raise ValueError(f"Pricing catalog at {catalog_path} is missing a 'models' key.")
 
         meta: dict[str, Any] = raw.get("_meta", {})
         version: str = meta.get("version", "v1")
@@ -340,15 +336,9 @@ class PricingCatalog:
         # Input tokens are billed at the standard rate; cache-read tokens
         # are billed at the (lower) cache-read rate; cache-write tokens are
         # billed at the (higher) cache-write rate.
-        cr_rate = (
-            pricing.cache_read_per_token
-            if pricing.cache_read_per_token is not None
-            else 0.0
-        )
+        cr_rate = pricing.cache_read_per_token if pricing.cache_read_per_token is not None else 0.0
         cw_rate = (
-            pricing.cache_write_per_token
-            if pricing.cache_write_per_token is not None
-            else 0.0
+            pricing.cache_write_per_token if pricing.cache_write_per_token is not None else 0.0
         )
 
         # Actual input = tokens sent minus cache-read tokens (already cached)
@@ -423,9 +413,7 @@ def compute_baseline_cost(model: str, raw_input_tokens: int) -> float:
     pricing = catalog.get_model(model)
 
     if pricing is None:
-        logger.warning(
-            "compute_baseline_cost: unknown model %r — returning 0.0", model
-        )
+        logger.warning("compute_baseline_cost: unknown model %r — returning 0.0", model)
         return 0.0
 
     return raw_input_tokens * pricing.input_per_token

@@ -23,7 +23,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -58,6 +57,7 @@ _REDACT_PATTERNS = [
 # ---------------------------------------------------------------------------
 # Secure config file writer
 # ---------------------------------------------------------------------------
+
 
 def secure_write_config(path: Path, data: Dict[str, Any]) -> None:
     """
@@ -118,6 +118,7 @@ def ensure_config_permissions(path: Path) -> bool:
 # Input sanitizers
 # ---------------------------------------------------------------------------
 
+
 def sanitize_model_name(model: str) -> str:
     """
     Validate and return *model* if it matches the allowed character set.
@@ -162,15 +163,14 @@ def sanitize_cli_arg(value: str, name: str = "argument") -> str:
     if not isinstance(value, str):
         raise ValueError(f"{name} must be a string")
     if _INJECTION_RE.search(value):
-        raise ValueError(
-            f"Invalid {name}: contains disallowed characters or sequences."
-        )
+        raise ValueError(f"Invalid {name}: contains disallowed characters or sequences.")
     return value
 
 
 # ---------------------------------------------------------------------------
 # PII scrubbing (for non-logger paths, e.g. error messages, DB fields)
 # ---------------------------------------------------------------------------
+
 
 def redact_pii(text: str) -> str:
     """
@@ -197,6 +197,7 @@ def redact_pii(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Temp-file cleanup helper
 # ---------------------------------------------------------------------------
+
 
 def safe_temp_file(
     suffix: str = "",

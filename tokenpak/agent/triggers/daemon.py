@@ -5,9 +5,7 @@ Runs as a lightweight background process; zero LLM calls.
 
 from __future__ import annotations
 
-import os
 import re
-import shlex
 import sqlite3
 import subprocess
 import threading
@@ -15,8 +13,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .store import TriggerStore, Trigger
 from .matcher import match_event
+from .store import Trigger, TriggerStore
 
 
 def _parse_interval_seconds(interval: str) -> int:
@@ -35,9 +33,7 @@ def _run_action(trigger: Trigger, store: TriggerStore) -> None:
     if not cmd.startswith("/") and not cmd.startswith("./") and not cmd.startswith("~"):
         cmd = f"tokenpak {cmd}"
     try:
-        result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=30
-        )
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
         output = (result.stdout + result.stderr).strip()
         store.log_fire(trigger, result.returncode, output)
     except subprocess.TimeoutExpired:
@@ -87,7 +83,7 @@ class TriggerDaemon:
 
             # timer
             if pat.startswith("timer:"):
-                interval_str = pat[len("timer:"):]
+                interval_str = pat[len("timer:") :]
                 try:
                     interval = _parse_interval_seconds(interval_str)
                 except ValueError:
@@ -95,7 +91,9 @@ class TriggerDaemon:
                 last = self._timer_last_fire.get(trigger.id, 0.0)
                 if now - last >= interval:
                     self._timer_last_fire[trigger.id] = now
-                    threading.Thread(target=_run_action, args=(trigger, self.store), daemon=True).start()
+                    threading.Thread(
+                        target=_run_action, args=(trigger, self.store), daemon=True
+                    ).start()
 
             # file:changed / file:created — handled via mtime polling
             elif pat.startswith("file:changed:") or pat.startswith("file:created:"):
@@ -124,7 +122,11 @@ class TriggerDaemon:
                 break
             concrete_parts.append(p)
         if concrete_parts and concrete_parts[0]:
-            base_dir = _Path("/".join(concrete_parts)) if glob.startswith("/") else _Path.home() / "/".join(concrete_parts)
+            base_dir = (
+                _Path("/".join(concrete_parts))
+                if glob.startswith("/")
+                else _Path.home() / "/".join(concrete_parts)
+            )
         else:
             base_dir = _Path.cwd()
 
@@ -149,7 +151,9 @@ class TriggerDaemon:
                     known_mtimes[path] = mtime
                     event_str = f"file:changed:{path}"
                     if match_event(trigger.event, event_str):
-                        threading.Thread(target=_run_action, args=(trigger, self.store), daemon=True).start()
+                        threading.Thread(
+                            target=_run_action, args=(trigger, self.store), daemon=True
+                        ).start()
                         return
                 elif old is None:
                     known_mtimes[path] = mtime
@@ -160,7 +164,9 @@ class TriggerDaemon:
                     known_mtimes[path] = mtime
                     event_str = f"file:created:{path}"
                     if match_event(trigger.event, event_str):
-                        threading.Thread(target=_run_action, args=(trigger, self.store), daemon=True).start()
+                        threading.Thread(
+                            target=_run_action, args=(trigger, self.store), daemon=True
+                        ).start()
                         return
 
     def _check_cost_threshold(self, triggers: List[Trigger]) -> None:
@@ -181,4 +187,6 @@ class TriggerDaemon:
         event_str = f"cost:daily>{daily_cost:.2f}"
         for trigger in triggers:
             if trigger.event.startswith("cost:daily>") and match_event(trigger.event, event_str):
-                threading.Thread(target=_run_action, args=(trigger, self.store), daemon=True).start()
+                threading.Thread(
+                    target=_run_action, args=(trigger, self.store), daemon=True
+                ).start()

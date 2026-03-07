@@ -10,10 +10,11 @@ All public functions are safe to call unconditionally — they are no-ops
 when the feature flag is disabled, so the proxy never needs to branch on
 the flag itself.
 """
+
 from __future__ import annotations
 
-import os
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Feature flag
 # ---------------------------------------------------------------------------
-WORKFLOW_TRACKING_ENABLED: bool = (
-    os.environ.get("TOKENPAK_WORKFLOW_TRACKING", "0").strip().lower()
-    in ("1", "true", "yes", "on")
-)
+WORKFLOW_TRACKING_ENABLED: bool = os.environ.get(
+    "TOKENPAK_WORKFLOW_TRACKING", "0"
+).strip().lower() in ("1", "true", "yes", "on")
 
 
 # ---------------------------------------------------------------------------
@@ -35,12 +35,14 @@ def _get_manager():
     if not WORKFLOW_TRACKING_ENABLED:
         return None
     from tokenpak.agent.agentic.workflow import get_manager
+
     return get_manager()
 
 
 # ---------------------------------------------------------------------------
 # Public API used by proxy.py
 # ---------------------------------------------------------------------------
+
 
 def start_proxy_workflow(
     request_id: str,
@@ -60,6 +62,7 @@ def start_proxy_workflow(
 
     try:
         from tokenpak.agent.agentic.workflow import template_steps
+
         steps = template_steps("proxy")
         wf = mgr.create(
             name=f"proxy-request-{request_id}",
@@ -144,6 +147,7 @@ def fail_step(
 # Recovery helpers
 # ---------------------------------------------------------------------------
 
+
 def recover_proxy_workflows() -> List[Dict[str, Any]]:
     """Return a list of incomplete proxy workflows from prior runs.
 
@@ -156,9 +160,7 @@ def recover_proxy_workflows() -> List[Dict[str, Any]]:
 
     try:
         incomplete = mgr.incomplete_workflows()
-        proxy_incomplete = [
-            wf for wf in incomplete if "proxy" in wf.tags
-        ]
+        proxy_incomplete = [wf for wf in incomplete if "proxy" in wf.tags]
         return [wf.to_dict() for wf in proxy_incomplete]
     except Exception as exc:
         logger.debug("proxy_workflow.recover_proxy_workflows failed (non-fatal): %s", exc)

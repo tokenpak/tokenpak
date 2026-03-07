@@ -9,8 +9,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Optional
-
+from typing import Dict, List
 
 # Default utility store location (relative to project root)
 DEFAULT_UTILITY_PATH = ".tokenpak/utility.json"
@@ -31,25 +30,26 @@ DECAY_DELTA = 0.1
 # Detection
 # ---------------------------------------------------------------------------
 
+
 def _extract_identifiers(block_content: str) -> List[str]:
     """Extract function/class names and file paths from a block."""
     identifiers = []
 
     # Python/JS/TS: def foo, class Foo, function foo, const foo =
     for pat in [
-        r'\bdef\s+(\w+)\s*\(',
-        r'\bclass\s+(\w+)\b',
-        r'\bfunction\s+(\w+)\s*\(',
-        r'\bconst\s+(\w+)\s*=',
-        r'\blet\s+(\w+)\s*=',
-        r'\bfunc\s+(\w+)\s*\(',    # Go
-        r'\bfn\s+(\w+)\s*\(',      # Rust
+        r"\bdef\s+(\w+)\s*\(",
+        r"\bclass\s+(\w+)\b",
+        r"\bfunction\s+(\w+)\s*\(",
+        r"\bconst\s+(\w+)\s*=",
+        r"\blet\s+(\w+)\s*=",
+        r"\bfunc\s+(\w+)\s*\(",  # Go
+        r"\bfn\s+(\w+)\s*\(",  # Rust
     ]:
         identifiers.extend(re.findall(pat, block_content))
 
     # File path patterns  (e.g. src/auth.py, ./utils/helper.js)
-    path_pats = re.findall(r'[\w./\-]+\.\w{1,6}', block_content)
-    identifiers.extend(p for p in path_pats if '/' in p or p.startswith('.'))
+    path_pats = re.findall(r"[\w./\-]+\.\w{1,6}", block_content)
+    identifiers.extend(p for p in path_pats if "/" in p or p.startswith("."))
 
     return [i for i in identifiers if len(i) >= 3]
 
@@ -100,7 +100,7 @@ def track_citations(
         identifiers = _extract_identifiers(content)
         for ident in identifiers:
             # Use word-boundary match to avoid false positives
-            pattern = r'\b' + re.escape(ident) + r'\b'
+            pattern = r"\b" + re.escape(ident) + r"\b"
             if re.search(pattern, response_text):
                 cited.append(sid)
                 break
@@ -111,6 +111,7 @@ def track_citations(
 # ---------------------------------------------------------------------------
 # Utility store
 # ---------------------------------------------------------------------------
+
 
 def _load_utility(utility_path: str) -> Dict:
     """Load utility.json; return empty dict if missing."""

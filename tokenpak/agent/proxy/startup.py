@@ -15,7 +15,6 @@ through the /health and /degradation endpoints instead.
 from __future__ import annotations
 
 import logging
-import os
 import socket
 from pathlib import Path
 from typing import List, Tuple
@@ -66,6 +65,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
     # ------------------------------------------------------------------ #
     try:
         from tokenpak.agent.proxy.failover import load_failover_config
+
         fc = load_failover_config()
         if fc.enabled and not fc.chain:
             msg = (
@@ -90,10 +90,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
             missing.append(dep)
 
     if missing:
-        msg = (
-            f"Missing dependencies: {', '.join(missing)}. "
-            f"Run: pip install tokenpak"
-        )
+        msg = f"Missing dependencies: {', '.join(missing)}. " f"Run: pip install tokenpak"
         logger.error("startup: %s", msg)
         warnings.append(msg)
         all_ok = False

@@ -10,10 +10,8 @@ Handles four detection patterns:
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
-
 
 # Regex to detect TOKPAK wire-format preamble
 _TOKPAK_PREAMBLE = re.compile(r"^TOKPAK:\d+", re.MULTILINE)

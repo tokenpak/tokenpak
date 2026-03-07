@@ -15,10 +15,10 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import hashlib
-import urllib.request
+import json
 import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import List, Optional
 
@@ -70,6 +70,7 @@ def _log_warning(message: str):
     """Append warning to today's memory file."""
     try:
         import datetime
+
         today = datetime.date.today().isoformat()
         mem_path = MEMORY_DIR / f"{today}.md"
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)

@@ -18,7 +18,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-
 DEFAULT_VALIDATION_LOG = ".tokenpak/validation_log.json"
 
 MIN_COVERAGE = 0.05
@@ -29,27 +28,145 @@ MAX_AVG_SENTENCE_LEN = 80
 MAX_SENTENCE_LEN = 120
 
 _STOPWORDS = {
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "up", "about", "into", "through", "during",
-    "before", "after", "above", "below", "between", "out", "off", "over",
-    "under", "again", "then", "once", "here", "there", "when", "where",
-    "why", "how", "all", "both", "each", "few", "more", "most", "other",
-    "some", "such", "no", "nor", "not", "only", "own", "same", "so",
-    "than", "too", "very", "s", "t", "can", "will", "just", "don",
-    "should", "now", "i", "me", "my", "we", "our", "you", "your",
-    "he", "him", "his", "she", "her", "they", "them", "their", "it",
-    "its", "this", "that", "these", "those", "am", "is", "are", "was",
-    "were", "be", "been", "being", "have", "has", "had", "having", "do",
-    "does", "did", "doing", "would", "could", "should", "might", "may",
-    "shall", "must", "need", "dare", "used", "also", "as", "if", "what",
-    "which", "who", "whom", "whose", "while", "although", "because",
-    "since", "unless", "until", "yet", "even", "though", "however",
-    "therefore", "thus", "hence", "otherwise",
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "up",
+    "about",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "out",
+    "off",
+    "over",
+    "under",
+    "again",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "both",
+    "each",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "s",
+    "t",
+    "can",
+    "will",
+    "just",
+    "don",
+    "should",
+    "now",
+    "i",
+    "me",
+    "my",
+    "we",
+    "our",
+    "you",
+    "your",
+    "he",
+    "him",
+    "his",
+    "she",
+    "her",
+    "they",
+    "them",
+    "their",
+    "it",
+    "its",
+    "this",
+    "that",
+    "these",
+    "those",
+    "am",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "having",
+    "do",
+    "does",
+    "did",
+    "doing",
+    "would",
+    "could",
+    "should",
+    "might",
+    "may",
+    "shall",
+    "must",
+    "need",
+    "dare",
+    "used",
+    "also",
+    "as",
+    "if",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "whose",
+    "while",
+    "although",
+    "because",
+    "since",
+    "unless",
+    "until",
+    "yet",
+    "even",
+    "though",
+    "however",
+    "therefore",
+    "thus",
+    "hence",
+    "otherwise",
 }
 
-_SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+')
-_CODE_FENCE_OPEN = re.compile(r'^```', re.MULTILINE)
-_NUMBER_PATTERN = re.compile(r'\$?\d+(?:[,_]\d{3})*(?:\.\d+)?%?|\d+\.\d+')
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_CODE_FENCE_OPEN = re.compile(r"^```", re.MULTILINE)
+_NUMBER_PATTERN = re.compile(r"\$?\d+(?:[,_]\d{3})*(?:\.\d+)?%?|\d+\.\d+")
 
 
 @dataclass
@@ -67,11 +184,7 @@ def top_terms(text: str, n: int = 10) -> List[str]:
         return []
 
     def tokenize(s: str) -> List[str]:
-        return [
-            w.lower().strip("\"'()[]{}.,;:!?-_")
-            for w in s.split()
-            if len(w) >= 3
-        ]
+        return [w.lower().strip("\"'()[]{}.,;:!?-_") for w in s.split() if len(w) >= 3]
 
     sent_tokens = [tokenize(s) for s in sentences]
     doc_count = len(sentences)
@@ -108,7 +221,11 @@ def _check_coverage(original: str, compressed: str) -> tuple:
     if ratio < MIN_COVERAGE:
         return False, ratio / MIN_COVERAGE, f"over-compressed (ratio {ratio:.3f} < {MIN_COVERAGE})"
     if ratio > MAX_COVERAGE:
-        return False, (1 - ratio) / (1 - MAX_COVERAGE), f"under-compressed (ratio {ratio:.3f} > {MAX_COVERAGE})"
+        return (
+            False,
+            (1 - ratio) / (1 - MAX_COVERAGE),
+            f"under-compressed (ratio {ratio:.3f} > {MAX_COVERAGE})",
+        )
     mid = (MIN_COVERAGE + MAX_COVERAGE) / 2
     score = 1.0 - abs(ratio - mid) / (mid - MIN_COVERAGE)
     return True, max(0.0, min(1.0, score)), "ok"
@@ -126,9 +243,17 @@ def _check_sentence_coherence(compressed: str) -> tuple:
     if max_len > MAX_SENTENCE_LEN:
         return False, 0.2, f"sentence too long ({max_len} words > {MAX_SENTENCE_LEN})"
     if avg_len < MIN_AVG_SENTENCE_LEN:
-        return False, avg_len / MIN_AVG_SENTENCE_LEN, f"avg sentence too short ({avg_len:.1f} < {MIN_AVG_SENTENCE_LEN})"
+        return (
+            False,
+            avg_len / MIN_AVG_SENTENCE_LEN,
+            f"avg sentence too short ({avg_len:.1f} < {MIN_AVG_SENTENCE_LEN})",
+        )
     if avg_len > MAX_AVG_SENTENCE_LEN:
-        return False, MAX_AVG_SENTENCE_LEN / avg_len, f"avg sentence too long ({avg_len:.1f} > {MAX_AVG_SENTENCE_LEN})"
+        return (
+            False,
+            MAX_AVG_SENTENCE_LEN / avg_len,
+            f"avg sentence too long ({avg_len:.1f} > {MAX_AVG_SENTENCE_LEN})",
+        )
     return True, 1.0, "ok"
 
 
@@ -137,10 +262,10 @@ def _check_key_terms(original: str, compressed: str) -> tuple:
     if not terms:
         return True, 1.0, "no key terms"
     comp_lower = compressed.lower()
-    found = sum(1 for t in terms if re.search(r'\b' + re.escape(t) + r'\b', comp_lower))
+    found = sum(1 for t in terms if re.search(r"\b" + re.escape(t) + r"\b", comp_lower))
     retention = found / len(terms)
     if retention < MIN_TERM_RETENTION:
-        missing = [t for t in terms if not re.search(r'\b' + re.escape(t) + r'\b', comp_lower)]
+        missing = [t for t in terms if not re.search(r"\b" + re.escape(t) + r"\b", comp_lower)]
         return (
             False,
             retention,
@@ -154,8 +279,12 @@ def _check_code_integrity(original: str, compressed: str) -> tuple:
     open_fences = len(_CODE_FENCE_OPEN.findall(compressed))
     if open_fences % 2 != 0:
         return False, 0.0, f"unclosed code fence ({open_fences} ``` markers)"
-    orig_indented = sum(1 for l in original.splitlines() if l.startswith("    ") or l.startswith("\t"))
-    comp_indented = sum(1 for l in compressed.splitlines() if l.startswith("    ") or l.startswith("\t"))
+    orig_indented = sum(
+        1 for l in original.splitlines() if l.startswith("    ") or l.startswith("\t")
+    )
+    comp_indented = sum(
+        1 for l in compressed.splitlines() if l.startswith("    ") or l.startswith("\t")
+    )
     if orig_indented > 0:
         preserved_ratio = comp_indented / orig_indented
         if preserved_ratio < 0.3:
@@ -216,9 +345,9 @@ def validate(
             failed = True
             first_failure = f"{name}: {reason}"
 
-    _run("coverage",  _check_coverage,          original_text, compressed_text)
+    _run("coverage", _check_coverage, original_text, compressed_text)
     _run("coherence", _check_sentence_coherence, compressed_text)
-    _run("key_terms", _check_key_terms,          original_text, compressed_text)
+    _run("key_terms", _check_key_terms, original_text, compressed_text)
 
     if risk_upper == "CODE":
         _run("code_integrity", _check_code_integrity, original_text, compressed_text)
@@ -290,8 +419,12 @@ def get_validation_stats(log_path: str = DEFAULT_VALIDATION_LOG) -> dict:
     p = Path(log_path)
     if not p.exists():
         return {
-            "total_checked": 0, "passed": 0, "failed": 0,
-            "fallback_rate": 0.0, "avg_score": 0.0, "most_common_failure": None,
+            "total_checked": 0,
+            "passed": 0,
+            "failed": 0,
+            "fallback_rate": 0.0,
+            "avg_score": 0.0,
+            "most_common_failure": None,
         }
     try:
         entries = json.loads(p.read_text())

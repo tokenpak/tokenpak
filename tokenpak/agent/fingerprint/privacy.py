@@ -4,15 +4,14 @@ TokenPak Fingerprint Privacy — control how much structural detail is shared.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 
 class PrivacyLevel(str, Enum):
-    MINIMAL  = "minimal"   # segment counts + total length only
+    MINIMAL = "minimal"  # segment counts + total length only
     STANDARD = "standard"  # segment types + rough lengths (default)
-    FULL     = "full"      # complete structural fingerprint
+    FULL = "full"  # complete structural fingerprint
 
 
 def apply_privacy(fingerprint_dict: dict[str, Any], level: PrivacyLevel) -> dict[str, Any]:
@@ -39,9 +38,7 @@ def apply_privacy(fingerprint_dict: dict[str, Any], level: PrivacyLevel) -> dict
             t = seg.get("type", "unknown")
             type_counts[t] = type_counts.get(t, 0) + 1
         out["segment_type_distribution"] = type_counts
-        out["avg_segment_tokens"] = (
-            fingerprint_dict.get("total_tokens", 0) // max(len(segments), 1)
-        )
+        out["avg_segment_tokens"] = fingerprint_dict.get("total_tokens", 0) // max(len(segments), 1)
 
     # MINIMAL: just counts/total already set above
     return {k: v for k, v in out.items() if v is not None}

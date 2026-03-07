@@ -5,6 +5,7 @@ Used by RequestValidator to validate incoming proxy requests before forwarding.
 """
 
 from __future__ import annotations
+
 from typing import Any, Dict
 
 # ---------------------------------------------------------------------------
@@ -201,6 +202,7 @@ OPENAI_CHAT_SCHEMA: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 # Schema registry
 # ---------------------------------------------------------------------------
+
 
 def get_request_schema(provider: str) -> Dict[str, Any]:
     """Return the appropriate request schema for a provider.

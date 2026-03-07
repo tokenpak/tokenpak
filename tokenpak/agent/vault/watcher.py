@@ -15,28 +15,40 @@ from __future__ import annotations
 
 import fnmatch
 import logging
-import os
 import signal
 import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_IGNORE_PATTERNS = [
-    "*.pyc", "*.pyo", "__pycache__", ".git", ".svn",
-    "*.swp", "*.swo", "*.tmp", ".DS_Store",
-    "node_modules", ".tox", ".venv", "venv",
-    "*.egg-info", "dist", "build",
+    "*.pyc",
+    "*.pyo",
+    "__pycache__",
+    ".git",
+    ".svn",
+    "*.swp",
+    "*.swo",
+    "*.tmp",
+    ".DS_Store",
+    "node_modules",
+    ".tox",
+    ".venv",
+    "venv",
+    "*.egg-info",
+    "dist",
+    "build",
 ]
 
 
 @dataclass
 class WatcherConfig:
     """Configuration for the file watcher."""
+
     watch_paths: list
     debounce_ms: int = 500
     recursive: bool = True
@@ -84,8 +96,8 @@ class VaultWatcher:
     def start(self, blocking: bool = False) -> None:
         """Start watching. If blocking=True, run until Ctrl+C."""
         try:
-            from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
+            from watchdog.observers import Observer
         except ImportError:
             raise RuntimeError("watchdog is required: pip install watchdog")
 
@@ -176,13 +188,14 @@ class VaultWatcher:
         if self._gitignore_patterns:
             logger.info("Loaded %d pattern(s) from .gitignore", len(self._gitignore_patterns))
         if self._tokenpakignore_patterns:
-            logger.info("Loaded %d pattern(s) from .tokenpakignore", len(self._tokenpakignore_patterns))
+            logger.info(
+                "Loaded %d pattern(s) from .tokenpakignore", len(self._tokenpakignore_patterns)
+            )
 
     def _should_ignore(self, path: str) -> bool:
         """Return True if path matches any ignore pattern (config, .gitignore, .tokenpakignore)."""
         p = Path(path)
         parts = p.parts
-        name = p.name
 
         all_patterns = list(self.config.ignore_patterns or [])
         all_patterns.extend(self._gitignore_patterns)
@@ -231,11 +244,12 @@ class VaultWatcher:
         self._stats.reindexes_triggered += 1
         reindexed = 0
         try:
-            from tokenpak.registry import BlockRegistry
-            from tokenpak.walker import FILE_TYPES
-            from tokenpak.processors import get_processor
-            from tokenpak.tokens import count_tokens
             import hashlib
+
+            from tokenpak.processors import get_processor
+            from tokenpak.registry import BlockRegistry
+            from tokenpak.tokens import count_tokens
+            from tokenpak.walker import FILE_TYPES
 
             db = self.config.db_path
             registry = BlockRegistry(db) if db else BlockRegistry()
@@ -290,7 +304,9 @@ class VaultWatcher:
         if reindexed:
             logger.info(
                 "Re-indexed %d file(s) | total reindexes=%d files=%d",
-                reindexed, self._stats.reindexes_triggered, self._stats.files_reindexed,
+                reindexed,
+                self._stats.reindexes_triggered,
+                self._stats.files_reindexed,
             )
 
     def _run_blocking(self) -> None:

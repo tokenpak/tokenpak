@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -23,11 +23,13 @@ _BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
 # Config I/O
 # ---------------------------------------------------------------------------
 
+
 def _load_config() -> dict:
     if not _BUDGET_CONFIG.exists():
         return {}
     try:
         import yaml
+
         with open(_BUDGET_CONFIG) as f:
             return yaml.safe_load(f) or {}
     except ImportError:
@@ -46,6 +48,7 @@ def _save_config(cfg: dict) -> None:
     _BUDGET_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     try:
         import yaml
+
         with open(_BUDGET_CONFIG, "w") as f:
             yaml.dump(cfg, f, default_flow_style=False)
     except ImportError:
@@ -56,6 +59,7 @@ def _save_config(cfg: dict) -> None:
 # ---------------------------------------------------------------------------
 # Spend queries (from monitor DB)
 # ---------------------------------------------------------------------------
+
 
 def _connect() -> Optional[sqlite3.Connection]:
     db = Path(_MONITOR_DB)
@@ -94,6 +98,7 @@ def _fmt_cost(c: float) -> str:
 # Budget history
 # ---------------------------------------------------------------------------
 
+
 def _budget_history(days: int = 30) -> list[dict]:
     """Return daily spend for the past N days."""
     conn = _connect()
@@ -113,7 +118,10 @@ def _budget_history(days: int = 30) -> list[dict]:
         (since,),
     ).fetchall()
     conn.close()
-    return [{"day": r["day"], "requests": r["requests"], "cost_usd": round(float(r["cost_usd"]), 6)} for r in rows]
+    return [
+        {"day": r["day"], "requests": r["requests"], "cost_usd": round(float(r["cost_usd"]), 6)}
+        for r in rows
+    ]
 
 
 def _budget_forecast(period: str = "monthly") -> dict:
@@ -134,6 +142,7 @@ def _budget_forecast(period: str = "monthly") -> dict:
     if period == "monthly":
         # Days remaining in month (excluding today)
         import calendar
+
         days_in_month = calendar.monthrange(today.year, today.month)[1]
         days_remaining = days_in_month - today.day
         already_spent = _get_spent("monthly")
@@ -156,6 +165,7 @@ def _budget_forecast(period: str = "monthly") -> dict:
 # Display functions
 # ---------------------------------------------------------------------------
 
+
 def print_budget_status(raw: bool = False) -> None:
     """Show current budget vs. spend."""
     cfg = _load_config()
@@ -171,14 +181,20 @@ def print_budget_status(raw: bool = False) -> None:
             "limit_usd": daily_limit,
             "spent_usd": round(daily_spent, 6),
             "remaining_usd": round(float(daily_limit) - daily_spent, 4) if daily_limit else None,
-            "percent_used": round(daily_spent / float(daily_limit) * 100, 1) if daily_limit else None,
+            "percent_used": (
+                round(daily_spent / float(daily_limit) * 100, 1) if daily_limit else None
+            ),
             "alert_at_percent": alert_pct,
         },
         "monthly": {
             "limit_usd": monthly_limit,
             "spent_usd": round(monthly_spent, 6),
-            "remaining_usd": round(float(monthly_limit) - monthly_spent, 4) if monthly_limit else None,
-            "percent_used": round(monthly_spent / float(monthly_limit) * 100, 1) if monthly_limit else None,
+            "remaining_usd": (
+                round(float(monthly_limit) - monthly_spent, 4) if monthly_limit else None
+            ),
+            "percent_used": (
+                round(monthly_spent / float(monthly_limit) * 100, 1) if monthly_limit else None
+            ),
             "alert_at_percent": alert_pct,
         },
     }
@@ -188,7 +204,7 @@ def print_budget_status(raw: bool = False) -> None:
         return
 
     hard_stop = cfg.get("hard_stop", False)
-    print(f"TOKENPAK  |  Budget Status")
+    print("TOKENPAK  |  Budget Status")
     print(SEP)
     if hard_stop:
         print("  ⚠ Hard-stop ENABLED — requests will be blocked when limit exceeded")
@@ -207,7 +223,15 @@ def print_budget_status(raw: bool = False) -> None:
             bar_filled = int(pct / 5) if pct is not None else 0
             bar = "█" * bar_filled + "░" * (20 - bar_filled)
             warn_pct = float(cfg.get("warn_at_percent", 95.0))
-            alert = "🔴 OVER BUDGET" if pct is not None and pct >= 100 else ("🟠 ALERT" if pct is not None and pct >= warn_pct else ("⚠ WARNING" if pct is not None and pct >= alert_pct else ""))
+            alert = (
+                "🔴 OVER BUDGET"
+                if pct is not None and pct >= 100
+                else (
+                    "🟠 ALERT"
+                    if pct is not None and pct >= warn_pct
+                    else ("⚠ WARNING" if pct is not None and pct >= alert_pct else "")
+                )
+            )
             print(f"  {label}:")
             print(f"    Limit:        {_fmt_cost(limit_f)}")
             print(f"    Spent:        {_fmt_cost(spent)}")
@@ -258,7 +282,7 @@ def print_budget_forecast(raw: bool = False) -> None:
         print(json.dumps(data, indent=2))
         return
 
-    print(f"TOKENPAK  |  Spend Forecast")
+    print("TOKENPAK  |  Spend Forecast")
     print(SEP)
     print(f"  {'Daily Avg (7d):':<28}{_fmt_cost(data['daily_avg_usd'])}")
     print(f"  {'Basis:':<28}{data['basis_days']} days")
@@ -278,6 +302,7 @@ def print_budget_forecast(raw: bool = False) -> None:
 # ---------------------------------------------------------------------------
 # Argparse dispatch (wired into main.py)
 # ---------------------------------------------------------------------------
+
 
 def run_budget_cmd(args) -> None:
     """Dispatch handler for 'tokenpak budget' from main.py argparse."""

@@ -60,9 +60,7 @@ class CanonBlockRegistry:
     def _content_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
-    def get_or_register(
-        self, block_id: str, content: str
-    ) -> Tuple[str, bool]:
+    def get_or_register(self, block_id: str, content: str) -> Tuple[str, bool]:
         """
         Register or look up a CANON block.
 
@@ -77,11 +75,9 @@ class CanonBlockRegistry:
         if entry is None:
             # First time seeing this block_id
             version = 1
-            is_new = True
         elif entry["hash"] != new_hash:
             # Content changed → bump version
             version = entry["version"] + 1
-            is_new = True
         else:
             # Same content — return existing version
             return f"v{entry['version']}", False
@@ -172,9 +168,7 @@ class ContextAssembler:
 
     def _save_session(self) -> None:
         self._session["turn"] = self._session.get("turn", 0) + 1
-        self._session["last_updated"] = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-        )
+        self._session["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         with open(self._session_path, "w", encoding="utf-8") as f:
             json.dump(self._session, f, indent=2)
 
@@ -213,7 +207,7 @@ class ContextAssembler:
         # Decide whether to inline or reference
         already_sent_version = self.sent_blocks.get(block_id)
         should_inline = (
-            already_sent_version is None          # never sent
+            already_sent_version is None  # never sent
             or already_sent_version != effective_version  # version changed
         )
 
@@ -296,6 +290,7 @@ class ContextAssembler:
             # Rebuild evidence_pack from trimmed items (if trimmed)
             if evidence_pack and trimmed.get("evidence"):
                 from .evidence_pack import EvidencePack
+
                 new_pack = EvidencePack()
                 new_pack.items = trimmed["evidence"]["items"]
                 evidence_pack = new_pack

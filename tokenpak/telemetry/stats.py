@@ -1,16 +1,18 @@
 """TokenPak Request and Session Stats — Track compression effectiveness."""
 
 from __future__ import annotations
+
+import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
-from collections import deque
-import threading
 
 
 @dataclass
 class RequestStats:
     """Stats for a single request through TokenPak."""
+
     request_id: str
     timestamp: datetime
     input_tokens_raw: int  # What the user sent
@@ -23,7 +25,7 @@ class RequestStats:
     def footer_oneline(self) -> str:
         """Generate single-line footer format (without session total)."""
         if self.tokens_saved == 0:
-            return f"⚡ TokenPak: 0 tokens saved"
+            return "⚡ TokenPak: 0 tokens saved"
         return f"⚡ TokenPak: -{self.tokens_saved:,} tokens ({self.percent_saved:.0f}%) | ${self.cost_saved:.3f} saved"
 
     def to_dict(self):
@@ -42,6 +44,7 @@ class RequestStats:
 @dataclass
 class SessionStats:
     """Aggregated stats for the current session (proxy uptime)."""
+
     session_requests: int = 0
     session_total_tokens_raw: int = 0
     session_total_tokens_sent: int = 0

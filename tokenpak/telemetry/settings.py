@@ -3,6 +3,7 @@
 Persists alert configuration to a JSON file alongside the telemetry DB.
 Thread-safe via a file lock (write-then-rename pattern).
 """
+
 from __future__ import annotations
 
 import json
@@ -92,6 +93,7 @@ class AlertSettings:
 
     def _validate(self, cfg: dict[str, Any]) -> dict[str, Any]:
         """Raise ValueError on bad inputs, else return cleaned config."""
+
         def pct_field(val, name):
             v = float(val)
             if not (0 <= v <= 500):
