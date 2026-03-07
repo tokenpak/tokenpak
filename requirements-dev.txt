@@ -1,0 +1,16 @@
+# Development dependencies for TokenPak
+# Install with: pip install -r requirements-dev.txt
+
+# Testing
+pytest>=7.0
+
+# Security auditing
+pip-audit>=2.10.0
+bandit>=1.8.0
+
+# Optional: token counting (for tests)
+tiktoken>=0.5.0
+
+# Optional: code quality
+# ruff>=0.1.0
+# mypy>=1.0
