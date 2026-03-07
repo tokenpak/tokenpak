@@ -49,6 +49,22 @@ from collections import deque
 import uuid
 
 # ---------------------------------------------------------------------------
+# PromptBuilder — stable/volatile prefix split for cache efficiency
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.proxy.prompt_builder import (
+        apply_stable_cache_control as _apply_stable_cache_control,
+        inject_with_cache_boundary as _inject_with_cache_boundary,
+    )
+    PROMPT_BUILDER_AVAILABLE = True
+except ImportError:
+    PROMPT_BUILDER_AVAILABLE = False
+    def _apply_stable_cache_control(body_bytes):
+        return body_bytes
+    def _inject_with_cache_boundary(body_bytes, volatile_text):
+        return body_bytes
+
+# ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
 # ---------------------------------------------------------------------------
 @dataclass
@@ -1342,6 +1358,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         SESSION["injection_skips"] += 1
                         vault_stage.details["skipped"] = True
                         vault_stage.details["reason"] = "model_skip" if INJECT_SKIP_MODELS.strip() and any(s.lower() in model.lower() for s in INJECT_SKIP_MODELS.split(",")) else "prompt_too_short"
+                        # Even when skipping vault injection, apply cache_control to stable prefix
+                        if PROMPT_BUILDER_AVAILABLE:
+                            body = _apply_stable_cache_control(body)
                     else:
                         body, injected_tokens, injected_sources = inject_vault_context(body)
                         if injected_tokens > 0:
