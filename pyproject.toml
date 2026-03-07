@@ -5,24 +5,47 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tokenpak"
 version = "1.0.0"
-description = "Universal LLM proxy — context compression, smart routing, cost tracking"
+description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
-  { name = "TokenPak Contributors" }
+  { name = "Kevin Yang", email = "kaywhy331@gmail.com" }
 ]
-keywords = ["llm", "ai", "proxy", "token-optimization", "openai", "anthropic", "compression"]
+maintainers = [
+  { name = "Kevin Yang", email = "kaywhy331@gmail.com" }
+]
+keywords = [
+  "llm",
+  "ai",
+  "proxy",
+  "token-optimization",
+  "openai",
+  "anthropic",
+  "compression",
+  "context",
+  "context-window",
+  "tokens",
+  "cost-tracking",
+  "routing",
+]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
   "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: System :: Networking",
+  "Topic :: Utilities",
+  "Typing :: Typed",
 ]
 
 dependencies = [
@@ -56,6 +79,7 @@ Homepage = "https://github.com/kaywhy331/tokenpak"
 Documentation = "https://github.com/kaywhy331/tokenpak/blob/master/README.md"
 "Bug Reports" = "https://github.com/kaywhy331/tokenpak/issues"
 "Source Code" = "https://github.com/kaywhy331/tokenpak"
+Changelog = "https://github.com/kaywhy331/tokenpak/blob/master/CHANGELOG.md"
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
