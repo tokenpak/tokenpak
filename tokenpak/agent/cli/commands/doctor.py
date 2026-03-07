@@ -122,7 +122,7 @@ def run_doctor(fix: bool = False) -> int:
 
     # --- Check 6: Python deps -------------------------------------------------
     missing_deps: list[str] = []
-    for pkg in ["click", "yaml"]:
+    for pkg in ["click", "yaml", "httpx"]:
         try:
             __import__(pkg)
         except ImportError:
@@ -142,6 +142,73 @@ def run_doctor(fix: bool = False) -> int:
         counts["pass"] += 1
     else:
         print(Colors.ok("Debug log           (not present)"))
+        counts["pass"] += 1
+
+    # --- Check 8: API key environment variables --------------------------------
+    api_key_checks = [
+        ("ANTHROPIC_API_KEY",  "Anthropic"),
+        ("OPENAI_API_KEY",     "OpenAI"),
+        ("GOOGLE_API_KEY",     "Google"),
+    ]
+    found_keys = []
+    missing_keys = []
+    for env_var, provider in api_key_checks:
+        val = os.environ.get(env_var, "").strip()
+        if val:
+            found_keys.append(provider)
+        else:
+            missing_keys.append((env_var, provider))
+
+    if found_keys:
+        print(Colors.ok(f"API keys            {', '.join(found_keys)} — env vars set"))
+        counts["pass"] += 1
+    else:
+        print(Colors.warn(
+            "API keys            none found — set ANTHROPIC_API_KEY, "
+            "OPENAI_API_KEY, or GOOGLE_API_KEY"
+        ))
+        counts["warn"] += 1
+
+    # --- Check 9: Proxy health endpoint (degradation) -------------------------
+    try:
+        import urllib.request as _urlreq
+        with _urlreq.urlopen("http://127.0.0.1:8766/degradation", timeout=3) as _r:
+            _deg = json.loads(_r.read())
+        if _deg.get("is_degraded"):
+            recent = _deg.get("recent_events", [])
+            detail = recent[0].get("detail", "") if recent else ""
+            print(Colors.warn(
+                f"Proxy degradation   running in degraded mode — {detail[:60] or 'see tokenpak status'}"
+            ))
+            counts["warn"] += 1
+        else:
+            print(Colors.ok("Proxy degradation   not degraded — no recent issues"))
+            counts["pass"] += 1
+    except Exception:
+        # Proxy not running — already reported in Check 4
+        pass
+
+    # --- Check 10: Failover config --------------------------------------------
+    failover_cfg_path = tokenpak_dir / "config.yaml"
+    if failover_cfg_path.exists():
+        try:
+            import yaml
+            with open(failover_cfg_path) as _f:
+                _fc = yaml.safe_load(_f) or {}
+            fo = _fc.get("failover", {})
+            if fo.get("enabled") and fo.get("chain"):
+                print(Colors.ok(f"Failover config     {failover_cfg_path} — {len(fo['chain'])} provider(s)"))
+            elif fo.get("enabled"):
+                print(Colors.warn(f"Failover config     enabled but no providers in chain"))
+                counts["warn"] += 1
+            else:
+                print(Colors.ok(f"Failover config     {failover_cfg_path} — disabled (no failover)"))
+            counts["pass"] += 1
+        except Exception as _e:
+            print(Colors.warn(f"Failover config     could not parse config.yaml: {_e}"))
+            counts["warn"] += 1
+    else:
+        print(Colors.ok("Failover config     not configured (optional)"))
         counts["pass"] += 1
 
     # --- Summary --------------------------------------------------------------

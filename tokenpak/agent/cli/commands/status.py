@@ -1,9 +1,11 @@
-"""status command — show proxy state, mode, session stats."""
+"""status command — show proxy health, mode, session stats, and degradation events."""
 
 from __future__ import annotations
 
 import json
 import sys
+import urllib.request
+from typing import Any, Dict, Optional
 
 try:
     import click
@@ -12,48 +14,132 @@ except ImportError:
     HAS_CLICK = False
 
 
+def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
+    """Fetch JSON from a URL. Returns None on failure."""
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
 def run(proxy_base: str = "http://127.0.0.1:8766", raw: bool = False, minimal: bool = False) -> None:
     """Print proxy status to stdout."""
-    import urllib.request
-    SEP = "────────────────────────"
+    SEP = "────────────────────────────────────"
 
-    try:
-        with urllib.request.urlopen(f"{proxy_base}/health", timeout=5) as r:
-            d = json.loads(r.read())
-    except Exception:
-        print(f"✖ Proxy unreachable at {proxy_base}")
+    # --- Fetch health ---
+    health = _fetch(f"{proxy_base}/health")
+    if health is None:
+        print(f"⛔️  TokenPak proxy unreachable at {proxy_base}")
+        print(f"    What happened:  The proxy is not running or crashed.")
+        print(f"    Why:            Connection refused on port {proxy_base.split(':')[-1]}.")
+        print(f"    What to do:     Run `tokenpak serve` to start it, or")
+        print(f"                    `tokenpak doctor` to diagnose the issue.")
         sys.exit(1)
 
     if raw:
-        print(json.dumps(d, indent=2))
+        # Fetch everything and dump
+        session = _fetch(f"{proxy_base}/stats/session") or {}
+        deg = _fetch(f"{proxy_base}/degradation") or {}
+        print(json.dumps({"health": health, "session": session, "degradation": deg}, indent=2))
         return
 
-    st = d.get("stats", {})
-    mode = d.get("compilation_mode", "unknown")
-    saved = st.get("saved_tokens", 0)
-    sent = st.get("sent_input_tokens", 0)
-    raw_in = sent + saved
-    pct = f"▼ {saved/raw_in*100:.1f}%" if raw_in else "n/a"
+    # --- Fetch session stats ---
+    session = _fetch(f"{proxy_base}/stats/session") or {}
+    deg = _fetch(f"{proxy_base}/degradation") or {}
+
+    # Core fields
+    is_degraded = health.get("is_degraded", False)
+    status_icon = "⚠️ " if is_degraded else "●"
+    status_text = "DEGRADED" if is_degraded else "Active"
+    uptime_s = health.get("uptime_seconds", 0)
+    uptime_h = uptime_s // 3600
+    uptime_m = (uptime_s % 3600) // 60
+    uptime_str = f"{uptime_h}h {uptime_m}m" if uptime_h else f"{uptime_m}m"
+
+    requests = session.get("session_requests", 0)
+    tokens_saved = session.get("tokens_saved", 0)
+    tokens_raw = session.get("tokens_raw", 0)
+    total_cost = session.get("total_cost", 0.0)
+    cost_saved = session.get("session_total_saved", 0.0)
+    avg_savings = session.get("avg_savings_pct", 0.0)
+    errors = session.get("errors", 0)
+    compression_avg = health.get("compression_ratio_avg", 0.0)
 
     if minimal:
-        print(f"● Active | {mode} | {pct}")
+        mark = "⚠️ DEGRADED" if is_degraded else "● Active"
+        pct = f"{avg_savings:.1f}% saved" if tokens_raw else "n/a"
+        print(f"{mark} | {requests:,} req | {pct}")
         return
 
-    print(f"TOKENPAK  |  Status\n{SEP}")
-    print(f"{'State:':<26}● Active")
-    print(f"{'Mode:':<26}{mode}")
-    print(f"{'Session Requests:':<26}{st.get('requests', 0):,}")
-    print(f"{'Tokens Saved:':<26}{saved:,}")
-    print(f"{'Compression:':<26}{pct}")
+    print(f"\nTOKENPAK  |  Status")
+    print(SEP)
+
+    print(f"{'Proxy:':<28}{status_icon} {status_text}")
+    print(f"{'Uptime:':<28}{uptime_str}")
+    print(f"{'Version:':<28}{health.get('version', '?')}")
+    print()
+
+    print(f"{'Session Requests:':<28}{requests:,}")
+    print(f"{'Errors:':<28}{errors:,}")
+    print(f"{'Tokens (raw):':<28}{tokens_raw:,}")
+    print(f"{'Tokens (saved):':<28}{tokens_saved:,}")
+    print(f"{'Avg Compression:':<28}{avg_savings:.1f}%  (ratio {compression_avg:.3f})")
+    print(f"{'Cost (this session):':<28}${total_cost:.4f}")
+    print(f"{'Cost Saved:':<28}${cost_saved:.4f}")
+
+    # --- Degradation block ---
+    if is_degraded or deg.get("recent_events"):
+        print()
+        print(SEP)
+        deg_status = deg.get("status", "unknown")
+        deg_msg = deg.get("message", "")
+        print(f"{'Degradation:':<28}{deg_msg}")
+
+        comp_fail = deg.get("lifetime_compression_failures", 0)
+        fo = deg.get("lifetime_provider_failovers", 0)
+        if comp_fail or fo:
+            print(f"{'Compression failures:':<28}{comp_fail}")
+            print(f"{'Provider failovers:':<28}{fo}")
+
+        recent = deg.get("recent_events", [])
+        if recent:
+            print()
+            print("Recent degradation events:")
+            for ev in recent[:5]:
+                ts = ev.get("timestamp", "")[:19].replace("T", " ")
+                etype = ev.get("event_type", "?")
+                detail = ev.get("detail", "")
+                recovered = "✅" if ev.get("recovered") else "❌"
+                print(f"  {recovered} [{ts}] {etype}: {detail[:70]}")
+
+    print(SEP)
+    if is_degraded:
+        print("ℹ️  Running degraded — requests still served. Run `tokenpak doctor` for details.")
+    print()
 
 
 if HAS_CLICK:
     import click
 
     @click.command("status")
-    @click.option("--proxy", default="http://127.0.0.1:8766", envvar="TOKENPAK_PROXY_URL")
-    @click.option("--raw", is_flag=True)
-    @click.option("--minimal", is_flag=True)
-    def status_cmd(proxy, raw, minimal):
-        """Show proxy state, mode, and session stats."""
+    @click.option("--proxy", default="http://127.0.0.1:8766", envvar="TOKENPAK_PROXY_URL",
+                  help="Proxy base URL")
+    @click.option("--raw", is_flag=True, help="Dump raw JSON")
+    @click.option("--minimal", is_flag=True, help="One-line summary")
+    def status_cmd(proxy: str, raw: bool, minimal: bool) -> None:
+        """Show proxy health, session stats, and degradation events.
+
+        Reports:
+          • Proxy status (Active / Degraded)
+          • Session token savings and cost
+          • Recent degradation events (compression failures, failovers)
+
+        Examples:
+
+        \\b
+          tokenpak status
+          tokenpak status --minimal
+          tokenpak status --raw
+        """
         run(proxy_base=proxy, raw=raw, minimal=minimal)
