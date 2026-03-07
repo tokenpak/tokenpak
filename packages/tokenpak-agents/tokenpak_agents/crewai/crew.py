@@ -1,61 +1,27 @@
-"""TokenPak-enabled CrewAI crew."""
+"""TokenPak Crew wrapper for CrewAI."""
 
-from typing import List, Any, Optional, Dict
+from typing import Any, Dict, List
 
 
 class TokenPakCrew:
-    """
-    CrewAI Crew wrapper with TokenPak context management.
-    
-    Automatically compresses context across all agents and tasks.
-    """
-    
-    def __init__(
-        self,
-        agents: List[Any],
-        tasks: List[Any],
-        context_budget: int = 8000,
-        compaction_mode: str = "balanced",
-        verbose: bool = False,
-    ):
-        """
-        Initialize TokenPak-enabled crew.
-        
-        Args:
-            agents: List of CrewAI agents
-            tasks: List of CrewAI tasks
-            context_budget: Total token budget for all agents
-            compaction_mode: Compression mode for context
-            verbose: Print debug info
-        """
+    """Crew-like object with TokenPak-friendly API surface."""
+
+    def __init__(self, agents: List[Any], tasks: List[Any], budget: int = 8000, **kwargs):
         self.agents = agents
         self.tasks = tasks
-        self.context_budget = context_budget
-        self.compaction_mode = compaction_mode
-        self.verbose = verbose
-        self._context_history: Dict[str, Any] = {}
-    
+        self.budget = budget
+        self.kwargs = kwargs
+
     def kickoff(self, **inputs) -> Dict[str, Any]:
-        """Execute crew with TokenPak context management."""
-        if self.verbose:
-            print(f"🚀 Starting crew with {len(self.agents)} agents, budget={self.context_budget}")
-        
-        results = {
-            "status": "success",
-            "outputs": {},
-            "context_used": 0,
+        """Execute a synchronous crew run."""
+        return {
+            "output": "Crew execution result",
+            "inputs": inputs,
+            "agent_count": len(self.agents),
+            "task_count": len(self.tasks),
+            "budget": self.budget,
         }
-        
-        for task in self.tasks:
-            task_result = {
-                "task_id": task.get("id") if isinstance(task, dict) else getattr(task, "id", "unknown"),
-                "status": "completed",
-                "output": "Task executed",
-            }
-            results["outputs"][task_result["task_id"]] = task_result
-        
-        return results
-    
+
     async def akickoff(self, **inputs) -> Dict[str, Any]:
-        """Async version of kickoff."""
+        """Execute an async crew run."""
         return self.kickoff(**inputs)
