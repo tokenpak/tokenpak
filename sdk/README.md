@@ -18,12 +18,13 @@ pnpm add tokenpak
 ## Requirements
 
 - Node.js ≥ 18
-- A running [TokenPak API server](https://github.com/kaywhy331/tokenpak) (Python)
 
-Start the server:
+Works with any LLM client (OpenAI SDK, Anthropic SDK, LangChain, etc.) — no proxy required.
+
+**Optional:** Run a local [TokenPak server](https://github.com/kaywhy331/tokenpak) for advanced caching and analytics:
 ```bash
 pip install tokenpak
-uvicorn tokenpak.examples.api_server.server:app --port 8000
+tokenpak serve --port 8000
 ```
 
 ---

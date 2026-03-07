@@ -71,7 +71,7 @@ TokenPak is an open protocol for AI context optimization. It defines:
 - **Recipes**: Compression strategies for different content types
 - **Budgets**: Token limits that guide compression decisions
 
-Learn more: https://github.com/tokenpak/tokenpak-spec
+Learn more: https://github.com/kaywhy331/tokenpak
 
 ## Features
 
@@ -253,14 +253,13 @@ Savings vary by content type:
 
 ## Documentation
 
-- **Spec**: https://github.com/tokenpak/tokenpak-spec
+- **Docs**: https://github.com/kaywhy331/tokenpak
 - **Protocol**: https://tokenpak.dev/protocol
-- **Implementations**: https://tokenpak.dev/implementations
 
 ## Support
 
-- Issues: https://github.com/tokenpak/langchain-tokenpak/issues
-- Discussions: https://github.com/tokenpak/tokenpak-spec/discussions
+- Issues: https://github.com/kaywhy331/tokenpak/issues
+- Discussions: https://github.com/kaywhy331/tokenpak/discussions
 - Email: support@tokenpak.dev
 
 ## License
