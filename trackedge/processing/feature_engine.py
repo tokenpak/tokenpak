@@ -117,7 +117,7 @@ def class_fit(horse: Dict, race: Dict) -> ClassFitResult:
     race_type = race.get("type", "Normal")
     
     class_fit_ratio = horse_avg_class / race_class if race_class > 0 else 1.0
-    score = max(0, min(100, class_fit_ratio * 100))
+    score = float(max(0, min(100, class_fit_ratio * 100)))
     
     flags = []
     if race_class < horse_avg_class * 0.95:
@@ -211,4 +211,4 @@ def first_time_starter_reweight(horse: Dict) -> Dict[str, float]:
     elif starts == 1:
         return {"speed_score": 0.20, "class_fit": 0.10, "pace_fit": 0.10, "form_fitness": 0.40, "connections": 0.20}
     else:
-        return {"speed_score": 0.10, "class_fit": 0.10, "pace_fit": 0.10, "form_fitness": 0.60, "connections": 0.20}
+        return {"speed_score": 0.10, "class_fit": 0.10, "pace_fit": 0.10, "form_fitness": 0.60, "connections": 0.10}
