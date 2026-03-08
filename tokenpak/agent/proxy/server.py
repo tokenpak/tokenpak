@@ -396,6 +396,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/ingest":
+            import json as _json
+            import uuid as _uuid
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                _payload = _json.loads(raw_body)
+            except Exception:
+                _payload = {}
+            _record_id = str(_uuid.uuid4())
+            _resp = _json.dumps({"status": "ok", "ids": [_record_id]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(_resp)))
+            self.end_headers()
+            self.wfile.write(_resp)
         elif self.path.startswith("/v1/"):
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
