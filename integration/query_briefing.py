@@ -46,22 +46,31 @@ class QueryBriefing:
         ]
         
         # Summary metrics
-        if "data" in summary:
-            data = summary["data"]
+        if "summary" in summary:
+            data = summary["summary"]
             lines.append("**Usage Summary:**")
             lines.append(f"  Total tokens: {data.get('total_tokens', 0):,}")
-            lines.append(f"  Cache hit rate: {data.get('cache_hit_rate', 0):.1%}")
+            lines.append(f"  Total requests: {data.get('total_requests', 0)}")
+            lines.append(f"  Cache tokens: {data.get('cache_tokens', 0):,}")
             lines.append(f"  Unique agents: {data.get('unique_agents', 0)}")
             lines.append(f"  Avg compression: {data.get('avg_compression', 1.0):.2f}x")
             lines.append("")
         
         # Top agents
-        if "data" in top_agents:
+        if "users" in top_agents:
             lines.append("**Top Agents (by tokens):**")
-            for i, agent in enumerate(top_agents["data"][:5], 1):
+            for i, agent in enumerate(top_agents["users"][:5], 1):
+                agent_id = agent.get("agent_id", "unknown")
                 tokens = agent.get("total_tokens", 0)
                 requests = agent.get("request_count", 0)
-                pct = (tokens / data.get('total_tokens', 1) * 100) if "data" in summary else 0
-                lines.append(f"  {i}. {agent.get('agent_id', 'unknown')}: {tokens:,} tokens ({pct:.1f}%) — {requests} requests")
+                pct = (tokens / summary["summary"].get('total_tokens', 1) * 100) if "summary" in summary else 0
+                lines.append(f"  {i}. {agent_id}: {tokens:,} tokens ({pct:.1f}%) — {requests} requests")
         
         return "\n".join(lines)
+
+# Singleton
+_briefing = QueryBriefing()
+
+def get_daily_briefing(date: Optional[str] = None) -> str:
+    """Get formatted daily briefing."""
+    return _briefing.format_briefing(date)
