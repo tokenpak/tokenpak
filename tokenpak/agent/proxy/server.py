@@ -1034,6 +1034,13 @@ class ProxyServer:
           4. Close the HTTP connection pool
           5. Stop the HTTP server
         """
+        # Always close the pool, even if server wasn't started
+        if self._connection_pool is not None:
+            try:
+                self._connection_pool.close()
+            except Exception:
+                pass
+
         if self._server is None:
             return  # already stopped
 

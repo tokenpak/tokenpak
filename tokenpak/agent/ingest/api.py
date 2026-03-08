@@ -152,15 +152,22 @@ def ingest_batch(entries: List[Entry]) -> IngestResponse:
 
 
 def create_ingest_app(prefix: str = "") -> Any:
-    """Create a standalone FastAPI app with ingest routes."""
+    """Create a standalone FastAPI app with ingest + query routes."""
     from fastapi import FastAPI
 
     app = FastAPI(
-        title="TokenPak Ingest API",
+        title="TokenPak API",
         version="5.0.0",
-        description="Phase 5A: Agent usage data ingest",
+        description="Phase 5A+5B: Agent usage data ingest and query",
     )
     app.include_router(router, prefix=prefix)
+
+    # Mount Phase 5B query router if available
+    try:
+        from tokenpak.agent.query.api import router as query_router
+        app.include_router(query_router, prefix=prefix)
+    except ImportError:
+        pass
 
     @app.get("/health")
     def health():
