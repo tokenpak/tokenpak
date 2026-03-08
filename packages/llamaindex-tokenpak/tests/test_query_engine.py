@@ -159,3 +159,49 @@ class TestQueryAsTokenpak:
         pack = tp.query_as_tokenpak("test", extra_nodes=extra)
         # Extra nodes should show up in blocks or be incorporated
         assert len(pack["blocks"]) >= 1
+
+
+class TestQueryEngineExtended:
+    def test_custom_budget_reflected_in_stats(self):
+        """Budget set at construction appears in token stats."""
+        engine = MockQueryEngine(source_nodes=make_source_nodes(2))
+        tp = TokenPakQueryEngine(query_engine=engine, budget=1234)
+        pack = tp.query_as_tokenpak("budget check")
+        assert pack["tokens"]["budget"] == 1234
+
+    def test_compression_ratio_is_valid_float(self):
+        """compression ratio is a float between 0 and 1 (exclusive upper)."""
+        nodes = make_source_nodes(3, tokens_each=500)
+        engine = MockQueryEngine(source_nodes=nodes)
+        tp = TokenPakQueryEngine(query_engine=engine, budget=300)
+        pack = tp.query_as_tokenpak("ratio test")
+        ratio = pack["tokens"]["ratio"]
+        assert isinstance(ratio, float)
+        assert 0.0 <= ratio <= 1.0
+
+    def test_source_nodes_is_list(self):
+        """source_nodes field is always a list."""
+        engine = MockQueryEngine(source_nodes=make_source_nodes(2))
+        tp = TokenPakQueryEngine(query_engine=engine)
+        pack = tp.query_as_tokenpak("source nodes check")
+        assert isinstance(pack["source_nodes"], list)
+
+    def test_raw_response_preserved(self):
+        """raw_response is the original response object from the base engine."""
+        engine = MockQueryEngine(response_text="Verbatim answer.", source_nodes=make_source_nodes(1))
+        tp = TokenPakQueryEngine(query_engine=engine)
+        pack = tp.query_as_tokenpak("raw test")
+        assert str(pack["raw_response"]) == "Verbatim answer."
+
+    def test_query_engine_kwargs_passed_through(self):
+        """Extra kwargs to query_as_tokenpak are forwarded to the base engine."""
+        calls = []
+
+        class TrackingEngine:
+            def query(self, query_str, **kwargs):
+                calls.append(kwargs)
+                return MockResponse("ok", [])
+
+        tp = TokenPakQueryEngine(query_engine=TrackingEngine())
+        tp.query_as_tokenpak("test", custom_param="hello")
+        assert any("custom_param" in c for c in calls)
