@@ -404,3 +404,34 @@ def speed_score_field_relative(horse: dict, race: dict) -> float:
     speed_score = 50 + (z * 15)
     return max(20, min(90, speed_score))
 
+
+
+def engineer_features(horse: Dict, race: Dict) -> Dict:
+    """
+    Aggregate all feature engineering for a single horse in a race.
+    Returns a flat dict of computed features for use by the scoring engine.
+    This is the primary entry point for feature engineering.
+    """
+    speed = speed_score(horse)
+    pace = pace_style(horse)
+    race_pace = race_pace_scenario(race)
+    cf = class_fit(horse, race)
+    wf = workout_fitness(horse)
+    lp = layoff_penalty(horse)
+    conn = connections_score(horse)
+    pace_label = race_pace.get("label", "P")
+    pace_fit = pace_fit_adjustment(horse, pace_label)
+
+    return {
+        "speed_score": speed.score if hasattr(speed, "score") else 50,
+        "speed_trend": speed.trend if hasattr(speed, "trend") else "flat",
+        "pace_style": pace,
+        "race_pace_scenario": race_pace,
+        "class_fit": cf.score if hasattr(cf, "score") else 50,
+        "class_flags": cf.flags if hasattr(cf, "flags") else [],
+        "workout_fitness": wf.score if hasattr(wf, "score") else 50,
+        "layoff_penalty": lp,
+        "connections_score": conn,
+        "pace_fit": pace_fit,
+        "form_fitness": max(0, (wf.score if hasattr(wf, "score") else 50) - lp),
+    }

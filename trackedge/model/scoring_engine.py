@@ -154,3 +154,26 @@ def race_confidence_score(race: Dict, horse_scores: Dict[str, float], probabilit
         pace_stability=pace_stability,
         field_competitiveness=field_competitiveness,
     )
+
+
+def compute_power_scores(race: Dict, features_by_horse: Dict[str, Dict] = None) -> Dict[str, float]:
+    """
+    Compute power scores for all horses in a race.
+    
+    Args:
+        race: Race dict with 'horses' list (each horse has 'name' key).
+        features_by_horse: Optional pre-computed features keyed by horse name.
+                           If not provided, uses empty feature dicts (returns baseline scores).
+    
+    Returns:
+        Dict mapping horse name -> power score (0-100).
+    """
+    if features_by_horse is None:
+        features_by_horse = {}
+
+    scores = {}
+    for horse in race.get("horses", []):
+        name = horse.get("name", f"horse_{id(horse)}")
+        features = features_by_horse.get(name, {})
+        scores[name] = power_score(horse, race, features)
+    return scores
