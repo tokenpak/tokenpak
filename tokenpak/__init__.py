@@ -74,6 +74,22 @@ from tokenpak.telemetry.collector import TelemetryCollector
 from tokenpak.tokens import count_tokens
 
 # ---------------------------------------------------------------------------
+# Agentic handoff protocol
+# ---------------------------------------------------------------------------
+from tokenpak.agent.agentic.handoff import (
+    ContextRef,
+    HandoffBlock,
+    HandoffManager,
+    HandoffStatus,
+    HandoffWire,
+    TokenPak,
+)
+# HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
+# The internal Handoff dataclass (file-based) is available via
+# tokenpak.agent.agentic.handoff.Handoff
+Handoff = HandoffWire
+
+# ---------------------------------------------------------------------------
 # Public API declaration
 # ---------------------------------------------------------------------------
 __all__ = [
@@ -113,4 +129,12 @@ __all__ = [
     "connectors",
     "agent",
     "proxy",
+    # Agentic handoff protocol
+    "ContextRef",
+    "Handoff",
+    "HandoffBlock",
+    "HandoffManager",
+    "HandoffStatus",
+    "HandoffWire",
+    "TokenPak",
 ]
