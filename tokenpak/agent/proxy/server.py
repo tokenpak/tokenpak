@@ -629,11 +629,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
+                    has_content_type = False
+                    has_cache_control = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
                         if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                             continue
+                        if h_lower == "content-type":
+                            has_content_type = True
+                        if h_lower == "cache-control":
+                            has_cache_control = True
                         self.send_header(h_key, h_val)
+                    # SSE-required headers: enforce even if upstream omits them
+                    if not has_content_type:
+                        self.send_header("Content-Type", "text/event-stream")
+                    if not has_cache_control:
+                        self.send_header("Cache-Control", "no-cache")
+                    # Always disable nginx buffering for streaming
+                    self.send_header("X-Accel-Buffering", "no")
                     self.end_headers()
 
                     for chunk in resp.iter_bytes(chunk_size=4096):
