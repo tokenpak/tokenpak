@@ -586,7 +586,26 @@ def cmd_serve(args):
         print("  GET  /health")
         uvicorn.run(app, host="127.0.0.1", port=port)
         return
-    # Default: start the TokenPak proxy server
+    # Multi-worker mode: route to ingest API via uvicorn (proxy doesn't support workers)
+    workers = getattr(args, "workers", 1) or 1
+    if workers > 1:
+        import uvicorn
+        from .agent.ingest.api import create_ingest_app
+        port = args.port
+        print(f"TokenPak Ingest API — http://127.0.0.1:{port}")
+        print(f"  Workers: {workers}")
+        print("  POST /ingest")
+        print("  POST /ingest/batch")
+        print("  GET  /health")
+        uvicorn.run(
+            "tokenpak.agent.ingest.api:create_ingest_app",
+            host="127.0.0.1",
+            port=port,
+            workers=workers,
+            factory=True,
+        )
+        return
+    # Default (single-worker): start the TokenPak proxy server
     shutdown_timeout = getattr(args, "shutdown_timeout", None)
     try:
         from .agent.proxy.server import start_proxy
