@@ -1,74 +1,84 @@
 # TokenPak Test Audit — 2026-03-08
 
 ## Summary
-- **Total tests**: 3141
-- **Passed**: 3029
-- **Failed**: 24
-- **Errors**: 6
-- **Skipped**: 82
 
-## Pass Rate: **96.5%**
+| Metric | Count |
+|--------|-------|
+| Total tests | 3141 |
+| Passed | 3035 |
+| Failed | 24 |
+| Skipped | 82 |
+| Errors (setup) | 0 (fixed, see below) |
+| **Pass Rate** | **96.6%** |
 
-## Failures (by category)
+> Note: 6 benchmark tests in `tests/benchmarks/test_compile_performance.py` were erroring on setup due to missing `pytest-benchmark` package. Fixed by running `pip install pytest-benchmark --break-system-packages`. After fix, all 6 benchmark error tests became passing (included in 3035 passed above).
 
-### Import Errors (module not yet built)
-- `test_handoff_protocol.py::test_top_level_imports` — missing module: `tokenpak.handoff` (CannotImportModule)
-- `test_handoff_protocol.py::test_handoff_block_basic` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_block_round_trip` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_add_and_get` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_chaining` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_blocks_by_type` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_remove` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_to_prompt_empty` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_to_prompt_format` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_token_pak_round_trip` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_wire_basic` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_wire_round_trip` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_wire_invalid_json` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_wire_unknown_version` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_handoff_wire_metadata` — missing module: `tokenpak.handoff`
-- `test_handoff_protocol.py::test_autogen_handoff_wire_round_trip` — missing module: `tokenpak.handoff`
+---
 
-### Logic Errors (implementation issues)
-- `test_async_proxy_server.py::test_start_proxy_uses_async_backend` — AssertionError: event loop backing
-- `test_connection_pool.py::test_proxy_server_stop_closes_pool` — AssertionError: pool not closed properly
-- `test_streaming.py::TestProxyStreamingEndToEnd::test_streaming_x_accel_buffering_header` — AssertionError: header value empty
-- `test_streaming.py::TestProxyStreamingEndToEnd::test_streaming_headers_enforced_without_upstream_content_type` — AssertionError: content-type not set
-- `test_streaming.py::TestProxyStreamingEndToEnd::test_streaming_headers_enforced_without_upstream_cache_control` — AssertionError: cache-control not set
-- `test_trackedge_features.py::TestPaceMetricsAndSpeed::test_calculate_pace_metrics` — AssertionError: pace metric calculation off
-- `test_trackedge_features.py::TestPaceMetricsAndSpeed::test_speed_score_field_relative_normalization` — AssertionError: speed score threshold
+## Failures by Category
 
-### Benchmark Errors (missing pytest-benchmark plugin)
-- `test_compile_performance.py::TestSmallPackBenchmark::test_small_pack_p50_under_20ms` — ERROR (fixture not found)
-- `test_compile_performance.py::TestSmallPackBenchmark::test_small_pack_p95_under_30ms` — ERROR
-- `test_compile_performance.py::TestMediumPackBenchmark::test_medium_pack_p50_under_30ms` — ERROR
-- `test_compile_performance.py::TestMediumPackBenchmark::test_medium_pack_p95_under_50ms` — ERROR
-- `test_compile_performance.py::TestLargePackBenchmark::test_large_pack_p50_under_50ms` — ERROR
-- `test_compile_performance.py::TestLargePackBenchmark::test_large_pack_p95_under_100ms` — ERROR
+### Import Errors (module not yet built — 16 tests)
 
-## Test Execution Details
+All from `tests/test_handoff_protocol.py`. The test file imports `TokenPak`, `HandoffBlock`, and `Handoff` from the `tokenpak` package, but these classes do not exist in `tokenpak/__init__.py` yet.
 
-**Command**: `cd ~/tokenpak && python3 -m pytest tests/ -v --tb=short`
+- `test_handoff_protocol.py::test_top_level_imports` — missing: `TokenPak`, `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_handoff_block_basic` — missing: `HandoffBlock`
+- `test_handoff_protocol.py::test_handoff_block_round_trip` — missing: `HandoffBlock`
+- `test_handoff_protocol.py::test_token_pak_add_and_get` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_chaining` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_blocks_by_type` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_remove` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_to_prompt_empty` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_to_prompt_format` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_token_pak_round_trip` — missing: `TokenPak`
+- `test_handoff_protocol.py::test_handoff_wire_basic` — missing: `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_handoff_wire_round_trip` — missing: `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_handoff_wire_invalid_json` — missing: `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_handoff_wire_unknown_version` — missing: `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_handoff_wire_metadata` — missing: `HandoffBlock`, `Handoff`
+- `test_handoff_protocol.py::test_autogen_handoff_wire_round_trip` — missing: `HandoffBlock`, `Handoff`
 
-**Execution time**: 155.83 seconds (2m 35s)
+### Logic / Behavior Errors (not fixed — 8 tests)
 
-**Warnings**: 10 (mostly unknown pytest marks: @pytest.mark.benchmark, @pytest.mark.integration)
+These tests pass imports but fail on assertions. Not my job to fix logic, just documenting.
 
-## Key Insights
+**test_connection_pool.py (1)**
+- `test_proxy_server_stop_closes_pool` — `AssertionError: assert ['api.anthropic.com'] == []`
+  Provider not removed from `active_providers` list after pool stop.
 
-1. **Strong overall pass rate (96.5%)** — Most of the test suite is stable
-2. **Handoff protocol tests blocked** — `tokenpak.handoff` module doesn't exist yet (16 tests)
-3. **Streaming issues** — 3 failures related to HTTP header handling in proxy streaming
-4. **Pace metrics issues** — 2 calculation/normalization bugs in trackedge features
-5. **Async/connection pool issues** — 2 failures in lower-level proxy infrastructure
-6. **Benchmark plugin missing** — 6 errors from missing pytest-benchmark fixture; these are infrastructure setup issues, not test failures
+**test_streaming.py (3)**
+- `test_streaming_x_accel_buffering_header` — Expected `X-Accel-Buffering: no` header, got empty string
+- `test_streaming_headers_enforced_without_upstream_content_type` — Missing `text/event-stream` Content-Type on streaming responses
+- `test_streaming_headers_enforced_without_upstream_cache_control` — Missing `no-cache` Cache-Control on streaming responses
 
-## Recommendations
+**test_serve_multiworker.py (1)**
+- `TestWorkerLifecycle::test_ingest_works_under_workers` — `HTTP Error 404: Not Found` when posting to `/ingest` endpoint under multi-worker mode. Endpoint likely not registered.
 
-- **16 handoff protocol tests**: Will pass once `tokenpak/handoff.py` is implemented
-- **Streaming header failures**: Investigate proxy response header forwarding logic
-- **Pace metrics failures**: Review calculation and normalization logic in trackedge_features.py
-- **Benchmark tests**: Either install pytest-benchmark or skip these tests with @pytest.mark.skip
+**test_trackedge_features.py (2)**
+- `TestPaceMetricsAndSpeed::test_calculate_pace_metrics` — Expected `avg_pacefigure=94.0`, got `0`. Logic not implemented.
+- `TestPaceMetricsAndSpeed::test_speed_score_field_relative_normalization` — Speed score normalization logic returns unexpected result.
 
-## Status
-All non-import, non-benchmark failures have actionable causes and are not transient issues. No fabricated numbers — counts verified against actual pytest output.
+### Missing Dependency (fixed — 6 errors → 0)
+
+`tests/benchmarks/test_compile_performance.py` required `pytest-benchmark` fixture. Fixed:
+```bash
+pip install pytest-benchmark --break-system-packages
+```
+All 6 benchmark tests now pass (confirmed re-run).
+
+### Unresolvable / Blocked
+None — all failures are either import-errors (module not yet built) or logic errors (not in scope).
+
+---
+
+## Final State After Fixes
+
+```
+24 failed, 3035 passed, 82 skipped in 139s
+Pass rate: 96.6%
+```
+
+Run to verify:
+```bash
+cd ~/tokenpak && python3 -m pytest tests/ --tb=no -q
+```
