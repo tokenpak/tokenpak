@@ -629,11 +629,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
+                    _has_content_type = False
+                    _has_cache_control = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
                         if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                             continue
+                        if h_lower == "content-type":
+                            _has_content_type = True
+                        if h_lower == "cache-control":
+                            _has_cache_control = True
                         self.send_header(h_key, h_val)
+                    # Inject required SSE headers if upstream omitted them
+                    if not _has_content_type:
+                        self.send_header("Content-Type", "text/event-stream")
+                    if not _has_cache_control:
+                        self.send_header("Cache-Control", "no-cache")
+                    # Always disable proxy buffering for SSE
+                    self.send_header("X-Accel-Buffering", "no")
                     self.end_headers()
 
                     for chunk in resp.iter_bytes(chunk_size=4096):
@@ -984,6 +997,8 @@ class ProxyServer:
         else:
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
+            # Alias used by tests and async backends to detect non-blocking start
+            self._async_thread = self._server_thread
 
     def _handle_signal(self, signum: int, frame: Any) -> None:
         """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
