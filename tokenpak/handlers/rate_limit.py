@@ -20,7 +20,7 @@ class RateLimitBackoff:
 
     def __init__(
         self,
-        max_retries: int = 4,
+        max_retries: int = 6,
         base_wait: float = 1.0,
         max_wait: float = 60.0,
         jitter_factor: float = 0.2,
@@ -71,7 +71,7 @@ class RateLimitBackoffSync:
 
     def __init__(
         self,
-        max_retries: int = 4,
+        max_retries: int = 6,
         base_wait: float = 1.0,
         max_wait: float = 60.0,
         jitter_factor: float = 0.2,
