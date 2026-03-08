@@ -1437,38 +1437,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
-
-            # Rate limit backoff: retry on 429 with exponential backoff + jitter
-            if status == 429 and any(h in target_url for h in ("anthropic.com", "openai.com", "googleapis.com")):
-                try:
-                    from tokenpak.handlers.rate_limit import get_backoff_sync
-                    _backoff_sync = get_backoff_sync()
-                    _429_body = resp.read()
-                    _429_headers = dict(resp.getheaders())
-                    conn.close()
-                    for _attempt in range(_backoff_sync.max_retries):
-                        _wait = _backoff_sync.wait_time(
-                            _attempt,
-                            retry_after=float(_429_headers.get("Retry-After", _429_headers.get("retry-after", 0)) or 0) or None,
-                        )
-                        print(f"  ⏳ Rate limited (429). Retry {_attempt + 1}/{_backoff_sync.max_retries} in {_wait:.1f}s...")
-                        time.sleep(_wait)
-                        if parsed.scheme == "https":
-                            conn = http.client.HTTPSConnection(parsed.netloc, timeout=300, context=ssl.create_default_context())
-                        else:
-                            conn = http.client.HTTPConnection(parsed.netloc, timeout=300)
-                        conn.request(method, path, body=body, headers=fwd_headers)
-                        resp = conn.getresponse()
-                        status = resp.status
-                        if status != 429:
-                            break
-                        _429_body = resp.read()
-                        _429_headers = dict(resp.getheaders())
-                        conn.close()
-                except Exception as _rl_err:
-                    import logging as _lg
-                    _lg.getLogger(__name__).warning("Rate limit backoff error (skipping): %s", _rl_err)
-
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
 
