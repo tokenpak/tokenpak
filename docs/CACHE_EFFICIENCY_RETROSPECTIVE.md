@@ -176,28 +176,35 @@ Commit `98b8e8f`:
 | Cached tokens per request | <1,000 | Minimal stable prefix use |
 | Efficiency vs. target | 0.05× (95% gap) | Target: 60–90% hit rate |
 
-### After Cache Optimizations (Projected)
+### After Cache Optimizations — Actual Validation Results (P2, 2026-03-09 15:58 PST)
 
-| Metric | Projected | Reasoning |
-|--------|-----------|-----------|
-| Cache hit rate | ≥60% | Repeated contexts now cache; identical requests reuse 100% |
-| Tokens per request | 2,000–4,000 | Stable prefix cached; only volatile portion fresh |
-| Cached tokens per request | 5,000–15,000 | Full stable block reused |
-| Efficiency gain | 5–10× | Before: 20K tokens; After: 2–4K tokens |
+| Metric | Actual | Target | Status |
+|--------|--------|--------|--------|
+| Overall cache hit rate | **2.3%** | ≥60% | ❌ Below target |
+| Best model hit rate (sonnet) | **17.0%** | ≥60% | ⚠️ Partial |
+| Total requests analyzed | 3,175 | — | — |
+| cache_read_tokens (savings) | 2,206,029 | — | ✅ Real cost reduction |
+| cache_creation_tokens | 574,452 | — | ✅ Cache written |
 
-### Empirical Data (Live Proxy, 2026-03-09)
+**Per-model breakdown:**
 
-From real production metrics (proxy has been running since Sprint deployment):
+| Model | Requests | Cache Hits | Hit Rate |
+|-------|----------|-----------|---------|
+| claude-haiku-4-5 | 2,538 | 17 | 0.7% |
+| claude-sonnet-4-6 | 330 | 56 | **17.0%** |
+| claude-opus-4-6 | 263 | 0 | 0.0% |
+| claude-haiku-4-6 + others | 36 | 0 | 0.0% |
+| **Total** | **3,175** | **73** | **2.3%** |
 
-| Stat | Value |
-|------|-------|
-| Total requests processed | 812 |
-| Total tokens sent to Anthropic | 16,203,410 |
-| Total tokens saved via cache | 4,289,236 |
-| Effective compression ratio | 0.79 (21% savings) |
+### Why 60% Was Not Achieved
 
-**Note:** The 21% savings above reflects the steady-state cache _hit_ benefit, not the full 60–90% _rate_. Full validation pending P2 task execution (measuring cache hit rate on dedicated test traffic).
+The sprint fixes (poison removal, frozen schemas, deterministic retrieval) are **working correctly**. The 2.3% overall rate reflects an architectural gap, not a bug:
 
+1. **~80% of traffic is haiku heartbeats** — explicitly excluded from cache_control injection via `INJECT_SKIP_MODELS`
+2. **Ephemeral TTL is 5 minutes** — Anthropic cache expires quickly; gaps between sonnet requests cause misses
+3. **Mechanism works when conditions align** — sonnet hit 17% on Mar 5 when back-to-back requests occurred within the TTL
+
+**Sprint impact:** The 17% sonnet hit rate on optimal conditions confirms poison-removal is functioning. Reaching the 60% overall target requires decoupling `cache_control` from vault injection (applying it to all request types including haiku).
 ---
 
 ## Section 5: Lessons Learned
