@@ -218,25 +218,32 @@ def filter_comparable_races(past_performances: list, race: dict) -> list:
     """
     Filter past performances to races comparable to today's race.
     
-    Criteria: similar distance, class, surface
+    Criteria: similar distance, class, surface.
+    A criterion is skipped when either the race or the PP is missing that field,
+    so sparse data doesn't cause all PPs to be filtered out.
     """
     if not past_performances:
         return []
     
     target_distance = race.get("distance", 0)
-    target_class = race.get("class_rating", 50000)
-    target_surface = race.get("surface", "dirt")
+    target_class = race.get("class_rating", 0)
+    target_surface = race.get("surface", "")
     
     comparable = []
     for pp in past_performances:
         distance = pp.get("distance", 0)
-        class_rating = pp.get("class_rating", 50000)
-        surface = pp.get("surface", "dirt")
+        class_rating = pp.get("class_rating", 0)
+        surface = pp.get("surface", "")
         
-        # Within 0.5 furlongs, class within 20%, same surface
-        if (abs(distance - target_distance) < 0.5 and
-            abs(class_rating - target_class) < target_class * 0.2 and
-            surface == target_surface):
+        # Only apply each filter when both sides have valid (non-zero/non-empty) data
+        distance_ok = (not target_distance or not distance or
+                       abs(distance - target_distance) < 0.5)
+        class_ok = (not target_class or not class_rating or
+                    abs(class_rating - target_class) < target_class * 0.2)
+        surface_ok = (not target_surface or not surface or
+                      surface == target_surface)
+        
+        if distance_ok and class_ok and surface_ok:
             comparable.append(pp)
     
     return comparable

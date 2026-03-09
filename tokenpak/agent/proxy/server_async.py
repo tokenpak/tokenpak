@@ -644,9 +644,42 @@ async def lifespan(app):
         follow_redirects=False,
         verify=True,
     )
+
+    # ---- Background tasks: cooldown auto-clear + OAuth auto-refresh --------
+    # Controlled by config keys: auth.auto_clear_cooldowns / auth.oauth_auto_refresh
+    _cooldown_clearer = None
+    _oauth_refresher = None
+    try:
+        from tokenpak.agent.config import get_config
+        cfg = get_config()
+        auth_cfg = cfg.get("auth", {}) if isinstance(cfg.get("auth"), dict) else {}
+        cooldown_enabled = auth_cfg.get("auto_clear_cooldowns", True)
+        oauth_enabled = auth_cfg.get("oauth_auto_refresh", True)
+
+        if cooldown_enabled:
+            from tokenpak.agent.auth.cooldown_manager import BackgroundCooldownClearer
+            _cooldown_clearer = BackgroundCooldownClearer(interval=60, enabled=True)
+            await _cooldown_clearer.start()
+
+        if oauth_enabled:
+            from tokenpak.agent.auth.oauth_manager import BackgroundOAuthRefresher
+            _oauth_refresher = BackgroundOAuthRefresher(interval=300, enabled=True)
+            await _oauth_refresher.start()
+
+    except Exception as _bg_exc:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "lifespan: could not start background tasks: %s", _bg_exc
+        )
+
     try:
         yield
     finally:
+        # Shut down background tasks cleanly
+        if _cooldown_clearer:
+            await _cooldown_clearer.stop()
+        if _oauth_refresher:
+            await _oauth_refresher.stop()
         if _async_client is not None:
             await _async_client.aclose()
         _async_client = None

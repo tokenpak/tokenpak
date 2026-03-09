@@ -273,23 +273,208 @@ try:
 
     @click.command("doctor")
     @click.option("--fix", is_flag=True, help="Auto-fix issues where possible")
-    def doctor_cmd(fix: bool) -> None:
+    @click.option("--fleet", is_flag=True, help="Check all agents in ~/.tokenpak/fleet.yaml")
+    @click.option("--deploy", is_flag=True, help="Push latest doctor to all agents (use with --fleet)")
+    def doctor_cmd(fix: bool, fleet: bool, deploy: bool) -> None:
         """Run diagnostics on your TokenPak installation.
 
         Checks: proxy health, vault index, auth config, disk space,
         Python version, and dependencies. Each check reports ✅/⚠️/❌
         with an actionable fix suggestion.
 
+        Fleet mode: run doctor on all registered agents in ~/.tokenpak/fleet.yaml.
+
         Examples:
 
         \b
-          tokenpak doctor          # run all checks
-          tokenpak doctor --fix    # run checks and auto-fix where possible
+          tokenpak doctor                   # run all checks locally
+          tokenpak doctor --fix             # run checks and auto-fix where possible
+          tokenpak doctor --fleet           # check all agents in fleet
+          tokenpak doctor --fleet --fix     # check + fix all agents
+          tokenpak doctor --fleet --deploy  # push latest doctor to all agents first
         """
-        rc = run_doctor(fix=fix)
+        if fleet:
+            rc = run_fleet_doctor(fix=fix, deploy=deploy)
+        else:
+            rc = run_doctor(fix=fix)
         sys.exit(rc)
 
 except ImportError:
 
     def doctor_cmd(*args, **kwargs):  # type: ignore
         print("click not installed; doctor command unavailable")
+
+
+# ===========================================================================
+# Fleet Doctor — tokenpak doctor --fleet
+# ===========================================================================
+
+import subprocess
+import concurrent.futures
+from pathlib import Path
+import yaml
+
+
+FLEET_CONFIG_FILE = Path.home() / ".tokenpak" / "fleet.yaml"
+
+DEFAULT_FLEET_CONFIG = {
+    "agents": [
+        {"name": "trix",  "host": "trixbot",  "user": "trix"},
+        {"name": "cali",  "host": "calibot",  "user": "cali"},
+        {"name": "sue",   "host": "suewu",    "user": "sue"},
+    ]
+}
+
+
+def load_fleet_config() -> dict:
+    """Load fleet.yaml; create with defaults if missing."""
+    if FLEET_CONFIG_FILE.exists():
+        try:
+            with open(FLEET_CONFIG_FILE) as f:
+                data = yaml.safe_load(f)
+            if data and "agents" in data:
+                return data
+        except Exception:
+            pass
+    # Create default
+    FLEET_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(FLEET_CONFIG_FILE, "w") as f:
+        yaml.safe_dump(DEFAULT_FLEET_CONFIG, f, default_flow_style=False)
+    return DEFAULT_FLEET_CONFIG
+
+
+def _run_remote_doctor(agent: dict, fix: bool = False, timeout: int = 30) -> dict:
+    """SSH into an agent and run tokenpak doctor. Returns result dict."""
+    name = agent.get("name", "?")
+    host = agent.get("host", "")
+    user = agent.get("user", "")
+
+    cmd_parts = ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+    if user:
+        cmd_parts += [f"{user}@{host}"]
+    else:
+        cmd_parts += [host]
+
+    remote_cmd = "tokenpak doctor"
+    if fix:
+        remote_cmd += " --fix"
+    cmd_parts.append(remote_cmd)
+
+    try:
+        result = subprocess.run(
+            cmd_parts,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        output = result.stdout + result.stderr
+        # Parse summary line: "N errors, M warnings."
+        errors = 0
+        warnings = 0
+        for line in output.splitlines():
+            if "error" in line and "warning" in line:
+                parts = line.strip().split()
+                try:
+                    errors = int(parts[0])
+                    warnings = int(parts[2])
+                except (ValueError, IndexError):
+                    pass
+        return {
+            "name": name,
+            "host": host,
+            "success": result.returncode == 0,
+            "output": output,
+            "errors": errors,
+            "warnings": warnings,
+        }
+    except subprocess.TimeoutExpired:
+        return {"name": name, "host": host, "success": False, "output": f"[timeout after {timeout}s]", "errors": 1, "warnings": 0}
+    except Exception as exc:
+        return {"name": name, "host": host, "success": False, "output": str(exc), "errors": 1, "warnings": 0}
+
+
+def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
+    """SCP the latest doctor.py to an agent's tokenpak installation."""
+    name = agent.get("name", "?")
+    host = agent.get("host", "")
+    user = agent.get("user", "")
+
+    local_doctor = Path(__file__)
+    remote_target = f"{user}@{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+    if not user:
+        remote_target = f"{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+
+    cmd = [
+        "scp",
+        "-o", "ConnectTimeout=10",
+        "-o", "BatchMode=yes",
+        str(local_doctor),
+        remote_target,
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return {
+            "name": name,
+            "host": host,
+            "success": result.returncode == 0,
+            "output": result.stdout + result.stderr,
+        }
+    except subprocess.TimeoutExpired:
+        return {"name": name, "host": host, "success": False, "output": f"[scp timeout after {timeout}s]"}
+    except Exception as exc:
+        return {"name": name, "host": host, "success": False, "output": str(exc)}
+
+
+def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
+    """Run fleet-wide doctor checks. Returns 0 if all pass, 1 if any fail."""
+    fleet_cfg = load_fleet_config()
+    agents = fleet_cfg.get("agents", [])
+
+    if not agents:
+        print(Colors.warn("Fleet config has no agents defined"))
+        return 1
+
+    print("\nTOKENPAK  |  Fleet Doctor")
+    print(f"Checking {len(agents)} agent(s) in parallel...\n")
+
+    if deploy:
+        print("Deploying latest doctor to all agents...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as ex:
+            deploy_futures = {ex.submit(_deploy_doctor, a): a for a in agents}
+            for fut in concurrent.futures.as_completed(deploy_futures):
+                r = fut.result()
+                status = Colors.ok(f"  Deployed to {r['name']} ({r['host']})") if r["success"] else Colors.fail(f"  Deploy failed on {r['name']} ({r['host']}): {r['output'][:60]}")
+                print(status)
+        print()
+
+    # Run checks in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as ex:
+        futures = {ex.submit(_run_remote_doctor, a, fix): a for a in agents}
+        results = []
+        for fut in concurrent.futures.as_completed(futures):
+            results.append(fut.result())
+
+    # Sort by agent name for deterministic output
+    results.sort(key=lambda r: r["name"])
+
+    total_errors = 0
+    total_warnings = 0
+    all_ok = True
+
+    print("──────────────────────────────────────────────────────")
+    for r in results:
+        icon = "✅" if r["errors"] == 0 else "❌"
+        warn_note = f", {r['warnings']}w" if r["warnings"] else ""
+        print(f"  {icon}  {r['name']:10s}  ({r['host']})  — {r['errors']} errors{warn_note}")
+        total_errors += r["errors"]
+        total_warnings += r["warnings"]
+        if r["errors"] > 0:
+            all_ok = False
+            # Print remote output indented
+            for line in r["output"].splitlines():
+                print(f"     {line}")
+
+    print("──────────────────────────────────────────────────────")
+    print(f"Fleet: {total_errors} total error(s), {total_warnings} total warning(s) across {len(agents)} agents")
+    return 0 if all_ok else 1

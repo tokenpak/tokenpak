@@ -73,6 +73,18 @@ from tokenpak.telemetry.collector import TelemetryCollector
 # ---------------------------------------------------------------------------
 from tokenpak.tokens import count_tokens
 
+
+# ---------------------------------------------------------------------------
+# Agent Handoff Protocol
+# ---------------------------------------------------------------------------
+from tokenpak.agent.agentic.handoff import (
+    HandoffBlock,
+    HandoffManager,
+    HandoffStatus,
+    HandoffWire as Handoff,
+    ContextRef,
+    TokenPak,
+)
 # ---------------------------------------------------------------------------
 # Agentic handoff protocol
 # ---------------------------------------------------------------------------
@@ -123,6 +135,13 @@ __all__ = [
     # Incremental adoption helpers
     "count_tokens",
     "pack_prompt",
+    # Agent Handoff Protocol
+    "HandoffBlock",
+    "HandoffManager",
+    "HandoffStatus",
+    "Handoff",
+    "ContextRef",
+    "TokenPak",
     # CLI
     "main",
     # Sub-packages

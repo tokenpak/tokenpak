@@ -408,6 +408,18 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate dashboard subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "dashboard":
+        try:
+            from tokenpak.agent.cli.commands.dashboard import dashboard_cmd
+
+            sys.argv = sys.argv[1:]
+            dashboard_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"dashboard command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate metrics subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "metrics":
         import argparse as _ap

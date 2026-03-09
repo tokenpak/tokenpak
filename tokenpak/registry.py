@@ -15,7 +15,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, List, Optional
+from typing import Dict, Any, TYPE_CHECKING, Generator, List, Optional, cast
 
 if TYPE_CHECKING:
     pass
@@ -25,7 +25,7 @@ _REGISTRIES: List["BlockRegistry"] = []
 _CLEANUP_REGISTERED = False
 
 
-def _cleanup_all_registries():
+def _cleanup_all_registries() -> None:
     """Cleanup hook for process exit."""
     for reg in _REGISTRIES:
         try:
@@ -51,7 +51,7 @@ class Block:
     slice_id: str = ""
     provenance: Optional[object] = None  # Optional[Provenance] — avoid circular import
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-generate slice_id if not provided."""
         if not self.slice_id:
             digest = hashlib.sha256(f"{self.path}:{self.content_hash}".encode()).hexdigest()[:8]
@@ -109,9 +109,10 @@ class BlockRegistry:
             conn.execute("PRAGMA temp_store=MEMORY")
             conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
             self._local.conn = conn
-        return self._local.conn
+        conn_obj: sqlite3.Connection = self._local.conn
+        return conn_obj
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         conn = self._get_connection()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS blocks (
@@ -170,7 +171,8 @@ class BlockRegistry:
         row = conn.execute("SELECT content_hash FROM blocks WHERE path = ?", (path,)).fetchone()
         if row is None:
             return True  # New file
-        return row[0] != new_hash
+        existing_hash: str = row[0]
+        return existing_hash != new_hash
 
     def add_block(self, block: Block) -> Block:
         """Add or update a block (auto-commit per call)."""
@@ -231,7 +233,7 @@ class BlockRegistry:
             return None
         return Block(**dict(row))
 
-    def list_blocks(self, file_type: str = None) -> List[Block]:
+    def list_blocks(self, file_type: Optional[str] = None) -> List[Block]:
         """List all blocks, optionally filtered by type."""
         conn = self._get_connection()
         conn.row_factory = sqlite3.Row
@@ -267,7 +269,7 @@ class BlockRegistry:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [block for _, block in scored[:top_k]]
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics."""
         conn = self._get_connection()
         stats = {}
@@ -292,13 +294,13 @@ class BlockRegistry:
 
         return stats
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all blocks."""
         conn = self._get_connection()
         conn.execute("DELETE FROM blocks")
         conn.commit()
 
-    def close(self):
+    def close(self) -> None:
         """Close the connection pool."""
         if self._closed:
             return
@@ -316,9 +318,8 @@ class BlockRegistry:
         except ValueError:
             pass
 
-    def __enter__(self):
+    def __enter__(self) -> "BlockRegistry":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         self.close()
-        return False

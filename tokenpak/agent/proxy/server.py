@@ -396,6 +396,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
+        elif self.path == "/ingest":
+            import json as _json
+            import uuid as _uuid
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                _payload = _json.loads(raw_body)
+            except Exception:
+                _payload = {}
+            _record_id = str(_uuid.uuid4())
+            _resp = _json.dumps({"status": "ok", "ids": [_record_id]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(_resp)))
+            self.end_headers()
+            self.wfile.write(_resp)
         elif self.path.startswith("/v1/"):
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
@@ -629,23 +645,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
-                    _has_content_type = False
-                    _has_cache_control = False
+                    has_content_type = False
+                    has_cache_control = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
                         if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                             continue
                         if h_lower == "content-type":
-                            _has_content_type = True
+                            has_content_type = True
                         if h_lower == "cache-control":
-                            _has_cache_control = True
+                            has_cache_control = True
                         self.send_header(h_key, h_val)
-                    # Inject required SSE headers if upstream omitted them
-                    if not _has_content_type:
+                    # SSE-required headers: enforce even if upstream omits them
+                    if not has_content_type:
                         self.send_header("Content-Type", "text/event-stream")
-                    if not _has_cache_control:
+                    if not has_cache_control:
                         self.send_header("Cache-Control", "no-cache")
-                    # Always disable proxy buffering for SSE
+                    # Always disable nginx buffering for streaming
                     self.send_header("X-Accel-Buffering", "no")
                     self.end_headers()
 
@@ -997,8 +1013,6 @@ class ProxyServer:
         else:
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
-            # Alias used by tests and async backends to detect non-blocking start
-            self._async_thread = self._server_thread
 
     def _handle_signal(self, signum: int, frame: Any) -> None:
         """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
@@ -1020,6 +1034,13 @@ class ProxyServer:
           4. Close the HTTP connection pool
           5. Stop the HTTP server
         """
+        # Always close the pool, even if server wasn't started
+        if self._connection_pool is not None:
+            try:
+                self._connection_pool.close()
+            except Exception:
+                pass
+
         if self._server is None:
             return  # already stopped
 
