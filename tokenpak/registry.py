@@ -15,7 +15,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any,  TYPE_CHECKING, Generator, List, Optional
+from typing import Dict,  Any,  TYPE_CHECKING, Generator, List, Optional
 
 if TYPE_CHECKING:
     pass
@@ -25,7 +25,7 @@ _REGISTRIES: List["BlockRegistry"] = []
 _CLEANUP_REGISTERED = False
 
 
-def _cleanup_all_registries():
+def _cleanup_all_registries() -> None:
     """Cleanup hook for process exit."""
     for reg in _REGISTRIES:
         try:
@@ -51,7 +51,7 @@ class Block:
     slice_id: str = ""
     provenance: Optional[object] = None  # Optional[Provenance] — avoid circular import
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Auto-generate slice_id if not provided."""
         if not self.slice_id:
             digest = hashlib.sha256(f"{self.path}:{self.content_hash}".encode()).hexdigest()[:8]
