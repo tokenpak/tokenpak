@@ -1,0 +1,68 @@
+# TokenPak Rate Limit Configuration
+# Controls backoff strategy and alert thresholds per provider.
+# Loaded by tokenpak.handlers.rate_limit and tokenpak.agent.agentic.retry
+
+rate_limiting:
+  enabled: true
+
+  strategies:
+    # Default strategy applied when no provider-specific override matches
+    default:
+      name: exponential_backoff
+      base_delay_ms: 1000
+      max_delay_ms: 60000
+      exponential_base: 2.0
+      jitter_factor: 0.1        # Full jitter prevents thundering-herd
+      max_retries: 3
+
+    # OpenAI: tight TPM/RPM limits, 1-minute rolling window
+    # Short base delay + more retries = effective for burst recovery
+    openai:
+      name: exponential_backoff
+      base_delay_ms: 500
+      max_delay_ms: 60000
+      exponential_base: 1.5
+      jitter_factor: 0.1
+      max_retries: 5
+
+    # Anthropic: generous limits but strict concurrency caps
+    # Standard delay; if hitting limits, problem is parallelism not throughput
+    anthropic:
+      name: exponential_with_adaptive_window
+      base_delay_ms: 1000
+      max_delay_ms: 60000
+      exponential_base: 2.0
+      jitter_factor: 0.1
+      max_retries: 3
+
+    # Google: quota system with daily caps + per-minute limits
+    # Longer initial delay; daily cap requires escalation not just waiting
+    google:
+      name: quota_aware
+      base_delay_ms: 2000
+      max_delay_ms: 60000
+      exponential_base: 2.0
+      jitter_factor: 0.15
+      max_retries: 4
+
+  # Per-error-code behavior overrides
+  # "wait"  = exponential backoff before retry
+  # "retry" = immediate retry (server errors)
+  # "alert" = skip retries, escalate to human immediately
+  per_error:
+    "429": wait
+    "500": retry
+    "502": retry
+    "503": retry
+    "504": retry
+    "401": alert
+    "403": alert
+
+  # Alert thresholds for monitoring dashboards
+  alerts:
+    enabled: true
+    thresholds:
+      rate_limit_events_per_hour: 5      # Warn if hitting limits more than 5x/hour
+      backoff_duration_seconds: 300      # Warn if cumulative backoff > 5 minutes
+      retry_exhausted_count: 1           # Alert immediately on any RetryExhaustedError
+      level4_alerts_per_day: 1           # Any Level 4 alert is a production incident
