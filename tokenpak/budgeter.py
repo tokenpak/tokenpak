@@ -28,7 +28,7 @@ Usage:
 import copy
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     import tiktoken
@@ -78,7 +78,7 @@ _DEFAULT_CONFIG = {
 }
 
 
-def _load_config(config_path: str) -> dict:
+def _load_config(config_path: str) -> Dict[str, Any]:
     """Load budget config. Supports YAML (if pyyaml installed) or JSON."""
     path = Path(config_path)
     if not path.exists():
@@ -104,7 +104,7 @@ def _load_config(config_path: str) -> dict:
     return _parse_simple_yaml(text)
 
 
-def _parse_simple_yaml(text: str) -> dict:
+def _parse_simple_yaml(text: str) -> Dict[str, Any]:
     """
     Minimal YAML parser for our specific config shape.
     Handles:
@@ -172,7 +172,7 @@ def _parse_simple_yaml(text: str) -> dict:
                 if current_section and current_sub:
                     sec = result.setdefault(current_section, {})
                     sub = sec.setdefault(current_sub, {})
-                    if isinstance(sub, dict):
+                    if isinstance(sub, Dict[str, Any]):
                         sub[key] = _cast(val)
 
         return result if result else _DEFAULT_CONFIG
@@ -205,20 +205,20 @@ class Budgeter:
     Never trims: STATE_JSON, output contract, CANON refs, current turn.
     """
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None) -> None:
         if config_path is None:
             # Look for budget_config.yaml in same dir as this file
             default = Path(__file__).parent / "budget_config.yaml"
             config_path = str(default)
 
-        self.config = _load_config(config_path)
+        self.config: Dict[str, Any] = _load_config(config_path)
         self.total_tokens: int = int(self.config.get("total_tokens", 12000))
         self.trim_order: List[str] = self.config.get("trim_order", _DEFAULT_CONFIG["trim_order"])
-        self.thresholds: dict = self.config.get("thresholds", _DEFAULT_CONFIG["thresholds"])
+        self.thresholds: Dict[str, Any] = self.config.get("thresholds", _DEFAULT_CONFIG["thresholds"])
 
     # ── Token counting ───────────────────────────────────────────────────────
 
-    def _component_tokens(self, comp: dict) -> int:
+    def _component_tokens(self, comp: Dict[str, Any]) -> int:
         """Count tokens in a component dict."""
         if "items" in comp:
             # Evidence bucket: list of EvidenceItem-like objects
@@ -228,12 +228,12 @@ class Budgeter:
             )
         return _count_tokens(comp.get("text", ""))
 
-    def _total_used(self, components: dict) -> int:
+    def _total_used(self, components: Dict[str, Any]) -> int:
         return sum(self._component_tokens(c) for c in components.values())
 
     # ── Trim actions ─────────────────────────────────────────────────────────
 
-    def _trim_history(self, components: dict) -> dict:
+    def _trim_history(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Keep last N recent turns, drop earlier."""
         keep_turns = int(self.thresholds.get("recent_keep_turns", 5))
         recent_comp = components.get("recent")
@@ -248,7 +248,7 @@ class Budgeter:
             components["recent"] = {**recent_comp, "text": "\n\n".join(kept)}
         return components
 
-    def _trim_evidence_by_score(self, components: dict) -> dict:
+    def _trim_evidence_by_score(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Drop lowest-scoring evidence items (keep top keep_pct)."""
         evidence = components.get("evidence")
         if not evidence or not evidence.get("items"):
@@ -263,7 +263,7 @@ class Budgeter:
         components["evidence"] = {**evidence, "items": items[:keep_count]}
         return components
 
-    def _trim_evidence_verbosity(self, components: dict) -> dict:
+    def _trim_evidence_verbosity(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Truncate each evidence span to max_span_tokens."""
         evidence = components.get("evidence")
         if not evidence or not evidence.get("items"):
@@ -291,7 +291,7 @@ class Budgeter:
         components["evidence"] = {**evidence, "items": new_items}
         return components
 
-    def _trim_skills(self, components: dict) -> dict:
+    def _trim_skills(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Replace tool/skill schemas with ref-only placeholders."""
         tools = components.get("tools")
         if not tools:
@@ -310,7 +310,7 @@ class Budgeter:
             }
         return components
 
-    def _trim_prose_background(self, components: dict) -> dict:
+    def _trim_prose_background(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Truncate the recent/evidence sections further as a last resort."""
         for key in ("recent", "evidence"):
             comp = components.get(key)
@@ -325,7 +325,7 @@ class Budgeter:
 
     # ── Main allocate API ────────────────────────────────────────────────────
 
-    def allocate(self, components: dict) -> dict:
+    def allocate(self, components: dict) -> Dict[str, Any]:
         """
         Allocate token budget across components, trimming as needed.
 
@@ -395,7 +395,7 @@ class Budgeter:
 
     # ── Stats ────────────────────────────────────────────────────────────────
 
-    def budget_report(self, components: dict) -> dict:
+    def budget_report(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """Return token usage per bucket."""
         report = {}
         total = 0

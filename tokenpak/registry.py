@@ -15,7 +15,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, List, Optional
+from typing import Any,  TYPE_CHECKING, Generator, List, Optional
 
 if TYPE_CHECKING:
     pass
@@ -267,7 +267,7 @@ class BlockRegistry:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [block for _, block in scored[:top_k]]
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get registry statistics."""
         conn = self._get_connection()
         stats = {}

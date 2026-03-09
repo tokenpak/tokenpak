@@ -73,7 +73,7 @@ class Decision:
     def tokens_saved(self) -> int:
         return max(0, self.tokens_before - self.tokens_after)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, Any]:
         d: dict = {
             "block_id": self.block_id,
             "block_type": self.block_type,
@@ -210,7 +210,7 @@ class CompileReport:
 
     # ── Format: JSON (logging / Langfuse) ───────────────────────────────
 
-    def to_json(self) -> dict:
+    def to_json(self) -> Dict[str, Any]:
         """Machine-readable dict. Suitable for json.dumps(), Langfuse metadata, etc."""
         return {
             "summary": {
