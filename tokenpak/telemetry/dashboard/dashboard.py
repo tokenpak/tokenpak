@@ -27,7 +27,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -59,7 +59,7 @@ except Exception:
 templates.env.globals["glossary_data"] = _GLOSSARY_DATA_GLOBAL
 
 # --- Notification System ---
-_NOTIFICATIONS = deque(maxlen=100)  # Max 100 notifications in memory
+_NOTIFICATIONS: deque = deque(maxlen=100)  # Max 100 notifications in memory
 _NOTIF_MAX = 100
 
 
@@ -352,7 +352,7 @@ def create_dashboard_router(
         }
 
     # Exposing the static dir path for app-level mounting:
-    router.state = {"static_dir": str(_STATIC_DIR)}
+    setattr(router, "state", {"static_dir": str(_STATIC_DIR)})
 
     # -----------------------------------------------------------------------
     # Root redirect
@@ -410,7 +410,7 @@ def create_dashboard_router(
         except Exception:
             from types import SimpleNamespace
 
-            savings_summary = SimpleNamespace(
+            savings_summary = SimpleNamespace(  # type: ignore[assignment]
                 lifetime_savings=0,
                 savings_30d=0,
                 savings_7d=0,
@@ -726,15 +726,18 @@ def create_dashboard_router(
         """Generate executive summary in paragraph or bullet format."""
         import asyncio
 
+        import functools
         loop = asyncio.get_event_loop()
         summary = await loop.run_in_executor(
             _executor,
-            _generate_executive_summary,
-            rollups,
-            days,
-            provider or None,
-            model or None,
-            format,
+            functools.partial(
+                _generate_executive_summary,
+                rollups,
+                days,
+                provider or None,
+                model or None,
+                format,
+            ),
         )
         return {"summary": summary, "format": format, "days": days}
 
@@ -819,7 +822,7 @@ def create_dashboard_router(
 
 
 def _generate_executive_summary(
-    rollups, days: int, provider: str = None, model: str = None, format: str = "paragraph"
+    rollups: Any, days: int, provider: str | None = None, model: str | None = None, format: str = "paragraph"
 ):
     """Generate executive summary in paragraph or bullet format."""
     import datetime
@@ -843,7 +846,7 @@ def _generate_executive_summary(
         pass
     prev_cost = float(prev_stats.get("total_cost_usd", 0) or 0)
 
-    cost_delta_pct = 0
+    cost_delta_pct: float = 0
     if prev_cost > 0:
         cost_delta_pct = round((total_cost - prev_cost) / prev_cost * 100, 1)
 

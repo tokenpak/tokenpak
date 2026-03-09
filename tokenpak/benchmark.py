@@ -6,7 +6,7 @@ import statistics
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .processors import get_processor
 from .registry import Block, BlockRegistry
@@ -873,7 +873,7 @@ def _run_single_compression_test(
     filename: str,
     file_type: str,
     content: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Run a single compression test case and return detailed results.
 
@@ -1036,9 +1036,9 @@ def run_compression_benchmark(
     print()
 
 
-def benchmark_tokenization(texts: List[str], iterations: int = 3) -> dict:
+def benchmark_tokenization(texts: List[str], iterations: int = 3) -> dict[str, Any]:
     """Benchmark token counting with and without cache."""
-    results = {}
+    results: dict[str, Any] = {}
 
     if not texts:
         return {"error": "no texts to benchmark"}
@@ -1071,9 +1071,9 @@ def benchmark_tokenization(texts: List[str], iterations: int = 3) -> dict:
     return results
 
 
-def benchmark_processing(files: List[Tuple[str, str, str]], iterations: int = 3) -> dict:
+def benchmark_processing(files: List[Tuple[str, str, int]], iterations: int = 3) -> dict[str, Any]:
     """Benchmark file processing (regex patterns)."""
-    results = {}
+    results: dict[str, Any] = {}
 
     # Group by type
     by_type: Dict[str, List[Tuple[str, str]]] = {}
@@ -1113,9 +1113,9 @@ def benchmark_processing(files: List[Tuple[str, str, str]], iterations: int = 3)
     return results
 
 
-def benchmark_indexing_baseline(directory: str, iterations: int = 3) -> dict:
+def benchmark_indexing_baseline(directory: str, iterations: int = 3) -> dict[str, Any]:
     """Benchmark indexing WITHOUT optimizations (simulated baseline)."""
-    results = {}
+    results: dict[str, Any] = {}
     times = []
 
     for _ in range(iterations):
@@ -1196,9 +1196,9 @@ def benchmark_indexing_baseline(directory: str, iterations: int = 3) -> dict:
     return results
 
 
-def benchmark_indexing_optimized(directory: str, iterations: int = 3) -> dict:
+def benchmark_indexing_optimized(directory: str, iterations: int = 3) -> dict[str, Any]:
     """Benchmark indexing WITH all optimizations."""
-    results = {}
+    results: dict[str, Any] = {}
     times = []
 
     for _ in range(iterations):
@@ -1255,9 +1255,9 @@ def benchmark_indexing_optimized(directory: str, iterations: int = 3) -> dict:
     return results
 
 
-def benchmark_search(registry: BlockRegistry, queries: List[str], iterations: int = 3) -> dict:
+def benchmark_search(registry: BlockRegistry, queries: List[str], iterations: int = 3) -> dict[str, Any]:
     """Benchmark search operations."""
-    results = {}
+    results: dict[str, Any] = {}
 
     if not queries:
         return {"error": "no queries"}
