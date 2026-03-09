@@ -53,10 +53,10 @@ try:
 
 except ImportError:
 
-    def _count_tokens(text: str) -> int:  # type: ignore[misc]
+    def _count_tokens(text: str) -> int:
         return max(1, len(text) // 4)
 
-    def _truncate_to_tokens(text: str, max_tokens: int) -> str:  # type: ignore[misc]
+    def _truncate_to_tokens(text: str, max_tokens: int) -> str:
         approx = max_tokens * 4
         return text[:approx] + ("..." if len(text) > approx else "")
 

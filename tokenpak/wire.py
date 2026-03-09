@@ -2,7 +2,7 @@
 """TokenPak wire format generator."""
 
 import hashlib
-from typing import Dict, List
+from typing import Any,  Dict, List
 
 
 def make_slice_id(content: str, ref: str) -> str:

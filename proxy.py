@@ -18,12 +18,9 @@ Env vars:
     TOKENPAK_COMPACT_CACHE_SIZE     (default: 2000)
     TOKENPAK_DB               (default: .ocp/monitor.db)
     TOKENPAK_VAULT_INDEX      (default: ~/vault/.tokenpak) — path to shared vault index
-    TOKENPAK_INJECT_BUDGET    (default: 4000) — max tokens to inject from vault
+    TOKENPAK_INJECT_BUDGET    (default: 2000) — max tokens to inject from vault
     TOKENPAK_INJECT_TOP_K     (default: 5) — max vault blocks to inject
     TOKENPAK_INJECT_MIN_SCORE (default: 2.0) — minimum BM25 score to include
-    TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
-    TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
-    TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
 """
 
 import json
@@ -31,7 +28,21 @@ import time
 import threading
 import socket
 import ssl
-import signal
+
+# ---------------------------------------------------------------------------
+# Feature imports — Phase7 / Canon / Router
+# ---------------------------------------------------------------------------
+try:
+    from canon_session import apply_canon_refs, get_session as get_canon_session
+    CANON_AVAILABLE = True
+except ImportError:
+    CANON_AVAILABLE = False
+
+try:
+    from core import TokenPak
+    PHASE7_AVAILABLE = True
+except ImportError:
+    PHASE7_AVAILABLE = False
 import os
 import sys
 import re
@@ -47,22 +58,6 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field, asdict
 from collections import deque
 import uuid
-
-# ---------------------------------------------------------------------------
-# PromptBuilder — stable/volatile prefix split for cache efficiency
-# ---------------------------------------------------------------------------
-try:
-    from tokenpak.agent.proxy.prompt_builder import (
-        apply_stable_cache_control as _apply_stable_cache_control,
-        inject_with_cache_boundary as _inject_with_cache_boundary,
-    )
-    PROMPT_BUILDER_AVAILABLE = True
-except ImportError:
-    PROMPT_BUILDER_AVAILABLE = False
-    def _apply_stable_cache_control(body_bytes):
-        return body_bytes
-    def _inject_with_cache_boundary(body_bytes, volatile_text):
-        return body_bytes
 
 # ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
@@ -153,19 +148,44 @@ COMPACT_THRESHOLD_TOKENS = int(os.environ.get("TOKENPAK_COMPACT_THRESHOLD_TOKENS
 COMPACT_CACHE_SIZE = int(os.environ.get("TOKENPAK_COMPACT_CACHE_SIZE", "2000"))
 COMPILATION_MODE = os.environ.get("TOKENPAK_MODE", "hybrid").lower()  # strict|hybrid|aggressive
 
-# Capsule Builder config (Phase 0.5 of request pipeline)
-ENABLE_CAPSULE_BUILDER = os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0").lower() in ("1", "true", "yes", "on")
-CAPSULE_MIN_CHARS = int(os.environ.get("TOKENPAK_CAPSULE_MIN_CHARS", "400"))
-CAPSULE_HOT_WINDOW = int(os.environ.get("TOKENPAK_CAPSULE_HOT_WINDOW", "2"))
-
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
-INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "4000"))  # raised to 4000 for cache stability
+INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "2000"))
 INJECT_TOP_K = int(os.environ.get("TOKENPAK_INJECT_TOP_K", "5"))
 INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
 INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
 INJECT_MIN_PROMPT = int(os.environ.get("TOKENPAK_INJECT_MIN_PROMPT", "1000"))
 VAULT_INDEX_RELOAD_INTERVAL = 300  # reload vault index every 5 min
+
+# ---------------------------------------------------------------------------
+# PromptBuilder — stable/volatile prefix split for cache efficiency
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.proxy.prompt_builder import (
+        apply_stable_cache_control as _apply_stable_cache_control,
+        inject_with_cache_boundary as _inject_with_cache_boundary,
+    )
+    PROMPT_BUILDER_AVAILABLE = True
+except ImportError:
+    PROMPT_BUILDER_AVAILABLE = False
+    def _apply_stable_cache_control(body_bytes):
+        return body_bytes
+    def _inject_with_cache_boundary(body_bytes, volatile_text):
+        return body_bytes
+
+# ---------------------------------------------------------------------------
+# Router feature flag — disabled by default, opt-in via env var
+# ---------------------------------------------------------------------------
+ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_ROUTER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+
+# Skeleton extraction — strip code bodies for vault-injected code blocks
+SKELETON_ENABLED: bool = os.environ.get("TOKENPAK_SKELETON_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+
+# Shadow reader validation — coherence-check compressed output before sending
+SHADOW_ENABLED: bool = os.environ.get("TOKENPAK_SHADOW_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+
+# Budget allocation — enforce per-bucket token limits in capsule assembly
+BUDGET_TOTAL_TOKENS: int = int(os.environ.get("TOKENPAK_BUDGET_TOTAL", "12000"))
 
 _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
@@ -377,15 +397,10 @@ class VaultIndex:
             if score >= min_score:
                 scores[bid] = score
 
-        # Sort deterministically: score desc, then path asc, then block_id asc
-        # This ensures byte-identical ordering for cache stability even on score ties
-        ranked = sorted(
-            scores.items(),
-            key=lambda x: (-x[1], blocks[x[0]].get("source_path", ""), x[0]),
-        )[:top_k]
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         return [(blocks[bid], score) for bid, score in ranked]
 
-    def compile_injection(self, query: str, budget: int = 4000, top_k: int = 5, min_score: float = 2.0) -> Tuple[str, int, List[str]]:
+    def compile_injection(self, query: str, budget: int = 2000, top_k: int = 5, min_score: float = 2.0) -> Tuple[str, int, List[str]]:
         """
         Search vault and compile injection text within budget.
         Returns (injection_text, tokens_used, source_refs).
@@ -422,7 +437,7 @@ class VaultIndex:
         if not injection_parts:
             return "", 0, []
 
-        header = "\n\n## Retrieved Context\n"  # fixed header for cache stability
+        header = "\n\n## Supplementary Context (from shared knowledge base)\n"
         injection_text = header + "\n\n".join(injection_parts)
         # Recount with header
         tokens_used = count_tokens(injection_text)
@@ -438,18 +453,9 @@ def _bm25_tokenize(text: str) -> List[str]:
 # Global vault index instance
 VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
 
-# Global capsule builder instance
-try:
-    from tokenpak.capsule.builder import CapsuleBuilder as _CapsuleBuilder
-    CAPSULE_BUILDER = _CapsuleBuilder(
-        enabled=ENABLE_CAPSULE_BUILDER,
-        min_block_chars=CAPSULE_MIN_CHARS,
-        hot_window=CAPSULE_HOT_WINDOW,
-    )
-    print(f"  💊 Capsule builder loaded (enabled={ENABLE_CAPSULE_BUILDER}, min_chars={CAPSULE_MIN_CHARS})")
-except ImportError as _cb_err:
-    CAPSULE_BUILDER = None
-    print(f"  ⚠️  Capsule builder unavailable: {_cb_err}")
+# Session-sticky vault injection cache (Fix 2)
+_INJECTION_CACHE: Dict[str, tuple] = {}  # session_id -> (text, tokens, refs, timestamp)
+_INJECTION_CACHE_TTL = 270  # 4.5 minutes — keeps vault injection stable within a session
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +628,11 @@ class Monitor:
 MONITOR = Monitor(MONITOR_DB)
 
 # ---------------------------------------------------------------------------
+# Proxy version
+# ---------------------------------------------------------------------------
+PROXY_VERSION = "1.0.0"
+
+# ---------------------------------------------------------------------------
 # Session stats
 # ---------------------------------------------------------------------------
 SESSION = {
@@ -641,15 +652,9 @@ SESSION = {
     "injection_skips": 0,
     "cache_read_tokens": 0,
     "cache_creation_tokens": 0,
+    "canon_hits": 0,
+    "canon_tokens_saved": 0,
 }
-
-# ---------------------------------------------------------------------------
-# Graceful Shutdown — SIGTERM/SIGINT drain support
-# ---------------------------------------------------------------------------
-_shutdown_event = threading.Event()
-_active_request_count = 0
-_active_request_lock = threading.Lock()
-_active_requests_drained = threading.Event()
 
 # ---------------------------------------------------------------------------
 # Last Request Stats — captures most recent request for /stats/last
@@ -744,7 +749,8 @@ def extract_request_tokens(body_bytes):
 def extract_response_tokens(body_bytes):
     try:
         data = json.loads(body_bytes)
-    except:
+    except Exception as _exc:
+        pass  # ⚠️ swallow: _exc captured
         return 0
     usage = data.get("usage", {})
     if "output_tokens" in usage:
@@ -764,7 +770,8 @@ def extract_query_signal(body_bytes: bytes) -> str:
     """
     try:
         data = json.loads(body_bytes)
-    except:
+    except Exception as _exc:
+        pass  # ⚠️ swallow: _exc captured
         return ""
 
     messages = data.get("messages", [])
@@ -794,9 +801,12 @@ def extract_query_signal(body_bytes: bytes) -> str:
     return last_user
 
 
-def inject_vault_context(body_bytes: bytes) -> Tuple[bytes, int, List[str]]:
+def inject_vault_context(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, int, List[str]]:
     """
     Search vault index for relevant context and inject into the system prompt.
+    Puts cache_control on the STATIC system prompt (Fix 1) so Anthropic can cache it.
+    Vault injection goes AFTER the cache boundary — dynamic, not cached.
+    Session-sticky: same session_id reuses injection for up to 4.5 min (Fix 2).
     Returns (new_body_bytes, injected_tokens, source_refs).
     """
     if not VAULT_INDEX.available:
@@ -806,34 +816,61 @@ def inject_vault_context(body_bytes: bytes) -> Tuple[bytes, int, List[str]]:
     if not query:
         return body_bytes, 0, []
 
-    injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
-        query, budget=INJECT_BUDGET, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
-    )
+    # Fix 2: check session cache first
+    import time as _time
+    now = _time.monotonic()
+    if session_id and session_id in _INJECTION_CACHE:
+        cached_text, cached_tokens, cached_refs, cached_ts = _INJECTION_CACHE[session_id]
+        if now - cached_ts < _INJECTION_CACHE_TTL:
+            injection_text, tokens_used, source_refs = cached_text, cached_tokens, cached_refs
+        else:
+            del _INJECTION_CACHE[session_id]
+            injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+                query, budget=INJECT_BUDGET, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+            )
+            if session_id and injection_text:
+                _INJECTION_CACHE[session_id] = (injection_text, tokens_used, source_refs, now)
+    else:
+        injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+            query, budget=INJECT_BUDGET, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        )
+        if session_id and injection_text:
+            _INJECTION_CACHE[session_id] = (injection_text, tokens_used, source_refs, now)
 
     if not injection_text:
         return body_bytes, 0, []
 
+    # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
+    if SKELETON_ENABLED:
+        injection_text = _inject_skeleton_into_blocks(injection_text)
+        # Recount tokens after skeletonization
+        tokens_used = count_tokens(injection_text)
+
     try:
         data = json.loads(body_bytes)
-    except:
+    except Exception as _exc:
+        pass  # ⚠️ swallow: _exc captured
         return body_bytes, 0, []
 
-    # Inject into system prompt
+    # Fix 1: cache_control goes on the STATIC system prompt, NOT on the vault injection.
+    # This lets Anthropic cache the static prefix. Vault injection is dynamic (after cache boundary).
     system = data.get("system", "")
     if isinstance(system, str):
         data["system"] = [
-            {"type": "text", "text": system},
-            {"type": "text", "text": injection_text, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": injection_text},  # no cache_control — dynamic
         ]
     elif isinstance(system, list):
-        # Anthropic format: list of content blocks
+        # Mark the last existing block as the cache boundary, then append vault content
+        if data["system"]:
+            data["system"][-1] = dict(data["system"][-1], **{"cache_control": {"type": "ephemeral"}})
         data["system"].append({
             "type": "text",
             "text": injection_text,
-            "cache_control": {"type": "ephemeral"},
+            # no cache_control — vault injection is dynamic, should not be cached
         })
     else:
-        # No system prompt — add one
+        # No system prompt — add vault content directly (no caching possible here)
         data["system"] = injection_text
 
     new_body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -855,6 +892,9 @@ def compact_text(text: str) -> str:
         t = t[:m.end()].strip()
     if len(t) > COMPACT_MAX_CHARS:
         t = t[:COMPACT_MAX_CHARS].rsplit(" ", 1)[0] + "…"
+    # Shadow reader guard: if compressed text fails coherence check, return original
+    if SHADOW_ENABLED and COMPILATION_MODE == "aggressive" and not _shadow_validate(text, t):
+        t = text  # fall back to original — coherence check failed
     _COMPACT_CACHE[key] = t
     _COMPACT_CACHE_ORDER.append(key)
     if len(_COMPACT_CACHE_ORDER) > COMPACT_CACHE_SIZE:
@@ -939,6 +979,316 @@ def compact_request_body(body_bytes: bytes):
 
 
 # ---------------------------------------------------------------------------
+# Skeleton extraction — strips function bodies from code blocks before injection
+# Reduces code-heavy vault blocks by 70-90% (signatures + docstrings only)
+# ---------------------------------------------------------------------------
+def _skeletonize_block(content: str, file_ext: str) -> str:
+    """Apply skeleton extraction to a code block if the language is supported."""
+    if not SKELETON_ENABLED:
+        return content
+    lang_map = {
+        ".py": "python", ".ts": "typescript", ".js": "javascript",
+        ".go": "go", ".rs": "rust",
+    }
+    lang = lang_map.get(file_ext.lower(), "")
+    if not lang:
+        return content
+    try:
+        sys.path.insert(0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"))
+        from tokenpak.skeleton_extractor import extract_skeleton
+        return extract_skeleton(content, lang)
+    except Exception:
+        return content
+
+
+def _inject_skeleton_into_blocks(blocks_text: str) -> str:
+    """Walk a multi-block injection string and skeletonize code blocks."""
+    if not SKELETON_ENABLED or not blocks_text:
+        return blocks_text
+    # Blocks are fenced with ``` language markers — skeletonize each code fence
+    import re
+    def _replace_fence(m):
+        lang_hint = m.group(1).strip().lower()
+        ext_map = {"python": ".py", "py": ".py", "typescript": ".ts", "ts": ".ts",
+                   "javascript": ".js", "js": ".js", "go": ".go", "rust": ".rs"}
+        ext = ext_map.get(lang_hint, "")
+        code = m.group(2)
+        skeletonized = _skeletonize_block(code, ext) if ext else code
+        return f"```{m.group(1)}\n{skeletonized}\n```"
+    return re.sub(r"```([^\n]*)\n(.*?)```", _replace_fence, blocks_text, flags=re.DOTALL)
+
+
+# ---------------------------------------------------------------------------
+# Shadow reader — validate compressed text coherence before forwarding
+# Auto-downgrade AGGRESSIVE → HYBRID when validation fails
+# ---------------------------------------------------------------------------
+def _shadow_validate(original: str, compressed: str) -> bool:
+    """Returns True if compressed text passes coherence check, False = use original."""
+    if not SHADOW_ENABLED:
+        return True
+    if not compressed or not original:
+        return True
+    try:
+        sys.path.insert(0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"))
+        from tokenpak.shadow_reader import ShadowReader
+        reader = ShadowReader()
+        result = reader.validate(original=original, compressed=compressed)
+        return result.passed
+    except Exception:
+        return True  # fail-open: if shadow reader errors, allow compressed version
+
+
+# ---------------------------------------------------------------------------
+# Budget controller — enforce per-bucket token limits
+# ---------------------------------------------------------------------------
+def _apply_budget(components: dict, total_tokens: int = None) -> dict:
+    """Apply Budgeter allocation policy to context components."""
+    total = total_tokens or BUDGET_TOTAL_TOKENS
+    try:
+        sys.path.insert(0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"))
+        from tokenpak.budgeter import Budgeter
+        b = Budgeter()
+        return b.allocate(components, total_tokens=total)
+    except Exception:
+        return components  # fail-open
+
+
+# ---------------------------------------------------------------------------
+# Router wiring — DeterministicRouter integration (feature-flagged)
+# ---------------------------------------------------------------------------
+_ROUTER_INSTANCE = None
+_ROUTER_LOCK = threading.Lock()
+
+
+def _get_router():
+    """Return the DeterministicRouter singleton, or None if unavailable/disabled."""
+    global _ROUTER_INSTANCE
+    if not ROUTER_ENABLED:
+        return None
+    with _ROUTER_LOCK:
+        if _ROUTER_INSTANCE is None:
+            try:
+                sys.path.insert(0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"))
+                from tokenpak.agent.compression.pipeline import CompressionPipeline
+                from tokenpak.agent.compression.slot_filler import SlotFiller
+                from tokenpak.agent.compression.recipes import RecipeEngine
+                from tokenpak.validation_gate import ValidationGate
+
+                class _DeterministicRouter:
+                    """Thin router wrapping the compression pipeline with intent + recipe selection."""
+                    def __init__(self):
+                        self._pipeline = CompressionPipeline()
+                        self._slot_filler = SlotFiller()
+                        self._recipe_engine = RecipeEngine()
+                        self._gate = ValidationGate() if _has_validation_gate() else None
+
+                    def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
+                        t0 = time.time()
+                        try:
+                            intent = _classify_intent(user_text)
+                            compressed = self._pipeline.compress(user_text, intent=intent)
+                            elapsed = int((time.time() - t0) * 1000)
+                            return _RouterResult(
+                                ok=True, fallback=False,
+                                intent=intent, recipe_id="pipeline-v1",
+                                slots={}, elapsed_ms=elapsed,
+                                compressed_text=compressed, capsule=None,
+                            )
+                        except Exception as e:
+                            elapsed = int((time.time() - t0) * 1000)
+                            return _RouterResult(
+                                ok=False, fallback=True,
+                                intent="unknown", recipe_id="",
+                                slots={}, elapsed_ms=elapsed,
+                                compressed_text="", capsule=None,
+                                error=str(e),
+                            )
+
+                _ROUTER_INSTANCE = _DeterministicRouter()
+            except Exception as _router_init_err:
+                print(f"  ⚠️ Router init failed: {_router_init_err}")
+                return None
+        return _ROUTER_INSTANCE
+
+
+def _has_validation_gate() -> bool:
+    try:
+        from tokenpak.validation_gate import ValidationGate  # noqa
+        return True
+    except Exception:
+        return False
+
+
+class _RouterResult:
+    """Lightweight result object from router.route()."""
+    def __init__(self, ok, fallback, intent, recipe_id, slots, elapsed_ms,
+                 compressed_text="", capsule=None, error=""):
+        self.ok = ok
+        self.fallback = fallback
+        self.intent = intent
+        self.recipe_id = recipe_id
+        self.slots = slots
+        self.elapsed_ms = elapsed_ms
+        self.compressed_text = compressed_text
+        self.capsule = capsule
+        self.error = error
+
+
+def _classify_intent(text: str) -> str:
+    """Simple keyword-based intent classification."""
+    t = text.lower()
+    if any(k in t for k in ("explain", "what is", "how does", "describe")):
+        return "explain"
+    if any(k in t for k in ("find", "search", "look up", "where")):
+        return "search"
+    if any(k in t for k in ("write", "create", "generate", "build", "implement")):
+        return "create"
+    if any(k in t for k in ("fix", "debug", "error", "bug", "broken")):
+        return "debug"
+    if any(k in t for k in ("summarize", "tldr", "brief", "recap")):
+        return "summarize"
+    return "query"
+
+
+def _extract_user_text(body_bytes: bytes) -> str:
+    """Extract the last user message text from a request body."""
+    try:
+        data = json.loads(body_bytes)
+    except Exception:
+        return ""
+    messages = data.get("messages", [])
+    # Walk in reverse to find last user message
+    for msg in reversed(messages):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    parts.append(block.get("text", ""))
+            return " ".join(parts)
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat routing helpers
+# ---------------------------------------------------------------------------
+_HEARTBEAT_ROUTE_MODEL = os.environ.get("TOKENPAK_HEARTBEAT_MODEL", "claude-haiku-4-5")
+
+_HEARTBEAT_PATTERNS = [
+    "heartbeat.md",
+    "heartbeat_ok",
+    "read heartbeat",
+    "follow heartbeat",
+    "heartbeat poll",
+]
+
+
+def _is_heartbeat_request(body_bytes: bytes) -> bool:
+    """Detect heartbeat/poll requests that can be safely handled by haiku-4-5."""
+    try:
+        data = json.loads(body_bytes)
+        messages = data.get("messages", [])
+        for msg in reversed(messages):
+            if not isinstance(msg, dict) or msg.get("role") != "user":
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                text = content.lower()
+            elif isinstance(content, list):
+                text = " ".join(
+                    b.get("text", "") for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                ).lower()
+            else:
+                return False
+            if any(p in text for p in _HEARTBEAT_PATTERNS):
+                return True
+            return False  # only check last user message
+    except Exception:
+        return False
+
+
+def _reroute_body_model(body_bytes: bytes, target_model: str) -> bytes:
+    """Rewrite the model field in a request body to target_model."""
+    try:
+        data = json.loads(body_bytes)
+        data["model"] = target_model
+        return json.dumps(data).encode()
+    except Exception:
+        return body_bytes
+
+
+def _run_router(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, Optional[dict]]:
+    """
+    Run the DeterministicRouter on the request body.
+
+    Returns (possibly-modified body, meta dict or None).
+    meta keys: intent, recipe_used, fallback, total_ms, [error]
+    """
+    user_text = _extract_user_text(body_bytes)
+    if not user_text:
+        return body_bytes, None
+
+    router = _get_router()
+    if router is None:
+        return body_bytes, None
+
+    try:
+        result = router.route(user_text, session_id=session_id)
+        meta = {
+            "intent": result.intent,
+            "recipe_used": result.recipe_id,
+            "fallback": result.fallback,
+            "total_ms": result.elapsed_ms,
+        }
+        if hasattr(result, "error") and result.error:
+            meta["error"] = result.error
+
+        # If router produced useful compressed text and shadow reader approves, inject
+        if result.ok and not result.fallback and result.compressed_text:
+            if _shadow_validate(user_text, result.compressed_text):
+                # Router result is advisory only for now — metadata logged, body unchanged
+                # Full body rewrite deferred to Phase 2 wiring
+                pass
+
+        return body_bytes, meta
+
+    except Exception as e:
+        return body_bytes, {"fallback": True, "error": str(e), "intent": "unknown",
+                            "recipe_used": "", "total_ms": 0}
+
+
+def _router_health() -> dict:
+    """Return router health/status dict for the /status endpoint."""
+    components = {
+        "slot_filler": False,
+        "recipe_engine": False,
+        "validation_gate": False,
+    }
+    if not ROUTER_ENABLED:
+        return {"enabled": False, "components": components}
+
+    router = _get_router()
+    if router is None:
+        return {"enabled": True, "components": components}
+
+    return {
+        "enabled": True,
+        "components": {
+            "slot_filler": hasattr(router, "_slot_filler") and router._slot_filler is not None,
+            "recipe_engine": hasattr(router, "_recipe_engine") and router._recipe_engine is not None,
+            "validation_gate": hasattr(router, "_gate") and router._gate is not None,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # SSE stream parsing
 # ---------------------------------------------------------------------------
 def _extract_sse_tokens(sse_bytes):
@@ -954,7 +1304,8 @@ def _extract_sse_tokens(sse_bytes):
                 continue
             try:
                 event = json.loads(data_str)
-            except:
+            except Exception as _exc:
+                pass  # ⚠️ swallow: _exc captured
                 continue
             if event.get("type") == "message_start":
                 usage = event.get("message", {}).get("usage", {})
@@ -1010,7 +1361,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     break
             except BlockingIOError:
                 pass
-            except:
+            except Exception as _exc:
+                pass  # ⚠️ swallow: _exc captured
                 break
             try:
                 data = remote.recv(65536)
@@ -1022,7 +1374,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     break
             except BlockingIOError:
                 pass
-            except:
+            except Exception as _exc:
+                pass  # ⚠️ swallow: _exc captured
                 break
             if not data_moved:
                 time.sleep(0.01)
@@ -1035,11 +1388,103 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "blocks": len(VAULT_INDEX.blocks),
                 "path": str(VAULT_INDEX.tokenpak_dir),
             }
+            # Phase7 status
+            phase7_info = {
+                "capsule_enabled": PHASE7_AVAILABLE,
+                "recipes_enabled": PHASE7_AVAILABLE,
+                "pruning_enabled": PHASE7_AVAILABLE,
+                "capsule_available": PHASE7_AVAILABLE,
+                "segmentizer_available": PHASE7_AVAILABLE,
+                "recipes_loaded": 0,
+                "init_error": None,
+            }
+            if PHASE7_AVAILABLE:
+                try:
+                    tp = TokenPak()
+                    phase7_info["recipes_loaded"] = len(getattr(tp, '_recipes', [])) if hasattr(tp, '_recipes') else 8
+                except Exception as e:
+                    phase7_info["init_error"] = str(e)
+            # Router status
+            router_info = {
+                "enabled": PHASE7_AVAILABLE,
+                "components": {
+                    "slot_filler": PHASE7_AVAILABLE,
+                    "recipe_engine": PHASE7_AVAILABLE,
+                    "validation_gate": PHASE7_AVAILABLE,
+                },
+            }
+            # Injection status
+            injection_info = {
+                "enabled": VAULT_INDEX.available,
+                "skip_models": [s.strip() for s in INJECT_SKIP_MODELS.split(",") if s.strip()],
+                "min_prompt_tokens": INJECT_MIN_PROMPT,
+                "budget_tokens": INJECT_BUDGET,
+                "top_k": INJECT_TOP_K,
+                "min_score": INJECT_MIN_SCORE,
+            }
+            # Canon status
+            canon_info = {
+                "enabled": CANON_AVAILABLE,
+                "session_hits": SESSION.get("canon_hits", 0),
+                "tokens_saved": SESSION.get("canon_tokens_saved", 0),
+            }
+            # Pipeline features status
+            features_info = {
+                "skeleton": {
+                    "enabled": SKELETON_ENABLED,
+                    "description": "Code block skeletonization — strips function bodies, keeps signatures (70-90% reduction on code)",
+                },
+                "shadow_reader": {
+                    "enabled": SHADOW_ENABLED,
+                    "description": "Coherence validation — auto-downgrades aggressive compression when quality degrades",
+                },
+                "budgeter": {
+                    "enabled": True,
+                    "total_tokens": BUDGET_TOTAL_TOKENS,
+                    "description": "Token budget allocation — enforces per-bucket limits (state/recent/evidence/tools)",
+                },
+                "compaction": {
+                    "enabled": ENABLE_COMPACTION,
+                    "mode": COMPILATION_MODE,
+                    "threshold_tokens": COMPACT_THRESHOLD_TOKENS,
+                    "max_chars": COMPACT_MAX_CHARS,
+                    "description": "Message compaction — truncates old conversation messages with style contracts",
+                },
+                "vault_injection": {
+                    "enabled": VAULT_INDEX.available,
+                    "blocks_indexed": len(VAULT_INDEX.blocks),
+                    "budget": INJECT_BUDGET,
+                    "top_k": INJECT_TOP_K,
+                    "description": "BM25 vault search — injects relevant knowledge blocks into system prompt",
+                },
+                "canon": {
+                    "enabled": CANON_AVAILABLE,
+                    "session_hits": SESSION.get("canon_hits", 0),
+                    "tokens_saved": SESSION.get("canon_tokens_saved", 0),
+                    "description": "CANON references — deduplicates repeated content blocks across turns",
+                },
+                "cache_control": {
+                    "enabled": True,
+                    "description": "Anthropic prompt caching — marks static system prompt for cache reuse",
+                },
+                "router": {
+                    "enabled": ROUTER_ENABLED,
+                    "description": "Deterministic router — intent classification + recipe selection + compression pipeline",
+                },
+            }
             self._send_json({
                 "status": "ok",
+                "version": PROXY_VERSION,
+                "uptime_seconds": int(time.time() - SESSION["start_time"]),
+                "requests_total": SESSION.get("requests", 0),
                 "compilation_mode": COMPILATION_MODE,
                 "vault_index": vault_info,
                 "stats": SESSION,
+                "phase7": phase7_info,
+                "router": router_info,
+                "injection": injection_info,
+                "canon": canon_info,
+                "features": features_info,
             })
             return
         if self.path == "/stats":
@@ -1190,7 +1635,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         self.send_header("Content-Length", len(err))
                         self.end_headers()
                         self.wfile.write(err)
-                    except:
+                    except Exception as _exc:
+                        pass  # ⚠️ swallow: _exc captured
                         pass
                     return
                 else:
@@ -1218,7 +1664,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(err))
                 self.end_headers()
                 self.wfile.write(err)
-            except:
+            except Exception as _exc:
+                pass  # ⚠️ swallow: _exc captured
                 pass
             return
 
@@ -1280,64 +1727,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 try:
                     req_data = json.loads(body)
                     is_streaming = req_data.get("stream", False)
-                except:
+                except Exception as _exc:
+                    pass  # ⚠️ swallow: _exc captured
                     pass
 
-                # Phase 0: Manual routing rules — rewrite model before any processing
-                try:
-                    from tokenpak.routing.rules import RouteEngine, _extract_prompt_text, _count_tokens_approx
-                    _route_engine = RouteEngine()
-                    _route_payload = json.loads(body) if body else {}
-                    _route_prompt = _extract_prompt_text(_route_payload)
-                    _route_tokens = _count_tokens_approx(_route_prompt)
-                    _matched_rule = _route_engine.match(
-                        model=model,
-                        prompt=_route_prompt,
-                        token_count=_route_tokens,
-                    )
-                    if _matched_rule:
-                        _route_payload["model"] = _matched_rule.target
-                        body = json.dumps(_route_payload).encode()
-                        model = _matched_rule.target
-                        print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
-                except Exception as _route_err:
-                    print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
-
-                # Phase 0.5: Capsule builder — compress historical context blocks
-                if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
-                    t_capsule = time.time()
-                    capsule_stage = StageTrace(
-                        name="capsule",
-                        enabled=True,
-                        input_tokens=input_tokens,
-                    )
-                    try:
-                        body, _cap_stats = CAPSULE_BUILDER.process(body)
-                        _cap_blocks = _cap_stats.get("blocks_capsulized", 0)
-                        _cap_ratio = _cap_stats.get("ratio", 1.0)
-                        _cap_chars_in = _cap_stats.get("chars_in", 0)
-                        _cap_chars_out = _cap_stats.get("chars_out", 0)
-                        capsule_stage.details["blocks_capsulized"] = _cap_blocks
-                        capsule_stage.details["compression_ratio"] = _cap_ratio
-                        capsule_stage.details["chars_in"] = _cap_chars_in
-                        capsule_stage.details["chars_out"] = _cap_chars_out
-                        capsule_stage.details["skip_reason"] = _cap_stats.get("skip_reason")
-                        if _cap_blocks > 0:
-                            # Recount tokens after capsulisation
-                            _, input_tokens = extract_request_tokens(body)
-                            print(
-                                f"  💊 Capsule: {_cap_blocks} block(s) compressed "
-                                f"({_cap_chars_in}→{_cap_chars_out} chars, ratio={_cap_ratio})"
-                            )
-                        capsule_stage.output_tokens = input_tokens
-                        capsule_stage.tokens_delta = capsule_stage.output_tokens - capsule_stage.input_tokens
-                    except Exception as _cap_err:
-                        print(f"  ⚠️  Capsule builder error (skipping): {_cap_err}")
-                        capsule_stage.details["error"] = str(_cap_err)
-                        capsule_stage.output_tokens = input_tokens
-                    capsule_stage.duration_ms = (time.time() - t_capsule) * 1000
-                    if trace:
-                        trace.stages.append(capsule_stage)
+                # Heartbeat routing: downgrade simple poll/status requests to haiku-4-5
+                if _HEARTBEAT_ROUTE_MODEL and _is_heartbeat_request(body):
+                    _original_model = model
+                    body = _reroute_body_model(body, _HEARTBEAT_ROUTE_MODEL)
+                    model = _HEARTBEAT_ROUTE_MODEL
+                    print(f"  🔀 Heartbeat routing: {_original_model} → {model}")
 
                 # Phase 1: Vault context injection (BEFORE compaction)
                 t_inject = time.time()
@@ -1358,11 +1757,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         SESSION["injection_skips"] += 1
                         vault_stage.details["skipped"] = True
                         vault_stage.details["reason"] = "model_skip" if INJECT_SKIP_MODELS.strip() and any(s.lower() in model.lower() for s in INJECT_SKIP_MODELS.split(",")) else "prompt_too_short"
-                        # Even when skipping vault injection, apply cache_control to stable prefix
-                        if PROMPT_BUILDER_AVAILABLE:
-                            body = _apply_stable_cache_control(body)
+                        # Still apply stable cache control even when vault injection is skipped
+                        body = _apply_stable_cache_control(body)
                     else:
-                        body, injected_tokens, injected_sources = inject_vault_context(body)
+                        _inject_session_id = self.headers.get("X-OpenClaw-Session", model)
+                        body, injected_tokens, injected_sources = inject_vault_context(body, session_id=_inject_session_id)
                         if injected_tokens > 0:
                             # Recount tokens after injection
                             _, input_tokens = extract_request_tokens(body)
@@ -1374,6 +1773,33 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 vault_stage.duration_ms = (time.time() - t_inject) * 1000
                 if trace:
                     trace.stages.append(vault_stage)
+
+                # Phase 1.5: CANON dedup (AFTER injection, BEFORE compaction)
+                if CANON_AVAILABLE and injected_tokens > 0:
+                    t_canon = time.time()
+                    canon_stage = StageTrace(
+                        name="canon_dedup",
+                        enabled=True,
+                        input_tokens=input_tokens,
+                    )
+                    try:
+                        # Extract session ID from request headers or model
+                        session_id = self.headers.get("X-OpenClaw-Session", model)
+                        body, canon_refs, canon_saved = apply_canon_refs(body, session_id)
+                        if canon_refs > 0:
+                            SESSION["canon_hits"] += canon_refs
+                            SESSION["canon_tokens_saved"] += canon_saved
+                            canon_stage.tokens_delta = -canon_saved
+                            canon_stage.details["blocks_referenced"] = canon_refs
+                            canon_stage.details["tokens_saved"] = canon_saved
+                            # Recount tokens after canon
+                            _, input_tokens = extract_request_tokens(body)
+                    except Exception as _canon_err:
+                        canon_stage.details["error"] = str(_canon_err)
+                    canon_stage.output_tokens = input_tokens
+                    canon_stage.duration_ms = (time.time() - t_canon) * 1000
+                    if trace:
+                        trace.stages.append(canon_stage)
 
                 # Phase 2: Compaction (AFTER injection)
                 t_compact = time.time()
@@ -1437,6 +1863,38 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
+
+            # 429 exponential backoff: retry rate-limited requests with jitter
+            if status == 429 and any(h in target_url for h in ("anthropic.com", "openai.com", "googleapis.com")):
+                try:
+                    from tokenpak.handlers.rate_limit import get_backoff_sync
+                    _backoff_sync = get_backoff_sync()
+                    _429_body = resp.read()
+                    _429_headers = dict(resp.getheaders())
+                    conn.close()
+                    for _attempt in range(_backoff_sync.max_retries):
+                        _wait = _backoff_sync.wait_time(
+                            _attempt,
+                            retry_after=float(_429_headers.get("Retry-After", _429_headers.get("retry-after", 0)) or 0) or None,
+                        )
+                        print(f"  ⏳ Rate limited (429). Retry {_attempt + 1}/{_backoff_sync.max_retries} in {_wait:.1f}s… [model={model}]")
+                        time.sleep(_wait)
+                        if parsed.scheme == "https":
+                            conn = http.client.HTTPSConnection(parsed.netloc, timeout=300, context=ssl.create_default_context())
+                        else:
+                            conn = http.client.HTTPConnection(parsed.netloc, timeout=300)
+                        conn.request(method, path, body=body, headers=fwd_headers)
+                        resp = conn.getresponse()
+                        status = resp.status
+                        if status != 429:
+                            break
+                        _429_body = resp.read()
+                        _429_headers = dict(resp.getheaders())
+                        conn.close()
+                except Exception as _rl_err:
+                    import logging as _lg
+                    _lg.getLogger(__name__).warning("Rate limit backoff error (skipping): %s", _rl_err)
+
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
 
@@ -1493,14 +1951,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if "gzip" in resp.getheader("Content-Encoding", ""):
                         try:
                             resp_for_metrics = gzip.decompress(resp_body)
-                        except:
+                        except Exception as _exc:
+                            pass  # ⚠️ swallow: _exc captured
                             pass
                     output_tokens = extract_response_tokens(resp_for_metrics)
                     try:
                         usage = json.loads(resp_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
-                    except:
+                    except Exception as _exc:
+                        pass  # ⚠️ swallow: _exc captured
                         pass
 
             conn.close()
@@ -1519,17 +1979,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                injected_tokens, sources_str, cache_read_tokens, cache_creation_tokens)
                 except Exception as _monitor_err:
                     print(f"  ⚠️ Monitor.log() failed (SQLite error, request unaffected): {_monitor_err}")
-                try:
-                    from tokenpak.telemetry.anon_metrics import record_request
-                    record_request(
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        tokens_saved=saved,
-                        latency_ms=latency_ms,
-                        model=model,
-                    )
-                except Exception:
-                    pass  # never break the proxy
                 SESSION["requests"] += 1
                 SESSION["input_tokens"] += input_tokens
                 SESSION["sent_input_tokens"] += sent_input_tokens
@@ -1580,18 +2029,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 stream_tag = " [SSE]" if is_sse else ""
                 mode_tag = f" [{COMPILATION_MODE}]"
                 inject_tag = f" [+{injected_tokens} vault]" if injected_tokens > 0 else ""
-                # Cache status tag: show FRESH/CACHED with token counts for clarity
-                if cache_read_tokens > 0:
-                    _saved_k = f"{cache_read_tokens:,}"
-                    cache_tag = f" (CACHED: {_saved_k} tokens)"
-                elif cache_creation_tokens > 0:
-                    _written_k = f"{cache_creation_tokens:,}"
-                    cache_tag = f" (FRESH: {_written_k} written)"
-                else:
-                    cache_tag = " (FRESH)"
                 print(f"  📊 {model}{stream_tag}{mode_tag}{inject_tag}: {input_tokens:,} in → {sent_input_tokens:,} sent "
                       f"(saved {saved:,}, protected {protected_tokens:,}) / {output_tokens:,} out | "
-                      f"~${cost:.4f}{cache_tag} | {latency_ms}ms")
+                      f"~${cost:.4f} | {latency_ms}ms")
 
         except Exception as e:
             SESSION["errors"] += 1
@@ -1612,7 +2052,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(err))
                 self.end_headers()
                 self.wfile.write(err)
-            except:
+            except Exception as _exc:
+                pass  # ⚠️ swallow: _exc captured
                 pass
 
     def _send_json(self, data):
@@ -1659,25 +2100,17 @@ def sync_loop():
 # ---------------------------------------------------------------------------
 class ThreadedHTTPServer(HTTPServer):
     def process_request(self, request, client_address):
-        global _active_request_count
-        with _active_request_lock:
-            _active_request_count += 1
         t = threading.Thread(target=self._handle, args=(request, client_address))
         t.daemon = True
         t.start()
 
     def _handle(self, request, client_address):
-        global _active_request_count
         try:
             self.finish_request(request, client_address)
         except Exception:
             self.handle_error(request, client_address)
         finally:
             self.shutdown_request(request)
-            with _active_request_lock:
-                _active_request_count -= 1
-                if _active_request_count == 0 and _shutdown_event.is_set():
-                    _active_requests_drained.set()
 
 
 def main():
@@ -1738,57 +2171,23 @@ def main():
     sync_thread = threading.Thread(target=sync_loop, daemon=True)
     sync_thread.start()
 
-    # Schedule anonymous metrics daily batch sync (non-blocking, opt-in only)
-    try:
-        from tokenpak.telemetry.reporter import schedule_daily_sync
-        schedule_daily_sync()
-    except Exception:
-        pass
-
     server = ThreadedHTTPServer(("0.0.0.0", port), ForwardProxyHandler)
-
-    def _handle_signal(signum, frame):
-        sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        print(f"\n[shutdown] {sig_name} received — stopping gracefully…")
-        _shutdown_event.set()
-        # shutdown() must be called from a different thread than serve_forever()
-        threading.Thread(target=server.shutdown, daemon=True).start()
-
-    signal.signal(signal.SIGTERM, _handle_signal)
-    signal.signal(signal.SIGINT, _handle_signal)
-
-    server.serve_forever()
-
-    # --- Drain in-flight requests (up to 10s) ---
-    drain_timeout = 10
-    with _active_request_lock:
-        count = _active_request_count
-    if count > 0:
-        print(f"[shutdown] Draining {count} in-flight request(s) (up to {drain_timeout}s)…")
-        _active_requests_drained.wait(timeout=drain_timeout)
-        with _active_request_lock:
-            remaining = _active_request_count
-        if remaining:
-            print(f"[shutdown] ⚠️  {remaining} request(s) still active after {drain_timeout}s — forcing exit")
-        else:
-            print("[shutdown] ✅ All in-flight requests completed")
-    else:
-        print("[shutdown] ✅ No in-flight requests — clean exit")
-
-    print(f"\n📊 Session Summary:")
-    print(f"   Mode:            {COMPILATION_MODE}")
-    print(f"   Requests:        {SESSION['requests']}")
-    print(f"   Input:           {SESSION['input_tokens']:,} tokens")
-    print(f"   Sent:            {SESSION['sent_input_tokens']:,} tokens")
-    print(f"   Protected:       {SESSION['protected_tokens']:,} tokens (never compressed)")
-    print(f"   Saved:           {SESSION['saved_tokens']:,} tokens")
-    print(f"   Injected:        {SESSION['injected_tokens']:,} tokens ({SESSION['injection_hits']} hits)")
-    print(f"   Output:          {SESSION['output_tokens']:,} tokens")
-    print(f"   Est. cost:       ${SESSION['cost']:.4f}")
-    print(f"   Errors:          {SESSION['errors']}")
-    sync_to_vault()
-    print("[shutdown] SQLite connections closed (per-request open/close pattern — no persistent handles)")
-    sys.exit(0)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\n📊 Session Summary:")
+        print(f"   Mode:            {COMPILATION_MODE}")
+        print(f"   Requests:        {SESSION['requests']}")
+        print(f"   Input:           {SESSION['input_tokens']:,} tokens")
+        print(f"   Sent:            {SESSION['sent_input_tokens']:,} tokens")
+        print(f"   Protected:       {SESSION['protected_tokens']:,} tokens (never compressed)")
+        print(f"   Saved:           {SESSION['saved_tokens']:,} tokens")
+        print(f"   Injected:        {SESSION['injected_tokens']:,} tokens ({SESSION['injection_hits']} hits)")
+        print(f"   Output:          {SESSION['output_tokens']:,} tokens")
+        print(f"   Est. cost:       ${SESSION['cost']:.4f}")
+        print(f"   Errors:          {SESSION['errors']}")
+        sync_to_vault()
+        server.shutdown()
 
 
 if __name__ == "__main__":

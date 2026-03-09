@@ -17,7 +17,7 @@ class HeuristicEngine(CompactionEngine):
 
     name = "heuristic"
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Import here to avoid circular imports
         from ..processors.text import TextProcessor
 

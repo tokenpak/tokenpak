@@ -126,9 +126,12 @@ def sign_license(payload: LicensePayload, private_pem: bytes) -> str:
     payload_bytes = json.dumps(payload.to_dict(), separators=(",", ":")).encode()
     payload_b64 = base64.urlsafe_b64encode(payload_bytes).rstrip(b"=").decode()
 
-    private_key = serialization.load_pem_private_key(
+    _raw_private_key = serialization.load_pem_private_key(
         private_pem, password=None, backend=default_backend()
     )
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+    from typing import cast as _cast
+    private_key = _cast(RSAPrivateKey, _raw_private_key)
     signature = private_key.sign(
         payload_bytes,
         padding.PKCS1v15(),
@@ -163,7 +166,10 @@ def verify_license(token: str, public_pem: bytes) -> LicensePayload:
     except Exception as exc:
         raise ValueError(f"Invalid base64 in license: {exc}") from exc
 
-    public_key = serialization.load_pem_public_key(public_pem, backend=default_backend())
+    _raw_public_key = serialization.load_pem_public_key(public_pem, backend=default_backend())
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+    from typing import cast as _cast
+    public_key = _cast(RSAPublicKey, _raw_public_key)
     try:
         public_key.verify(
             signature,

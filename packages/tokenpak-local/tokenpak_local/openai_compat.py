@@ -119,7 +119,7 @@ class TokenPakOpenAICompat:
         all_messages = self._build_messages(model, tokenpak, messages, user_message)
         return self._client.chat.completions.create(
             model=model,
-            messages=all_messages,
+            messages=all_messages,  # type: ignore[arg-type]
             stream=stream,
             **kwargs,
         )
