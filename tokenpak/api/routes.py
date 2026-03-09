@@ -5,13 +5,17 @@ HTTP route definitions for the TokenPak proxy management API.
 
 Currently exposes:
     GET /health   — Liveness + provider + cache status
+    GET /metrics  — Prometheus text format metrics
 
 Usage (standalone / testing)::
 
-    from tokenpak.api.routes import HealthRoute
+    from tokenpak.api.routes import HealthRoute, MetricsRoute
 
     checker = HealthRoute()          # or pass start_time=<float>
     payload = checker.handle()       # returns dict, HTTP status always 200
+
+    metrics = MetricsRoute()
+    body, status, headers = metrics.handle_bytes()
 
 Integration with ProxyServer
 -----------------------------
@@ -26,8 +30,14 @@ To wire it in, add to ``_ProxyHandler.do_GET``::
         self._send_json(ps._health_route.handle())
         return
 
-and set ``ps._health_route = HealthRoute(start_time=ps.session['start_time'])``
-in ``ProxyServer.__init__``.
+    if path == "/metrics":
+        body, status, hdrs = ps._metrics_route.handle_bytes()
+        ...
+
+and initialise in ``ProxyServer.__init__``::
+
+    ps._health_route = HealthRoute(start_time=ps.session['start_time'])
+    ps._metrics_route = MetricsRoute(proxy_server=ps)
 """
 
 from __future__ import annotations
@@ -115,6 +125,51 @@ class RouteRegistry:
         return list(self._routes.keys())
 
 
+class MetricsRoute:
+    """
+    Handles GET /metrics requests — returns Prometheus text exposition format.
+
+    Parameters
+    ----------
+    proxy_server : ProxyServer, optional
+        Live proxy server instance for session + circuit-breaker data.
+        If None, metrics are collected from available global registries only.
+    db_path : str or Path, optional
+        Path to TelemetryDB for per-provider/model breakdowns.
+        Defaults to the project-level ``telemetry.db`` when not set.
+    """
+
+    def __init__(
+        self,
+        proxy_server: Optional[Any] = None,
+        db_path: Optional[str] = None,
+    ) -> None:
+        self._proxy_server = proxy_server
+        self._db_path = db_path
+
+    def handle(self) -> str:
+        """Collect and return Prometheus metrics as a text string."""
+        from tokenpak.monitoring.metrics import ProxyMetricsCollector
+        collector = ProxyMetricsCollector(
+            proxy_server=self._proxy_server,
+            db_path=self._db_path,
+        )
+        return collector.collect()
+
+    def handle_bytes(self) -> Tuple[bytes, int, Dict[str, str]]:
+        """
+        Return ``(body_bytes, http_status, headers)`` for direct HTTP handler use.
+        """
+        body = self.handle().encode("utf-8")
+        headers = {
+            "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+            "Content-Length": str(len(body)),
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+        }
+        return body, 200, headers
+
+
 def build_default_registry(start_time: Optional[float] = None) -> RouteRegistry:
     """
     Build and return a RouteRegistry pre-populated with default management routes.
@@ -126,4 +181,5 @@ def build_default_registry(start_time: Optional[float] = None) -> RouteRegistry:
     """
     registry = RouteRegistry()
     registry.register("/health", HealthRoute(start_time=start_time))
+    registry.register("/metrics", MetricsRoute())
     return registry

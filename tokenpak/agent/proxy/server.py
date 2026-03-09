@@ -307,6 +307,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if ps.shutdown.is_shutting_down and path.startswith("http"):
             self._send_503_shutdown()
             return
+        if path == "/metrics":
+            from tokenpak.monitoring.metrics import ProxyMetricsCollector
+            collector = ProxyMetricsCollector(proxy_server=ps)
+            body = collector.collect().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
             self._send_json(get_degradation_tracker().summary())
