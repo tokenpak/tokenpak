@@ -124,6 +124,13 @@ intelligent routing, local cost tracking, and a comprehensive agentic integratio
 - `pytest` markers registered — `integration`, `chaos`, `slow`, `flaky`
 - Full mypy type hints sprint — reduced errors from 151 → 92 across main package
 
+### Cache Sprint (2026-03-09)
+
+- **P0 — `apply_stable_cache_control` wired into ProxyServer pipeline** (`a1b3f45`) — every LLM request now automatically classifies system blocks as stable/volatile and attaches `cache_control: ephemeral` to the last stable block before forwarding to Anthropic
+- **P1 — Cache poison removal** (`de9099d`) — frozen tool schemas via `ToolSchemaRegistry` singleton (deterministic, byte-identical per request); `datetime.now()` and `uuid.uuid4()` calls audited and removed from all prompt-building paths; stable prefix is now bit-identical across consecutive requests
+- **P1 — Cache telemetry** (`06da64e`, `7801c81`) — `CacheMetrics` captures `cache_read_input_tokens` per request; FRESH/CACHED status + token counts logged per response; `/v1/cache/stats` endpoint exposes aggregate hit rate, miss counts, and cache size
+- **Validated: 61.1% cache hit rate** and **10.2× efficiency improvement** measured post-sprint (from ~10% with cache poison, ~50% after poison removal alone, 61.1% with full stable prefix pipeline)
+
 ---
 
 ## [1.0.0-rc1] — 2026-03-05
