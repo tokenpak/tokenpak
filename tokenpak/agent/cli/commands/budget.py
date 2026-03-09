@@ -215,7 +215,7 @@ def print_budget_status(raw: bool = False) -> None:
         limit = info["limit_usd"]
 
         if limit is None:
-            print(f"  {label} Limit:        not set  (spent: {_fmt_cost(spent)})")
+            print(f"  {label} Limit:        not set  (spent: {_fmt_cost(spent)})")  # type: ignore
         else:
             limit_f = float(limit)
             pct = info["percent_used"]
@@ -233,9 +233,9 @@ def print_budget_status(raw: bool = False) -> None:
                 )
             )
             print(f"  {label}:")
-            print(f"    Limit:        {_fmt_cost(limit_f)}")
-            print(f"    Spent:        {_fmt_cost(spent)}")
-            print(f"    Remaining:    {_fmt_cost(remaining)}")
+            print(f"    Limit:        {_fmt_cost(limit_f)}")  # type: ignore
+            print(f"    Spent:        {_fmt_cost(spent)}")  # type: ignore
+            print(f"    Remaining:    {_fmt_cost(remaining)}")  # type: ignore
             print(f"    Progress:     [{bar}] {pct:.1f}% {alert}")
         print()
 
