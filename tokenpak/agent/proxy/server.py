@@ -58,6 +58,7 @@ from tokenpak.agent.dashboard.session_filter import (
 )
 from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
+from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +346,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/stats/session":
             self._send_json(ps.session_stats())
+            return
+        if path == "/cache-stats":
+            self._send_json(_get_cache_collector().summary())
             return
         if path == "/traces":
             traces = ps.trace_storage.get_all()
@@ -757,6 +761,36 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cost_saved"] += cost_saved
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
+
+                # Record cache telemetry
+                try:
+                    _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
+                    _miss_reason: Optional[str] = None
+                    if cache_read_tokens == 0:
+                        # Heuristic miss-reason diagnosis (best-effort)
+                        try:
+                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                        except Exception:
+                            _body_text = ""
+                        import re as _re
+                        if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
+                            _miss_reason = "timestamp"
+                        elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
+                            _miss_reason = "uuid"
+                    _get_cache_collector().record(CacheMetrics(
+                        request_id=trace.request_id if trace else str(uuid.uuid4()),
+                        stable_prefix_tokens=sent_input_tokens,
+                        stable_cached=(cache_read_tokens > 0),
+                        cache_miss_reason=_miss_reason,
+                        volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
+                        total_input_tokens=input_tokens,
+                        cache_read_tokens=cache_read_tokens,
+                        cache_creation_tokens=cache_creation_tokens,
+                        output_tokens=output_tokens,
+                    ))
+                except Exception:
+                    pass  # telemetry must never break request handling
+
                 # Track per-request compression ratio for rolling average
                 if input_tokens > 0:
                     ratio = round(saved / input_tokens, 4)
