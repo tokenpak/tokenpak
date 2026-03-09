@@ -1,8 +1,9 @@
 """
 utils.py — Lightweight Block and TokenPak shims + helper utilities.
 
-tokenpak-local avoids hard runtime dependencies on tokenpak-sdk by providing
-minimal shims. When tokenpak-sdk is installed these shims are replaced.
+tokenpak-local uses its own minimal Block/TokenPak shims.
+The tokenpak core package's Block is a registry object with a different
+interface (file storage), so we always use these chat-focused shims.
 """
 
 from __future__ import annotations
@@ -11,74 +12,68 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
-# ---------------------------------------------------------------------------
-# Try real SDK first; fall back to minimal shims
-# ---------------------------------------------------------------------------
+_SDK_AVAILABLE = False
 
-try:
-    from tokenpak import Block, TokenPak  # type: ignore[import]
-    _SDK_AVAILABLE = True
-except ImportError:
-    _SDK_AVAILABLE = False
 
-    @dataclass
-    class Block:
-        """Minimal TokenPak Block shim."""
-        type: str = "evidence"
-        content: str = ""
-        quality: float = 1.0
-        id: Optional[str] = None
-        metadata: Dict[str, Any] = field(default_factory=dict)
-        provenance: Dict[str, Any] = field(default_factory=dict)
-        tokens: int = 0
+@dataclass
+class Block:
+    """Minimal TokenPak Block shim."""
+    type: str = "evidence"
+    content: str = ""
+    quality: float = 1.0
+    id: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    tokens: int = 0
 
-        def __post_init__(self):
-            if not self.tokens:
-                self.tokens = max(1, len(self.content) // 4)
+    def __post_init__(self):
+        if not self.tokens:
+            self.tokens = max(1, len(self.content) // 4)
 
-        def to_dict(self) -> Dict[str, Any]:
-            return {
-                "type": self.type,
-                "content": self.content,
-                "quality": self.quality,
-                "id": self.id,
-                "metadata": self.metadata,
-                "provenance": self.provenance,
-                "tokens": self.tokens,
-            }
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": self.type,
+            "content": self.content,
+            "quality": self.quality,
+            "id": self.id,
+            "metadata": self.metadata,
+            "provenance": self.provenance,
+            "tokens": self.tokens,
+        }
 
-    class TokenPak:
-        """Minimal TokenPak shim that compiles to OpenAI-style messages."""
 
-        def __init__(
-            self,
-            budget: Optional[int] = None,
-            instructions: str = "",
-        ):
-            self.budget = budget
-            self.instructions = instructions
-            self._blocks: List[Block] = []
+class TokenPak:
+    """Minimal TokenPak shim that compiles to OpenAI-style messages."""
 
-        def add(self, block: Block) -> "TokenPak":
-            self._blocks.append(block)
-            return self
+    def __init__(
+        self,
+        budget: Optional[int] = None,
+        instructions: str = "",
+    ):
+        self.budget = budget
+        self.instructions = instructions
+        self._blocks: List[Block] = []
 
-        def to_messages(self) -> List[Dict[str, str]]:
-            """Compile blocks to OpenAI chat messages list."""
-            parts: List[str] = []
-            if self.instructions:
-                parts.append(self.instructions)
-            for b in self._blocks:
-                parts.append(f"[{b.type.upper()}]\n{b.content}")
-            system_content = "\n\n".join(parts)
-            return [{"role": "system", "content": system_content}]
+    def add(self, block: Block) -> "TokenPak":
+        self._blocks.append(block)
+        return self
 
-        def compile(self) -> "TokenPak":
-            return self
+    def to_messages(self) -> List[Dict[str, str]]:
+        """Compile blocks to OpenAI chat messages list."""
+        parts: List[str] = []
+        if self.instructions:
+            parts.append(self.instructions)
+        for b in self._blocks:
+            parts.append(f"[{b.type.upper()}]\n{b.content}")
+        system_content = "\n\n".join(parts)
+        return [{"role": "system", "content": system_content}]
 
-        @property
-        def total_tokens(self) -> int:
-            return sum(b.tokens for b in self._blocks)
+    def compile(self) -> "TokenPak":
+        return self
+
+    @property
+    def total_tokens(self) -> int:
+        return sum(b.tokens for b in self._blocks)
 
 
 # ---------------------------------------------------------------------------
