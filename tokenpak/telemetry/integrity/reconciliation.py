@@ -21,7 +21,7 @@ class ReconciliationRecord:
     difference: int = 0
     difference_pct: float = 0.0
     status: str = "pending"  # matched, mismatch, pending
-    created_at: str = None
+    created_at: str = None  # type: ignore[assignment]
 
 
 class ReconciliationManager:

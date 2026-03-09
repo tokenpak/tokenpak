@@ -109,7 +109,7 @@ class EloRatings:
     @staticmethod
     def _key(model: str, task_type: str) -> str:
         # Normalize
-        tt = task_type.upper() if isinstance(task_type, str) else task_type.value
+        tt = task_type.upper() if isinstance(task_type, str) else task_type.value  # type: ignore[attr-defined]
         return f"{model.lower()}::{tt}"
 
     @staticmethod

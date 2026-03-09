@@ -204,9 +204,9 @@ def parse_filter_param(filter_str: str) -> Optional[FilterSpec]:
 
         # Coerce value type
         if value.isdigit():
-            value = int(value)
+            value = int(value)  # type: ignore[assignment]
         elif value in ("true", "false"):
-            value = value == "true"
+            value = value == "true"  # type: ignore[assignment]
 
         return FilterSpec(column, operator, value)
 

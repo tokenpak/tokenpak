@@ -40,7 +40,7 @@ class NotionConnector(Connector):
             print("Notion connector requires auth_token (integration token)")
             return False
 
-        self._headers = {
+        self._headers = {  # type: ignore[assignment]
             "Authorization": f"Bearer {self.config.auth_token}",
             "Notion-Version": "2022-06-28",
             "Content-Type": "application/json",

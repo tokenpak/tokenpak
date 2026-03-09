@@ -213,7 +213,7 @@ def handoff_cmd(args) -> None:
     # show
     # ------------------------------------------------------------------
     elif subcmd == "show":
-        h = manager.get_handoff(args.handoff_id)
+        h = manager.get_handoff(args.handoff_id)  # type: ignore[assignment]
         if h is None:
             print(f"✖ Handoff '{args.handoff_id}' not found", file=sys.stderr)
             sys.exit(1)

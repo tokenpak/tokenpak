@@ -128,7 +128,7 @@ def _get_latest_compression_ratio() -> float:
     """
     try:
         from tokenpak.agent.proxy.stats import CompressionStats
-        stats = CompressionStats.get_global()
+        stats = CompressionStats.get_global()  # type: ignore[attr-defined]
         ratio = stats.avg_ratio() if stats else 0.0
         return round(ratio, 3)
     except Exception:
