@@ -715,6 +715,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                         continue
                     self.send_header(h_key, h_val)
+                # Debug header: stable prefix hash for cache determinism verification.
+                # Emitted for all messages requests (not just intercepted hosts)
+                # so integration tests and local stubs can verify determinism.
+                if is_messages:
+                    _ph = _compute_stable_prefix_hash(body)
+                    if _ph:
+                        self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
                 self.end_headers()
 
                 resp_body = resp.content
@@ -894,6 +901,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 # Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
+
+def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
+    """
+    Compute a short SHA-256 hash of the stable system prefix.
+
+    Used to populate X-Tokenpak-Cache-Prefix-Hash response header for
+    determinism verification in integration tests and debug tooling.
+
+    Returns a 16-char hex string, or "" if unavailable.
+    """
+    if not body:
+        return ""
+    try:
+        import hashlib
+        data = json.loads(body)
+        system = data.get("system")
+        if not system:
+            return ""
+        if isinstance(system, str):
+            stable_text = system.strip()
+        elif isinstance(system, list):
+            from .prompt_builder import classify_system_blocks
+            stable_blocks, _ = classify_system_blocks(system)
+            stable_text = "\n".join(
+                b.get("text", "")
+                for b in stable_blocks
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        else:
+            return ""
+        if not stable_text:
+            return ""
+        return hashlib.sha256(stable_text.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return ""
+
 
 def _estimate_tokens_from_body(body: bytes) -> int:
     try:
