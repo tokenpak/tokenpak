@@ -486,13 +486,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def _proxy_to(self, target_url: str, method: str) -> None:
-        ps = self.server.proxy_server
+        ps = self.server.proxy_server  # type: ignore[attr-defined]
         with ps.shutdown.track_request():
             self._proxy_to_inner(target_url, method)
 
     def _proxy_to_inner(self, target_url: str, method: str) -> None:
         t0 = time.time()
-        ps = self.server.proxy_server
+        ps = self.server.proxy_server  # type: ignore[attr-defined]
         parsed = urlparse(target_url)
 
         should_log = any(h in target_url for h in INTERCEPT_HOSTS)
@@ -659,7 +659,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Content-Length"] = str(len(body))
 
         try:
-            pool = self.server.proxy_server._connection_pool
+            pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
             _cb_success = False  # track whether request succeeded for circuit breaker
 
             output_tokens = 0
