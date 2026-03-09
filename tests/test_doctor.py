@@ -26,6 +26,7 @@ class DoctorChecksPythonVersionTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.captured_output = StringIO()
     
     @patch('sys.stdout', new_callable=StringIO)
