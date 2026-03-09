@@ -216,6 +216,8 @@ def _new_session() -> Dict[str, Any]:
 class _ThreadedHTTPServer(HTTPServer):
     """HTTP server that dispatches each request to a daemon thread."""
 
+    proxy_server: "ProxyServer"  # injected after construction
+
     def process_request(self, request, client_address):
         t = threading.Thread(target=self._handle, args=(request, client_address))
         t.daemon = True
@@ -241,6 +243,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     Attributes injected by ProxyServer before serving:
         server.proxy_server  — back-reference to the ProxyServer instance
     """
+
+    @property
+    def _ps(self) -> "ProxyServer":
+        """Typed accessor for the back-reference to ProxyServer."""
+        return self.server.proxy_server  # type: ignore[attr-defined]
 
     def log_message(self, format, *args):  # silence access log
         pass

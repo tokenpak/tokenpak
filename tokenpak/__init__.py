@@ -100,7 +100,7 @@ from tokenpak.agent.agentic.handoff import (
 # HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
 # The internal Handoff dataclass (file-based) is available via
 # tokenpak.agent.agentic.handoff.Handoff
-Handoff = HandoffWire
+Handoff = HandoffWire  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Public API declaration
