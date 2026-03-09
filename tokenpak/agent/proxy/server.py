@@ -982,6 +982,34 @@ class ProxyServer:
         except Exception:  # pragma: no cover — import failure falls back gracefully
             self.request_hook = request_hook
 
+        # Wire apply_stable_cache_control into the pipeline.
+        # Runs AFTER any capsule/compression processing, BEFORE forwarding to LLM.
+        # Ensures every Anthropic request with a system prompt gets a stable cache
+        # prefix marker — enabling prompt cache reuse across requests.
+        try:
+            from .prompt_builder import apply_stable_cache_control
+            _prior_hook = self.request_hook
+
+            def _stable_cache_hook(
+                body: bytes,
+                model: str,
+                trace=None,
+                *,
+                _hook=_prior_hook,
+                _scc=apply_stable_cache_control,
+            ):
+                if _hook is not None:
+                    body, sent, raw, protected = _hook(body, model, trace)
+                else:
+                    _tok = len(body) // 4
+                    body, sent, raw, protected = body, _tok, _tok, 0
+                body = _scc(body)
+                return body, sent, raw, protected
+
+            self.request_hook = _stable_cache_hook
+        except Exception:  # pragma: no cover — import failure gracefully degrades
+            pass
+
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
         self.session_filter = SessionFilter()
