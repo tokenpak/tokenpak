@@ -1,5 +1,11 @@
 # TokenPak
 
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-54%25-brightgreen)
+![Python](https://img.shields.io/badge/python-3.8+-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![PyPI](https://img.shields.io/badge/pypi-1.0.0-blue)
+
 > **Zero-token operations. Maximum context efficiency.**
 
 TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
