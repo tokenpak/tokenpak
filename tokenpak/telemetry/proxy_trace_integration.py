@@ -25,7 +25,7 @@ class ProxyTraceCapture:
         input_tokens: int,
         output_tokens: int,
         blocks_matched: int = 0,
-        block_names: List[str] = None,
+        block_names: Optional[List[str]] = None,
         tokens_injected: int = 0,
         duration_ms: float = 0.0,
     ) -> None:
@@ -103,7 +103,7 @@ class ProxyTraceCapture:
         input_tokens: int,
         output_tokens: int,
         refs_resolved: int = 0,
-        ref_names: List[str] = None,
+        ref_names: Optional[List[str]] = None,
         tokens_saved: int = 0,
         duration_ms: float = 0.0,
     ) -> None:
@@ -128,7 +128,7 @@ class ProxyTraceCapture:
         input_tokens: int,
         output_tokens: int,
         passed: bool = True,
-        checks: List[str] = None,
+        checks: Optional[List[str]] = None,
         duration_ms: float = 0.0,
     ) -> None:
         """Record validation gate stage."""

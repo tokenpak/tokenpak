@@ -296,7 +296,7 @@ class InsightEngine:
     def _cost_insights(
         self, conn: sqlite3.Connection, current: dict, previous: dict, days: int
     ) -> List[Insight]:
-        insights = []
+        insights: List[Insight] = []
         models = self._fetch_model_breakdown(conn, days)
         daily_costs = self._fetch_daily_costs(conn, days)
 

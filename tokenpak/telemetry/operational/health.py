@@ -20,7 +20,7 @@ class HealthStatus:
     version: str
     uptime_seconds: int
     checks: Dict[str, str]  # component -> ok/error/degraded
-    stats: Dict[str, any]  # stats snapshot
+    stats: Dict[str, Any]  # stats snapshot
 
 
 class HealthChecker:
@@ -90,7 +90,7 @@ class HealthChecker:
         except Exception as e:
             return "error", str(e)
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get operational statistics."""
         try:
             conn = sqlite3.connect(self.db_path)

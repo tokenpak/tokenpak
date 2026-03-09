@@ -275,6 +275,8 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
         request.state.api_key = api_key
 
         # ── 4. Rate limit ──────────────────────────────────────
+        assert api_key is not None, "api_key should not be None after validation"
+        assert tier is not None, "tier should not be None after validation"
         allowed, remaining, reset_ts = self.limiter.check(api_key, tier)
 
         if not allowed:

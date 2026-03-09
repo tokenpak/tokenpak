@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import asdict
 from pathlib import Path
+from typing import Optional, Any
 
 try:
     from fastapi import APIRouter, Query
@@ -12,8 +13,8 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
-    APIRouter = None
-    Query = None
+    APIRouter = None  # type: ignore
+    Query = None  # type: ignore
 
 from tokenpak.telemetry.query import (
     get_cost_summary,
@@ -36,7 +37,7 @@ def _to_json(obj):
 
 
 if FASTAPI_AVAILABLE:
-    router = APIRouter(tags=["telemetry"])
+    router = APIRouter(tags=["telemetry"])  # type: ignore
 
     @router.get("/cost-summary")
     def api_cost_summary(days: int = Query(default=30, ge=1, le=365)):
@@ -174,7 +175,7 @@ if FASTAPI_AVAILABLE:
         ]
 
 else:
-    router = None
+    router = None  # type: ignore
 
 
 def create_app():

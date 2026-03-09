@@ -53,7 +53,7 @@ class CodeProcessor:
     def _process_python(self, content: str) -> str:
         """Extract Python structure using pre-compiled patterns."""
         lines = content.split("\n")
-        result = []
+        result: List[str] = []
         i = 0
 
         while i < len(lines):
@@ -133,7 +133,7 @@ class CodeProcessor:
     def _process_javascript(self, content: str) -> str:
         """Extract JavaScript/TypeScript structure using pre-compiled patterns."""
         lines = content.split("\n")
-        result = []
+        result: List[str] = []
         i = 0
 
         while i < len(lines):

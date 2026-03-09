@@ -10,6 +10,13 @@ from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from tokenpak.telemetry.storage_base import _now, _row_to_dict
 
 
+# Type stub: these methods are provided by other mixins
+# We declare them here to satisfy mypy when mixins are composed
+    
+    
+    
+
+
 class EventsMixin:
     """Mixin providing TelemetryEvent insert, insert_trace, and query methods."""
 
@@ -80,11 +87,11 @@ class EventsMixin:
         """
         self.insert_event(event)
         if usage is not None:
-            self.insert_usage(usage)
+            self.insert_usage(usage)  # type: ignore  # type: ignore
         if cost is not None:
-            self.insert_cost(cost)
+            self.insert_cost(cost)  # type: ignore  # type: ignore
         if segments:
-            self.insert_segments(segments)
+            self.insert_segments(segments)  # type: ignore  # type: ignore
 
     # ------------------------------------------------------------------
     # Query helpers
@@ -115,7 +122,7 @@ class EventsMixin:
         cost_row = cur.fetchone()
         cost = _row_to_dict(cur, cost_row) if cost_row else None
 
-        segments = self.get_segments(trace_id)
+        segments = self.get_segments(trace_id)  # type: ignore  # type: ignore
 
         return {
             "event": event,

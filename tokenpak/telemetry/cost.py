@@ -504,6 +504,7 @@ class CostEngine:
             conn.close()
         # Invalidate cache
         self._pricing_cache.clear()
+        assert row_id is not None
         return row_id
 
     # ------------------------------------------------------------------

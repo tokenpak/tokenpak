@@ -7,7 +7,7 @@ one of the TaskType categories. Pure regex/keyword — no LLM required.
 
 import re
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 
 class TaskType(str, Enum):
@@ -218,7 +218,7 @@ def _word_set(text: str) -> set:
     return set(re.findall(r"\b\w+\b", text.lower()))
 
 
-def score_complexity(query: str, context_blocks: List[str] = None) -> tuple:
+def score_complexity(query: str, context_blocks: Optional[List[str]] = None) -> tuple:
     """
     Score the complexity of a query + context.
 

@@ -136,6 +136,7 @@ class RoutingLedger:
             row_id = cur.lastrowid
             conn.commit()
             conn.close()
+        assert row_id is not None
         return row_id
 
     def record_outcome(

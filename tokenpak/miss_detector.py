@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 # Default gap store location (relative to project root)
 DEFAULT_GAPS_PATH = ".tokenpak/gaps.json"
@@ -157,7 +157,7 @@ def _extract_fn_calls(text: str) -> dict:
     Returns {fn_name: param_count} for each call detected.
     Multiple calls to same fn → keep max param count.
     """
-    calls = {}
+    calls: Dict[str, int] = {}
     for m in re.finditer(r"\b(\w+)\s*\(([^)]*)\)", text):
         name = m.group(1)
         # Skip keywords and builtins

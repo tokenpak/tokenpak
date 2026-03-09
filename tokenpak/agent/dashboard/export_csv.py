@@ -16,7 +16,12 @@ import csv
 import io
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _csv import writer as CsvWriter
+else:
+    CsvWriter = Any  # type: ignore
 
 
 class ExportFormat(str, Enum):
@@ -66,7 +71,7 @@ _STATS_COLUMNS = ["metric", "value"]
 # ---------------------------------------------------------------------------
 
 
-def _make_writer(buf: io.StringIO) -> csv.writer:
+def _make_writer(buf: io.StringIO) -> Any:
     """Return a csv.writer with standard dialect (no BOM, RFC-4180-ish)."""
     return csv.writer(buf, dialect="excel", lineterminator="\r\n")
 

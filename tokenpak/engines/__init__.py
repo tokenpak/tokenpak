@@ -10,7 +10,7 @@ try:
     LLMLINGUA_AVAILABLE = True
 except ImportError:
     LLMLINGUA_AVAILABLE = False
-    LLMLinguaEngine = None
+    LLMLinguaEngine = None  # type: ignore[assignment]
 
 ENGINES = {
     "heuristic": HeuristicEngine,
@@ -18,8 +18,8 @@ ENGINES = {
 }
 
 if LLMLINGUA_AVAILABLE:
-    ENGINES["balanced"] = LLMLinguaEngine
-    ENGINES["llmlingua"] = LLMLinguaEngine
+    ENGINES["balanced"] = LLMLinguaEngine  # type: ignore[assignment]
+    ENGINES["llmlingua"] = LLMLinguaEngine  # type: ignore[assignment]
 
 
 def get_engine(name: str = "heuristic") -> CompactionEngine:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 from .response_schema import RESPONSE_SCHEMA
 
@@ -23,8 +23,9 @@ try:
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
-    Draft202012Validator = None
-    ValidationError = Exception
+    # Use type: ignore comments to handle the conditional imports
+    Draft202012Validator = None  # type: ignore
+    ValidationError = Exception  # type: ignore
 
 
 class ValidationResult:
@@ -78,7 +79,7 @@ class ResponseValidator:
         self.log_errors = log_errors
 
         # Pre-compile jsonschema validator if available
-        self._json_validator = None
+        self._json_validator: Optional[Any] = None
         if HAS_JSONSCHEMA:
             self._json_validator = Draft202012Validator(self.schema)
 
@@ -121,9 +122,12 @@ class ResponseValidator:
 
     def _validate_with_jsonschema(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Validate using jsonschema library."""
-        errors = []
+        errors: List[Dict[str, Any]] = []
 
-        for error in self._json_validator.iter_errors(response):
+        if self._json_validator is None:  # type: ignore
+            return errors
+
+        for error in self._json_validator.iter_errors(response):  # type: ignore
             field = ".".join(str(p) for p in error.absolute_path) or "(root)"
             errors.append(
                 {
@@ -220,7 +224,10 @@ class ResponseValidator:
         expected_types = type_map.get(expected)
         if expected_types is None:
             return True  # Unknown type, skip
-        return isinstance(value, expected_types)
+        # Ensure expected_types is a tuple for isinstance
+        if isinstance(expected_types, tuple):
+            return isinstance(value, expected_types)
+        return isinstance(value, (expected_types,))  # type: ignore
 
     def _validate_semantics(
         self, response: Dict[str, Any]
