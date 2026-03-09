@@ -47,6 +47,7 @@ from .stats import CompressionStats
 from .degradation import get_degradation_tracker, DegradationEventType
 from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
 from .startup import run_startup_checks, format_startup_report
+from tokenpak import __version__ as _tokenpak_version
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
@@ -294,8 +295,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         path = self.path
 
         # Always allow /health during shutdown (needed for health-check polling)
-        if path == "/health":
-            self._send_json(ps.health())
+        if path == "/health" or path.startswith("/health?"):
+            from urllib.parse import parse_qs, urlparse as _urlparse
+            parsed_path = _urlparse(path)
+            qs = parse_qs(parsed_path.query)
+            deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
+            self._send_json(ps.health(deep=deep))
             return
 
         # Reject new proxied requests while shutting down
@@ -1128,7 +1133,7 @@ class ProxyServer:
     # Status endpoints (also used by handler GET routes)
     # ------------------------------------------------------------------
 
-    def health(self) -> dict:
+    def health(self, deep: bool = False) -> dict:
         with self._session_lock:
             uptime = round(time.time() - self.session["start_time"])
             requests_total = self.session["requests"]
@@ -1147,10 +1152,10 @@ class ProxyServer:
             s.get("state") in ("open", "half_open")
             for s in cb_statuses.values()
         )
-        return {
+        result = {
             "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
-            "version": "0.1.0",
+            "version": _tokenpak_version,
             "requests_total": requests_total,
             "requests_errors": requests_errors,
             "compression_ratio_avg": compression_ratio_avg,
@@ -1169,6 +1174,30 @@ class ProxyServer:
                 "providers": cb_statuses,
             },
         }
+        if deep:
+            import shutil
+            import psutil  # optional; fall back gracefully
+            # providers: list active providers with their circuit-breaker status
+            providers = [
+                {"name": name, "status": info.get("state", "unknown")}
+                for name, info in cb_statuses.items()
+            ]
+            # memory usage in MB
+            try:
+                proc = psutil.Process()
+                mem_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+            except Exception:
+                mem_mb = None
+            # disk available in GB
+            try:
+                disk = shutil.disk_usage("/")
+                disk_available_gb = round(disk.free / (1024 ** 3), 2)
+            except Exception:
+                disk_available_gb = None
+            result["providers"] = providers
+            result["memory"] = {"rss_mb": mem_mb}
+            result["disk"] = {"available_gb": disk_available_gb}
+        return result
 
     def stats(self) -> dict:
         return {
