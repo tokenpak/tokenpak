@@ -224,8 +224,7 @@ def get_registry() -> ToolSchemaRegistry:
 # ---------------------------------------------------------------------------
 # FROZEN_TOOL_SCHEMAS — module-level accessor for acceptance criteria
 # ---------------------------------------------------------------------------
-# This proxy exposes the frozen schemas from the singleton registry as a
-# module-level reference, satisfying: grep -r "FROZEN_TOOL_SCHEMAS" ...
+# Returns the frozen schemas from the singleton registry.
 # The actual frozen data lives inside get_registry()._frozen_tools and is
 # updated only when tool schemas genuinely change.
 
@@ -236,7 +235,8 @@ def _get_frozen_tool_schemas() -> list:
         return reg._frozen_tools or []
 
 
-# Module-level constant: frozen tool schemas singleton (updated only on schema change)
-FROZEN_TOOL_SCHEMAS = property(lambda _: _get_frozen_tool_schemas())  # type: ignore[assignment]
+# Module-level constant alias: call FROZEN_TOOL_SCHEMAS() to get the current frozen list.
+# Use get_registry().normalize_request(body) in the request pipeline (preferred).
+FROZEN_TOOL_SCHEMAS = _get_frozen_tool_schemas
 
 __all__ = ["ToolSchemaRegistry", "get_registry", "FROZEN_TOOL_SCHEMAS", "_get_frozen_tool_schemas"]
