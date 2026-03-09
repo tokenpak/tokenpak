@@ -11,7 +11,9 @@ Tests verify adapters handle common error scenarios gracefully:
 import pytest
 import os
 from unittest.mock import patch, MagicMock
-from openai import OpenAIError
+
+openai = pytest.importorskip("openai")
+OpenAIError = openai.OpenAIError
 
 
 class TestMissingAPIKey:
