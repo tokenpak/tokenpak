@@ -1,0 +1,26 @@
+tokenpak/registry.py:32: error: Call to untyped function "close" in typed context  [no-untyped-call]
+tokenpak/registry.py:85: error: Call to untyped function "_init_db" in typed context  [no-untyped-call]
+tokenpak/registry.py:112: error: Returning Any from function declared to return "Connection"  [no-any-return]
+tokenpak/registry.py:114: error: Function is missing a return type annotation  [no-untyped-def]
+tokenpak/registry.py:114: note: Use "-> None" if function does not return a value
+tokenpak/registry.py:173: error: Returning Any from function declared to return "bool"  [no-any-return]
+tokenpak/registry.py:234: error: Incompatible default for argument "file_type" (default has type "None", argument has type "str")  [assignment]
+tokenpak/registry.py:234: note: PEP 484 prohibits implicit Optional. Accordingly, mypy has changed its default to no_implicit_optional=True
+tokenpak/registry.py:234: note: Use https://github.com/hauntsaninja/no_implicit_optional to automatically upgrade your codebase
+tokenpak/registry.py:295: error: Function is missing a return type annotation  [no-untyped-def]
+tokenpak/registry.py:295: note: Use "-> None" if function does not return a value
+tokenpak/registry.py:301: error: Function is missing a return type annotation  [no-untyped-def]
+tokenpak/registry.py:301: note: Use "-> None" if function does not return a value
+tokenpak/registry.py:319: error: Function is missing a type annotation  [no-untyped-def]
+tokenpak/registry.py:322: error: Function is missing a type annotation  [no-untyped-def]
+tokenpak/registry.py:323: error: Call to untyped function "close" in typed context  [no-untyped-call]
+tokenpak/pack.py:55: error: Unused "type: ignore" comment  [unused-ignore]
+tokenpak/pack.py:58: error: Unused "type: ignore" comment  [unused-ignore]
+tokenpak/budgeter.py:91: error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+tokenpak/budgeter.py:97: error: Unused "type: ignore" comment  [unused-ignore]
+tokenpak/budgeter.py:99: error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+tokenpak/budgeter.py:175: error: Parameterized generics cannot be used with class or instance checks  [misc]
+tokenpak/budgeter.py:183: error: Function is missing a return type annotation  [no-untyped-def]
+tokenpak/budgeter.py:288: error: Incompatible types in assignment (expression has type "dict[Any, Any]", variable has type "EvidenceItem")  [assignment]
+tokenpak/budgeter.py:328: error: Missing type parameters for generic type "dict"  [type-arg]
+Found 20 errors in 3 files (checked 5 source files)

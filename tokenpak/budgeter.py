@@ -88,15 +88,16 @@ def _load_config(config_path: str) -> Dict[str, Any]:
 
     # Try JSON first (faster, no dep)
     try:
-        return json.loads(text)
+        from typing import cast as _cast_t
+        return _cast_t(Dict[str, Any], json.loads(text))
     except json.JSONDecodeError:
         pass
 
     # Try YAML if pyyaml is available
     try:
-        import yaml  # type: ignore
-
-        return yaml.safe_load(text)
+        import yaml
+        from typing import cast as _cast_t
+        return _cast_t(Dict[str, Any], yaml.safe_load(text))
     except ImportError:
         pass
 
@@ -172,7 +173,7 @@ def _parse_simple_yaml(text: str) -> Dict[str, Any]:
                 if current_section and current_sub:
                     sec = result.setdefault(current_section, {})
                     sub = sec.setdefault(current_sub, {})
-                    if isinstance(sub, Dict[str, Any]):
+                    if isinstance(sub, dict):
                         sub[key] = _cast(val)
 
         return result if result else _DEFAULT_CONFIG
@@ -180,7 +181,7 @@ def _parse_simple_yaml(text: str) -> Dict[str, Any]:
         return _DEFAULT_CONFIG
 
 
-def _cast(val: str):
+def _cast(val: str) -> Any:
     """Cast string to int, float, or string."""
     if val.lower() in ("true", "yes"):
         return True
@@ -270,7 +271,7 @@ class Budgeter:
             return components
 
         max_span = int(self.thresholds.get("evidence_max_span_tokens", 30))
-        new_items = []
+        new_items: List[Any] = []
         for ev in evidence["items"]:
             if hasattr(ev, "text"):
                 # EvidenceItem object — create a copy-like proxy
@@ -285,7 +286,9 @@ class Budgeter:
                 )
             else:
                 # Plain dict
-                new_ev = {**ev, "text": _truncate_tokens(ev.get("text", ""), max_span)}
+                new_ev_dict: Dict[str, Any] = {**ev, "text": _truncate_tokens(ev.get("text", ""), max_span)}
+                new_items.append(new_ev_dict)
+                continue
             new_items.append(new_ev)
 
         components["evidence"] = {**evidence, "items": new_items}
@@ -325,7 +328,7 @@ class Budgeter:
 
     # ── Main allocate API ────────────────────────────────────────────────────
 
-    def allocate(self, components: dict) -> Dict[str, Any]:
+    def allocate(self, components: Dict[str, Any]) -> Dict[str, Any]:
         """
         Allocate token budget across components, trimming as needed.
 
