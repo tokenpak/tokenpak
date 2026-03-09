@@ -1,0 +1,11 @@
+{
+  "comment": "Registry of required config fields that have been reviewed and have migration paths. Update this when adding new required fields.",
+  "known_required_fields": [
+    "goal",
+    "current_task"
+  ],
+  "migrations": {
+    "goal": "Present since v0.1.0 — no migration needed",
+    "current_task": "Present since v0.1.0 — no migration needed"
+  }
+}
