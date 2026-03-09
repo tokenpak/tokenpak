@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """ContextAssembler — OCP Phase 1: CANON references + STATE_JSON.
 
 Builds the wire-format context payload for LLM requests. Deduplicates

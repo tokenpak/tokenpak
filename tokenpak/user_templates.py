@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """User prompt templates — local CRUD with {{variable}} substitution.
 
 Templates are stored in ~/.tokenpak/templates/<name>.json

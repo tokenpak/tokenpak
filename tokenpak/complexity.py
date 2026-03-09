@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Task complexity scoring heuristic for TokenPak Shadow Mode.
 
 Scores a query + context on a 0.0–10.0 scale and classifies it into

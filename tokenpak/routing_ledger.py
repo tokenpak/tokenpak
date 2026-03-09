@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Routing Ledger for TokenPak Shadow Mode.
 
 Logs every LLM transaction to SQLite with WAL mode for concurrent access.

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Token counting utilities with caching, lazy loading, and robust truncation."""
 
 from functools import lru_cache

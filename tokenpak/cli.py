@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """TokenPak CLI with parallel processing and optimized batch operations."""
 
 import argparse

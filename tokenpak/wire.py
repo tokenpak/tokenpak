@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """TokenPak wire format generator."""
 
 import hashlib

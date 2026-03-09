@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """EvidencePack — extractive spans with provenance for OCP Phase 2.
 
 Replaces full-chunk memory dumps with compact evidence items:

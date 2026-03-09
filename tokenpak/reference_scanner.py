@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Reference Scanner — detects external references in text for compile-time injection.
 
 Scans query + context blocks for GitHub issues/PRs, bare URLs, and

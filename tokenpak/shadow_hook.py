@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Shadow Mode proxy hook for TokenPak.
 
 Lightweight integration point for the forward proxy. The proxy calls

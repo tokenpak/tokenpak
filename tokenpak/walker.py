@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Directory walker with file type detection."""
 
 import os

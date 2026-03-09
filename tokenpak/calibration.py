@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Hybrid worker calibration for TokenPak.
 
 - Static calibration: benchmark candidate worker counts and store baseline.

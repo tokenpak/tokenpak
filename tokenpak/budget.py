@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Budget allocation using quadratic importance weighting."""
 
 from dataclasses import dataclass

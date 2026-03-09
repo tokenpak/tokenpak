@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """tokenpak/report.py — Compile Report Schema.
 
 Every compile() call produces a CompileReport showing exactly what

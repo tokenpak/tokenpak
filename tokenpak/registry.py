@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Block Registry — SQLite-backed content versioning with optimized I/O.
 
 Hardened for stability:

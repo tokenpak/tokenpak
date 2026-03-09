@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Shadow Reader — Compression Validation for TokenPak.
 
 Before sending AGGRESSIVE-mode output to the LLM, validates that the

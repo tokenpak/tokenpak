@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 tokenpak.security
 =================

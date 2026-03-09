@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """tokenpak/core.py — Vault index builder (proxy-compatible format).
 
 Provides index_directory() for the rebuild-vault-index.sh script.

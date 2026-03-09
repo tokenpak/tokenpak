@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """
 # TOKENPAK CORE — DO NOT MODIFY
 TokenPak agent startup version validation.

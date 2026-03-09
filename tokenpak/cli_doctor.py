@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Comprehensive diagnostics for TokenPak installation."""
 
 import json

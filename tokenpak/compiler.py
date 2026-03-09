@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Compile-Time Tool Orchestration for TokenPak Phase 3.4.
 
 Scans context blocks + query for external references (GitHub issues, URLs,

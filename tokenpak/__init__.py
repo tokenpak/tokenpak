@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """TokenPak — Universal Content Compiler for LLMs.
 
 Public API surface for TokenPak v1.0.0.

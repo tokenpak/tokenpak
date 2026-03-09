@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """tokenpak/cache_report.py
 
 Cache report formatting for telemetry trace detail endpoint.

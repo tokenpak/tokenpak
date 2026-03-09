@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Compression Calibration for TokenPak.
 
 Tracks retry/success events per risk_class and auto-adjusts compression

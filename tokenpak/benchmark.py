@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Benchmarking for TokenPak: compression performance and latency."""
 
 import hashlib
