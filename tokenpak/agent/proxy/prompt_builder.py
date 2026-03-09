@@ -433,6 +433,137 @@ def get_stats() -> PromptCacheStats:
     return _stats
 
 
+# ---------------------------------------------------------------------------
+# High-level helpers: build_stable_prefix / build_volatile_tail
+# ---------------------------------------------------------------------------
+
+_UUID_PATTERN = re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    re.IGNORECASE,
+)
+_SHORT_HEX_PATTERN = re.compile(r"\b[0-9a-f]{12,}\b", re.IGNORECASE)
+
+
+def _strip_volatile_content(text: str) -> str:
+    """Remove known-volatile patterns from text to produce a stable key."""
+    for pat in _VOLATILE_PATTERNS:
+        text = pat.sub("", text)
+    # Strip UUIDs
+    text = _UUID_PATTERN.sub("", text)
+    text = _SHORT_HEX_PATTERN.sub("", text)
+    return text
+
+
+def build_stable_prefix(system: str, tools: list[dict[str, Any]]) -> str:
+    """
+    Build a stable, cache-friendly representation of the system prompt + tools.
+
+    The returned string:
+    - Is identical (byte-for-byte) for identical inputs
+    - Excludes timestamps, UUIDs, and any other volatile patterns
+    - Incorporates a deterministically serialized snapshot of tools
+
+    This is the string that should be used as the cache key / prefix for
+    Anthropic prompt-caching purposes.
+
+    Parameters
+    ----------
+    system:
+        The raw system prompt string (may contain dynamic content — it will
+        be stripped automatically).
+    tools:
+        List of tool schema dicts.  Serialized deterministically (sorted by name,
+        recursive key sort) and appended to the prefix.
+
+    Returns
+    -------
+    str
+        The stable prefix string.
+
+    Examples
+    --------
+    >>> prefix1 = build_stable_prefix("You are an AI.", [])
+    >>> prefix2 = build_stable_prefix("You are an AI.", [])
+    >>> prefix1 == prefix2
+    True
+    """
+    # Strip volatile content from system prompt
+    clean_system = _strip_volatile_content(system)
+
+    # Serialize tools deterministically (sorted by name, recursive key sort)
+    def _sort_keys(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _sort_keys(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, list):
+            return [_sort_keys(i) for i in obj]
+        return obj
+
+    sorted_tools = sorted([_sort_keys(t) for t in tools], key=lambda t: t.get("name", ""))
+    tools_str = json.dumps(sorted_tools, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    return f"<stable_prefix>\n{clean_system}\n<tools>\n{tools_str}\n</tools>\n</stable_prefix>"
+
+
+def build_volatile_tail(
+    user_message: str,
+    retrieved: list,
+    max_tokens: int | None = None,
+) -> str:
+    """
+    Build the volatile tail containing dynamic per-request content.
+
+    The tail has two fixed sections (in order):
+      1. ``## Retrieved Context`` — injected retrieval results (if any)
+      2. ``## User Message`` — the user's message
+
+    This order ensures the retrieval section always precedes the user message,
+    making section positions predictable for parsing.
+
+    Parameters
+    ----------
+    user_message:
+        The user's raw message text.
+    retrieved:
+        List of retrieved documents.  Each item may be a string or a dict with
+        a ``"text"`` key.
+    max_tokens:
+        Optional token cap for retrieved content.  Approximately 4 chars per
+        token.  Truncates retrieved items if the combined text exceeds the cap.
+
+    Returns
+    -------
+    str
+        The assembled volatile tail string.
+
+    Examples
+    --------
+    >>> tail = build_volatile_tail("Hello", ["doc1"])
+    >>> "## Retrieved Context" in tail
+    True
+    >>> "## User Message" in tail
+    True
+    >>> "Hello" in tail
+    True
+    """
+    # Build retrieved context section
+    retrieved_parts: list[str] = []
+    char_budget = max_tokens * 4 if max_tokens is not None else None
+
+    for item in retrieved:
+        text = item["text"] if isinstance(item, dict) else str(item)
+        if char_budget is not None:
+            if char_budget <= 0:
+                break
+            text = text[:char_budget]
+            char_budget -= len(text)
+        retrieved_parts.append(text)
+
+    retrieved_section = "## Retrieved Context\n" + "\n\n".join(retrieved_parts)
+    user_section = f"## User Message\n{user_message}"
+
+    return f"{retrieved_section}\n\n{user_section}"
+
+
 __all__ = [
     "PromptBuilder",
     "PromptParts",
@@ -440,5 +571,7 @@ __all__ = [
     "apply_stable_cache_control",
     "inject_with_cache_boundary",
     "classify_system_blocks",
+    "build_stable_prefix",
+    "build_volatile_tail",
     "get_stats",
 ]
