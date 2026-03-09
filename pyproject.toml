@@ -92,6 +92,12 @@ include = ["tokenpak*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "integration: integration tests requiring external services or running proxy",
+    "chaos: fault injection and chaos tests",
+    "slow: tests that take longer than 5 seconds",
+    "flaky: tests that may fail intermittently — run with --reruns",
+]
 
 [tool.black]
 line-length = 100
