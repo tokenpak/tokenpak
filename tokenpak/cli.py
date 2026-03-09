@@ -49,6 +49,7 @@ _COMMAND_GROUPS = {
         ("benchmark", "Run compression benchmarks"),
         ("calibrate", "Calibrate worker count for this host"),
         ("doctor", "Run diagnostics"),
+        ("dashboard", "Real-time health dashboard (TUI)"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
     ],
@@ -660,8 +661,21 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
+def cmd_dashboard(args):
+    """Real-time TokenPak health dashboard."""
+    from .agent.cli.commands.dashboard import run_dashboard
+    run_dashboard(
+        fleet=getattr(args, "fleet", False),
+        json_export=getattr(args, "json_export", False),
+    )
+
+
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
+    if getattr(args, "fleet", False):
+        from .agent.cli.commands.doctor import run_fleet_doctor
+        rc = run_fleet_doctor(fix=getattr(args, "fix", False), deploy=getattr(args, "deploy", False))
+        sys.exit(rc)
     print("\nTOKENPAK  |  Doctor")
     print("──────────────────────────────\n")
 
@@ -1004,7 +1018,14 @@ def build_parser():
 
     p_doctor = sub.add_parser("doctor", help="Run system diagnostics")
     p_doctor.add_argument("--fix", action="store_true", help="Auto-fix issues where possible")
+    p_doctor.add_argument("--fleet", action="store_true", help="Check all agents in ~/.tokenpak/fleet.yaml")
+    p_doctor.add_argument("--deploy", action="store_true", help="Push latest doctor to all agents (use with --fleet)")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI)")
+    p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary")
+    p_dashboard.add_argument("--json", dest="json_export", action="store_true", help="Export dashboard as JSON (non-interactive)")
+    p_dashboard.set_defaults(func=cmd_dashboard)
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
