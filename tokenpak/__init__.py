@@ -1,6 +1,6 @@
 """TokenPak — Universal Content Compiler for LLMs.
 
-Public API surface for TokenPak v0.1.0.
+Public API surface for TokenPak v1.0.0.
 Formalizes importable classes for agent integrations, deployment, and testing.
 
 Quick start:
