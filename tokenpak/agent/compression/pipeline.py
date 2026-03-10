@@ -95,6 +95,8 @@ class CompressionPipeline:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        *,
+        dry_run: bool = False,
     ) -> PipelineResult:
         """
         Run the full compression pipeline on *messages*.
@@ -129,6 +131,7 @@ class CompressionPipeline:
             out, instruction_stats = self._instruction_table.compress_messages(
                 out,
                 context_budget_tight=self.context_budget_tight,
+                persist=not dry_run,
             )
             instruction_replacements = instruction_stats.replacements_by_id
             instruction_savings = instruction_stats.tokens_saved_by_id

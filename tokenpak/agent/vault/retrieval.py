@@ -24,6 +24,7 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from tokenpak.agent.ingest.schema_converter import should_serve_schema
+from tokenpak.agent.memory.session_capsules import capsule_retrieval_score
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -57,7 +58,12 @@ def sort_retrieval_results(
     return sorted(
         results,
         key=lambda item: (
-            -item[1],  # score desc
+            -capsule_retrieval_score(
+                item[1],
+                (item[0].get("metadata") or {}).get("session_capsule")
+                if isinstance(item[0].get("metadata"), dict)
+                else None,
+            ),
             item[0].get("source_path", ""),  # path asc
             item[0].get("block_id", ""),  # chunk_id asc
         ),

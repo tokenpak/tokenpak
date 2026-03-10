@@ -42,7 +42,7 @@ import hashlib
 import http.client
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional, Any, Mapping
 from dataclasses import dataclass, field, asdict
 from collections import deque
@@ -1245,6 +1245,7 @@ SESSION = {
     },
     "canon_hits": 0,
     "canon_tokens_saved": 0,
+    "ingest_entries": 0,
 }
 
 # ---------------------------------------------------------------------------
@@ -1902,6 +1903,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._ollama_proxy("POST")
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
+        elif self.path == "/ingest" or self.path == "/ingest/batch":
+            self._ingest(self.path)
         else:
             # Fix #2: JSON 404 instead of HTML
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
@@ -2689,6 +2692,152 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except:
                 pass
 
+    def _ingest(self, path):
+        """Handle /ingest and /ingest/batch POST requests."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length == 0:
+            self._send_json({"error": "empty request body"}, status=400)
+            return
+        if content_length > 1024 * 1024:  # 1MB limit for ingest payloads
+            self._send_json({"error": "request body too large (max 1MB)"}, status=413)
+            return
+        
+        try:
+            body = self.rfile.read(content_length)
+            payload = json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            self._send_json({"error": f"invalid JSON: {e}"}, status=400)
+            return
+        
+        if path == "/ingest":
+            self._ingest_single(payload)
+        elif path == "/ingest/batch":
+            self._ingest_batch(payload)
+    
+    def _ingest_single(self, payload):
+        """Handle single entry ingest."""
+        if not isinstance(payload, dict):
+            self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
+            return
+        
+        # Validate required fields
+        required = {"model", "tokens", "cost"}
+        missing = required - set(payload.keys())
+        if missing:
+            self._send_json({"error": f"missing required fields: {', '.join(missing)}"}, status=400)
+            return
+        
+        try:
+            # Basic type validation
+            model = payload.get("model")
+            tokens = payload.get("tokens")
+            cost = payload.get("cost")
+            
+            if not isinstance(model, str) or not model:
+                raise ValueError("model must be a non-empty string")
+            if not isinstance(tokens, int) or tokens < 0:
+                raise ValueError("tokens must be a non-negative integer")
+            if not isinstance(cost, (int, float)) or cost < 0:
+                raise ValueError("cost must be a non-negative number")
+            
+            # Validate timestamp if provided
+            timestamp = payload.get("timestamp")
+            if timestamp is not None:
+                if not isinstance(timestamp, str):
+                    raise ValueError("timestamp must be a string")
+                # Validate ISO 8601 format
+                try:
+                    datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    raise ValueError(f"invalid ISO 8601 timestamp: {timestamp}")
+            else:
+                # Use current UTC time
+                timestamp = datetime.now(timezone.utc).isoformat()
+                payload["timestamp"] = timestamp
+            
+            # Write entry
+            entry_id = _ingest_write_entry(payload)
+            self._send_json({"status": "ok", "ids": [entry_id]}, status=200)
+            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + 1
+        except ValueError as e:
+            self._send_json({"error": str(e)}, status=422)
+        except Exception as e:
+            self._send_json({"error": f"internal error: {e}"}, status=500)
+    
+    def _ingest_batch(self, payload):
+        """Handle batch entry ingest."""
+        if not isinstance(payload, dict):
+            self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
+            return
+        
+        if "events" not in payload:
+            self._send_json({"error": "missing 'events' field"}, status=400)
+            return
+        
+        events = payload["events"]
+        if not isinstance(events, list):
+            self._send_json({"error": "events must be a list"}, status=400)
+            return
+        
+        if len(events) == 0:
+            self._send_json({"error": "events list cannot be empty"}, status=400)
+            return
+        
+        if len(events) > 1000:
+            self._send_json({"error": "events list too large (max 1000)"}, status=400)
+            return
+        
+        ids = []
+        errors = []
+        
+        for i, event in enumerate(events):
+            if not isinstance(event, dict):
+                errors.append(f"event[{i}]: expected object, got {type(event).__name__}")
+                continue
+            
+            required = {"model", "tokens", "cost"}
+            missing = required - set(event.keys())
+            if missing:
+                errors.append(f"event[{i}]: missing fields {', '.join(missing)}")
+                continue
+            
+            try:
+                model = event.get("model")
+                tokens = event.get("tokens")
+                cost = event.get("cost")
+                
+                if not isinstance(model, str) or not model:
+                    raise ValueError("model must be non-empty string")
+                if not isinstance(tokens, int) or tokens < 0:
+                    raise ValueError("tokens must be non-negative int")
+                if not isinstance(cost, (int, float)) or cost < 0:
+                    raise ValueError("cost must be non-negative number")
+                
+                timestamp = event.get("timestamp")
+                if timestamp is not None:
+                    if not isinstance(timestamp, str):
+                        raise ValueError("timestamp must be string")
+                    try:
+                        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    except ValueError:
+                        raise ValueError(f"invalid timestamp: {timestamp}")
+                else:
+                    timestamp = datetime.now(timezone.utc).isoformat()
+                    event["timestamp"] = timestamp
+                
+                entry_id = _ingest_write_entry(event)
+                ids.append(entry_id)
+            except ValueError as e:
+                errors.append(f"event[{i}]: {e}")
+        
+        # Return success if we got any entries
+        if ids:
+            self._send_json({"status": "ok", "ids": ids, "errors": errors if errors else None}, status=200)
+            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + len(ids)
+        else:
+            # All events failed
+            self._send_json({"error": f"all events failed: {'; '.join(errors)}"}, status=422)
+
     def _send_json(self, data, status=200):
         body = json.dumps(data, indent=2).encode()
         self.send_response(status)
@@ -2697,6 +2846,41 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+
+# ---------------------------------------------------------------------------
+# Ingest storage
+# ---------------------------------------------------------------------------
+INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
+
+def _ingest_write_entry(entry: Dict[str, Any]) -> str:
+    """Append a single entry to the JSONL file, return its id."""
+    entry_id = entry.setdefault("id", str(uuid.uuid4()))
+    date_str = None
+    
+    # Use timestamp date if provided, else today
+    ts = entry.get("timestamp")
+    if ts:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    
+    if date_str is None:
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    # Create entries directory
+    INGEST_ENTRIES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Append to JSONL file
+    entries_file = INGEST_ENTRIES_DIR / f"{date_str}.jsonl"
+    with open(entries_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    
+    return entry_id
 
 
 # ---------------------------------------------------------------------------

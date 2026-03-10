@@ -43,6 +43,7 @@ class InstructionTable:
         messages: list[dict[str, Any]],
         *,
         context_budget_tight: bool = True,
+        persist: bool = True,
     ) -> tuple[list[dict[str, Any]], InstructionCompressionStats]:
         out = [dict(m) for m in messages]
         stats = InstructionCompressionStats()
@@ -53,13 +54,15 @@ class InstructionTable:
 
         # If budget is not tight, leave content expanded.
         if not context_budget_tight:
-            self._save()
+            if persist:
+                self._save()
             return out, stats
 
         for idx, msg in enumerate(out):
             out[idx] = self._compress_message(msg, stats)
 
-        self._save()
+        if persist:
+            self._save()
         return out, stats
 
     def expand_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
