@@ -828,8 +828,11 @@ def _get_router():
                     def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
                         t0 = time.time()
                         try:
-                            # Phase 1: Classify intent
-                            intent = _classify_intent(user_text)
+                            # Phase 0.5: Semantic metadata dict (populated by _classify_intent)
+                            _sem_meta: dict = {}
+
+                            # Phase 1: Classify intent (semantic resolver runs first internally)
+                            intent = _classify_intent(user_text, _semantic_meta=_sem_meta)
 
                             # Phase 2: Fill slots for this intent
                             filled = self._slot_filler.fill(intent, user_text)
@@ -846,7 +849,7 @@ def _get_router():
                                     compressed = pipeline_result.messages[-1].get("content", user_text)
 
                             elapsed = int((time.time() - t0) * 1000)
-                            return _RouterResult(
+                            result = _RouterResult(
                                 ok=True,
                                 fallback=decision.fallback,
                                 intent=decision.intent,
@@ -857,6 +860,9 @@ def _get_router():
                                 capsule=None,
                                 fallback_reason=decision.fallback_reason,
                             )
+                            # Attach semantic resolution metadata for debug/tracing
+                            result.semantic_meta = _sem_meta
+                            return result
                         except Exception as e:
                             elapsed = int((time.time() - t0) * 1000)
                             return _RouterResult(
@@ -897,15 +903,42 @@ class _RouterResult:
         self.capsule = capsule
         self.error = error
         self.fallback_reason = fallback_reason
+        # Semantic resolution metadata (set by route() when SemanticResolver runs)
+        # Keys: intent_alias, intent_canonical, match_type, entity_aliases, normalized
+        self.semantic_meta: dict = {}
 
 
-def _classify_intent(text: str) -> str:
+def _classify_intent(text: str, _semantic_meta: "dict | None" = None) -> str:
     """Keyword-based intent classification — canonical intent set.
 
+    Phase 0: Semantic resolver preprocessing — maps alias variants to canonical
+             intents deterministically before keyword matching (faster path +
+             handles wording variants not in the keyword lists).
     Priority order matters: more specific checks run first.
     Returns one of: status, usage, execute, debug, summarize, plan,
                     explain, search, create, query (fallback).
+
+    Args:
+        text: Raw user input text.
+        _semantic_meta: Optional dict populated with semantic resolution metadata
+                        for router debug/tracing. Keys: intent_alias, intent_canonical,
+                        entity_aliases, normalized.
     """
+    # Phase 0: Semantic alias resolution (deterministic, no LLM)
+    try:
+        from tokenpak.semantic.resolver import get_default_resolver as _get_resolver
+        _resolver = _get_resolver()
+        _sem_result = _resolver.resolve_intent(text)
+        if _sem_result is not None:
+            # Populate metadata for caller inspection
+            if _semantic_meta is not None:
+                _semantic_meta["intent_alias"] = _sem_result.alias_matched
+                _semantic_meta["intent_canonical"] = _sem_result.canonical
+                _semantic_meta["match_type"] = _sem_result.match_type
+            return _sem_result.canonical
+    except Exception:
+        pass  # Semantic layer is best-effort; fall through to keyword matching
+
     t = text.lower()
     # status — health/liveness checks (check before debug to avoid "error" overlap)
     if any(k in t for k in ("status", "health", "is it running", "is it up", "ping",
