@@ -21,6 +21,7 @@ Env vars:
     TOKENPAK_INJECT_BUDGET    (default: 4000) — max tokens to inject from vault
     TOKENPAK_INJECT_TOP_K     (default: 5) — max vault blocks to inject
     TOKENPAK_INJECT_MIN_SCORE (default: 2.0) — minimum BM25 score to include
+    TOKENPAK_RETRIEVAL_BACKEND (default: json_blocks) — json_blocks|sqlite — vault retrieval backend
     TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
     TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
     TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
@@ -217,6 +218,7 @@ INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
 INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
 INJECT_MIN_PROMPT = int(os.environ.get("TOKENPAK_INJECT_MIN_PROMPT", "1000"))
 VAULT_INDEX_RELOAD_INTERVAL = 300  # reload vault index every 5 min
+RETRIEVAL_BACKEND = os.environ.get("TOKENPAK_RETRIEVAL_BACKEND", "json_blocks").lower()  # json_blocks|sqlite
 
 _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
@@ -691,8 +693,18 @@ def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r'[a-z0-9_]+', text.lower())
 
 
-# Global vault index instance
-VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+# Global vault index instance — backend-aware
+if RETRIEVAL_BACKEND == "sqlite":
+    try:
+        from tokenpak.agent.vault.sqlite_retrieval import SQLiteRetrievalBackend as _SQLiteBackend
+        VAULT_INDEX = _SQLiteBackend(VAULT_INDEX_PATH)
+        print(f"  📦 Vault retrieval backend: sqlite ({VAULT_INDEX_PATH})")
+    except ImportError as _sqlite_err:
+        print(f"  ⚠️  SQLite retrieval backend unavailable ({_sqlite_err}), falling back to json_blocks")
+        VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+else:
+    VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+    print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
 
 # Global capsule builder instance
 try:
