@@ -209,6 +209,10 @@ UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
 # Fix #5: Strict validation mode — reject malformed requests (vs warn-and-forward)
 STRICT_VALIDATION: bool = os.environ.get("TOKENPAK_STRICT_MODE", "0").lower() in ("1", "true", "yes", "on")
 
+# Validation gate — pre-forward runtime guardrails for deterministic path
+VALIDATION_GATE_ENABLED: bool = os.environ.get("TOKENPAK_VALIDATION_GATE", "1").lower() in ("1", "true", "yes", "on")
+VALIDATION_GATE_BUDGET_CAP: int = int(os.environ.get("TOKENPAK_VALIDATION_GATE_BUDGET_CAP", "120000"))
+
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
 INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "4000"))  # raised to 4000 for cache stability
@@ -811,7 +815,11 @@ def _get_router():
                         self._pipeline = CompressionPipeline()
                         self._slot_filler = SlotFiller()
                         self._recipe_engine = RecipeEngine()
-                        self._gate = (ValidationGate() if ValidationGate is not None and _has_validation_gate() else None)
+                        self._gate = (
+                            ValidationGate(enabled=VALIDATION_GATE_ENABLED, token_budget_cap=VALIDATION_GATE_BUDGET_CAP)
+                            if ValidationGate is not None and _has_validation_gate() and VALIDATION_GATE_ENABLED
+                            else None
+                        )
 
                     def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
                         t0 = time.time()
@@ -863,12 +871,33 @@ def _get_router():
         return _ROUTER_INSTANCE
 
 
+_VALIDATION_GATE_INSTANCE = None
+_VALIDATION_GATE_LOCK = threading.Lock()
+
+
 def _has_validation_gate() -> bool:
     try:
         from tokenpak.validation_gate import ValidationGate  # noqa
         return True
     except Exception:
         return False
+
+
+def _get_validation_gate():
+    global _VALIDATION_GATE_INSTANCE
+    if not VALIDATION_GATE_ENABLED:
+        return None
+    with _VALIDATION_GATE_LOCK:
+        if _VALIDATION_GATE_INSTANCE is None:
+            try:
+                from tokenpak.validation_gate import ValidationGate
+                _VALIDATION_GATE_INSTANCE = ValidationGate(
+                    enabled=True,
+                    token_budget_cap=VALIDATION_GATE_BUDGET_CAP,
+                )
+            except Exception:
+                return None
+        return _VALIDATION_GATE_INSTANCE
 
 
 class _RouterResult:
@@ -2011,6 +2040,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         tools_schema_changed = False
         raw_request_body_for_cache_reason = body
         final_request_body_for_cache_reason = body
+        router_meta: Optional[dict] = None
 
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
@@ -2099,6 +2129,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         try:
                             _session_id_router = self.headers.get("X-OpenClaw-Session", model)
                             body, _router_meta = _run_router(body, session_id=_session_id_router)
+                            router_meta = _router_meta
                             if _router_meta and not _router_meta.get("fallback"):
                                 print(f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)")
                         except Exception as _router_err:
@@ -2250,6 +2281,48 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 sent_input_tokens = input_tokens
 
         final_request_body_for_cache_reason = body
+
+        # Final validation gate (pre-forward): budget, deterministic context, fingerprint, dry-run
+        if should_log and is_messages and body and active_adapter.source_format != "passthrough":
+            gate = _get_validation_gate()
+            if gate is not None:
+                try:
+                    gate_result = gate.validate_request(
+                        request_body=body,
+                        model=model,
+                        input_tokens=sent_input_tokens or input_tokens,
+                        router_meta=router_meta or {},
+                    )
+                    if gate_result.fingerprint:
+                        print(f"  🧾 Determinism fingerprint: {gate_result.fingerprint}")
+                    if not gate_result.valid:
+                        self._send_json(
+                            {
+                                "error": {
+                                    "type": "validation_gate_failed",
+                                    "message": "Request blocked by validation gate",
+                                    "reasons": gate_result.errors,
+                                },
+                                "warnings": gate_result.warnings,
+                                "fingerprint": gate_result.fingerprint,
+                            },
+                            status=422,
+                        )
+                        return
+                    if gate_result.dry_run:
+                        self._send_json(
+                            {
+                                "status": "dry_run",
+                                "message": "Validation gate accepted request; upstream forward skipped",
+                                "plan": gate_result.plan,
+                                "fingerprint": gate_result.fingerprint,
+                                "warnings": gate_result.warnings,
+                            },
+                            status=200,
+                        )
+                        return
+                except Exception as _gate_err:
+                    print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
         fwd_headers = {}
         for key in self.headers:
