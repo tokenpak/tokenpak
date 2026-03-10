@@ -66,6 +66,7 @@ class DoctorConfigFileTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -126,6 +127,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -213,6 +215,7 @@ class DoctorProxyPortTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -290,6 +293,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -346,6 +350,7 @@ class DoctorLogFileTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -447,6 +452,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -490,6 +496,7 @@ class DoctorExitCodesTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -524,6 +531,7 @@ class DoctorExitCodesTest(unittest.TestCase):
         """Should exit 1 when any check fails."""
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         
         with patch('sys.stdout', new_callable=StringIO):
             with self.assertRaises(SystemExit) as cm:
@@ -563,6 +571,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 
@@ -624,6 +633,7 @@ class DoctorDependenciesTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 

@@ -228,6 +228,21 @@ class CacheTelemetryCollector:
                 return 0.0
             return self._total_hits / self._total_requests
 
+    def total(self) -> int:
+        """Total number of requests recorded."""
+        with self._lock:
+            return self._total_requests
+
+    def hits(self) -> int:
+        """Total number of cache hits recorded."""
+        with self._lock:
+            return self._total_hits
+
+    def misses(self) -> int:
+        """Total number of cache misses recorded."""
+        with self._lock:
+            return self._total_requests - self._total_hits
+
     def avg_cache_ratio(self) -> float:
         """Average per-request cache-read / total-input ratio (0.0–1.0)."""
         with self._lock:

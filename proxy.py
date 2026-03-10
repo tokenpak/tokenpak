@@ -898,8 +898,11 @@ def inject_vault_context(body_bytes: bytes, session_id: str = "") -> Tuple[bytes
                 data["system"][-1] = dict(data["system"][-1], **{"cache_control": {"type": "ephemeral"}})
             data["system"].append(volatile_block)
     else:
-        # No system prompt — add vault content directly (no caching possible here)
-        data["system"] = injection_text
+        # No system prompt — wrap vault injection in volatile block with ephemeral cache control
+        # This ensures Anthropic doesn't cache dynamic injection when system prompt is missing
+        data["system"] = [
+            {"type": "text", "text": injection_text, "cache_control": {"type": "ephemeral"}}
+        ]
 
     new_body = json.dumps(data, ensure_ascii=False).encode("utf-8")
     return new_body, tokens_used, source_refs
