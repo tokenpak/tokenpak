@@ -83,6 +83,18 @@ except ImportError:
         return body_bytes
 
 # ---------------------------------------------------------------------------
+# Tool Schema Registry — normalizes tools array to byte-identical JSON
+# Enables Anthropic prompt cache hits on repeated tool calls
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_tool_registry
+    TOOL_REGISTRY_AVAILABLE = True
+except ImportError:
+    TOOL_REGISTRY_AVAILABLE = False
+    def _get_tool_registry():
+        return None
+
+# ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
 # ---------------------------------------------------------------------------
 @dataclass
@@ -190,6 +202,12 @@ BUDGET_TOTAL_TOKENS: int = int(os.environ.get("TOKENPAK_BUDGET_TOTAL", "12000"))
 
 # Chat footer — inject stats into SSE stream (visible in chat)
 CHAT_FOOTER_ENABLED: bool = os.environ.get("TOKENPAK_CHAT_FOOTER", "0").lower() in ("1", "true", "yes", "on")
+
+# Fix #3: Configurable upstream timeout (default 300s)
+UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
+
+# Fix #5: Strict validation mode — reject malformed requests (vs warn-and-forward)
+STRICT_VALIDATION: bool = os.environ.get("TOKENPAK_STRICT_MODE", "0").lower() in ("1", "true", "yes", "on")
 
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
@@ -1282,6 +1300,65 @@ def compact_text(text: str) -> str:
     return t
 
 
+_UUID_PATTERN = re.compile(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b', re.IGNORECASE)
+_TIMESTAMP_PATTERN = re.compile(
+    r'\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?\b'
+)
+_HEARTBEAT_COUNTER = re.compile(r'Heartbeat\s*#?\s*\d+', re.IGNORECASE)
+
+def _strip_cache_poisons(body_bytes: bytes) -> bytes:
+    """
+    Strip dynamic content that breaks prompt cache hits:
+    - ISO timestamps embedded in prompts (e.g. "Current time: 2026-03-09T17:00:00Z")
+    - UUIDs embedded in prompts (e.g. "request_id: a1b2c3d4-...")
+    - Heartbeat counters (e.g. "Heartbeat #1287")
+    Only strips from message content strings, not from metadata fields.
+    Fails open — returns original body if any error occurs.
+    """
+    try:
+        data = json.loads(body_bytes)
+        changed = False
+
+        def _scrub(text: str) -> str:
+            nonlocal changed
+            original = text
+            text = _UUID_PATTERN.sub("[id]", text)
+            text = _TIMESTAMP_PATTERN.sub("[time]", text)
+            text = _HEARTBEAT_COUNTER.sub("Heartbeat", text)
+            if text != original:
+                changed = True
+            return text
+
+        def _scrub_content(content):
+            if isinstance(content, str):
+                return _scrub(content)
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        part["text"] = _scrub(part["text"])
+            return content
+
+        # Scrub message content
+        for msg in data.get("messages", []):
+            if isinstance(msg, dict):
+                msg["content"] = _scrub_content(msg.get("content", ""))
+
+        # Scrub system prompt (only text parts, not cache_control blocks)
+        system = data.get("system")
+        if isinstance(system, str):
+            data["system"] = _scrub(system)
+        elif isinstance(system, list):
+            for part in system:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    part["text"] = _scrub(part["text"])
+
+        if changed:
+            return json.dumps(data, ensure_ascii=False).encode("utf-8")
+        return body_bytes
+    except Exception:
+        return body_bytes  # fail-open
+
+
 def compact_request_body(body_bytes: bytes, adapter: Optional[FormatAdapter] = None):
     """
     Style-contract-aware compaction.
@@ -1474,6 +1551,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "skeleton": {"enabled": SKELETON_ENABLED},
                 "shadow_reader": {"enabled": SHADOW_ENABLED},
                 "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
+                "tool_schema_registry": {
+                    "enabled": TOOL_REGISTRY_AVAILABLE,
+                    **((_get_tool_registry().stats() if _get_tool_registry() else {}) if TOOL_REGISTRY_AVAILABLE else {}),
+                },
+                "cache_poison_removal": {"enabled": True},
+                "strict_validation": {"enabled": STRICT_VALIDATION},
+                "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
+                "circuit_breakers": {p: {"open": cb["open"], "failures": cb["failures"]} for p, cb in _provider_circuits.items()},
                 "stats": SESSION,
             })
             return
@@ -1787,6 +1872,25 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 pass
 
         if should_log and is_messages and body:
+            # Fix #5: Strict validation mode — reject malformed requests early
+            if STRICT_VALIDATION:
+                try:
+                    _val_data = json.loads(body)
+                    _val_errors = []
+                    if "messages" not in _val_data:
+                        _val_errors.append("missing required field: messages")
+                    if "model" not in _val_data:
+                        _val_errors.append("missing required field: model")
+                    msgs = _val_data.get("messages", [])
+                    if not isinstance(msgs, list) or len(msgs) == 0:
+                        _val_errors.append("messages must be a non-empty array")
+                    if _val_errors:
+                        self._send_json({"error": {"type": "validation_error", "message": "; ".join(_val_errors)}}, status=400)
+                        return
+                except json.JSONDecodeError as _je:
+                    self._send_json({"error": {"type": "invalid_json", "message": str(_je)}}, status=400)
+                    return
+
             _original_body = body  # save for fallback
             try:
                 model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
@@ -1797,6 +1901,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     pass
 
                 if pipeline_enabled:
+                    # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
+                    # Enables Anthropic cache hits on repeated tool schemas
+                    if TOOL_REGISTRY_AVAILABLE and body:
+                        try:
+                            _tool_reg = _get_tool_registry()
+                            if _tool_reg:
+                                body, _tools_changed = _tool_reg.normalize_request(body)
+                                _tstats = _tool_reg.stats()
+                                SESSION["tool_schema_frozen_tools"] = _tstats.get("frozen_tools", 0)
+                                SESSION["tool_schema_bytes_saved"] = _tool_reg.bytes_saved
+                        except Exception as _treg_err:
+                            pass  # fail-open: never break a request over tool registry
+
                     # Phase 0: Manual routing rules — rewrite model before any processing
                     try:
                         from tokenpak.routing.rules import RouteEngine, _extract_prompt_text, _count_tokens_approx
@@ -1862,6 +1979,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         capsule_stage.duration_ms = (time.time() - t_capsule) * 1000
                         if trace:
                             trace.stages.append(capsule_stage)
+
+                    # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
+                    # Must run BEFORE stable cache control so the stable prefix stays bit-identical
+                    if body:
+                        body = _strip_cache_poisons(body)
 
                     # Phase 1: Vault context injection (BEFORE compaction)
                     t_inject = time.time()
@@ -1990,9 +2112,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         try:
             if parsed.scheme == "https":
                 ctx = ssl.create_default_context()
-                conn = http.client.HTTPSConnection(parsed.netloc, timeout=300, context=ctx)
+                conn = http.client.HTTPSConnection(parsed.netloc, timeout=UPSTREAM_TIMEOUT, context=ctx)
             else:
-                conn = http.client.HTTPConnection(parsed.netloc, timeout=300)
+                conn = http.client.HTTPConnection(parsed.netloc, timeout=UPSTREAM_TIMEOUT)
             path = parsed.path
             if parsed.query:
                 path += "?" + parsed.query
@@ -2006,6 +2128,33 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _circuit_record_success(_cb_provider)
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
+
+            # Fix #4: Normalize upstream error responses to unified JSON shape
+            # Anthropic returns {"type":"error","error":{...},"request_id":"..."}
+            # We normalize all 4xx/5xx to {"error":{"type":...,"message":...}}
+            _resp_content_type = resp.getheader("Content-Type", "")
+            if status >= 400 and "application/json" in _resp_content_type and not is_sse:
+                try:
+                    _err_raw = resp.read()
+                    _err_data = json.loads(_err_raw)
+                    # Anthropic shape: {"type":"error","error":{"type":...,"message":...}}
+                    if "type" in _err_data and _err_data.get("type") == "error" and "error" in _err_data:
+                        _inner = _err_data["error"]
+                        _normalized = {"error": {"type": _inner.get("type", "upstream_error"), "message": _inner.get("message", ""), "request_id": _err_data.get("request_id", "")}}
+                    # OpenAI shape: {"error":{"message":...,"type":...,"code":...}}
+                    elif "error" in _err_data and isinstance(_err_data["error"], dict):
+                        _normalized = _err_data  # already correct shape
+                    else:
+                        _normalized = {"error": {"type": "upstream_error", "message": str(_err_data)}}
+                    _err_body = json.dumps(_normalized, indent=2).encode()
+                    self.send_response(status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", len(_err_body))
+                    self.end_headers()
+                    self.wfile.write(_err_body)
+                    return
+                except Exception:
+                    resp = type("FakeResp", (), {"read": lambda self: _err_raw, "getheaders": lambda self: [], "getheader": lambda self, k, d="": d})()
 
             self.send_response(status)
             for h_key, h_val in resp.getheaders():
