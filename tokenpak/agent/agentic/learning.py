@@ -803,3 +803,92 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
     else:
         print("⚡  Quality-per-Token  — no data yet")
     print()
+
+
+# ---------------------------------------------------------------------------
+# Integration: memory_promoter bridge
+# ---------------------------------------------------------------------------
+
+
+def record_lesson(
+    lesson_id: str,
+    content: str,
+    outcome: Optional[float] = None,
+    specificity_score: float = 0.5,
+    material_savings: float = 0.0,
+    metadata: Optional[dict] = None,
+    memory_path: Optional[str] = None,
+) -> "object":
+    """Record a lesson observation via the memory promotion system.
+
+    Delegates to memory_promoter.record_lesson(). New lessons start at Tier 1
+    and may be promoted via run_memory_promotion() once sufficient evidence
+    is accumulated.
+
+    Args:
+        lesson_id:         Unique lesson key (e.g. "model_routing_CODING").
+        content:           Human-readable description of what was learned.
+        outcome:           1.0 = success, 0.0 = failure, None = unknown.
+        specificity_score: How actionable the lesson is (0.0–1.0).
+        material_savings:  Estimated reduction in future work (0.0–1.0).
+        metadata:          Optional extra context.
+        memory_path:       Override path to memory_tiers.json.
+
+    Returns:
+        Lesson dataclass from memory_promoter.
+    """
+    from tokenpak.agent.agentic.memory_promoter import (
+        DEFAULT_MEMORY_PATH,
+        record_lesson as _record,
+    )
+
+    return _record(
+        lesson_id=lesson_id,
+        content=content,
+        outcome=outcome,
+        specificity_score=specificity_score,
+        material_savings=material_savings,
+        metadata=metadata,
+        memory_path=memory_path or DEFAULT_MEMORY_PATH,
+    )
+
+
+def run_memory_promotion(
+    memory_path: Optional[str] = None,
+) -> Dict[str, str]:
+    """Run a full promotion + demotion sweep over all tracked lessons.
+
+    Promotes lessons that pass tier gates, demotes expired/unused ones,
+    and removes Tier-1 lessons that have exceeded their TTL.
+
+    Args:
+        memory_path: Override path to memory_tiers.json.
+
+    Returns:
+        Dict of {lesson_id: action_taken} for all modified lessons.
+    """
+    from tokenpak.agent.agentic.memory_promoter import (
+        DEFAULT_MEMORY_PATH,
+        promote_all,
+    )
+
+    return promote_all(memory_path=memory_path or DEFAULT_MEMORY_PATH)
+
+
+def get_durable_lessons(
+    memory_path: Optional[str] = None,
+) -> list:
+    """Return all Tier 4 (Durable / permanent) lessons.
+
+    Args:
+        memory_path: Override path to memory_tiers.json.
+
+    Returns:
+        List of Lesson dataclasses.
+    """
+    from tokenpak.agent.agentic.memory_promoter import (
+        DEFAULT_MEMORY_PATH,
+        get_durable_lessons as _get_durable,
+    )
+
+    return _get_durable(memory_path=memory_path or DEFAULT_MEMORY_PATH)
