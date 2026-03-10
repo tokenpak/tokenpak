@@ -227,6 +227,7 @@ ADAPTER_REGISTRY = build_default_registry()
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
     """
     Auto-discover upstream routes from openclaw.json tokenpak-* provider mirrors.
+    Supports current OpenClaw shape at `models.providers` and legacy root `providers`.
     """
     cfg_path = Path.home() / ".openclaw" / "openclaw.json"
     if not cfg_path.exists():
@@ -237,7 +238,18 @@ def _load_openclaw_upstream_overrides() -> Dict[str, str]:
     except Exception:
         return {}
 
-    providers = cfg.get("providers", {})
+    providers = None
+    models = cfg.get("models")
+    if isinstance(models, dict):
+        model_providers = models.get("providers")
+        if isinstance(model_providers, dict):
+            providers = model_providers
+
+    if providers is None:
+        legacy_providers = cfg.get("providers")
+        if isinstance(legacy_providers, dict):
+            providers = legacy_providers
+
     if not isinstance(providers, dict):
         return {}
 
@@ -246,6 +258,12 @@ def _load_openclaw_upstream_overrides() -> Dict[str, str]:
         "openai": "openai-chat",
         "openai-codex": "openai-responses",
         "google": "google-generative-ai",
+        # P0 providers
+        "openrouter": "openai-chat",
+        "litellm": "openai-chat",
+        "vercel-ai-gateway": "openai-chat",
+        "kilocode": "openai-responses",
+        "bedrock": "anthropic-messages",
     }
 
     overrides: Dict[str, str] = {}
@@ -255,6 +273,8 @@ def _load_openclaw_upstream_overrides() -> Dict[str, str]:
         if not isinstance(entry, dict):
             continue
         source_provider = entry.get("source_provider") or name[len("tokenpak-"):]
+        if not isinstance(source_provider, str):
+            continue
         source_entry = providers.get(source_provider)
         if not isinstance(source_entry, dict):
             continue
@@ -265,7 +285,7 @@ def _load_openclaw_upstream_overrides() -> Dict[str, str]:
         mapped = aliases.get(source_provider)
         if mapped:
             overrides[mapped] = base_url
-            # OpenAI upstream usually shared for both Chat + Responses.
+            # OpenAI-compatible upstreams are usually shared for Chat + Responses.
             if mapped == "openai-chat":
                 overrides.setdefault("openai-responses", base_url)
 
@@ -300,7 +320,19 @@ UPSTREAM_ROUTES = _build_upstream_routes()
 
 
 def _resolve_upstream(adapter: FormatAdapter) -> str:
-    return UPSTREAM_ROUTES.get(adapter.source_format, adapter.get_default_upstream())
+    mapped = UPSTREAM_ROUTES.get(adapter.source_format)
+    if mapped:
+        return mapped
+
+    # Hard fail for passthrough: unknown/undetected providers must be explicitly routed.
+    if adapter.source_format == "passthrough":
+        raise ValueError(
+            "No upstream route mapping for passthrough requests. "
+            "Configure models.providers tokenpak-* source providers or set "
+            "TOKENPAK_UPSTREAM_PASSTHROUGH."
+        )
+
+    return adapter.get_default_upstream()
 
 
 def _extract_host(url: str) -> str:
@@ -1812,7 +1844,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
     def _reverse_proxy(self, method):
         headers = _header_mapping(self.headers)
         adapter = _detect_adapter(path=self.path, headers=headers, body_bytes=None)
-        base = _resolve_upstream(adapter)
+        try:
+            base = _resolve_upstream(adapter)
+        except ValueError as exc:
+            self._send_json(
+                {
+                    "error": {
+                        "type": "upstream_route_missing",
+                        "message": str(exc),
+                    }
+                },
+                status=502,
+            )
+            return
         self._proxy_to(base + self.path, method, adapter=adapter)
 
     def _proxy_to(self, target_url, method, force_intercept=False, adapter: Optional[FormatAdapter] = None):
