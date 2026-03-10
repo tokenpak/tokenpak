@@ -567,7 +567,7 @@ async def handle_circuit_breakers(request: Request) -> JSONResponse:
 
 async def handle_sessions(request: Request) -> JSONResponse:
     from tokenpak.agent.dashboard.session_filter import FilterParams
-    qs = str(request.query_string, "utf-8") if isinstance(request.query_string, bytes) else request.query_string
+    qs = str(request.query_string, "utf-8") if isinstance(request.query_string, bytes) else request.query_string  # type: ignore[attr-defined]
     try:
         params = FilterParams.from_query_string(qs)
     except (ValueError, TypeError) as exc:
@@ -926,7 +926,7 @@ async def run_async_proxy(
     server = uvicorn.Server(config)
 
     # Suppress uvicorn's default signal handlers (ProxyServer manages shutdown)
-    server.install_signal_handlers = lambda: None
+    server.install_signal_handlers = lambda: None  # type: ignore[attr-defined]
 
     tasks = [asyncio.create_task(server.serve())]
 

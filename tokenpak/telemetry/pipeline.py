@@ -27,9 +27,9 @@ except Exception:
     _shadow_hook = None  # type: ignore
 
 try:
-    from tokenpak.complexity import classify_intent as _classify_intent
+    from tokenpak.complexity import classify_intent as _classify_intent  # type: ignore
 except Exception:
-    _classify_intent = None  # type: ignore
+    _classify_intent = None  # type: ignore  # type: ignore
 
 try:
     from tokenpak.shadow_reader import validate as _shadow_validate
@@ -213,10 +213,10 @@ class TelemetryPipeline:
 
         # Classify intent (fail-silent)
         intent = "unknown"
-        if _classify_intent is not None:
+        if _classify_intent is not None:  # type: ignore
             try:
                 query = str(event.get("query", event.get("messages", "")))[:500]
-                ic = _classify_intent(query)
+                ic = _classify_intent(query)  # type: ignore
                 intent = ic.value if hasattr(ic, "value") else str(ic)
             except Exception:
                 pass
@@ -336,7 +336,7 @@ class TelemetryPipeline:
             _o = event.get("_original")
             if _c and _o:
                 try:
-                    _shadow_validate(_o, _c)
+                    _shadow_validate(_o, _c)  # type: ignore
                 except Exception:
                     pass
 

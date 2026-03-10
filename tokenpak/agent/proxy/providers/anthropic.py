@@ -189,7 +189,7 @@ class AnthropicFormat:
         """
         block = {"type": "text", "text": content}
         if cache_control:
-            block["cache_control"] = {"type": "ephemeral"}
+            block["cache_control"] = {"type": "ephemeral"}  # type: ignore[assignment]
 
         system = data.get("system", "")
 

@@ -37,7 +37,7 @@ _DB_PATH = os.environ.get("TOKENPAK_AB_DB", "")
 
 def _get_store() -> ABOptimizerStore:
     if not hasattr(_get_store, "_instance"):
-        _get_store._instance = ABOptimizerStore(_DB_PATH or ABOptimizerStore.__init__.__defaults__)  # type: ignore[attr-defined]
+        _get_store._instance = ABOptimizerStore(_DB_PATH or ABOptimizerStore.__init__.__defaults__)  # type: ignore[attr-defined, arg-type]
     return _get_store._instance  # type: ignore[attr-defined]
 
 

@@ -4,6 +4,7 @@ Pre-compiled regex patterns for ~30% faster processing.
 """
 
 import re
+from typing import List
 
 # ============================================================
 # PRE-COMPILED PATTERNS (module-level for reuse)

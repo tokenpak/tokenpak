@@ -22,11 +22,11 @@ class OpenAIMessage:
     def to_dict(self) -> Dict[str, Any]:
         d = {"role": self.role}
         if self.content is not None:
-            d["content"] = self.content
+            d["content"] = self.content  # type: ignore[assignment]
         if self.name:
             d["name"] = self.name
         if self.tool_calls:
-            d["tool_calls"] = self.tool_calls
+            d["tool_calls"] = self.tool_calls  # type: ignore[assignment]
         if self.tool_call_id:
             d["tool_call_id"] = self.tool_call_id
         return d

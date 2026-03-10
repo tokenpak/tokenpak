@@ -120,8 +120,8 @@ class FilterParams:
             from_dt=_first("from"),
             to_dt=_first("to"),
             status=_first("status"),
-            limit=int(_first("limit")) if _first("limit") else None,
-            offset=int(_first("offset")) if _first("offset") else None,
+            limit=int(_first("limit")) if _first("limit") else None,  # type: ignore[arg-type]
+            offset=int(_first("offset")) if _first("offset") else None,  # type: ignore[arg-type]
         )
 
 

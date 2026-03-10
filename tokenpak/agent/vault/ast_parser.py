@@ -61,8 +61,8 @@ class ASTParser:
 
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                kind = "function" if not self._is_method(node, tree) else "method"
-                sig = self._python_signature(node, lines)
+                kind = "function" if not self._is_method(node, tree) else "method"  # type: ignore
+                sig = self._python_signature(node, lines)  # type: ignore
                 docstring = ast.get_docstring(node)
                 decorators = [f"@{self._unparse(d)}" for d in node.decorator_list]
                 nodes.append(

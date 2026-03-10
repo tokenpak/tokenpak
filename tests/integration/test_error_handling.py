@@ -12,8 +12,9 @@ import pytest
 import os
 from unittest.mock import patch, MagicMock
 
-openai = pytest.importorskip("openai")
-OpenAIError = openai.OpenAIError
+# Guard: skip entire module if openai is not installed (prevents collection errors)
+pytest.importorskip("openai")
+from openai import OpenAIError
 
 
 class TestMissingAPIKey:

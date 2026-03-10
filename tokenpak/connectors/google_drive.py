@@ -126,7 +126,7 @@ class GoogleDriveConnector(Connector):
         """Convert Drive API file to RemoteFile."""
         return RemoteFile(
             path=drive_file.get("name", "unknown"),
-            source_id=drive_file.get("id"),
+            source_id=drive_file.get("id"),  # type: ignore
             size_bytes=int(drive_file.get("size", 0)),
             modified_at=drive_file.get("modifiedTime", datetime.now().isoformat()),
             file_type=drive_file.get("mimeType"),

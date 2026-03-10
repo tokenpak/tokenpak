@@ -45,8 +45,8 @@ def blocks_to_messages(
     total_tokens = 0
 
     for block in blocks:
-        raw = getattr(block, "compressed_content", None) or getattr(block, "content", "")
-        tokens = getattr(block, "compressed_tokens", None) or _estimate_tokens(raw)
+        raw = getattr(block, "compressed_content", None) or getattr(block, "content", "")  # type: ignore
+        tokens = getattr(block, "compressed_tokens", None) or _estimate_tokens(raw)  # type: ignore
 
         if compaction != "none" and total_tokens + tokens > budget:
             if compaction == "aggressive":
@@ -55,7 +55,7 @@ def blocks_to_messages(
                 if remaining < 50:
                     break
                 approx_chars = remaining * 4
-                raw = raw[:approx_chars] + "\n…[truncated]"
+                raw = (raw or "")[:approx_chars] + "\n…[truncated]"
                 tokens = _estimate_tokens(raw)
             elif compaction == "balanced":
                 # Try engine compaction first
@@ -66,14 +66,14 @@ def blocks_to_messages(
                     engine = get_engine("heuristic")
                     remaining = max(50, budget - total_tokens)
                     hints = CompactionHints(target_tokens=remaining, aggressive=False)
-                    raw = engine.compact(raw, hints)
+                    raw = engine.compact(raw, hints)  # type: ignore
                     tokens = _estimate_tokens(raw)
                 except Exception:
                     # Fallback: plain truncate
                     remaining = max(0, budget - total_tokens)
                     if remaining < 50:
                         break
-                    raw = raw[: remaining * 4] + "\n…"
+                    raw = (raw or "")[: remaining * 4] + "\n…"
                     tokens = _estimate_tokens(raw)
 
         wire_blocks.append(

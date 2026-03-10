@@ -184,8 +184,8 @@ def compile_with_refs(
             )
 
             for key, (ref, content) in results.items():
-                _cache_put(ref, content, cache)
-                fetched_blocks.append(_build_ephemeral_block(ref, content))
+                _cache_put(ref, content, cache)  # type: ignore[arg-type]
+                fetched_blocks.append(_build_ephemeral_block(ref, content))  # type: ignore[arg-type]
 
         # Prune and save cache
         cache = _prune_stale(cache)

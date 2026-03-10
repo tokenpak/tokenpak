@@ -124,10 +124,10 @@ class GoogleFormat:
         data = {"contents": contents}
 
         if system_instruction:
-            data["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+            data["systemInstruction"] = {"parts": [{"text": system_instruction}]}  # type: ignore[assignment]
 
         if generation_config:
-            data["generationConfig"] = generation_config
+            data["generationConfig"] = generation_config  # type: ignore[assignment]
 
         data.update(kwargs)
 

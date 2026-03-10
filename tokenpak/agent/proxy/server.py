@@ -58,6 +58,7 @@ from tokenpak.agent.dashboard.session_filter import (
 )
 from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
+from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +346,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/stats/session":
             self._send_json(ps.session_stats())
+            return
+        if path == "/cache-stats":
+            self._send_json(_get_cache_collector().summary())
             return
         if path == "/traces":
             traces = ps.trace_storage.get_all()
@@ -715,6 +719,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                         continue
                     self.send_header(h_key, h_val)
+                # Debug header: stable prefix hash for cache determinism verification.
+                # Emitted for all messages requests (not just intercepted hosts)
+                # so integration tests and local stubs can verify determinism.
+                if is_messages:
+                    _ph = _compute_stable_prefix_hash(body)
+                    if _ph:
+                        self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
                 self.end_headers()
 
                 resp_body = resp.content
@@ -757,6 +768,36 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cost_saved"] += cost_saved
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
+
+                # Record cache telemetry
+                try:
+                    _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
+                    _miss_reason: Optional[str] = None
+                    if cache_read_tokens == 0:
+                        # Heuristic miss-reason diagnosis (best-effort)
+                        try:
+                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                        except Exception:
+                            _body_text = ""
+                        import re as _re
+                        if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
+                            _miss_reason = "timestamp"
+                        elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
+                            _miss_reason = "uuid"
+                    _get_cache_collector().record(CacheMetrics(
+                        request_id=trace.request_id if trace else str(uuid.uuid4()),
+                        stable_prefix_tokens=sent_input_tokens,
+                        stable_cached=(cache_read_tokens > 0),
+                        cache_miss_reason=_miss_reason,
+                        volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
+                        total_input_tokens=input_tokens,
+                        cache_read_tokens=cache_read_tokens,
+                        cache_creation_tokens=cache_creation_tokens,
+                        output_tokens=output_tokens,
+                    ))
+                except Exception:
+                    pass  # telemetry must never break request handling
+
                 # Track per-request compression ratio for rolling average
                 if input_tokens > 0:
                     ratio = round(saved / input_tokens, 4)
@@ -895,6 +936,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 # Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
 
+def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
+    """
+    Compute a short SHA-256 hash of the stable system prefix.
+
+    Used to populate X-Tokenpak-Cache-Prefix-Hash response header for
+    determinism verification in integration tests and debug tooling.
+
+    Returns a 16-char hex string, or "" if unavailable.
+    """
+    if not body:
+        return ""
+    try:
+        import hashlib
+        data = json.loads(body)
+        system = data.get("system")
+        if not system:
+            return ""
+        if isinstance(system, str):
+            stable_text = system.strip()
+        elif isinstance(system, list):
+            from .prompt_builder import classify_system_blocks
+            stable_blocks, _ = classify_system_blocks(system)
+            stable_text = "\n".join(
+                b.get("text", "")
+                for b in stable_blocks
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        else:
+            return ""
+        if not stable_text:
+            return ""
+        return hashlib.sha256(stable_text.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return ""
+
+
 def _estimate_tokens_from_body(body: bytes) -> int:
     try:
         data = json.loads(body)
@@ -981,6 +1058,34 @@ class ProxyServer:
             )
         except Exception:  # pragma: no cover — import failure falls back gracefully
             self.request_hook = request_hook
+
+        # Wire apply_stable_cache_control into the pipeline.
+        # Runs AFTER any capsule/compression processing, BEFORE forwarding to LLM.
+        # Ensures every Anthropic request with a system prompt gets a stable cache
+        # prefix marker — enabling prompt cache reuse across requests.
+        try:
+            from .prompt_builder import apply_stable_cache_control
+            _prior_hook = self.request_hook
+
+            def _stable_cache_hook(
+                body: bytes,
+                model: str,
+                trace=None,
+                *,
+                _hook=_prior_hook,
+                _scc=apply_stable_cache_control,
+            ):
+                if _hook is not None:
+                    body, sent, raw, protected = _hook(body, model, trace)
+                else:
+                    _tok = len(body) // 4
+                    body, sent, raw, protected = body, _tok, _tok, 0
+                body = _scc(body)
+                return body, sent, raw, protected
+
+            self.request_hook = _stable_cache_hook
+        except Exception:  # pragma: no cover — import failure gracefully degrades
+            pass
 
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)

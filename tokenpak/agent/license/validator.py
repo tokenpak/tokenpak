@@ -185,7 +185,7 @@ class LicenseValidator:
             if env_key:
                 self._public_pem = env_key.encode()
             else:
-                self._public_pem = None
+                self._public_pem = None  # type: ignore
 
         self._seat_registry = seat_registry or SeatRegistry()
 

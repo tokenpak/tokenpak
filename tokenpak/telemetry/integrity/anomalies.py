@@ -260,7 +260,7 @@ class AnomalyDetector:
 
         return None
 
-    def record_anomaly(self, anomaly: Anomaly) -> int:
+    def record_anomaly(self, anomaly: Anomaly) -> int | None:
         """Record detected anomaly in database."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -286,7 +286,7 @@ class AnomalyDetector:
 
         return anomaly_id
 
-    def get_recent_anomalies(self, since: str = None, limit: int = 50) -> List[Dict]:
+    def get_recent_anomalies(self, since: str | None = None, limit: int = 50) -> List[Dict]:
         """Get recent anomalies."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

@@ -94,7 +94,7 @@ def _fetch_github(ref: Reference) -> Optional[str]:
         return None
 
     # Fetch comments if issue has any
-    comments = []
+    comments: list[dict] = []
     comments_url = data.get("comments_url")
     if comments_url and data.get("comments", 0) > 0:
         raw = _gh_get(f"{comments_url}?per_page={_MAX_COMMENTS}&page=1")
