@@ -10,6 +10,7 @@ from typing import Callable, Optional
 from tokenpak.processors import get_processor
 from tokenpak.tokens import count_tokens
 from tokenpak.walker import detect_file_type, walk_directory
+from tokenpak.agent.ingest.schema_converter import convert_document
 
 from .blocks import BlockRecord, BlockStore, get_block_store
 from .symbols import SymbolTable
@@ -69,6 +70,8 @@ class VaultIndexer:
         compressed_tokens = count_tokens(compressed)
         block_id = f"{path}#{content_hash[:8]}"
 
+        schema_info = convert_document(content, filename=path)
+
         record = BlockRecord(
             block_id=block_id,
             path=path,
@@ -77,6 +80,10 @@ class VaultIndexer:
             raw_tokens=raw_tokens,
             compressed_tokens=compressed_tokens,
             compressed_content=compressed,
+            metadata={
+                "doc_type": schema_info.get("doc_type"),
+                "schema": schema_info.get("schema"),
+            },
         )
         self.blocks.save(record)
 
