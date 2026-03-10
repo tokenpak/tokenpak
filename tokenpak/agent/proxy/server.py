@@ -1007,6 +1007,63 @@ def _extract_response_tokens(body: bytes) -> int:
 # ProxyServer — public API
 # ---------------------------------------------------------------------------
 
+def auto_detect_upstream(request_headers: dict) -> str:
+    """
+    Detect target upstream from request headers.
+    
+    Supports zero-config mode: when no explicit provider URL is configured,
+    this function uses request headers to identify the intended LLM provider
+    and route to the correct upstream.
+    
+    Header priority:
+    1. Authorization: Bearer sk-ant-* → Anthropic
+    2. Authorization: Bearer sk-* (non-Anthropic) → OpenAI
+    3. x-goog-api-key → Google
+    4. anthropic-* headers → Anthropic
+    5. Default → Anthropic (most common reverse-proxy use case)
+    
+    Args:
+        request_headers: Dictionary of HTTP request headers (case-insensitive lookup)
+    
+    Returns:
+        Upstream provider base URL
+        
+    Examples:
+        >>> auto_detect_upstream({"authorization": "Bearer sk-ant-abc123"})
+        'https://api.anthropic.com'
+        
+        >>> auto_detect_upstream({"authorization": "Bearer sk-openai-xyz"})
+        'https://api.openai.com'
+        
+        >>> auto_detect_upstream({"x-goog-api-key": "AIza..."})
+        'https://generativelanguage.googleapis.com'
+    """
+    # Case-insensitive header lookup
+    lower_headers = {k.lower(): v for k, v in request_headers.items()}
+    
+    # Check Authorization header
+    auth = lower_headers.get("authorization", "").lower()
+    
+    # Anthropic token pattern: sk-ant-*
+    if auth.startswith("bearer sk-ant-"):
+        return "https://api.anthropic.com"
+    
+    # OpenAI token pattern: sk-* (but not sk-ant-*)
+    if auth.startswith("bearer sk-"):
+        return "https://api.openai.com"
+    
+    # Google API key
+    if "x-goog-api-key" in lower_headers:
+        return "https://generativelanguage.googleapis.com"
+    
+    # Anthropic-specific headers (x-api-key, anthropic-version, etc)
+    if "x-api-key" in lower_headers or "anthropic-version" in lower_headers:
+        return "https://api.anthropic.com"
+    
+    # Default to Anthropic (most common reverse-proxy use case)
+    return "https://api.anthropic.com"
+
+
 class ProxyServer:
     """
     TokenPak HTTP proxy server.
@@ -1131,6 +1188,7 @@ class ProxyServer:
                 signal.signal(signal.SIGINT, self._handle_signal)
 
             print(f"TokenPak proxy listening on {self.host}:{self.port} [{self.compilation_mode}]")
+            print("  ✓ Zero-config mode enabled (auto-detecting upstream from request headers)")
             try:
                 server.serve_forever()
             except KeyboardInterrupt:
