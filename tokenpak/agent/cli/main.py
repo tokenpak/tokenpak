@@ -259,6 +259,12 @@ def cmd_help(args):
                 ("optimize --apply", "Auto-apply optimization recommendations (Pro+)"),
                 ("cost", "Token usage and cost reporting"),
                 ("budget intelligence", "Burn rate, ETA, trend, suggestions (Pro+)"),
+                ("prune", "Remove low-priority blocks from store (Pro+)"),
+                ("prune --dry-run", "Preview prune candidates without changes (Pro+)"),
+                ("prune --auto", "Auto-prune without confirmation (Pro+)"),
+                ("retain <id>", "Pin a block so it survives pruning (Pro+)"),
+                ("retain --list", "Show all pinned blocks (Pro+)"),
+                ("retain --remove <id>", "Unpin a block (Pro+)"),
             ],
         ),
     ]
@@ -308,6 +314,32 @@ def _diff_argparse(argv: list) -> None:
     dp.add_argument("--since", default=None, help="Diff from specific ISO timestamp")
     args = dp.parse_args(argv)
     run_diff_cmd(args)
+
+
+def _prune_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.prune import run_prune
+
+    pp = argparse.ArgumentParser(prog="tokenpak prune", add_help=True)
+    pp.add_argument("--auto", action="store_true", help="Auto-prune without confirmation")
+    pp.add_argument("--dry-run", dest="dry_run", action="store_true", help="Preview without changes")
+    pp.add_argument(
+        "--threshold", type=float, default=0.4, metavar="SCORE",
+        help="Quality score below which blocks are pruned (default: 0.4)"
+    )
+    pp.add_argument("--json", dest="as_json", action="store_true", help="Output raw JSON")
+    args = pp.parse_args(argv)
+    run_prune(auto=args.auto, dry_run=args.dry_run, threshold=args.threshold, as_json=args.as_json)
+
+
+def _retain_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.retain import run_retain
+
+    rp = argparse.ArgumentParser(prog="tokenpak retain", add_help=True)
+    rp.add_argument("block_id", nargs="?", default=None, help="Block ID to pin")
+    rp.add_argument("--list", dest="list_pins", action="store_true", help="Show all pinned blocks")
+    rp.add_argument("--remove", metavar="BLOCK_ID", default=None, help="Unpin a block")
+    args = rp.parse_args(argv)
+    run_retain(block_id=args.block_id, list_pins=args.list_pins, remove=args.remove)
 
 
 def _budget_argparse(argv: list) -> None:
@@ -503,6 +535,16 @@ def main():
     # Delegate diff subcommand (Pro+)
     if len(sys.argv) > 1 and sys.argv[1] == "diff":
         _diff_argparse(sys.argv[2:])
+        return
+
+    # Delegate prune subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "prune":
+        _prune_argparse(sys.argv[2:])
+        return
+
+    # Delegate retain subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "retain":
+        _retain_argparse(sys.argv[2:])
         return
 
     # Delegate Enterprise policy/sla/compliance commands
