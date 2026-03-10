@@ -17,4 +17,5 @@ __all__ = [
     "last",
     "workflow",
     "replay",
+    "teacher",
 ]
