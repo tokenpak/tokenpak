@@ -73,6 +73,17 @@ from tokenpak.telemetry.collector import TelemetryCollector
 # Token Counting (Level 1 — single import, zero config)
 # ---------------------------------------------------------------------------
 from tokenpak.tokens import count_tokens
+from tokenpak.trace import (  # noqa: F401
+    TokenPakTrace,
+    TraceBuilder,
+    attach_trace_header,
+    attach_trace_envelope,
+    strip_trace,
+    strip_trace_header,
+    read_trace_header,
+    read_trace_envelope,
+    assert_no_leak,
+)
 
 
 # ---------------------------------------------------------------------------
