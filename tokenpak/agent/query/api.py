@@ -239,7 +239,7 @@ class EntryStore:
                     "sample_count": len(ratios),
                 }
             )
-        result.sort(key=lambda x: x["agent_id"])
+        result.sort(key=lambda x: x["agent_id"])  # type: ignore
         return result
 
     def usage_summary(self, date: str) -> dict[str, Any]:

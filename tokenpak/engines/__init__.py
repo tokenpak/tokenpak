@@ -10,7 +10,7 @@ try:
     LLMLINGUA_AVAILABLE = True
 except ImportError:
     LLMLINGUA_AVAILABLE = False
-    LLMLinguaEngine = None  # type: ignore[assignment]
+    LLMLinguaEngine = None  # type: ignore[assignment, misc]
 
 ENGINES = {
     "heuristic": HeuristicEngine,

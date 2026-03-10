@@ -29,7 +29,7 @@ try:
         return _enc.decode(tokens[:max_tokens]) + "..."
 
 except ImportError:
-    _enc = None
+    _enc = None  # type: ignore[assignment]
 
     def _count_tokens(text: str) -> int:
         # Rough approximation: 1 token ≈ 4 chars

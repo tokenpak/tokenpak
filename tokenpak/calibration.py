@@ -58,7 +58,7 @@ def _candidate_workers(max_workers: int = 8) -> List[int]:
 
 def _sample_files(directory: str, max_files: int = 150) -> List[Tuple[str, str, str]]:
     files = list(walk_directory(directory))
-    return files[:max_files]
+    return files[:max_files]  # type: ignore
 
 
 def _run_index_once(files: List[Tuple[str, str, str]], workers: int) -> float:
@@ -137,7 +137,7 @@ def calibrate_workers(directory: str, max_workers: int = 8, rounds: int = 2) -> 
         avg = sum(runs) / len(runs)
         scores[w] = avg
 
-    best_workers = min(scores, key=scores.get)
+    best_workers = min(scores, key=scores.get)  # type: ignore
 
     profile = load_profile()
     host = _host_key()

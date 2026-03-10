@@ -239,7 +239,7 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
         quality_score=1.0,
         importance=5.0,
     )
-    return (path, content, block)
+    return (path, content, block)  # type: ignore[return-value]
 
 
 def cmd_index(args):
@@ -1796,7 +1796,7 @@ def cmd_config_validate(args):
 
     if errors:
         print("\n❌ Errors:")
-        for e in errors:
+        for e in errors:  # type: ignore[misc]
             print(f"   {e}")
     if warnings:
         print("\n⚠️  Warnings:")

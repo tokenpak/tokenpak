@@ -145,7 +145,7 @@ class _AnthropicToOpenAIStream:
                 "max_tokens": "length",
                 "stop_sequence": "stop",
             }
-            self._finish_reason = finish_map.get(stop_reason, "stop")
+            self._finish_reason = finish_map.get(stop_reason, "stop")  # type: ignore
             # Emit final chunk with finish_reason
             chunk = self._chunk({}, finish_reason=self._finish_reason)
             return _sse_line(chunk)

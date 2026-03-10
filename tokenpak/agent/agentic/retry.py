@@ -524,5 +524,5 @@ class RetryEngine:
         raise RetryExhaustedError(
             context=self.context,
             partial_state=self.partial_state,
-            attempts=self.attempts,
+            attempts=self.attempts,  # type: ignore
         )

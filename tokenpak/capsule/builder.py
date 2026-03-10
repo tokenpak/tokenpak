@@ -314,7 +314,7 @@ class CapsuleBuilder:
 
         if not modified:
             ratio = 1.0
-            stats: Dict[str, Any] = {
+            stats: Dict[str, Any] = {  # type: ignore[no-redef]
                 "blocks_capsulized": 0,
                 "chars_in": total_chars_in,
                 "chars_out": total_chars_in,
