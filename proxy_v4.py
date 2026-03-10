@@ -799,13 +799,14 @@ def _get_router():
                 from tokenpak.agent.compression.pipeline import CompressionPipeline
                 from tokenpak.agent.compression.slot_filler import SlotFiller
                 from tokenpak.agent.compression.recipes import RecipeEngine
+                from tokenpak.agent.proxy.intent_policy import decide as _policy_decide
                 try:
                     from tokenpak.validation_gate import ValidationGate
                 except ImportError:
                     ValidationGate = None  # type: ignore[assignment,misc]
 
                 class _DeterministicRouter:
-                    """Thin router wrapping the compression pipeline with intent + recipe selection."""
+                    """Classifier-first router: intent → slots → deterministic recipe/action."""
                     def __init__(self):
                         self._pipeline = CompressionPipeline()
                         self._slot_filler = SlotFiller()
@@ -815,25 +816,44 @@ def _get_router():
                     def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
                         t0 = time.time()
                         try:
+                            # Phase 1: Classify intent
                             intent = _classify_intent(user_text)
-                            msgs = [{"role": "user", "content": user_text}]
-                            result = self._pipeline.run(msgs)
-                            compressed = result.messages[-1].get("content", user_text) if result.messages else user_text
+
+                            # Phase 2: Fill slots for this intent
+                            filled = self._slot_filler.fill(intent, user_text)
+
+                            # Phase 3: Deterministic policy decision (intent + slots → recipe + action)
+                            decision = _policy_decide(intent, filled.slots, filled.confidence)
+
+                            # Phase 4: Compress via pipeline (skipped for low-cost intents)
+                            compressed = user_text
+                            if decision.action.compress:
+                                msgs = [{"role": "user", "content": user_text}]
+                                pipeline_result = self._pipeline.run(msgs)
+                                if pipeline_result.messages:
+                                    compressed = pipeline_result.messages[-1].get("content", user_text)
+
                             elapsed = int((time.time() - t0) * 1000)
                             return _RouterResult(
-                                ok=True, fallback=False,
-                                intent=intent, recipe_id="pipeline-v1",
-                                slots={}, elapsed_ms=elapsed,
-                                compressed_text=compressed, capsule=None,
+                                ok=True,
+                                fallback=decision.fallback,
+                                intent=decision.intent,
+                                recipe_id=decision.recipe_id,
+                                slots=decision.slots_used,
+                                elapsed_ms=elapsed,
+                                compressed_text=compressed,
+                                capsule=None,
+                                fallback_reason=decision.fallback_reason,
                             )
                         except Exception as e:
                             elapsed = int((time.time() - t0) * 1000)
                             return _RouterResult(
                                 ok=False, fallback=True,
-                                intent="unknown", recipe_id="",
+                                intent="unknown", recipe_id="pipeline-v1",
                                 slots={}, elapsed_ms=elapsed,
                                 compressed_text="", capsule=None,
                                 error=str(e),
+                                fallback_reason=f"exception:{type(e).__name__}",
                             )
 
                 _ROUTER_INSTANCE = _DeterministicRouter()
@@ -854,7 +874,7 @@ def _has_validation_gate() -> bool:
 class _RouterResult:
     """Lightweight result object from router.route()."""
     def __init__(self, ok, fallback, intent, recipe_id, slots, elapsed_ms,
-                 compressed_text="", capsule=None, error=""):
+                 compressed_text="", capsule=None, error="", fallback_reason=""):
         self.ok = ok
         self.fallback = fallback
         self.intent = intent
@@ -864,21 +884,54 @@ class _RouterResult:
         self.compressed_text = compressed_text
         self.capsule = capsule
         self.error = error
+        self.fallback_reason = fallback_reason
 
 
 def _classify_intent(text: str) -> str:
-    """Simple keyword-based intent classification."""
+    """Keyword-based intent classification — canonical intent set.
+
+    Priority order matters: more specific checks run first.
+    Returns one of: status, usage, execute, debug, summarize, plan,
+                    explain, search, create, query (fallback).
+    """
     t = text.lower()
-    if any(k in t for k in ("explain", "what is", "how does", "describe")):
-        return "explain"
-    if any(k in t for k in ("find", "search", "look up", "where")):
-        return "search"
-    if any(k in t for k in ("write", "create", "generate", "build", "implement")):
-        return "create"
-    if any(k in t for k in ("fix", "debug", "error", "bug", "broken")):
+    # status — health/liveness checks (check before debug to avoid "error" overlap)
+    if any(k in t for k in ("status", "health", "is it running", "is it up", "ping",
+                              "uptime", "alive", "reachable", "available")):
+        return "status"
+    # usage — cost/token analytics (check before search/query)
+    if any(k in t for k in ("usage", "cost", "spend", "how much", "token count",
+                              "billing", "how many tokens")):
+        return "usage"
+    # execute — imperative run/deploy/start commands
+    if any(k in t for k in ("run ", "execute", "start ", "deploy", "launch", "trigger",
+                              "kick off", "fire")):
+        return "execute"
+    # debug — error diagnosis
+    if any(k in t for k in ("fix", "debug", "error", "bug", "broken", "failing",
+                              "exception", "traceback", "crash", "why is")):
         return "debug"
-    if any(k in t for k in ("summarize", "tldr", "brief", "recap")):
+    # summarize — condensing content
+    if any(k in t for k in ("summarize", "tldr", "brief", "recap", "summary",
+                              "condense", "digest")):
         return "summarize"
+    # plan — architecture / design / roadmap
+    if any(k in t for k in ("plan", "design", "architect", "roadmap", "strategy",
+                              "approach", "what should i", "how should i")):
+        return "plan"
+    # explain — knowledge / conceptual questions
+    if any(k in t for k in ("explain", "what is", "how does", "describe", "tell me about",
+                              "what does", "how do")):
+        return "explain"
+    # search — lookups and finding things
+    if any(k in t for k in ("find", "search", "look up", "where", "locate", "which",
+                              "list all")):
+        return "search"
+    # create — code / artifact generation
+    if any(k in t for k in ("write", "create", "generate", "build", "implement",
+                              "make a", "add a", "new ")):
+        return "create"
+    # query — safe catch-all fallback
     return "query"
 
 
@@ -921,18 +974,23 @@ def _run_router(body_bytes: bytes, session_id: str = "") -> Tuple[bytes, Optiona
 
     try:
         result = router.route(user_text, session_id=session_id)
-        meta = {
+        meta: Dict[str, Any] = {
             "intent": result.intent,
             "recipe_used": result.recipe_id,
             "fallback": result.fallback,
             "total_ms": result.elapsed_ms,
         }
+        # Surface slot extraction for debugging and downstream consumers
+        if result.slots:
+            meta["slots"] = result.slots
+        if hasattr(result, "fallback_reason") and result.fallback_reason:
+            meta["fallback_reason"] = result.fallback_reason
         if hasattr(result, "error") and result.error:
             meta["error"] = result.error
         return body_bytes, meta
     except Exception as e:
         return body_bytes, {"fallback": True, "error": str(e), "intent": "unknown",
-                            "recipe_used": "", "total_ms": 0}
+                            "recipe_used": "pipeline-v1", "total_ms": 0}
 
 
 def _router_health() -> dict:
