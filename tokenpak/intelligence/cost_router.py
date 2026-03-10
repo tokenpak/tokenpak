@@ -162,13 +162,13 @@ async def cost_projections(
     try:
         cost_values = [float(v.strip()) for v in daily_costs.split(",") if v.strip()]
     except ValueError:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"error": "Invalid daily_costs — must be comma-separated floats"},
         )
 
     if not cost_values:
-        return JSONResponse(
+        return JSONResponse(  # type: ignore[return-value]
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"error": "daily_costs must contain at least one value"},
         )

@@ -643,7 +643,7 @@ def create_app(
             from tokenpak.capsule import CapsuleBuilder
 
             builder = CapsuleBuilder()
-            capsule = builder.build(
+            capsule = builder.build(  # type: ignore[attr-defined]
                 segments=body.segments,
                 budget_tokens=body.budget_tokens,
                 session_id=body.session_id,

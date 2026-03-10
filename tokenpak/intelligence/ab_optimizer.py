@@ -599,7 +599,7 @@ class ABOptimizerStore:
                     exp_id,
                 ),
             )
-        return self.get_experiment(exp_id)
+        return self.get_experiment(exp_id)  # type: ignore[return-value]
 
     def cancel_experiment(self, exp_id: str) -> Experiment:
         """Cancel an active experiment."""
@@ -612,7 +612,7 @@ class ABOptimizerStore:
                 """UPDATE experiments SET status=?, completed_at=? WHERE id=?""",
                 (ExperimentStatus.CANCELLED.value, now, exp_id),
             )
-        return self.get_experiment(exp_id)
+        return self.get_experiment(exp_id)  # type: ignore[return-value]
 
     def get_results(self, exp_id: str) -> Dict[str, Any]:
         """Full results for an experiment including significance test."""

@@ -109,7 +109,7 @@ def sync_batch(
                 result["uploaded"] = len(records)
                 result["synced_ids"] = synced_ids
                 if 400 <= status < 500:
-                    result["errors"].append(f"Server rejected batch with HTTP {status}")
+                    result["errors"].append(f"Server rejected batch with HTTP {status}")  # type: ignore
                 return result
             # 5xx: retry
             last_error = Exception(f"HTTP {status}")
@@ -119,7 +119,7 @@ def sync_batch(
         if attempt < MAX_RETRIES:
             time.sleep(BASE_BACKOFF_S * (2 ** (attempt - 1)))
 
-    result["errors"].append(f"Failed after {MAX_RETRIES} attempts: {last_error}")
+    result["errors"].append(f"Failed after {MAX_RETRIES} attempts: {last_error}")  # type: ignore
     result["skipped"] = len(records)
     return result
 

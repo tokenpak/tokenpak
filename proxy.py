@@ -174,6 +174,16 @@ except ImportError:
         return body_bytes
 
 # ---------------------------------------------------------------------------
+# ToolSchemaRegistry — freeze tool schemas for prompt-cache stability
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_tool_schema_registry
+    TOOL_SCHEMA_REGISTRY_AVAILABLE = True
+except ImportError:
+    TOOL_SCHEMA_REGISTRY_AVAILABLE = False
+    _get_tool_schema_registry = None  # type: ignore[assignment]
+
+# ---------------------------------------------------------------------------
 # Router feature flag — disabled by default, opt-in via env var
 # ---------------------------------------------------------------------------
 ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_ROUTER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
@@ -852,23 +862,41 @@ def inject_vault_context(body_bytes: bytes, session_id: str = "") -> Tuple[bytes
         pass  # ⚠️ swallow: _exc captured
         return body_bytes, 0, []
 
-    # Fix 1: cache_control goes on the STATIC system prompt, NOT on the vault injection.
-    # This lets Anthropic cache the static prefix. Vault injection is dynamic (after cache boundary).
+    # Fix 1: cache_control goes on the last STABLE system block, NOT on the vault injection.
+    # Uses classify_system_blocks() to skip timestamp/UUID-containing volatile blocks.
+    # Vault injection goes AFTER the cache boundary — dynamic, never cached.
     system = data.get("system", "")
+    volatile_block = {"type": "text", "text": injection_text}  # no cache_control — dynamic
     if isinstance(system, str):
         data["system"] = [
             {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}},
-            {"type": "text", "text": injection_text},  # no cache_control — dynamic
+            volatile_block,
         ]
     elif isinstance(system, list):
-        # Mark the last existing block as the cache boundary, then append vault content
-        if data["system"]:
-            data["system"][-1] = dict(data["system"][-1], **{"cache_control": {"type": "ephemeral"}})
-        data["system"].append({
-            "type": "text",
-            "text": injection_text,
-            # no cache_control — vault injection is dynamic, should not be cached
-        })
+        # Classify blocks: skip over volatile (timestamp-containing) blocks to find last stable
+        if PROMPT_BUILDER_AVAILABLE:
+            try:
+                from tokenpak.agent.proxy.prompt_builder import classify_system_blocks as _classify
+                # Remove existing cache_control before reclassifying (idempotent)
+                clean = [{k: v for k, v in b.items() if k != "cache_control"} if isinstance(b, dict) else b
+                         for b in data["system"]]
+                stable_blocks, existing_volatile = _classify(clean)
+                if stable_blocks:
+                    # Mark last stable block as cache boundary
+                    last = dict(stable_blocks[-1])
+                    last["cache_control"] = {"type": "ephemeral"}
+                    stable_blocks[-1] = last
+                data["system"] = stable_blocks + existing_volatile + [volatile_block]
+            except Exception:
+                # Fallback: mark last existing block
+                if data["system"]:
+                    data["system"][-1] = dict(data["system"][-1], **{"cache_control": {"type": "ephemeral"}})
+                data["system"].append(volatile_block)
+        else:
+            # Fallback: mark last existing block (naive but functional)
+            if data["system"]:
+                data["system"][-1] = dict(data["system"][-1], **{"cache_control": {"type": "ephemeral"}})
+            data["system"].append(volatile_block)
     else:
         # No system prompt — add vault content directly (no caching possible here)
         data["system"] = injection_text
@@ -1737,6 +1765,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     body = _reroute_body_model(body, _HEARTBEAT_ROUTE_MODEL)
                     model = _HEARTBEAT_ROUTE_MODEL
                     print(f"  🔀 Heartbeat routing: {_original_model} → {model}")
+
+                # Phase 0.5: Freeze tool schemas (deterministic byte-for-byte identity)
+                # Must run BEFORE vault injection so tools are stable across all requests.
+                if TOOL_SCHEMA_REGISTRY_AVAILABLE and _get_tool_schema_registry is not None:
+                    try:
+                        body, _schema_changed = _get_tool_schema_registry().normalize_request(body)
+                        if _schema_changed:
+                            print("  🔧 Tool schemas updated (cache will miss this request)")
+                    except Exception as _tsr_err:
+                        import logging as _log
+                        _log.getLogger(__name__).warning("Tool schema registry error (skipping): %s", _tsr_err)
 
                 # Phase 1: Vault context injection (BEFORE compaction)
                 t_inject = time.time()

@@ -57,12 +57,12 @@ class DataProcessor:
                 if i >= 15:  # Limit keys shown
                     schema["..."] = f"({len(data) - 15} more keys)"
                     break
-                schema[key] = self._extract_json_schema(value, depth + 1, max_depth)
+                schema[key] = self._extract_json_schema(value, depth + 1, max_depth)  # type: ignore[assignment]
             return schema
         elif isinstance(data, list):
             if len(data) == 0:
                 return "[]"
-            return [self._extract_json_schema(data[0], depth + 1, max_depth)]
+            return [self._extract_json_schema(data[0], depth + 1, max_depth)]  # type: ignore[return-value]
         elif isinstance(data, str):
             return "string"
         elif isinstance(data, bool):

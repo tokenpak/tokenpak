@@ -1,198 +1,316 @@
 """
 tokenpak/cache/telemetry.py
 
-CacheMetrics and CacheTelemetryCollector — lightweight telemetry for tracking
-Anthropic prompt-cache hit/miss behaviour per request.
+Cache telemetry for the TokenPak proxy.
+
+Tracks per-request cache hit/miss data and aggregates into session-level
+statistics.  Designed for zero-overhead when no consumers are attached:
+``CacheTelemetryCollector.record()`` is always O(1) with bounded memory.
+
+Classes
+-------
+CacheMetrics          — per-request snapshot (dataclass)
+CacheTelemetryCollector — thread-safe session-level aggregator
 
 Usage::
 
-    from tokenpak.cache.telemetry import CacheMetrics, CacheTelemetryCollector
+    from tokenpak.cache.telemetry import (
+        CacheMetrics,
+        CacheTelemetryCollector,
+        get_collector,
+    )
 
-    collector = CacheTelemetryCollector()
-
-    # Record a cache hit
+    # Record a request
+    collector = get_collector()
     collector.record(CacheMetrics(
         request_id="req_001",
-        stable_prefix_tokens=15000,
+        stable_prefix_tokens=15_000,
         stable_cached=True,
-        cache_read_tokens=13500,
-        total_input_tokens=15000,
+        cache_read_tokens=13_500,
+        total_input_tokens=15_200,
+        volatile_tail_tokens=200,
+        output_tokens=512,
     ))
 
-    # Inspect aggregates
-    print(collector.hit_rate())          # 1.0
-    print(collector.by_miss_reason())    # {}
+    # Query aggregate stats
+    print(collector.hit_rate())         # 1.0
+    print(collector.avg_cache_ratio())  # 0.888...
+    print(collector.summary())          # dict with all KPIs
 """
 
 from __future__ import annotations
 
 import threading
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+
+__all__ = [
+    "CacheMetrics",
+    "CacheTelemetryCollector",
+    "get_collector",
+    "reset_collector",
+]
+
+# ---------------------------------------------------------------------------
+# Per-request metrics
+# ---------------------------------------------------------------------------
+
+# Estimated cost-saving multiplier for cache-read tokens vs fresh input tokens.
+# Anthropic charges ~10% for cache reads vs full price for fresh input.
+_CACHE_READ_COST_MULTIPLIER = 0.10
 
 
 @dataclass
 class CacheMetrics:
-    """Per-request cache telemetry snapshot.
+    """Snapshot of cache behaviour for a single proxy request.
 
-    Attributes
+    Parameters
     ----------
     request_id:
-        Unique identifier for the request (used for deduplication).
+        Unique identifier for the request (any string; auto-generated if
+        ``""`` is passed, but callers should supply a meaningful id).
     stable_prefix_tokens:
-        Approximate token count of the stable system prefix.
+        Estimated token count of the *stable* portion of the prompt that
+        is expected to be cache-resident after the first request.
     stable_cached:
-        True if Anthropic returned cache_read_input_tokens > 0, indicating
-        the stable prefix was served from cache.
-    cache_read_tokens:
-        Tokens read from cache (from Anthropic usage.cache_read_input_tokens).
-    total_input_tokens:
-        Total input tokens for the request.
+        True when the LLM reported cache-read tokens > 0.
     cache_miss_reason:
-        Human-readable reason for cache miss (e.g. "timestamp", "retrieval",
-        "cold_start", "schema_change").  Empty/None on cache hit.
+        Human-readable diagnosis string when the cache missed.
+        ``None`` means cache hit (or unknown miss, not diagnosed).
     volatile_tail_tokens:
-        Approximate token count of the volatile tail (user message + injection).
+        Tokens in the *volatile* tail (user message + tool call etc.).
+    total_input_tokens:
+        Total input token count as reported by the LLM API response.
+    cache_read_tokens:
+        Tokens served from the prompt cache (``cache_read_input_tokens``
+        in Anthropic's usage object).
     cache_creation_tokens:
-        Tokens written to cache (from Anthropic usage.cache_creation_input_tokens).
+        Tokens written into the prompt cache for this request
+        (``cache_creation_input_tokens``).
+    output_tokens:
+        Output / completion tokens for this request.
+    timestamp:
+        Unix epoch seconds when the request was recorded.
     """
 
     request_id: str
     stable_prefix_tokens: int
     stable_cached: bool
-    cache_read_tokens: int
-    total_input_tokens: int
+
     cache_miss_reason: Optional[str] = None
     volatile_tail_tokens: int = 0
+    total_input_tokens: int = 0
+    cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    output_tokens: int = 0
+    timestamp: float = field(default_factory=time.time)
+
+    # ------------------------------------------------------------------
+    # Derived properties
+    # ------------------------------------------------------------------
 
     @property
-    def effective_tokens(self) -> int:
-        """Tokens actually processed (total minus cached)."""
-        return self.total_input_tokens - self.cache_read_tokens
+    def cache_hit(self) -> bool:
+        """True when the prompt cache served at least one token."""
+        return self.cache_read_tokens > 0
 
     @property
-    def cache_ratio(self) -> float:
+    def cache_hit_ratio(self) -> float:
         """Fraction of input tokens served from cache (0.0–1.0)."""
         if self.total_input_tokens == 0:
             return 0.0
         return self.cache_read_tokens / self.total_input_tokens
 
+    @property
+    def cost_saved(self) -> float:
+        """Estimated relative cost saving from cache reads.
+
+        Cache reads cost ~10% of fresh token price, so we save ~90% on
+        those tokens.  The value is expressed in *equivalent fresh token*
+        units (multiply by your per-token price to get dollars).
+        """
+        return self.cache_read_tokens * (1.0 - _CACHE_READ_COST_MULTIPLIER)
+
+    def to_dict(self) -> dict:
+        return {
+            "request_id": self.request_id,
+            "stable_prefix_tokens": self.stable_prefix_tokens,
+            "stable_cached": self.stable_cached,
+            "cache_hit": self.cache_hit,
+            "cache_hit_ratio": round(self.cache_hit_ratio, 4),
+            "cache_miss_reason": self.cache_miss_reason,
+            "volatile_tail_tokens": self.volatile_tail_tokens,
+            "total_input_tokens": self.total_input_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "cache_creation_tokens": self.cache_creation_tokens,
+            "output_tokens": self.output_tokens,
+            "cost_saved": round(self.cost_saved, 2),
+            "timestamp": self.timestamp,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Session-level aggregator
+# ---------------------------------------------------------------------------
+
+_MAX_RECENT = 100  # keep last N requests in memory
+
 
 class CacheTelemetryCollector:
-    """Thread-safe collector for CacheMetrics records.
+    """Thread-safe session-level cache telemetry aggregator.
 
-    Aggregates hit rate and miss reason breakdown across multiple requests.
+    All public methods are safe to call from multiple threads.
 
-    >>> collector = CacheTelemetryCollector()
-    >>> collector.record(CacheMetrics(request_id="r1", stable_prefix_tokens=1000,
-    ...     stable_cached=True, cache_read_tokens=900, total_input_tokens=1000))
-    >>> collector.hit_rate()
-    1.0
-    >>> collector.total()
-    1
+    Parameters
+    ----------
+    max_recent:
+        Maximum number of per-request ``CacheMetrics`` objects to retain
+        in memory.  Older entries are dropped (FIFO) to bound memory use.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_recent: int = _MAX_RECENT) -> None:
         self._lock = threading.Lock()
-        self._records: List[CacheMetrics] = []
+        self._recent: List[CacheMetrics] = []
+        self._max_recent = max_recent
+
+        # Running totals (never reset; allow computing session-lifetime KPIs)
+        self._total_requests: int = 0
+        self._total_hits: int = 0
+        self._total_cache_read_tokens: int = 0
+        self._total_cache_creation_tokens: int = 0
+        self._total_input_tokens: int = 0
+        self._total_output_tokens: int = 0
+        self._total_cost_saved: float = 0.0
+        self._miss_reasons: Dict[str, int] = {}
 
     # ------------------------------------------------------------------
-    # Recording
+    # Write path
     # ------------------------------------------------------------------
 
     def record(self, metrics: CacheMetrics) -> None:
-        """Append a CacheMetrics record to the collector."""
-        with self._lock:
-            self._records.append(metrics)
+        """Record a single request's cache metrics.
 
-    def clear(self) -> None:
-        """Remove all records."""
+        Parameters
+        ----------
+        metrics:
+            A populated ``CacheMetrics`` instance.
+        """
         with self._lock:
-            self._records.clear()
+            # Update running totals
+            self._total_requests += 1
+            if metrics.cache_hit:
+                self._total_hits += 1
+            self._total_cache_read_tokens += metrics.cache_read_tokens
+            self._total_cache_creation_tokens += metrics.cache_creation_tokens
+            self._total_input_tokens += metrics.total_input_tokens
+            self._total_output_tokens += metrics.output_tokens
+            self._total_cost_saved += metrics.cost_saved
+
+            if metrics.cache_miss_reason:
+                key = metrics.cache_miss_reason
+                self._miss_reasons[key] = self._miss_reasons.get(key, 0) + 1
+
+            # Bounded recent list
+            self._recent.append(metrics)
+            if len(self._recent) > self._max_recent:
+                self._recent.pop(0)
 
     # ------------------------------------------------------------------
-    # Aggregates
+    # Read path (aggregate KPIs)
     # ------------------------------------------------------------------
-
-    def total(self) -> int:
-        """Total number of records."""
-        with self._lock:
-            return len(self._records)
-
-    def hits(self) -> int:
-        """Number of cache-hit records."""
-        with self._lock:
-            return sum(1 for r in self._records if r.stable_cached)
-
-    def misses(self) -> int:
-        """Number of cache-miss records."""
-        with self._lock:
-            return sum(1 for r in self._records if not r.stable_cached)
 
     def hit_rate(self) -> float:
-        """Fraction of requests that were cache hits (0.0–1.0).
-
-        Returns 0.0 when no records have been collected.
-        """
+        """Fraction of requests that were cache hits (0.0–1.0)."""
         with self._lock:
-            total = len(self._records)
-            if total == 0:
+            if self._total_requests == 0:
                 return 0.0
-            hit_count = sum(1 for r in self._records if r.stable_cached)
-            return hit_count / total
-
-    def by_miss_reason(self) -> Dict[str, int]:
-        """Return a dict mapping miss reason → count.
-
-        Only includes miss records (stable_cached=False) that have a
-        non-empty cache_miss_reason.
-
-        >>> c = CacheTelemetryCollector()
-        >>> from tokenpak.cache.telemetry import CacheMetrics
-        >>> c.record(CacheMetrics("r1", 100, False, 0, 100, "timestamp"))
-        >>> c.record(CacheMetrics("r2", 100, False, 0, 100, "timestamp"))
-        >>> c.record(CacheMetrics("r3", 100, False, 0, 100, "retrieval"))
-        >>> c.by_miss_reason()
-        {'timestamp': 2, 'retrieval': 1}
-        """
-        result: Dict[str, int] = {}
-        with self._lock:
-            for r in self._records:
-                if not r.stable_cached and r.cache_miss_reason:
-                    result[r.cache_miss_reason] = result.get(r.cache_miss_reason, 0) + 1
-        return result
+            return self._total_hits / self._total_requests
 
     def avg_cache_ratio(self) -> float:
-        """Average cache_ratio across all records."""
+        """Average per-request cache-read / total-input ratio (0.0–1.0)."""
         with self._lock:
-            if not self._records:
-                return 0.0
-            return sum(r.cache_ratio for r in self._records) / len(self._records)
+            recent = list(self._recent)
+        if not recent:
+            return 0.0
+        ratios = [m.cache_hit_ratio for m in recent]
+        return sum(ratios) / len(ratios)
+
+    def by_miss_reason(self) -> Dict[str, int]:
+        """Return a copy of the miss-reason histogram."""
+        with self._lock:
+            return dict(self._miss_reasons)
+
+    def recent_requests(self, n: int = 10) -> List[dict]:
+        """Return the last *n* requests as dicts (newest last)."""
+        with self._lock:
+            snapshot = list(self._recent)
+        return [m.to_dict() for m in snapshot[-n:]]
 
     def summary(self) -> dict:
-        """Return a dict summarising collector state."""
+        """Return all KPIs as a JSON-serialisable dict."""
         with self._lock:
-            total = len(self._records)
-            hits = sum(1 for r in self._records if r.stable_cached)
+            total = self._total_requests
+            hits = self._total_hits
             misses = total - hits
-            reasons: Dict[str, int] = {}
-            for r in self._records:
-                if not r.stable_cached and r.cache_miss_reason:
-                    reasons[r.cache_miss_reason] = reasons.get(r.cache_miss_reason, 0) + 1
-            return {
-                "total": total,
-                "hits": hits,
-                "misses": misses,
-                "hit_rate": hits / total if total > 0 else 0.0,
-                "miss_reasons": reasons,
-            }
+            hit_rate = hits / total if total else 0.0
+            miss_rate = misses / total if total else 0.0
+            reasons = dict(self._miss_reasons)
+            cost_saved = round(self._total_cost_saved, 2)
+            cache_read = self._total_cache_read_tokens
+            cache_creation = self._total_cache_creation_tokens
+            input_total = self._total_input_tokens
+            output_total = self._total_output_tokens
+            recent_snap = list(self._recent)
 
-    def __repr__(self) -> str:  # pragma: no cover
-        return (
-            f"<CacheTelemetryCollector total={self.total()} "
-            f"hit_rate={self.hit_rate():.0%}>"
-        )
+        # Compute avg_cache_ratio outside the lock (from already-captured snapshot)
+        if recent_snap:
+            avg_ratio = sum(m.cache_hit_ratio for m in recent_snap) / len(recent_snap)
+        else:
+            avg_ratio = 0.0
+
+        recent_dicts = [m.to_dict() for m in recent_snap[-10:]]
+
+        return {
+            "total_requests": total,
+            "cache_hits": hits,
+            "cache_misses": misses,
+            "hit_rate": round(hit_rate, 4),
+            "miss_rate": round(miss_rate, 4),
+            "hit_rate_pct": round(hit_rate * 100, 1),
+            "avg_cache_ratio": round(avg_ratio, 4),
+            "avg_cache_ratio_pct": round(avg_ratio * 100, 1),
+            "total_cache_read_tokens": cache_read,
+            "total_cache_creation_tokens": cache_creation,
+            "total_input_tokens": input_total,
+            "total_output_tokens": output_total,
+            "estimated_cost_saved_tokens": cost_saved,
+            "miss_reasons": reasons,
+            "recent_requests": recent_dicts,
+        }
 
 
-__all__ = ["CacheMetrics", "CacheTelemetryCollector"]
+# ---------------------------------------------------------------------------
+# Module-level singleton
+# ---------------------------------------------------------------------------
+
+_collector_lock = threading.Lock()
+_collector: Optional[CacheTelemetryCollector] = None
+
+
+def get_collector() -> CacheTelemetryCollector:
+    """Return the module-level shared ``CacheTelemetryCollector`` (lazy init)."""
+    global _collector
+    if _collector is None:
+        with _collector_lock:
+            if _collector is None:
+                _collector = CacheTelemetryCollector()
+    return _collector
+
+
+def reset_collector() -> None:
+    """Reset the module-level collector (useful in tests)."""
+    global _collector
+    with _collector_lock:
+        _collector = None

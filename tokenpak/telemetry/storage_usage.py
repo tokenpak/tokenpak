@@ -348,7 +348,7 @@ class UsageMixin:
 
         Includes event, usage, cost, segments, and metadata.
         """
-        trace = self.get_trace(trace_id)
+        trace = self.get_trace(trace_id)  # type: ignore[attr-defined]
         return {
             "format": "tokenpak_trace_export_v1",
             "trace_id": trace_id,

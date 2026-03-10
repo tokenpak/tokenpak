@@ -113,13 +113,13 @@ class VaultWatcher:
                 if src and not watcher_ref._should_ignore(src):
                     watcher_ref._on_fs_event(src)
 
-        self._observer = Observer()
+        self._observer: BaseObserver = Observer()  # type: ignore
         for raw_path in self.config.watch_paths:
             watch_dir = str(Path(raw_path).expanduser().resolve())
-            self._observer.schedule(_Handler(), watch_dir, recursive=self.config.recursive)
+            self._observer.schedule(_Handler(), watch_dir, recursive=self.config.recursive)  # type: ignore
             logger.info("Watching: %s", watch_dir)
 
-        self._observer.start()
+        self._observer.start()  # type: ignore
 
         self._debounce_thread = threading.Thread(
             target=self._debounce_loop, daemon=True, name="tp-watcher-debounce"
@@ -286,7 +286,7 @@ class VaultWatcher:
                     "compressed_content": compressed,
                     "metadata": "{}",
                 }
-                registry.add_block(block)
+                registry.add_block(block)  # type: ignore
                 reindexed += 1
                 logger.debug("Re-indexed: %s", path)
 

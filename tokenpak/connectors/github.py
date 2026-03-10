@@ -42,13 +42,13 @@ class GitHubConnector(Connector):
             print("GitHub connector requires source_path in 'owner/repo' format")
             return False
 
-        self._owner, self._repo = self.config.source_path.split("/", 1)
+        self._owner, self._repo = self.config.source_path.split("/", 1)  # type: ignore[assignment]
 
         if not self.config.auth_token:
             print("GitHub connector requires auth_token (PAT)")
             return False
 
-        self._headers = {
+        self._headers = {  # type: ignore[assignment]
             "Authorization": f"Bearer {self.config.auth_token}",
             "Accept": "application/vnd.github.v3+json",
         }

@@ -3,9 +3,11 @@ tokenpak.cache — Stable/Volatile cache layer for TokenPak proxy and runtime.
 
 Public API
 ----------
-StableCache    — Long-lived LRU cache (default TTL: 24 h)
-VolatileCache  — Short-lived TTL cache (default TTL: 270 s)
-CacheRegistry  — Central registry for named cache instances
+StableCache              — Long-lived LRU cache (default TTL: 24 h)
+VolatileCache            — Short-lived TTL cache (default TTL: 270 s)
+CacheRegistry            — Central registry for named cache instances
+CacheMetrics             — Per-request cache telemetry snapshot
+CacheTelemetryCollector  — Session-level telemetry aggregator
 
 Quick start::
 
@@ -23,5 +25,14 @@ Quick start::
 from .stable_cache import StableCache
 from .volatile_cache import VolatileCache
 from .registry import CacheRegistry
+from .telemetry import CacheMetrics, CacheTelemetryCollector, get_collector, reset_collector
 
-__all__ = ["StableCache", "VolatileCache", "CacheRegistry"]
+__all__ = [
+    "StableCache",
+    "VolatileCache",
+    "CacheRegistry",
+    "CacheMetrics",
+    "CacheTelemetryCollector",
+    "get_collector",
+    "reset_collector",
+]

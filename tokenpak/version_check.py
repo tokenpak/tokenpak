@@ -127,7 +127,7 @@ def run_startup_check(agent_name: str = "agent") -> List[str]:
                 if isinstance(obj, dict) and part in obj:
                     obj = obj[part]
                 else:
-                    obj = None
+                    obj = None  # type: ignore[assignment]
                     break
             if obj is not None:
                 w = f"Deprecated config field found: {deprecated_path} — remove it"

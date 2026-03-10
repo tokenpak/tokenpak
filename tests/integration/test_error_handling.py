@@ -11,6 +11,9 @@ Tests verify adapters handle common error scenarios gracefully:
 import pytest
 import os
 from unittest.mock import patch, MagicMock
+
+# Guard: skip entire module if openai is not installed (prevents collection errors)
+pytest.importorskip("openai")
 from openai import OpenAIError
 
 

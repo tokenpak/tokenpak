@@ -47,7 +47,7 @@ class TelemetryCollector:
         self.file_states: dict[str, FileState] = {}
         self.pending_events: list[dict[str, Any]] = []
         self.last_flush_time = time.time()
-        self.observer: Optional[Observer] = None
+        self.observer: Optional[Observer] = None  # type: ignore
         self._running = False
         if config.state_file and config.state_file.exists():
             self._load_state()
