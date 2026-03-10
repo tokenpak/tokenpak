@@ -11,6 +11,7 @@ from tokenpak.processors import get_processor
 from tokenpak.tokens import count_tokens
 from tokenpak.walker import detect_file_type, walk_directory
 from tokenpak.agent.ingest.schema_converter import convert_document
+from tokenpak.extraction import EntityExtractor
 
 from .blocks import BlockRecord, BlockStore, get_block_store
 from .symbols import SymbolTable
@@ -36,6 +37,7 @@ class VaultIndexer:
     ):
         self.blocks = block_store if block_store is not None else get_block_store()
         self.symbols = symbol_table if symbol_table is not None else SymbolTable()
+        self.extractor = EntityExtractor()
 
     def index_file(self, path: str, content: Optional[str] = None) -> Optional[BlockRecord]:
         """Index a single file. Reads from disk if content not provided."""
@@ -71,6 +73,8 @@ class VaultIndexer:
         block_id = f"{path}#{content_hash[:8]}"
 
         schema_info = convert_document(content, filename=path)
+        extracted = self.extractor.extract(content)
+        compact_entities = self.extractor.compact_text(extracted)
 
         record = BlockRecord(
             block_id=block_id,
@@ -83,6 +87,8 @@ class VaultIndexer:
             metadata={
                 "doc_type": schema_info.get("doc_type"),
                 "schema": schema_info.get("schema"),
+                "entities": extracted.to_compact_dict(),
+                "entities_compact": compact_entities,
             },
         )
         self.blocks.save(record)
