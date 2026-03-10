@@ -161,51 +161,129 @@ def _mark_last_block_cacheable(
 # ---------------------------------------------------------------------------
 
 
+def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Mark the last text content block of a message as cacheable."""
+    marked = False
+    msg = dict(message)
+    content = msg.get("content")
+
+    if isinstance(content, str):
+        if content.strip():
+            msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+            marked = True
+        return msg, marked
+
+    if not isinstance(content, list):
+        return msg, False
+
+    content_out = [dict(c) if isinstance(c, dict) else c for c in content]
+    for i in range(len(content_out) - 1, -1, -1):
+        block = content_out[i]
+        if isinstance(block, dict) and block.get("type") == "text":
+            if block.get("cache_control") != {"type": "ephemeral"}:
+                content_out[i] = dict(block, cache_control={"type": "ephemeral"})
+                marked = True
+            msg["content"] = content_out
+            return msg, marked
+
+    return msg, False
+
+
 def apply_stable_cache_control(body_bytes: bytes) -> bytes:
-    """
-    Ensure the stable system prefix has cache_control: ephemeral.
+    """Backward-compatible entrypoint for deterministic cache breakpoints."""
+    return apply_deterministic_cache_breakpoints(body_bytes)
 
-    Intended for ALL Anthropic requests — not just those with vault injection.
-    Idempotent: if cache_control is already placed, does nothing.
 
-    Returns the (possibly modified) body bytes.
-    """
+def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
+    """Apply deterministic multi-breakpoint cache markers to Anthropic requests."""
     try:
         data = json.loads(body_bytes)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return body_bytes
 
+    changed = False
+
+    # Breakpoint 1: last stable system block
     system = data.get("system")
-    if not system:
-        return body_bytes
-
-    # Normalize string system prompt → list form
     if isinstance(system, str):
-        if not system.strip():
-            return body_bytes
-        data["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
-        return json.dumps(data, ensure_ascii=False).encode("utf-8")
+        if system.strip():
+            data["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+            changed = True
+            _stats.record_breakpoint("system_last", True)
+        else:
+            _stats.record_breakpoint("system_last", False)
+    elif isinstance(system, list) and system:
+        stable_blocks, volatile_blocks = classify_system_blocks(system)
+        if stable_blocks:
+            marked_stable = _mark_last_block_cacheable(stable_blocks)
+            rebuilt = marked_stable + volatile_blocks
+            if rebuilt != system:
+                data["system"] = rebuilt
+                changed = True
+                _stats.record_breakpoint("system_last", True)
+            else:
+                _stats.record_breakpoint("system_last", False)
+        else:
+            _stats.record_breakpoint("system_last", False)
+    else:
+        _stats.record_breakpoint("system_last", False)
 
-    if not isinstance(system, list):
+    # Breakpoint 2: last tool definition block
+    tools = data.get("tools")
+    if isinstance(tools, list) and tools:
+        tools_out = [dict(t) if isinstance(t, dict) else t for t in tools]
+        idx = len(tools_out) - 1
+        last_tool = tools_out[idx]
+        if isinstance(last_tool, dict):
+            if last_tool.get("cache_control") != {"type": "ephemeral"}:
+                tools_out[idx] = dict(last_tool, cache_control={"type": "ephemeral"})
+                data["tools"] = tools_out
+                changed = True
+                _stats.record_breakpoint("tools_last", True)
+            else:
+                _stats.record_breakpoint("tools_last", False)
+        else:
+            _stats.record_breakpoint("tools_last", False)
+    else:
+        _stats.record_breakpoint("tools_last", False)
+
+    # Breakpoints 3 & 4: conversation midpoint and second-to-last assistant
+    messages = data.get("messages")
+    if isinstance(messages, list) and messages:
+        messages_out = [dict(m) if isinstance(m, dict) else m for m in messages]
+
+        midpoint_idx = len(messages_out) // 2
+        if isinstance(messages_out[midpoint_idx], dict):
+            new_msg, did_mark = _mark_message_content_cacheable(messages_out[midpoint_idx])
+            if did_mark:
+                messages_out[midpoint_idx] = new_msg
+                changed = True
+            _stats.record_breakpoint("conversation_midpoint", did_mark)
+        else:
+            _stats.record_breakpoint("conversation_midpoint", False)
+
+        assistant_indices = [
+            i for i, m in enumerate(messages_out)
+            if isinstance(m, dict) and m.get("role") == "assistant"
+        ]
+        if len(assistant_indices) >= 2:
+            target_idx = assistant_indices[-2]
+            new_msg, did_mark = _mark_message_content_cacheable(messages_out[target_idx])
+            if did_mark:
+                messages_out[target_idx] = new_msg
+                changed = True
+            _stats.record_breakpoint("assistant_second_last", did_mark)
+        else:
+            _stats.record_breakpoint("assistant_second_last", False)
+
+        if changed:
+            data["messages"] = messages_out
+    else:
+        _stats.record_breakpoint("conversation_midpoint", False)
+        _stats.record_breakpoint("assistant_second_last", False)
+
+    if not changed:
         return body_bytes
-
-    # Already has cache_control somewhere? Check if it's on the last stable block.
-    # If any block already has cache_control, respect existing placement.
-    has_cache_control = any(isinstance(b, dict) and b.get("cache_control") for b in system)
-    if has_cache_control:
-        return body_bytes  # already handled
-
-    # Classify blocks: stable vs volatile
-    stable_blocks, volatile_blocks = classify_system_blocks(system)
-
-    if not stable_blocks:
-        return body_bytes  # nothing to mark
-
-    # Mark last stable block
-    stable_blocks = _mark_last_block_cacheable(stable_blocks)
-
-    # Reassemble: stable (with marker) + volatile
-    data["system"] = stable_blocks + volatile_blocks
 
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
@@ -382,6 +460,18 @@ class PromptCacheStats:
         self.already_marked: int = 0  # idempotent skip
         self.volatile_blocks_found: int = 0
         self.stable_blocks_found: int = 0
+        self.breakpoint_applied: dict[str, int] = {
+            "system_last": 0,
+            "tools_last": 0,
+            "conversation_midpoint": 0,
+            "assistant_second_last": 0,
+        }
+        self.breakpoint_skipped: dict[str, int] = {
+            "system_last": 0,
+            "tools_last": 0,
+            "conversation_midpoint": 0,
+            "assistant_second_last": 0,
+        }
         self._started_at: float = time.time()
 
     def record_applied(
@@ -400,6 +490,15 @@ class PromptCacheStats:
                 self.already_marked += 1
             else:
                 self.cache_markers_skipped += 1
+
+    def record_breakpoint(self, name: str, applied: bool) -> None:
+        with self._lock:
+            if name not in self.breakpoint_applied:
+                return
+            if applied:
+                self.breakpoint_applied[name] += 1
+            else:
+                self.breakpoint_skipped[name] += 1
 
     def summary(self) -> dict:
         with self._lock:
@@ -421,6 +520,10 @@ class PromptCacheStats:
                     else 0
                 ),
                 "uptime_s": round(time.time() - self._started_at),
+                "breakpoint_activity": {
+                    "applied": dict(self.breakpoint_applied),
+                    "skipped": dict(self.breakpoint_skipped),
+                },
             }
 
 
@@ -569,6 +672,7 @@ __all__ = [
     "PromptParts",
     "PromptCacheStats",
     "apply_stable_cache_control",
+    "apply_deterministic_cache_breakpoints",
     "inject_with_cache_boundary",
     "classify_system_blocks",
     "build_stable_prefix",
