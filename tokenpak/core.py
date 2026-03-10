@@ -17,6 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+# Precomputation pipeline (lazy import to avoid circular deps)
+try:
+    from .precompute import recompute_all as _recompute_all
+    _PRECOMPUTE_AVAILABLE = True
+except ImportError:
+    _PRECOMPUTE_AVAILABLE = False
+    _recompute_all = None
+
 # ---------------------------------------------------------------------------
 # File classification
 # ---------------------------------------------------------------------------
