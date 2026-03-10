@@ -47,3 +47,11 @@ __all__ = [
     "dedup_messages",
     "DirectiveApplier",
 ]
+from .fidelity_tiers import (
+    FidelityTier,
+    TIER_COST_FACTOR,
+    TieredBlock,
+    TierGenerator,
+    TierSelector,
+    TierStore,
+)
