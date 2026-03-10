@@ -505,6 +505,22 @@ def main():
         _diff_argparse(sys.argv[2:])
         return
 
+    # Delegate Enterprise policy/sla/compliance commands
+    if len(sys.argv) > 1 and sys.argv[1] == "policy":
+        from tokenpak.agent.cli.commands.policy import run as _policy_run
+        _policy_run(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "sla":
+        from tokenpak.agent.cli.commands.sla import run as _sla_run
+        _sla_run(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "compliance":
+        from tokenpak.agent.cli.commands.compliance import run as _compliance_run
+        _compliance_run(sys.argv[2:])
+        return
+
     p = argparse.ArgumentParser(prog="tokenpak", add_help=False)
     p.add_argument("--verbose", "-v", action="store_true")
     p.add_argument("--raw", action="store_true")
