@@ -39,6 +39,13 @@ class PolicyResult:
     compress: bool = False               # True → run compression pipeline
     retrieve: bool = False               # True → run vault retrieval injection
     skip_compression: bool = False       # True → bypass compression entirely
+    # Context contract fields (v2)
+    memory_scope: tuple = ()             # memory categories to include (empty = all)
+    retrieval_sources: tuple = ()        # retrieval sources to include (empty = all)
+    context_quota: int = 4000            # max tokens for this intent
+    omission_rules: tuple = ()           # categories to always exclude
+    reasoning_ceiling: str = "medium"    # low / medium / high
+    stop_condition: str = ""             # when to stop gathering context
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -49,6 +56,12 @@ class PolicyResult:
             "compress": self.compress,
             "retrieve": self.retrieve,
             "skip_compression": self.skip_compression,
+            "memory_scope": list(self.memory_scope),
+            "retrieval_sources": list(self.retrieval_sources),
+            "context_quota": self.context_quota,
+            "omission_rules": list(self.omission_rules),
+            "reasoning_ceiling": self.reasoning_ceiling,
+            "stop_condition": self.stop_condition,
             **self.extra,
         }
 
@@ -67,6 +80,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=False,
         retrieve=False,
         skip_compression=True,
+        memory_scope=(),
+        retrieval_sources=(),
+        context_quota=500,
+        omission_rules=("history", "memory"),
+        reasoning_ceiling="low",
+        stop_condition="first_answer",
     ),
     "usage": PolicyResult(
         recipe_id="usage-report",
@@ -75,6 +94,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=False,
         retrieve=False,
         skip_compression=True,
+        memory_scope=(),
+        retrieval_sources=(),
+        context_quota=500,
+        omission_rules=("history", "memory"),
+        reasoning_ceiling="low",
+        stop_condition="first_answer",
     ),
     "debug": PolicyResult(
         recipe_id="debug-trace",
@@ -83,6 +108,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=False,
         retrieve=False,
         skip_compression=True,
+        memory_scope=("errors", "code"),
+        retrieval_sources=("logs", "diff", "tests"),
+        context_quota=4000,
+        omission_rules=("brand", "style"),
+        reasoning_ceiling="high",
+        stop_condition="",
     ),
     "summarize": PolicyResult(
         recipe_id="summarize-compress",
@@ -91,6 +122,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=True,
         retrieve=False,
         skip_compression=False,
+        memory_scope=("goals",),
+        retrieval_sources=("source_docs",),
+        context_quota=3000,
+        omission_rules=("raw_logs", "code"),
+        reasoning_ceiling="medium",
+        stop_condition="",
     ),
     "plan": PolicyResult(
         recipe_id="plan-scaffold",
@@ -99,6 +136,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=True,
         retrieve=True,
         skip_compression=False,
+        memory_scope=("goals", "constraints"),
+        retrieval_sources=("project_state", "decisions"),
+        context_quota=6000,
+        omission_rules=("raw_logs",),
+        reasoning_ceiling="high",
+        stop_condition="",
     ),
     "execute": PolicyResult(
         recipe_id="execute-dispatch",
@@ -107,6 +150,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=False,
         retrieve=False,
         skip_compression=False,
+        memory_scope=("current_task",),
+        retrieval_sources=(),
+        context_quota=2000,
+        omission_rules=("history", "style"),
+        reasoning_ceiling="low",
+        stop_condition="task_complete",
     ),
     "explain": PolicyResult(
         recipe_id="explain-expand",
@@ -115,6 +164,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=True,
         retrieve=True,
         skip_compression=False,
+        memory_scope=("context",),
+        retrieval_sources=("docs", "code"),
+        context_quota=4000,
+        omission_rules=(),
+        reasoning_ceiling="medium",
+        stop_condition="",
     ),
     "search": PolicyResult(
         recipe_id="search-retrieve",
@@ -123,6 +178,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=False,
         retrieve=True,
         skip_compression=True,
+        memory_scope=(),
+        retrieval_sources=("vault_all",),
+        context_quota=2000,
+        omission_rules=("history",),
+        reasoning_ceiling="low",
+        stop_condition="results_found",
     ),
     "create": PolicyResult(
         recipe_id="create-scaffold",
@@ -131,6 +192,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=True,
         retrieve=False,
         skip_compression=False,
+        memory_scope=("goals", "style"),
+        retrieval_sources=("templates", "examples"),
+        context_quota=3000,
+        omission_rules=("raw_logs",),
+        reasoning_ceiling="medium",
+        stop_condition="",
     ),
     "query": PolicyResult(
         recipe_id="pipeline-v1",
@@ -139,6 +206,12 @@ _BASE_POLICY: Dict[str, PolicyResult] = {
         compress=True,
         retrieve=False,
         skip_compression=False,
+        memory_scope=("recent",),
+        retrieval_sources=("relevant",),
+        context_quota=4000,
+        omission_rules=(),
+        reasoning_ceiling="medium",
+        stop_condition="",
     ),
 }
 
@@ -150,6 +223,12 @@ FALLBACK_POLICY = PolicyResult(
     compress=True,
     retrieve=False,
     skip_compression=False,
+    memory_scope=(),
+    retrieval_sources=(),
+    context_quota=4000,
+    omission_rules=(),
+    reasoning_ceiling="medium",
+    stop_condition="",
 )
 
 # Confidence threshold below which we fall back to default pipeline
@@ -250,6 +329,85 @@ def resolve_policy(
         skip_compression=overrides.get("skip_compression", base.skip_compression),
         extra=merged_extra,
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Context contract enforcement
+# ---------------------------------------------------------------------------
+
+
+def apply_context_contract(
+    policy: "PolicyResult",
+    context: Dict[str, Any],
+    token_counter: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Apply a PolicyResult's context contract to a context dict.
+
+    The context dict maps category names to text values (strings).
+    The function:
+      1. Removes categories in omission_rules
+      2. Filters memory categories by memory_scope (if non-empty)
+      3. Filters retrieval categories by retrieval_sources (if non-empty)
+      4. Enforces context_quota by truncating the longest values first
+
+    Args:
+        policy:        PolicyResult with context contract fields.
+        context:       Dict[category_name → text_content].
+        token_counter: Optional callable(text) → int for token counting.
+                       Defaults to a simple whitespace-based estimator.
+
+    Returns:
+        Filtered and truncated context dict.
+    """
+    if token_counter is None:
+        # Rough estimator: ~4 chars per token
+        def token_counter(text: str) -> int:  # type: ignore[misc]
+            return max(1, len(str(text)) // 4)
+
+    result: Dict[str, Any] = {}
+
+    # Step 1: Remove omitted categories
+    for key, value in context.items():
+        if key not in policy.omission_rules:
+            result[key] = value
+
+    # Step 2: Filter memory_scope (if defined, only allow listed scopes)
+    if policy.memory_scope:
+        result = {k: v for k, v in result.items() if k in policy.memory_scope or k in policy.retrieval_sources}
+
+    # Step 3: Filter retrieval_sources (if defined, only allow listed sources)
+    if policy.retrieval_sources:
+        # Keep memory_scope items + retrieval_source items; discard others not in either
+        allowed = set(policy.memory_scope) | set(policy.retrieval_sources)
+        if policy.memory_scope or policy.retrieval_sources:
+            result = {k: v for k, v in result.items() if k in allowed}
+
+    # Step 4: Enforce context_quota — truncate if total tokens exceed quota
+    total = sum(token_counter(str(v)) for v in result.values())
+    if total > policy.context_quota:
+        # Sort by token size descending; trim the largest values first
+        sorted_keys = sorted(result, key=lambda k: token_counter(str(result[k])), reverse=True)
+        budget = policy.context_quota
+        trimmed: Dict[str, Any] = {}
+        for k in sorted_keys:
+            v = str(result[k])
+            v_tokens = token_counter(v)
+            if v_tokens <= budget:
+                trimmed[k] = result[k]
+                budget -= v_tokens
+            else:
+                # Proportional truncation: keep as many chars as budget allows
+                if budget > 0:
+                    keep_chars = budget * 4  # reverse of estimator
+                    trimmed[k] = v[:keep_chars]
+                    budget = 0
+                # No budget left — drop remaining keys
+        result = trimmed
+
+    return result
+
 
 
 def known_intents() -> list[str]:

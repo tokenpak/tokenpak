@@ -2107,14 +2107,27 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
+                    _intent_for_contract: str = "query"
                     if ROUTER_ENABLED:
                         try:
                             _session_id_router = self.headers.get("X-OpenClaw-Session", model)
                             body, _router_meta = _run_router(body, session_id=_session_id_router)
                             if _router_meta and not _router_meta.get("fallback"):
+                                _intent_for_contract = _router_meta.get("intent", "query")
                                 print(f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)")
                         except Exception as _router_err:
                             print(f"  ⚠️ Router stage error (skipping): {_router_err}")
+
+                    # Phase 0.4: Context contract enforcement — quota + scope + omission
+                    try:
+                        from tokenpak.agent.proxy.intent_policy import resolve_policy as _resolve_policy
+                        _contract_policy = _resolve_policy(_intent_for_contract, {}, 1.0)
+                        _, _pre_contract_tokens = extract_request_tokens(body, adapter=active_adapter)
+                        if _pre_contract_tokens > _contract_policy.context_quota:
+                            # Soft-cap: log quota violation; hard truncation handled by compaction
+                            print(f"  📋 Contract: intent={_intent_for_contract} quota={_contract_policy.context_quota} tokens={_pre_contract_tokens} ceiling={_contract_policy.reasoning_ceiling}")
+                    except Exception as _contract_err:
+                        pass  # fail-open: contract enforcement is advisory
 
                     # Phase 0.5: Capsule builder — compress historical context blocks
                     if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
