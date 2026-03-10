@@ -1,13 +1,6 @@
 # crewai-tokenpak
 
-TokenPak integration for CrewAI — automatic context compression for multi-agent systems.
-
-Reduces token costs across agent communications by 30-50%.
-
-[![PyPI version](https://img.shields.io/pypi/v/crewai-tokenpak)](https://pypi.org/project/crewai-tokenpak/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
----
+TokenPak integration for CrewAI with a minimal hook that intercepts crew context assembly and compresses task context before it reaches each agent.
 
 ## Installation
 
@@ -15,145 +8,91 @@ Reduces token costs across agent communications by 30-50%.
 pip install crewai-tokenpak
 ```
 
----
-
 ## Quick Start
 
-### Crew with automatic compression
-
 ```python
-from crewai_tokenpak import TokenPakCrew
+from crewai import Agent, Crew, Task
+from crewai_tokenpak import AgentContextConfig, TokenPakCrewAIHook
 
-crew = TokenPakCrew(
-    agents=[researcher, writer, reviewer],
-    tasks=[research_task, write_task, review_task],
-    budget=8000,   # total token budget for the crew
+researcher = Agent(role="researcher", goal="Find the best evidence", backstory="...")
+writer = Agent(role="writer", goal="Draft the answer", backstory="...")
+
+research_task = Task(
+    description="Research the topic from prior notes",
+    expected_output="Key findings",
+    agent=researcher,
 )
+write_task = Task(
+    description="Write the final brief",
+    expected_output="Executive summary",
+    agent=writer,
+    context=[research_task],
+)
+
+crew = Crew(agents=[researcher, writer], tasks=[research_task, write_task])
+hook = TokenPakCrewAIHook(
+    total_budget=4000,
+    shared_context="Company style guide: concise, source-backed, no filler.",
+    task_context={"Write the final brief": "Audience: executive staff."},
+    agent_overrides={
+        "writer": AgentContextConfig(budget=900, prefix="Focus on synthesis.")
+    },
+)
+hook.apply_to_crew(crew)
 
 result = crew.kickoff()
+print(result)
+print(hook.compression_report())
 ```
-
-### Coordinate budgets across agents
-
-```python
-from crewai_tokenpak import TokenPakContext
-
-ctx = TokenPakContext(
-    total_budget=8000,
-    per_agent_budget=2000,  # override per-agent limit
-)
-
-# Allocate budget for a specific agent
-budget = ctx.allocate_budget("researcher")
-
-# Track actual usage
-ctx.record_usage("researcher", tokens_used=1500)
-usage = ctx.get_usage()
-# {"researcher": 1500}
-```
-
-### Compress context during agent handoffs
-
-```python
-from crewai_tokenpak import TokenPakHandoff
-
-handoff = TokenPakHandoff(budget=2000)
-
-# Agent A prepares handoff package
-wire = handoff.prepare_handoff(
-    state={"findings": "..."},
-    from_agent="researcher",
-    to_agent="writer",
-    what_was_done="Analyzed 50 documents on topic X",
-    whats_next="Write executive summary",
-)
-
-# Agent B receives compressed context
-context = handoff.receive_handoff_wire(wire)
-```
-
----
-
-## What is TokenPak?
-
-TokenPak is an open protocol for AI context optimization. It compresses context blocks to fit within token budgets while keeping the highest-priority content intact.
-
-Learn more: https://github.com/kaywhy331/tokenpak
-
----
 
 ## API Reference
 
+### `TokenPakCrewAIHook`
+
+Primary integration point. Patches one crew instance by replacing its `_get_context(...)` method, then:
+
+- collects shared crew context
+- resolves task-level context dependencies
+- injects optional task-specific context
+- applies optional per-agent budget overrides
+- compresses the final assembled context deterministically
+- stores a compression report per task
+
 ### `TokenPakCrew`
 
-```python
-class TokenPakCrew:
-    def __init__(
-        self,
-        agents: List[Any],
-        tasks: List[Any],
-        budget: int = 8000,      # total token budget
-        **kwargs,
-    ) -> None: ...
-
-    def kickoff(self) -> Any: ...
-```
+Thin wrapper that applies `TokenPakCrewAIHook` before delegating to `crew.kickoff()` or `crew.akickoff()`.
 
 ### `TokenPakContext`
 
-```python
-class TokenPakContext:
-    def __init__(
-        self,
-        total_budget: int = 8000,
-        per_agent_budget: Optional[int] = None,  # defaults to total/4
-    ) -> None: ...
+Budget allocator and deterministic compressor used by the hook. It does not require the `crewai` package at import time.
 
-    def allocate_budget(self, agent_id: str) -> int: ...
-    def record_usage(self, agent_id: str, tokens_used: int) -> None: ...
-    def get_usage(self) -> Dict[str, int]: ...
-```
+### `AgentContextConfig`
 
-### `TokenPakHandoff`
+Per-agent override object with:
+
+- `budget`: custom compression budget for that agent
+- `prefix`: agent-specific text injected before assembled crew context
+- `suffix`: agent-specific text injected after assembled crew context
+
+## Compression Report Example
 
 ```python
-class TokenPakHandoff:
-    def __init__(
-        self,
-        budget: int = 2000,
-        keep_recent: int = 10,
-    ) -> None: ...
-
-    def prepare_handoff(
-        self,
-        state: Dict[str, Any],
-        from_agent: str,
-        to_agent: str,
-        what_was_done: str,
-        whats_next: str,
-    ) -> "HandoffWire": ...
-
-    def receive_handoff_wire(self, wire: "HandoffWire") -> Dict[str, Any]: ...
+{
+    "tasks": 2,
+    "original_tokens": 1120,
+    "compressed_tokens": 540,
+    "saved_tokens": 580,
+    "agents": ["researcher", "writer"],
+}
 ```
 
----
+Each task also records a `TokenPakCompressionReport` with per-task budgets, token counts, and which context sections were injected.
 
-## Performance
+## Design Notes
 
-Typical savings in multi-agent workflows:
-
-| Workflow Type         | Savings | Notes                        |
-|-----------------------|---------|------------------------------|
-| Research → Write      | 35-50%  | Compresses research output   |
-| Multi-step pipelines  | 40-55%  | Compounds across handoffs    |
-| Group coordination    | 30-45%  | Shared context compression   |
-
----
-
-## Support
-
-- Issues: https://github.com/kaywhy331/tokenpak/issues
-- Discussions: https://github.com/kaywhy331/tokenpak/discussions
+- Mirrors the lightweight adapter style used by `langchain-tokenpak`.
+- Keeps `crewai` imports lazy so the package remains importable in restricted environments.
+- Uses a simple deterministic compressor for stable tests and predictable behavior.
 
 ## License
 
