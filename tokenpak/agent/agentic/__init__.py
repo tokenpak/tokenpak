@@ -39,3 +39,26 @@ __all__ = [
     "DEFAULT_HANDOFF_DIR",
     "REGISTERED_AGENTS",
 ]
+from .state_collector import (
+    SCHEMA_VERSION,
+    STALE_THRESHOLD_SECONDS,
+    EnvState,
+    FileState,
+    GitState,
+    ServiceState,
+    StateCollector,
+    StructuredState,
+    TestState,
+)
+
+__all__ += [
+    "StateCollector",
+    "StructuredState",
+    "GitState",
+    "ServiceState",
+    "EnvState",
+    "FileState",
+    "TestState",
+    "SCHEMA_VERSION",
+    "STALE_THRESHOLD_SECONDS",
+]
