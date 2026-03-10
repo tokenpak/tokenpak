@@ -98,11 +98,10 @@ class CacheMetrics:
     request_id: str
     stable_prefix_tokens: int
     stable_cached: bool
-
+    cache_read_tokens: int = 0
+    total_input_tokens: int = 0
     cache_miss_reason: Optional[str] = None
     volatile_tail_tokens: int = 0
-    total_input_tokens: int = 0
-    cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
     output_tokens: int = 0
     timestamp: float = field(default_factory=time.time)
@@ -122,6 +121,16 @@ class CacheMetrics:
         if self.total_input_tokens == 0:
             return 0.0
         return self.cache_read_tokens / self.total_input_tokens
+
+    @property
+    def effective_tokens(self) -> int:
+        """Total tokens minus cache_read tokens (new tokens processed)."""
+        return self.total_input_tokens - self.cache_read_tokens
+
+    @property
+    def cache_ratio(self) -> float:
+        """Alias for cache_hit_ratio (cache_read / total input)."""
+        return self.cache_hit_ratio
 
     @property
     def cost_saved(self) -> float:
@@ -221,6 +230,19 @@ class CacheTelemetryCollector:
     # Read path (aggregate KPIs)
     # ------------------------------------------------------------------
 
+    def clear(self) -> None:
+        """Clear all recorded metrics and reset state."""
+        with self._lock:
+            self._recent = []
+            self._total_requests = 0
+            self._total_hits = 0
+            self._total_cache_read_tokens = 0
+            self._total_cache_creation_tokens = 0
+            self._total_input_tokens = 0
+            self._total_output_tokens = 0
+            self._total_cost_saved = 0.0
+            self._miss_reasons = {}
+
     def hit_rate(self) -> float:
         """Fraction of requests that were cache hits (0.0–1.0)."""
         with self._lock:
@@ -288,6 +310,9 @@ class CacheTelemetryCollector:
         recent_dicts = [m.to_dict() for m in recent_snap[-10:]]
 
         return {
+            "total": total,  # alias for backward compat
+            "hits": hits,  # alias
+            "misses": misses,  # alias
             "total_requests": total,
             "cache_hits": hits,
             "cache_misses": misses,

@@ -401,16 +401,23 @@ class DoctorFixFlagTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = True
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
     def tearDown(self):
         self.temp_home.cleanup()
     
+    @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_fix_create_config(self, mock_stdout):
+    def test_fix_create_config(self, mock_stdout, mock_socket):
         """--fix should create missing config."""
+        # Mock the socket to avoid hanging
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 1  # connection refused
+        mock_socket.return_value = mock_sock
+        
         config_dir = self.temp_path / ".tokenpak"
         # Don't create config dir or file
         
@@ -427,10 +434,16 @@ class DoctorFixFlagTest(unittest.TestCase):
                 data = json.load(f)
                 self.assertEqual(data.get("port"), 8765)
     
+    @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_fix_backup_on_overwrite(self, mock_stdout):
+    def test_fix_backup_on_overwrite(self, mock_stdout, mock_socket):
         """--fix should backup before overwriting invalid config."""
+        # Mock the socket to avoid hanging
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 1  # connection refused
+        mock_socket.return_value = mock_sock
+        
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
