@@ -1,22 +1,31 @@
+"""TokenPak integration for Microsoft AutoGen.
+
+This package provides automatic context compression for AutoGen conversations,
+reducing token usage in multi-agent systems while preserving conversation quality.
+
+Example:
+    >>> from autogen_tokenpak import TokenPakConversationHook
+    >>> from autogen import UserProxyAgent, AssistantAgent
+    >>>
+    >>> hook = TokenPakConversationHook()
+    >>>
+    >>> user = UserProxyAgent("user")
+    >>> assistant = AssistantAgent("assistant", llm_config={...})
+    >>>
+    >>> hook.compress_agent(assistant)
+    >>>
+    >>> user.initiate_chat(assistant, message="Hello!")
 """
-autogen-tokenpak
 
-TokenPak integration for AutoGen — automatic context compression for multi-agent conversations.
-
-Quick Start:
-    from autogen_tokenpak import TokenPakAssistant, TokenPakGroupChat
-
-    assistant = TokenPakAssistant(name="agent", budget=4000)
-    group = TokenPakGroupChat(agents=[assistant], budget=8000)
-"""
-
-from .assistant import TokenPakAssistant
-from .groupchat import TokenPakGroupChat
-from .message import TokenPakMessage
+from .context import (
+    TokenPakConversationHook,
+    TokenPakCompressionReport,
+    AgentContextConfig,
+)
 
 __version__ = "0.1.0"
 __all__ = [
-    "TokenPakAssistant",
-    "TokenPakGroupChat",
-    "TokenPakMessage",
+    "TokenPakConversationHook",
+    "TokenPakCompressionReport",
+    "AgentContextConfig",
 ]

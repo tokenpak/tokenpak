@@ -48,6 +48,7 @@ from .degradation import get_degradation_tracker, DegradationEventType
 from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
+from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
@@ -327,6 +328,31 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path.startswith("/dashboard"):
+            # Serve dashboard UI files
+            from tokenpak.dashboard import serve_dashboard_file
+            import asyncio
+            
+            # Extract dashboard path
+            dashboard_path = path[10:]  # Remove '/dashboard' prefix
+            if not dashboard_path:
+                dashboard_path = '/'
+            
+            # Serve the file
+            result = asyncio.run(serve_dashboard_file(dashboard_path))
+            if result:
+                content, mime_type = result
+                body = content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type + "; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_error(404)
+            return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
             self._send_json(get_degradation_tracker().summary())
@@ -496,6 +522,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _proxy_to_inner(self, target_url: str, method: str) -> None:
         t0 = time.time()
+        # Request ID: honour X-Request-ID from client, else generate UUID
+        _req_id = _new_request_id(dict(self.headers))
         ps = self.server.proxy_server  # type: ignore[attr-defined]
         parsed = urlparse(target_url)
 
@@ -691,6 +719,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         self.send_header("Cache-Control", "no-cache")
                     # Always disable nginx buffering for streaming
                     self.send_header("X-Accel-Buffering", "no")
+                    # Propagate request ID to client for correlation
+                    self.send_header("X-Request-ID", _req_id)
                     self.end_headers()
 
                     for chunk in resp.iter_bytes(chunk_size=4096):
@@ -726,6 +756,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _ph = _compute_stable_prefix_hash(body)
                     if _ph:
                         self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
+                # Propagate request ID to client for correlation
+                self.send_header("X-Request-ID", _req_id)
                 self.end_headers()
 
                 resp_body = resp.content
@@ -748,6 +780,37 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         pass
             latency_ms = int((time.time() - t0) * 1000)
             _cb_success = True  # reached here without exception → request succeeded
+
+            # ── Request logging ───────────────────────────────────────────
+            try:
+                _resp_status = resp.status_code if "resp" in dir() else 0  # type: ignore
+                _req_body_sz = content_length
+                _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
+                _comp_ratio = None
+                if input_tokens > 0 and sent_input_tokens > 0:
+                    _comp_ratio = sent_input_tokens / input_tokens
+                _provider_name = ""
+                if "anthropic" in target_url:
+                    _provider_name = "anthropic"
+                elif "openai" in target_url:
+                    _provider_name = "openai"
+                elif "googleapis" in target_url:
+                    _provider_name = "google"
+                log_request(
+                    request_id=_req_id,
+                    client_ip=self.client_address[0] if self.client_address else "",
+                    method=method,
+                    endpoint=parsed.path,
+                    request_body_size=_req_body_sz,
+                    response_status=_resp_status,
+                    response_body_size=_resp_body_sz,
+                    compression_ratio=_comp_ratio,
+                    latency_ms=latency_ms,
+                    model=model,
+                    provider=_provider_name,
+                )
+            except Exception:
+                pass  # logging must never break the proxy
 
             if should_log and is_messages and input_tokens > 0:
                 cost = estimate_cost(model, sent_input_tokens, output_tokens,
@@ -876,6 +939,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 )
             exc_type = type(exc).__name__
             exc_msg = str(exc)
+            # Log the failed request
+            try:
+                log_request(
+                    request_id=_req_id,
+                    client_ip=self.client_address[0] if self.client_address else "",
+                    method=method,
+                    endpoint=parsed.path,
+                    request_body_size=content_length,
+                    response_status=502,
+                    latency_ms=latency_ms,
+                    model=model,
+                    extra={"error": exc_type, "error_message": exc_msg[:200]},
+                )
+            except Exception:
+                pass  # logging must never break the proxy
             # Build an actionable error message depending on the exception type
             if "timeout" in exc_type.lower() or isinstance(exc, TimeoutError):
                 user_detail = (
@@ -1007,6 +1085,63 @@ def _extract_response_tokens(body: bytes) -> int:
 # ProxyServer — public API
 # ---------------------------------------------------------------------------
 
+def auto_detect_upstream(request_headers: dict) -> str:
+    """
+    Detect target upstream from request headers.
+    
+    Supports zero-config mode: when no explicit provider URL is configured,
+    this function uses request headers to identify the intended LLM provider
+    and route to the correct upstream.
+    
+    Header priority:
+    1. Authorization: Bearer sk-ant-* → Anthropic
+    2. Authorization: Bearer sk-* (non-Anthropic) → OpenAI
+    3. x-goog-api-key → Google
+    4. anthropic-* headers → Anthropic
+    5. Default → Anthropic (most common reverse-proxy use case)
+    
+    Args:
+        request_headers: Dictionary of HTTP request headers (case-insensitive lookup)
+    
+    Returns:
+        Upstream provider base URL
+        
+    Examples:
+        >>> auto_detect_upstream({"authorization": "Bearer sk-ant-abc123"})
+        'https://api.anthropic.com'
+        
+        >>> auto_detect_upstream({"authorization": "Bearer sk-openai-xyz"})
+        'https://api.openai.com'
+        
+        >>> auto_detect_upstream({"x-goog-api-key": "AIza..."})
+        'https://generativelanguage.googleapis.com'
+    """
+    # Case-insensitive header lookup
+    lower_headers = {k.lower(): v for k, v in request_headers.items()}
+    
+    # Check Authorization header
+    auth = lower_headers.get("authorization", "").lower()
+    
+    # Anthropic token pattern: sk-ant-*
+    if auth.startswith("bearer sk-ant-"):
+        return "https://api.anthropic.com"
+    
+    # OpenAI token pattern: sk-* (but not sk-ant-*)
+    if auth.startswith("bearer sk-"):
+        return "https://api.openai.com"
+    
+    # Google API key
+    if "x-goog-api-key" in lower_headers:
+        return "https://generativelanguage.googleapis.com"
+    
+    # Anthropic-specific headers (x-api-key, anthropic-version, etc)
+    if "x-api-key" in lower_headers or "anthropic-version" in lower_headers:
+        return "https://api.anthropic.com"
+    
+    # Default to Anthropic (most common reverse-proxy use case)
+    return "https://api.anthropic.com"
+
+
 class ProxyServer:
     """
     TokenPak HTTP proxy server.
@@ -1131,6 +1266,7 @@ class ProxyServer:
                 signal.signal(signal.SIGINT, self._handle_signal)
 
             print(f"TokenPak proxy listening on {self.host}:{self.port} [{self.compilation_mode}]")
+            print("  ✓ Zero-config mode enabled (auto-detecting upstream from request headers)")
             try:
                 server.serve_forever()
             except KeyboardInterrupt:
