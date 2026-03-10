@@ -252,6 +252,15 @@ def cmd_help(args):
                 ("help", "This help"),
             ],
         ),
+        (
+            "PRO",
+            [
+                ("optimize", "Auto-analyze session for cost + token efficiency (Pro+)"),
+                ("optimize --apply", "Auto-apply optimization recommendations (Pro+)"),
+                ("cost", "Token usage and cost reporting"),
+                ("budget intelligence", "Burn rate, ETA, trend, suggestions (Pro+)"),
+            ],
+        ),
     ]
     if target:
         flat = {cmd: desc for _, grp in CMDS for cmd, desc in grp}
@@ -472,6 +481,18 @@ def main():
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
         _cost_argparse(sys.argv[2:])
+        return
+
+    # Delegate optimize subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "optimize":
+        import argparse as _ap
+        from tokenpak.agent.cli.commands.optimize import run_optimize
+        op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
+        op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
+        op.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
+        op.add_argument("--apply", action="store_true", help="Auto-apply recommendations")
+        oargs = op.parse_args(sys.argv[2:])
+        run_optimize(verbose=oargs.verbose, as_json=oargs.as_json, apply=oargs.apply)
         return
 
     # Delegate budget subcommand
