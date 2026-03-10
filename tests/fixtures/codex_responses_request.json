@@ -1,0 +1,8 @@
+{
+  "model": "gpt-5.3-codex",
+  "instructions": "You are a careful code assistant.",
+  "input": "CRITICAL_FACT: project codenamed ORBIT. Refactor this function to improve readability and keep behavior unchanged. The function currently validates arguments, normalizes options, computes a deterministic cache key, and emits telemetry spans. It also validates arguments, normalizes options, computes a deterministic cache key, and emits telemetry spans.",
+  "max_output_tokens": 400,
+  "temperature": 0.0,
+  "stream": false
+}

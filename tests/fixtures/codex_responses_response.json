@@ -1,0 +1,21 @@
+{
+  "id": "resp_codex_123",
+  "model": "gpt-5.3-codex",
+  "output": [
+    {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Refactor complete: extracted validation, option normalization, cache-key building, and telemetry emission helpers."
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 130,
+    "output_tokens": 31,
+    "total_tokens": 161
+  }
+}
