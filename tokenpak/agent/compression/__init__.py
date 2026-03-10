@@ -14,6 +14,7 @@ Provides the compression pipeline and supporting utilities:
 from .canon import ValidationResult, apply_fallback, validate
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
+from .instruction_table import InstructionTable
 from .pipeline import CompressionPipeline
 from .recipes import (
     PHRASE_MAP,
@@ -29,6 +30,7 @@ from .slot_filler import FilledSlots, SlotFiller
 
 __all__ = [
     "CompressionPipeline",
+    "InstructionTable",
     "segmentize",
     "Segment",
     "SegmentType",

@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
+from .instruction_table import InstructionTable
 from .segmentizer import Segment, segmentize
 
 
@@ -26,6 +27,8 @@ class PipelineResult:
     tokens_after: int
     duration_ms: float
     stages_run: List[str] = field(default_factory=list)
+    instruction_replacements: Dict[str, int] = field(default_factory=dict)
+    instruction_savings: Dict[str, int] = field(default_factory=dict)
 
     @property
     def tokens_saved(self) -> int:
@@ -66,14 +69,20 @@ class CompressionPipeline:
         enable_dedup: bool = True,
         enable_segmentation: bool = True,
         enable_directives: bool = True,
+        enable_instruction_table: bool = True,
+        instruction_table_path: str | None = None,
+        context_budget_tight: bool = True,
         trace_id: str = "",
     ) -> None:
         self.enable_dedup = enable_dedup
         self.enable_segmentation = enable_segmentation
         self.enable_directives = enable_directives
+        self.enable_instruction_table = enable_instruction_table
+        self.context_budget_tight = context_budget_tight
         self.trace_id = trace_id
         self._hooks: List[Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]] = []
         self._directive_applier = DirectiveApplier()
+        self._instruction_table = InstructionTable(path=instruction_table_path)
 
     def add_hook(
         self,
@@ -112,7 +121,20 @@ class CompressionPipeline:
             out = dedup_messages(out)
             stages.append("dedup")
 
-        # Stage 2: custom hooks
+        instruction_replacements: Dict[str, int] = {}
+        instruction_savings: Dict[str, int] = {}
+
+        # Stage 2: instruction table lookup compression
+        if self.enable_instruction_table:
+            out, instruction_stats = self._instruction_table.compress_messages(
+                out,
+                context_budget_tight=self.context_budget_tight,
+            )
+            instruction_replacements = instruction_stats.replacements_by_id
+            instruction_savings = instruction_stats.tokens_saved_by_id
+            stages.append("instruction_table")
+
+        # Stage 3: custom hooks
         for hook in self._hooks:
             try:
                 out = hook(out)
@@ -120,13 +142,13 @@ class CompressionPipeline:
             except Exception as exc:
                 print(f"  ⚠ compression hook error: {exc}")
 
-        # Stage 3: segmentize
+        # Stage 4: segmentize
         segments: List[Segment] = []
         if self.enable_segmentation:
             segments = segmentize(out, tools=tools, trace_id=self.trace_id)
             stages.append("segmentize")
 
-        # Stage 4: directives
+        # Stage 5: directives
         if self.enable_directives:
             out = self._directive_applier.apply(out)
             stages.append("directives")
@@ -141,6 +163,8 @@ class CompressionPipeline:
             tokens_after=tokens_after,
             duration_ms=round(duration_ms, 2),
             stages_run=stages,
+            instruction_replacements=instruction_replacements,
+            instruction_savings=instruction_savings,
         )
 
 
