@@ -23,6 +23,7 @@ from .prefetcher import (
     PrefetchStore,
     PredictivePrefetcher,
 )
+from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
 
 __all__ = [
     "FileLockManager",
@@ -46,4 +47,7 @@ __all__ = [
     "PredictivePrefetcher",
     "PrefetchStore",
     "DEFAULT_DIAGNOSTIC_ARTIFACTS",
+    "ErrorNormalizer",
+    "FailureSignatureDB",
+    "MergeSuggestion",
 ]
