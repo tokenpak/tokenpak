@@ -431,6 +431,18 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate exec subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "exec":
+        try:
+            from tokenpak.agent.cli.commands.exec import exec_cmd
+
+            sys.argv = sys.argv[1:]
+            exec_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"exec command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate metrics subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "metrics":
         import argparse as _ap
