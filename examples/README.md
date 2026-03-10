@@ -1,147 +1,135 @@
-# TokenPak Examples
+# TokenPak Python Examples
 
-Practical, runnable examples for common TokenPak use cases.
+Practical, copy-paste-ready Python examples for common TokenPak SDK workflows.
+These scripts are intentionally local-first and runnable without external API calls.
+Use them to understand compression, caching, metrics, and proxy cost behavior.
 
-## Quick Start
-
-```bash
-pip install tokenpak
-cd examples/basic_compression
-python main.py
-```
-
----
-
-## Examples
-
-### 🟢 Basic (Start Here)
-
-| Example | Problem Solved | Time | Savings |
-|---|---|---|---|
-| [basic_compression](./basic_compression/) | Compress verbose text/code | 5 min | 40–60% |
-| [cache_management](./cache_management/) | Avoid reprocessing identical content | 5 min | 100x speedup on hits |
-| [cli_usage](./cli_usage/) | Compress files from the terminal | 5 min | 40–60% |
-| [async_compression](./async_compression/) | Non-blocking compression for asyncio apps | 5 min | 40–60% |
-
-### 🟡 Intermediate
-
-| Example | Problem Solved | Time | Savings |
-|---|---|---|---|
-| [multi_turn_compression](./multi_turn_compression/) | Keep long chat histories within token budgets | 10 min | 40–65% |
-| [openai_wrapper](./openai_wrapper/) | Drop-in OpenAI client with auto-compression | 10 min | 30–60% |
-| [claude_integration](./claude_integration/) | Drop-in Anthropic client with auto-compression | 10 min | 30–60% |
-| [streaming_compression](./streaming_compression/) | Compress log/file streams on-the-fly | 10 min | 40–65% |
-| [error_handling](./error_handling/) | Graceful fallbacks, retries, circuit breakers | 10 min | N/A |
-
-### 🔴 Advanced
-
-| Example | Problem Solved | Time | Savings |
-|---|---|---|---|
-| [api_server](./api_server/) | Compression proxy server for any LLM app | 15 min | 30–60% |
-| [fastapi_middleware](./fastapi_middleware/) | Auto-compress request bodies in FastAPI | 15 min | 30–60% |
-| [flask_integration](./flask_integration/) | Decorator + before_request hook for Flask | 15 min | 30–60% |
-| [django_integration](./django_integration/) | Middleware + service layer for web apps | 15 min | 30–60% |
-| [langchain_integration](./langchain_integration/) | LangChain memory + RAG document compression | 15 min | 40–60% |
-
-### 🌍 Real-World Scenarios
-
-| Example | Problem Solved | Time | Savings |
-|---|---|---|---|
-| [real_world/vector_compression.py](./real_world/vector_compression.py) | Compress RAG retrieval chunks to fit token budget | 10 min | 40–55% |
-| [real_world/db_query_compression.py](./real_world/db_query_compression.py) | Compress database result text fields | 10 min | 40–65% |
-| [real_world/api_response_compression.py](./real_world/api_response_compression.py) | Compress third-party API responses | 10 min | 50–75% |
-
-### 📊 Benchmarking
-
-| Example | Problem Solved | Time | |
-|---|---|---|---|
-| [performance_benchmarking](./performance_benchmarking/) | Measure savings, speed, and cost impact | 5 min | — |
-
----
-
-## REST API Examples
-
-If you're using TokenPak as an HTTP service (see [api_server](./api_server/)):
+## Quick start
 
 ```bash
-# Start the server
-cd api_server && python server.py
-
-# Then run cURL examples
-bash api_server/curl_examples.sh
+cd /home/trix/Projects/tokenpak
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+python examples/basic_compression.py
 ```
 
-Or use Python requests directly:
+## Examples at a glance
 
-```python
-import requests
+### 1) `basic_compression.py`
+**Use case:** First-time SDK users who want a minimal compress workflow.
 
-r = requests.post("http://localhost:8000/compress", json={
-    "text": "Your verbose text here...",
-})
-print(r.json()["compressed"])
-```
+What it shows:
+- Create a local `TokenPakClient`
+- Compress a large prompt string
+- Compute token savings with `count_tokens`
+- Print a simple cost/savings-style summary
 
----
-
-## Integration Patterns
-
-### Standalone CLI
+Run:
 ```bash
-tokenpak compress input.txt -o output.txt
-tokenpak compress --stdin < large_file.txt
+python examples/basic_compression.py
 ```
 
-### Programmatic (Python)
-```python
-from tokenpak import HeuristicEngine
-engine = HeuristicEngine()
-compressed = engine.compact(text)
-```
-
-### Async (asyncio)
-```python
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-_executor = ThreadPoolExecutor()
-
-async def compress(text):
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_executor, engine.compact, text)
-```
-
-### HTTP API
-```python
-import requests
-result = requests.post("http://localhost:8000/compress", json={"text": text}).json()
-```
+Expected output (shape):
+- Original tokens: <int>
+- Compressed tokens: <int>
+- Saved <pct>% tokens
 
 ---
 
-## Error Handling
+### 2) `streaming_compression.py`
+**Use case:** Very large context payloads where chunking improves memory behavior.
 
-Always wrap compression in try/except for production:
+What it shows:
+- Split text into chunks with an iterator
+- Compress each chunk independently
+- Track peak in-memory chunk token count
+- Stitch chunk outputs into one compressed payload
 
-```python
-def safe_compress(text: str) -> str:
-    try:
-        return engine.compact(text)
-    except Exception:
-        return text  # fallback: original text
-```
-
-See [error_handling/](./error_handling/) for full patterns including retry, circuit breaker, and timeout.
-
----
-
-## Performance
-
-Typical results on a modern CPU:
-- **Latency:** ~1ms per compression call
-- **Throughput:** ~1,000 req/s single-threaded
-- **Savings:** 40-60% on prose, 30-50% on code, 45-65% on chat history
-
-Run the benchmark:
+Run:
 ```bash
-cd performance_benchmarking && python main.py
+python examples/streaming_compression.py
 ```
+
+Expected output (shape):
+- Input tokens: <int>
+- Output tokens: <int>
+- Peak chunk tokens: <int>
+- Memory efficiency note
+
+---
+
+### 3) `cache_usage.py`
+**Use case:** Repeated prompts in agents, workers, or scheduled jobs.
+
+What it shows:
+- Prompt-keyed cache for repeated requests
+- Hit/miss tracking over a sample workload
+- Final hit-rate reporting
+- Fast repeated response behavior
+
+Run:
+```bash
+python examples/cache_usage.py
+```
+
+Expected output (shape):
+- Prompt-by-prompt logs
+- Cache stats block
+- Hits / Misses / Hit rate
+
+---
+
+### 4) `metrics_collection.py`
+**Use case:** Compare savings across models for observability and routing policy.
+
+What it shows:
+- Per-model sample rows
+- Savings calculation per model
+- Aggregate savings across all samples
+- Compact report-table style output
+
+Run:
+```bash
+python examples/metrics_collection.py
+```
+
+Expected output (shape):
+- `Model metrics` header
+- One row per model
+- Overall savings summary
+
+---
+
+### 5) `with_proxy.py`
+**Use case:** Local proxy deployments (e.g., `localhost:8766`) with cost accounting.
+
+What it shows:
+- Configure a client with `base_url`
+- Estimate direct model cost vs compressed proxy cost
+- Print estimated dollar savings
+- Demonstrate integration pattern without network dependency
+
+Run:
+```bash
+python examples/with_proxy.py
+```
+
+Expected output (shape):
+- Proxy endpoint line
+- Direct model cost
+- Proxy-compressed cost
+- Estimated savings
+
+## Notes
+
+- These examples are educational and deterministic by design.
+- No external API calls are required for execution.
+- Safe to run in CI or local dev environments.
+
+## API docs
+
+- Project README: `../README.md`
+- Python package source: `../tokenpak/`
+- CLI usage: `../tokenpak/cli.py`
+- Test suite reference: `../tests/`
