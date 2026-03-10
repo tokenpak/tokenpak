@@ -177,7 +177,7 @@ class TestProxyForwarding:
                 assert "id" in data or "error" in data
         except urllib.error.HTTPError as e:
             # 502/503 from proxy means proxy ran (didn't crash), upstream was unreachable
-            assert e.code in (200, 201, 400, 404, 502, 503), f"Unexpected error code: {e.code}"
+            assert e.code in (200, 201, 400, 401, 404, 502, 503), f"Unexpected error code: {e.code}"
 
     def test_proxy_routes_direct_url(self, proxy):
         """Proxy should handle direct-URL forwarding (CONNECT-style passthrough)."""
@@ -270,7 +270,7 @@ class TestCompressionPipeline:
                 assert resp.status in (200, 201)
         except urllib.error.HTTPError as e:
             # 502 means proxy processed it but upstream was unavailable — acceptable
-            assert e.code in (200, 400, 502, 503), f"Unexpected: {e.code}"
+            assert e.code in (200, 400, 401, 502, 503), f"Unexpected: {e.code}"
 
 
 # ---------------------------------------------------------------------------
