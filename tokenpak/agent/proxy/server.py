@@ -327,6 +327,31 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path.startswith("/dashboard"):
+            # Serve dashboard UI files
+            from tokenpak.dashboard import serve_dashboard_file
+            import asyncio
+            
+            # Extract dashboard path
+            dashboard_path = path[10:]  # Remove '/dashboard' prefix
+            if not dashboard_path:
+                dashboard_path = '/'
+            
+            # Serve the file
+            result = asyncio.run(serve_dashboard_file(dashboard_path))
+            if result:
+                content, mime_type = result
+                body = content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type + "; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_error(404)
+            return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
             self._send_json(get_degradation_tracker().summary())
