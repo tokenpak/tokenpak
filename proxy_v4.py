@@ -1148,6 +1148,14 @@ SESSION = {
     "injection_skips": 0,
     "cache_read_tokens": 0,
     "cache_creation_tokens": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "cache_miss_reasons": {
+        "timestamp_poison": 0,
+        "uuid_request_id_poison": 0,
+        "schema_tool_change": 0,
+        "retrieval_order_drift_or_unknown": 0,
+    },
     "canon_hits": 0,
     "canon_tokens_saved": 0,
 }
@@ -1391,6 +1399,48 @@ def _strip_cache_poisons(body_bytes: bytes) -> bytes:
         return body_bytes  # fail-open
 
 
+def _classify_cache_miss_reason(raw_body: Optional[bytes], cache_poison_scrubbed: bool, tools_schema_changed: bool, final_body: Optional[bytes]) -> str:
+    """Best-effort classifier for cache misses."""
+    if tools_schema_changed:
+        return "schema_tool_change"
+
+    raw_text = ""
+    if raw_body:
+        try:
+            raw_text = raw_body.decode("utf-8", errors="ignore")
+        except Exception:
+            raw_text = ""
+
+    if cache_poison_scrubbed:
+        if _TIMESTAMP_PATTERN.search(raw_text):
+            return "timestamp_poison"
+        if _UUID_PATTERN.search(raw_text) or re.search(r"\brequest[_-]?id\b", raw_text, re.IGNORECASE):
+            return "uuid_request_id_poison"
+        return "timestamp_poison"
+
+    if raw_body and final_body and raw_body != final_body:
+        return "retrieval_order_drift_or_unknown"
+
+    return "retrieval_order_drift_or_unknown"
+
+
+def _build_cache_stats_payload() -> Dict[str, Any]:
+    hits = int(SESSION.get("cache_hits", 0) or 0)
+    misses = int(SESSION.get("cache_misses", 0) or 0)
+    total = hits + misses
+    hit_rate = (hits / total) if total > 0 else 0.0
+    miss_reasons = dict(SESSION.get("cache_miss_reasons", {}))
+    return {
+        "hit_rate": round(hit_rate, 4),
+        "cache_read_tokens": int(SESSION.get("cache_read_tokens", 0) or 0),
+        "cache_creation_tokens": int(SESSION.get("cache_creation_tokens", 0) or 0),
+        "cache_hits": hits,
+        "cache_misses": misses,
+        "total_cache_decisions": total,
+        "miss_reasons": miss_reasons,
+    }
+
+
 def compact_request_body(body_bytes: bytes, adapter: Optional[FormatAdapter] = None):
     """
     Style-contract-aware compaction.
@@ -1616,6 +1666,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "by_model": MONITOR.get_by_model(),
                 "recent": MONITOR.recent(10),
             })
+            return
+        if self.path == "/cache-stats":
+            self._send_json(_build_cache_stats_payload())
             return
         if self.path == "/recent":
             self._send_json({"recent": MONITOR.recent(50)})
@@ -1896,6 +1949,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
+        cache_poison_scrubbed = False
+        tools_schema_changed = False
+        raw_request_body_for_cache_reason = body
+        final_request_body_for_cache_reason = body
 
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
@@ -1952,6 +2009,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             _tool_reg = _get_tool_registry()
                             if _tool_reg:
                                 body, _tools_changed = _tool_reg.normalize_request(body)
+                                tools_schema_changed = bool(_tools_changed)
                                 _tstats = _tool_reg.stats()
                                 SESSION["tool_schema_frozen_tools"] = _tstats.get("frozen_tools", 0)
                                 SESSION["tool_schema_bytes_saved"] = _tool_reg.bytes_saved
@@ -2027,7 +2085,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
                     if body:
+                        _pre_poison_body = body
                         body = _strip_cache_poisons(body)
+                        cache_poison_scrubbed = body != _pre_poison_body
 
                     # Phase 1: Vault context injection (BEFORE compaction)
                     t_inject = time.time()
@@ -2130,6 +2190,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 body = _original_body  # restore original body so request still forwards
                 model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
                 sent_input_tokens = input_tokens
+
+        final_request_body_for_cache_reason = body
 
         fwd_headers = {}
         for key in self.headers:
@@ -2410,6 +2472,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 SESSION["injected_tokens"] += injected_tokens
                 SESSION["cache_read_tokens"] += cache_read_tokens
                 SESSION["cache_creation_tokens"] += cache_creation_tokens
+                if cache_read_tokens > 0:
+                    SESSION["cache_hits"] += 1
+                else:
+                    SESSION["cache_misses"] += 1
+                    miss_reason = _classify_cache_miss_reason(
+                        raw_request_body_for_cache_reason,
+                        cache_poison_scrubbed=cache_poison_scrubbed,
+                        tools_schema_changed=tools_schema_changed,
+                        final_body=final_request_body_for_cache_reason,
+                    )
+                    miss_map = SESSION.setdefault("cache_miss_reasons", {})
+                    miss_map[miss_reason] = int(miss_map.get(miss_reason, 0) or 0) + 1
                 if injected_tokens > 0:
                     SESSION["injection_hits"] += 1
 
