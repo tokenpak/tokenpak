@@ -60,3 +60,4 @@ from .fidelity_tiers import (
     TierSelector,
     TierStore,
 )
+from .query_rewriter import QueryRewriter, RewriteResult, rewrite_query
