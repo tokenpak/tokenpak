@@ -1,273 +1,249 @@
-# Observability — Request Logging
+# TokenPak Logging Schema
 
-TokenPak proxy ships with built-in structured request logging. Every proxied
-request produces a JSON log entry suitable for ingestion into any log
-aggregator (Datadog, Splunk, Loki, CloudWatch, etc.).
+Complete reference for logging data structures and JSON fields.
 
----
+## LogRecord
 
-## Quick Start
+Standard request log entry.
 
-Logging is **enabled by default** and writes to `~/.tokenpak/logs/proxy-YYYY-MM-DD.log`.
+### Fields
 
-```bash
-# View today's log in real time
-tail -f ~/.tokenpak/logs/proxy-$(date +%Y-%m-%d).log | jq .
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | ISO 8601 | Request timestamp (UTC) |
+| `request_id` | UUID | Unique request identifier |
+| `level` | string | Log level: debug, info, warn, error |
+| `endpoint` | string | API endpoint (e.g., /compile, /cache/get) |
+| `client_ip` | string | Client IP address |
+| `method` | string | HTTP method (GET, POST, etc.) |
+| `status_code` | integer | Response HTTP status code |
+| `request_size` | integer | Request body size (bytes) |
+| `response_size` | integer | Response body size (bytes) |
+| `latency_ms` | float | Total request latency (milliseconds) |
+| `compression_ratio` | float | Response size / request size (0-1) |
+| `message` | string | Human-readable message |
+| `context` | object | Additional structured context |
 
-# Count requests by status code
-cat ~/.tokenpak/logs/proxy-*.log | jq -r '.response_status' | sort | uniq -c
-
-# Find slow requests (> 2s)
-cat ~/.tokenpak/logs/proxy-*.log | jq 'select(.latency_ms > 2000)'
-```
-
----
-
-## Configuration
-
-Add a `"logging"` key to `~/.tokenpak/config.json`:
+### Example
 
 ```json
 {
-  "logging": {
-    "enabled": true,
-    "level": "info",
-    "destination": "file",
-    "retention_days": 30,
-    "include_request_body": false,
-    "include_response_body": false
+  "timestamp": "2026-03-10T06:00:00.123456Z",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "level": "info",
+  "endpoint": "/compile",
+  "client_ip": "192.168.1.100",
+  "method": "POST",
+  "status_code": 200,
+  "request_size": 5000,
+  "response_size": 3000,
+  "latency_ms": 45.234,
+  "compression_ratio": 0.6,
+  "message": "Compilation successful",
+  "context": {
+    "input_blocks": 20,
+    "output_blocks": 15,
+    "blocks_removed": 5,
+    "compression_methods": ["truncation", "deduplication"]
   }
 }
 ```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `true` | Master on/off switch |
-| `level` | string | `"info"` | Minimum level: `"debug"`, `"info"`, `"warn"` |
-| `destination` | string | `"file"` | `"file"`, `"stdout"`, `"syslog"` |
-| `retention_days` | int | `30` | Days to keep log files (file destination only) |
-| `include_request_body` | bool | `false` | Include raw request body (privacy risk) |
-| `include_response_body` | bool | `false` | Include raw response body (privacy risk) |
+## CompileAudit
 
-### Environment Variable Overrides
+Detailed audit trail for `/compile` requests.
 
-```bash
-TOKENPAK_LOG_ENABLED=1          # or 0 to disable
-TOKENPAK_LOG_LEVEL=debug        # debug | info | warn
-TOKENPAK_LOG_DESTINATION=stdout # file | stdout | syslog
-TOKENPAK_LOG_RETENTION_DAYS=7
-```
-
----
-
-## Log Schema
-
-Each log entry is a single-line JSON object (JSONL format):
-
-```json
-{
-  "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "timestamp": "2026-03-10T14:23:01.234567+00:00",
-  "level": "info",
-  "client_ip": "127.0.0.1",
-  "method": "POST",
-  "endpoint": "/v1/messages",
-  "request_body_size": 8192,
-  "response_status": 200,
-  "response_body_size": 1024,
-  "compression_ratio": 0.7241,
-  "latency_ms": 432.15,
-  "model": "claude-3-5-sonnet-20241022",
-  "provider": "anthropic"
-}
-```
-
-### Field Reference
+### Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `request_id` | string | UUID v4 unique per request. Propagated via `X-Request-ID` response header. |
-| `timestamp` | string | ISO 8601 UTC timestamp |
-| `level` | string | `"debug"`, `"info"`, `"warn"` |
-| `client_ip` | string | Client IP address |
-| `method` | string | HTTP method (`POST`, `GET`, etc.) |
-| `endpoint` | string | Request path (e.g. `/v1/messages`, `/v1/chat/completions`) |
-| `request_body_size` | int | Request body bytes |
-| `response_status` | int | HTTP response status code |
-| `response_body_size` | int | Response body bytes |
-| `compression_ratio` | float\|null | Tokens sent / tokens in raw request (e.g. 0.72 = 28% saved). Null if no compression. |
-| `latency_ms` | float | Total request latency in milliseconds |
-| `model` | string | LLM model name (e.g. `claude-3-5-sonnet-20241022`) |
-| `provider` | string | Provider name (`anthropic`, `openai`, `google`) |
+| `request_id` | UUID | Links to LogRecord |
+| `timestamp` | ISO 8601 | Audit timestamp |
+| `input_block_count` | integer | Number of input blocks |
+| `input_blocks_by_type` | object | Block counts by type |
+| `input_total_size` | integer | Total input size (bytes) |
+| `output_block_count` | integer | Number of output blocks |
+| `output_blocks_by_type` | object | Output counts by type |
+| `output_total_size` | integer | Total output size (bytes) |
+| `blocks_audited` | array | Detailed per-block decisions |
+| `compression_methods_used` | object | Count of each method used |
+| `parse_latency_ms` | float | Parse phase latency |
+| `compile_latency_ms` | float | Compilation latency |
+| `render_latency_ms` | float | Rendering latency |
+| `total_latency_ms` | float | Total compilation latency |
+| `compression_ratio` | float | Output / input size |
+| `tokens_removed` | integer | Total tokens removed |
+| `errors` | array | Any errors encountered |
 
----
+### BlockType Values
 
-## Audit Trail (Debug Level)
+- `instruction` — System instructions
+- `knowledge` — Knowledge base content
+- `evidence` — Supporting evidence
+- `example` — Examples
+- `custom` — Custom blocks
 
-When `level` is set to `"debug"`, the proxy also emits structured audit events
-that document *why* tokens were removed or compacted:
+### CompressionMethod Values
 
-### Compile event
+- `extractive` — Extract key sentences
+- `llm` — LLM-based summarization
+- `truncation` — Truncate to token limit
+- `deduplication` — Remove duplicates
+- `semantic` — Semantic similarity filtering
+
+### BlockAudit
+
+Per-block decision record within CompileAudit.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `block_id` | string | Block identifier |
+| `block_type` | string | Type of block |
+| `original_size` | integer | Original size (bytes) |
+| `final_size` | integer | Final size (bytes) |
+| `action` | string | kept, removed, compacted, deduplicated |
+| `compression_method` | string | Method used (if compressed) |
+| `reason` | string | Human-readable reason |
+| `similarity_to_kept` | float | Similarity score (for dedup) |
+
+### Example
 
 ```json
 {
-  "request_id": "a1b2c3d4...",
-  "timestamp": "2026-03-10T14:23:01.1Z",
-  "level": "debug",
-  "event": "compile",
-  "input_block_count": 12,
-  "output_block_count": 7,
-  "blocks_removed_count": 5,
-  "blocks_removed": [
-    {"id": "knowledge-3", "reason": "low_relevance"},
-    {"id": "evidence-7", "reason": "duplicate"}
-  ],
-  "compression_method": "extractive",
-  "stage_timings_ms": {
-    "parse": 3.2,
-    "compile": 88.5,
-    "render": 2.8
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-03-10T06:00:00.123456Z",
+  "input_block_count": 20,
+  "input_blocks_by_type": {
+    "instruction": 5,
+    "knowledge": 10,
+    "evidence": 5
   },
-  "input_block_types": {"instructions": 2, "knowledge": 5, "evidence": 5},
-  "output_block_types": {"instructions": 2, "knowledge": 3, "evidence": 2},
-  "tokens_before": 12000,
-  "tokens_after": 8400
+  "input_total_size": 50000,
+  "output_block_count": 15,
+  "output_blocks_by_type": {
+    "instruction": 5,
+    "knowledge": 8,
+    "evidence": 2
+  },
+  "output_total_size": 35000,
+  "blocks_audited": [
+    {
+      "block_id": "block-k-1",
+      "block_type": "knowledge",
+      "original_size": 1000,
+      "final_size": 0,
+      "action": "removed",
+      "compression_method": null,
+      "reason": "Duplicate of block-k-2"
+    },
+    {
+      "block_id": "block-e-1",
+      "block_type": "evidence",
+      "original_size": 2000,
+      "final_size": 1000,
+      "action": "compacted",
+      "compression_method": "truncation",
+      "reason": "Truncated to 500 tokens"
+    }
+  ],
+  "compression_methods_used": {
+    "truncation": 3,
+    "deduplication": 2
+  },
+  "parse_latency_ms": 5.0,
+  "compile_latency_ms": 30.0,
+  "render_latency_ms": 5.0,
+  "total_latency_ms": 40.0,
+  "compression_ratio": 0.7,
+  "tokens_removed": 5000,
+  "errors": []
 }
 ```
 
-### Cache event
+## CacheAudit
+
+Audit trail for `/cache/*` requests.
+
+### Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `request_id` | UUID | Links to LogRecord |
+| `timestamp` | ISO 8601 | Audit timestamp |
+| `operation` | string | get, set, invalidate, clear |
+| `block_id` | string | Block ID (null for clear) |
+| `cache_hit` | boolean | Cache hit (for get) |
+| `cached_value_size` | integer | Size of cached value |
+| `ttl_seconds` | integer | Time-to-live (for set) |
+| `message` | string | Operation details |
+
+### Example
 
 ```json
 {
-  "request_id": "a1b2c3d4...",
-  "timestamp": "2026-03-10T14:23:01.0Z",
-  "level": "debug",
-  "event": "cache",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-03-10T06:00:00.123456Z",
   "operation": "get",
-  "block_id": "knowledge-3",
+  "block_id": "block-k-1",
   "cache_hit": true,
-  "cached_size": 2048
+  "cached_value_size": 1000,
+  "ttl_seconds": null,
+  "message": "Cache hit for block-k-1"
 }
 ```
 
----
+## MetricsAudit
 
-## Example Log Output
+Audit trail for `/metrics` requests.
 
-### Successful compile request
+### Fields
 
-```json
-{"request_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890","timestamp":"2026-03-10T14:23:01.234567+00:00","level":"info","client_ip":"127.0.0.1","method":"POST","endpoint":"/v1/messages","request_body_size":8192,"response_status":200,"response_body_size":1024,"compression_ratio":0.7241,"latency_ms":432.15,"model":"claude-3-5-sonnet-20241022","provider":"anthropic"}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `request_id` | UUID | Links to LogRecord |
+| `timestamp` | ISO 8601 | Audit timestamp |
+| `aggregation_window` | string | Time window (1h, 24h, etc.) |
+| `data_points_returned` | integer | Number of data points |
+| `metrics_included` | array | List of metric names |
 
-### Error response (401 Unauthorized)
-
-```json
-{"request_id":"b2c3d4e5-f6a7-8901-bcde-f12345678901","timestamp":"2026-03-10T14:23:05.001234+00:00","level":"warn","client_ip":"192.168.1.50","method":"POST","endpoint":"/v1/messages","request_body_size":1024,"response_status":401,"response_body_size":128,"latency_ms":12.3,"model":"unknown","provider":"anthropic"}
-```
-
-### Cache hit
+### Example
 
 ```json
-{"request_id":"c3d4e5f6-a7b8-9012-cdef-123456789012","timestamp":"2026-03-10T14:23:10.567890+00:00","level":"debug","event":"cache","operation":"get","block_id":"kb-system-prompt","cache_hit":true,"cached_size":4096}
+{
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-03-10T06:00:00.123456Z",
+  "aggregation_window": "24h",
+  "data_points_returned": 1440,
+  "metrics_included": [
+    "compression_ratio",
+    "latency_p50",
+    "latency_p95",
+    "latency_p99",
+    "blocks_removed",
+    "requests_per_second",
+    "cache_hit_rate"
+  ]
+}
 ```
 
----
+## Type Reference
 
-## Request ID Correlation
+### LogLevel
 
-Every request gets a UUID assigned in `X-Request-ID` response header.
-Client libraries can log this ID to correlate their trace with proxy logs:
+- `debug` — Detailed tracing information
+- `info` — General informational messages
+- `warn` — Warning messages (unusual but not error)
+- `error` — Error messages (request failed)
 
-```python
-import httpx
+### Destination
 
-resp = httpx.post("http://localhost:8766/v1/messages", ...)
-request_id = resp.headers.get("X-Request-ID")
-print(f"TokenPak request ID: {request_id}")
-```
+- `file` — Write to `~/.tokenpak/logs/proxy-YYYY-MM-DD.log`
+- `stdout` — Write to standard output
+- `syslog` — Write to system syslog
 
-To supply your own ID (e.g., from a distributed trace):
+### CacheOperation
 
-```python
-resp = httpx.post(
-    "http://localhost:8766/v1/messages",
-    headers={"X-Request-ID": "my-trace-id-abc123"},
-    ...
-)
-```
-
----
-
-## Troubleshooting Using Logs
-
-### "Why was my request slow?"
-
-```bash
-# Show requests slower than 1s, sorted by latency
-cat ~/.tokenpak/logs/proxy-*.log \
-  | jq 'select(.latency_ms > 1000)' \
-  | jq -s 'sort_by(.latency_ms) | reverse | .[0:10]'
-```
-
-### "Why did my request fail?"
-
-```bash
-# Find all errors with request IDs
-cat ~/.tokenpak/logs/proxy-*.log \
-  | jq 'select(.response_status >= 400) | {request_id, timestamp, response_status, error}'
-```
-
-### "How much is TokenPak compressing?"
-
-```bash
-# Average compression ratio across all requests
-cat ~/.tokenpak/logs/proxy-*.log \
-  | jq 'select(.compression_ratio != null) | .compression_ratio' \
-  | awk '{sum+=$1; n++} END {printf "Avg compression ratio: %.2f (%.0f%% tokens sent)\n", sum/n, sum/n*100}'
-```
-
-### "Why was block X removed?"
-
-Enable `level: "debug"` and look for audit events:
-
-```bash
-cat ~/.tokenpak/logs/proxy-*.log \
-  | jq 'select(.event == "compile" and .blocks_removed != null) | .blocks_removed[] | select(.id == "your-block-id")'
-```
-
----
-
-## Log Destinations
-
-### File (default)
-
-Daily rotating files at `~/.tokenpak/logs/proxy-YYYY-MM-DD.log`.
-Files older than `retention_days` are automatically pruned.
-
-### Stdout
-
-Suitable for containerised deployments. Configure in `config.json`:
-
-```json
-{"logging": {"destination": "stdout"}}
-```
-
-Or via env: `TOKENPAK_LOG_DESTINATION=stdout`
-
-Stdout logs are consumed by Docker/Kubernetes log drivers and forwarded to
-your configured log aggregator.
-
-### Syslog
-
-Linux/macOS only. Logs appear in system journal with the identifier
-`tokenpak-proxy`:
-
-```bash
-journalctl -t tokenpak-proxy -f
-```
-
-### Future: Cloud (Datadog / Splunk)
-
-Cloud log destinations are planned for a future release. In the interim,
-use the file destination with a log shipping agent (Filebeat, Fluentd, etc.).
+- `get` — Retrieve from cache
+- `set` — Store in cache
+- `invalidate` — Invalidate specific block
+- `clear` — Clear all cache
