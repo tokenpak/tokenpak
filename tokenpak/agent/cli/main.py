@@ -290,6 +290,17 @@ def _cost_argparse(argv: list) -> None:
     run_cost_cmd(args)
 
 
+def _diff_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+
+    dp = argparse.ArgumentParser(prog="tokenpak diff", add_help=True)
+    dp.add_argument("--verbose", "-v", action="store_true", help="Show token counts per block")
+    dp.add_argument("--json", dest="raw", action="store_true", help="Output raw JSON")
+    dp.add_argument("--since", default=None, help="Diff from specific ISO timestamp")
+    args = dp.parse_args(argv)
+    run_diff_cmd(args)
+
+
 def _budget_argparse(argv: list) -> None:
     from tokenpak.agent.cli.commands.budget import run_budget_cmd
 
@@ -466,6 +477,11 @@ def main():
     # Delegate budget subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "budget":
         _budget_argparse(sys.argv[2:])
+        return
+
+    # Delegate diff subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "diff":
+        _diff_argparse(sys.argv[2:])
         return
 
     p = argparse.ArgumentParser(prog="tokenpak", add_help=False)
