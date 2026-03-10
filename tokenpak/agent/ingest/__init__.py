@@ -4,3 +4,12 @@ from .api import create_ingest_app
 from .api import router as ingest_router
 
 __all__ = ["create_ingest_app", "ingest_router"]
+
+from .cross_doc import (  # noqa: F401
+    CrossDocAnalyzer,
+    DocCard,
+    SchemaConverter,
+    analyze_docs,
+)
+
+__all__ += ["CrossDocAnalyzer", "DocCard", "SchemaConverter", "analyze_docs"]
