@@ -373,3 +373,21 @@ def decide(
         fallback_reason="",
         confidence=confidence,
     )
+
+
+# ---------------------------------------------------------------------------
+# Canonical intent set + helper — added for classifier-first router wiring
+# ---------------------------------------------------------------------------
+
+#: All intents with explicit policy definitions.
+CANONICAL_INTENTS: frozenset[str] = frozenset(_BASE_POLICY.keys())
+
+
+def is_known_intent(intent: str) -> bool:
+    """Return True if intent is in the canonical policy set."""
+    return intent in _BASE_POLICY
+
+
+def known_intents() -> list[str]:
+    """Return list of all known canonical intent strings."""
+    return list(_BASE_POLICY.keys())
