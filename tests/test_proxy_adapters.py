@@ -68,7 +68,14 @@ class TestAnthropicAdapter:
         assert restored["model"] == "claude-sonnet-4-6"
         assert restored["stream"] is True
 
-    def test_inject_system_context_uses_ephemeral_cache_control(self):
+    def test_inject_system_context_stable_prefix_gets_cache_control(self):
+        """
+        Stable prefix (original system) must get cache_control: ephemeral.
+        Volatile injection block must NOT have cache_control.
+
+        Regression: old code applied cache_control to the volatile injection block,
+        causing cache churn.  The marker must anchor the STABLE prefix.
+        """
         body = _to_bytes(
             {
                 "model": "claude-sonnet-4-6",
@@ -78,8 +85,128 @@ class TestAnthropicAdapter:
         )
 
         updated = json.loads(self.adapter.inject_system_context(body, "vault context"))
-        assert isinstance(updated["system"], list)
-        assert updated["system"][-1]["cache_control"]["type"] == "ephemeral"
+        assert isinstance(updated["system"], list), "system should be a list after injection"
+        assert len(updated["system"]) == 2, f"Expected 2 blocks, got {len(updated['system'])}"
+
+        stable_block = updated["system"][0]
+        volatile_block = updated["system"][1]
+
+        # Stable prefix (original system) must have cache_control
+        assert stable_block["text"] == "base system", "First block should be original system"
+        assert stable_block.get("cache_control") == {"type": "ephemeral"}, (
+            f"Stable prefix must have cache_control: ephemeral, got: {stable_block.get('cache_control')}"
+        )
+
+        # Volatile injection must NOT have cache_control (it changes every request)
+        assert volatile_block["text"] == "vault context", "Second block should be vault injection"
+        assert "cache_control" not in volatile_block, (
+            f"Volatile injection must NOT have cache_control — causes cache churn. Got: {volatile_block}"
+        )
+
+    def test_inject_system_context_list_system_stable_prefix_gets_cache_control(self):
+        """
+        When system is already a list, the last existing block (stable prefix)
+        gets cache_control.  The appended volatile injection must NOT have it.
+        """
+        body = _to_bytes(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": [
+                    {"type": "text", "text": "You are helpful."},
+                    {"type": "text", "text": "Additional stable context."},
+                ],
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+        )
+
+        updated = json.loads(self.adapter.inject_system_context(body, "retrieved docs"))
+        system = updated["system"]
+        assert len(system) == 3, f"Expected 3 blocks, got {len(system)}"
+
+        # Last pre-existing block (index 1) should be the cache boundary
+        boundary_block = system[1]
+        assert boundary_block["text"] == "Additional stable context."
+        assert boundary_block.get("cache_control") == {"type": "ephemeral"}, (
+            f"Last stable block must be cache boundary, got: {boundary_block.get('cache_control')}"
+        )
+
+        # Volatile injection (index 2) must have no cache_control
+        volatile_block = system[2]
+        assert volatile_block["text"] == "retrieved docs"
+        assert "cache_control" not in volatile_block, (
+            f"Volatile injection must NOT have cache_control. Got: {volatile_block}"
+        )
+
+    def test_inject_system_context_empty_string_system(self):
+        """Empty string system → volatile injection stored as plain string (no crash)."""
+        body = _to_bytes(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": "",
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+        )
+        updated = json.loads(self.adapter.inject_system_context(body, "injection"))
+        # No crash; system is set to injection text
+        assert "injection" in str(updated.get("system", ""))
+
+    def test_inject_idempotent_cache_control_not_doubled(self):
+        """
+        If the last stable block already has cache_control, it must not be doubled.
+        """
+        body = _to_bytes(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": [
+                    {
+                        "type": "text",
+                        "text": "Already marked stable.",
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+        )
+        updated = json.loads(self.adapter.inject_system_context(body, "volatile"))
+        system = updated["system"]
+        assert len(system) == 2
+        # The already-marked block remains exactly once
+        stable = system[0]
+        assert stable.get("cache_control") == {"type": "ephemeral"}
+        # Volatile has no cache_control
+        assert "cache_control" not in system[1]
+
+    def test_repeated_request_stable_prefix_hash_consistent(self):
+        """
+        For repeated identical requests, the stable prefix shape must be byte-identical.
+        Regression: if cache_control lands on the volatile block, each new injection
+        changes the hash → 0% cache hit rate.
+        """
+        body = _to_bytes(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": "Stable base system.",
+                "messages": [{"role": "user", "content": "hello"}],
+            }
+        )
+
+        # Simulate two requests with DIFFERENT vault injections
+        updated1 = json.loads(self.adapter.inject_system_context(body, "vault result A"))
+        updated2 = json.loads(self.adapter.inject_system_context(body, "vault result B"))
+
+        # Stable prefix blocks (index 0) must be identical across both requests
+        stable1 = {k: v for k, v in updated1["system"][0].items()}
+        stable2 = {k: v for k, v in updated2["system"][0].items()}
+        assert stable1 == stable2, (
+            f"Stable prefix changed between requests:\n  req1: {stable1}\n  req2: {stable2}"
+        )
+        # Their text and cache_control must match
+        assert stable1["text"] == stable2["text"] == "Stable base system."
+        assert stable1["cache_control"] == stable2["cache_control"] == {"type": "ephemeral"}
+
+        # Volatile blocks (index 1) must differ (different injection content)
+        assert updated1["system"][1]["text"] == "vault result A"
+        assert updated2["system"][1]["text"] == "vault result B"
 
 
 class TestOpenAIChatAdapter:

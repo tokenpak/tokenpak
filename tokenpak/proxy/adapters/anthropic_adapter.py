@@ -63,27 +63,47 @@ class AnthropicAdapter(FormatAdapter):
         return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
     def inject_system_context(self, body: bytes, injection_text: str) -> bytes:
+        """
+        Inject volatile content into the system prompt with correct cache boundary.
+
+        Cache boundary strategy (Anthropic prompt caching):
+          - STABLE prefix (original system blocks) → gets cache_control: ephemeral
+          - VOLATILE injection (retrieval/vault content) → NO cache_control
+
+        Placing cache_control on the volatile block causes cache churn (0% hit rate)
+        because the volatile content changes every request.  The cache_control must
+        anchor the STABLE prefix so Anthropic can cache up to that boundary.
+        """
         canonical = self.normalize(body)
+        # Volatile injection block — intentionally NO cache_control
+        volatile_block: dict = {"type": "text", "text": injection_text}
+
         if isinstance(canonical.system, str):
             if canonical.system:
+                # String system → convert to list; stable block gets the cache marker
                 canonical.system = [
-                    {"type": "text", "text": canonical.system},
                     {
                         "type": "text",
-                        "text": injection_text,
+                        "text": canonical.system,
                         "cache_control": {"type": "ephemeral"},
                     },
+                    volatile_block,  # volatile: no cache_control
                 ]
             else:
+                # Empty system — just store raw text (no stable prefix to mark)
                 canonical.system = injection_text
         elif isinstance(canonical.system, list):
-            canonical.system.append(
-                {
-                    "type": "text",
-                    "text": injection_text,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            )
+            # Mark the LAST EXISTING block (stable prefix anchor)
+            if canonical.system:
+                marked = list(canonical.system)
+                for i in range(len(marked) - 1, -1, -1):
+                    blk = marked[i]
+                    if isinstance(blk, dict) and blk.get("type") == "text":
+                        if blk.get("cache_control") != {"type": "ephemeral"}:
+                            marked[i] = dict(blk, cache_control={"type": "ephemeral"})
+                        break
+                canonical.system = marked
+            canonical.system.append(volatile_block)  # volatile: no cache_control
         else:
             canonical.system = injection_text
         return self.denormalize(canonical)
