@@ -11,9 +11,12 @@ from .learning import (
     DEFAULT_LEARNING_PATH,
     cmd_learn_status,
     get_best_model,
+    get_best_quality_per_token,
+    get_compression_quality_signal,
     get_effective_compression,
     learn,
     load,
+    record_quality_per_token,
     reset,
 )
 from .locks import FileLockManager, LockConflictError, LockExpiredError
@@ -29,7 +32,10 @@ __all__ = [
     "load",
     "reset",
     "get_best_model",
+    "get_best_quality_per_token",
+    "get_compression_quality_signal",
     "get_effective_compression",
+    "record_quality_per_token",
     "cmd_learn_status",
     "DEFAULT_LEARNING_PATH",
     "HandoffManager",

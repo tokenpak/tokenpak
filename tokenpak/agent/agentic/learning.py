@@ -5,6 +5,7 @@ Extracts and persists patterns from Shadow Mode telemetry:
   - Compression mode effectiveness (calibrator)
   - Block utility scores (citation_tracker)
   - Context gap patterns (miss_detector)
+  - Quality-per-token metrics: outcome_score / tokens_used per model/mode/task
 
 Data is persisted to ~/.tokenpak/learning.json.
 Feeds model routing decisions, recipe selection, and budget allocation.
@@ -50,6 +51,9 @@ def _empty_store() -> dict:
             "queries_with_gaps": 0,
             "expansion_triggers": 0,
         },
+        # quality_per_token: outcome_score / tokens_used
+        # {(model, compression_mode, task_type): {avg_qpt, samples, total_outcome, total_tokens}}
+        "quality_per_token": {},  # key = "<model>|<compression_mode>|<task_type>"
     }
 
 
@@ -271,6 +275,144 @@ def _extract_context_gaps(
 
 
 # ---------------------------------------------------------------------------
+# Extraction: routing_ledger → quality_per_token
+# ---------------------------------------------------------------------------
+
+
+def _extract_quality_per_token(
+    ledger_path: str,
+    store: dict,
+    compression_mode: str = "unknown",
+) -> dict:
+    """
+    Compute quality_per_token from routing_ledger transactions.
+
+    quality_per_token = outcome_score / tokens_used
+    - outcome_score: accepted=1 → 1.0; accepted=0 → 0.0 (no partial in DB)
+    - tokens_used: context_tokens + response_tokens
+
+    Aggregated per key "<model>|<compression_mode>|<task_type>".
+
+    Args:
+        ledger_path:       Path to routing_ledger.db (SQLite).
+        store:             Current learning store dict (mutated in place).
+        compression_mode:  Compression mode label to attribute ledger rows to.
+
+    Returns:
+        Updated store["quality_per_token"] dict.
+    """
+    import sqlite3
+
+    p = Path(ledger_path)
+    if not p.exists():
+        return store.get("quality_per_token", {})
+
+    try:
+        conn = sqlite3.connect(str(p), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("""
+            SELECT
+                model_used,
+                task_type,
+                accepted,
+                context_tokens,
+                response_tokens
+            FROM transactions
+            WHERE accepted IS NOT NULL
+              AND (context_tokens + response_tokens) > 0
+        """).fetchall()
+        conn.close()
+    except sqlite3.Error:
+        return store.get("quality_per_token", {})
+
+    # Aggregate per (model, compression_mode, task_type)
+    agg: Dict[str, Dict] = {}
+    for row in rows:
+        task_type = (row["task_type"] or "UNKNOWN").upper()
+        model = row["model_used"] or "unknown"
+        tokens_used = (row["context_tokens"] or 0) + (row["response_tokens"] or 0)
+        outcome_score = 1.0 if row["accepted"] == 1 else 0.0
+        qpt = outcome_score / tokens_used
+
+        key = f"{model}|{compression_mode}|{task_type}"
+        if key not in agg:
+            agg[key] = {
+                "model": model,
+                "compression_mode": compression_mode,
+                "task_type": task_type,
+                "total_outcome": 0.0,
+                "total_tokens": 0,
+                "samples": 0,
+                "avg_qpt": 0.0,
+            }
+        agg[key]["total_outcome"] += outcome_score
+        agg[key]["total_tokens"] += tokens_used
+        agg[key]["samples"] += 1
+
+    # Compute avg_qpt for each key
+    for key, stats in agg.items():
+        if stats["total_tokens"] > 0:
+            stats["avg_qpt"] = round(stats["total_outcome"] / stats["total_tokens"], 8)
+
+    store["quality_per_token"] = agg
+    return agg
+
+
+# ---------------------------------------------------------------------------
+# Public API: record_quality_per_token()
+# ---------------------------------------------------------------------------
+
+
+def record_quality_per_token(
+    model: str,
+    task_type: str,
+    outcome_score: float,
+    tokens_used: int,
+    compression_mode: str = "unknown",
+    learning_path: str = DEFAULT_LEARNING_PATH,
+) -> None:
+    """
+    Record a single quality_per_token observation into the learning store.
+
+    Incrementally updates the running average without requiring a full ledger
+    re-scan. Use for real-time recording from the proxy or agent.
+
+    Args:
+        model:            Model name (e.g. "claude-sonnet-4-6").
+        task_type:        Task type string (e.g. "CODING", "QA").
+        outcome_score:    1.0 = success, 0.5 = partial, 0.0 = failure.
+        tokens_used:      Total tokens consumed (context + response).
+        compression_mode: Active compression mode (e.g. "aggressive", "hybrid").
+        learning_path:    Path to learning.json.
+    """
+    if tokens_used <= 0:
+        return
+
+    store = _load(learning_path)
+    qpt_map: Dict[str, Dict] = store.setdefault("quality_per_token", {})
+
+    key = f"{model}|{compression_mode}|{task_type.upper()}"
+    if key not in qpt_map:
+        qpt_map[key] = {
+            "model": model,
+            "compression_mode": compression_mode,
+            "task_type": task_type.upper(),
+            "total_outcome": 0.0,
+            "total_tokens": 0,
+            "samples": 0,
+            "avg_qpt": 0.0,
+        }
+
+    entry = qpt_map[key]
+    entry["total_outcome"] += outcome_score
+    entry["total_tokens"] += tokens_used
+    entry["samples"] += 1
+    entry["avg_qpt"] = round(entry["total_outcome"] / entry["total_tokens"], 8)
+
+    _save(store, learning_path)
+
+
+# ---------------------------------------------------------------------------
 # Public API: learn()
 # ---------------------------------------------------------------------------
 
@@ -308,6 +450,7 @@ def learn(
     _extract_compression_modes(_calib, store)
     _extract_block_utility(_utility, store)
     _extract_context_gaps(_gaps, store)
+    _extract_quality_per_token(_ledger, store)
 
     _save(store, learning_path)
     return store
@@ -396,6 +539,143 @@ def get_effective_compression(
         return _MODE_ORDER[min(idx + 1, len(_MODE_ORDER) - 1)]
     except ValueError:
         return base_mode.lower()
+
+
+# ---------------------------------------------------------------------------
+# Public API: get_best_quality_per_token()
+# ---------------------------------------------------------------------------
+
+
+def get_best_quality_per_token(
+    task_type: str,
+    learning_path: str = DEFAULT_LEARNING_PATH,
+    min_samples: int = MIN_SAMPLES_THRESHOLD,
+) -> Optional[Dict]:
+    """
+    Return the (model, compression_mode) combo with the highest avg quality_per_token
+    for a given task_type.
+
+    Returns None if no data exists or no entry meets min_samples.
+
+    Args:
+        task_type:     Task type string (e.g. "CODING", "QA").
+        learning_path: Path to learning.json.
+        min_samples:   Minimum observations required before trusting the metric.
+
+    Returns:
+        Dict with keys: model, compression_mode, task_type, avg_qpt, samples
+        or None.
+    """
+    store = _load(learning_path)
+    qpt_map = store.get("quality_per_token", {})
+    task_upper = task_type.upper()
+
+    best: Optional[Dict] = None
+    best_qpt = -1.0
+
+    for key, stats in qpt_map.items():
+        if stats.get("task_type", "").upper() != task_upper:
+            continue
+        if stats.get("samples", 0) < min_samples:
+            continue
+        avg = stats.get("avg_qpt", 0.0)
+        if avg > best_qpt:
+            best_qpt = avg
+            best = {
+                "model": stats["model"],
+                "compression_mode": stats["compression_mode"],
+                "task_type": stats["task_type"],
+                "avg_qpt": avg,
+                "samples": stats["samples"],
+            }
+
+    return best
+
+
+# ---------------------------------------------------------------------------
+# Public API: get_compression_quality_signal()
+# ---------------------------------------------------------------------------
+
+
+def get_compression_quality_signal(
+    model: str,
+    task_type: str,
+    learning_path: str = DEFAULT_LEARNING_PATH,
+    min_samples: int = MIN_SAMPLES_THRESHOLD,
+) -> Dict:
+    """
+    Compare quality_per_token across compression modes for a model+task_type.
+
+    Used by cost_router to decide whether compression improves or degrades QPT.
+
+    Returns a dict with:
+      - best_mode: compression mode with highest avg_qpt (or None)
+      - prefer_compression: True if aggressive/hybrid beats strict on QPT
+      - modes: {mode: {avg_qpt, samples}} for each tracked mode
+      - recommendation: human-readable string
+
+    Args:
+        model:         Model name.
+        task_type:     Task type string.
+        learning_path: Path to learning.json.
+        min_samples:   Minimum samples threshold.
+
+    Returns:
+        Signal dict.
+    """
+    store = _load(learning_path)
+    qpt_map = store.get("quality_per_token", {})
+    task_upper = task_type.upper()
+    model_lower = model.lower()
+
+    modes: Dict[str, Dict] = {}
+    for key, stats in qpt_map.items():
+        if stats.get("task_type", "").upper() != task_upper:
+            continue
+        if stats.get("model", "").lower() != model_lower:
+            continue
+        mode = stats.get("compression_mode", "unknown")
+        modes[mode] = {
+            "avg_qpt": stats.get("avg_qpt", 0.0),
+            "samples": stats.get("samples", 0),
+        }
+
+    # Filter to modes with enough samples
+    trusted = {m: v for m, v in modes.items() if v["samples"] >= min_samples}
+
+    if not trusted:
+        return {
+            "best_mode": None,
+            "prefer_compression": False,
+            "modes": modes,
+            "recommendation": "insufficient data",
+        }
+
+    best_mode = max(trusted, key=lambda m: trusted[m]["avg_qpt"])
+    strict_qpt = trusted.get("strict", {}).get("avg_qpt", 0.0)
+    best_qpt = trusted[best_mode]["avg_qpt"]
+
+    # Prefer compression if best non-strict mode beats strict
+    prefer_compression = best_mode != "strict" and best_qpt >= strict_qpt
+
+    if prefer_compression:
+        recommendation = (
+            f"Use {best_mode} compression — best QPT "
+            f"({best_qpt:.2e}) vs strict ({strict_qpt:.2e})"
+        )
+    else:
+        recommendation = (
+            f"Back off compression — strict gives best QPT ({strict_qpt:.2e})"
+            if "strict" in trusted
+            else f"Use {best_mode} mode (only trusted option)"
+        )
+
+    return {
+        "best_mode": best_mode,
+        "prefer_compression": prefer_compression,
+        "modes": modes,
+        "recommendation": recommendation,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -498,4 +778,28 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
         print(f"  Expansion triggers:        {cg.get('expansion_triggers', 0)}")
     else:
         print("🔍  Context Gaps  — no data yet")
+    print()
+
+    # Quality-per-token
+    qpt_map = store.get("quality_per_token", {})
+    if qpt_map:
+        print(f"⚡  Quality-per-Token  ({len(qpt_map)} combos tracked)")
+        # Group by task_type
+        by_task: Dict[str, list] = {}
+        for key, stats in qpt_map.items():
+            tt = stats.get("task_type", "UNKNOWN")
+            by_task.setdefault(tt, []).append(stats)
+        for tt in sorted(by_task):
+            entries = sorted(by_task[tt], key=lambda s: s.get("avg_qpt", 0.0), reverse=True)
+            print(f"  {tt}")
+            for stats in entries:
+                model = stats.get("model", "?")
+                mode = stats.get("compression_mode", "?")
+                avg = stats.get("avg_qpt", 0.0)
+                n = stats.get("samples", 0)
+                flag = " ✓" if n >= MIN_SAMPLES_THRESHOLD else " (low data)"
+                print(f"    {model:<36} [{mode:<12}] QPT={avg:.2e}  n={n}{flag}")
+        print()
+    else:
+        print("⚡  Quality-per-Token  — no data yet")
     print()
