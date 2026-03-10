@@ -1,5 +1,5 @@
 """
-TokenPak Request Schemas — JSON Schema definitions for Anthropic and OpenAI requests.
+TokenPak Request Schemas — JSON Schema definitions for adapter-specific requests.
 
 Used by RequestValidator to validate incoming proxy requests before forwarding.
 """
@@ -200,6 +200,70 @@ OPENAI_CHAT_SCHEMA: Dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
+# OpenAI /v1/responses schema (Codex / Responses API)
+# ---------------------------------------------------------------------------
+
+OPENAI_RESPONSES_SCHEMA: Dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "OpenAIResponsesRequest",
+    "description": "OpenAI /v1/responses API request",
+    "type": "object",
+    "required": ["model", "input"],
+    "additionalProperties": True,
+    "properties": {
+        "model": {"type": "string", "minLength": 1},
+        "input": {
+            "oneOf": [
+                {"type": "string", "minLength": 1},
+                {"type": "array", "minItems": 1},
+            ]
+        },
+        "instructions": {"type": "string"},
+        "stream": {"type": "boolean"},
+        "temperature": {"type": "number", "minimum": 0.0, "maximum": 2.0},
+        "max_output_tokens": {"type": "integer", "minimum": 1},
+        "tools": {"type": "array"},
+        "tool_choice": {},
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Google Gemini generateContent schema
+# ---------------------------------------------------------------------------
+
+GOOGLE_GENERATE_CONTENT_SCHEMA: Dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "GoogleGenerateContentRequest",
+    "description": "Google Gemini models/*:generateContent request",
+    "type": "object",
+    "required": ["contents"],
+    "additionalProperties": True,
+    "properties": {
+        "contents": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["parts"],
+                "properties": {
+                    "role": {"type": "string"},
+                    "parts": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "object"},
+                    },
+                },
+            },
+        },
+        "systemInstruction": {"type": "object"},
+        "generationConfig": {"type": "object"},
+        "safetySettings": {"type": "array"},
+        "tools": {"type": "array"},
+    },
+}
+
+
+# ---------------------------------------------------------------------------
 # Schema registry
 # ---------------------------------------------------------------------------
 
@@ -208,7 +272,7 @@ def get_request_schema(provider: str) -> Dict[str, Any]:
     """Return the appropriate request schema for a provider.
 
     Args:
-        provider: "anthropic" or "openai"
+        provider: "anthropic" | "openai" | "openai-codex" | "google"
 
     Returns:
         JSON Schema dict, or an empty permissive schema for unknown providers.
@@ -217,5 +281,9 @@ def get_request_schema(provider: str) -> Dict[str, Any]:
         return ANTHROPIC_MESSAGE_SCHEMA
     if provider == "openai":
         return OPENAI_CHAT_SCHEMA
+    if provider == "openai-codex":
+        return OPENAI_RESPONSES_SCHEMA
+    if provider == "google":
+        return GOOGLE_GENERATE_CONTENT_SCHEMA
     # Unknown provider — return permissive schema (no required fields)
     return {"type": "object", "additionalProperties": True}
