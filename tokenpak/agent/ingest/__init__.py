@@ -13,3 +13,10 @@ from .cross_doc import (  # noqa: F401
 )
 
 __all__ += ["CrossDocAnalyzer", "DocCard", "SchemaConverter", "analyze_docs"]
+
+from .table_extractor import (  # noqa: F401
+    NormalizedTable,
+    TableExtractor,
+)
+
+__all__ += ["NormalizedTable", "TableExtractor"]
