@@ -26,6 +26,7 @@ from .audit_trail import (
 )
 
 from .logging_middleware import LoggingMiddleware
+from .semantic_cache_middleware import SemanticCacheMiddleware
 
 __all__ = [
     # Logger
@@ -51,4 +52,5 @@ __all__ = [
     
     # Middleware
     "LoggingMiddleware",
+    "SemanticCacheMiddleware",
 ]

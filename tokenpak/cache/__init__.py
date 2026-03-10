@@ -26,6 +26,12 @@ from .stable_cache import StableCache
 from .volatile_cache import VolatileCache
 from .registry import CacheRegistry
 from .telemetry import CacheMetrics, CacheTelemetryCollector, get_collector, reset_collector
+from .semantic_cache import (
+    SemanticCache,
+    SemanticCacheConfig,
+    SemanticCacheEntry,
+    SemanticCacheLookup,
+)
 
 __all__ = [
     "StableCache",
@@ -35,4 +41,9 @@ __all__ = [
     "CacheTelemetryCollector",
     "get_collector",
     "reset_collector",
+    # Semantic cache
+    "SemanticCache",
+    "SemanticCacheConfig",
+    "SemanticCacheEntry",
+    "SemanticCacheLookup",
 ]
