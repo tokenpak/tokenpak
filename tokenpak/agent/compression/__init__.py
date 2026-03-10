@@ -9,11 +9,13 @@ Provides the compression pipeline and supporting utilities:
 - validate / apply_fallback — shadow-reader validation (canon.py)
 - dedup_messages       — duplicate turn removal (dedup.py)
 - DirectiveApplier     — directive application stub (directives.py)
+- SchemaExtractor      — document-type-aware schema substitution (schema_extractor.py)
 """
 
 from .canon import ValidationResult, apply_fallback, validate
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
+from .schema_extractor import TEMPLATES, ExtractionResult, SchemaExtractor
 from .pipeline import CompressionPipeline
 from .recipes import (
     PHRASE_MAP,
@@ -46,6 +48,9 @@ __all__ = [
     "ValidationResult",
     "dedup_messages",
     "DirectiveApplier",
+    "SchemaExtractor",
+    "ExtractionResult",
+    "TEMPLATES",
 ]
 from .fidelity_tiers import (
     FidelityTier,
