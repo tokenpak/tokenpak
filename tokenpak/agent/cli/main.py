@@ -313,6 +313,10 @@ def _budget_argparse(argv: list) -> None:
     # tokenpak budget forecast
     bsub.add_parser("forecast", help="Projected spend forecast")
 
+    # tokenpak budget intelligence (Pro+)
+    intp = bsub.add_parser("intelligence", help="Pro: burn rate, ETA, trend, suggestions")
+    intp.add_argument("--json", dest="raw", action="store_true", help="Output raw JSON")
+
     bp.add_argument("--raw", action="store_true", help="Output raw JSON")
     args = bp.parse_args(argv)
     run_budget_cmd(args)

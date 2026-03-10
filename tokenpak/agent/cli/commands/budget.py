@@ -387,5 +387,247 @@ def run_budget_cmd(args) -> None:
         print_budget_forecast(raw=raw)
         return
 
+    if budget_cmd == "intelligence":
+        print_budget_intelligence(raw=raw)
+        return
+
     # Default: show status
     print_budget_status(raw=raw)
+
+
+# ---------------------------------------------------------------------------
+# Budget Intelligence (Pro+)
+# ---------------------------------------------------------------------------
+
+_MODEL_TIER_MAP: dict[str, str] = {
+    # Expensive → mid → cheap ordering
+    "claude-opus": "expensive",
+    "claude-opus-4": "expensive",
+    "claude-sonnet": "mid",
+    "claude-sonnet-4": "mid",
+    "gpt-4": "expensive",
+    "gpt-4o": "mid",
+    "gemini-pro": "mid",
+    "claude-haiku": "cheap",
+    "claude-haiku-4": "cheap",
+    "gpt-3.5": "cheap",
+    "gpt-4o-mini": "cheap",
+    "gemini-flash": "cheap",
+}
+
+_CHEAPER_MODEL_MAP: dict[str, str] = {
+    "claude-opus": "claude-sonnet",
+    "claude-opus-4": "claude-sonnet-4",
+    "claude-sonnet": "claude-haiku",
+    "claude-sonnet-4": "claude-haiku-4",
+    "gpt-4": "gpt-4o-mini",
+    "gpt-4o": "gpt-4o-mini",
+    "gemini-pro": "gemini-flash",
+}
+
+_COST_REDUCTION_ESTIMATE: dict[str, float] = {
+    # Fraction of cost saved when switching to cheaper model
+    "claude-opus": 0.80,
+    "claude-opus-4": 0.80,
+    "claude-sonnet": 0.75,
+    "claude-sonnet-4": 0.75,
+    "gpt-4": 0.85,
+    "gpt-4o": 0.75,
+    "gemini-pro": 0.70,
+}
+
+
+def _get_model_daily_avg(days: int = 7) -> list[dict]:
+    """Return avg daily cost per model over the past N days."""
+    conn = _connect()
+    if not conn:
+        return []
+    since = (date.today() - timedelta(days=days - 1)).isoformat()
+    rows = conn.execute(
+        """
+        SELECT model,
+               COUNT(*) AS requests,
+               COALESCE(SUM(estimated_cost), 0.0) AS total_cost
+        FROM requests
+        WHERE date(timestamp) >= ?
+        GROUP BY model
+        ORDER BY total_cost DESC
+        """,
+        (since,),
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "model": r["model"] or "unknown",
+            "requests": r["requests"],
+            "total_cost": round(float(r["total_cost"]), 6),
+            "daily_avg": round(float(r["total_cost"]) / days, 6),
+        }
+        for r in rows
+    ]
+
+
+def _calc_burn_rate() -> dict:
+    """Calculate daily/weekly/monthly burn rate from history."""
+    h7 = _budget_history(days=7)
+    h30 = _budget_history(days=30)
+    today_cost = next((r["cost_usd"] for r in h7 if r["day"] == date.today().isoformat()), 0.0)
+    daily_avg_7d = sum(r["cost_usd"] for r in h7) / max(len(h7), 1)
+    weekly_avg = daily_avg_7d * 7
+    monthly_projection = daily_avg_7d * 30
+    # 7-day trend: compare last 7 days vs prior 7 days
+    last7 = sum(r["cost_usd"] for r in h7)
+    # Prior 7 days = days 8-14 ago (pull from h30)
+    prior7_start = (date.today() - timedelta(days=14)).isoformat()
+    prior7_end = (date.today() - timedelta(days=8)).isoformat()
+    prior7 = sum(
+        r["cost_usd"] for r in h30 if prior7_start <= r["day"] <= prior7_end
+    )
+    if prior7 > 0:
+        trend_pct = (last7 - prior7) / prior7 * 100
+    else:
+        trend_pct = 0.0
+    return {
+        "today_usd": round(today_cost, 6),
+        "daily_avg_7d": round(daily_avg_7d, 6),
+        "weekly_avg": round(weekly_avg, 6),
+        "monthly_projection": round(monthly_projection, 6),
+        "trend_7d_pct": round(trend_pct, 1),
+        "last7_total": round(last7, 6),
+        "prior7_total": round(prior7, 6),
+    }
+
+
+def _calc_depletion_eta(monthly_limit: float | None, burn: dict) -> dict | None:
+    """Calculate when budget will be depleted based on burn rate."""
+    if not monthly_limit or monthly_limit <= 0:
+        return None
+    spent = _get_spent("monthly")
+    remaining = monthly_limit - spent
+    daily_avg = burn["daily_avg_7d"]
+    if daily_avg <= 0:
+        return {"days_remaining": None, "eta_date": None, "remaining_usd": round(remaining, 4)}
+    days_to_depletion = remaining / daily_avg
+    eta_date = date.today() + timedelta(days=days_to_depletion)
+    return {
+        "days_remaining": round(days_to_depletion, 1),
+        "eta_date": eta_date.strftime("%b %-d"),
+        "eta_iso": eta_date.isoformat(),
+        "remaining_usd": round(remaining, 4),
+    }
+
+
+def _generate_suggestions(burn: dict, model_breakdown: list[dict]) -> list[str]:
+    """Generate actionable throttle suggestions based on usage patterns."""
+    suggestions: list[str] = []
+    daily_avg = burn["daily_avg_7d"]
+    # Suggestion 1: Switch expensive models to cheaper alternatives
+    for entry in model_breakdown:
+        model_key = entry["model"].lower()
+        # Find matching tier key
+        match = None
+        for k in _CHEAPER_MODEL_MAP:
+            if k in model_key:
+                match = k
+                break
+        if match and entry["daily_avg"] > 0.01:
+            cheaper = _CHEAPER_MODEL_MAP[match]
+            reduction = _COST_REDUCTION_ESTIMATE.get(match, 0.70)
+            savings = entry["daily_avg"] * reduction
+            suggestions.append(
+                f"Switch {entry['model']} → {cheaper} on low-priority queries "
+                f"(-{_fmt_cost(savings)}/day)"
+            )
+    # Suggestion 2: Enable compression if not already implied
+    if daily_avg > 0.05 and not suggestions:
+        suggestions.append(
+            f"Enable aggressive compression on high-volume agents "
+            f"(est. -{_fmt_cost(daily_avg * 0.25)}/day)"
+        )
+    # Suggestion 3: Trend-based warning
+    if burn["trend_7d_pct"] > 20:
+        suggestions.append(
+            f"Spend is up {burn['trend_7d_pct']:.1f}% vs last week — review recent agent activity"
+        )
+    # Limit to top 3
+    return suggestions[:3]
+
+
+def print_budget_intelligence(raw: bool = False) -> None:
+    """Show Pro-tier budget intelligence: burn rate, ETA, trend, suggestions."""
+    from tokenpak.agent.license.activation import is_pro
+
+    if not is_pro():
+        print("⚠ Budget Intelligence requires a Pro (or higher) license.")
+        print("  Run: tokenpak license activate <key>")
+        return
+
+    cfg = _load_config()
+    monthly_limit = cfg.get("monthly_limit_usd")
+    monthly_limit_f = float(monthly_limit) if monthly_limit else None
+    monthly_spent = _get_spent("monthly")
+
+    burn = _calc_burn_rate()
+    eta = _calc_depletion_eta(monthly_limit_f, burn)
+    model_breakdown = _get_model_daily_avg(days=7)
+    suggestions = _generate_suggestions(burn, model_breakdown)
+
+    # Trend arrow
+    trend_pct = burn["trend_7d_pct"]
+    if abs(trend_pct) < 1.0:
+        trend_str = f"→ flat"
+    elif trend_pct > 0:
+        trend_str = f"▲ {trend_pct:.1f}% vs last week"
+    else:
+        trend_str = f"▼ {abs(trend_pct):.1f}% vs last week"
+
+    if raw:
+        output = {
+            "monthly_budget_usd": monthly_limit_f,
+            "spent_mtd_usd": round(monthly_spent, 4),
+            "remaining_usd": round(monthly_limit_f - monthly_spent, 4) if monthly_limit_f else None,
+            "burn_rate": {
+                "daily_avg_7d": burn["daily_avg_7d"],
+                "weekly_avg": burn["weekly_avg"],
+                "monthly_projection": burn["monthly_projection"],
+            },
+            "depletion_eta": eta,
+            "trend_7d_pct": trend_pct,
+            "suggestions": suggestions,
+        }
+        print(json.dumps(output, indent=2))
+        return
+
+    print("TOKENPAK  |  Budget Intelligence")
+    print(SEP)
+    print()
+    # Budget overview
+    if monthly_limit_f:
+        remaining = monthly_limit_f - monthly_spent
+        print(f"  {'Monthly Budget:':<26}{_fmt_cost(monthly_limit_f)}")
+        print(f"  {'Spent (MTD):':<26}{_fmt_cost(monthly_spent)}")
+        print(f"  {'Remaining:':<26}{_fmt_cost(remaining)}")
+    else:
+        print(f"  {'Spent (MTD):':<26}{_fmt_cost(monthly_spent)}")
+        print(f"  {'Monthly Budget:':<26}not set")
+    print()
+    # Burn rate + ETA
+    print(f"  {'Burn Rate:':<26}{_fmt_cost(burn['daily_avg_7d'])}/day")
+    if eta and eta.get("days_remaining") is not None:
+        print(
+            f"  {'Budget Depletion ETA:':<26}"
+            f"{eta['days_remaining']:.1f} days ({eta['eta_date']})"
+        )
+    elif monthly_limit_f:
+        print(f"  {'Budget Depletion ETA:':<26}N/A (burn rate too low)")
+    print()
+    print(f"  {'Trend (7d):':<26}{trend_str}")
+    print()
+    # Suggestions
+    if suggestions:
+        print("  Suggestions:")
+        for i, s in enumerate(suggestions, 1):
+            print(f"  {i}. {s}")
+    else:
+        print("  No suggestions — usage looks optimal.")
+    print()
