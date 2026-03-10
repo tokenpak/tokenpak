@@ -2171,12 +2171,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 chunk_count = 0
                 early_break = False
+                _pending_chunk = b""
+                _footer_injected = False
                 import zlib as _zlib
                 _ce = resp.getheader("Content-Encoding", "")
                 _decomp = _zlib.decompressobj(_zlib.MAX_WBITS | 16) if "gzip" in _ce else None
                 while True:
                     chunk = resp.read(4096)
                     if not chunk:
+                        # Flush any pending chunk at end of stream
+                        if _pending_chunk:
+                            try:
+                                self.wfile.write(_pending_chunk)
+                                self.wfile.flush()
+                            except (BrokenPipeError, ConnectionResetError):
+                                pass
+                            if should_log and is_messages:
+                                sse_buffer += _pending_chunk
                         break
                     chunk_count += 1
                     if _decomp:
@@ -2186,6 +2197,79 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             pass
                     if not chunk:
                         continue
+
+                    # Chat footer injection — buffer chunks to find message_stop
+                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages:
+                        combined = _pending_chunk + chunk
+                        _pending_chunk = b""
+                        if b'"type":"message_stop"' in combined or b'"type": "message_stop"' in combined:
+                            try:
+                                # Find injection point — right before message_stop event
+                                stop_idx = combined.find(b'event: message_stop')
+                                if stop_idx == -1:
+                                    # Inline format — find the event: line before type:message_stop
+                                    ms_idx = combined.find(b'"type":"message_stop"')
+                                    if ms_idx == -1:
+                                        ms_idx = combined.find(b'"type": "message_stop"')
+                                    if ms_idx > 0:
+                                        search_back = combined[:ms_idx].rfind(b'event:')
+                                        stop_idx = search_back if search_back >= 0 else -1
+
+                                if stop_idx > 0:
+                                    before_stop = combined[:stop_idx]
+                                    after_stop = combined[stop_idx:]
+                                    self.wfile.write(before_stop)
+                                    self.wfile.flush()
+                                    sse_buffer += before_stop
+
+                                    # Build footer stats
+                                    _temp_usage = _extract_sse_tokens(sse_buffer)
+                                    _temp_output = _temp_usage.get("output_tokens", 0)
+                                    _temp_cache_r = _temp_usage.get("cache_read_input_tokens", 0)
+                                    _saved = max(0, input_tokens - sent_input_tokens)
+                                    _pct = int(100 * _saved / input_tokens) if input_tokens > 0 else 0
+                                    _cost = estimate_cost(model, sent_input_tokens, _temp_output, _temp_cache_r, 0)
+                                    _footer_text = f"\n\n───\n📊 {input_tokens:,}→{sent_input_tokens:,} tok (-{_pct}%) | ${_cost:.3f}"
+                                    if _temp_cache_r > 0:
+                                        _footer_text += f" | cache: {_temp_cache_r:,}r"
+                                    _footer_event = {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": _footer_text}}
+                                    _footer_sse = f"event: content_block_delta\ndata: {json.dumps(_footer_event)}\n\n".encode()
+                                    self.wfile.write(_footer_sse)
+                                    self.wfile.flush()
+                                    _footer_injected = True
+
+                                    self.wfile.write(after_stop)
+                                    self.wfile.flush()
+                                    sse_buffer += after_stop
+                                    continue
+                                else:
+                                    # Couldn't find injection point — write combined as-is
+                                    self.wfile.write(combined)
+                                    self.wfile.flush()
+                                    sse_buffer += combined
+                                    _footer_injected = True
+                                    continue
+                            except Exception:
+                                # Fail-open — write the chunk normally
+                                self.wfile.write(combined)
+                                self.wfile.flush()
+                                sse_buffer += combined
+                                _footer_injected = True
+                                continue
+                        else:
+                            # Buffer one chunk ahead to catch message_stop split across chunks
+                            if _pending_chunk:
+                                try:
+                                    self.wfile.write(_pending_chunk)
+                                    self.wfile.flush()
+                                except (BrokenPipeError, ConnectionResetError):
+                                    early_break = True
+                                    break
+                                if should_log and is_messages:
+                                    sse_buffer += _pending_chunk
+                            _pending_chunk = combined
+                            continue
+
                     try:
                         self.wfile.write(chunk)
                         self.wfile.flush()
@@ -2201,9 +2285,34 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
                 resp_body = resp.read()
+                output_tokens = 0
+                # Chat footer — JSON (non-streaming) injection
+                if CHAT_FOOTER_ENABLED and should_log and is_messages and status == 200:
+                    try:
+                        body_for_parse = resp_body
+                        if "gzip" in resp.getheader("Content-Encoding", ""):
+                            body_for_parse = gzip.decompress(resp_body)
+                        resp_json = json.loads(body_for_parse)
+                        usage = resp_json.get("usage", {})
+                        _out_tok = usage.get("output_tokens", 0)
+                        _cache_r = usage.get("cache_read_input_tokens", 0)
+                        _pct = round((input_tokens - sent_input_tokens) / input_tokens * 100, 1) if input_tokens else 0
+                        _cost = estimate_cost(model, sent_input_tokens, _out_tok, _cache_r, 0)
+                        _footer_text = f"\n\n───\n📊 {input_tokens:,}→{sent_input_tokens:,} tok (-{_pct}%) | ${_cost:.3f}"
+                        if _cache_r > 0:
+                            _footer_text += f" | cache: {_cache_r:,}r"
+                        content = resp_json.get("content", [])
+                        if content and isinstance(content, list):
+                            for i in range(len(content) - 1, -1, -1):
+                                if content[i].get("type") == "text":
+                                    content[i]["text"] += _footer_text
+                                    break
+                            resp_json["content"] = content
+                            resp_body = json.dumps(resp_json).encode()
+                    except Exception:
+                        pass  # fail-open
                 self.wfile.write(resp_body)
                 self.wfile.flush()
-                output_tokens = 0
                 if should_log and is_messages:
                     resp_for_metrics = resp_body
                     if "gzip" in resp.getheader("Content-Encoding", ""):
