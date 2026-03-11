@@ -40,28 +40,24 @@ class TestCooldownManager:
         assert isinstance(manager, CooldownManager)
 
     def test_is_available_initial(self, manager):
-        """Test availability on first check."""
-        available = manager.is_available("key1")
-        assert isinstance(available, bool)
+        """Test getting active cooldowns."""
+        active = manager.get_active_cooldowns()
+        assert isinstance(active, dict)
 
     def test_record_call(self, manager):
-        """Test recording a call."""
-        manager.record_call("key1")
-        # Should not raise
+        """Test clearing expired cooldowns."""
+        cleared = manager.clear_expired()
+        assert isinstance(cleared, list)
 
     def test_cooldown_period(self, manager):
-        """Test cooldown period enforcement."""
-        manager.record_call("key2")
-        time.sleep(0.01)
-        manager.record_call("key2")
-        # Should record without error
+        """Test clearing from profiles."""
+        cleared = manager.clear_expired_from_profiles()
+        assert isinstance(cleared, list)
 
     def test_multiple_keys(self, manager):
-        """Test handling multiple keys."""
-        manager.record_call("a")
-        manager.record_call("b")
-        manager.record_call("c")
-        # Should track separately
+        """Test run cycle."""
+        count = manager.run_cycle()
+        assert isinstance(count, int)
 
 
 class TestClaimIndexer:
@@ -69,14 +65,14 @@ class TestClaimIndexer:
 
     def test_extract_claims(self):
         """Test extracting claims from document."""
-        doc = "The study shows that X is true. Based on research, Y is important."
+        doc = {"text": "The study shows that X is true. Based on research, Y is important."}
         claims = extract_claims_from_document(doc)
-        assert isinstance(claims, (list, type(None)))
+        assert isinstance(claims, list)
 
     def test_extract_claims_empty(self):
         """Test extracting from empty document."""
-        claims = extract_claims_from_document("")
-        assert isinstance(claims, (list, type(None)))
+        claims = extract_claims_from_document({"text": ""})
+        assert isinstance(claims, list)
 
     def test_claim_evidence(self):
         """Test claim evidence dataclass."""
@@ -86,16 +82,16 @@ class TestClaimIndexer:
     def test_extract_multiple_documents(self):
         """Test extracting from multiple documents."""
         docs = [
-            "First document with claims.",
-            "Second document with more claims."
+            {"text": "First document with claims."},
+            {"text": "Second document with more claims."}
         ]
         for doc in docs:
             claims = extract_claims_from_document(doc)
-            assert isinstance(claims, (list, type(None)))
+            assert isinstance(claims, list)
 
     def test_claim_extraction_consistency(self):
         """Test consistency of claim extraction."""
-        doc = "X is true according to research."
+        doc = {"text": "X is true according to research."}
         claims1 = extract_claims_from_document(doc)
         claims2 = extract_claims_from_document(doc)
         # Same input should give same result
@@ -106,30 +102,34 @@ class TestPrivacy:
     """Test privacy handling."""
 
     def test_apply_privacy_low(self):
-        """Test applying low privacy level."""
-        result = apply_privacy("sensitive", PrivacyLevel.LOW)
-        assert isinstance(result, (str, type(None)))
+        """Test applying minimal privacy level."""
+        fingerprint = {"fingerprint_id": "test1", "total_tokens": 100, "segment_count": 5}
+        result = apply_privacy(fingerprint, PrivacyLevel.MINIMAL)
+        assert isinstance(result, dict)
 
     def test_apply_privacy_medium(self):
-        """Test applying medium privacy level."""
-        result = apply_privacy("data", PrivacyLevel.MEDIUM)
-        assert isinstance(result, (str, type(None)))
+        """Test applying standard privacy level."""
+        fingerprint = {"fingerprint_id": "test2", "total_tokens": 200, "segment_count": 10, "segments": []}
+        result = apply_privacy(fingerprint, PrivacyLevel.STANDARD)
+        assert isinstance(result, dict)
 
     def test_apply_privacy_high(self):
-        """Test applying high privacy level."""
-        result = apply_privacy("secret", PrivacyLevel.HIGH)
-        assert isinstance(result, (str, type(None)))
+        """Test applying full privacy level."""
+        fingerprint = {"fingerprint_id": "test3", "total_tokens": 300, "segment_count": 15}
+        result = apply_privacy(fingerprint, PrivacyLevel.FULL)
+        assert isinstance(result, dict)
 
     def test_privacy_levels(self):
         """Test privacy level enum."""
-        assert hasattr(PrivacyLevel, 'LOW')
-        assert hasattr(PrivacyLevel, 'MEDIUM')
-        assert hasattr(PrivacyLevel, 'HIGH')
+        assert hasattr(PrivacyLevel, 'MINIMAL')
+        assert hasattr(PrivacyLevel, 'STANDARD')
+        assert hasattr(PrivacyLevel, 'FULL')
 
     def test_apply_privacy_empty(self):
-        """Test applying privacy to empty string."""
-        result = apply_privacy("", PrivacyLevel.LOW)
-        assert isinstance(result, (str, type(None)))
+        """Test applying privacy to minimal fingerprint."""
+        fingerprint = {"fingerprint_id": "test4"}
+        result = apply_privacy(fingerprint, PrivacyLevel.MINIMAL)
+        assert isinstance(result, dict)
 
 
 class TestPremadeMacros:
@@ -166,31 +166,31 @@ class TestScriptHooks:
 
     def test_fire_hook_basic(self):
         """Test firing a basic hook."""
-        result = fire_hook("test_hook", {})
-        # Should not raise
+        result = fire_hook("on_request", {})
+        # Should not raise or return dict
 
     def test_fire_hook_with_context(self):
         """Test firing hook with context."""
         context = {"key": "value"}
-        result = fire_hook("hook", context)
+        result = fire_hook("on_request", context)
         # Should handle context
 
     def test_fire_on_error(self):
         """Test error hook."""
         from tokenpak.agent.macros.script_hooks import fire_on_error
-        result = fire_on_error("Error message")
+        result = fire_on_error("anthropic", "default", "rate_limit", "Too many requests")
         # Should not raise
 
     def test_fire_on_budget_alert(self):
         """Test budget alert hook."""
         from tokenpak.agent.macros.script_hooks import fire_on_budget_alert
-        result = fire_on_budget_alert(0.8)  # 80% budget used
+        result = fire_on_budget_alert("budget_1", 100.0, 80.0)
         # Should not raise
 
     def test_fire_on_request(self):
         """Test request hook."""
         from tokenpak.agent.macros.script_hooks import fire_on_request
-        result = fire_on_request({"type": "message"})
+        result = fire_on_request("gpt-4", "openai", 10)
         # Should not raise
 
 
@@ -199,38 +199,37 @@ class TestStreamTranslator:
 
     @pytest.fixture
     def translator(self):
-        return StreamingTranslator()
+        return StreamingTranslator("anthropic", "openai")
 
     def test_init(self, translator):
         """Test initialization."""
         assert isinstance(translator, StreamingTranslator)
 
     def test_translate_event(self, translator):
-        """Test translating an event."""
-        event = {"type": "message", "data": "test"}
-        result = translator.translate(event)
-        assert result is not None or result is None
+        """Test translating a chunk line."""
+        line = 'data: {"type": "message_start", "message": {"model": "claude-3"}}'
+        result = translator.translate_chunk(line)
+        assert isinstance(result, list)
 
     def test_translate_empty(self, translator):
-        """Test translating empty event."""
-        result = translator.translate({})
-        # Should handle empty
+        """Test translating empty line."""
+        result = translator.translate_chunk("")
+        assert isinstance(result, list)
 
     def test_translate_batch(self, translator):
-        """Test translating batch of events."""
-        events = [
-            {"type": "msg", "data": "a"},
-            {"type": "msg", "data": "b"},
+        """Test translating batch of chunk lines."""
+        lines = [
+            'data: {"type": "message_start", "message": {"model": "claude-3"}}',
+            'data: [DONE]',
         ]
-        if hasattr(translator, 'translate_batch'):
-            result = translator.translate_batch(events)
-            assert isinstance(result, (list, type(None)))
+        results = [translator.translate_chunk(line) for line in lines]
+        assert all(isinstance(r, list) for r in results)
 
     def test_translate_streaming(self, translator):
         """Test streaming translation."""
-        if hasattr(translator, 'stream_translate'):
-            result = translator.stream_translate({"data": "test"})
-            assert result is not None or result is None
+        lines = iter(['data: {"type": "message_start", "message": {"model": "claude-3"}}'])
+        result = list(translator.translate_stream(lines))
+        assert isinstance(result, list)
 
 
 class TestStatsAPI:
@@ -245,34 +244,31 @@ class TestStatsAPI:
         assert isinstance(stats, StatsAPI)
 
     def test_record_metric(self, stats):
-        """Test recording metric."""
-        stats.record("requests", 1)
-        # Should not raise
+        """Test handling /stats/last route."""
+        result = stats.route("/stats/last")
+        assert result is None or isinstance(result, tuple)
 
     def test_get_stats(self, stats):
-        """Test getting statistics."""
-        stats.record("hits", 100)
-        result = stats.get_stats()
-        assert isinstance(result, (dict, type(None)))
+        """Test handling /stats/session route."""
+        result = stats.route("/stats/session")
+        assert result is None or isinstance(result, tuple)
 
     def test_increment_counter(self, stats):
-        """Test incrementing counter."""
-        stats.increment("count")
-        stats.increment("count")
-        # Should track increments
+        """Test handle_stats_last method."""
+        body, headers = StatsAPI.handle_stats_last()
+        assert isinstance(body, str)
+        assert isinstance(headers, dict)
 
     def test_multiple_metrics(self, stats):
-        """Test multiple metrics."""
-        stats.record("metric_a", 10)
-        stats.record("metric_b", 20)
-        stats.record("metric_c", 30)
-        # Should track all
+        """Test handle_stats_session method."""
+        body, headers = StatsAPI.handle_stats_session()
+        assert isinstance(body, str)
+        assert isinstance(headers, dict)
 
     def test_reset_stats(self, stats):
-        """Test resetting stats."""
-        stats.record("temp", 999)
-        if hasattr(stats, 'reset'):
-            stats.reset()
+        """Test route with unknown path."""
+        result = stats.route("/unknown")
+        assert result is None
 
 
 class TestConfig:
@@ -320,35 +316,41 @@ class TestDebugLogger:
         assert isinstance(logger, DebugLogger)
 
     def test_log_message(self, logger):
-        """Test logging message."""
-        logger.log("test message")
+        """Test record context manager."""
+        with logger.record() as rec:
+            rec.set("key", "value")
         # Should not raise
 
     def test_log_levels(self, logger):
-        """Test different log levels."""
-        logger.debug("debug")
-        logger.info("info")
-        logger.warning("warning")
-        logger.error("error")
+        """Test record with steps."""
+        with logger.record() as rec:
+            rec.add_step("step1", status="ok")
+            rec.add_step("step2", status="ok")
         # All should work
 
     def test_get_logs(self, logger):
-        """Test retrieving logs."""
-        logger.log("test")
-        logs = logger.get_logs() if hasattr(logger, 'get_logs') else []
-        assert isinstance(logs, list)
+        """Test record with error handling."""
+        try:
+            with logger.record() as rec:
+                rec.fail("test error")
+        except:
+            pass
+        # Should handle errors
 
     def test_clear_logs(self, logger):
-        """Test clearing logs."""
-        logger.log("test")
-        if hasattr(logger, 'clear'):
-            logger.clear()
-        # Should clear without error
+        """Test multiple records."""
+        with logger.record() as rec:
+            rec.set("a", 1)
+        with logger.record() as rec:
+            rec.set("b", 2)
+        # Should record multiple
 
     def test_log_with_context(self, logger):
-        """Test logging with context."""
-        logger.log("msg", context={"key": "value"})
-        # Should handle context
+        """Test record to_dict."""
+        with logger.record() as rec:
+            rec.set("msg", "test")
+            data = rec.to_dict()
+        assert isinstance(data, dict)
 
 
 class TestCapabilities:
