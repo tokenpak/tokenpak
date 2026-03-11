@@ -6,7 +6,7 @@ from typing import Optional
 class HeartbeatIngest:
     """Posts heartbeat metrics to TokenPak ingest endpoint."""
     
-    def __init__(self, ingest_url: str = "http://localhost:8765"):
+    def __init__(self, ingest_url: str = "http://localhost:8766"):
         self.ingest_url = ingest_url
         self.endpoint = f"{ingest_url}/ingest"
     

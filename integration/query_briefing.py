@@ -15,7 +15,7 @@ class QueryBriefing:
     query routes aren't mounted on the server yet.
     """
     
-    def __init__(self, query_url: str = "http://localhost:8765"):
+    def __init__(self, query_url: str = "http://localhost:8766"):
         self.query_url = query_url
     
     # ------------------------------------------------------------------

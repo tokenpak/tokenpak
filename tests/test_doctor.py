@@ -80,7 +80,7 @@ class DoctorConfigFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -141,7 +141,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": [{"id": "1"}, {"id": "2"}]}))
@@ -160,7 +160,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
@@ -179,7 +179,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -195,7 +195,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text("{invalid")
@@ -230,7 +230,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -252,7 +252,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -274,7 +274,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -307,7 +307,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -328,7 +328,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -364,7 +364,7 @@ class DoctorLogFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -381,7 +381,7 @@ class DoctorLogFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -432,7 +432,7 @@ class DoctorFixFlagTest(unittest.TestCase):
             # Verify it's valid JSON
             with open(config_file) as f:
                 data = json.load(f)
-                self.assertEqual(data.get("port"), 8765)
+                self.assertEqual(data.get("port"), 8766)
     
     @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
@@ -474,7 +474,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir = Path.home() / ".tokenpak"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         try:
             cmd_doctor(self.args)
@@ -492,7 +492,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir = Path.home() / ".tokenpak"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         try:
             cmd_doctor(self.args)
@@ -523,7 +523,7 @@ class DoctorExitCodesTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -599,7 +599,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -615,7 +615,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir.mkdir()
         # Don't create cache dir
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -632,7 +632,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -666,7 +666,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -691,7 +691,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -711,7 +711,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with self.assertRaises(SystemExit) as cm:

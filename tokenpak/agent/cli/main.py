@@ -408,7 +408,7 @@ def main():
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
         sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-        sp.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
+        sp.add_argument("--port", type=int, default=8766, help="Bind port (default: 8766)")
         sp.add_argument(
             "--workers",
             type=int,

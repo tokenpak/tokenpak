@@ -101,7 +101,7 @@ def client(validator):
 def test_secure_write_config_mode_600(tmp_dir):
     """Config file must be created with mode 600."""
     cfg = tmp_dir / "config.json"
-    secure_write_config(cfg, {"port": 8765})
+    secure_write_config(cfg, {"port": 8766})
     mode = oct(stat.S_IMODE(cfg.stat().st_mode))
     assert mode == oct(0o600), f"Expected 0o600, got {mode}"
 

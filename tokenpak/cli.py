@@ -773,7 +773,7 @@ def cmd_doctor(args):
         results["warn"] += 1
 
     # Check 4: Proxy port
-    proxy_port = 8765
+    proxy_port = 8766
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
@@ -884,7 +884,7 @@ def cmd_doctor(args):
         for fix_type, fix_path in fixes_needed:
             if fix_type == "create config":
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
-                default_config = {"version": "1.0", "port": 8765, "compress": True}
+                default_config = {"version": "1.0", "port": 8766, "compress": True}
                 secure_write_config(fix_path, default_config)
                 print(f"  ✓ Created {fix_path} (mode 600)")
             elif fix_type == "reset config":
@@ -894,7 +894,7 @@ def cmd_doctor(args):
                     fix_path.rename(backup_path)
                     print(f"  ✓ Backed up invalid config to {backup_path}")
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
-                default_config = {"version": "1.0", "port": 8765, "compress": True}
+                default_config = {"version": "1.0", "port": 8766, "compress": True}
                 secure_write_config(fix_path, default_config)
                 print(f"  ✓ Recreated {fix_path} (mode 600)")
             elif fix_type == "create dirs":

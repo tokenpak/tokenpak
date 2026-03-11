@@ -87,7 +87,7 @@ def cmd_doctor(args):
         results["warn"] += 1
 
     # Check 4: Proxy port
-    proxy_port = 8765
+    proxy_port = 8766
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
@@ -139,7 +139,7 @@ def cmd_doctor(args):
         for fix in fixes_needed:
             if fix == "create config":
                 tokenpak_dir.mkdir(parents=True, exist_ok=True)
-                default_config = {"version": "1.0", "port": 8765, "compress": True}
+                default_config = {"version": "1.0", "port": 8766, "compress": True}
                 with open(config_path, "w") as f:
                     json.dump(default_config, f, indent=2)
                 print(f"  ✓ Created {config_path}")
