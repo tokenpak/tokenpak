@@ -20,3 +20,11 @@ from .table_extractor import (  # noqa: F401
 )
 
 __all__ += ["NormalizedTable", "TableExtractor"]
+
+from .document_parser import (  # noqa: F401
+    DocumentParser,
+    DocumentSection,
+    DocumentStructure,
+)
+
+__all__ += ["DocumentParser", "DocumentSection", "DocumentStructure"]
