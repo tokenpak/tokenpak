@@ -10,6 +10,7 @@ Provides the compression pipeline and supporting utilities:
 - dedup_messages       — duplicate turn removal (dedup.py)
 - DirectiveApplier     — directive application stub (directives.py)
 - SchemaExtractor      — document-type-aware schema substitution (schema_extractor.py)
+- CompressionDictionary — project-specific phrase → token replacement (dictionary.py)
 """
 
 from .canon import ValidationResult, apply_fallback, validate
@@ -85,3 +86,6 @@ __all__ += [
 from .alias_compressor import AliasCompressor, AliasResult
 
 __all__ += ["AliasCompressor", "AliasResult"]
+from .dictionary import CompressionDictionary, DictionaryResult, SuggestedEntry
+
+__all__ += ["CompressionDictionary", "DictionaryResult", "SuggestedEntry"]
