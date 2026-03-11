@@ -250,12 +250,6 @@ RETRIEVAL_WATCHDOG_ENABLED: bool = os.environ.get("TOKENPAK_RETRIEVAL_WATCHDOG",
 FAILURE_MEMORY_ENABLED: bool = os.environ.get("TOKENPAK_FAILURE_MEMORY", "0").lower() in ("1", "true", "yes", "on")
 FIDELITY_TIERS_ENABLED: bool = os.environ.get("TOKENPAK_FIDELITY_TIERS", "0").lower() in ("1", "true", "yes", "on")
 
-# --- Phase 3 Module Toggles (2026-03-11) --- all default OFF
-SESSION_CAPSULES_ENABLED: bool = os.environ.get("TOKENPAK_SESSION_CAPSULES", "0").lower() in ("1", "true", "yes", "on")
-PRECONDITION_GATES_ENABLED: bool = os.environ.get("TOKENPAK_PRECONDITION_GATES", "0").lower() in ("1", "true", "yes", "on")
-QUERY_REWRITER_ENABLED: bool = os.environ.get("TOKENPAK_QUERY_REWRITER", "0").lower() in ("1", "true", "yes", "on")
-STABILITY_SCORER_ENABLED: bool = os.environ.get("TOKENPAK_STABILITY_SCORER", "0").lower() in ("1", "true", "yes", "on")
-
 # --- Tier 2B Cache Registry singleton (initialized at module load if enabled) ---
 _cache_registry = None
 if CACHE_REGISTRY_ENABLED:
@@ -2360,21 +2354,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     except Exception as _route_err:
                         print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
 
-                    # Phase 0.1: Precondition Gates — reject requests likely to fail
-                    if PRECONDITION_GATES_ENABLED and body:
-                        try:
-                            from tokenpak.agent.agentic.precondition_gates import PreconditionGates
-                            _pg = PreconditionGates()
-                            _pg_pass, _pg_reason = _pg.check(model)
-                            SESSION["precondition_gates_pass"] = _pg_pass
-                            if not _pg_pass:
-                                SESSION["precondition_gates_blocked"] = _pg_reason
-                                self._send_json({"error": {"type": "precondition_failed", "message": f"Request blocked by precondition gate: {_pg_reason}"}}, status=422)
-                                return
-                        except Exception as _pg_err:
-                            SESSION["precondition_gates_error"] = str(_pg_err)
-                            pass  # fail-open
-
                     # Phase 0.2: Budget Controller — enforce token budget limits before processing
                     if BUDGET_CONTROLLER_ENABLED and body:
                         try:
@@ -2573,21 +2552,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 SESSION["salience_router_applied"] = _salience_applied
                         except Exception as _sr_err:
                             SESSION["salience_router_error"] = str(_sr_err)
-                            pass  # fail-open
-
-                    # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
-                    if QUERY_REWRITER_ENABLED and body:
-                        try:
-                            from tokenpak.agent.compression.query_rewriter import QueryRewriter
-                            _qr = QueryRewriter()
-                            _req_data = json.loads(body)
-                            _rewritten = _qr.rewrite_messages(_req_data.get("messages", []))
-                            if _rewritten and _rewritten != _req_data.get("messages", []):
-                                _req_data["messages"] = _rewritten
-                                body = json.dumps(_req_data, separators=(',', ':'))
-                                SESSION["query_rewriter_applied"] = len(_rewritten)
-                        except Exception as _qr_err:
-                            SESSION["query_rewriter_error"] = str(_qr_err)
                             pass  # fail-open
 
                     # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
@@ -3020,20 +2984,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             resp_body = json.dumps(resp_json).encode()
                     except Exception:
                         pass  # fail-open
-                
-                # Phase 2.2: Session Capsules — compress and store session context
-                if SESSION_CAPSULES_ENABLED and body:
-                    try:
-                        from tokenpak.agent.memory.session_capsules import build_session_capsule, serialize_capsule
-                        _session_id = self.headers.get("X-OpenClaw-Session", model)
-                        _capsule = build_session_capsule(body, source_path=_session_id)
-                        _capsule_str = serialize_capsule(_capsule)
-                        SESSION["session_capsule_built"] = True
-                        SESSION["session_capsule_size"] = len(_capsule_str)
-                    except Exception as _sc_err:
-                        SESSION["session_capsule_error"] = str(_sc_err)
-                        pass  # fail-open
-                
                 self.wfile.write(resp_body)
                 self.wfile.flush()
                 if should_log and is_messages:
@@ -3066,26 +3016,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
-
-            # Post-request: Stability Scorer — track response consistency over time
-            if STABILITY_SCORER_ENABLED:
-                try:
-                    from tokenpak.agent.regression.stability_scorer import StabilityScorer, RunRecord
-                    _ss = StabilityScorer()
-                    _workflow_id = self.headers.get("X-OpenClaw-Session", model)
-                    _record = RunRecord(
-                        timestamp=int(time.time()),
-                        input_tokens=input_tokens or 0,
-                        output_tokens=output_tokens or 0,
-                        status=status,
-                        latency_ms=latency_ms,
-                    )
-                    _ss.record_run(_workflow_id, _record)
-                    _score = _ss.score_workflow(_workflow_id)
-                    SESSION["stability_score"] = _score.score if hasattr(_score, 'score') else str(_score)
-                except Exception as _ss_err:
-                    SESSION["stability_scorer_error"] = str(_ss_err)
-                    pass  # fail-open
 
             # Post-request: Log completed request via Request Logger
             if REQUEST_LOGGER_ENABLED and _request_log_id:
