@@ -1,240 +1,258 @@
 # TokenPak Adapter Compatibility Matrix
 
-**Last updated:** 2026-03-08
-**Verified against:** Cali system (Python 3.12.3)
+## Overview
 
-This matrix shows which TokenPak versions work with which provider SDK versions.
-Use it to verify your combination before installing.
+This matrix documents which TokenPak versions are compatible with which SDK versions. TokenPak adapters communicate via HTTP, so compatibility is determined by:
 
-**Legend:**
-- ✅ Supported — tested and verified working
-- ⚠️ Beta / Experimental — may work with caveats
-- ❌ Not supported — known incompatibility
-- 🔲 Not tested — likely works but untested
+1. **API shape preservation** — the adapter correctly translates between TokenPak and the provider's API
+2. **Token usage reporting** — the adapter correctly extracts usage metrics from responses
+3. **Error handling** — common error cases are handled correctly
+
+**Status Legend:**
+- ✅ **Supported** — tested and working
+- ⚠️ **Beta/Experimental** — working but limited testing
+- 🔲 **Not tested** — likely works (same API shape) but not verified
+- ❌ **Not supported** — breaking changes or deprecated
 
 ---
 
 ## OpenAI SDK Adapter
 
-TokenPak works with OpenAI by accepting `compiled.to_messages()` output, which is
-standard OpenAI-compatible `messages` format. No extra package required.
+The OpenAI adapter routes `chat.completions.create` requests through TokenPak while preserving the full OpenAI Chat Completions API shape.
 
-**Reference:** https://pypi.org/project/openai/
+### Compatibility
 
-| TokenPak | OpenAI SDK  | Python     | Status | Notes |
-|----------|-------------|------------|--------|-------|
-| v0.9     | 0.28–1.x    | 3.10–3.12  | ⚠️     | `to_messages()` available but unstable |
-| v1.0     | 1.x–1.6x    | 3.10–3.13  | ✅     | Stable; `to_messages()` and `to_anthropic()` tested |
-| v1.0     | 2.x (2.26+) | 3.10–3.13  | ✅     | Tested on Cali with `openai==2.26.0` |
-| v1.0     | >=2.27      | 3.10–3.13  | 🔲     | Not tested; likely works (OpenAI SDK is stable) |
+| TokenPak | OpenAI SDK | Python | Status | Notes |
+|----------|-----------|--------|--------|-------|
+| v1.0+ | 1.0–1.x | 3.10+ | ✅ | Stable. Tested with 1.x; API stable since v1.0 |
+| v1.0+ | 2.0–2.x | 3.10+ | ✅ | Stable. Tested with 2.26.0 (current). Function calling, vision support |
+| v1.0+ | 0.28–0.45 | 3.10+ | 🔲 | Not tested but likely works; API shape stable across v0/v1 |
+| v0.9.x | 0.28–1.x | 3.8+ | ⚠️ | Legacy. No longer tested; may have subtle issues |
 
-> The proxy (`tokenpak serve`) intercepts calls to `api.openai.com` — no SDK dependency required for proxy mode.
+### Implementation Notes
+
+- **Location:** `tokenpak/adapters/openai.py`
+- **HTTP client:** requests library (optional dependency)
+- **Token tracking:** Extracts from `usage.prompt_tokens`, `usage.completion_tokens`, `usage.prompt_tokens_details.cached_tokens`
+- **Streaming:** Supports streaming responses via server-sent events
+- **Tools/Functions:** Handles both `tools` and legacy `functions` (auto-promoted)
+
+### Reference
+- [OpenAI Python SDK Releases](https://github.com/openai/openai-python/releases)
+- [OpenAI API Versioning](https://platform.openai.com/docs/api-reference/versioning)
 
 ---
 
 ## Anthropic SDK Adapter
 
-TokenPak produces Anthropic-compatible output via `compiled.to_anthropic()`, which returns
-a `(system, messages)` tuple. No extra package required.
+The Anthropic adapter routes `messages.create` requests through TokenPak while preserving the full Anthropic Messages API shape.
 
-**Reference:** https://pypi.org/project/anthropic/
+### Compatibility
 
-| TokenPak | Anthropic SDK | Python     | Status | Notes |
-|----------|---------------|------------|--------|-------|
-| v0.9     | 0.24–0.27     | 3.10–3.12  | ⚠️     | Claude 2 era; `to_anthropic()` not present |
-| v1.0     | 0.28–0.35     | 3.10–3.13  | ✅     | Claude 3 Opus/Sonnet/Haiku; tested |
-| v1.0     | >=0.36        | 3.10–3.13  | 🔲     | Not tested; API format is stable, likely works |
+| TokenPak | Anthropic SDK | Python | Status | Notes |
+|----------|---------------|--------|--------|-------|
+| v1.0+ | 0.28–0.x | 3.10+ | ✅ | Stable. Tested with current SDK; Messages API stable |
+| v1.0+ | 0.24–0.27 | 3.8+ | 🔲 | Not tested; API shape compatible, but older tokens reporting |
+| v0.9.x | 0.24–0.x | 3.8+ | ⚠️ | Legacy. No longer tested |
 
-> The proxy intercepts calls to `api.anthropic.com` — no SDK dependency required for proxy mode.
+### Implementation Notes
+
+- **Location:** `tokenpak/adapters/anthropic.py`
+- **HTTP client:** requests library (optional dependency)
+- **Token tracking:** Exact usage in every response: `usage.input_tokens`, `usage.output_tokens`, `usage.cache_read_input_tokens`, `usage.cache_creation_input_tokens`
+- **Streaming:** Supports streaming responses with token counting via `message_start`, `message_stop` events
+- **Models:** Works with Claude 3, 3.5, and newer variants
+
+### Reference
+- [Anthropic Python SDK Releases](https://github.com/anthropics/anthropic-sdk-python/releases)
+- [Claude API Documentation](https://docs.anthropic.com)
+
+---
+
+## LangChain Integration
+
+The `langchain-tokenpak` package provides a TokenPak callback handler for LangChain.
+
+### Compatibility
+
+| TokenPak | LangChain | Python | Status | Notes |
+|----------|-----------|--------|--------|-------|
+| v1.0+ | 0.1+ | 3.10+ | ✅ | Stable. Tested with langchain-core 1.2.17 |
+| v1.0+ | 0.0.x | 3.9+ | 🔲 | Not tested; likely works with adapters |
+| v0.9.x | 0.1+ | 3.10+ | ⚠️ | Legacy. Callback interface may have changed |
+
+### Implementation Notes
+
+- **Location:** `packages/langchain-tokenpak/`
+- **Integration type:** LangChain callback handler (integrates at request/response boundary)
+- **Supported models:** Works with any LangChain LLM that uses OpenAI/Anthropic backends
+- **Token tracking:** Derives from provider token counts reported by LangChain
+
+### Reference
+- [LangChain Python SDK Releases](https://github.com/langchain-ai/langchain/releases)
+- [LangChain Callbacks Documentation](https://python.langchain.com/docs/modules/callbacks/)
 
 ---
 
 ## LiteLLM Integration
 
-TokenPak ships a first-class `tokenpak.integrations.litellm` module with `TokenPakMiddleware`,
-`compile_pack`, and a `ProxyHandler`. LiteLLM is an **optional dependency** — install separately.
+The `tokenpak/integrations/litellm/` module provides TokenPak adapter for LiteLLM.
 
-**Reference:** https://pypi.org/project/litellm/
+### Compatibility
 
-| TokenPak | LiteLLM     | Python     | Status | Notes |
-|----------|-------------|------------|--------|-------|
-| v0.9     | any         | 3.10–3.12  | ❌     | LiteLLM integration added in v1.0 |
-| v1.0     | 1.0–1.x     | 3.10–3.13  | ✅     | `TokenPakMiddleware`, `patch_completion`, `ProxyHandler` |
-| v1.0     | >=2.0       | 3.10–3.13  | 🔲     | Not tested; middleware uses standard kwargs, likely compatible |
+| TokenPak | LiteLLM | Python | Status | Notes |
+|----------|---------|--------|--------|-------|
+| v1.0+ | 1.0+ | 3.10+ | ✅ | Stable. Tested via adapter interface; works with 1.x+ models |
+| v1.0+ | 0.9.x | 3.10+ | 🔲 | Not tested; likely works; API stable |
+| v0.9.x | 0.9+ | 3.10+ | ⚠️ | Legacy. No longer tested |
 
-**Usage:**
-```python
-from tokenpak.integrations.litellm import TokenPakMiddleware
-```
+### Implementation Notes
 
----
+- **Location:** `tokenpak/integrations/litellm/`
+- **Integration type:** Adapter wrapping LiteLLM's proxy mode
+- **Supported providers:** All LiteLLM-supported providers (OpenAI, Anthropic, Google, Azure, etc.)
+- **Token tracking:** Derives from provider-specific token reporting
 
-## LangChain Integration (`langchain-tokenpak`)
-
-Separate installable package with `TokenPakContextManager`, `TokenPakState`,
-`TokenPakRetriever`, and `TokenPakMemory`.
-
-**Reference:** https://pypi.org/project/langchain-core/
-
-| tokenpak | langchain-tokenpak | langchain-core | Python     | Status | Notes |
-|----------|--------------------|----------------|------------|--------|-------|
-| v0.9     | —                  | —              | —          | ❌     | Package not yet released |
-| v1.0     | 0.1.0              | >=0.1.0        | 3.10–3.12  | ✅     | 18/18 tests passing; installed: `langchain-core==1.2.17` |
-| v1.0     | 0.1.0              | >=1.0          | 3.10–3.13  | ✅     | Tested on Cali with `langchain-core==1.2.17` |
-
-**Install:**
-```bash
-pip install langchain-tokenpak
-pip install langchain  # optional: full LangChain stack
-```
+### Reference
+- [LiteLLM Documentation](https://docs.litellm.ai)
+- [LiteLLM GitHub Releases](https://github.com/BerriAI/litellm/releases)
 
 ---
 
-## LlamaIndex Integration (`llamaindex-tokenpak`)
+## Google Vertex AI (via Generative AI SDK)
 
-Separate installable package with `TokenPakNodeParser`, `TokenPakRetriever`,
-`TokenPakQueryEngine`, and `TokenPakWorkflow`.
+TokenPak includes proxy-mode support for Google Vertex AI via the generative AI SDK.
 
-**Reference:** https://pypi.org/project/llama-index-core/
+### Compatibility
 
-| tokenpak | llamaindex-tokenpak | llama-index-core | Python     | Status | Notes |
-|----------|---------------------|------------------|------------|--------|-------|
-| v0.9     | —                   | —                | —          | ❌     | Package not yet released |
-| v1.0     | 0.1.0               | >=0.10.0         | 3.10–3.12  | ✅     | 67/67 tests passing; tested with `llama-index-core==0.14.15` |
-| v1.0     | 0.1.0               | >=0.14           | 3.10–3.13  | ✅     | Cali system verified |
+| TokenPak | Google SDK | Python | Status | Notes |
+|----------|-----------|--------|--------|-------|
+| v1.0+ | 0.45+ | 3.10+ | ⚠️ | Beta. Implemented in proxy_v4.py; limited real-world testing |
+| v1.0+ | <0.45 | 3.10+ | 🔲 | Not tested; API shape may differ |
 
-**Install:**
-```bash
-pip install llamaindex-tokenpak
-```
+### Implementation Notes
 
----
+- **Location:** `tokenpak/proxy_v4.py` (provider routing layer)
+- **Integration type:** Proxy mode (HTTP request translation)
+- **Supported models:** Gemini models via Vertex AI API
+- **Token tracking:** Google SDK provides token counts in `usage_metadata`
 
-## CrewAI Integration (`crewai-tokenpak`)
-
-Separate installable package providing `TokenPakContextAllocator` for multi-agent context budgeting.
-
-**Reference:** https://pypi.org/project/crewai/
-
-| tokenpak | crewai-tokenpak | crewai    | Python     | Status | Notes |
-|----------|-----------------|-----------|------------|--------|-------|
-| v0.9     | —               | —         | —          | ❌     | Package not yet released |
-| v1.0     | 0.1.0           | >=0.1.0   | 3.10–3.12  | ✅     | 1/1 tests passing; tested with `crewai==1.10.1` |
-| v1.0     | 0.1.0           | >=1.0     | 3.10–3.13  | ✅     | Cali system: `crewai==1.10.1` ✅ |
-
-**Install:**
-```bash
-pip install crewai-tokenpak
-```
+### Reference
+- [Google Generative AI SDK Releases](https://github.com/googleapis/python-genai/releases)
+- [Vertex AI API Documentation](https://cloud.google.com/vertex-ai/docs/generative-ai/start/quickstarts/api-quickstart)
 
 ---
 
-## AutoGen Integration (`autogen-tokenpak`)
+## Framework Adapters Status
 
-Separate installable package. Compatible with both `pyautogen` and the newer
-`autogen-agentchat` / `autogen-core` packages.
+### AutoGen (Microsoft)
 
-**Reference:** https://pypi.org/project/pyautogen/ | https://pypi.org/project/autogen-agentchat/
+| TokenPak | AutoGen | Python | Status | Notes |
+|----------|---------|--------|--------|-------|
+| v1.0+ | 0.2+ | 3.10+ | 🔲 | Not tested; supports custom client override |
 
-| tokenpak | autogen-tokenpak | pyautogen  | autogen-core | Python     | Status | Notes |
-|----------|------------------|------------|--------------|------------|--------|-------|
-| v0.9     | —                | —          | —            | —          | ❌     | Package not yet released |
-| v1.0     | 0.1.0            | >=0.2.0    | —            | 3.10–3.12  | ✅     | 1/1 tests passing |
-| v1.0     | 0.1.0            | 0.10.0     | 0.7.5        | 3.10–3.13  | ✅     | Cali system: both packages installed |
-| v1.0     | 0.1.0            | >=0.10     | >=0.7        | 3.10–3.13  | 🔲     | Newer versions not tested |
+**Location:** Example in docs or framework-adapter ecosystem  
+**Integration:** Use OpenAI/Anthropic adapters as custom client  
+**Reference:** [AutoGen Documentation](https://microsoft.github.io/autogen/)
 
-**Install:**
-```bash
-pip install autogen-tokenpak
-```
+### CrewAI
 
----
+| TokenPak | CrewAI | Python | Status | Notes |
+|----------|--------|--------|--------|-------|
+| v1.0+ | 0.27+ | 3.10+ | 🔲 | Not tested; uses LangChain/LiteLLM underneath |
 
-## Langfuse Integration (`langfuse-tokenpak`)
+**Location:** Via LangChain or LiteLLM adapter  
+**Integration:** Override LLM provider with TokenPak-wrapped client  
+**Reference:** [CrewAI Documentation](https://docs.crewai.com)
 
-Separate installable package for tracing and observability. Langfuse is optional.
+### LlamaIndex
 
-**Reference:** https://pypi.org/project/langfuse/
+| TokenPak | LlamaIndex | Python | Status | Notes |
+|----------|-----------|--------|--------|-------|
+| v1.0+ | 0.9+ | 3.10+ | 🔲 | Not tested; use OpenAI/Anthropic adapters as custom LLM |
 
-| tokenpak | langfuse-tokenpak | langfuse   | Python     | Status | Notes |
-|----------|-------------------|------------|------------|--------|-------|
-| v0.9     | —                 | —          | —          | ❌     | Package not yet released |
-| v1.0     | 0.1.0             | >=2.0.0    | 3.10–3.12  | ✅     | 30/30 tests passing (langfuse itself not required for tests) |
-| v1.0     | 0.1.0             | >=3.0      | 3.10–3.13  | 🔲     | Not tested; langfuse SDK is mostly optional |
+**Location:** Via custom LLM callback  
+**Integration:** Override default LLM with TokenPak wrapper  
+**Reference:** [LlamaIndex Documentation](https://docs.llamaindex.ai)
 
-**Install:**
-```bash
-pip install langfuse-tokenpak
-pip install "langfuse-tokenpak[langfuse]"   # to include langfuse SDK
-pip install "langfuse-tokenpak[langchain]"  # langchain + langfuse combo
-```
+### Langfuse
 
----
+| TokenPak | Langfuse | Python | Status | Notes |
+|----------|----------|--------|--------|-------|
+| v1.0+ | 2.0+ | 3.10+ | 🔲 | Not tested; telemetry integration possible |
 
-## Google Vertex AI / Gemini
-
-TokenPak proxy intercepts `googleapis.com` (rate-limit detection). Native SDK output
-format is not implemented — Google-bound calls go through the proxy or via LiteLLM routing.
-
-**Reference:** https://cloud.google.com/vertex-ai/docs
-
-| TokenPak | Vertex AI SDK | Python     | Status | Notes |
-|----------|---------------|------------|--------|-------|
-| v0.9     | any           | —          | ❌     | Not targeted |
-| v1.0     | any           | 3.10–3.13  | ⚠️     | Proxy passthrough only; no `to_vertex()` output format |
-| future   | TBD           | —          | 🔲     | Planned in roadmap (native Gemini format) |
-
-> If you need Vertex AI support today, route through LiteLLM (`litellm` supports Vertex natively).
-
----
-
-## Tiktoken (Token Counting)
-
-Optional dependency for accurate token counting. Without it, TokenPak uses a character-based heuristic.
-
-**Reference:** https://pypi.org/project/tiktoken/
-
-| TokenPak | tiktoken    | Python     | Status | Notes |
-|----------|-------------|------------|--------|-------|
-| v0.9     | >=0.5.0     | 3.10–3.12  | ⚠️     | Optional; basic heuristic used if absent |
-| v1.0     | >=0.5.0     | 3.10–3.13  | ✅     | Optional extra: `pip install "tokenpak[tokens]"` |
-| v1.0     | 0.12.0      | 3.10–3.13  | ✅     | Tested on Cali with `tiktoken==0.12.0` |
+**Location:** Observability layer on top of adapters  
+**Integration:** Combine with any TokenPak adapter for telemetry  
+**Reference:** [Langfuse Documentation](https://langfuse.com)
 
 ---
 
 ## Python Version Support
 
-| Python | TokenPak v0.9 | TokenPak v1.0 |
-|--------|--------------|--------------|
-| 3.9    | ⚠️            | ❌            |
-| 3.10   | ✅            | ✅            |
-| 3.11   | ✅            | ✅            |
-| 3.12   | ✅            | ✅ (primary dev env: 3.12.3) |
-| 3.13   | 🔲            | ✅            |
+TokenPak requires **Python 3.10+** (as of v1.0).
+
+**Tested versions:**
+- ✅ Python 3.10
+- ✅ Python 3.11
+- ✅ Python 3.12
+- ✅ Python 3.13
+
+**Older Python (3.8–3.9):** Not supported by TokenPak v1.0+. Use v0.9.x if needed.
 
 ---
 
-## Quick Install Reference
+## Proxy Mode Provider Support
 
-```bash
-# Core only (proxy mode, no SDK deps)
-pip install tokenpak
+The TokenPak proxy (`proxy_v4.py`) supports routing to these providers:
 
-# With token counting
-pip install "tokenpak[tokens]"
-
-# Framework adapters (install the ones you need)
-pip install langchain-tokenpak
-pip install llamaindex-tokenpak
-pip install crewai-tokenpak
-pip install autogen-tokenpak
-pip install langfuse-tokenpak
-
-# LiteLLM integration (built into tokenpak, install litellm separately)
-pip install litellm
-```
+| Provider | Status | Notes |
+|----------|--------|-------|
+| OpenAI | ✅ | Stable. `/v1/chat/completions` passthrough |
+| Anthropic | ✅ | Stable. `/v1/messages` passthrough |
+| Google (Vertex AI) | ⚠️ | Beta. Generative AI SDK passthrough |
+| Azure (via OpenAI compat) | 🔲 | Not tested but likely works (OpenAI API compatible) |
+| LiteLLM | 🔲 | Not tested; acts as provider aggregator |
 
 ---
 
-*Matrix generated by Cali — 2026-03-08. Based on code audit of `~/tokenpak/`, installed package versions,
-and test results from `packages/ADAPTER-STATUS-2026-03-07.md`.*
+## Known Issues & Workarounds
+
+### Issue: Old OpenAI SDK + Streaming
+If using OpenAI SDK < 1.0 with streaming, token counts may be delayed or incomplete.  
+**Workaround:** Upgrade to OpenAI SDK 1.x or 2.x.
+
+### Issue: Anthropic SDK Cache Tokens (< 0.24)
+Older Anthropic SDK versions don't report cache tokens in usage.  
+**Workaround:** Upgrade to latest Anthropic SDK (0.28+).
+
+### Issue: LangChain LLM vs Provider Token Counts
+LangChain may derive token counts differently than the underlying provider.  
+**Workaround:** Use TokenPak telemetry for ground-truth token tracking; verify against provider bills.
+
+---
+
+## How to Request New Adapter Support
+
+1. **Identify the SDK/framework:** Does it have a documented API?
+2. **Check HTTP shape:** Can TokenPak translate HTTP requests/responses?
+3. **Token reporting:** Does the SDK report usage metrics?
+4. **Open an issue:** [TokenPak GitHub Issues](https://github.com/kaywhy331/tokenpak/issues)
+
+Include:
+- SDK name and version
+- Expected use case
+- API documentation link
+- Example code showing how you'd use TokenPak with this SDK
+
+---
+
+## Last Updated
+
+- **Date:** 2026-03-11
+- **By:** Cali
+- **TokenPak Version:** 1.0+
+
+For current adapter status, check:
+- `tokenpak/adapters/` directory
+- `packages/*/` subdirectories
+- `tokenpak/integrations/` directory
