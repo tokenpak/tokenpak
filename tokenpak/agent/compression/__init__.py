@@ -52,6 +52,16 @@ __all__ = [
     "ExtractionResult",
     "TEMPLATES",
 ]
+from . import salience
+from .salience import (
+    ContentType,
+    detect_content_type,
+    LogExtractor,
+    CodeExtractor,
+    DocExtractor,
+    SalientResult,
+    extract as salience_extract,
+)
 from .fidelity_tiers import (
     FidelityTier,
     TIER_COST_FACTOR,
@@ -61,3 +71,14 @@ from .fidelity_tiers import (
     TierStore,
 )
 from .query_rewriter import QueryRewriter, RewriteResult, rewrite_query
+
+__all__ += [
+    "salience",
+    "ContentType",
+    "detect_content_type",
+    "LogExtractor",
+    "CodeExtractor",
+    "DocExtractor",
+    "SalientResult",
+    "salience_extract",
+]
