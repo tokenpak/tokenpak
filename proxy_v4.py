@@ -3549,10 +3549,16 @@ def main():
 
     server = ThreadedHTTPServer(("0.0.0.0", port), ForwardProxyHandler)
 
+    # Write PID file for CLI stop/restart
+    _pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    _pid_path.parent.mkdir(parents=True, exist_ok=True)
+    _pid_path.write_text(str(os.getpid()))
+
     def _handle_signal(signum, frame):
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
         print(f"\n[shutdown] {sig_name} received — stopping gracefully…")
         _shutdown_event.set()
+        _pid_path.unlink(missing_ok=True)
         # shutdown() must be called from a different thread than serve_forever()
         threading.Thread(target=server.shutdown, daemon=True).start()
 

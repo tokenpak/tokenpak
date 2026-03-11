@@ -162,11 +162,73 @@ def cmd_help(args):
 
 
 def cmd_start(args):
-    """Start the proxy on localhost:8766 (alias for `serve --port 8766`)."""
-    import types
+    """Start the proxy on localhost:8766 (launches proxy_v4.py)."""
+    import subprocess
 
-    serve_args = types.SimpleNamespace(port=8766, telemetry=False, ingest=False, workers=1)
-    cmd_serve(serve_args)
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+
+    # Check if proxy is already responding (covers systemd, manual, PID file)
+    health = _proxy_get("/health", port=port)
+    if health:
+        mode = health.get("compilation_mode", "unknown")
+        reqs = health.get("stats", {}).get("requests", 0)
+        print(f"Proxy already running (port {port}, mode={mode}, {reqs} requests).")
+        return
+
+    # Check stale PID file
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, 0)
+            print(f"Proxy process exists (PID {pid}) but not responding. Try `tokenpak restart`.")
+            return
+        except (ProcessLookupError, ValueError):
+            pid_path.unlink(missing_ok=True)
+
+    # Find proxy_v4.py
+    candidates = [
+        Path(__file__).resolve().parent.parent / "proxy_v4.py",
+        Path.home() / "tokenpak" / "proxy_v4.py",
+        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
+    ]
+    proxy_path = None
+    for c in candidates:
+        if c.exists():
+            proxy_path = c
+            break
+
+    if not proxy_path:
+        print("Error: proxy_v4.py not found. Falling back to legacy server.")
+        import types
+        serve_args = types.SimpleNamespace(port=port, telemetry=False, ingest=False, workers=1)
+        cmd_serve(serve_args)
+        return
+
+    # Launch proxy_v4.py as a background process
+    env = os.environ.copy()
+    env["TOKENPAK_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, str(proxy_path)],
+        env=env,
+        cwd=str(proxy_path.parent),
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid_path.write_text(str(proc.pid))
+
+    # Wait briefly and verify
+    import time as _t
+    _t.sleep(1.5)
+    health = _proxy_get("/health", port=port)
+    if health:
+        mode = health.get("compilation_mode", "unknown")
+        print(f"Proxy started (PID {proc.pid}, port {port}, mode={mode}).")
+    else:
+        print(f"Proxy launched (PID {proc.pid}, port {port}) — waiting for startup...")
+        print("  Run `tokenpak status` to verify.")
 
 
 def cmd_stop(args):

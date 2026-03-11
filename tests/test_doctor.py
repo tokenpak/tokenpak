@@ -264,7 +264,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
-            self.assertIn('connection refused', output)
+            self.assertIn('not reachable', output)
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
