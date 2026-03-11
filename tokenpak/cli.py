@@ -65,6 +65,7 @@ _COMMAND_GROUPS = {
         ("audit", "Enterprise audit log management"),
         ("compliance", "Generate compliance reports"),
         ("validate", "Validate a TokenPak JSON file"),
+        ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
     ],
@@ -1071,6 +1072,7 @@ def build_parser():
     _build_status_parser(sub)
     _build_debug_parser(sub)
     _build_demo_parser(sub)
+    _build_diff_parser(sub)
     _build_run_parser(sub)
     _build_macro_parser(sub)
     _build_fingerprint_parser(sub)
@@ -3670,6 +3672,26 @@ def cmd_run_cancel(args):
         print(f"✅ Cancelled scheduled run: {args.id}")
     else:
         print(f"❌ No scheduled run found with id: {args.id}")
+
+
+# ── diff: Context diff visualization ─────────────────────────────────────────
+
+
+def cmd_diff(args):
+    """Show context diff: removed, compressed, retained blocks."""
+    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+    run_diff_cmd(args)
+
+
+def _build_diff_parser(sub):
+    p_diff = sub.add_parser("diff", help="Show context changes (removed/compressed/retained blocks)")
+    p_diff.add_argument("--verbose", "-v", action="store_true", help="Show token counts per block")
+    p_diff.add_argument("--json", action="store_true", help="Output as JSON")
+    p_diff.add_argument("--since", default=None, metavar="TIMESTAMP", help="Diff from specific time")
+    p_diff.set_defaults(func=cmd_diff)
+
+
+# ── run: Macro scheduler CLI ──────────────────────────────────────────────────
 
 
 def _build_run_parser(sub):

@@ -212,6 +212,7 @@ def test_diff_empty_when_no_trace(capsys):
         args = MagicMock()
         args.verbose = False
         args.raw = False
+        args.json = False
         args.since = None
         run_diff_cmd(args)
     captured = capsys.readouterr()
