@@ -276,6 +276,7 @@ STRICT_VALIDATION: bool = os.environ.get("TOKENPAK_STRICT_MODE", "0").lower() in
 # Validation gate — pre-forward runtime guardrails for deterministic path
 VALIDATION_GATE_ENABLED: bool = os.environ.get("TOKENPAK_VALIDATION_GATE", "1").lower() in ("1", "true", "yes", "on")
 VALIDATION_GATE_BUDGET_CAP: int = int(os.environ.get("TOKENPAK_VALIDATION_GATE_BUDGET_CAP", "120000"))
+VALIDATION_GATE_SOFT: bool = os.environ.get("TOKENPAK_VALIDATION_GATE_SOFT", "1").lower() in ("1", "true", "yes", "on")  # soft mode: warn but don't block
 
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
@@ -2675,19 +2676,24 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if gate_result.fingerprint:
                         print(f"  🧾 Determinism fingerprint: {gate_result.fingerprint}")
                     if not gate_result.valid:
-                        self._send_json(
-                            {
-                                "error": {
-                                    "type": "validation_gate_failed",
-                                    "message": "Request blocked by validation gate",
-                                    "reasons": gate_result.errors,
+                        if VALIDATION_GATE_SOFT:
+                            # Soft mode: log warning but forward request anyway
+                            print(f"  ⚠️ Validation gate SOFT-BLOCK (forwarding): {gate_result.errors}")
+                            SESSION["validation_gate_soft_block"] = gate_result.errors
+                        else:
+                            self._send_json(
+                                {
+                                    "error": {
+                                        "type": "validation_gate_failed",
+                                        "message": "Request blocked by validation gate",
+                                        "reasons": gate_result.errors,
+                                    },
+                                    "warnings": gate_result.warnings,
+                                    "fingerprint": gate_result.fingerprint,
                                 },
-                                "warnings": gate_result.warnings,
-                                "fingerprint": gate_result.fingerprint,
-                            },
-                            status=422,
-                        )
-                        return
+                                status=422,
+                            )
+                            return
                     if gate_result.dry_run:
                         self._send_json(
                             {
