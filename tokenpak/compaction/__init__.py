@@ -8,6 +8,9 @@ Public API::
         CompactionPolicy,
         BlockPolicy,
         compact,
+        TopicAwarePolicy,
+        TopicBoundaryDetector,
+        TopicSegment,
     )
 
     # One-shot compaction
@@ -26,14 +29,26 @@ Public API::
         }
     })
     result = policy.compact_block(text, block_type="code")
+
+    # Topic-aware compaction
+    topic_policy = TopicAwarePolicy(
+        active_mode="balanced",
+        inactive_mode="aggressive",
+        activity_threshold=0.5,
+    )
+    result = topic_policy.compact_with_topics(text)
 """
 
 from .modes import CompactionMode, compact
-from .policy import BlockPolicy, CompactionPolicy
+from .policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
+from .topic_aware import TopicBoundaryDetector, TopicSegment
 
 __all__ = [
     "CompactionMode",
     "CompactionPolicy",
     "BlockPolicy",
     "compact",
+    "TopicAwarePolicy",
+    "TopicBoundaryDetector",
+    "TopicSegment",
 ]
