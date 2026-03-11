@@ -199,62 +199,65 @@ TRACE_STORAGE = TraceStorage(max_traces=10)
 
 
 # ---------------------------------------------------------------------------
-# Config
+# Config — reads ~/.tokenpak/config.yaml with env var overrides
 # ---------------------------------------------------------------------------
-PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", 8766))
-MONITOR_DB = os.environ.get("TOKENPAK_DB", str(Path(__file__).parent / "monitor.db"))
+try:
+    from tokenpak.config_loader import get as _cfg
+    print("📄 Config: ~/.tokenpak/config.yaml (env vars override)")
+except ImportError:
+    # Fallback: env-only mode (no config_loader available)
+    def _cfg(key, default=None, env_var=None, cast=None):
+        if env_var:
+            val = os.environ.get(env_var)
+            if val is not None:
+                if cast is bool:
+                    return val.lower() in ("1", "true", "yes", "on")
+                return cast(val) if cast else val
+        return default
+    print("📄 Config: env vars only (config_loader not available)")
+
+PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
+MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 VAULT_SYNC_INTERVAL = 60
-ENABLE_COMPACTION = os.environ.get("TOKENPAK_COMPACT", "1").lower() in ("1", "true", "yes", "on")
-COMPACT_MAX_CHARS = int(os.environ.get("TOKENPAK_COMPACT_MAX_CHARS", "120"))
-COMPACT_THRESHOLD_TOKENS = int(os.environ.get("TOKENPAK_COMPACT_THRESHOLD_TOKENS", "4500"))
-COMPACT_CACHE_SIZE = int(os.environ.get("TOKENPAK_COMPACT_CACHE_SIZE", "2000"))
-COMPILATION_MODE = os.environ.get("TOKENPAK_MODE", "hybrid").lower()  # strict|hybrid|aggressive
+ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
+COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
+COMPACT_THRESHOLD_TOKENS = _cfg("compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)
+COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
+COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
 
-# Capsule Builder config (Phase 0.5 of request pipeline)
-ENABLE_CAPSULE_BUILDER = os.environ.get("TOKENPAK_CAPSULE_BUILDER", "0").lower() in ("1", "true", "yes", "on")
-CAPSULE_MIN_CHARS = int(os.environ.get("TOKENPAK_CAPSULE_MIN_CHARS", "400"))
-CAPSULE_HOT_WINDOW = int(os.environ.get("TOKENPAK_CAPSULE_HOT_WINDOW", "2"))
+# Capsule Builder
+ENABLE_CAPSULE_BUILDER = _cfg("features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER", bool)
+CAPSULE_MIN_CHARS = _cfg("capsule.min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int)
+CAPSULE_HOT_WINDOW = _cfg("capsule.hot_window", 2, "TOKENPAK_CAPSULE_HOT_WINDOW", int)
 
-# Router feature flag — DeterministicRouter integration
-ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_ROUTER_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+# Core features
+ROUTER_ENABLED: bool = _cfg("features.router", True, "TOKENPAK_ROUTER_ENABLED", bool)
+SKELETON_ENABLED: bool = _cfg("features.skeleton", True, "TOKENPAK_SKELETON_ENABLED", bool)
+SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENABLED", bool)
+BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
+CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
-# Skeleton extraction — strip code bodies for vault-injected code blocks
-SKELETON_ENABLED: bool = os.environ.get("TOKENPAK_SKELETON_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+# Tier 1 modules
+SEMANTIC_CACHE_ENABLED: bool = _cfg("features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool)
+PREFIX_REGISTRY_ENABLED: bool = _cfg("features.prefix_registry", False, "TOKENPAK_PREFIX_REGISTRY", bool)
+COMPRESSION_DICT_ENABLED: bool = _cfg("features.compression_dict", False, "TOKENPAK_COMPRESSION_DICT", bool)
+TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
 
-# Shadow reader validation — coherence-check compressed output before sending
-SHADOW_ENABLED: bool = os.environ.get("TOKENPAK_SHADOW_ENABLED", "1").lower() in ("1", "true", "yes", "on")
+# Tier 2 modules
+ERROR_NORMALIZER_ENABLED: bool = _cfg("features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool)
+BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", False, "TOKENPAK_BUDGET_CONTROLLER", bool)
+REQUEST_LOGGER_ENABLED: bool = _cfg("features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool)
+SALIENCE_ROUTER_ENABLED: bool = _cfg("features.salience_router", False, "TOKENPAK_SALIENCE_ROUTER", bool)
+CACHE_REGISTRY_ENABLED: bool = _cfg("features.cache_registry", False, "TOKENPAK_CACHE_REGISTRY", bool)
+RETRIEVAL_WATCHDOG_ENABLED: bool = _cfg("features.retrieval_watchdog", False, "TOKENPAK_RETRIEVAL_WATCHDOG", bool)
+FAILURE_MEMORY_ENABLED: bool = _cfg("features.failure_memory", False, "TOKENPAK_FAILURE_MEMORY", bool)
+FIDELITY_TIERS_ENABLED: bool = _cfg("features.fidelity_tiers", False, "TOKENPAK_FIDELITY_TIERS", bool)
 
-# Budget allocation — enforce per-bucket token limits in capsule assembly
-BUDGET_TOTAL_TOKENS: int = int(os.environ.get("TOKENPAK_BUDGET_TOTAL", "12000"))
-
-# Chat footer — inject stats into SSE stream (visible in chat)
-CHAT_FOOTER_ENABLED: bool = os.environ.get("TOKENPAK_CHAT_FOOTER", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 1 Module Toggles (2026-03-11) --- all default OFF for safe rollout
-SEMANTIC_CACHE_ENABLED: bool = os.environ.get("TOKENPAK_SEMANTIC_CACHE", "0").lower() in ("1", "true", "yes", "on")
-PREFIX_REGISTRY_ENABLED: bool = os.environ.get("TOKENPAK_PREFIX_REGISTRY", "0").lower() in ("1", "true", "yes", "on")
-COMPRESSION_DICT_ENABLED: bool = os.environ.get("TOKENPAK_COMPRESSION_DICT", "0").lower() in ("1", "true", "yes", "on")
-TRACE_ENABLED: bool = os.environ.get("TOKENPAK_TRACE", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2A Module Toggles (2026-03-11) --- all default OFF for safe rollout
-ERROR_NORMALIZER_ENABLED: bool = os.environ.get("TOKENPAK_ERROR_NORMALIZER", "0").lower() in ("1", "true", "yes", "on")
-BUDGET_CONTROLLER_ENABLED: bool = os.environ.get("TOKENPAK_BUDGET_CONTROLLER", "0").lower() in ("1", "true", "yes", "on")
-REQUEST_LOGGER_ENABLED: bool = os.environ.get("TOKENPAK_REQUEST_LOGGER", "0").lower() in ("1", "true", "yes", "on")
-SALIENCE_ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_SALIENCE_ROUTER", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2B Cache Toggles (2026-03-11) --- all default OFF
-CACHE_REGISTRY_ENABLED: bool = os.environ.get("TOKENPAK_CACHE_REGISTRY", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2C Advanced Module Toggles (2026-03-11) --- all default OFF
-RETRIEVAL_WATCHDOG_ENABLED: bool = os.environ.get("TOKENPAK_RETRIEVAL_WATCHDOG", "0").lower() in ("1", "true", "yes", "on")
-FAILURE_MEMORY_ENABLED: bool = os.environ.get("TOKENPAK_FAILURE_MEMORY", "0").lower() in ("1", "true", "yes", "on")
-FIDELITY_TIERS_ENABLED: bool = os.environ.get("TOKENPAK_FIDELITY_TIERS", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Phase 3 Module Toggles (2026-03-11) --- all default OFF
-SESSION_CAPSULES_ENABLED: bool = os.environ.get("TOKENPAK_SESSION_CAPSULES", "0").lower() in ("1", "true", "yes", "on")
-PRECONDITION_GATES_ENABLED: bool = os.environ.get("TOKENPAK_PRECONDITION_GATES", "0").lower() in ("1", "true", "yes", "on")
-QUERY_REWRITER_ENABLED: bool = os.environ.get("TOKENPAK_QUERY_REWRITER", "0").lower() in ("1", "true", "yes", "on")
-STABILITY_SCORER_ENABLED: bool = os.environ.get("TOKENPAK_STABILITY_SCORER", "0").lower() in ("1", "true", "yes", "on")
+# Phase 3 modules
+SESSION_CAPSULES_ENABLED: bool = _cfg("features.session_capsules", False, "TOKENPAK_SESSION_CAPSULES", bool)
+PRECONDITION_GATES_ENABLED: bool = _cfg("features.precondition_gates", False, "TOKENPAK_PRECONDITION_GATES", bool)
+QUERY_REWRITER_ENABLED: bool = _cfg("features.query_rewriter", False, "TOKENPAK_QUERY_REWRITER", bool)
+STABILITY_SCORER_ENABLED: bool = _cfg("features.stability_scorer", False, "TOKENPAK_STABILITY_SCORER", bool)
 
 # --- Tier 2B Cache Registry singleton (initialized at module load if enabled) ---
 _cache_registry = None
@@ -267,31 +270,29 @@ if CACHE_REGISTRY_ENABLED:
         print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
         CACHE_REGISTRY_ENABLED = False
 
-# Fix #3: Configurable upstream timeout (default 300s)
-UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
+# Upstream
+UPSTREAM_TIMEOUT: int = _cfg("upstream.timeout", 300, "TOKENPAK_UPSTREAM_TIMEOUT", int)
+STRICT_VALIDATION: bool = _cfg("features.strict_mode", False, "TOKENPAK_STRICT_MODE", bool)
 
-# Fix #5: Strict validation mode — reject malformed requests (vs warn-and-forward)
-STRICT_VALIDATION: bool = os.environ.get("TOKENPAK_STRICT_MODE", "0").lower() in ("1", "true", "yes", "on")
+# Validation gate
+VALIDATION_GATE_ENABLED: bool = _cfg("features.validation_gate", True, "TOKENPAK_VALIDATION_GATE", bool)
+VALIDATION_GATE_BUDGET_CAP: int = _cfg("budget.validation_gate_cap", 120000, "TOKENPAK_VALIDATION_GATE_BUDGET_CAP", int)
+VALIDATION_GATE_SOFT: bool = _cfg("features.validation_gate_soft", True, "TOKENPAK_VALIDATION_GATE_SOFT", bool)
 
-# Validation gate — pre-forward runtime guardrails for deterministic path
-VALIDATION_GATE_ENABLED: bool = os.environ.get("TOKENPAK_VALIDATION_GATE", "1").lower() in ("1", "true", "yes", "on")
-VALIDATION_GATE_BUDGET_CAP: int = int(os.environ.get("TOKENPAK_VALIDATION_GATE_BUDGET_CAP", "120000"))
-VALIDATION_GATE_SOFT: bool = os.environ.get("TOKENPAK_VALIDATION_GATE_SOFT", "1").lower() in ("1", "true", "yes", "on")  # soft mode: warn but don't block
+# Vault / Retrieval
+VAULT_INDEX_PATH = _cfg("vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str)
+INJECT_BUDGET = _cfg("vault.inject_budget", 4000, "TOKENPAK_INJECT_BUDGET", int)
+INJECT_TOP_K = _cfg("vault.inject_top_k", 5, "TOKENPAK_INJECT_TOP_K", int)
+INJECT_MIN_SCORE = _cfg("vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float)
+INJECT_SKIP_MODELS = _cfg("vault.inject_skip_models", "haiku", "TOKENPAK_INJECT_SKIP_MODELS", str)
+INJECT_MIN_PROMPT = _cfg("vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_PROMPT", int)
+VAULT_INDEX_RELOAD_INTERVAL = 300
+RETRIEVAL_BACKEND = _cfg("vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str).lower()
 
-# Two-Tier Index Config
-VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
-INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "4000"))  # raised to 4000 for cache stability
-INJECT_TOP_K = int(os.environ.get("TOKENPAK_INJECT_TOP_K", "5"))
-INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
-INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
-INJECT_MIN_PROMPT = int(os.environ.get("TOKENPAK_INJECT_MIN_PROMPT", "1000"))
-VAULT_INDEX_RELOAD_INTERVAL = 300  # reload vault index every 5 min
-RETRIEVAL_BACKEND = os.environ.get("TOKENPAK_RETRIEVAL_BACKEND", "json_blocks").lower()  # json_blocks|sqlite
-
-# Term-Card Resolver — glossary term extraction for routing/constraints
-TERM_RESOLVER_ENABLED: bool = os.environ.get("TOKENPAK_TERM_RESOLVER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
-TERM_RESOLVER_TOP_K: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_TOP_K", "3"))
-TERM_RESOLVER_MAX_BYTES: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_MAX_BYTES", "200"))
+# Term-Card Resolver
+TERM_RESOLVER_ENABLED: bool = _cfg("features.term_resolver", False, "TOKENPAK_TERM_RESOLVER_ENABLED", bool)
+TERM_RESOLVER_TOP_K: int = _cfg("term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int)
+TERM_RESOLVER_MAX_BYTES: int = _cfg("term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int)
 
 _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
@@ -461,8 +462,8 @@ INTERCEPT_HOSTS = {
 }
 
 # Ollama upstream routing — requests with /ollama-proxy/ prefix get forwarded here
-OLLAMA_UPSTREAM = os.environ.get("TOKENPAK_OLLAMA_UPSTREAM", "http://100.80.241.118:11434")
-OLLAMA_CONNECT_TIMEOUT = int(os.environ.get("TOKENPAK_OLLAMA_TIMEOUT", "20"))
+OLLAMA_UPSTREAM = _cfg("upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str)
+OLLAMA_CONNECT_TIMEOUT = _cfg("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
 
 # Circuit breaker for ollama upstream -- avoids repeated 2-min TCP hangs
 _ollama_circuit = {
@@ -529,7 +530,7 @@ def _circuit_record_success(provider: str):
             cb["open"] = False
 
 # Fix #7: Per-IP rate limiting — token bucket, 60 req/min per IP by default
-_RATE_LIMIT_RPM = int(os.environ.get("TOKENPAK_RATE_LIMIT_RPM", "60"))
+_RATE_LIMIT_RPM = _cfg("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
 _rate_buckets: dict = {}
 _rate_bucket_lock = threading.Lock()
 

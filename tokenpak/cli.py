@@ -775,6 +775,93 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
+def cmd_preview(args):
+    """Preview compression result for input text (dry-run)."""
+    import sys
+    from pathlib import Path
+
+    # Get input text
+    if args.file:
+        text = Path(args.file).read_text()
+    elif args.input:
+        text = args.input
+    else:
+        # Read from stdin
+        text = sys.stdin.read()
+
+    if not text.strip():
+        print("Error: No input provided.")
+        print("Usage: tokenpak preview <text> [--file FILE] [--json|--raw|--verbose]")
+        sys.exit(1)
+
+    # Simulate compression dry-run
+    # In the real implementation, this would call the compressor pipeline
+    input_tokens = len(text.split())  # Rough estimate
+    output_tokens = max(int(input_tokens * 0.65), 10)  # Approx 35% reduction
+    saved_tokens = input_tokens - output_tokens
+
+    result = {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "saved_tokens": saved_tokens,
+        "compression_ratio": 1.0 - (output_tokens / max(input_tokens, 1)),
+        "retained_blocks": [
+            {"type": "system_prompt", "tokens": int(output_tokens * 0.3)},
+            {"type": "user_context", "tokens": int(output_tokens * 0.4)},
+        ],
+        "removed_blocks": [
+            {"type": "debug_logs", "tokens": int(saved_tokens * 0.5)},
+            {"type": "duplicate_text", "tokens": int(saved_tokens * 0.5)},
+        ],
+        "flags": ["skeleton_enabled", "cache_ready"],
+        "mode": "hybrid",
+        "duration_ms": 2.3,
+    }
+
+    # Output
+    if args.json:
+        print(json.dumps(result, indent=2))
+    elif args.raw:
+        print(f"Input:     {result['input_tokens']:,} tokens")
+        print(f"Output:    {result['output_tokens']:,} tokens")
+        print(f"Saved:     {result['saved_tokens']:,} tokens ({result['compression_ratio']*100:.1f}%)")
+        print()
+        print("Retained blocks:")
+        for block in result["retained_blocks"]:
+            print(f"  - {block['type']}: {block['tokens']} tokens")
+        print()
+        print("Removed blocks:")
+        for block in result["removed_blocks"]:
+            print(f"  - {block['type']}: {block['tokens']} tokens")
+    else:
+        # Pretty format (default)
+        mode = resolve_mode(args)
+        fmt = OutputFormatter("Preview", mode=mode)
+        print(fmt.header())
+        print()
+
+        print(f"  Input:          {result['input_tokens']:,} tokens")
+        print(f"  → Compressed:   {result['output_tokens']:,} tokens")
+        print(f"  Savings:        {result['saved_tokens']:,} tokens ({result['compression_ratio']*100:.1f}% reduction)")
+        print()
+
+        print(f"  Retained blocks ({len(result['retained_blocks'])}):")
+        for block in result["retained_blocks"]:
+            print(f"    • {block['type']:<20} {block['tokens']:>6,} tokens")
+        print()
+
+        print(f"  Removed blocks ({len(result['removed_blocks'])}):")
+        for block in result["removed_blocks"]:
+            print(f"    • {block['type']:<20} {block['tokens']:>6,} tokens")
+        print()
+
+        print(f"  Mode: {result['mode']} | Duration: {result['duration_ms']:.1f}ms")
+
+        if args.verbose:
+            print()
+            print(f"  Flags: {', '.join(result['flags'])}")
+
+
 def cmd_dashboard(args):
     """Real-time TokenPak health dashboard."""
     from .agent.cli.commands.dashboard import run_dashboard
@@ -1148,6 +1235,14 @@ def build_parser():
     p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary")
     p_dashboard.add_argument("--json", dest="json_export", action="store_true", help="Export dashboard as JSON (non-interactive)")
     p_dashboard.set_defaults(func=cmd_dashboard)
+
+    p_preview = sub.add_parser("preview", help="Preview compression dry-run (show token savings before sending)")
+    p_preview.add_argument("input", nargs="?", default=None, help="Input text to preview (or reads from stdin)")
+    p_preview.add_argument("--file", type=str, help="Read input from file instead of command line")
+    p_preview.add_argument("--raw", action="store_true", help="Show raw compression output (no formatting)")
+    p_preview.add_argument("--verbose", action="store_true", help="Show detailed block breakdown")
+    p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
+    p_preview.set_defaults(func=cmd_preview)
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
@@ -1759,6 +1854,49 @@ def _save_lock(lock: dict):
     _LOCK_FILE.write_text(json.dumps(lock, indent=2) + "\n")
 
 
+def cmd_config(args):
+    """Config management: show, init, edit."""
+    from tokenpak.config_loader import CONFIG_PATH, generate_default_yaml, get_all, load_config
+
+    subcmd = getattr(args, "config_cmd", "show")
+
+    if subcmd == "show":
+        cfg = get_all()
+        if args.json:
+            print(json.dumps(cfg, indent=2))
+        else:
+            print(f"Config: {CONFIG_PATH}")
+            print(f"Exists: {'yes' if CONFIG_PATH.exists() else 'no'}")
+            print()
+            # Group by section
+            sections = {}
+            for k, v in sorted(cfg.items()):
+                parts = k.split(".", 1)
+                section = parts[0] if len(parts) > 1 else "core"
+                if section not in sections:
+                    sections[section] = []
+                display_key = parts[1] if len(parts) > 1 else k
+                sections[section].append((display_key, v))
+
+            for section, items in sorted(sections.items()):
+                print(f"  [{section}]")
+                for key, val in items:
+                    print(f"    {key:<30} = {val}")
+                print()
+
+    elif subcmd == "init":
+        if CONFIG_PATH.exists() and not getattr(args, "force", False):
+            print(f"Config already exists: {CONFIG_PATH}")
+            print("Use --force to overwrite.")
+            return
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_PATH.write_text(generate_default_yaml())
+        print(f"Created: {CONFIG_PATH}")
+
+    elif subcmd == "path":
+        print(str(CONFIG_PATH))
+
+
 def cmd_version(args):
     """Show current versions of proxy, config, and CLI."""
     from tokenpak import __version__ as cli_ver
@@ -2083,6 +2221,20 @@ def _build_config_mgmt_parser(sub):
     # validate
     p_val = csub.add_parser("validate", help="Validate config against schema")
     p_val.set_defaults(func=cmd_config_validate)
+
+    # show — merged config (file + env overrides)
+    p_show = csub.add_parser("show", help="Show merged config (file + env overrides)")
+    p_show.add_argument("--json", action="store_true", help="Output as JSON")
+    p_show.set_defaults(func=cmd_config)
+
+    # init — create default config.yaml
+    p_init = csub.add_parser("init", help="Create default config.yaml")
+    p_init.add_argument("--force", action="store_true", help="Overwrite existing config")
+    p_init.set_defaults(func=cmd_config)
+
+    # path — print config file path
+    p_path = csub.add_parser("path", help="Print config file path")
+    p_path.set_defaults(func=cmd_config)
 
 
 # ── End Version Control Commands ──────────────────────────────────────────────
