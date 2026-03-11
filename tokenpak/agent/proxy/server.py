@@ -19,6 +19,7 @@ Env vars (all optional):
     TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
     TOKENPAK_DB            (default .ocp/monitor.db)
 """
+from __future__ import annotations
 
 import warnings as _warnings
 _warnings.warn(
@@ -27,8 +28,6 @@ _warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-
-from __future__ import annotations
 
 import gzip
 import http.client
