@@ -2315,15 +2315,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         try:
                             from tokenpak.cache.semantic_cache import SemanticCache
                             _sem_cache = SemanticCache()
-                            _cached_response = _sem_cache.lookup(body)
-                            if _cached_response is not None:
+                            _sem_query = body.decode('utf-8') if isinstance(body, bytes) else body
+                            _cache_result = _sem_cache.lookup(_sem_query)
+                            if _cache_result is not None and _cache_result.hit and _cache_result.entry:
                                 SESSION["semantic_cache_hit"] = True
                                 SESSION["phase_semantic_cache"] = "hit"
                                 # Return cached response — skip all processing
-                                if is_streaming:
-                                    self.wfile.write(_cached_response if isinstance(_cached_response, bytes) else _cached_response.encode())
+                                _cached_resp = _cache_result.entry.response
+                                if isinstance(_cached_resp, dict):
+                                    self._send_json(_cached_resp)
+                                elif isinstance(_cached_resp, bytes):
+                                    self.wfile.write(_cached_resp)
                                 else:
-                                    self._send_json(json.loads(_cached_response) if isinstance(_cached_response, str) else _cached_response)
+                                    self._send_json(json.loads(_cached_resp))
                                 return
                             SESSION["phase_semantic_cache"] = "miss"
                         except Exception as _sc_err:
@@ -2382,12 +2386,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 0.2: Budget Controller — enforce token budget limits before processing
                     if BUDGET_CONTROLLER_ENABLED and body:
                         try:
-                            from tokenpak.budget_controller import BudgetController, ClassificationResult
+                            from tokenpak.budget_controller import BudgetController, ClassificationResult, IntentClass
                             _bc = BudgetController()
                             _bc_tokens = input_tokens or 0
-                            _bc_class = ClassificationResult(tier="standard", intent="query", token_count=_bc_tokens)
+                            _bc_class = ClassificationResult(intent=IntentClass.GEN_Q, complexity_score=min(_bc_tokens / 10000.0, 1.0))
                             _bc_decision = _bc.decide(_bc_class)
-                            SESSION["budget_controller_tier"] = _bc_class.tier
+                            SESSION["budget_controller_tier"] = str(_bc_class.intent.name)
                             SESSION["budget_controller_action"] = _bc_decision.action if hasattr(_bc_decision, 'action') else str(_bc_decision)
                             if hasattr(_bc_decision, 'reject') and _bc_decision.reject:
                                 self._send_json({"error": {"type": "budget_exceeded", "message": f"Request exceeds token budget: {_bc_tokens} tokens"}}, status=429)
@@ -2520,10 +2524,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         try:
                             from tokenpak.agent.regression.retrieval_watchdog import RetrievalQualityWatchdog, QueryRetrievalRecord
                             _rw = RetrievalQualityWatchdog()
+                            _rw_chunk_count = len(injected_sources) if injected_sources else 0
                             _rw_record = QueryRetrievalRecord(
-                                query=model,  # use model as proxy for query fingerprint
-                                retrieved_count=len(injected_sources) if injected_sources else 0,
-                                injected_tokens=injected_tokens,
+                                query_id=model or "unknown",
+                                query_text=user_text[:200] if user_text else "",
+                                chunk_count=_rw_chunk_count,
+                                unique_chunk_count=_rw_chunk_count,
+                                relevance_scores=[1.0] * _rw_chunk_count,
+                                source_ids=injected_sources if injected_sources else [],
+                                chunk_ids_ordered=[f"chunk_{i}" for i in range(_rw_chunk_count)],
                             )
                             _rw_alert = _rw.observe(_rw_record)
                             if _rw_alert:
@@ -2640,7 +2649,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             _req_data = json.loads(body)
                             if "messages" in _req_data:
                                 _dict_result = _dict.apply(_req_data["messages"])
-                                _req_data["messages"] = _dict_result
+                                _req_data["messages"] = _dict_result.messages
                                 body = json.dumps(_req_data, separators=(',', ':'))
                                 SESSION["compression_dict_applied"] = True
                         except Exception as _cd_err:
@@ -3035,7 +3044,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     try:
                         from tokenpak.agent.memory.session_capsules import build_session_capsule, serialize_capsule
                         _session_id = self.headers.get("X-OpenClaw-Session", model)
-                        _capsule = build_session_capsule(body, source_path=_session_id)
+                        _capsule_text = body.decode('utf-8') if isinstance(body, bytes) else body
+                        _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
                         _capsule_str = serialize_capsule(_capsule)
                         SESSION["session_capsule_built"] = True
                         SESSION["session_capsule_size"] = len(_capsule_str)
@@ -3067,8 +3077,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 try:
                     from tokenpak.cache.semantic_cache import SemanticCache
                     _sem_cache = SemanticCache()
-                    _store_resp = resp_body if 'resp_body' in locals() else json.dumps({"status": status}).encode()
-                    _sem_cache.store(_original_body, _store_resp)
+                    _store_query = _original_body.decode('utf-8') if isinstance(_original_body, bytes) else _original_body
+                    _store_resp_raw = resp_body if 'resp_body' in locals() else json.dumps({"status": status}).encode()
+                    _store_resp_dict = json.loads(_store_resp_raw) if isinstance(_store_resp_raw, (bytes, str)) else _store_resp_raw
+                    _sem_cache.store(_store_query, _store_resp_dict)
                     SESSION["semantic_cache_stored"] = True
                 except Exception as _sc_store_err:
                     SESSION["semantic_cache_store_error"] = str(_sc_store_err)
@@ -3082,12 +3094,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.agent.regression.stability_scorer import StabilityScorer, RunRecord
                     _ss = StabilityScorer()
                     _workflow_id = self.headers.get("X-OpenClaw-Session", model)
+                    _resp_text = ""
+                    try:
+                        _resp_text = (resp_body[:500].decode('utf-8') if isinstance(resp_body, bytes) else str(resp_body)[:500]) if 'resp_body' in locals() else ""
+                    except Exception:
+                        pass
                     _record = RunRecord(
-                        timestamp=int(time.time()),
-                        input_tokens=input_tokens or 0,
-                        output_tokens=output_tokens or 0,
-                        status=status,
-                        latency_ms=latency_ms,
+                        timestamp=str(int(time.time())),
+                        passed=status == 200,
+                        retried=False,
+                        token_count=(input_tokens or 0) + (output_tokens or 0),
+                        output_text=_resp_text,
+                        validation_passed=status == 200,
                     )
                     _ss.record_run(_workflow_id, _record)
                     _score = _ss.score_workflow(_workflow_id)
