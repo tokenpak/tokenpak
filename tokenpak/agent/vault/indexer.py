@@ -13,7 +13,8 @@ from tokenpak.walker import detect_file_type, walk_directory
 from tokenpak.agent.ingest.schema_converter import convert_document
 from tokenpak.extraction import EntityExtractor
 
-from .blocks import BlockRecord, BlockStore, get_block_store
+from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
+from .slicer import SliceRecord, should_slice, slice_content
 from .symbols import SymbolTable
 
 
@@ -34,9 +35,11 @@ class VaultIndexer:
         self,
         block_store: Optional[BlockStore] = None,
         symbol_table: Optional[SymbolTable] = None,
+        slice_store: Optional[SliceStore] = None,
     ):
         self.blocks = block_store if block_store is not None else get_block_store()
         self.symbols = symbol_table if symbol_table is not None else SymbolTable()
+        self.slices = slice_store if slice_store is not None else SliceStore(":memory:")
         self.extractor = EntityExtractor()
 
     def index_file(self, path: str, content: Optional[str] = None) -> Optional[BlockRecord]:
@@ -92,6 +95,13 @@ class VaultIndexer:
             },
         )
         self.blocks.save(record)
+
+        # Semantic slicing for long structured text assets.
+        # Remove stale slices for this parent block before re-slicing.
+        self.slices.delete_by_parent(record.block_id)
+        if should_slice(content, path):
+            for sr in slice_content(content, record.block_id, path):
+                self.slices.save(sr)
 
         # Index symbols for code, docs, and structured data.
         if file_type in ("code", "text", "data"):
@@ -149,6 +159,19 @@ class VaultIndexer:
     def search(self, query: str, top_k: int = 10) -> list[BlockRecord]:
         """Search indexed blocks by keyword."""
         return self.blocks.search(query, top_k=top_k)
+
+    def search_slices(self, query: str, top_k: int = 10) -> list[SliceRecord]:
+        """Search semantic sub-blocks (slices) by keyword.
+
+        Returns the most relevant :class:`SliceRecord` objects for *query*,
+        ranked by keyword frequency.  Use this for section-level retrieval
+        from long structured documents.
+        """
+        return self.slices.search(query, top_k=top_k)
+
+    def get_slices_for_file(self, path: str) -> list[SliceRecord]:
+        """Return all slices for the given source file path, in document order."""
+        return self.slices.get_by_path(path)
 
     def lookup_symbol(self, name: str):
         """Look up a symbol by exact name."""

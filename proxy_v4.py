@@ -322,6 +322,37 @@ def _build_upstream_routes() -> Dict[str, str]:
 
 UPSTREAM_ROUTES = _build_upstream_routes()
 
+def _cap_cache_control_blocks(body_bytes, max_blocks=4):
+    """Anthropic allows max 4 cache_control blocks. Strip extras from earliest."""
+    try:
+        body = json.loads(body_bytes)
+    except Exception:
+        return body_bytes
+    locations = []
+    system = body.get("system", [])
+    if isinstance(system, list):
+        for i, block in enumerate(system):
+            if isinstance(block, dict) and "cache_control" in block:
+                locations.append(("system", i))
+    for mi, msg in enumerate(body.get("messages", [])):
+        c = msg.get("content", [])
+        if isinstance(c, list):
+            for ci, block in enumerate(c):
+                if isinstance(block, dict) and "cache_control" in block:
+                    locations.append(("messages", mi, ci))
+    if len(locations) <= max_blocks:
+        return body_bytes
+    to_remove = locations[:-max_blocks]
+    for loc in to_remove:
+        if loc[0] == "system":
+            body["system"][loc[1]].pop("cache_control", None)
+        else:
+            body["messages"][loc[1]]["content"][loc[2]].pop("cache_control", None)
+    print(f"  \U0001f527 Capped cache_control: {len(locations)} -> {max_blocks}")
+    return json.dumps(body).encode()
+
+
+
 
 def _resolve_upstream(adapter: FormatAdapter) -> str:
     mapped = UPSTREAM_ROUTES.get(adapter.source_format)
@@ -2358,6 +2389,53 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             path = parsed.path
             if parsed.query:
                 path += "?" + parsed.query
+            # DEBUG: count cache_control blocks before cap
+            try:
+                _dbg_body = json.loads(body) if isinstance(body, bytes) else json.loads(body.encode() if isinstance(body, str) else body)
+                _cc_locs = []
+                for _si, _sb in enumerate(_dbg_body.get('system', [])):
+                    if isinstance(_sb, dict) and 'cache_control' in _sb:
+                        _cc_locs.append(f'system[{_si}]')
+                for _mi, _mm in enumerate(_dbg_body.get('messages', [])):
+                    _mc = _mm.get('content', [])
+                    if isinstance(_mc, list):
+                        for _ci, _cb in enumerate(_mc):
+                            if isinstance(_cb, dict) and 'cache_control' in _cb:
+                                _cc_locs.append(f'msg[{_mi}].content[{_ci}]')
+                if _cc_locs:
+                    print(f'  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}')
+            except Exception as _e:
+                print(f'  🔍 debug error: {_e}')
+            body = _cap_cache_control_blocks(body)
+            # Fix Content-Length after cache_control cap may have changed body size
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            fwd_headers["Content-Length"] = str(len(body))
+            # DEBUG: count cache_control blocks
+            try:
+                _dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                _cc = 0
+                for _s in (_dbody.get('system') or []):
+                    if isinstance(_s, dict) and 'cache_control' in _s: _cc += 1
+                for _m in (_dbody.get('messages') or []):
+                    for _c in (_m.get('content') or []) if isinstance(_m.get('content'), list) else []:
+                        if isinstance(_c, dict) and 'cache_control' in _c: _cc += 1
+                if _cc > 0: print(f'  📦 cache_control blocks in request: {_cc}', flush=True)
+                if _cc > 4:
+                    print(f'  ⚠️ OVER LIMIT! Stripping {_cc - 4} earliest cache_control blocks', flush=True)
+                    _locs = []
+                    for _i, _s in enumerate((_dbody.get('system') or [])):
+                        if isinstance(_s, dict) and 'cache_control' in _s: _locs.append(('s', _i))
+                    for _mi, _m in enumerate((_dbody.get('messages') or [])):
+                        for _ci, _c in enumerate((_m.get('content') or []) if isinstance(_m.get('content'), list) else []):
+                            if isinstance(_c, dict) and 'cache_control' in _c: _locs.append(('m', _mi, _ci))
+                    for _loc in _locs[:(_cc - 4)]:
+                        if _loc[0] == 's': _dbody['system'][_loc[1]].pop('cache_control', None)
+                        else: _dbody['messages'][_loc[1]]['content'][_loc[2]].pop('cache_control', None)
+                    body = json.dumps(_dbody).encode()
+                    print(f'  ✅ Stripped. Now {sum(1 for s in (_dbody.get("system") or []) if isinstance(s,dict) and "cache_control" in s) + sum(1 for m in (_dbody.get("messages") or []) for c in (m.get("content") or []) if isinstance(c,dict) and "cache_control" in c)} blocks', flush=True)
+            except Exception as _e:
+                print(f'  ⚠️ cache_control debug error: {_e}', flush=True)
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
