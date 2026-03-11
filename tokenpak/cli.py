@@ -16,6 +16,19 @@ from typing import Optional, Tuple
 from .formatting import OutputFormatter, OutputMode, resolve_mode
 from .formatting import symbols as FS
 
+# ── Live Proxy Access ─────────────────────────────────────────────────────────
+
+def _proxy_get(path: str, port: int = None) -> "dict | None":
+    """Fetch JSON from running proxy. Returns None if unreachable."""
+    import urllib.request as _urlreq
+    port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
+    try:
+        resp = _urlreq.urlopen(f"http://127.0.0.1:{port}{path}", timeout=2)
+        return json.loads(resp.read())
+    except Exception:
+        return None
+
+
 # ── Progressive Disclosure ────────────────────────────────────────────────────
 
 _FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
@@ -772,25 +785,33 @@ def cmd_doctor(args):
         print(Colors.warn(f"Vault index         {index_path} — not found"))
         results["warn"] += 1
 
-    # Check 4: Proxy port
-    proxy_port = 8766
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex(("127.0.0.1", proxy_port))
-        sock.close()
-        if result == 0:
-            print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK"))
-            results["pass"] += 1
-        else:
-            print(
-                Colors.warn(
-                    f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"
-                )
-            )
-            results["warn"] += 1
-    except Exception:
-        print(Colors.warn(f"Proxy reachable     port {proxy_port} — check failed"))
+    # Check 4: Proxy health
+    proxy_port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    health = _proxy_get("/health")
+    if health:
+        mode = health.get("compilation_mode", "unknown")
+        reqs = health.get("stats", {}).get("requests", 0)
+        errs = health.get("stats", {}).get("errors", 0)
+        print(Colors.ok(f"Proxy reachable     port {proxy_port} — {mode} mode, {reqs} reqs, {errs} errors"))
+        results["pass"] += 1
+        # Feature status
+        for feat_name, feat_key in [("Skeleton", "skeleton"), ("Shadow reader", "shadow_reader"),
+                                     ("Canon", "canon")]:
+            data = health.get(feat_key, {})
+            enabled = data.get("enabled", False) if isinstance(data, dict) else bool(data)
+            if enabled:
+                results["pass"] += 1
+            else:
+                results["warn"] += 1
+        # Circuit breakers
+        for name, cb in health.get("circuit_breakers", {}).items():
+            if cb.get("open"):
+                print(Colors.fail(f"Circuit breaker     {name} — OPEN"))
+                results["fail"] += 1
+            else:
+                results["pass"] += 1
+    else:
+        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak start)"))
         results["warn"] += 1
 
     # Check 5: Disk usage
@@ -1093,69 +1114,119 @@ def build_parser():
 
 
 def cmd_status(args):
-    """Show system status including recent retry/failover events."""
+    """Show system status — live proxy data + budget tracking."""
     import time as _time
-
-    from .agent.agentic.retry import load_recent_retry_events
 
     mode = resolve_mode(args)
     fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
-    n = getattr(args, "limit", 20)
-    events = load_recent_retry_events(n=n)
+
+    # Fetch live proxy data
+    health = _proxy_get("/health")
+    stats = _proxy_get("/stats")
+    cache = _proxy_get("/cache-stats")
 
     if mode == OutputMode.RAW:
-        print(
-            fmt.raw(
-                {
-                    "section": "status",
-                    "retry_events": events,
-                    "retry_event_count": len(events),
-                }
-            )
-        )
-        return
-
-    if fmt.minimal:
-        print(
-            fmt.minimal_line(
-                [
-                    "Enabled" if events else "Idle",
-                    f"retry={len(events)}",
-                    f"limit={n}",
-                ]
-            )
-        )
+        print(fmt.raw({
+            "section": "status",
+            "proxy": health,
+            "stats": stats.get("session") if stats else None,
+            "cache": cache,
+        }))
         return
 
     print(fmt.header())
     print()
-    print(fmt.signal(FS.ENABLED if events else FS.DISABLED, f"Retry events: {len(events)}", tone="info"))
 
-    if mode == OutputMode.VERBOSE and events:
-        for ev in events:
-            ts = ev.get("timestamp", 0)
-            try:
-                ts_str = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(ts))
-            except Exception:
-                ts_str = str(ts)
-            event_type = ev.get("event", "unknown")
-            task = ev.get("task_id") or ev.get("task") or "—"
-            print(f"  {ts_str}  {event_type:<30} task={task}")
+    if health:
+        s = health.get("stats", {})
+        uptime_s = _time.time() - s.get("start_time", _time.time())
+        h, rem = divmod(int(uptime_s), 3600)
+        m = rem // 60
+        uptime_str = f"{h}h {m:02d}m" if h else f"{m}m"
 
+        # Proxy status line
+        print(fmt.signal(FS.ENABLED, f"Proxy: running (port {os.environ.get('TOKENPAK_PORT', '8766')})", tone="info"))
+        print(f"  Uptime:          {uptime_str}")
+        print(f"  Requests:        {s.get('requests', 0):,}")
+        print(f"  Errors:          {s.get('errors', 0)}")
+        print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+        print()
+
+        # Token savings
+        inp = s.get("input_tokens", 0)
+        sent = s.get("sent_input_tokens", 0)
+        saved = s.get("saved_tokens", 0)
+        protected = s.get("protected_tokens", 0)
+        pct = (saved / inp * 100) if inp > 0 else 0
+        print(f"  Tokens in:       {inp:,}")
+        print(f"  Tokens sent:     {sent:,}")
+        print(f"  Tokens saved:    {saved:,} ({pct:.1f}%)")
+        print(f"  Protected:       {protected:,}")
+        print()
+
+        # Cost
+        cost = s.get("cost", 0)
+        cost_saved = s.get("cost_saved", 0)
+        print(f"  Cost:            ${cost:.4f}")
+        if cost_saved > 0:
+            print(f"  Cost saved:      ${cost_saved:.4f}")
+        print()
+
+        # Cache
+        if cache:
+            hits = cache.get("cache_hits", 0)
+            misses = cache.get("cache_misses", 0)
+            total = hits + misses
+            hit_rate = (hits / total * 100) if total > 0 else 0
+            read_tokens = cache.get("cache_read_tokens", 0)
+            print(f"  Cache hit rate:  {hit_rate:.0f}% ({hits} hits / {misses} misses)")
+            print(f"  Cache reads:     {read_tokens:,} tokens")
+            miss_reasons = cache.get("miss_reasons", {})
+            if miss_reasons and any(v > 0 for v in miss_reasons.values()):
+                reasons = [f"{k}={v}" for k, v in miss_reasons.items() if v > 0]
+                print(f"  Miss reasons:    {', '.join(reasons)}")
+            print()
+
+        # Features
+        router = health.get("router", {})
+        components = router.get("components", {})
+        features = []
+        for feat_name, feat_key in [
+            ("skeleton", "skeleton"), ("shadow", "shadow_reader"),
+            ("canon", "canon"), ("capsule", "capsule_available"),
+        ]:
+            feat_data = health.get(feat_key, {})
+            enabled = feat_data.get("enabled", False) if isinstance(feat_data, dict) else bool(feat_data)
+            features.append(f"{feat_name} {'✅' if enabled else '❌'}")
+        print(f"  Features:        {' | '.join(features)}")
+
+        # Circuit breakers
+        cbs = health.get("circuit_breakers", {})
+        if cbs:
+            cb_parts = [f"{k} {'✅' if not v.get('open') else '🔴'}" for k, v in cbs.items()]
+            print(f"  Circuits:        {' | '.join(cb_parts)}")
+
+        # Vault
+        vault = health.get("vault_index", {})
+        if vault.get("available"):
+            print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+    else:
+        print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
+        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+        print()
+
+    # Budget tracking (local DB)
     try:
         from .budgeter import BudgetTracker
-
         tracker = BudgetTracker()
         rows = []
         for period in ("daily", "weekly", "monthly"):
             status = tracker.get_status(period)
             if status:
-                rows.append(
-                    (
-                        f"{period.capitalize()} budget",
-                        f"${status.spent_usd:.4f} / ${status.limit_usd:.2f} ({status.percent_used:.1f}%)",
-                    )
-                )
+                rows.append((
+                    f"{period.capitalize()} budget",
+                    f"${status.spent_usd:.4f} / ${status.limit_usd:.2f} ({status.percent_used:.1f}%)",
+                ))
         if rows:
             print()
             print(fmt.kv(rows))
@@ -2625,6 +2696,21 @@ def cmd_cost(args):
 
     print(f"TokenPak Cost Summary — {label}")
     print(f"  Spent:  ${total:.4f}")
+
+    # Show live proxy session cost if available
+    stats = _proxy_get("/stats")
+    if stats:
+        session = stats.get("session", {})
+        proxy_cost = session.get("cost", 0)
+        proxy_saved = session.get("cost_saved", 0)
+        saved_tokens = session.get("saved_tokens", 0)
+        if proxy_cost > 0 or saved_tokens > 0:
+            print(f"\n  Live session (proxy):")
+            print(f"    Cost:          ${proxy_cost:.4f}")
+            if proxy_saved > 0:
+                print(f"    Cost saved:    ${proxy_saved:.4f}")
+            if saved_tokens > 0:
+                print(f"    Tokens saved:  {saved_tokens:,}")
 
     # Show budget status if configured
     for p in ("daily", "monthly"):
