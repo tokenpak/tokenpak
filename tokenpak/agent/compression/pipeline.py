@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .dedup import dedup_messages
+from .alias_compressor import AliasCompressor, AliasResult
 from .directives import DirectiveApplier
 from .segmentizer import Segment, segmentize
 
@@ -64,12 +65,20 @@ class CompressionPipeline:
     def __init__(
         self,
         enable_dedup: bool = True,
+        enable_alias: bool = True,
         enable_segmentation: bool = True,
         enable_directives: bool = True,
         trace_id: str = "",
+        alias_min_occurrences: int = 3,
+        alias_min_length: int = 20,
     ) -> None:
         self.enable_dedup = enable_dedup
+        self.enable_alias = enable_alias
         self.enable_segmentation = enable_segmentation
+        self._alias_compressor = AliasCompressor(
+            min_occurrences=alias_min_occurrences,
+            min_entity_length=alias_min_length,
+        )
         self.enable_directives = enable_directives
         self.trace_id = trace_id
         self._hooks: List[Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]]] = []
@@ -111,6 +120,13 @@ class CompressionPipeline:
         if self.enable_dedup:
             out = dedup_messages(out)
             stages.append("dedup")
+
+        # Stage 1b: alias compression
+        alias_result: "AliasResult | None" = None
+        if self.enable_alias:
+            alias_result = self._alias_compressor.compress(out)
+            out = alias_result.messages
+            stages.append("alias")
 
         # Stage 2: custom hooks
         for hook in self._hooks:

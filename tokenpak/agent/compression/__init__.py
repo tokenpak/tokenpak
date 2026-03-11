@@ -82,3 +82,6 @@ __all__ += [
     "SalientResult",
     "salience_extract",
 ]
+from .alias_compressor import AliasCompressor, AliasResult
+
+__all__ += ["AliasCompressor", "AliasResult"]
