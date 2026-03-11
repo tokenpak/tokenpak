@@ -285,6 +285,36 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     if not changed:
         return body_bytes
 
+
+    # --- Cap total cache_control blocks to Anthropic max (4) ---
+    _all_cc = []
+    _sys = data.get("system", [])
+    if isinstance(_sys, list):
+        for _si, _sb in enumerate(_sys):
+            if isinstance(_sb, dict) and "cache_control" in _sb:
+                _all_cc.append(("system", _si))
+    _tools = data.get("tools", [])
+    if isinstance(_tools, list):
+        for _ti, _tb in enumerate(_tools):
+            if isinstance(_tb, dict) and "cache_control" in _tb:
+                _all_cc.append(("tools", _ti))
+    _msgs = data.get("messages", [])
+    if isinstance(_msgs, list):
+        for _mi, _mm in enumerate(_msgs):
+            _mc = _mm.get("content", []) if isinstance(_mm, dict) else []
+            if isinstance(_mc, list):
+                for _ci, _cb in enumerate(_mc):
+                    if isinstance(_cb, dict) and "cache_control" in _cb:
+                        _all_cc.append(("messages", _mi, _ci))
+    if len(_all_cc) > 4:
+        for _loc in _all_cc[:-4]:
+            if _loc[0] == "system":
+                data["system"][_loc[1]].pop("cache_control", None)
+            elif _loc[0] == "tools":
+                data["tools"][_loc[1]].pop("cache_control", None)
+            elif _loc[0] == "messages":
+                data["messages"][_loc[1]]["content"][_loc[2]].pop("cache_control", None)
+
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 

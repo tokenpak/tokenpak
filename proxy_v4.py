@@ -323,7 +323,7 @@ def _build_upstream_routes() -> Dict[str, str]:
 UPSTREAM_ROUTES = _build_upstream_routes()
 
 def _cap_cache_control_blocks(body_bytes, max_blocks=4):
-    """Anthropic allows max 4 cache_control blocks. Strip extras from earliest."""
+    """Anthropic allows max 4 cache_control blocks. Strip extras (including tools)."""
     try:
         body = json.loads(body_bytes)
     except Exception:
@@ -334,6 +334,11 @@ def _cap_cache_control_blocks(body_bytes, max_blocks=4):
         for i, block in enumerate(system):
             if isinstance(block, dict) and "cache_control" in block:
                 locations.append(("system", i))
+    tools = body.get("tools", [])
+    if isinstance(tools, list):
+        for i, tool in enumerate(tools):
+            if isinstance(tool, dict) and "cache_control" in tool:
+                locations.append(("tools", i))
     for mi, msg in enumerate(body.get("messages", [])):
         c = msg.get("content", [])
         if isinstance(c, list):
@@ -346,12 +351,12 @@ def _cap_cache_control_blocks(body_bytes, max_blocks=4):
     for loc in to_remove:
         if loc[0] == "system":
             body["system"][loc[1]].pop("cache_control", None)
+        elif loc[0] == "tools":
+            body["tools"][loc[1]].pop("cache_control", None)
         else:
             body["messages"][loc[1]]["content"][loc[2]].pop("cache_control", None)
-    print(f"  \U0001f527 Capped cache_control: {len(locations)} -> {max_blocks}")
+    print(f"  🔧 Capped cache_control: {len(locations)} -> {max_blocks} (removed from: {[l[0] for l in to_remove]})")
     return json.dumps(body).encode()
-
-
 
 
 def _resolve_upstream(adapter: FormatAdapter) -> str:
@@ -2436,6 +2441,29 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     print(f'  ✅ Stripped. Now {sum(1 for s in (_dbody.get("system") or []) if isinstance(s,dict) and "cache_control" in s) + sum(1 for m in (_dbody.get("messages") or []) for c in (m.get("content") or []) if isinstance(c,dict) and "cache_control" in c)} blocks', flush=True)
             except Exception as _e:
                 print(f'  ⚠️ cache_control debug error: {_e}', flush=True)
+            body = _cap_cache_control_blocks(body)
+            if isinstance(body, str): body = body.encode("utf-8")
+            fwd_headers["Content-Length"] = str(len(body))
+            # TEMP DEBUG: dump final body to file
+            try:
+                import json as _j2
+                _fb = _j2.loads(body) if isinstance(body, (bytes, str)) else body
+                _all_cc = 0
+                for _sk in ['system', 'tools', 'messages']:
+                    items = _fb.get(_sk, [])
+                    if isinstance(items, list):
+                        for _it in items:
+                            if isinstance(_it, dict):
+                                if 'cache_control' in _it: _all_cc += 1
+                                for _cv in (_it.get('content', []) if isinstance(_it.get('content'), list) else []):
+                                    if isinstance(_cv, dict) and 'cache_control' in _cv: _all_cc += 1
+                print(f'  🎯 FINAL body has {_all_cc} cache_control blocks (system+tools+messages)', flush=True)
+                if _all_cc > 4:
+                    with open('/tmp/debug_body.json', 'w') as _df:
+                        _j2.dump(_fb, _df, indent=2)
+                    print('  ❌ DUMPED to /tmp/debug_body.json', flush=True)
+            except Exception as _de:
+                print(f'  debug error: {_de}', flush=True)
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
