@@ -2085,6 +2085,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("http"):
             self._forward_request("GET")
+        elif self.path == "/dashboard" or self.path.startswith("/dashboard/"):
+            self._serve_dashboard()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
         else:
@@ -3381,6 +3383,53 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         else:
             # All events failed
             self._send_json({"error": f"all events failed: {'; '.join(errors)}"}, status=422)
+
+    def _serve_dashboard(self):
+        """Serve static dashboard files (HTML/CSS/JS)."""
+        dashboard_dir = Path(__file__).parent / "tokenpak" / "dashboard"
+        
+        # Default to index.html
+        if self.path == "/dashboard" or self.path == "/dashboard/":
+            file_path = dashboard_dir / "index.html"
+            content_type = "text/html; charset=utf-8"
+        else:
+            # Parse requested file
+            rel_path = self.path[len("/dashboard/"):]
+            file_path = (dashboard_dir / rel_path).resolve()
+            
+            # Security: prevent directory traversal
+            if not str(file_path).startswith(str(dashboard_dir.resolve())):
+                self._send_json({"error": {"type": "forbidden", "message": "Access denied"}}, status=403)
+                return
+            
+            # Determine content type
+            if rel_path.endswith(".html"):
+                content_type = "text/html; charset=utf-8"
+            elif rel_path.endswith(".css"):
+                content_type = "text/css; charset=utf-8"
+            elif rel_path.endswith(".js"):
+                content_type = "application/javascript; charset=utf-8"
+            elif rel_path.endswith(".json"):
+                content_type = "application/json"
+            else:
+                content_type = "application/octet-stream"
+        
+        # Serve file
+        if not file_path.exists():
+            self._send_json({"error": {"type": "not_found", "message": f"File not found: {rel_path}"}}, status=404)
+            return
+        
+        try:
+            body = file_path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", len(body))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache, must-revalidate")
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception as e:
+            self._send_json({"error": {"type": "server_error", "message": str(e)}}, status=500)
 
     def _send_json(self, data, status=200):
         body = json.dumps(data, indent=2).encode()
