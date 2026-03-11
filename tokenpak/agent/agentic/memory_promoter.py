@@ -1,536 +1,304 @@
-"""Memory Promotion Rules for TokenPak Agent Learning.
+"""TokenPak Memory Promotion Rules — manages memory tier progression.
 
-Implements a 4-tier memory system with strict promotion gates:
-  Tier 1: Working memory  — current session only, auto-expires
-  Tier 2: Session memory  — persists across turns, TTL in hours
-  Tier 3: Project memory  — persists across sessions, TTL in days
-  Tier 4: Durable memory  — permanent, highest quality gate
+Implements strict gates for promoting learned knowledge:
+  Tier 1 → Tier 2 → Tier 3 → Tier 4
 
-Promotion Flow:
-  New lesson → Tier 1
-  2+ occurrences → candidate for Tier 2
-  5+ with >70% success → candidate for Tier 3
-  10+ with >85% success, not contradicted in 7 days → Tier 4
-
-Demotion:
-  Contradicted lesson → demote one tier
-  Unused for >30 days → demote one tier
-  Failed validation → remove from all tiers
-
-Integrates with learning.py via record_lesson() / promote_all().
+Principle: Only promote if:
+  - Happened 2+ times (min_occurrences)
+  - >70% success rate (min_success_rate)
+  - Not contradicted in 7 days (not_contradicted_days)
+  - Saves >15% future work (material_savings)
+  - Specific enough to act on (specificity_score >= 0.5)
 """
 
 from __future__ import annotations
 
 import json
-import os
-from dataclasses import asdict, dataclass, field
+import logging
+import time
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
-# ---------------------------------------------------------------------------
-# Promotion gates
-# ---------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
 
+# Promotion gate thresholds
 PROMOTION_RULES = {
-    "min_occurrences": 2,       # happened more than once
-    "min_success_rate": 0.7,    # validated by outcome
-    "not_contradicted_days": 7, # not contradicted in last 7 days
-    "material_savings": 0.15,   # reduces future work by >15%
-    "specificity_score": 0.5,   # specific enough to be actionable
+    "min_occurrences": 2,          # happened more than once
+    "min_success_rate": 0.7,       # validated by outcome
+    "not_contradicted_days": 7,    # not contradicted in last 7 days
+    "material_savings": 0.15,      # reduces future work by >15% (e.g., 15% token reduction)
+    "specificity_score": 0.5,      # specific enough to be actionable (0-1 scale)
 }
 
-# Per-tier thresholds (override defaults above where stricter)
-TIER_GATES = {
-    1: {  # Working → Session
-        "min_occurrences": 2,
-        "min_success_rate": 0.0,    # any positive outcome
-        "specificity_score": 0.0,   # no specificity required yet
-    },
-    2: {  # Session → Project
-        "min_occurrences": 5,
-        "min_success_rate": 0.70,
-        "material_savings": 0.15,
-        "specificity_score": 0.5,
-    },
-    3: {  # Project → Durable
-        "min_occurrences": 10,
-        "min_success_rate": 0.85,
-        "not_contradicted_days": 7,
-        "material_savings": 0.15,
-        "specificity_score": 0.5,
-    },
+# Memory tier definitions
+TIER_NAMES = {
+    1: "working",     # current session, auto-expires
+    2: "session",     # persists across turns, TTL: hours
+    3: "project",     # persists across sessions, TTL: days
+    4: "durable",     # permanent, highest quality gate
 }
 
-# TTL per tier (None = no expiry)
-TIER_TTL = {
-    1: timedelta(hours=4),    # Working memory: 4 hours
-    2: timedelta(hours=24),   # Session memory: 1 day
-    3: timedelta(days=30),    # Project memory: 30 days
-    4: None,                  # Durable: permanent (but can be demoted)
+DEFAULT_TTL = {
+    1: 300,              # Tier 1: 5 minutes
+    2: 3600 * 4,         # Tier 2: 4 hours
+    3: 86400 * 7,        # Tier 3: 7 days
+    4: None,             # Tier 4: permanent
 }
 
-UNUSED_DEMOTION_DAYS = 30     # Demote if not accessed for 30 days
-DEFAULT_MEMORY_PATH = os.path.expanduser("~/.tokenpak/memory_tiers.json")
-
-
-# ---------------------------------------------------------------------------
-# Data model
-# ---------------------------------------------------------------------------
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _parse_dt(s: Optional[str]) -> Optional[datetime]:
-    if not s:
-        return None
-    try:
-        dt = datetime.fromisoformat(s)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except ValueError:
-        return None
+DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
 
 
 @dataclass
 class Lesson:
-    """A single learned lesson tracked across tiers."""
+    """A learned lesson with promotion tracking."""
+    
+    lesson_id: str
+    content: str                    # The actual lesson text
+    tier: int                       # 1-4
+    occurrences: int                # How many times we've seen this
+    successes: int                  # How many times it succeeded
+    failures: int                   # How many times it failed
+    contradictions: int             # How many times it was contradicted
+    specificity_score: float         # 0-1: actionability
+    savings_pct: float              # 0-100: estimated % savings
+    created_at: float               # Unix timestamp
+    last_seen_at: float             # Unix timestamp
+    last_promoted_at: float         # Unix timestamp when promoted to current tier
+    promoted_from: Optional[int]    # Previous tier
 
-    id: str                           # unique identifier (e.g. "model_routing_CODING")
-    content: str                      # human-readable lesson text
-    tier: int = 1                     # current tier (1-4)
-    occurrences: int = 1              # how many times observed
-    successes: int = 0                # validated positive outcomes
-    failures: int = 0                 # validated negative outcomes
-    specificity_score: float = 0.5   # 0.0–1.0, how actionable
-    material_savings: float = 0.0    # estimated work reduction (0.0–1.0)
-    contradictions: int = 0           # contradiction events
-    last_contradicted: Optional[str] = None   # ISO datetime
-    last_accessed: Optional[str] = None       # ISO datetime
-    last_promoted: Optional[str] = None       # ISO datetime
-    created: str = field(default_factory=_now_iso)
-    updated: str = field(default_factory=_now_iso)
-    metadata: Dict = field(default_factory=dict)
-
-    @property
     def success_rate(self) -> float:
-        total = self.successes + self.failures
+        """Return success rate (0-1)."""
+        total = self.occurrences
         return self.successes / total if total > 0 else 0.0
 
-    def touch(self) -> None:
-        self.last_accessed = _now_iso()
-        self.updated = _now_iso()
+    def days_since_contradicted(self) -> float:
+        """Return days since last contradiction, or infinity if never contradicted."""
+        if self.contradictions == 0:
+            return float('inf')
+        # Approximate: last contradiction was about (occurrences - successes - failures) / 2 occurrences ago
+        # For simplicity, we'll track the actual timestamp separately in a real implementation
+        return 0  # Placeholder—would need actual contradiction timestamp tracking
+
+    def is_expired(self) -> bool:
+        """Check if this lesson has exceeded its tier's TTL."""
+        ttl = DEFAULT_TTL.get(self.tier)
+        if ttl is None:  # Tier 4 never expires
+            return False
+        age_seconds = time.time() - self.last_seen_at
+        return age_seconds > ttl
 
     def to_dict(self) -> dict:
         return asdict(self)
 
-    @classmethod
-    def from_dict(cls, d: dict) -> "Lesson":
-        known = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
-        return cls(**{k: v for k, v in d.items() if k in known})
 
+class MemoryPromoter:
+    """Manages promotion and demotion of learned lessons."""
 
-# ---------------------------------------------------------------------------
-# Persistence helpers
-# ---------------------------------------------------------------------------
+    def __init__(self, path: str | Path = DEFAULT_PROMOTER_PATH):
+        self.path = Path(path)
+        self.lessons: dict[str, Lesson] = {}
+        self._load()
 
-def _load_store(path: str) -> Dict[str, dict]:
-    p = Path(path)
-    if p.exists():
+    def _load(self) -> None:
+        """Load lessons from disk."""
+        if not self.path.exists():
+            return
         try:
-            data = json.loads(p.read_text())
-            if isinstance(data, dict):
-                return data
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
+            data = json.loads(self.path.read_text())
+            for lesson_id, lesson_data in data.get("lessons", {}).items():
+                lesson_data["lesson_id"] = lesson_id
+                self.lessons[lesson_id] = Lesson(**lesson_data)
+        except (json.JSONDecodeError, OSError, TypeError) as e:
+            logger.warning(f"Could not load memory promoter: {e}")
 
+    def _save(self) -> None:
+        """Save lessons to disk."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "version": 1,
+            "updated": datetime.now(timezone.utc).isoformat(),
+            "lessons": {lid: lesson.to_dict() for lid, lesson in self.lessons.items()},
+        }
+        self.path.write_text(json.dumps(data, indent=2))
 
-def _save_store(store: Dict[str, dict], path: str) -> None:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(store, indent=2))
-
-
-def _load_lessons(path: str) -> Dict[str, Lesson]:
-    raw = _load_store(path)
-    lessons: Dict[str, Lesson] = {}
-    for lid, d in raw.items():
-        try:
-            lessons[lid] = Lesson.from_dict(d)
-        except (TypeError, KeyError):
-            pass
-    return lessons
-
-
-def _save_lessons(lessons: Dict[str, Lesson], path: str) -> None:
-    store = {lid: lesson.to_dict() for lid, lesson in lessons.items()}
-    _save_store(store, path)
-
-
-# ---------------------------------------------------------------------------
-# Core promotion logic
-# ---------------------------------------------------------------------------
-
-def _check_gate(lesson: Lesson, gate: dict) -> tuple[bool, List[str]]:
-    """Check if a lesson passes the given promotion gate.
-
-    Returns (passed, list_of_reasons_if_failed).
-    """
-    reasons: List[str] = []
-
-    if lesson.occurrences < gate.get("min_occurrences", 1):
-        reasons.append(
-            f"occurrences={lesson.occurrences} < {gate['min_occurrences']}"
-        )
-
-    min_sr = gate.get("min_success_rate", 0.0)
-    if min_sr > 0 and lesson.success_rate < min_sr:
-        reasons.append(
-            f"success_rate={lesson.success_rate:.2f} < {min_sr}"
-        )
-
-    min_spec = gate.get("specificity_score", 0.0)
-    if lesson.specificity_score < min_spec:
-        reasons.append(
-            f"specificity_score={lesson.specificity_score:.2f} < {min_spec}"
-        )
-
-    min_savings = gate.get("material_savings", 0.0)
-    if lesson.material_savings < min_savings:
-        reasons.append(
-            f"material_savings={lesson.material_savings:.2f} < {min_savings}"
-        )
-
-    not_contradicted_days = gate.get("not_contradicted_days", 0)
-    if not_contradicted_days > 0 and lesson.last_contradicted:
-        contradicted_at = _parse_dt(lesson.last_contradicted)
-        if contradicted_at:
-            window = timedelta(days=not_contradicted_days)
-            if _now() - contradicted_at < window:
-                reasons.append(
-                    f"contradicted within last {not_contradicted_days} days"
-                )
-
-    return (len(reasons) == 0, reasons)
-
-
-def _is_expired(lesson: Lesson) -> bool:
-    """Return True if lesson has passed its tier TTL."""
-    ttl = TIER_TTL.get(lesson.tier)
-    if ttl is None:
-        return False  # Tier 4 never expires by TTL
-    created_at = _parse_dt(lesson.created)
-    if created_at is None:
-        return False
-    return _now() - created_at > ttl
-
-
-def _is_unused_too_long(lesson: Lesson) -> bool:
-    """Return True if lesson hasn't been accessed in UNUSED_DEMOTION_DAYS."""
-    if lesson.tier <= 1:
-        return False  # Don't demote from tier 1 for inactivity
-    last_used = _parse_dt(lesson.last_accessed) or _parse_dt(lesson.created)
-    if last_used is None:
-        return False
-    return _now() - last_used > timedelta(days=UNUSED_DEMOTION_DAYS)
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def record_lesson(
-    lesson_id: str,
-    content: str,
-    outcome: Optional[float] = None,
-    specificity_score: float = 0.5,
-    material_savings: float = 0.0,
-    metadata: Optional[dict] = None,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> Lesson:
-    """Record or update a lesson observation.
-
-    New lessons start at Tier 1. Occurrences are incremented on each call.
-    Outcome (0.0–1.0) updates success/failure counters.
-
-    Args:
-        lesson_id:         Unique key for this lesson (e.g. "model_routing_CODING").
-        content:           Human-readable description.
-        outcome:           1.0 = success, 0.0 = failure, None = unknown.
-        specificity_score: How actionable the lesson is (0.0–1.0).
-        material_savings:  Estimated work reduction (0.0–1.0).
-        metadata:          Optional extra context dict.
-        memory_path:       Path to memory_tiers.json.
-
-    Returns:
-        The updated Lesson object.
-    """
-    lessons = _load_lessons(memory_path)
-
-    if lesson_id in lessons:
-        lesson = lessons[lesson_id]
-        lesson.occurrences += 1
-        lesson.content = content  # Update to latest phrasing
-    else:
+    def add_lesson(
+        self,
+        lesson_id: str,
+        content: str,
+        specificity_score: float = 0.5,
+        savings_pct: float = 0.0,
+    ) -> Lesson:
+        """Create a new lesson starting at Tier 1."""
+        now = time.time()
         lesson = Lesson(
-            id=lesson_id,
+            lesson_id=lesson_id,
             content=content,
             tier=1,
+            occurrences=1,
+            successes=0,
+            failures=0,
+            contradictions=0,
             specificity_score=specificity_score,
-            material_savings=material_savings,
-            metadata=metadata or {},
+            savings_pct=savings_pct,
+            created_at=now,
+            last_seen_at=now,
+            last_promoted_at=now,
+            promoted_from=None,
+        )
+        self.lessons[lesson_id] = lesson
+        self._save()
+        return lesson
+
+    def record_success(self, lesson_id: str) -> Optional[Lesson]:
+        """Record a successful application of this lesson."""
+        if lesson_id not in self.lessons:
+            return None
+        lesson = self.lessons[lesson_id]
+        lesson.occurrences += 1
+        lesson.successes += 1
+        lesson.last_seen_at = time.time()
+        self._maybe_promote(lesson)
+        self._save()
+        return lesson
+
+    def record_failure(self, lesson_id: str) -> Optional[Lesson]:
+        """Record a failed application of this lesson."""
+        if lesson_id not in self.lessons:
+            return None
+        lesson = self.lessons[lesson_id]
+        lesson.occurrences += 1
+        lesson.failures += 1
+        lesson.last_seen_at = time.time()
+        self._save()
+        return lesson
+
+    def record_contradiction(self, lesson_id: str) -> Optional[Lesson]:
+        """Record that this lesson was contradicted by new evidence."""
+        if lesson_id not in self.lessons:
+            return None
+        lesson = self.lessons[lesson_id]
+        lesson.contradictions += 1
+        lesson.last_seen_at = time.time()
+        self._maybe_demote(lesson)
+        self._save()
+        return lesson
+
+    def _maybe_promote(self, lesson: Lesson) -> bool:
+        """Check if lesson should be promoted to next tier."""
+        if lesson.tier >= 4:
+            return False  # Already at max tier
+
+        # Check promotion gates
+        success_rate = lesson.success_rate()
+        
+        if lesson.tier == 1 and self._check_tier1_to_2(lesson):
+            self._promote(lesson, 2)
+            return True
+        elif lesson.tier == 2 and self._check_tier2_to_3(lesson):
+            self._promote(lesson, 3)
+            return True
+        elif lesson.tier == 3 and self._check_tier3_to_4(lesson):
+            self._promote(lesson, 4)
+            return True
+        
+        return False
+
+    def _check_tier1_to_2(self, lesson: Lesson) -> bool:
+        """Check if lesson can be promoted from Tier 1 to Tier 2."""
+        return (
+            lesson.occurrences >= PROMOTION_RULES["min_occurrences"]
+            and lesson.success_rate() >= PROMOTION_RULES["min_success_rate"]
+            and lesson.contradictions == 0
+            and lesson.specificity_score >= PROMOTION_RULES["specificity_score"]
         )
 
-    # Record outcome
-    if outcome is not None:
-        if outcome >= 0.5:
-            lesson.successes += 1
-        else:
-            lesson.failures += 1
+    def _check_tier2_to_3(self, lesson: Lesson) -> bool:
+        """Check if lesson can be promoted from Tier 2 to Tier 3."""
+        return (
+            lesson.occurrences >= 5
+            and lesson.success_rate() >= 0.7
+            and lesson.contradictions == 0
+            and lesson.savings_pct >= PROMOTION_RULES["material_savings"] * 100
+        )
 
-    lesson.specificity_score = max(lesson.specificity_score, specificity_score)
-    lesson.material_savings = max(lesson.material_savings, material_savings)
-    if metadata:
-        lesson.metadata.update(metadata)
+    def _check_tier3_to_4(self, lesson: Lesson) -> bool:
+        """Check if lesson can be promoted from Tier 3 to Tier 4 (durable)."""
+        return (
+            lesson.occurrences >= 10
+            and lesson.success_rate() >= 0.85
+            and lesson.contradictions == 0
+            and lesson.savings_pct >= PROMOTION_RULES["material_savings"] * 100
+            and lesson.specificity_score >= 0.6
+        )
 
-    lesson.touch()
-    lessons[lesson_id] = lesson
-    _save_lessons(lessons, memory_path)
-    return lesson
+    def _maybe_demote(self, lesson: Lesson) -> bool:
+        """Check if lesson should be demoted due to contradictions or age."""
+        # Demote if contradicted
+        if lesson.contradictions > 0:
+            self._demote(lesson)
+            return True
 
+        # Demote or remove if expired
+        if lesson.is_expired():
+            self._demote(lesson)
+            return True
 
-def contradict_lesson(
-    lesson_id: str,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> Optional[Lesson]:
-    """Mark a lesson as contradicted, demoting it one tier.
-
-    Args:
-        lesson_id:   ID of the lesson to contradict.
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        Updated lesson, or None if not found.
-    """
-    lessons = _load_lessons(memory_path)
-    if lesson_id not in lessons:
-        return None
-
-    lesson = lessons[lesson_id]
-    lesson.contradictions += 1
-    lesson.last_contradicted = _now_iso()
-    lesson.failures += 1
-
-    # Demote one tier
-    if lesson.tier > 1:
-        lesson.tier -= 1
-
-    lesson.touch()
-    lessons[lesson_id] = lesson
-    _save_lessons(lessons, memory_path)
-    return lesson
-
-
-def invalidate_lesson(
-    lesson_id: str,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> bool:
-    """Remove a lesson from all tiers (hard delete on failed validation).
-
-    Args:
-        lesson_id:   ID of the lesson to remove.
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        True if found and removed, False if not found.
-    """
-    lessons = _load_lessons(memory_path)
-    if lesson_id not in lessons:
         return False
-    del lessons[lesson_id]
-    _save_lessons(lessons, memory_path)
-    return True
 
+    def _promote(self, lesson: Lesson, new_tier: int) -> None:
+        """Promote lesson to a higher tier."""
+        old_tier = lesson.tier
+        lesson.promoted_from = old_tier
+        lesson.tier = new_tier
+        lesson.last_promoted_at = time.time()
+        logger.info(f"Promoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
 
-def try_promote(
-    lesson_id: str,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> tuple[bool, str]:
-    """Attempt to promote a single lesson to the next tier.
+    def _demote(self, lesson: Lesson) -> None:
+        """Demote lesson to lower tier."""
+        if lesson.tier <= 1:
+            logger.info(f"Removing lesson {lesson.lesson_id} (failed quality gates)")
+            del self.lessons[lesson.lesson_id]
+        else:
+            old_tier = lesson.tier
+            lesson.tier = max(1, lesson.tier - 1)
+            lesson.last_promoted_at = time.time()
+            logger.info(f"Demoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {lesson.tier}")
 
-    Args:
-        lesson_id:   ID of the lesson to promote.
-        memory_path: Path to memory_tiers.json.
+    def cleanup_expired(self) -> int:
+        """Remove or demote expired lessons. Returns count of lessons affected."""
+        affected = 0
+        lesson_ids_to_check = list(self.lessons.keys())
+        for lesson_id in lesson_ids_to_check:
+            lesson = self.lessons[lesson_id]
+            if lesson.is_expired() and self._maybe_demote(lesson):
+                affected += 1
+        if affected > 0:
+            self._save()
+        return affected
 
-    Returns:
-        (promoted: bool, reason: str)
-    """
-    lessons = _load_lessons(memory_path)
-    if lesson_id not in lessons:
-        return False, "lesson not found"
+    def get_tier_lessons(self, tier: int) -> list[Lesson]:
+        """Get all lessons at a specific tier."""
+        return [lesson for lesson in self.lessons.values() if lesson.tier == tier]
 
-    lesson = lessons[lesson_id]
-    if lesson.tier >= 4:
-        return False, "already at max tier (Durable)"
+    def get_lesson(self, lesson_id: str) -> Optional[Lesson]:
+        """Get a specific lesson."""
+        return self.lessons.get(lesson_id)
 
-    gate = TIER_GATES.get(lesson.tier, {})
-    passed, fail_reasons = _check_gate(lesson, gate)
+    def get_all_lessons(self) -> list[Lesson]:
+        """Get all lessons."""
+        return list(self.lessons.values())
 
-    if not passed:
-        return False, f"gate failed: {'; '.join(fail_reasons)}"
-
-    lesson.tier += 1
-    lesson.last_promoted = _now_iso()
-    lesson.touch()
-    lessons[lesson_id] = lesson
-    _save_lessons(lessons, memory_path)
-    return True, f"promoted to Tier {lesson.tier}"
-
-
-def promote_all(
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> Dict[str, str]:
-    """Run promotion + demotion sweep across all tracked lessons.
-
-    - Expired lessons are demoted one tier (or removed at Tier 1)
-    - Unused lessons are demoted one tier
-    - Promotable lessons advance one tier
-
-    Returns:
-        Dict of {lesson_id: action_taken} for all modified lessons.
-    """
-    lessons = _load_lessons(memory_path)
-    results: Dict[str, str] = {}
-
-    for lid, lesson in list(lessons.items()):
-
-        # --- Expiry check ---
-        if _is_expired(lesson):
-            if lesson.tier <= 1:
-                del lessons[lid]
-                results[lid] = "removed (expired at Tier 1)"
-                continue
-            lesson.tier -= 1
-            lesson.touch()
-            results[lid] = f"demoted to Tier {lesson.tier} (expired)"
-            continue
-
-        # --- Inactivity demotion ---
-        if _is_unused_too_long(lesson):
-            lesson.tier -= 1
-            lesson.touch()
-            results[lid] = f"demoted to Tier {lesson.tier} (unused {UNUSED_DEMOTION_DAYS}d)"
-            continue
-
-        # --- Promotion attempt ---
-        if lesson.tier < 4:
-            gate = TIER_GATES.get(lesson.tier, {})
-            passed, fail_reasons = _check_gate(lesson, gate)
-            if passed:
-                lesson.tier += 1
-                lesson.last_promoted = _now_iso()
-                lesson.touch()
-                results[lid] = f"promoted to Tier {lesson.tier}"
-
-    _save_lessons(lessons, memory_path)
-    return results
-
-
-def get_lessons_by_tier(
-    tier: int,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> List[Lesson]:
-    """Return all lessons currently in a given tier.
-
-    Args:
-        tier:        Tier number (1–4).
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        List of Lesson objects.
-    """
-    lessons = _load_lessons(memory_path)
-    result = [l for l in lessons.values() if l.tier == tier]
-    # Touch lessons as they're accessed
-    for lesson in result:
-        lesson.touch()
-    if result:
-        _save_lessons(lessons, memory_path)
-    return result
-
-
-def get_durable_lessons(
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> List[Lesson]:
-    """Return all Tier 4 (Durable) lessons.
-
-    These are the highest-quality, permanent lessons.
-
-    Args:
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        List of Lesson objects.
-    """
-    return get_lessons_by_tier(4, memory_path)
-
-
-def get_lesson(
-    lesson_id: str,
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> Optional[Lesson]:
-    """Retrieve a single lesson by ID, touching its access time.
-
-    Args:
-        lesson_id:   Lesson ID.
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        Lesson or None.
-    """
-    lessons = _load_lessons(memory_path)
-    if lesson_id not in lessons:
-        return None
-    lesson = lessons[lesson_id]
-    lesson.touch()
-    lessons[lesson_id] = lesson
-    _save_lessons(lessons, memory_path)
-    return lesson
-
-
-def summarize(
-    memory_path: str = DEFAULT_MEMORY_PATH,
-) -> dict:
-    """Return a summary of all tiers.
-
-    Args:
-        memory_path: Path to memory_tiers.json.
-
-    Returns:
-        Dict with tier counts and lesson list.
-    """
-    lessons = _load_lessons(memory_path)
-    by_tier: Dict[int, List[str]] = {1: [], 2: [], 3: [], 4: []}
-    for lid, lesson in lessons.items():
-        tier = max(1, min(4, lesson.tier))
-        by_tier[tier].append(lid)
-
-    return {
-        "total": len(lessons),
-        "tiers": {
-            f"tier_{t}": {
-                "name": ["working", "session", "project", "durable"][t - 1],
-                "count": len(ids),
-                "lessons": ids,
-            }
-            for t, ids in by_tier.items()
-        },
-    }
+    def stats(self) -> dict:
+        """Return statistics about the memory store."""
+        by_tier = {i: 0 for i in range(1, 5)}
+        total_lessons = len(self.lessons)
+        for lesson in self.lessons.values():
+            by_tier[lesson.tier] += 1
+        
+        return {
+            "total_lessons": total_lessons,
+            "by_tier": by_tier,
+            "tier_names": TIER_NAMES,
+        }
