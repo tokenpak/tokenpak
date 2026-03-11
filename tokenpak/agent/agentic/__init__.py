@@ -95,3 +95,27 @@ __all__ += [
     "SchemaValidator",
     "make_validated_step_handler",
 ]
+
+from .runbook_generator import (
+    DEFAULT_RUNBOOKS_DIR,
+    Episode,
+    RunbookDB,
+    RunbookEntry,
+    generate_from_episode,
+    get_runbook,
+    maybe_generate,
+    render_markdown,
+    should_generate,
+)
+
+__all__ += [
+    "DEFAULT_RUNBOOKS_DIR",
+    "Episode",
+    "RunbookDB",
+    "RunbookEntry",
+    "generate_from_episode",
+    "get_runbook",
+    "maybe_generate",
+    "render_markdown",
+    "should_generate",
+]
