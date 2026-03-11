@@ -286,6 +286,27 @@ def cmd_help(args):
 
 
 # ---------------------------------------------------------------------------
+# savings argparse helper
+# ---------------------------------------------------------------------------
+
+
+def _savings_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.savings import run_savings_cmd
+
+    sp = argparse.ArgumentParser(prog="tokenpak savings", add_help=True)
+    sp.add_argument(
+        "--period",
+        default="24h",
+        choices=["24h", "7d", "30d"],
+        help="Time window (default: 24h)",
+    )
+    sp.add_argument("--verbose", "-v", action="store_true", help="Per-model breakdown")
+    sp.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
+    args = sp.parse_args(argv)
+    run_savings_cmd(args)
+
+
+# ---------------------------------------------------------------------------
 # cost / budget argparse helpers
 # ---------------------------------------------------------------------------
 
@@ -508,6 +529,11 @@ def main():
             fn_m(margs)
         else:
             mp.print_help()
+        return
+
+    # Delegate savings subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "savings":
+        _savings_argparse(sys.argv[2:])
         return
 
     # Delegate cost subcommand
