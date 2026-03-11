@@ -25,12 +25,6 @@ Env vars:
     TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
     TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
     TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
-    
-    # Tier 1 Modules (2026-03-11, all default OFF for safe rollout)
-    TOKENPAK_SEMANTIC_CACHE     (default: 0) — enable short-circuit cache for duplicate queries
-    TOKENPAK_PREFIX_REGISTRY    (default: 0) — enable stable prefix tracking for cache optimization
-    TOKENPAK_COMPRESSION_DICT   (default: 0) — enable post-compaction dictionary compression
-    TOKENPAK_TRACE             (default: 0) — enable pipeline tracing (WIP)
 """
 
 import json
@@ -2368,22 +2362,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         if trace:
                             trace.stages.append(capsule_stage)
 
-                    # Phase 0.6: Prefix Registry — track stable system message prefixes
-                    if PREFIX_REGISTRY_ENABLED and body:
-                        try:
-                            from tokenpak.cache.prefix_registry import StablePrefixRegistry
-                            _prefix_reg = StablePrefixRegistry()
-                            _sys_msgs = [m for m in json.loads(body).get("messages", []) if m.get("role") == "system"]
-                            if _sys_msgs:
-                                _prefix_text = _sys_msgs[0].get("content", "")[:200]  # first 200 chars
-                                _prefix_hash = hash(_prefix_text)
-                                _prefix_meta = _prefix_reg.get_or_create(_prefix_hash, _prefix_text)
-                                SESSION["prefix_registry_registered"] = True
-                                SESSION["prefix_registry_hash"] = _prefix_hash
-                        except Exception as _pr_err:
-                            SESSION["prefix_registry_error"] = str(_pr_err)
-                            pass  # fail-open
-
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
                     if body:
@@ -2477,21 +2455,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     compaction_stage.duration_ms = (time.time() - t_compact) * 1000
                     if trace:
                         trace.stages.append(compaction_stage)
-                    # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body:
-                        try:
-                            from tokenpak.agent.compression.dictionary import CompressionDictionary
-                            _dict = CompressionDictionary()
-                            _req_data = json.loads(body)
-                            if "messages" in _req_data:
-                                _dict_result = _dict.apply(_req_data["messages"])
-                                _req_data["messages"] = _dict_result
-                                body = json.dumps(_req_data, separators=(',', ':'))
-                                SESSION["compression_dict_applied"] = True
-                        except Exception as _cd_err:
-                            SESSION["compression_dict_error"] = str(_cd_err)
-                            pass  # fail-open
-
                     # Workflow: vault_inject done → compress done → begin forward
                     if _wf_id:
                         try:
@@ -2864,19 +2827,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         pass
 
             conn.close()
-
-            # Post-request: Store successful response in semantic cache
-            if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
-                try:
-                    from tokenpak.cache.semantic_cache import SemanticCache
-                    _sem_cache = SemanticCache()
-                    _store_resp = resp_body if 'resp_body' in locals() else json.dumps({"status": status}).encode()
-                    _sem_cache.store(_original_body, _store_resp)
-                    SESSION["semantic_cache_stored"] = True
-                except Exception as _sc_store_err:
-                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                    pass  # fail-open
-
             latency_ms = int((time.time() - t0) * 1000)
 
             if should_log and is_messages and input_tokens > 0:

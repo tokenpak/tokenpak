@@ -25,12 +25,6 @@ Env vars:
     TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
     TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
     TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
-    
-    # Tier 1 Modules (2026-03-11, all default OFF for safe rollout)
-    TOKENPAK_SEMANTIC_CACHE     (default: 0) — enable short-circuit cache for duplicate queries
-    TOKENPAK_PREFIX_REGISTRY    (default: 0) — enable stable prefix tracking for cache optimization
-    TOKENPAK_COMPRESSION_DICT   (default: 0) — enable post-compaction dictionary compression
-    TOKENPAK_TRACE             (default: 0) — enable pipeline tracing (WIP)
 """
 
 import json
