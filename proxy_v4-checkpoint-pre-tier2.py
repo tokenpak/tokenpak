@@ -31,15 +31,6 @@ Env vars:
     TOKENPAK_PREFIX_REGISTRY    (default: 0) — enable stable prefix tracking for cache optimization
     TOKENPAK_COMPRESSION_DICT   (default: 0) — enable post-compaction dictionary compression
     TOKENPAK_TRACE             (default: 0) — enable pipeline tracing (WIP)
-    
-    # Tier 2A Modules (2026-03-11, all default OFF)
-    TOKENPAK_ERROR_NORMALIZER  (default: 0) — normalize error responses across providers
-    TOKENPAK_BUDGET_CONTROLLER (default: 0) — enforce token budget limits per request
-    TOKENPAK_REQUEST_LOGGER    (default: 0) — structured request/response logging
-    TOKENPAK_SALIENCE_ROUTER   (default: 0) — content-type-aware extraction before compaction
-    
-    # Tier 2B Cache (2026-03-11, all default OFF)
-    TOKENPAK_CACHE_REGISTRY    (default: 0) — unified stable/volatile cache registry
 """
 
 import json
@@ -235,31 +226,6 @@ SEMANTIC_CACHE_ENABLED: bool = os.environ.get("TOKENPAK_SEMANTIC_CACHE", "0").lo
 PREFIX_REGISTRY_ENABLED: bool = os.environ.get("TOKENPAK_PREFIX_REGISTRY", "0").lower() in ("1", "true", "yes", "on")
 COMPRESSION_DICT_ENABLED: bool = os.environ.get("TOKENPAK_COMPRESSION_DICT", "0").lower() in ("1", "true", "yes", "on")
 TRACE_ENABLED: bool = os.environ.get("TOKENPAK_TRACE", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2A Module Toggles (2026-03-11) --- all default OFF for safe rollout
-ERROR_NORMALIZER_ENABLED: bool = os.environ.get("TOKENPAK_ERROR_NORMALIZER", "0").lower() in ("1", "true", "yes", "on")
-BUDGET_CONTROLLER_ENABLED: bool = os.environ.get("TOKENPAK_BUDGET_CONTROLLER", "0").lower() in ("1", "true", "yes", "on")
-REQUEST_LOGGER_ENABLED: bool = os.environ.get("TOKENPAK_REQUEST_LOGGER", "0").lower() in ("1", "true", "yes", "on")
-SALIENCE_ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_SALIENCE_ROUTER", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2B Cache Toggles (2026-03-11) --- all default OFF
-CACHE_REGISTRY_ENABLED: bool = os.environ.get("TOKENPAK_CACHE_REGISTRY", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2C Advanced Module Toggles (2026-03-11) --- all default OFF
-RETRIEVAL_WATCHDOG_ENABLED: bool = os.environ.get("TOKENPAK_RETRIEVAL_WATCHDOG", "0").lower() in ("1", "true", "yes", "on")
-FAILURE_MEMORY_ENABLED: bool = os.environ.get("TOKENPAK_FAILURE_MEMORY", "0").lower() in ("1", "true", "yes", "on")
-FIDELITY_TIERS_ENABLED: bool = os.environ.get("TOKENPAK_FIDELITY_TIERS", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2B Cache Registry singleton (initialized at module load if enabled) ---
-_cache_registry = None
-if CACHE_REGISTRY_ENABLED:
-    try:
-        from tokenpak.cache.registry import CacheRegistry
-        _cache_registry = CacheRegistry()
-        print(f"  🗄️  Cache registry initialized: {_cache_registry.names()}")
-    except Exception as _cr_init_err:
-        print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
-        CACHE_REGISTRY_ENABLED = False
 
 # Fix #3: Configurable upstream timeout (default 300s)
 UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
@@ -2287,18 +2253,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except:
                     pass
 
-                # Phase -3: Request Logger — generate request ID and start logging
-                _request_log_id = None
-                if REQUEST_LOGGER_ENABLED:
-                    try:
-                        from tokenpak.monitoring.request_logger import RequestLogger
-                        _req_logger = RequestLogger.get_instance()
-                        _request_log_id = _req_logger.new_request_id(dict(self.headers) if self.headers else None)
-                        SESSION["request_logger_id"] = _request_log_id
-                    except Exception as _rl_err:
-                        SESSION["request_logger_error"] = str(_rl_err)
-                        pass  # fail-open
-
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
                     if SEMANTIC_CACHE_ENABLED and body:
@@ -2353,23 +2307,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
                     except Exception as _route_err:
                         print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
-
-                    # Phase 0.2: Budget Controller — enforce token budget limits before processing
-                    if BUDGET_CONTROLLER_ENABLED and body:
-                        try:
-                            from tokenpak.budget_controller import BudgetController, ClassificationResult
-                            _bc = BudgetController()
-                            _bc_tokens = input_tokens or 0
-                            _bc_class = ClassificationResult(tier="standard", intent="query", token_count=_bc_tokens)
-                            _bc_decision = _bc.decide(_bc_class)
-                            SESSION["budget_controller_tier"] = _bc_class.tier
-                            SESSION["budget_controller_action"] = _bc_decision.action if hasattr(_bc_decision, 'action') else str(_bc_decision)
-                            if hasattr(_bc_decision, 'reject') and _bc_decision.reject:
-                                self._send_json({"error": {"type": "budget_exceeded", "message": f"Request exceeds token budget: {_bc_tokens} tokens"}}, status=429)
-                                return
-                        except Exception as _bc_err:
-                            SESSION["budget_controller_error"] = str(_bc_err)
-                            pass  # fail-open
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
                     _intent_for_contract: str = "query"
@@ -2490,23 +2427,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(vault_stage)
 
-                    # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
-                    if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
-                        try:
-                            from tokenpak.agent.regression.retrieval_watchdog import RetrievalQualityWatchdog, QueryRetrievalRecord
-                            _rw = RetrievalQualityWatchdog()
-                            _rw_record = QueryRetrievalRecord(
-                                query=model,  # use model as proxy for query fingerprint
-                                retrieved_count=len(injected_sources) if injected_sources else 0,
-                                injected_tokens=injected_tokens,
-                            )
-                            _rw_alert = _rw.observe(_rw_record)
-                            if _rw_alert:
-                                SESSION["retrieval_watchdog_alert"] = str(_rw_alert)
-                        except Exception as _rw_err:
-                            SESSION["retrieval_watchdog_error"] = str(_rw_err)
-                            pass  # fail-open
-
                     # Phase 1.5: CANON dedup (AFTER injection, BEFORE compaction)
                     if CANON_AVAILABLE and injected_tokens > 0:
                         t_canon = time.time()
@@ -2531,41 +2451,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         canon_stage.duration_ms = (time.time() - t_canon) * 1000
                         if trace:
                             trace.stages.append(canon_stage)
-
-                    # Phase 1.8: Salience Router — content-type-aware extraction before compaction
-                    if SALIENCE_ROUTER_ENABLED and body:
-                        try:
-                            from tokenpak.agent.compression.salience.router import detect_content_type, extract as salience_extract
-                            _req_data = json.loads(body)
-                            _salience_applied = 0
-                            for _msg in _req_data.get("messages", []):
-                                _content = _msg.get("content", "")
-                                if isinstance(_content, str) and len(_content) > 500:
-                                    _ctype = detect_content_type(_content)
-                                    if _ctype.value != "unknown":
-                                        _result = salience_extract(_content, content_type=_ctype)
-                                        if _result.compressed and len(_result.compressed) < len(_content):
-                                            _msg["content"] = _result.compressed
-                                            _salience_applied += 1
-                            if _salience_applied > 0:
-                                body = json.dumps(_req_data, separators=(',', ':'))
-                                SESSION["salience_router_applied"] = _salience_applied
-                        except Exception as _sr_err:
-                            SESSION["salience_router_error"] = str(_sr_err)
-                            pass  # fail-open
-
-                    # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
-                    if FIDELITY_TIERS_ENABLED and body:
-                        try:
-                            from tokenpak.agent.compression.fidelity_tiers import TierSelector, FidelityTier
-                            _ts = TierSelector()
-                            _complexity = min(1.0, (input_tokens or 0) / 10000.0)  # simple heuristic
-                            _budget_remaining = max(0.0, 1.0 - _complexity)
-                            _selected_tier = _ts.select(_complexity, _budget_remaining)
-                            SESSION["fidelity_tier"] = _selected_tier.name if hasattr(_selected_tier, 'name') else str(_selected_tier)
-                        except Exception as _ft_err:
-                            SESSION["fidelity_tier_error"] = str(_ft_err)
-                            pass  # fail-open
 
                     # Phase 2: Compaction (AFTER injection)
                     t_compact = time.time()
@@ -2796,29 +2681,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         _normalized = _err_data  # already correct shape
                     else:
                         _normalized = {"error": {"type": "upstream_error", "message": str(_err_data)}}
-                    # Tier 2A: Error Normalizer — further standardize error message text
-                    if ERROR_NORMALIZER_ENABLED:
-                        try:
-                            from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
-                            _en = ErrorNormalizer()
-                            _err_msg = _normalized.get("error", {}).get("message", "")
-                            if _err_msg:
-                                _normalized["error"]["message"] = _en.normalize(_err_msg)
-                                SESSION["error_normalizer_applied"] = True
-                        except Exception:
-                            pass  # fail-open
-                    # Tier 2C: Failure Memory — record error signature for future avoidance
-                    if FAILURE_MEMORY_ENABLED:
-                        try:
-                            from tokenpak.agent.agentic.failure_memory import FailureMemoryDB, FailureSignature
-                            _fm = FailureMemoryDB()
-                            _fm_msg = _normalized.get("error", {}).get("message", "")
-                            _fm_type = _normalized.get("error", {}).get("type", "unknown")
-                            if _fm_msg and not _fm.match(_fm_msg):
-                                _fm.add(FailureSignature(error_type=_fm_type, pattern=_fm_msg[:200], model=model))
-                                SESSION["failure_memory_recorded"] = True
-                        except Exception:
-                            pass  # fail-open
                     _err_body = json.dumps(_normalized, indent=2).encode()
                     self.send_response(status)
                     self.send_header("Content-Type", "application/json")
@@ -3016,28 +2878,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
-
-            # Post-request: Log completed request via Request Logger
-            if REQUEST_LOGGER_ENABLED and _request_log_id:
-                try:
-                    from tokenpak.monitoring.request_logger import RequestLogger
-                    _req_logger = RequestLogger.get_instance()
-                    _record = _req_logger.build_record(
-                        request_id=_request_log_id,
-                        method="POST",
-                        endpoint=target_url,
-                        request_body_size=len(body) if body else 0,
-                        response_status=status,
-                        compression_ratio=round(sent_input_tokens / input_tokens, 3) if input_tokens else None,
-                        latency_ms=latency_ms,
-                        model=model,
-                        provider=_cb_provider if '_cb_provider' in dir() else "",
-                    )
-                    _req_logger.log(_record)
-                    SESSION["request_logger_logged"] = True
-                except Exception as _rl_post_err:
-                    SESSION["request_logger_post_error"] = str(_rl_post_err)
-                    pass  # fail-open
 
             if should_log and is_messages and input_tokens > 0:
                 cost = estimate_cost(model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)

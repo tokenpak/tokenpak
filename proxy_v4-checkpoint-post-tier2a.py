@@ -37,9 +37,6 @@ Env vars:
     TOKENPAK_BUDGET_CONTROLLER (default: 0) — enforce token budget limits per request
     TOKENPAK_REQUEST_LOGGER    (default: 0) — structured request/response logging
     TOKENPAK_SALIENCE_ROUTER   (default: 0) — content-type-aware extraction before compaction
-    
-    # Tier 2B Cache (2026-03-11, all default OFF)
-    TOKENPAK_CACHE_REGISTRY    (default: 0) — unified stable/volatile cache registry
 """
 
 import json
@@ -241,25 +238,6 @@ ERROR_NORMALIZER_ENABLED: bool = os.environ.get("TOKENPAK_ERROR_NORMALIZER", "0"
 BUDGET_CONTROLLER_ENABLED: bool = os.environ.get("TOKENPAK_BUDGET_CONTROLLER", "0").lower() in ("1", "true", "yes", "on")
 REQUEST_LOGGER_ENABLED: bool = os.environ.get("TOKENPAK_REQUEST_LOGGER", "0").lower() in ("1", "true", "yes", "on")
 SALIENCE_ROUTER_ENABLED: bool = os.environ.get("TOKENPAK_SALIENCE_ROUTER", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2B Cache Toggles (2026-03-11) --- all default OFF
-CACHE_REGISTRY_ENABLED: bool = os.environ.get("TOKENPAK_CACHE_REGISTRY", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2C Advanced Module Toggles (2026-03-11) --- all default OFF
-RETRIEVAL_WATCHDOG_ENABLED: bool = os.environ.get("TOKENPAK_RETRIEVAL_WATCHDOG", "0").lower() in ("1", "true", "yes", "on")
-FAILURE_MEMORY_ENABLED: bool = os.environ.get("TOKENPAK_FAILURE_MEMORY", "0").lower() in ("1", "true", "yes", "on")
-FIDELITY_TIERS_ENABLED: bool = os.environ.get("TOKENPAK_FIDELITY_TIERS", "0").lower() in ("1", "true", "yes", "on")
-
-# --- Tier 2B Cache Registry singleton (initialized at module load if enabled) ---
-_cache_registry = None
-if CACHE_REGISTRY_ENABLED:
-    try:
-        from tokenpak.cache.registry import CacheRegistry
-        _cache_registry = CacheRegistry()
-        print(f"  🗄️  Cache registry initialized: {_cache_registry.names()}")
-    except Exception as _cr_init_err:
-        print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
-        CACHE_REGISTRY_ENABLED = False
 
 # Fix #3: Configurable upstream timeout (default 300s)
 UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
@@ -2490,23 +2468,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(vault_stage)
 
-                    # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
-                    if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
-                        try:
-                            from tokenpak.agent.regression.retrieval_watchdog import RetrievalQualityWatchdog, QueryRetrievalRecord
-                            _rw = RetrievalQualityWatchdog()
-                            _rw_record = QueryRetrievalRecord(
-                                query=model,  # use model as proxy for query fingerprint
-                                retrieved_count=len(injected_sources) if injected_sources else 0,
-                                injected_tokens=injected_tokens,
-                            )
-                            _rw_alert = _rw.observe(_rw_record)
-                            if _rw_alert:
-                                SESSION["retrieval_watchdog_alert"] = str(_rw_alert)
-                        except Exception as _rw_err:
-                            SESSION["retrieval_watchdog_error"] = str(_rw_err)
-                            pass  # fail-open
-
                     # Phase 1.5: CANON dedup (AFTER injection, BEFORE compaction)
                     if CANON_AVAILABLE and injected_tokens > 0:
                         t_canon = time.time()
@@ -2552,19 +2513,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 SESSION["salience_router_applied"] = _salience_applied
                         except Exception as _sr_err:
                             SESSION["salience_router_error"] = str(_sr_err)
-                            pass  # fail-open
-
-                    # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
-                    if FIDELITY_TIERS_ENABLED and body:
-                        try:
-                            from tokenpak.agent.compression.fidelity_tiers import TierSelector, FidelityTier
-                            _ts = TierSelector()
-                            _complexity = min(1.0, (input_tokens or 0) / 10000.0)  # simple heuristic
-                            _budget_remaining = max(0.0, 1.0 - _complexity)
-                            _selected_tier = _ts.select(_complexity, _budget_remaining)
-                            SESSION["fidelity_tier"] = _selected_tier.name if hasattr(_selected_tier, 'name') else str(_selected_tier)
-                        except Exception as _ft_err:
-                            SESSION["fidelity_tier_error"] = str(_ft_err)
                             pass  # fail-open
 
                     # Phase 2: Compaction (AFTER injection)
@@ -2805,18 +2753,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             if _err_msg:
                                 _normalized["error"]["message"] = _en.normalize(_err_msg)
                                 SESSION["error_normalizer_applied"] = True
-                        except Exception:
-                            pass  # fail-open
-                    # Tier 2C: Failure Memory — record error signature for future avoidance
-                    if FAILURE_MEMORY_ENABLED:
-                        try:
-                            from tokenpak.agent.agentic.failure_memory import FailureMemoryDB, FailureSignature
-                            _fm = FailureMemoryDB()
-                            _fm_msg = _normalized.get("error", {}).get("message", "")
-                            _fm_type = _normalized.get("error", {}).get("type", "unknown")
-                            if _fm_msg and not _fm.match(_fm_msg):
-                                _fm.add(FailureSignature(error_type=_fm_type, pattern=_fm_msg[:200], model=model))
-                                SESSION["failure_memory_recorded"] = True
                         except Exception:
                             pass  # fail-open
                     _err_body = json.dumps(_normalized, indent=2).encode()
