@@ -2527,7 +2527,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             _rw_chunk_count = len(injected_sources) if injected_sources else 0
                             _rw_record = QueryRetrievalRecord(
                                 query_id=model or "unknown",
-                                query_text=user_text[:200] if user_text else "",
+                                query_text=_extract_user_text(body if isinstance(body, bytes) else body.encode("utf-8") if isinstance(body, str) else b"")[:200],
                                 chunk_count=_rw_chunk_count,
                                 unique_chunk_count=_rw_chunk_count,
                                 relevance_scores=[1.0] * _rw_chunk_count,
