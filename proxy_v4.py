@@ -95,6 +95,17 @@ except ImportError:
         return None
 
 # ---------------------------------------------------------------------------
+# Term Resolver — deterministic glossary term extraction
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+    TERM_RESOLVER_AVAILABLE = True
+except ImportError:
+    TERM_RESOLVER_AVAILABLE = False
+    TermResolver = None
+    TermResolverConfig = None
+
+# ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
 # ---------------------------------------------------------------------------
 @dataclass
@@ -221,6 +232,11 @@ INJECT_MIN_SCORE = float(os.environ.get("TOKENPAK_INJECT_MIN_SCORE", "2.0"))
 INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
 INJECT_MIN_PROMPT = int(os.environ.get("TOKENPAK_INJECT_MIN_PROMPT", "1000"))
 VAULT_INDEX_RELOAD_INTERVAL = 300  # reload vault index every 5 min
+
+# Term-Card Resolver — glossary term extraction for routing/constraints
+TERM_RESOLVER_ENABLED: bool = os.environ.get("TOKENPAK_TERM_RESOLVER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+TERM_RESOLVER_TOP_K: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_TOP_K", "3"))
+TERM_RESOLVER_MAX_BYTES: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_MAX_BYTES", "200"))
 
 _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
@@ -733,6 +749,20 @@ def _bm25_tokenize(text: str) -> List[str]:
 
 # Global vault index instance
 VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+
+# Global term resolver instance
+TERM_RESOLVER = None
+if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
+    try:
+        _config = TermResolverConfig(
+            top_k=TERM_RESOLVER_TOP_K,
+            max_bytes_per_card=TERM_RESOLVER_MAX_BYTES,
+            enabled=True,
+        )
+        TERM_RESOLVER = TermResolver(config=_config)
+        print(f"  🔤 Term resolver initialized (top_k={TERM_RESOLVER_TOP_K}, enabled={TERM_RESOLVER_ENABLED})")
+    except Exception as e:
+        print(f"  ⚠️ Failed to initialize term resolver: {e}")
 
 # Global capsule builder instance
 try:
@@ -1409,6 +1439,7 @@ def extract_query_signal(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
 def inject_vault_context(body_bytes: bytes, adapter: Optional[FormatAdapter] = None) -> Tuple[bytes, int, List[str]]:
     """
     Search vault index for relevant context and inject into the system prompt.
+    Optionally resolves glossary terms and injects term cards.
     Returns (new_body_bytes, injected_tokens, source_refs).
     """
     if not VAULT_INDEX.available:
@@ -1419,23 +1450,54 @@ def inject_vault_context(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
     if not query:
         return body_bytes, 0, []
 
+    # Resolve glossary terms (optional, feature-flagged)
+    glossary_injection = ""
+    glossary_tokens = 0
+    if TERM_RESOLVER is not None and TERM_RESOLVER_ENABLED:
+        try:
+            resolution = TERM_RESOLVER.resolve_terms(query)
+            if resolution.injection_text and resolution.canonical_ids:
+                glossary_injection = resolution.injection_text
+                glossary_tokens = resolution.tokens_estimate
+                # Adjust vault budget to account for glossary tokens
+                remaining_budget = max(1000, INJECT_BUDGET - glossary_tokens)
+            else:
+                remaining_budget = INJECT_BUDGET
+        except Exception:
+            remaining_budget = INJECT_BUDGET
+    else:
+        remaining_budget = INJECT_BUDGET
+
     injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
-        query, budget=INJECT_BUDGET, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
     )
 
-    if not injection_text:
+    # Combine glossary + vault injection if both present
+    combined_injection = ""
+    combined_tokens = 0
+    if glossary_injection and injection_text:
+        combined_injection = glossary_injection + "\n\n" + injection_text
+        combined_tokens = glossary_tokens + tokens_used
+    elif glossary_injection:
+        combined_injection = glossary_injection
+        combined_tokens = glossary_tokens
+    elif injection_text:
+        combined_injection = injection_text
+        combined_tokens = tokens_used
+    
+    if not combined_injection:
         return body_bytes, 0, []
 
     # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
     if SKELETON_ENABLED:
-        injection_text = _inject_skeleton_into_blocks(injection_text)
-        tokens_used = count_tokens(injection_text)
+        combined_injection = _inject_skeleton_into_blocks(combined_injection)
+        combined_tokens = count_tokens(combined_injection)
 
     try:
-        new_body = active_adapter.inject_system_context(body_bytes, injection_text)
+        new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
     except Exception:
         return body_bytes, 0, []
-    return new_body, tokens_used, source_refs
+    return new_body, combined_tokens, source_refs
 
 
 # ---------------------------------------------------------------------------
@@ -1760,6 +1822,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "tool_schema_registry": {
                     "enabled": TOOL_REGISTRY_AVAILABLE,
                     **((_get_tool_registry().stats() if _get_tool_registry() else {}) if TOOL_REGISTRY_AVAILABLE else {}),
+                },
+                "term_resolver": {
+                    "enabled": TERM_RESOLVER_ENABLED,
+                    "available": TERM_RESOLVER is not None,
+                    "top_k": TERM_RESOLVER_TOP_K,
+                    "max_bytes_per_card": TERM_RESOLVER_MAX_BYTES,
                 },
                 "cache_poison_removal": {"enabled": True},
                 "strict_validation": {"enabled": STRICT_VALIDATION},
