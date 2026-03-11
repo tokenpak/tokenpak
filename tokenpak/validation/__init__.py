@@ -18,7 +18,9 @@ Request validation:
 
 from .request_schema import (
     ANTHROPIC_MESSAGE_SCHEMA,
+    GOOGLE_GENERATE_CONTENT_SCHEMA,
     OPENAI_CHAT_SCHEMA,
+    OPENAI_RESPONSES_SCHEMA,
     get_request_schema,
 )
 from .request_validator import (
@@ -49,6 +51,8 @@ __all__ = [
     # Request schemas
     "ANTHROPIC_MESSAGE_SCHEMA",
     "OPENAI_CHAT_SCHEMA",
+    "OPENAI_RESPONSES_SCHEMA",
+    "GOOGLE_GENERATE_CONTENT_SCHEMA",
     "get_request_schema",
     # Request validation
     "RequestValidator",

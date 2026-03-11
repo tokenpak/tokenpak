@@ -1,4 +1,4 @@
-"""tokenpak.agent.semantic — Semantic KB layer: term-card generation and resolution."""
+"""tokenpak.agent.semantic — Semantic KB layer: term-card generation, resolution and glossary integration."""
 
 from .term_card_builder import (
     build,
@@ -12,6 +12,14 @@ from .term_card_builder import (
     validation_report,
 )
 
+from .term_resolver import (
+    TermResolver,
+    TermResolverConfig,
+    resolve_terms,
+    TermCardSnippet,
+    TermResolution,
+)
+
 __all__ = [
     "build",
     "detect_alias_conflicts",
@@ -22,4 +30,9 @@ __all__ = [
     "sort_cards",
     "validate_card",
     "validation_report",
+    "TermResolver",
+    "TermResolverConfig",
+    "resolve_terms",
+    "TermCardSnippet",
+    "TermResolution",
 ]

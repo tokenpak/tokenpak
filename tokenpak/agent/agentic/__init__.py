@@ -21,6 +21,12 @@ from .learning import (
 )
 from .locks import FileLockManager, LockConflictError, LockExpiredError
 from .retry import RetryEngine, RetryExhaustedError
+from .prefetcher import (
+    DEFAULT_DIAGNOSTIC_ARTIFACTS,
+    PrefetchStore,
+    PredictivePrefetcher,
+)
+from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
 
 __all__ = [
     "FileLockManager",
@@ -44,6 +50,12 @@ __all__ = [
     "Handoff",
     "DEFAULT_HANDOFF_DIR",
     "REGISTERED_AGENTS",
+    "PredictivePrefetcher",
+    "PrefetchStore",
+    "DEFAULT_DIAGNOSTIC_ARTIFACTS",
+    "ErrorNormalizer",
+    "FailureSignatureDB",
+    "MergeSuggestion",
 ]
 from .state_collector import (
     SCHEMA_VERSION,

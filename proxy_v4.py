@@ -43,7 +43,7 @@ import hashlib
 import http.client
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional, Any, Mapping
 from dataclasses import dataclass, field, asdict
 from collections import deque
@@ -94,6 +94,17 @@ except ImportError:
     TOOL_REGISTRY_AVAILABLE = False
     def _get_tool_registry():
         return None
+
+# ---------------------------------------------------------------------------
+# Term Resolver — deterministic glossary term extraction
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+    TERM_RESOLVER_AVAILABLE = True
+except ImportError:
+    TERM_RESOLVER_AVAILABLE = False
+    TermResolver = None
+    TermResolverConfig = None
 
 # ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
@@ -210,6 +221,10 @@ UPSTREAM_TIMEOUT: int = int(os.environ.get("TOKENPAK_UPSTREAM_TIMEOUT", "300"))
 # Fix #5: Strict validation mode — reject malformed requests (vs warn-and-forward)
 STRICT_VALIDATION: bool = os.environ.get("TOKENPAK_STRICT_MODE", "0").lower() in ("1", "true", "yes", "on")
 
+# Validation gate — pre-forward runtime guardrails for deterministic path
+VALIDATION_GATE_ENABLED: bool = os.environ.get("TOKENPAK_VALIDATION_GATE", "1").lower() in ("1", "true", "yes", "on")
+VALIDATION_GATE_BUDGET_CAP: int = int(os.environ.get("TOKENPAK_VALIDATION_GATE_BUDGET_CAP", "120000"))
+
 # Two-Tier Index Config
 VAULT_INDEX_PATH = os.environ.get("TOKENPAK_VAULT_INDEX", str(Path.home() / "vault" / ".tokenpak"))
 INJECT_BUDGET = int(os.environ.get("TOKENPAK_INJECT_BUDGET", "4000"))  # raised to 4000 for cache stability
@@ -219,6 +234,11 @@ INJECT_SKIP_MODELS = os.environ.get("TOKENPAK_INJECT_SKIP_MODELS", "haiku")
 INJECT_MIN_PROMPT = int(os.environ.get("TOKENPAK_INJECT_MIN_PROMPT", "1000"))
 VAULT_INDEX_RELOAD_INTERVAL = 300  # reload vault index every 5 min
 RETRIEVAL_BACKEND = os.environ.get("TOKENPAK_RETRIEVAL_BACKEND", "json_blocks").lower()  # json_blocks|sqlite
+
+# Term-Card Resolver — glossary term extraction for routing/constraints
+TERM_RESOLVER_ENABLED: bool = os.environ.get("TOKENPAK_TERM_RESOLVER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+TERM_RESOLVER_TOP_K: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_TOP_K", "3"))
+TERM_RESOLVER_MAX_BYTES: int = int(os.environ.get("TOKENPAK_TERM_RESOLVER_MAX_BYTES", "200"))
 
 _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
@@ -319,6 +339,42 @@ def _build_upstream_routes() -> Dict[str, str]:
 
 
 UPSTREAM_ROUTES = _build_upstream_routes()
+
+def _cap_cache_control_blocks(body_bytes, max_blocks=4):
+    """Anthropic allows max 4 cache_control blocks. Strip extras (including tools)."""
+    try:
+        body = json.loads(body_bytes)
+    except Exception:
+        return body_bytes
+    locations = []
+    system = body.get("system", [])
+    if isinstance(system, list):
+        for i, block in enumerate(system):
+            if isinstance(block, dict) and "cache_control" in block:
+                locations.append(("system", i))
+    tools = body.get("tools", [])
+    if isinstance(tools, list):
+        for i, tool in enumerate(tools):
+            if isinstance(tool, dict) and "cache_control" in tool:
+                locations.append(("tools", i))
+    for mi, msg in enumerate(body.get("messages", [])):
+        c = msg.get("content", [])
+        if isinstance(c, list):
+            for ci, block in enumerate(c):
+                if isinstance(block, dict) and "cache_control" in block:
+                    locations.append(("messages", mi, ci))
+    if len(locations) <= max_blocks:
+        return body_bytes
+    to_remove = locations[:-max_blocks]
+    for loc in to_remove:
+        if loc[0] == "system":
+            body["system"][loc[1]].pop("cache_control", None)
+        elif loc[0] == "tools":
+            body["tools"][loc[1]].pop("cache_control", None)
+        else:
+            body["messages"][loc[1]]["content"][loc[2]].pop("cache_control", None)
+    print(f"  🔧 Capped cache_control: {len(locations)} -> {max_blocks} (removed from: {[l[0] for l in to_remove]})")
+    return json.dumps(body).encode()
 
 
 def _resolve_upstream(adapter: FormatAdapter) -> str:
@@ -706,6 +762,20 @@ else:
     VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
     print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
 
+# Global term resolver instance
+TERM_RESOLVER = None
+if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
+    try:
+        _config = TermResolverConfig(
+            top_k=TERM_RESOLVER_TOP_K,
+            max_bytes_per_card=TERM_RESOLVER_MAX_BYTES,
+            enabled=True,
+        )
+        TERM_RESOLVER = TermResolver(config=_config)
+        print(f"  🔤 Term resolver initialized (top_k={TERM_RESOLVER_TOP_K}, enabled={TERM_RESOLVER_ENABLED})")
+    except Exception as e:
+        print(f"  ⚠️ Failed to initialize term resolver: {e}")
+
 # Global capsule builder instance
 try:
     from tokenpak.capsule.builder import CapsuleBuilder as _CapsuleBuilder
@@ -823,7 +893,11 @@ def _get_router():
                         self._pipeline = CompressionPipeline()
                         self._slot_filler = SlotFiller()
                         self._recipe_engine = RecipeEngine()
-                        self._gate = (ValidationGate() if ValidationGate is not None and _has_validation_gate() else None)
+                        self._gate = (
+                            ValidationGate(enabled=VALIDATION_GATE_ENABLED, token_budget_cap=VALIDATION_GATE_BUDGET_CAP)
+                            if ValidationGate is not None and _has_validation_gate() and VALIDATION_GATE_ENABLED
+                            else None
+                        )
 
                     def route(self, user_text: str, session_id: str = "") -> "_RouterResult":
                         t0 = time.time()
@@ -881,12 +955,33 @@ def _get_router():
         return _ROUTER_INSTANCE
 
 
+_VALIDATION_GATE_INSTANCE = None
+_VALIDATION_GATE_LOCK = threading.Lock()
+
+
 def _has_validation_gate() -> bool:
     try:
         from tokenpak.validation_gate import ValidationGate  # noqa
         return True
     except Exception:
         return False
+
+
+def _get_validation_gate():
+    global _VALIDATION_GATE_INSTANCE
+    if not VALIDATION_GATE_ENABLED:
+        return None
+    with _VALIDATION_GATE_LOCK:
+        if _VALIDATION_GATE_INSTANCE is None:
+            try:
+                from tokenpak.validation_gate import ValidationGate
+                _VALIDATION_GATE_INSTANCE = ValidationGate(
+                    enabled=True,
+                    token_budget_cap=VALIDATION_GATE_BUDGET_CAP,
+                )
+            except Exception:
+                return None
+        return _VALIDATION_GATE_INSTANCE
 
 
 class _RouterResult:
@@ -1261,6 +1356,7 @@ SESSION = {
     },
     "canon_hits": 0,
     "canon_tokens_saved": 0,
+    "ingest_entries": 0,
 }
 
 # ---------------------------------------------------------------------------
@@ -1388,6 +1484,7 @@ def extract_query_signal(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
 def inject_vault_context(body_bytes: bytes, adapter: Optional[FormatAdapter] = None) -> Tuple[bytes, int, List[str]]:
     """
     Search vault index for relevant context and inject into the system prompt.
+    Optionally resolves glossary terms and injects term cards.
     Returns (new_body_bytes, injected_tokens, source_refs).
     """
     if not VAULT_INDEX.available:
@@ -1398,23 +1495,54 @@ def inject_vault_context(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
     if not query:
         return body_bytes, 0, []
 
+    # Resolve glossary terms (optional, feature-flagged)
+    glossary_injection = ""
+    glossary_tokens = 0
+    if TERM_RESOLVER is not None and TERM_RESOLVER_ENABLED:
+        try:
+            resolution = TERM_RESOLVER.resolve_terms(query)
+            if resolution.injection_text and resolution.canonical_ids:
+                glossary_injection = resolution.injection_text
+                glossary_tokens = resolution.tokens_estimate
+                # Adjust vault budget to account for glossary tokens
+                remaining_budget = max(1000, INJECT_BUDGET - glossary_tokens)
+            else:
+                remaining_budget = INJECT_BUDGET
+        except Exception:
+            remaining_budget = INJECT_BUDGET
+    else:
+        remaining_budget = INJECT_BUDGET
+
     injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
-        query, budget=INJECT_BUDGET, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
     )
 
-    if not injection_text:
+    # Combine glossary + vault injection if both present
+    combined_injection = ""
+    combined_tokens = 0
+    if glossary_injection and injection_text:
+        combined_injection = glossary_injection + "\n\n" + injection_text
+        combined_tokens = glossary_tokens + tokens_used
+    elif glossary_injection:
+        combined_injection = glossary_injection
+        combined_tokens = glossary_tokens
+    elif injection_text:
+        combined_injection = injection_text
+        combined_tokens = tokens_used
+    
+    if not combined_injection:
         return body_bytes, 0, []
 
     # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
     if SKELETON_ENABLED:
-        injection_text = _inject_skeleton_into_blocks(injection_text)
-        tokens_used = count_tokens(injection_text)
+        combined_injection = _inject_skeleton_into_blocks(combined_injection)
+        combined_tokens = count_tokens(combined_injection)
 
     try:
-        new_body = active_adapter.inject_system_context(body_bytes, injection_text)
+        new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
     except Exception:
         return body_bytes, 0, []
-    return new_body, tokens_used, source_refs
+    return new_body, combined_tokens, source_refs
 
 
 # ---------------------------------------------------------------------------
@@ -1740,6 +1868,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "enabled": TOOL_REGISTRY_AVAILABLE,
                     **((_get_tool_registry().stats() if _get_tool_registry() else {}) if TOOL_REGISTRY_AVAILABLE else {}),
                 },
+                "term_resolver": {
+                    "enabled": TERM_RESOLVER_ENABLED,
+                    "available": TERM_RESOLVER is not None,
+                    "top_k": TERM_RESOLVER_TOP_K,
+                    "max_bytes_per_card": TERM_RESOLVER_MAX_BYTES,
+                },
                 "cache_poison_removal": {"enabled": True},
                 "strict_validation": {"enabled": STRICT_VALIDATION},
                 "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
@@ -1918,6 +2052,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._ollama_proxy("POST")
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
+        elif self.path == "/ingest" or self.path == "/ingest/batch":
+            self._ingest(self.path)
         else:
             # Fix #2: JSON 404 instead of HTML
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
@@ -2056,6 +2192,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         tools_schema_changed = False
         raw_request_body_for_cache_reason = body
         final_request_body_for_cache_reason = body
+        router_meta: Optional[dict] = None
 
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
@@ -2145,6 +2282,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         try:
                             _session_id_router = self.headers.get("X-OpenClaw-Session", model)
                             body, _router_meta = _run_router(body, session_id=_session_id_router)
+                            router_meta = _router_meta
                             if _router_meta and not _router_meta.get("fallback"):
                                 _intent_for_contract = _router_meta.get("intent", "query")
                                 print(f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)")
@@ -2309,6 +2447,48 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
         final_request_body_for_cache_reason = body
 
+        # Final validation gate (pre-forward): budget, deterministic context, fingerprint, dry-run
+        if should_log and is_messages and body and active_adapter.source_format != "passthrough":
+            gate = _get_validation_gate()
+            if gate is not None:
+                try:
+                    gate_result = gate.validate_request(
+                        request_body=body,
+                        model=model,
+                        input_tokens=sent_input_tokens or input_tokens,
+                        router_meta=router_meta or {},
+                    )
+                    if gate_result.fingerprint:
+                        print(f"  🧾 Determinism fingerprint: {gate_result.fingerprint}")
+                    if not gate_result.valid:
+                        self._send_json(
+                            {
+                                "error": {
+                                    "type": "validation_gate_failed",
+                                    "message": "Request blocked by validation gate",
+                                    "reasons": gate_result.errors,
+                                },
+                                "warnings": gate_result.warnings,
+                                "fingerprint": gate_result.fingerprint,
+                            },
+                            status=422,
+                        )
+                        return
+                    if gate_result.dry_run:
+                        self._send_json(
+                            {
+                                "status": "dry_run",
+                                "message": "Validation gate accepted request; upstream forward skipped",
+                                "plan": gate_result.plan,
+                                "fingerprint": gate_result.fingerprint,
+                                "warnings": gate_result.warnings,
+                            },
+                            status=200,
+                        )
+                        return
+                except Exception as _gate_err:
+                    print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
+
         fwd_headers = {}
         for key in self.headers:
             if key.lower() in ("host", "proxy-connection", "proxy-authorization",
@@ -2340,6 +2520,76 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             path = parsed.path
             if parsed.query:
                 path += "?" + parsed.query
+            # DEBUG: count cache_control blocks before cap
+            try:
+                _dbg_body = json.loads(body) if isinstance(body, bytes) else json.loads(body.encode() if isinstance(body, str) else body)
+                _cc_locs = []
+                for _si, _sb in enumerate(_dbg_body.get('system', [])):
+                    if isinstance(_sb, dict) and 'cache_control' in _sb:
+                        _cc_locs.append(f'system[{_si}]')
+                for _mi, _mm in enumerate(_dbg_body.get('messages', [])):
+                    _mc = _mm.get('content', [])
+                    if isinstance(_mc, list):
+                        for _ci, _cb in enumerate(_mc):
+                            if isinstance(_cb, dict) and 'cache_control' in _cb:
+                                _cc_locs.append(f'msg[{_mi}].content[{_ci}]')
+                if _cc_locs:
+                    print(f'  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}')
+            except Exception as _e:
+                print(f'  🔍 debug error: {_e}')
+            body = _cap_cache_control_blocks(body)
+            # Fix Content-Length after cache_control cap may have changed body size
+            if isinstance(body, str):
+                body = body.encode("utf-8")
+            fwd_headers["Content-Length"] = str(len(body))
+            # DEBUG: count cache_control blocks
+            try:
+                _dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                _cc = 0
+                for _s in (_dbody.get('system') or []):
+                    if isinstance(_s, dict) and 'cache_control' in _s: _cc += 1
+                for _m in (_dbody.get('messages') or []):
+                    for _c in (_m.get('content') or []) if isinstance(_m.get('content'), list) else []:
+                        if isinstance(_c, dict) and 'cache_control' in _c: _cc += 1
+                if _cc > 0: print(f'  📦 cache_control blocks in request: {_cc}', flush=True)
+                if _cc > 4:
+                    print(f'  ⚠️ OVER LIMIT! Stripping {_cc - 4} earliest cache_control blocks', flush=True)
+                    _locs = []
+                    for _i, _s in enumerate((_dbody.get('system') or [])):
+                        if isinstance(_s, dict) and 'cache_control' in _s: _locs.append(('s', _i))
+                    for _mi, _m in enumerate((_dbody.get('messages') or [])):
+                        for _ci, _c in enumerate((_m.get('content') or []) if isinstance(_m.get('content'), list) else []):
+                            if isinstance(_c, dict) and 'cache_control' in _c: _locs.append(('m', _mi, _ci))
+                    for _loc in _locs[:(_cc - 4)]:
+                        if _loc[0] == 's': _dbody['system'][_loc[1]].pop('cache_control', None)
+                        else: _dbody['messages'][_loc[1]]['content'][_loc[2]].pop('cache_control', None)
+                    body = json.dumps(_dbody).encode()
+                    print(f'  ✅ Stripped. Now {sum(1 for s in (_dbody.get("system") or []) if isinstance(s,dict) and "cache_control" in s) + sum(1 for m in (_dbody.get("messages") or []) for c in (m.get("content") or []) if isinstance(c,dict) and "cache_control" in c)} blocks', flush=True)
+            except Exception as _e:
+                print(f'  ⚠️ cache_control debug error: {_e}', flush=True)
+            body = _cap_cache_control_blocks(body)
+            if isinstance(body, str): body = body.encode("utf-8")
+            fwd_headers["Content-Length"] = str(len(body))
+            # TEMP DEBUG: dump final body to file
+            try:
+                import json as _j2
+                _fb = _j2.loads(body) if isinstance(body, (bytes, str)) else body
+                _all_cc = 0
+                for _sk in ['system', 'tools', 'messages']:
+                    items = _fb.get(_sk, [])
+                    if isinstance(items, list):
+                        for _it in items:
+                            if isinstance(_it, dict):
+                                if 'cache_control' in _it: _all_cc += 1
+                                for _cv in (_it.get('content', []) if isinstance(_it.get('content'), list) else []):
+                                    if isinstance(_cv, dict) and 'cache_control' in _cv: _all_cc += 1
+                print(f'  🎯 FINAL body has {_all_cc} cache_control blocks (system+tools+messages)', flush=True)
+                if _all_cc > 4:
+                    with open('/tmp/debug_body.json', 'w') as _df:
+                        _j2.dump(_fb, _df, indent=2)
+                    print('  ❌ DUMPED to /tmp/debug_body.json', flush=True)
+            except Exception as _de:
+                print(f'  debug error: {_de}', flush=True)
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
@@ -2674,6 +2924,152 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except:
                 pass
 
+    def _ingest(self, path):
+        """Handle /ingest and /ingest/batch POST requests."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length == 0:
+            self._send_json({"error": "empty request body"}, status=400)
+            return
+        if content_length > 1024 * 1024:  # 1MB limit for ingest payloads
+            self._send_json({"error": "request body too large (max 1MB)"}, status=413)
+            return
+        
+        try:
+            body = self.rfile.read(content_length)
+            payload = json.loads(body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            self._send_json({"error": f"invalid JSON: {e}"}, status=400)
+            return
+        
+        if path == "/ingest":
+            self._ingest_single(payload)
+        elif path == "/ingest/batch":
+            self._ingest_batch(payload)
+    
+    def _ingest_single(self, payload):
+        """Handle single entry ingest."""
+        if not isinstance(payload, dict):
+            self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
+            return
+        
+        # Validate required fields
+        required = {"model", "tokens", "cost"}
+        missing = required - set(payload.keys())
+        if missing:
+            self._send_json({"error": f"missing required fields: {', '.join(missing)}"}, status=400)
+            return
+        
+        try:
+            # Basic type validation
+            model = payload.get("model")
+            tokens = payload.get("tokens")
+            cost = payload.get("cost")
+            
+            if not isinstance(model, str) or not model:
+                raise ValueError("model must be a non-empty string")
+            if not isinstance(tokens, int) or tokens < 0:
+                raise ValueError("tokens must be a non-negative integer")
+            if not isinstance(cost, (int, float)) or cost < 0:
+                raise ValueError("cost must be a non-negative number")
+            
+            # Validate timestamp if provided
+            timestamp = payload.get("timestamp")
+            if timestamp is not None:
+                if not isinstance(timestamp, str):
+                    raise ValueError("timestamp must be a string")
+                # Validate ISO 8601 format
+                try:
+                    datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                except ValueError:
+                    raise ValueError(f"invalid ISO 8601 timestamp: {timestamp}")
+            else:
+                # Use current UTC time
+                timestamp = datetime.now(timezone.utc).isoformat()
+                payload["timestamp"] = timestamp
+            
+            # Write entry
+            entry_id = _ingest_write_entry(payload)
+            self._send_json({"status": "ok", "ids": [entry_id]}, status=200)
+            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + 1
+        except ValueError as e:
+            self._send_json({"error": str(e)}, status=422)
+        except Exception as e:
+            self._send_json({"error": f"internal error: {e}"}, status=500)
+    
+    def _ingest_batch(self, payload):
+        """Handle batch entry ingest."""
+        if not isinstance(payload, dict):
+            self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
+            return
+        
+        if "events" not in payload:
+            self._send_json({"error": "missing 'events' field"}, status=400)
+            return
+        
+        events = payload["events"]
+        if not isinstance(events, list):
+            self._send_json({"error": "events must be a list"}, status=400)
+            return
+        
+        if len(events) == 0:
+            self._send_json({"error": "events list cannot be empty"}, status=400)
+            return
+        
+        if len(events) > 1000:
+            self._send_json({"error": "events list too large (max 1000)"}, status=400)
+            return
+        
+        ids = []
+        errors = []
+        
+        for i, event in enumerate(events):
+            if not isinstance(event, dict):
+                errors.append(f"event[{i}]: expected object, got {type(event).__name__}")
+                continue
+            
+            required = {"model", "tokens", "cost"}
+            missing = required - set(event.keys())
+            if missing:
+                errors.append(f"event[{i}]: missing fields {', '.join(missing)}")
+                continue
+            
+            try:
+                model = event.get("model")
+                tokens = event.get("tokens")
+                cost = event.get("cost")
+                
+                if not isinstance(model, str) or not model:
+                    raise ValueError("model must be non-empty string")
+                if not isinstance(tokens, int) or tokens < 0:
+                    raise ValueError("tokens must be non-negative int")
+                if not isinstance(cost, (int, float)) or cost < 0:
+                    raise ValueError("cost must be non-negative number")
+                
+                timestamp = event.get("timestamp")
+                if timestamp is not None:
+                    if not isinstance(timestamp, str):
+                        raise ValueError("timestamp must be string")
+                    try:
+                        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    except ValueError:
+                        raise ValueError(f"invalid timestamp: {timestamp}")
+                else:
+                    timestamp = datetime.now(timezone.utc).isoformat()
+                    event["timestamp"] = timestamp
+                
+                entry_id = _ingest_write_entry(event)
+                ids.append(entry_id)
+            except ValueError as e:
+                errors.append(f"event[{i}]: {e}")
+        
+        # Return success if we got any entries
+        if ids:
+            self._send_json({"status": "ok", "ids": ids, "errors": errors if errors else None}, status=200)
+            SESSION["ingest_entries"] = SESSION.get("ingest_entries", 0) + len(ids)
+        else:
+            # All events failed
+            self._send_json({"error": f"all events failed: {'; '.join(errors)}"}, status=422)
+
     def _send_json(self, data, status=200):
         body = json.dumps(data, indent=2).encode()
         self.send_response(status)
@@ -2682,6 +3078,41 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+
+# ---------------------------------------------------------------------------
+# Ingest storage
+# ---------------------------------------------------------------------------
+INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
+
+def _ingest_write_entry(entry: Dict[str, Any]) -> str:
+    """Append a single entry to the JSONL file, return its id."""
+    entry_id = entry.setdefault("id", str(uuid.uuid4()))
+    date_str = None
+    
+    # Use timestamp date if provided, else today
+    ts = entry.get("timestamp")
+    if ts:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    
+    if date_str is None:
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    
+    # Create entries directory
+    INGEST_ENTRIES_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Append to JSONL file
+    entries_file = INGEST_ENTRIES_DIR / f"{date_str}.jsonl"
+    with open(entries_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    
+    return entry_id
 
 
 # ---------------------------------------------------------------------------

@@ -285,6 +285,36 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     if not changed:
         return body_bytes
 
+
+    # --- Cap total cache_control blocks to Anthropic max (4) ---
+    _all_cc = []
+    _sys = data.get("system", [])
+    if isinstance(_sys, list):
+        for _si, _sb in enumerate(_sys):
+            if isinstance(_sb, dict) and "cache_control" in _sb:
+                _all_cc.append(("system", _si))
+    _tools = data.get("tools", [])
+    if isinstance(_tools, list):
+        for _ti, _tb in enumerate(_tools):
+            if isinstance(_tb, dict) and "cache_control" in _tb:
+                _all_cc.append(("tools", _ti))
+    _msgs = data.get("messages", [])
+    if isinstance(_msgs, list):
+        for _mi, _mm in enumerate(_msgs):
+            _mc = _mm.get("content", []) if isinstance(_mm, dict) else []
+            if isinstance(_mc, list):
+                for _ci, _cb in enumerate(_mc):
+                    if isinstance(_cb, dict) and "cache_control" in _cb:
+                        _all_cc.append(("messages", _mi, _ci))
+    if len(_all_cc) > 4:
+        for _loc in _all_cc[:-4]:
+            if _loc[0] == "system":
+                data["system"][_loc[1]].pop("cache_control", None)
+            elif _loc[0] == "tools":
+                data["tools"][_loc[1]].pop("cache_control", None)
+            elif _loc[0] == "messages":
+                data["messages"][_loc[1]]["content"][_loc[2]].pop("cache_control", None)
+
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
@@ -667,10 +697,387 @@ def build_volatile_tail(
     return f"{retrieved_section}\n\n{user_section}"
 
 
+# ---------------------------------------------------------------------------
+# DeterministicPromptPack — Fixed Section Ordering & Byte-Identical Output
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DeterministicPromptPack:
+    """
+    Enforces deterministic prompt assembly with fixed section ordering.
+
+    Canonical Section Order
+    -----------------------
+    1. SYSTEM PROMPT          — model behavior, instructions (STABLE)
+    2. TOOLS DEFINITIONS      — tool schemas in canonical order (STABLE)
+    3. POLICIES/CONSTRAINTS   — safety rules, guardrails (STABLE)
+    4. RETRIEVED CONTEXT      — search results, injected knowledge (VOLATILE)
+    5. USER INPUT             — user message / query (VOLATILE)
+
+    Key Properties
+    ~~~~~~~~~~~~~~
+    - **Fixed ordering** ensures consistent section positioning
+    - **Deterministic separators** (no extra whitespace, canonical line breaks)
+    - **Byte-identical output** for equivalent inputs (proven by tests)
+    - **Stable vs volatile boundary** explicitly marked for cache_control
+    - **Optional integration** — does not break existing PromptBuilder
+
+    Why This Matters
+    ~~~~~~~~~~~~~~~~
+    Prompt caching in Anthropic APIs requires:
+      1. Consistent prefix structure (cache key must be stable)
+      2. Volatile content segregated after the cache boundary
+      3. Deterministic encoding to ensure byte-for-byte matches
+
+    Without fixed ordering:
+      - Section position varies based on assembly order
+      - Cache keys are unstable even for semantically identical prompts
+      - Equivalent requests produce different byte sequences
+
+    With DeterministicPromptPack:
+      - Section position is guaranteed
+      - Cache keys are stable and reproducible
+      - Byte-identical output for identical inputs
+
+    Usage Example (Before)
+    ~~~~~~~~~~~~~~~~~~~~~~
+    ```python
+    # Old way: sections assembled ad-hoc, order inconsistent
+    system_parts = []
+    system_parts.append(system_prompt)
+    if tools:
+        system_parts.append(json.dumps(tools))
+    if policies:
+        system_parts.append(policies)
+    if vault_context:
+        system_parts.append(vault_context)
+
+    system_str = "\\n\\n".join(system_parts)  # order may vary, spacing inconsistent
+    ```
+
+    Usage Example (After)
+    ~~~~~~~~~~~~~~~~~~~~~
+    ```python
+    pack = DeterministicPromptPack(
+        system="You are a helpful AI.",
+        tools=[{"name": "search", "description": "..."}],
+        policies="Always be honest.",
+        retrieved_context=["doc1", "doc2"],
+        user_input="What is X?",
+    )
+
+    system_block = pack.to_system_block()
+    # Output: deterministic, section order fixed, byte-identical for same inputs
+    ```
+
+    Attributes
+    ~~~~~~~~~~
+    system : str
+        System prompt / instructions for the model. (STABLE)
+    tools : list[dict]
+        Tool schemas (typically frozen by tool_schema_registry). (STABLE)
+    policies : str
+        Safety rules, constraints, guardrails. (STABLE)
+    retrieved_context : list[str | dict]
+        Retrieved documents or search results. (VOLATILE — changes per request)
+    user_input : str
+        User message or query. (VOLATILE — changes per request)
+    metadata : dict
+        Optional metadata (not included in output, useful for debugging).
+
+    Cache Boundary Marking
+    ~~~~~~~~~~~~~~~~~~~~~~
+    The last stable section (policies or tools, whichever is last) is marked
+    with cache_control: {type: "ephemeral"}. Volatile sections follow without
+    cache markers.
+
+    Before::
+
+        system: [
+            {type: text, text: "SYSTEM..."},
+            {type: text, text: "TOOLS..."},
+            {type: text, text: "POLICIES..."}  ← cache boundary
+            {type: text, text: "RETRIEVED..."},  ← volatile, no marker
+            {type: text, text: "USER..."}        ← volatile, no marker
+        ]
+
+    After::
+
+        system: [
+            {type: text, text: "SYSTEM..."},
+            {type: text, text: "TOOLS..."},
+            {type: text, text: "POLICIES...", cache_control: {type: ephemeral}}
+            {type: text, text: "RETRIEVED..."},
+            {type: text, text: "USER..."}
+        ]
+
+    Testing & Validation
+    ~~~~~~~~~~~~~~~~~~~~
+    Byte-identity is proven via:
+
+        pack1 = DeterministicPromptPack(...same inputs...)
+        pack2 = DeterministicPromptPack(...same inputs...)
+        assert pack1.to_request_body() == pack2.to_request_body()
+        assert pack1.to_system_block() == pack2.to_system_block()
+        # byte-for-byte identical JSON output
+
+    Integration Guidance
+    ~~~~~~~~~~~~~~~~~~~~
+    1. **In proxy layer**: Replace ad-hoc system string assembly with:
+       ```
+       pack = DeterministicPromptPack(
+           system=read_system_prompt(),
+           tools=registry.get_tools(),
+           policies=read_policies(),
+           retrieved_context=vault_search(...),
+           user_input=msg.content,
+       )
+       body["system"] = pack.to_system_block()
+       ```
+
+    2. **With cache_control**: Automatically handled:
+       ```
+       blocks = pack.to_system_block()
+       # Last stable block already has cache_control marker
+       ```
+
+    3. **Feature-flagged**: Disable with env var or config:
+       ```
+       if config.USE_DETERMINISTIC_PACKING:
+           pack = DeterministicPromptPack(...)
+           body["system"] = pack.to_system_block()
+       else:
+           # Fallback to PromptBuilder or legacy assembly
+       ```
+    """
+
+    system: str = ""
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    policies: str = ""
+    retrieved_context: list[str | dict[str, Any]] = field(default_factory=list)
+    user_input: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    # --- Canonical formatting (internal) ---
+    _SECTION_SEPARATOR = "\n\n"  # Always 2 newlines between sections
+    _STABLE_SECTIONS = ["system", "tools", "policies"]
+    _VOLATILE_SECTIONS = ["retrieved_context", "user_input"]
+
+    def _serialize_tools(self) -> str:
+        """
+        Serialize tools deterministically.
+
+        Order:
+          1. Sort tools by name
+          2. Recursively sort all dict keys
+          3. Use compact JSON (no spaces)
+          4. Ensure unicode is consistent
+
+        This ensures byte-identity for identical tool lists.
+        """
+        if not self.tools:
+            return ""
+
+        def _sort_keys(obj: Any) -> Any:
+            """Recursively sort dict keys for deterministic JSON."""
+            if isinstance(obj, dict):
+                return {k: _sort_keys(v) for k, v in sorted(obj.items())}
+            if isinstance(obj, list):
+                return [_sort_keys(i) for i in obj]
+            return obj
+
+        # Sort tools by name, then recursively sort keys
+        sorted_tools = sorted(
+            [_sort_keys(t) for t in self.tools],
+            key=lambda t: t.get("name", ""),
+        )
+
+        # Compact JSON: no spaces after separators
+        return json.dumps(
+            sorted_tools,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    def _serialize_retrieved_context(self) -> str:
+        """
+        Serialize retrieved context deterministically.
+
+        Each item is extracted as text, then joined with newlines.
+        Order is preserved (assumes input is already ranked/sorted).
+        """
+        if not self.retrieved_context:
+            return ""
+
+        parts = []
+        for item in self.retrieved_context:
+            if isinstance(item, dict):
+                # Support {text, source, score, ...} format
+                text = item.get("text", str(item))
+            else:
+                text = str(item)
+            parts.append(text)
+
+        return "\n".join(parts)
+
+    def _build_stable_block(self) -> str:
+        """
+        Build the stable section (SYSTEM + TOOLS + POLICIES).
+
+        These sections never change per-request, so they're cacheable.
+        Returns a single string suitable for the first system block.
+        """
+        parts: list[str] = []
+
+        if self.system:
+            parts.append(f"# SYSTEM\n\n{self.system}")
+
+        tools_json = self._serialize_tools()
+        if tools_json:
+            parts.append(f"# TOOLS\n\n{tools_json}")
+
+        if self.policies:
+            parts.append(f"# POLICIES/CONSTRAINTS\n\n{self.policies}")
+
+        return self._SECTION_SEPARATOR.join(parts)
+
+    def _build_volatile_block(self) -> str:
+        """
+        Build the volatile section (RETRIEVED CONTEXT + USER INPUT).
+
+        These sections change per-request, so they're not cacheable.
+        Returns a single string suitable for append to system blocks.
+        """
+        parts: list[str] = []
+
+        retrieved_json = self._serialize_retrieved_context()
+        if retrieved_json:
+            parts.append(f"# RETRIEVED CONTEXT\n\n{retrieved_json}")
+
+        if self.user_input:
+            parts.append(f"# USER INPUT\n\n{self.user_input}")
+
+        return self._SECTION_SEPARATOR.join(parts)
+
+    def to_system_block(self) -> list[dict[str, Any]]:
+        """
+        Assemble into a list of system content blocks (Anthropic format).
+
+        Structure::
+
+            [
+                {type: text, text: <stable sections>, cache_control: {type: ephemeral}},
+                {type: text, text: <volatile sections>},
+            ]
+
+        The last stable block has cache_control marker.
+        Volatile blocks do not.
+
+        Returns
+        -------
+        list[dict]
+            Anthropic system content blocks.
+        """
+        blocks: list[dict[str, Any]] = []
+
+        stable_text = self._build_stable_block()
+        if stable_text:
+            blocks.append({
+                "type": "text",
+                "text": stable_text,
+                "cache_control": {"type": "ephemeral"},
+            })
+
+        volatile_text = self._build_volatile_block()
+        if volatile_text:
+            blocks.append({
+                "type": "text",
+                "text": volatile_text,
+            })
+
+        return blocks
+
+    def to_request_body(self, model: str = "claude-3-5-sonnet-20241022") -> dict[str, Any]:
+        """
+        Assemble into a complete Anthropic messages API request body.
+
+        Parameters
+        ----------
+        model : str
+            Model identifier (default: claude-3-5-sonnet-20241022)
+
+        Returns
+        -------
+        dict
+            Anthropic request body with system, tools, messages fields.
+
+        Example
+        -------
+        >>> pack = DeterministicPromptPack(
+        ...     system="You are helpful.",
+        ...     user_input="Hello!",
+        ... )
+        >>> body = pack.to_request_body()
+        >>> body["system"]
+        [{"type": "text", "text": "# SYSTEM\n\nYou are helpful.", ...}]
+        >>> body["messages"]
+        [{"role": "user", "content": "Hello!"}]
+        """
+        body: dict[str, Any] = {
+            "model": model,
+            "system": self.to_system_block(),
+            "messages": [
+                {
+                    "role": "user",
+                    "content": self.user_input,
+                }
+            ],
+        }
+
+        if self.tools:
+            body["tools"] = self.tools
+
+        return body
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        Two packs are equal if all their fields are equal.
+
+        This is used for testing byte-identity:
+            pack1 = DeterministicPromptPack(...)
+            pack2 = DeterministicPromptPack(...)
+            assert pack1 == pack2  # all fields identical
+            assert pack1.to_system_block() == pack2.to_system_block()  # output identical
+        """
+        if not isinstance(other, DeterministicPromptPack):
+            return False
+        return (
+            self.system == other.system
+            and self.tools == other.tools
+            and self.policies == other.policies
+            and self.retrieved_context == other.retrieved_context
+            and self.user_input == other.user_input
+        )
+
+    def __repr__(self) -> str:
+        """Pretty repr showing section sizes."""
+        return (
+            f"DeterministicPromptPack("
+            f"system={len(self.system)}B, "
+            f"tools={len(self.tools)}, "
+            f"policies={len(self.policies)}B, "
+            f"retrieved_context={len(self.retrieved_context)}, "
+            f"user_input={len(self.user_input)}B"
+            f")"
+        )
+
+
 __all__ = [
     "PromptBuilder",
     "PromptParts",
     "PromptCacheStats",
+    "DeterministicPromptPack",
     "apply_stable_cache_control",
     "apply_deterministic_cache_breakpoints",
     "inject_with_cache_boundary",

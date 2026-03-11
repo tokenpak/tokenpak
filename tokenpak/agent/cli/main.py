@@ -449,6 +449,17 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate teacher subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "teacher":
+        try:
+            from tokenpak.agent.cli.commands.teacher import run_teacher_cmd
+
+            run_teacher_cmd(sys.argv[2:])
+        except ImportError as e:
+            print(f"teacher command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate index subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "index":
         try:
@@ -494,6 +505,18 @@ def main():
             dashboard_cmd(standalone_mode=True)
         except ImportError as e:
             print(f"dashboard command not available: {e}")
+            sys.exit(1)
+        return
+
+    # Delegate exec subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "exec":
+        try:
+            from tokenpak.agent.cli.commands.exec import exec_cmd
+
+            sys.argv = sys.argv[1:]
+            exec_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"exec command not available: {e}")
             sys.exit(1)
         return
 

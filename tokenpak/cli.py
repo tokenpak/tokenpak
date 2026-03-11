@@ -13,6 +13,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Tuple
 
+from .formatting import OutputFormatter, OutputMode, resolve_mode
+from .formatting import symbols as FS
+
 # ── Progressive Disclosure ────────────────────────────────────────────────────
 
 _FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
@@ -1070,6 +1073,8 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_usage_parser(sub)
+    _build_savings_parser(sub)
     _build_debug_parser(sub)
     _build_demo_parser(sub)
     _build_diff_parser(sub)
@@ -1088,20 +1093,45 @@ def build_parser():
 
 
 def cmd_status(args):
-    """Show system status including recent retry events."""
+    """Show system status including recent retry/failover events."""
     import time as _time
 
     from .agent.agentic.retry import load_recent_retry_events
 
-    print("TokenPak Status\n" + "─" * 40)
-
-    # ── Recent retry events ──
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
     n = getattr(args, "limit", 20)
     events = load_recent_retry_events(n=n)
-    if not events:
-        print("\n  Retry events: none\n")
-    else:
-        print(f"\n  Recent retry events (last {len(events)}):\n")
+
+    if mode == OutputMode.RAW:
+        print(
+            fmt.raw(
+                {
+                    "section": "status",
+                    "retry_events": events,
+                    "retry_event_count": len(events),
+                }
+            )
+        )
+        return
+
+    if fmt.minimal:
+        print(
+            fmt.minimal_line(
+                [
+                    "Enabled" if events else "Idle",
+                    f"retry={len(events)}",
+                    f"limit={n}",
+                ]
+            )
+        )
+        return
+
+    print(fmt.header())
+    print()
+    print(fmt.signal(FS.ENABLED if events else FS.DISABLED, f"Retry events: {len(events)}", tone="info"))
+
+    if mode == OutputMode.VERBOSE and events:
         for ev in events:
             ts = ev.get("timestamp", 0)
             try:
@@ -1110,68 +1140,107 @@ def cmd_status(args):
                 ts_str = str(ts)
             event_type = ev.get("event", "unknown")
             task = ev.get("task_id") or ev.get("task") or "—"
-            extra = ""
-            if ev.get("http_status"):
-                extra += f" [HTTP {ev['http_status']}]"
-            if ev.get("error"):
-                extra += f" — {ev['error'][:60]}"
-            if ev.get("from_model") and ev.get("to_model"):
-                extra += f" {ev['from_model']} → {ev['to_model']}"
-            if ev.get("from_provider") and ev.get("to_provider"):
-                extra += f" {ev['from_provider']} → {ev['to_provider']}"
-            print(f"    {ts_str}  {event_type:<30}  task={task}{extra}")
-        print()
+            print(f"  {ts_str}  {event_type:<30} task={task}")
 
-    # ── Failover events ──
-    try:
-        from .agent.proxy.failover_engine import get_event_log
-
-        flog = get_event_log()
-        failover_events = flog.get_recent(limit=n)
-        if not failover_events:
-            print("  Failover events: none\n")
-        else:
-            print(f"  Recent failover events (last {len(failover_events)}):\n")
-            for ev in failover_events:
-                ts = ev.get("timestamp", "")[:19].replace("T", " ")
-                orig = ev.get("original_provider", "?")
-                fail = ev.get("failover_provider", "?")
-                etype = ev.get("error_type", "?")
-                http_s = ev.get("http_status") or ""
-                http_tag = f" [{http_s}]" if http_s else ""
-                status_icon = "✅" if ev.get("succeeded") else "❌"
-                print(f"    {ts}  {status_icon} {orig} → {fail}{http_tag} ({etype})")
-            print()
-    except Exception:
-        pass
-
-    # ── Budget status (if available) ──
     try:
         from .budgeter import BudgetTracker
 
         tracker = BudgetTracker()
-        any_budget = False
+        rows = []
         for period in ("daily", "weekly", "monthly"):
             status = tracker.get_status(period)
             if status:
-                any_budget = True
-                alert_tag = " ⚠️  ALERT" if status.alert_triggered else ""
-                print(
-                    f"  {period.capitalize()} budget: ${status.spent_usd:.4f} / "
-                    f"${status.limit_usd:.2f} ({status.percent_used:.1f}%){alert_tag}"
+                rows.append(
+                    (
+                        f"{period.capitalize()} budget",
+                        f"${status.spent_usd:.4f} / ${status.limit_usd:.2f} ({status.percent_used:.1f}%)",
+                    )
                 )
-        if not any_budget:
-            print("  Budget: not configured")
+        if rows:
+            print()
+            print(fmt.kv(rows))
     except Exception:
         pass
 
+
+def cmd_usage(args):
+    """Show model token usage summary."""
+    from .telemetry.query import get_model_usage
+
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Usage", mode=mode, minimal=getattr(args, "minimal", False))
+    days = getattr(args, "days", 30)
+    rows = get_model_usage(days=days)
+
+    if mode == OutputMode.RAW:
+        print(fmt.raw({"section": "usage", "days": days, "rows": [r.__dict__ for r in rows]}))
+        return
+
+    total_requests = sum(r.request_count for r in rows)
+    total_tokens = sum(r.total_input_tokens + r.total_output_tokens for r in rows)
+
+    if fmt.minimal:
+        print(fmt.minimal_line([f"{total_requests} req", f"{total_tokens:,} tok", f"{days}d"]))
+        return
+
+    print(fmt.header())
     print()
+    print(fmt.kv([("Requests", f"{total_requests:,}"), ("Tokens", f"{total_tokens:,}"), ("Window", f"{days}d")]))
+
+    if mode == OutputMode.VERBOSE:
+        print()
+        for r in rows[:10]:
+            print(f"{FS.ENABLED} {r.model} ({r.provider})  req={r.request_count} in={r.total_input_tokens} out={r.total_output_tokens}")
+
+
+def cmd_savings(args):
+    """Show compression savings summary."""
+    from .telemetry.query import get_savings_report
+
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Savings", mode=mode, minimal=getattr(args, "minimal", False))
+    days = getattr(args, "days", 30)
+    report = get_savings_report(days=days)
+
+    if mode == OutputMode.RAW:
+        print(fmt.raw({"section": "savings", "days": days, **report.__dict__}))
+        return
+
+    if fmt.minimal:
+        print(fmt.minimal_line([f"{report.savings_pct:.1f}%", f"${report.savings_amount:.2f}", f"{days}d"]))
+        return
+
+    print(fmt.header())
+    print()
+    print(
+        fmt.kv(
+            [
+                ("Savings", f"${report.savings_amount:.2f}"),
+                ("Savings %", f"{report.savings_pct:.1f}%"),
+                ("Actual Cost", f"${report.total_cost:.2f}"),
+                ("Baseline", f"${report.estimated_without_compression:.2f}"),
+                ("Cache Hit", f"{report.cache_hit_rate*100:.1f}%"),
+            ]
+        )
+    )
 
 
 def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.set_defaults(func=cmd_status)
+
+
+def _build_usage_parser(sub):
+    p_usage = sub.add_parser("usage", help="Show model usage summary")
+    p_usage.add_argument("--days", type=int, default=30, help="Rolling window in days")
+    p_usage.set_defaults(func=cmd_usage)
+
+
+def _build_savings_parser(sub):
+    p_savings = sub.add_parser("savings", help="Show savings summary")
+    p_savings.add_argument("--days", type=int, default=30, help="Rolling window in days")
+    p_savings.set_defaults(func=cmd_savings)
 
 
 def _build_debug_parser(sub):

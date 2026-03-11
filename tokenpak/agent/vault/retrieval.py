@@ -20,7 +20,11 @@ Usage::
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional, Tuple
+
+from tokenpak.agent.ingest.schema_converter import should_serve_schema
+from tokenpak.agent.memory.session_capsules import capsule_retrieval_score
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -54,7 +58,12 @@ def sort_retrieval_results(
     return sorted(
         results,
         key=lambda item: (
-            -item[1],  # score desc
+            -capsule_retrieval_score(
+                item[1],
+                (item[0].get("metadata") or {}).get("session_capsule")
+                if isinstance(item[0].get("metadata"), dict)
+                else None,
+            ),
             item[0].get("source_path", ""),  # path asc
             item[0].get("block_id", ""),  # chunk_id asc
         ),
@@ -65,6 +74,7 @@ def inject_retrieved_context(
     results: List[Tuple[Dict[str, Any], float]],
     max_tokens: int = DEFAULT_MAX_TOKENS,
     count_tokens_fn: Optional[Any] = None,
+    intent: Optional[str] = None,
 ) -> Tuple[str, int, List[str]]:
     """Build a cache-stable injection block from retrieval results.
 
@@ -103,9 +113,11 @@ def inject_retrieved_context(
     tokens_used = header_tokens
     source_refs: List[str] = []
 
+    prefer_schema = should_serve_schema(intent)
+
     for block, score in sorted_results:
         source_path = block.get("source_path", block.get("block_id", "unknown"))
-        content = block.get("content", "")
+        content = _select_block_content(block, prefer_schema=prefer_schema)
 
         block_text = f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}"
         block_tokens = count_tokens_fn(block_text)
@@ -135,6 +147,19 @@ def inject_retrieved_context(
     tokens_used = count_tokens_fn(injection_text)
 
     return injection_text, tokens_used, source_refs
+
+
+def _select_block_content(block: Dict[str, Any], prefer_schema: bool) -> str:
+    """Choose schema summary or raw block content for retrieval injection."""
+    if prefer_schema:
+        metadata = block.get("metadata") or {}
+        schema = metadata.get("schema") if isinstance(metadata, dict) else None
+        doc_type = metadata.get("doc_type") if isinstance(metadata, dict) else None
+        if isinstance(schema, dict) and schema:
+            payload = {"doc_type": doc_type, "schema": schema}
+            return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+
+    return block.get("content", "")
 
 
 def measure_injection_consistency(
