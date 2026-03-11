@@ -1,173 +1,196 @@
-"""savings command — show token compression savings across periods.
+"""savings command — dedicated compression efficiency report.
 
 Usage:
-    tokenpak savings                    # show 24h savings (default)
-    tokenpak savings --period 7d        # show 7-day savings
-    tokenpak savings --period 30d       # show 30-day savings
-    tokenpak savings --verbose          # per-model breakdown
-    tokenpak savings --json             # machine-readable output
-
-Flags:
-    --period {24h,7d,30d}   Time window (default: 24h)
-    --verbose               Show per-model compression breakdown
-    --json                  Output as machine-readable JSON
+    tokenpak savings                # 24h efficiency report
+    tokenpak savings --period 7d    # change time window (24h, 7d, 30d)
+    tokenpak savings --verbose      # per-model breakdown
+    tokenpak savings --json         # machine-readable JSON
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+import os
+import sqlite3
+from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
-# Helpers
+# DB / formatting helpers
 # ---------------------------------------------------------------------------
 
+_MONITOR_DB = os.environ.get(
+    "TOKENPAK_DB",
+    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+)
 
-def _period_to_days(period: str) -> int:
-    """Convert period string to days."""
-    period = period.lower().strip()
-    if period in ("24h", "1d", "today"):
-        return 1
-    if period in ("7d", "week"):
-        return 7
-    if period in ("30d", "month"):
-        return 30
-    try:
-        return int(period.rstrip("d"))
-    except ValueError:
-        return 1
+SEP = "────────────────────────────────"
 
 
-def _fmt_tokens(n: int) -> str:
-    """Format token count with commas."""
+def _connect() -> Optional[sqlite3.Connection]:
+    db = Path(_MONITOR_DB)
+    if not db.exists():
+        return None
+    conn = sqlite3.connect(str(db))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _period_days(period: str) -> Optional[int]:
+    """Return number of days for named period, or None for all-time."""
+    mapping = {"24h": 1, "7d": 7, "30d": 30}
+    return mapping.get(period.lower())
+
+
+def _period_label(period: str) -> str:
+    labels = {"24h": "Last 24h", "7d": "Last 7 days", "30d": "Last 30 days"}
+    return labels.get(period.lower(), period)
+
+
+def _fmt_n(n: int) -> str:
     return f"{n:,}"
 
 
-def _fmt_pct(ratio: float) -> str:
-    """Format compression ratio as percentage."""
-    return f"{ratio * 100:.1f}%"
+def _fmt_pct(pct: float) -> str:
+    return f"▼ {pct:.1f}%"
 
 
 def _fmt_cost(c: float) -> str:
-    """Format cost as USD."""
     if c < 0.01:
         return f"${c:.4f}"
-    if c < 1.0:
-        return f"${c:.3f}"
     return f"${c:.2f}"
 
 
-SEP = "────────────────────────"
-
-
 # ---------------------------------------------------------------------------
-# Data queries using anon_metrics
+# Core query
 # ---------------------------------------------------------------------------
 
 
-def _query_metrics_summary(days: int) -> dict:
-    """Aggregate metrics from anon_metrics store for the period.
-    
-    Returns dict with:
-    - input_tokens_raw: total input (before compression)
-    - input_tokens_compressed: total input (after compression)
-    - tokens_saved: total tokens saved by compression
-    - compression_ratio: overall compression ratio
-    - avg_latency_ms: average latency
-    - request_count: number of requests
-    - per_model: dict of per-model stats
-    """
-    from tokenpak.telemetry.anon_metrics import get_store
-    from datetime import date
-    
-    store = get_store()
-    history = store.history(days=days)
-    
-    if not history:
-        return {
-            "input_tokens_raw": 0,
-            "input_tokens_compressed": 0,
-            "tokens_saved": 0,
-            "compression_ratio": 0.0,
-            "avg_latency_ms": 0.0,
-            "request_count": 0,
-            "per_model": {},
-        }
-    
-    total_input = sum(r.input_tokens for r in history)
-    total_saved = sum(r.tokens_saved for r in history)
-    total_output = sum(r.output_tokens for r in history)
-    total_latency = sum(r.latency_ms for r in history)
-    
-    # Per-model breakdown
-    per_model = {}
-    for rec in history:
-        if rec.model not in per_model:
-            per_model[rec.model] = {
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "tokens_saved": 0,
-                "requests": 0,
-                "avg_latency_ms": 0.0,
-            }
-        m = per_model[rec.model]
-        m["input_tokens"] += rec.input_tokens
-        m["output_tokens"] += rec.output_tokens
-        m["tokens_saved"] += rec.tokens_saved
-        m["requests"] += 1
-        m["avg_latency_ms"] += rec.latency_ms
-    
-    # Calculate per-model average latency
-    for model in per_model:
-        count = per_model[model]["requests"]
-        if count > 0:
-            per_model[model]["avg_latency_ms"] /= count
-            per_model[model]["compression_ratio"] = (
-                per_model[model]["tokens_saved"] / per_model[model]["input_tokens"]
-                if per_model[model]["input_tokens"] > 0
-                else 0.0
-            )
-    
+def _query_savings(period: str = "24h", model: Optional[str] = None) -> dict:
+    """Query the monitor DB for compression savings data."""
+    conn = _connect()
+    if not conn:
+        return {"error": "DB not found", "db": _MONITOR_DB}
+
+    days = _period_days(period)
+    clauses, params = [], []
+
+    if days is not None:
+        clauses.append("date(timestamp) >= date('now', ?)")
+        params.append(f"-{days} days")
+    if model:
+        clauses.append("model = ?")
+        params.append(model)
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    row = conn.execute(
+        f"""
+        SELECT
+            COUNT(*)                                           AS requests,
+            COALESCE(AVG(input_tokens), 0)                    AS avg_raw,
+            COALESCE(AVG(CASE WHEN compressed_tokens > 0
+                              THEN compressed_tokens
+                              ELSE input_tokens END), 0)      AS avg_compressed,
+            COALESCE(SUM(input_tokens), 0)                    AS total_raw,
+            COALESCE(SUM(CASE WHEN compressed_tokens > 0
+                              THEN compressed_tokens
+                              ELSE input_tokens END), 0)      AS total_compressed,
+            COALESCE(SUM(estimated_cost), 0.0)                AS total_cost
+        FROM requests {where}
+        """,
+        params,
+    ).fetchone()
+    conn.close()
+
+    avg_raw = int(row["avg_raw"])
+    avg_compressed = int(row["avg_compressed"])
+    total_raw = int(row["total_raw"])
+    total_compressed = int(row["total_compressed"])
+    total_cost = float(row["total_cost"])
+    requests = int(row["requests"])
+
+    tokens_saved = max(0, total_raw - total_compressed)
+    pct_saved = (tokens_saved / total_raw * 100.0) if total_raw > 0 else 0.0
+
+    # Estimate $ saved: tokens_saved * (total_cost / total_compressed) if we have data
+    # Use cost-per-token from actual spend: cost / compressed_tokens = rate, then * tokens_saved
+    if total_compressed > 0 and total_cost > 0:
+        cost_per_token = total_cost / total_compressed
+        est_cost_saved = tokens_saved * cost_per_token
+    else:
+        est_cost_saved = 0.0
+
     return {
-        "input_tokens_raw": total_input,
-        "input_tokens_compressed": total_input - total_saved,
-        "tokens_saved": total_saved,
-        "compression_ratio": total_saved / total_input if total_input > 0 else 0.0,
-        "avg_latency_ms": total_latency / len(history) if history else 0.0,
-        "request_count": len(history),
-        "per_model": per_model,
+        "period": period,
+        "requests": requests,
+        "avg_raw_tokens": avg_raw,
+        "avg_compressed_tokens": avg_compressed,
+        "reduction_pct": round(pct_saved, 2),
+        "tokens_saved_total": tokens_saved,
+        "est_cost_saved_usd": round(est_cost_saved, 4),
     }
 
 
-def _estimate_cost_saved(tokens_saved: int, model: str = "gpt-4o") -> float:
-    """Rough estimate of cost saved by tokens (input tokens saved).
-    
-    Uses approximate rates:
-    - gpt-4o: $0.0025/1K input tokens
-    - claude-sonnet: $0.003/1K input tokens
-    - claude-haiku: $0.00025/1K input tokens
-    - Default fallback: $0.001/1K
-    """
-    rates_per_1k = {
-        "gpt-4o": 0.0025,
-        "gpt-4-turbo": 0.01,
-        "claude-sonnet": 0.003,
-        "claude-opus": 0.015,
-        "claude-haiku": 0.00025,
-        "gemini-2-flash": 0.0001,
-        "llama": 0.0005,
-    }
-    
-    # Match prefix
-    rate = rates_per_1k.get("gpt-4o")  # default
-    for model_prefix, r in rates_per_1k.items():
-        if model.lower().startswith(model_prefix.lower()):
-            rate = r
-            break
-    
-    return (tokens_saved / 1000) * rate
+def _query_by_model(period: str = "24h") -> list[dict]:
+    """Return per-model savings breakdown."""
+    conn = _connect()
+    if not conn:
+        return []
+
+    days = _period_days(period)
+    clauses, params = [], []
+
+    if days is not None:
+        clauses.append("date(timestamp) >= date('now', ?)")
+        params.append(f"-{days} days")
+
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    rows = conn.execute(
+        f"""
+        SELECT
+            model,
+            COUNT(*)                                           AS requests,
+            COALESCE(AVG(input_tokens), 0)                    AS avg_raw,
+            COALESCE(AVG(CASE WHEN compressed_tokens > 0
+                              THEN compressed_tokens
+                              ELSE input_tokens END), 0)      AS avg_compressed,
+            COALESCE(SUM(input_tokens), 0)                    AS total_raw,
+            COALESCE(SUM(CASE WHEN compressed_tokens > 0
+                              THEN compressed_tokens
+                              ELSE input_tokens END), 0)      AS total_compressed,
+            COALESCE(SUM(estimated_cost), 0.0)                AS total_cost
+        FROM requests {where}
+        GROUP BY model
+        ORDER BY total_raw DESC
+        """,
+        params,
+    ).fetchall()
+    conn.close()
+
+    result = []
+    for r in rows:
+        total_raw = int(r["total_raw"])
+        total_compressed = int(r["total_compressed"])
+        tokens_saved = max(0, total_raw - total_compressed)
+        pct_saved = (tokens_saved / total_raw * 100.0) if total_raw > 0 else 0.0
+        total_cost = float(r["total_cost"])
+        if total_compressed > 0 and total_cost > 0:
+            est_saved = tokens_saved * (total_cost / total_compressed)
+        else:
+            est_saved = 0.0
+        result.append({
+            "model": r["model"],
+            "requests": int(r["requests"]),
+            "avg_raw_tokens": int(r["avg_raw"]),
+            "avg_compressed_tokens": int(r["avg_compressed"]),
+            "reduction_pct": round(pct_saved, 2),
+            "tokens_saved_total": tokens_saved,
+            "est_cost_saved_usd": round(est_saved, 4),
+        })
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -175,143 +198,92 @@ def _estimate_cost_saved(tokens_saved: int, model: str = "gpt-4o") -> float:
 # ---------------------------------------------------------------------------
 
 
-def _print_summary(days: int, period_str: str, data: dict) -> None:
-    """Print human-readable savings summary."""
-    print(f"TOKENPAK  |  Compression Savings ({period_str})\n{SEP}\n")
-    
-    if data["request_count"] == 0:
-        print("  No compression metrics recorded yet.")
+def _print_summary(data: dict, period: str) -> None:
+    label = _period_label(period)
+    avg_raw = data["avg_raw_tokens"]
+    avg_comp = data["avg_compressed_tokens"]
+    avg_saved = max(0, avg_raw - avg_comp)
+    pct = data["reduction_pct"]
+    tok_saved = data["tokens_saved_total"]
+    cost_saved = data["est_cost_saved_usd"]
+    requests = data["requests"]
+
+    print(f"TOKENPAK  |  Efficiency Report  ({label})\n{SEP}\n")
+
+    if requests == 0:
+        print("  No requests recorded for this period.")
         print()
         return
-    
-    # Main metrics
-    print(f"  {'Raw Input Tokens:':<25}{_fmt_tokens(data['input_tokens_raw'])}")
-    print(f"  {'Compressed Input:':<25}{_fmt_tokens(data['input_tokens_compressed'])}")
-    print(f"  {'Tokens Saved:':<25}{_fmt_tokens(data['tokens_saved'])}")
-    print(f"  {'Reduction %:':<25}{_fmt_pct(data['compression_ratio'])}")
+
+    print(f"  {'Raw Avg Input:':<26} {_fmt_n(avg_raw):>12}  tokens")
+    print(f"  {'Compressed Avg Input:':<26} {_fmt_n(avg_comp):>12}  tokens")
+    print(f"  {'Avg Saved:':<26} {_fmt_n(avg_saved):>12}  tokens  ({_fmt_pct(pct)})")
     print()
-    
-    # Cost estimate
-    estimated_saved = _estimate_cost_saved(data["tokens_saved"])
-    print(f"  {'Estimated $ Saved (24h):':<25}{_fmt_cost(estimated_saved)}")
+    print(f"  {'Tokens Saved (' + _period_label(period) + '):':<26} {_fmt_n(tok_saved):>12}")
+    print(f"  {'Est. $ Saved (' + _period_label(period) + '):':<26} {_fmt_cost(cost_saved):>12}")
     print()
-    
-    # Performance
-    print(f"  {'Requests:':<25}{data['request_count']:,}")
-    print(f"  {'Avg Latency:':<25}{data['avg_latency_ms']:.1f}ms")
+    print(f"  Requests:  {_fmt_n(requests)}")
     print()
 
 
-def _print_verbose(days: int, period_str: str, data: dict) -> None:
-    """Print per-model breakdown."""
-    _print_summary(days, period_str, data)
-    
-    if not data["per_model"]:
+def _print_verbose(rows: list[dict], period: str) -> None:
+    if not rows:
+        print("  No per-model data available.")
+        print()
         return
-    
-    print("Per-Model Breakdown:")
-    print("─" * 80)
-    
-    # Header
+
+    label = _period_label(period)
+    print(f"  Per-Model Breakdown  ({label})\n  {SEP}")
     print(
-        f"  {'Model':<30} {'Raw Input':>12} {'Saved':>10} {'Reduction':>10} {'Requests':>8}"
+        f"  {'MODEL':<34} {'REQS':>6} {'RAW AVG':>10} {'COMP AVG':>10} {'SAVED':>10} {'%':>7} {'$ SAVED':>10}"
     )
-    print(f"  {'─'*30} {'─'*12} {'─'*10} {'─'*10} {'─'*8}")
-    
-    # Rows (sorted by tokens saved, descending)
-    sorted_models = sorted(
-        data["per_model"].items(),
-        key=lambda x: x[1]["tokens_saved"],
-        reverse=True,
-    )
-    for model, stats in sorted_models:
-        model_display = model[:30] if model else "unknown"
+    print(f"  {'─'*34} {'─'*6} {'─'*10} {'─'*10} {'─'*10} {'─'*7} {'─'*10}")
+
+    for r in rows:
         print(
-            f"  {model_display:<30} "
-            f"{_fmt_tokens(stats['input_tokens']):>12} "
-            f"{_fmt_tokens(stats['tokens_saved']):>10} "
-            f"{_fmt_pct(stats['compression_ratio']):>10} "
-            f"{stats['requests']:>8}"
+            f"  {r['model'][:34]:<34}"
+            f" {_fmt_n(r['requests']):>6}"
+            f" {_fmt_n(r['avg_raw_tokens']):>10}"
+            f" {_fmt_n(r['avg_compressed_tokens']):>10}"
+            f" {_fmt_n(r['tokens_saved_total']):>10}"
+            f" {_fmt_pct(r['reduction_pct']):>7}"
+            f" {_fmt_cost(r['est_cost_saved_usd']):>10}"
         )
-    
     print()
 
 
-def _print_json(data: dict) -> None:
-    """Print machine-readable JSON output."""
-    # Prepare for JSON serialization
-    output = {
-        "input_tokens_raw": data["input_tokens_raw"],
-        "input_tokens_compressed": data["input_tokens_compressed"],
-        "tokens_saved": data["tokens_saved"],
-        "compression_ratio": round(data["compression_ratio"], 4),
-        "avg_latency_ms": round(data["avg_latency_ms"], 2),
-        "request_count": data["request_count"],
-        "per_model": {},
-    }
-    
-    for model, stats in data["per_model"].items():
-        output["per_model"][model] = {
-            "input_tokens": stats["input_tokens"],
-            "output_tokens": stats["output_tokens"],
-            "tokens_saved": stats["tokens_saved"],
-            "compression_ratio": round(stats.get("compression_ratio", 0.0), 4),
-            "requests": stats["requests"],
-            "avg_latency_ms": round(stats["avg_latency_ms"], 2),
-        }
-    
-    print(json.dumps(output, indent=2))
-
-
 # ---------------------------------------------------------------------------
-# Main subcommands
+# Main command entry point
 # ---------------------------------------------------------------------------
 
 
-def cmd_show(args=None) -> None:
-    """Show savings summary (default command)."""
-    period_str = getattr(args, "period", "24h") or "24h"
-    days = _period_to_days(period_str)
+def run_savings_cmd(args) -> None:
+    """Dispatch handler for 'tokenpak savings'."""
+    period = getattr(args, "period", "24h") or "24h"
     verbose = getattr(args, "verbose", False)
-    output_json = getattr(args, "json", False)
-    
-    data = _query_metrics_summary(days)
-    
-    if output_json:
-        _print_json(data)
-    elif verbose:
-        _print_verbose(days, period_str, data)
-    else:
-        _print_summary(days, period_str, data)
+    as_json = getattr(args, "json", False) or getattr(args, "as_json", False)
 
+    data = _query_savings(period=period)
 
-# ---------------------------------------------------------------------------
-# Click interface (optional, for Click-based CLI)
-# ---------------------------------------------------------------------------
+    if "error" in data:
+        if as_json:
+            print(json.dumps(data, indent=2))
+        else:
+            print(f"TOKENPAK  |  Efficiency Report\n{SEP}\n")
+            print(f"  ✖ No data available  ({data['error']})")
+            print(f"    DB path: {data['db']}")
+            print()
+        return
 
-try:
-    import click
+    if as_json:
+        output = {"summary": data}
+        if verbose:
+            output["by_model"] = _query_by_model(period=period)
+        print(json.dumps(output, indent=2))
+        return
 
-    @click.group("savings")
-    def savings_group():
-        """Show compression savings and token reduction metrics."""
-        pass
+    _print_summary(data, period)
 
-    @savings_group.command("show")
-    @click.option("--period", default="24h", help="Time window (24h, 7d, 30d)")
-    @click.option("--verbose", is_flag=True, help="Per-model breakdown")
-    @click.option("--json", is_flag=True, help="Machine-readable JSON output")
-    def savings_show_cmd(period, verbose, json):
-        """Show compression savings summary."""
-
-        class _Args:
-            pass
-
-        a = _Args()
-        a.period = period
-        a.verbose = verbose
-        a.json = json
-        cmd_show(a)
-
-except ImportError:
-    pass
+    if verbose:
+        rows = _query_by_model(period=period)
+        _print_verbose(rows, period)
