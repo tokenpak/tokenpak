@@ -175,10 +175,52 @@ class SkillStore:
     def _skill_path(self, skill_id: str) -> Path:
         return self.skills_dir / f"{skill_id}.json"
 
+    def _build_macro_steps(self, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert extracted skill steps to MacroStep-compatible format.
+        
+        Handles both formats:
+        - MacroStep format: {'name': ..., 'cmd': ...}
+        - Tool format: {'tool': ..., 'args': ...}
+        """
+        macro_steps: List[Dict[str, Any]] = []
+        for step in steps:
+            if "name" in step and "cmd" in step:
+                # Already in correct format
+                macro_steps.append(step)
+            elif "tool" in step:
+                # Convert from tool format to macro format
+                tool = step.get("tool", "unknown_tool")
+                args = step.get("args", {})
+                cmd_parts = [tool]
+                if isinstance(args, dict):
+                    for k, v in args.items():
+                        cmd_parts.append(f"--{k} {v}")
+                elif isinstance(args, list):
+                    cmd_parts.extend(str(a) for a in args)
+                else:
+                    cmd_parts.append(str(args))
+                macro_steps.append({
+                    "name": tool.replace("-", "_").replace(".", "_").lower()[:32],
+                    "cmd": " ".join(cmd_parts),
+                    "label": step.get("label", tool),
+                    "timeout": step.get("timeout", 60),
+                })
+            else:
+                # Fallback: treat entire step as a command
+                macro_steps.append({
+                    "name": f"step_{len(macro_steps)}",
+                    "cmd": json.dumps(step) if isinstance(step, dict) else str(step),
+                    "label": "Auto-converted step",
+                    "timeout": 60,
+                })
+        return macro_steps
+
     def register_with_macro_engine(self, skill: ExtractedSkill, overwrite: bool = True) -> Path:
+        """Register extracted skill with macro engine, converting step format as needed."""
+        macro_steps = self._build_macro_steps(skill.steps)
         return self.macro_engine.create(
             name=skill.skill_id,
-            steps=skill.steps,
+            steps=macro_steps,
             description=f"Extracted skill for {skill.name}",
             continue_on_error=False,
             overwrite=overwrite,
