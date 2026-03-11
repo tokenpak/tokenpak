@@ -110,20 +110,35 @@ def _print_quick_help():
 
 
 def _print_full_help():
-    """Print the power-user grouped help output."""
-    print("TokenPak — LLM Proxy with Context Compression\n")
-    print("All Commands:\n")
-    for group_name, commands in _COMMAND_GROUPS.items():
-        print(f"  {group_name}:")
-        for cmd, desc in commands:
-            print(f"    {cmd:<14} {desc}")
-        print()
-    print("Run `tokenpak <command> --help` for command details.")
+    """Print the power-user grouped help output (tier-aware)."""
+    try:
+        from tokenpak.agent.cli.commands.help import print_full_help
+        print_full_help()
+    except Exception:
+        # Fallback to static help
+        print("TokenPak — LLM Proxy with Context Compression\n")
+        print("All Commands:\n")
+        for group_name, commands in _COMMAND_GROUPS.items():
+            print(f"  {group_name}:")
+            for cmd, desc in commands:
+                print(f"    {cmd:<14} {desc}")
+            print()
+        print("Run `tokenpak <command> --help` for command details.")
 
 
 def cmd_help(args):
-    """Show all commands grouped by category (power-user view)."""
-    _print_full_help()
+    """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
+    try:
+        from tokenpak.agent.cli.commands.help import run as help_run
+        # args is a Namespace; get any extra command from sys.argv
+        import sys
+        help_args = sys.argv[2:]  # ['help', ...] -> skip 'tokenpak'
+        # Drop 'help' itself if present
+        if help_args and help_args[0] == 'help':
+            help_args = help_args[1:]
+        help_run(help_args)
+    except Exception:
+        _print_full_help()
 
 
 # ── Alias commands ────────────────────────────────────────────────────────────
