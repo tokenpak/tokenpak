@@ -284,7 +284,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
-            self.assertIn('check failed', output)
+            self.assertIn('not reachable', output)
 
 
 class DoctorDiskSpaceTest(unittest.TestCase):
