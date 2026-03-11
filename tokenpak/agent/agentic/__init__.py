@@ -119,3 +119,24 @@ __all__ += [
     "render_markdown",
     "should_generate",
 ]
+from .skill_compiler import (
+    DEFAULT_SKILLS_DIR,
+    PROMOTION_MIN_SUCCESSFUL_EPISODES,
+    PROMOTION_MIN_SUCCESS_RATE,
+    PROMOTION_MIN_TOKEN_SAVINGS,
+    ExtractedSkill,
+    SkillCompiler,
+    SkillEpisode,
+    SkillStore,
+)
+
+__all__ += [
+    "DEFAULT_SKILLS_DIR",
+    "PROMOTION_MIN_SUCCESSFUL_EPISODES",
+    "PROMOTION_MIN_SUCCESS_RATE",
+    "PROMOTION_MIN_TOKEN_SAVINGS",
+    "SkillEpisode",
+    "ExtractedSkill",
+    "SkillStore",
+    "SkillCompiler",
+]

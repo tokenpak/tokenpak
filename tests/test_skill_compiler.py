@@ -1,0 +1,173 @@
+"""Tests for tokenpak.agent.agentic.skill_compiler."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from tokenpak.agent.agentic.skill_compiler import (
+    ExtractedSkill,
+    PROMOTION_MIN_SUCCESSFUL_EPISODES,
+    SkillCompiler,
+    SkillEpisode,
+    SkillStore,
+)
+from tokenpak.agent.macros.engine import MacroDefinition, MacroEngine, MacroStep
+
+
+@pytest.fixture
+def skill_env(tmp_path: Path):
+    pytest.importorskip("yaml")
+    macro_engine = MacroEngine(macros_dir=tmp_path / "macros")
+    store = SkillStore(skills_dir=tmp_path / "skills", macro_engine=macro_engine)
+    compiler = SkillCompiler(store=store)
+    return compiler, store, macro_engine
+
+
+def _episode(
+    *,
+    target: Path,
+    success: bool = True,
+    validation_passed: bool = True,
+    tokens_original: int = 1000,
+    tokens_skill: int = 500,
+    timestamp: str = "2026-03-11T10:00:00+00:00",
+    task_type: str = "patch_bug",
+) -> SkillEpisode:
+    return SkillEpisode(
+        task_type=task_type,
+        tool_sequence=["rg", "apply_patch", "pytest"],
+        file_targets=[str(target)],
+        steps=[
+            {
+                "name": "write_result",
+                "label": "Write result",
+                "cmd": f"printf fixed > {target}",
+            }
+        ],
+        validation="file contains fixed",
+        success=success,
+        validation_passed=validation_passed,
+        tokens_original=tokens_original,
+        tokens_skill=tokens_skill,
+        timestamp=timestamp,
+        outcome={"file": str(target), "value": "fixed"},
+    )
+
+
+def test_pattern_detection_identifies_repeated_tasks(skill_env) -> None:
+    compiler, _, _ = skill_env
+    target = Path("/tmp/a.py")
+
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T10:00:00+00:00"))
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T10:01:00+00:00"))
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T10:02:00+00:00"))
+
+    repeated = compiler.detect_repeated_patterns()
+    assert len(repeated) == 1
+    stats = repeated[0]
+    assert stats.trigger_pattern["task_type"] == "patch_bug"
+    assert stats.trigger_pattern["tool_sequence"] == ["rg", "apply_patch", "pytest"]
+    assert stats.trigger_pattern["file_targets"] == [str(target)]
+
+
+def test_skill_generated_after_threshold_met(skill_env) -> None:
+    compiler, store, macro_engine = skill_env
+    target = Path("/tmp/compiler.py")
+
+    created = None
+    for idx in range(PROMOTION_MIN_SUCCESSFUL_EPISODES):
+        created = compiler.record_episode(
+            _episode(target=target, timestamp=f"2026-03-11T10:0{idx}:00+00:00")
+        )
+
+    assert isinstance(created, ExtractedSkill)
+    assert store.get(created.skill_id) is not None
+    assert (store.skills_dir / f"{created.skill_id}.json").exists()
+    assert macro_engine.exists(created.skill_id) is True
+
+
+def test_promotion_rules_enforced(skill_env) -> None:
+    compiler, store, _ = skill_env
+    target = Path("/tmp/rules.py")
+
+    for idx in range(3):
+        skill = compiler.record_episode(
+            _episode(
+                target=target,
+                tokens_original=1000,
+                tokens_skill=850,
+                timestamp=f"2026-03-11T11:0{idx}:00+00:00",
+            )
+        )
+        assert skill is None
+
+    assert store.list_all() == []
+
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T12:00:00+00:00"))
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T12:01:00+00:00"))
+    compiler.record_episode(_episode(target=target, timestamp="2026-03-11T12:02:00+00:00"))
+    blocked = compiler.record_episode(
+        _episode(
+            target=target,
+            success=False,
+            validation_passed=False,
+            timestamp="2026-03-11T12:03:00+00:00",
+        )
+    )
+
+    assert blocked is None
+    assert len(store.list_all()) == 1
+
+
+def test_skill_execution_produces_same_outcome_as_original_reasoning(skill_env, tmp_path: Path) -> None:
+    compiler, store, _ = skill_env
+    target = tmp_path / "result.txt"
+
+    original_engine = MacroEngine(macros_dir=tmp_path / "original-macros")
+    original_definition = MacroDefinition(
+        name="original-reasoning",
+        steps=[MacroStep("write_result", f"printf fixed > {target}", "Write result")],
+        description="Original reasoning",
+    )
+    original_result = original_engine.run_definition(original_definition)
+    original_value = target.read_text()
+    target.unlink()
+
+    skill = None
+    for idx in range(3):
+        skill = compiler.record_episode(
+            _episode(target=target, timestamp=f"2026-03-11T13:0{idx}:00+00:00")
+        )
+
+    assert skill is not None
+    skill_result = store.execute(skill.skill_id)
+    assert skill_result.success is True
+    assert original_result.success is True
+    assert target.read_text() == original_value == "fixed"
+
+
+def test_token_savings_tracked(skill_env) -> None:
+    compiler, store, _ = skill_env
+    target = Path("/tmp/savings.py")
+
+    for idx, tokens_skill in enumerate((400, 500, 600), start=1):
+        compiler.record_episode(
+            _episode(
+                target=target,
+                tokens_original=1000,
+                tokens_skill=tokens_skill,
+                timestamp=f"2026-03-11T14:0{idx}:00+00:00",
+            )
+        )
+
+    skill = store.list_all()[0]
+    assert skill.avg_tokens_original == pytest.approx(1000.0)
+    assert skill.avg_tokens_skill == pytest.approx(500.0)
+    assert skill.avg_token_savings == pytest.approx(0.5)
+
+    raw = json.loads((store.skills_dir / f"{skill.skill_id}.json").read_text())
+    assert raw["avg_tokens_original"] == pytest.approx(1000.0)
+    assert raw["avg_tokens_skill"] == pytest.approx(500.0)
