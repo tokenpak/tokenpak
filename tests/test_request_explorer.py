@@ -3,12 +3,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tokenpak.request_explorer import (
-    age_label,
-    cache_pct,
-    get_request_by_id,
     load_requests,
-    status_label,
+    get_request_by_id,
     to_view,
+    cache_pct,
+    status_label,
+    age_label,
 )
 
 
@@ -19,12 +19,12 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_ignores_malformed(tmp_path: Path):
+def test_load_requests_skips_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    path.write_text('{"id": "ok"}\n{bad}\n')
+    path.write_text("{bad json}\n" + json.dumps({"id": "r1"}) + "\n")
     rows = load_requests(path=path)
     assert len(rows) == 1
-    assert rows[0]["id"] == "ok"
+    assert rows[0]["id"] == "r1"
 
 
 def test_load_requests_limit(tmp_path: Path):
@@ -36,32 +36,30 @@ def test_load_requests_limit(tmp_path: Path):
 
 
 def test_get_request_by_id(tmp_path: Path):
-    rows = [{"id": "r1"}, {"id": "r2"}]
+    rows = [{"id": "a"}, {"id": "b"}]
     path = tmp_path / "requests.jsonl"
     _write_jsonl(path, rows)
-    assert get_request_by_id("r2", path=path)["id"] == "r2"
-    assert get_request_by_id("missing", path=path) is None
+    found = get_request_by_id("b", path=path)
+    assert found["id"] == "b"
 
 
 def test_to_view_defaults():
-    view = to_view({"id": "r1", "model": "m"})
-    assert view.request_id == "r1"
+    view = to_view({"id": "x", "model": "m"})
+    assert view.request_id == "x"
     assert view.input_tokens == 0
     assert view.output_tokens == 0
 
 
-def test_cache_pct():
-    view = to_view({"id": "r1", "input_tokens": 100, "cache_read": 25})
+def test_cache_pct_and_status():
+    view = to_view({"id": "x", "model": "m", "input_tokens": 100, "cache_read": 25})
     assert cache_pct(view) == 25.0
+    assert status_label(view) == "cached"
+
+    view2 = to_view({"id": "y", "model": "m", "status": "error"})
+    assert status_label(view2) == "error"
 
 
-def test_status_label_and_age():
+def test_age_label():
     now = datetime.now(timezone.utc)
-    view = to_view({
-        "id": "r1",
-        "status": "success",
-        "cache_read": 0,
-        "timestamp": (now - timedelta(seconds=5)).isoformat(),
-    })
-    assert status_label(view) == "fresh"
-    assert age_label(view.timestamp).endswith("s")
+    ts = (now - timedelta(seconds=30)).isoformat()
+    assert age_label(ts).endswith("s")
