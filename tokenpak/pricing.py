@@ -107,3 +107,29 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
         "cost_with_tokenpak": round(cost_with, 4),
         "reduction_percent": round(reduction_pct, 1),
     }
+
+
+def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int = 0, cache_creation_tokens: int = 0, output_tokens: int = 0) -> float:
+    """Calculate actual cost for a request routed through TokenPak."""
+    rates = get_rates(model)
+    input_rate = rates.get("input_per_mtok", 3.0)
+    output_rate = rates.get("output_per_mtok", 15.0)
+    cache_read_rate = input_rate * 0.1  # Cache reads at 10% of input
+    cache_create_rate = input_rate * 1.25  # Cache creation at 125% of input
+
+    cost = (input_tokens / 1_000_000) * input_rate
+    cost += (cache_read_tokens / 1_000_000) * cache_read_rate
+    cost += (cache_creation_tokens / 1_000_000) * cache_create_rate
+    cost += (output_tokens / 1_000_000) * output_rate
+    return round(cost, 6)
+
+
+def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_tokens: int = 0) -> float:
+    """Calculate what a request would cost WITHOUT TokenPak (no cache, no compression)."""
+    rates = get_rates(model)
+    input_rate = rates.get("input_per_mtok", 3.0)
+    output_rate = rates.get("output_per_mtok", 15.0)
+
+    cost = (total_input_tokens / 1_000_000) * input_rate
+    cost += (output_tokens / 1_000_000) * output_rate
+    return round(cost, 6)

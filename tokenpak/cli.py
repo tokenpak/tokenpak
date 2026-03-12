@@ -2614,6 +2614,16 @@ def main():
         "version",
         "update",
         "config",
+        "setup",
+        "compare",
+        "leaderboard",
+        "report",
+        "check-alerts",
+        "watch",
+        "integrate",
+        "savings",
+        "usage",
+        "preview",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
