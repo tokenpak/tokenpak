@@ -14,6 +14,13 @@ try:
 except ImportError:
     HAS_CLICK = False
 
+# Import pricing module for savings calculations
+try:
+    from tokenpak.pricing import estimate_savings
+except ImportError:
+    # Fallback if pricing module not available
+    estimate_savings = None
+
 
 def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
     """Fetch JSON from a URL. Returns None on failure."""
@@ -78,18 +85,31 @@ def run(
     print("\nTOKENPAK  |  Status")
     print(SEP)
 
-    print(f"{'Proxy:':<28}{status_icon} {status_text}")
-    print(f"{'Uptime:':<28}{uptime_str}")
-    print(f"{'Version:':<28}{health.get('version', '?')}")
+    print(f"{'✅  Proxy running':<28}port {proxy_base.split(':')[-1]} — hybrid mode")
+    print(f"{'✅  Uptime':<28}{uptime_str}")
+    print(f"{'✅  Health':<28}OK (0 errors)" if errors == 0 else f"{'⚠️  Health':<28}{errors} errors")
     print()
 
-    print(f"{'Session Requests:':<28}{requests:,}")
-    print(f"{'Errors:':<28}{errors:,}")
-    print(f"{'Tokens (raw):':<28}{tokens_raw:,}")
-    print(f"{'Tokens (saved):':<28}{tokens_saved:,}")
-    print(f"{'Avg Compression:':<28}{avg_savings:.1f}%  (ratio {compression_avg:.3f})")
-    print(f"{'Cost (this session):':<28}${total_cost:.4f}")
-    print(f"{'Cost Saved:':<28}${cost_saved:.4f}")
+    # Calculate and display savings summary
+    if estimate_savings and session:
+        savings_data = estimate_savings(session)
+        print("💰  Session Savings")
+        print(f"    Requests:      {requests:,}")
+        print(f"    Input tokens:  {tokens_raw:,}")
+        print(f"    Tokens saved:  {tokens_saved:,} ({avg_savings:.1f}% compression)")
+        print(f"    Cache reads:   {session.get('cache_read_tokens', 0):,} ({savings_data.get('cache_hit_rate', 0):.0f}% hit rate)")
+        print(f"    Est. saved:    ${savings_data.get('total_cost_saved', 0):.2f}")
+        print()
+    else:
+        # Fallback without pricing module
+        print(f"{'Session Requests:':<28}{requests:,}")
+        print(f"{'Errors:':<28}{errors:,}")
+        print(f"{'Tokens (raw):':<28}{tokens_raw:,}")
+        print(f"{'Tokens (saved):':<28}{tokens_saved:,}")
+        print(f"{'Avg Compression:':<28}{avg_savings:.1f}%  (ratio {compression_avg:.3f})")
+        print(f"{'Cost (this session):':<28}${total_cost:.4f}")
+        print(f"{'Cost Saved:':<28}${cost_saved:.4f}")
+        print()
 
     # --- Degradation block ---
     if is_degraded or deg.get("recent_events"):
@@ -119,6 +139,8 @@ def run(
     print(SEP)
     if is_degraded:
         print("ℹ️  Running degraded — requests still served. Run `tokenpak doctor` for details.")
+    else:
+        print("ℹ️  Run `tokenpak savings` for detailed breakdown.")
     print()
 
 

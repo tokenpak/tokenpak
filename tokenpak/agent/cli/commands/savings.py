@@ -16,6 +16,12 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+# Import pricing module for savings estimates
+try:
+    from tokenpak.pricing import estimate_savings as calc_savings_from_stats
+except ImportError:
+    calc_savings_from_stats = None
+
 # ---------------------------------------------------------------------------
 # DB / formatting helpers
 # ---------------------------------------------------------------------------
@@ -121,6 +127,11 @@ def _query_savings(period: str = "24h", model: Optional[str] = None) -> dict:
         est_cost_saved = tokens_saved * cost_per_token
     else:
         est_cost_saved = 0.0
+    
+    # Calculate before/after costs
+    cost_without_tokenpak = total_raw * (total_cost / total_compressed) if total_compressed > 0 else 0.0
+    cost_with_tokenpak = total_cost
+    cost_reduction_pct = ((cost_without_tokenpak - cost_with_tokenpak) / cost_without_tokenpak * 100.0) if cost_without_tokenpak > 0 else 0.0
 
     return {
         "period": period,
@@ -130,6 +141,9 @@ def _query_savings(period: str = "24h", model: Optional[str] = None) -> dict:
         "reduction_pct": round(pct_saved, 2),
         "tokens_saved_total": tokens_saved,
         "est_cost_saved_usd": round(est_cost_saved, 4),
+        "cost_without_tokenpak": round(cost_without_tokenpak, 2),
+        "cost_with_tokenpak": round(cost_with_tokenpak, 2),
+        "cost_reduction_pct": round(cost_reduction_pct, 1),
     }
 
 
@@ -179,8 +193,11 @@ def _query_by_model(period: str = "24h") -> list[dict]:
         total_cost = float(r["total_cost"])
         if total_compressed > 0 and total_cost > 0:
             est_saved = tokens_saved * (total_cost / total_compressed)
+            cost_without = total_raw * (total_cost / total_compressed)
+            cost_reduction_pct = ((cost_without - total_cost) / cost_without * 100.0) if cost_without > 0 else 0.0
         else:
             est_saved = 0.0
+            cost_reduction_pct = 0.0
         result.append({
             "model": r["model"],
             "requests": int(r["requests"]),
@@ -189,6 +206,7 @@ def _query_by_model(period: str = "24h") -> list[dict]:
             "reduction_pct": round(pct_saved, 2),
             "tokens_saved_total": tokens_saved,
             "est_cost_saved_usd": round(est_saved, 4),
+            "cost_reduction_pct": round(cost_reduction_pct, 1),
         })
     return result
 
@@ -207,22 +225,34 @@ def _print_summary(data: dict, period: str) -> None:
     tok_saved = data["tokens_saved_total"]
     cost_saved = data["est_cost_saved_usd"]
     requests = data["requests"]
+    cost_without = data.get("cost_without_tokenpak", 0.0)
+    cost_with = data.get("cost_with_tokenpak", 0.0)
+    cost_reduction = data.get("cost_reduction_pct", 0.0)
 
-    print(f"TOKENPAK  |  Efficiency Report  ({label})\n{SEP}\n")
+    print(f"TOKENPAK  |  Savings Report ({label})")
+    print(SEP)
+    print()
 
     if requests == 0:
         print("  No requests recorded for this period.")
         print()
         return
 
-    print(f"  {'Raw Avg Input:':<26} {_fmt_n(avg_raw):>12}  tokens")
-    print(f"  {'Compressed Avg Input:':<26} {_fmt_n(avg_comp):>12}  tokens")
-    print(f"  {'Avg Saved:':<26} {_fmt_n(avg_saved):>12}  tokens  ({_fmt_pct(pct)})")
+    print(f"  📊  This Session ({label})")
+    print(f"      Total requests:    {_fmt_n(requests)}")
     print()
-    print(f"  {'Tokens Saved (' + _period_label(period) + '):':<26} {_fmt_n(tok_saved):>12}")
-    print(f"  {'Est. $ Saved (' + _period_label(period) + '):':<26} {_fmt_cost(cost_saved):>12}")
+    print(f"      Compression:")
+    print(f"        Tokens trimmed:  {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
+    print(f"        Est. saved:      {_fmt_cost(cost_saved)}")
     print()
-    print(f"  Requests:  {_fmt_n(requests)}")
+    if cost_without > 0:
+        print(f"      💰 TOTAL SAVED:    {_fmt_cost(cost_saved)}")
+        print(f"      📈 Without TokenPak: {_fmt_cost(cost_without)}")
+        print(f"      📉 With TokenPak:    {_fmt_cost(cost_with)}")
+        print(f"      🔥 Reduction:        {cost_reduction:.0f}%")
+    print()
+    print(f"  💡 Enable more modules for higher savings:")
+    print(f"     tokenpak config profile aggressive")
     print()
 
 

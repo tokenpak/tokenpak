@@ -80,6 +80,14 @@
                 <canvas id="topTypesChart"></canvas>
             </div>
 
+            <!-- Goals Widget -->
+            <div class="goals-container">
+                <h2>💾 Savings Goals</h2>
+                <div id="goalsGrid" class="goals-grid">
+                    <p class="no-goals">No goals configured. Use `tokenpak goals --add` to create one.</p>
+                </div>
+            </div>
+
             <!-- Document Type Table -->
             <div class="table-container">
                 <h2>Top 10 Document Types</h2>
@@ -101,6 +109,7 @@
 
     <script src="metrics.js"></script>
     <script src="charts.js"></script>
+    <script src="goals.js"></script>
     <script>
         // Auto-refresh every 5 seconds
         setInterval(() => {

@@ -390,6 +390,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/cache-stats":
             self._send_json(_get_cache_collector().summary())
             return
+        if path == "/api/goals":
+            # Get all goals with progress
+            from tokenpak.goals import GoalManager
+            try:
+                manager = GoalManager()
+                goals = manager.list_goals()
+                response = {}
+                for goal in goals:
+                    progress = manager.get_progress(goal.goal_id)
+                    if progress:
+                        response[goal.goal_id] = {
+                            "goal": goal.to_dict(),
+                            "progress": progress.to_dict(),
+                        }
+                self._send_json(response)
+            except Exception as e:
+                self._send_json({"error": str(e)})
+            return
         if path == "/traces":
             traces = ps.trace_storage.get_all()
             self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
