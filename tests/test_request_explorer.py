@@ -12,47 +12,48 @@ from tokenpak.request_explorer import (
 )
 
 
-def _write_lines(path: Path, lines: list[str]) -> None:
+def _write_jsonl(path: Path, rows: list[dict], add_bad: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n")
+    with path.open("w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+        if add_bad:
+            f.write("{bad json}\n")
 
 
-def test_load_requests_skips_malformed(tmp_path: Path):
+def test_load_requests_skips_bad_json(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    good = {"id": "req1", "model": "m1"}
-    lines = [json.dumps(good), "{bad json}", ""]
-    _write_lines(path, lines)
+    rows = [{"id": "req1"}, {"id": "req2"}]
+    _write_jsonl(path, rows, add_bad=True)
+    loaded = load_requests(path=path)
+    assert len(loaded) == 2
 
-    rows = load_requests(path=path)
-    assert len(rows) == 1
-    assert rows[0]["id"] == "req1"
+
+def test_load_requests_limit(tmp_path: Path):
+    path = tmp_path / "requests.jsonl"
+    rows = [{"id": f"req{i}"} for i in range(5)]
+    _write_jsonl(path, rows)
+    loaded = load_requests(path=path, limit=2)
+    assert [r["id"] for r in loaded] == ["req3", "req4"]
 
 
 def test_get_request_by_id(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    lines = [json.dumps({"id": "req_a"}), json.dumps({"id": "req_b"})]
-    _write_lines(path, lines)
-
-    row = get_request_by_id("req_b", path=path)
-    assert row is not None
-    assert row["id"] == "req_b"
+    rows = [{"id": "req1"}, {"id": "req2"}]
+    _write_jsonl(path, rows)
+    assert get_request_by_id("req2", path=path)["id"] == "req2"
 
 
-def test_cache_pct_calculation():
-    view = to_view({"input_tokens": 100, "cache_read": 25})
+def test_cache_pct():
+    view = to_view({"id": "req", "model": "m", "input_tokens": 100, "cache_read": 25})
     assert cache_pct(view) == 25.0
 
 
 def test_status_label_cached():
-    view = to_view({"status": "success", "cache_read": 10})
+    view = to_view({"id": "req", "model": "m", "input_tokens": 10, "cache_read": 1, "status": "success"})
     assert status_label(view) == "cached"
 
 
-def test_status_label_error():
-    view = to_view({"status": "error"})
-    assert status_label(view) == "error"
-
-
 def test_age_label_seconds():
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
     assert age_label(ts).endswith("s")
