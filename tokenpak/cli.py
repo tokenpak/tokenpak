@@ -1045,7 +1045,6 @@ class Colors:
 
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
-    import json
     from tokenpak.request_explorer import (
         REQUESTS_PATH,
         load_requests,
@@ -1057,6 +1056,7 @@ def cmd_requests(args):
     )
     import time as _time
     import json as _json
+    from tokenpak.aggregate import format_tokens
 
     request_id = getattr(args, "request_id", None)
     subcmd = getattr(args, "requests_cmd", None) or ("show" if request_id else "tail")
