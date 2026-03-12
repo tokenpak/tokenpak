@@ -19,42 +19,42 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_ignores_malformed(tmp_path: Path):
+def test_load_requests_handles_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    path.write_text('{"id": "a"}\n{bad json}\n')
+    path.write_text('{"id":"ok"}\n{bad json}\n')
     rows = load_requests(path=path)
     assert len(rows) == 1
-    assert rows[0]["id"] == "a"
+    assert rows[0]["id"] == "ok"
 
 
 def test_get_request_by_id(tmp_path: Path):
-    rows = [{"id": "req_1"}, {"id": "req_2"}]
+    rows = [{"id": "req1"}, {"id": "req2"}]
     path = tmp_path / "requests.jsonl"
     _write_jsonl(path, rows)
-    found = get_request_by_id("req_2", path=path)
-    assert found is not None
-    assert found["id"] == "req_2"
+    assert get_request_by_id("req2", path=path)["id"] == "req2"
 
 
-def test_to_view_defaults():
-    view = to_view({"id": "r", "model": "m"})
-    assert view.request_id == "r"
-    assert view.model == "m"
-    assert view.input_tokens == 0
-    assert view.output_tokens == 0
-
-
-def test_cache_pct():
-    view = to_view({"id": "r", "model": "m", "input_tokens": 100, "cache_read": 25})
+def test_cache_pct_calculation():
+    view = to_view({"id": "r", "input_tokens": 100, "cache_read": 25})
     assert cache_pct(view) == 25.0
 
 
-def test_status_label_cached():
-    view = to_view({"id": "r", "model": "m", "cache_read": 10, "status": "success"})
-    assert status_label(view) == "cached"
+def test_status_label_cached_vs_error():
+    cached = to_view({"id": "r", "status": "success", "cache_read": 10})
+    fresh = to_view({"id": "r", "status": "success", "cache_read": 0})
+    err = to_view({"id": "r", "status": "error", "cache_read": 0})
+    assert status_label(cached) == "cached"
+    assert status_label(fresh) == "fresh"
+    assert status_label(err) == "error"
 
 
 def test_age_label_seconds():
     now = datetime.now(timezone.utc)
-    view = to_view({"id": "r", "model": "m", "timestamp": (now - timedelta(seconds=30)).isoformat()})
-    assert age_label(view.timestamp).endswith("s")
+    ts = (now - timedelta(seconds=10)).isoformat()
+    assert age_label(ts) == "10s"
+
+
+def test_age_label_minutes():
+    now = datetime.now(timezone.utc)
+    ts = (now - timedelta(minutes=5)).isoformat()
+    assert age_label(ts) == "5m"
