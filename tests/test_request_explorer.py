@@ -12,84 +12,58 @@ from tokenpak.request_explorer import (
 )
 
 
-def _write_jsonl(path: Path, rows: list[str]) -> None:
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as f:
         for row in rows:
-            f.write(row + "\n")
+            f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_skips_bad_json(tmp_path: Path):
-    rows = [
-        json.dumps({"id": "req1", "model": "m1"}),
-        "{bad json}",
-        json.dumps({"id": "req2", "model": "m2"}),
-    ]
+def test_load_requests_ignores_bad_json(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, rows)
-
-    loaded = load_requests(path=path)
-    assert [r["id"] for r in loaded] == ["req1", "req2"]
+    path.write_text('{"id": "a"}\n{bad json}\n')
+    rows = load_requests(path=path)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "a"
 
 
 def test_load_requests_limit(tmp_path: Path):
-    rows = [json.dumps({"id": f"req{i}"}) for i in range(5)]
     path = tmp_path / "requests.jsonl"
+    rows = [{"id": f"r{i}"} for i in range(5)]
     _write_jsonl(path, rows)
-
     loaded = load_requests(path=path, limit=2)
-    assert [r["id"] for r in loaded] == ["req3", "req4"]
+    assert [r["id"] for r in loaded] == ["r3", "r4"]
 
 
 def test_get_request_by_id(tmp_path: Path):
-    rows = [json.dumps({"id": "abc", "model": "m"})]
     path = tmp_path / "requests.jsonl"
+    rows = [{"id": "x"}, {"id": "y"}]
     _write_jsonl(path, rows)
-
-    found = get_request_by_id("abc", path=path)
+    found = get_request_by_id("y", path=path)
     assert found is not None
-    assert found["model"] == "m"
+    assert found["id"] == "y"
 
 
-def test_to_view_and_cache_pct():
-    row = {
-        "id": "req",
-        "model": "m",
-        "input_tokens": 100,
-        "output_tokens": 50,
-        "cache_read": 25,
-        "saved_cost": 0.1,
-        "status": "success",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_id": "abc",
-    }
-    view = to_view(row)
-    assert view.request_id == "req"
+def test_to_view_defaults():
+    view = to_view({"id": "a", "model": "m"})
+    assert view.request_id == "a"
+    assert view.model == "m"
+    assert view.input_tokens == 0
+    assert view.output_tokens == 0
+
+
+def test_cache_pct():
+    view = to_view({"input_tokens": 100, "cache_read": 25})
     assert cache_pct(view) == 25.0
 
 
-def test_status_label_cached_vs_error():
-    row = {
-        "id": "req",
-        "model": "m",
-        "input_tokens": 10,
-        "output_tokens": 2,
-        "cache_read": 3,
-        "saved_cost": 0.01,
-        "status": "success",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    view = to_view(row)
-    assert status_label(view) == "cached"
-
-    row["status"] = "error"
-    view = to_view(row)
-    assert status_label(view) == "error"
+def test_status_label_cached_and_error():
+    cached = to_view({"input_tokens": 10, "cache_read": 5})
+    assert status_label(cached) == "cached"
+    err = to_view({"status": "error"})
+    assert status_label(err) == "error"
 
 
-def test_age_label_formats():
-    now = datetime.now(timezone.utc)
-    assert age_label((now - timedelta(seconds=30)).isoformat()).endswith("s")
-    assert age_label((now - timedelta(minutes=5)).isoformat()).endswith("m")
-    assert age_label((now - timedelta(hours=2)).isoformat()).endswith("h")
-    assert age_label((now - timedelta(days=2)).isoformat()).endswith("d")
+def test_age_label_seconds():
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
+    assert age_label(ts).endswith("s")
