@@ -76,6 +76,7 @@ _COMMAND_GROUPS = {
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
         ("aggregate", "Aggregate request ledger across machines"),
+        ("requests", "Live request explorer"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1041,6 +1042,98 @@ class Colors:
 
 
 
+
+def cmd_requests(args):
+    """Live request explorer: tail or show a request by id."""
+    import json
+    from tokenpak.request_explorer import (
+        REQUESTS_PATH,
+        load_requests,
+        get_request_by_id,
+        to_view,
+        cache_pct,
+        status_label,
+        age_label,
+    )
+    import time as _time
+
+    request_id = getattr(args, "request_id", None)
+    subcmd = getattr(args, "requests_cmd", None) or ("show" if request_id else "tail")
+
+    if subcmd == "tail":
+        limit = getattr(args, "limit", 10)
+        follow = not getattr(args, "once", False)
+
+        if not REQUESTS_PATH.exists():
+            print("No request ledger found yet. Run requests through the proxy first.")
+            return
+
+        header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
+        print(header)
+        print("─" * len(header))
+
+        def _render_rows(rows):
+            for row in rows:
+                view = to_view(row)
+                cache = f"{cache_pct(view):>5.0f}%"
+                saved = f"${view.saved_cost:.2f}" if view.saved_cost >= 0.01 else f"${view.saved_cost:.4f}"
+                print(
+                    f"{view.request_id[:8]:<10} {view.model:<17} {view.input_tokens:>6}  {view.output_tokens:>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
+                )
+
+        rows = load_requests(limit=limit)
+        _render_rows(rows)
+
+        if not follow:
+            return
+
+        # Follow new entries
+        with REQUESTS_PATH.open("r") as f:
+            f.seek(0, 2)
+            try:
+                while True:
+                    line = f.readline()
+                    if not line:
+                        _time.sleep(0.5)
+                        continue
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    _render_rows([row])
+            except KeyboardInterrupt:
+                return
+
+    # default: show single request
+    if not request_id:
+        print("Provide a request id (e.g. tokenpak requests <id>).")
+        return
+
+    row = get_request_by_id(request_id)
+    if not row:
+        print(f"Request '{request_id}' not found.")
+        return
+
+    view = to_view(row)
+    print(f"Request ID: {view.request_id}")
+    print("─" * 45)
+    print(f"Model:     {view.model}")
+    print(f"Status:    {status_label(view)}")
+    print(f"Age:       {age_label(view.timestamp)}")
+    if view.session_id:
+        print(f"Session:   {view.session_id}")
+
+    print("\nTokens:")
+    print(f"  Input:   {view.input_tokens:,}")
+    print(f"  Output:  {view.output_tokens:,}")
+    if view.cache_read:
+        print(f"  Cache:   {view.cache_read:,} (read)")
+    print(f"  Saved:   ${view.saved_cost:.4f}")
+
+
 def cmd_aggregate(args):
     """Aggregate request ledger across machines."""
     import json as _json
@@ -1591,6 +1684,23 @@ def build_parser():
 
 
     p_agg = sub.add_parser("aggregate", help="Aggregate request ledger across machines")
+
+    p_req = sub.add_parser("requests", help="Live request explorer")
+    rsub = p_req.add_subparsers(dest="requests_cmd", required=False)
+
+    p_tail = rsub.add_parser("tail", help="Tail live request ledger")
+    p_tail.add_argument("--limit", "-n", type=int, default=10, help="Number of rows to show")
+    p_tail.add_argument("--once", action="store_true", help="Print once and exit")
+    p_tail.set_defaults(func=cmd_requests)
+
+    p_show = rsub.add_parser("show", help="Show request details")
+    p_show.add_argument("request_id", nargs="?", help="Request id")
+    p_show.set_defaults(func=cmd_requests)
+
+    # Allow `tokenpak requests <id>` shortcut
+    p_req.add_argument("request_id", nargs="?", help="Request id")
+    p_req.set_defaults(func=cmd_requests)
+
     p_agg.add_argument("--since", default="7d", help="Time window, e.g. 7d, 24h, 30m, or ISO date")
     p_agg.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
     p_agg.set_defaults(func=cmd_aggregate)
@@ -2808,6 +2918,7 @@ def main():
         "usage",
         "preview",
         "aggregate",
+        "requests",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
