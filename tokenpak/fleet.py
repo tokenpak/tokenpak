@@ -37,6 +37,9 @@ class FleetStats:
     compression: float = 0.0
     health: str = "❌"  # ✅, ⚠️, or ❌
     error: Optional[str] = None
+    cost: float = 0.0
+    cost_saved: float = 0.0
+    cache_read_tokens: int = 0
 
 
 # ── Fleet configuration ───────────────────────────────────────────────────────
@@ -109,6 +112,9 @@ def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
         session_stats = stats_data.get("session", {})
         stats.requests = session_stats.get("requests", 0)
         stats.saved = session_stats.get("saved_tokens", 0)
+        stats.cost = session_stats.get("cost", 0.0)
+        stats.cost_saved = session_stats.get("cost_saved", 0.0)
+        stats.cache_read_tokens = session_stats.get("cache_read_tokens", 0)
         
         # Calculate cache percentage
         inp = session_stats.get("input_tokens", 0)
@@ -151,43 +157,52 @@ def query_fleet(machines: List[FleetMachine]) -> List[FleetStats]:
 
 # ── Rendering ────────────────────────────────────────────────────────────────
 
+def _fmt_cost(amount: float) -> str:
+    """Format a dollar amount compactly."""
+    if amount >= 1.0:
+        return f"${amount:.2f}"
+    elif amount >= 0.01:
+        return f"${amount:.2f}"
+    else:
+        return f"${amount:.4f}"
+
+
+def _fmt_tokens(n: int) -> str:
+    """Format token count compactly (e.g., 1.2M, 342K)."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    elif n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    else:
+        return str(n)
+
+
 def render_fleet_table(stats_list: List[FleetStats], compact: bool = False) -> str:
-    """Render fleet stats as a formatted table."""
+    """Render fleet stats — savings-focused, minimal format."""
     if not stats_list:
         return "No machines configured in fleet."
-    
-    if compact:
-        # One-line per machine
-        lines = []
-        for s in stats_list:
-            line = f"{s.health} {s.name:12} requests={s.requests:6} saved={s.saved:8} cache={s.cache_pct:5.1f}% compression={s.compression:5.1f}%"
-            lines.append(line)
-        return "\n".join(lines)
-    
-    # Full table with borders
+
     lines = []
-    
-    # Header
-    lines.append("┌─ Fleet Status ──────────────────────────────────────────────────────┐")
-    lines.append("│ Health  Name          Requests    Saved   Cache%  Compression       │")
-    lines.append("├─────────────────────────────────────────────────────────────────────┤")
-    
-    # Rows
-    totals = FleetStats(name="TOTAL")
+    total_cost = 0.0
+    total_saved_cost = 0.0
+    total_cache_read = 0
+    total_requests = 0
+
     for s in stats_list:
-        line = f"│ {s.health}      {s.name:12} {s.requests:8,d}  {s.saved:9,d}  {s.cache_pct:5.1f}%     {s.compression:5.1f}%       │"
+        # Estimate savings from cache reads (90% discount on cached tokens)
+        cache_savings = s.cache_read_tokens * 0.9  # tokens that cost 10% instead of 100%
+        total_cost += s.cost
+        total_saved_cost += s.cost_saved
+        total_cache_read += s.cache_read_tokens
+        total_requests += s.requests
+
+        status = s.health
+        line = f"{status} {s.name}: {s.requests} reqs, {_fmt_cost(s.cost)} spent, cache {s.cache_pct:.0f}%, {_fmt_tokens(s.cache_read_tokens)} cached reads"
         lines.append(line)
-        
-        # Accumulate totals
-        totals.requests += s.requests
-        totals.saved += s.saved
-    
-    # Totals row
-    lines.append("├─────────────────────────────────────────────────────────────────────┤")
-    line = f"│       {totals.name:12} {totals.requests:8,d}  {totals.saved:9,d}                           │"
-    lines.append(line)
-    lines.append("└─────────────────────────────────────────────────────────────────────┘")
-    
+
+    lines.append("")
+    lines.append(f"Fleet: {total_requests} reqs, {_fmt_cost(total_cost)} total, {_fmt_tokens(total_cache_read)} cache reads")
+
     return "\n".join(lines)
 
 
