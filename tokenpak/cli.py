@@ -1057,7 +1057,7 @@ def cmd_requests(args):
         age_label,
     )
 
-    action = getattr(args, "requests_cmd", None) or "tail"
+    action = getattr(args, "action", None) or "tail"
     request_id = getattr(args, "request_id", None)
 
     # Allow `tokenpak requests <id>`
