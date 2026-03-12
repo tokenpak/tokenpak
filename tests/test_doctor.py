@@ -66,6 +66,7 @@ class DoctorConfigFileTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -79,7 +80,7 @@ class DoctorConfigFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -126,6 +127,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -139,7 +141,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": [{"id": "1"}, {"id": "2"}]}))
@@ -158,7 +160,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
@@ -177,7 +179,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -193,7 +195,7 @@ class DoctorVaultIndexTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         index_file = config_dir / "index.json"
         index_file.write_text("{invalid")
@@ -213,6 +215,7 @@ class DoctorProxyPortTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -227,7 +230,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -249,7 +252,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -261,7 +264,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
-            self.assertIn('connection refused', output)
+            self.assertIn('not reachable', output)
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -271,7 +274,7 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -281,7 +284,7 @@ class DoctorProxyPortTest(unittest.TestCase):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
-            self.assertIn('check failed', output)
+            self.assertIn('not reachable', output)
 
 
 class DoctorDiskSpaceTest(unittest.TestCase):
@@ -290,6 +293,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -303,7 +307,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -324,7 +328,7 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -346,6 +350,7 @@ class DoctorLogFileTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -359,7 +364,7 @@ class DoctorLogFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -376,7 +381,7 @@ class DoctorLogFileTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -396,16 +401,23 @@ class DoctorFixFlagTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = True
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
     def tearDown(self):
         self.temp_home.cleanup()
     
+    @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_fix_create_config(self, mock_stdout):
+    def test_fix_create_config(self, mock_stdout, mock_socket):
         """--fix should create missing config."""
+        # Mock the socket to avoid hanging
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 1  # connection refused
+        mock_socket.return_value = mock_sock
+        
         config_dir = self.temp_path / ".tokenpak"
         # Don't create config dir or file
         
@@ -420,12 +432,18 @@ class DoctorFixFlagTest(unittest.TestCase):
             # Verify it's valid JSON
             with open(config_file) as f:
                 data = json.load(f)
-                self.assertEqual(data.get("port"), 8765)
+                self.assertEqual(data.get("port"), 8766)
     
+    @patch('socket.socket')
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_fix_backup_on_overwrite(self, mock_stdout):
+    def test_fix_backup_on_overwrite(self, mock_stdout, mock_socket):
         """--fix should backup before overwriting invalid config."""
+        # Mock the socket to avoid hanging
+        mock_sock = MagicMock()
+        mock_sock.connect_ex.return_value = 1  # connection refused
+        mock_socket.return_value = mock_sock
+        
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
@@ -447,6 +465,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -455,7 +474,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir = Path.home() / ".tokenpak"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         try:
             cmd_doctor(self.args)
@@ -473,7 +492,7 @@ class DoctorOutputFormatTest(unittest.TestCase):
         config_dir = Path.home() / ".tokenpak"
         config_dir.mkdir(parents=True, exist_ok=True)
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         
         try:
             cmd_doctor(self.args)
@@ -490,6 +509,7 @@ class DoctorExitCodesTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -503,7 +523,7 @@ class DoctorExitCodesTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
         
@@ -524,6 +544,7 @@ class DoctorExitCodesTest(unittest.TestCase):
         """Should exit 1 when any check fails."""
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         
         with patch('sys.stdout', new_callable=StringIO):
             with self.assertRaises(SystemExit) as cm:
@@ -563,6 +584,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 
@@ -577,7 +599,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -593,7 +615,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir.mkdir()
         # Don't create cache dir
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -610,7 +632,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -624,6 +646,7 @@ class DoctorDependenciesTest(unittest.TestCase):
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
+        self.args.fleet = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 
@@ -643,7 +666,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -668,7 +691,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
@@ -688,7 +711,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         config_dir.mkdir()
         (config_dir / "cache").mkdir()
         config_file = config_dir / "config.json"
-        config_file.write_text(json.dumps({"port": 8765}))
+        config_file.write_text(json.dumps({"port": 8766}))
 
         with patch('pathlib.Path.home', return_value=self.temp_path):
             with self.assertRaises(SystemExit) as cm:

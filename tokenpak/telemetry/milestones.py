@@ -377,7 +377,7 @@ def check_and_create_milestones(db_path: Optional[str] = None) -> list[Milestone
                 conn.commit()
                 new_milestones.append(
                     Milestone(
-                        id=mid,
+                        id=mid,  # type: ignore[arg-type]
                         milestone_type=m_type,
                         threshold=threshold,
                         label=label,

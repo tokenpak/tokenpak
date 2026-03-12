@@ -1,9 +1,33 @@
 """Code processor — extract signatures, imports, and docstrings.
 
 Pre-compiled regex patterns for ~30% faster processing.
+
+Modes
+-----
+CODE_API (default)
+    Large template/literal string constants are replaced with deterministic
+    stub placeholders:  ``<TEMPLATE:<name> lines=<n> sha256=<h>[:8]>``
+    This keeps code outlines lean by stripping multi-line HTML/CSS/JS/SQL
+    blobs that bloat the compressed output without adding retrieval signal.
+
+CODE_WITH_TEMPLATES
+    Template content is retained verbatim.  Use this for template-edit
+    workflows where the literal payload must be present.
 """
 
+import hashlib
 import re
+from enum import Enum
+from typing import List, Optional, Set
+
+# ============================================================
+# COMPACTION MODES
+# ============================================================
+
+class CodeCompactionMode(str, Enum):
+    CODE_API = "CODE_API"
+    CODE_WITH_TEMPLATES = "CODE_WITH_TEMPLATES"
+
 
 # ============================================================
 # PRE-COMPILED PATTERNS (module-level for reuse)
@@ -19,6 +43,14 @@ _PY_TYPE_HINT = re.compile(r"^\w+\s*:\s*\w+")
 _PY_TYPE_ALIAS = re.compile(r"^(type\s+|TypeAlias)")
 _PY_CLASS_ATTR = re.compile(r"^\s+\w+\s*[=:]")
 
+# Large literal/template patterns  (triple-quoted string on assignment)
+# Matches:   NAME = """..."""  or  NAME = '''...'''  (start of block)
+_PY_TRIPLE_ASSIGN = re.compile(
+    r'^([A-Za-z_]\w*)\s*=\s*("""|\'\'\')(.*)'
+)
+# Threshold: literals with >= this many source lines are considered "large"
+_LARGE_LITERAL_THRESHOLD = 5
+
 # JavaScript/TypeScript patterns
 _JS_IMPORT = re.compile(r"^(import\s|const\s+\w+\s*=\s*require|export\s+(default\s+)?{)")
 _JS_EXPORT = re.compile(r"^export\s+")
@@ -29,31 +61,75 @@ _JS_ARROW_CONST = re.compile(r"^(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s
 _JS_CONST_UPPER = re.compile(r"^(export\s+)?(const|let|var)\s+[A-Z_]")
 
 
+# ============================================================
+# HELPERS
+# ============================================================
+
+def _sha256_stub(text: str) -> str:
+    """Return the first 8 hex chars of the SHA-256 of *text*."""
+    return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:8]
+
+
+def _make_template_stub(name: str, lines: int, content: str) -> str:
+    """Build a deterministic stub placeholder for a large literal."""
+    h = _sha256_stub(content)
+    return f"<TEMPLATE:{name} lines={lines} sha256={h}>"
+
+
+# ============================================================
+# MAIN PROCESSOR
+# ============================================================
+
 class CodeProcessor:
     """Extract code structure while dropping implementation details."""
 
-    def process(self, content: str, path: str = "") -> str:
+    def process(
+        self,
+        content: str,
+        path: str = "",
+        mode: CodeCompactionMode = CodeCompactionMode.CODE_API,
+    ) -> str:
         """
         Compress code by extracting structure.
 
         Strategy:
-        - Keep all imports/requires
+        - Keep all imports/requires (deduplicated)
         - Keep function/class signatures + docstrings
         - Drop function bodies
         - Keep type definitions
         - Keep constants and module-level assignments
+        - In CODE_API mode: replace large triple-quoted literals with stubs
+        - In CODE_WITH_TEMPLATES mode: keep template content verbatim
+
+        Parameters
+        ----------
+        content : str
+            Source code to compress.
+        path : str
+            File path (used to select language-specific logic).
+        mode : CodeCompactionMode
+            Compaction mode (default: CODE_API).
         """
         if path.endswith(".py"):
-            return self._process_python(content)
+            return self._process_python(content, mode=mode)
         elif path.endswith((".js", ".jsx", ".ts", ".tsx")):
             return self._process_javascript(content)
         else:
             return self._process_generic(content)
 
-    def _process_python(self, content: str) -> str:
+    # ------------------------------------------------------------------
+    # Python
+    # ------------------------------------------------------------------
+
+    def _process_python(
+        self,
+        content: str,
+        mode: CodeCompactionMode = CodeCompactionMode.CODE_API,
+    ) -> str:
         """Extract Python structure using pre-compiled patterns."""
         lines = content.split("\n")
         result: List[str] = []
+        seen_imports: Set[str] = set()
         i = 0
 
         while i < len(lines):
@@ -67,9 +143,11 @@ class CodeProcessor:
                 i += 1
                 continue
 
-            # Imports — always keep (using compiled pattern)
+            # Imports — deduplicated, always keep
             if _PY_IMPORT.match(stripped):
-                result.append(line)
+                if stripped not in seen_imports:
+                    seen_imports.add(stripped)
+                    result.append(line)
                 # Handle multi-line imports
                 while stripped.endswith("\\") or (stripped.count("(") > stripped.count(")")):
                     i += 1
@@ -77,7 +155,9 @@ class CodeProcessor:
                         break
                     line = lines[i]
                     stripped = line.strip()
-                    result.append(line)
+                    # Add continuation lines only if we kept the import header
+                    if line not in seen_imports:
+                        result.append(line)
                 i += 1
                 continue
 
@@ -94,7 +174,7 @@ class CodeProcessor:
                 # Grab docstring
                 i = self._grab_docstring(lines, i, result)
                 # Grab class body signatures (methods)
-                i = self._grab_class_body(lines, i, result)
+                i = self._grab_class_body(lines, i, result, mode=mode)
                 continue
 
             # Function definitions (top-level)
@@ -106,6 +186,44 @@ class CodeProcessor:
                 # Skip body
                 i = self._skip_body(lines, i, self._indent_level(line))
                 result.append("")
+                continue
+
+            # Large literal/template assignment (CODE_API: stub; CODE_WITH_TEMPLATES: include)
+            triple_m = _PY_TRIPLE_ASSIGN.match(stripped)
+            if triple_m:
+                name = triple_m.group(1)
+                quote = triple_m.group(2)
+                rest = triple_m.group(3)
+                # Collect the full literal
+                literal_lines = [line]
+                # Check if it closes on the same line
+                closed = rest.count(quote) >= 1 and rest != quote  # rest after opening triple quote
+                # more precise: check if closing triple is already in rest
+                closed = quote in rest
+                j = i + 1
+                if not closed:
+                    while j < len(lines):
+                        literal_lines.append(lines[j])
+                        if quote in lines[j]:
+                            j += 1
+                            break
+                        j += 1
+                else:
+                    j = i + 1
+
+                n_lines = len(literal_lines)
+                if n_lines >= _LARGE_LITERAL_THRESHOLD:
+                    if mode == CodeCompactionMode.CODE_WITH_TEMPLATES:
+                        result.extend(literal_lines)
+                    else:
+                        # CODE_API: emit stub
+                        content_str = "\n".join(literal_lines)
+                        stub = _make_template_stub(name, n_lines, content_str)
+                        result.append(f"{name} = {stub}")
+                else:
+                    # Small literal — always keep
+                    result.extend(literal_lines)
+                i = j
                 continue
 
             # Module-level constants and type hints
@@ -130,10 +248,15 @@ class CodeProcessor:
 
         return "\n".join(result).strip()
 
+    # ------------------------------------------------------------------
+    # JavaScript / TypeScript
+    # ------------------------------------------------------------------
+
     def _process_javascript(self, content: str) -> str:
         """Extract JavaScript/TypeScript structure using pre-compiled patterns."""
         lines = content.split("\n")
         result: List[str] = []
+        seen_imports: Set[str] = set()
         i = 0
 
         while i < len(lines):
@@ -146,17 +269,26 @@ class CodeProcessor:
                 i += 1
                 continue
 
-            # Imports/requires
+            # Imports/requires (deduplicated)
             if _JS_IMPORT.match(stripped):
-                result.append(line)
-                # Multi-line import
-                while not stripped.endswith(";") and not stripped.endswith("}"):
-                    i += 1
-                    if i >= len(lines):
-                        break
-                    line = lines[i]
-                    stripped = line.strip()
+                if stripped not in seen_imports:
+                    seen_imports.add(stripped)
                     result.append(line)
+                    # Multi-line import
+                    while not stripped.endswith(";") and not stripped.endswith("}"):
+                        i += 1
+                        if i >= len(lines):
+                            break
+                        line = lines[i]
+                        stripped = line.strip()
+                        result.append(line)
+                else:
+                    # Skip duplicate (advance past multi-line if needed)
+                    while not stripped.endswith(";") and not stripped.endswith("}"):
+                        i += 1
+                        if i >= len(lines):
+                            break
+                        stripped = lines[i].strip()
                 i += 1
                 continue
 
@@ -205,10 +337,18 @@ class CodeProcessor:
 
         return "\n".join(result).strip()
 
+    # ------------------------------------------------------------------
+    # Generic
+    # ------------------------------------------------------------------
+
     def _process_generic(self, content: str) -> str:
         """Fallback: keep first 100 lines."""
         lines = content.split("\n")[:100]
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     def _indent_level(self, line: str) -> int:
         """Count leading spaces."""
@@ -244,7 +384,13 @@ class CodeProcessor:
             i += 1
         return i
 
-    def _grab_class_body(self, lines: list, i: int, result: list) -> int:
+    def _grab_class_body(
+        self,
+        lines: list,
+        i: int,
+        result: list,
+        mode: CodeCompactionMode = CodeCompactionMode.CODE_API,
+    ) -> int:
         """Extract method signatures from a class body."""
         if i >= len(lines):
             return i
@@ -272,6 +418,41 @@ class CodeProcessor:
                 result.append(line)
                 i += 1
                 continue
+
+            # Class-level large literal (template)
+            indent = self._indent_level(line) if stripped else 0
+            if indent > class_indent:
+                triple_m = _PY_TRIPLE_ASSIGN.match(stripped)
+                if triple_m:
+                    name = triple_m.group(1)
+                    quote = triple_m.group(2)
+                    rest = triple_m.group(3)
+                    literal_lines = [line]
+                    closed = quote in rest
+                    j = i + 1
+                    if not closed:
+                        while j < len(lines):
+                            literal_lines.append(lines[j])
+                            if quote in lines[j]:
+                                j += 1
+                                break
+                            j += 1
+                    else:
+                        j = i + 1
+
+                    n_lines = len(literal_lines)
+                    prefix = " " * indent
+                    if n_lines >= _LARGE_LITERAL_THRESHOLD:
+                        if mode == CodeCompactionMode.CODE_WITH_TEMPLATES:
+                            result.extend(literal_lines)
+                        else:
+                            content_str = "\n".join(literal_lines)
+                            stub = _make_template_stub(name, n_lines, content_str)
+                            result.append(f"{prefix}{name} = {stub}")
+                    else:
+                        result.extend(literal_lines)
+                    i = j
+                    continue
 
             # Class-level assignments
             if _PY_CLASS_ATTR.match(line) and indent == class_indent + 4:

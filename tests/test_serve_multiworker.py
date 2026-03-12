@@ -27,7 +27,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-BASE_PORT = 18765  # test port base — avoid clashing with real serve (8765)
+BASE_PORT = 18766  # test port base — avoid clashing with real serve (8766)
 
 
 def _get(url: str, timeout: float = 5.0) -> dict:

@@ -43,6 +43,30 @@ def _make_openai_body(**overrides) -> bytes:
     return json.dumps(data).encode()
 
 
+def _make_openai_responses_body(**overrides) -> bytes:
+    """Build a minimal valid OpenAI Responses API body."""
+    data = {
+        "model": "gpt-4.1",
+        "input": "Hello",
+    }
+    data.update(overrides)
+    return json.dumps(data).encode()
+
+
+def _make_google_body(**overrides) -> bytes:
+    """Build a minimal valid Google generateContent body."""
+    data = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": "Hello"}],
+            }
+        ]
+    }
+    data.update(overrides)
+    return json.dumps(data).encode()
+
+
 # ---------------------------------------------------------------------------
 # Schema import test
 # ---------------------------------------------------------------------------
@@ -71,9 +95,19 @@ class TestRequestSchemas(unittest.TestCase):
         schema = get_request_schema("openai")
         self.assertEqual(schema["title"], OPENAI_CHAT_SCHEMA["title"])
 
+    def test_get_request_schema_returns_openai_responses(self):
+        from tokenpak.validation.request_schema import get_request_schema, OPENAI_RESPONSES_SCHEMA
+        schema = get_request_schema("openai-codex")
+        self.assertEqual(schema["title"], OPENAI_RESPONSES_SCHEMA["title"])
+
+    def test_get_request_schema_returns_google(self):
+        from tokenpak.validation.request_schema import get_request_schema, GOOGLE_GENERATE_CONTENT_SCHEMA
+        schema = get_request_schema("google")
+        self.assertEqual(schema["title"], GOOGLE_GENERATE_CONTENT_SCHEMA["title"])
+
     def test_get_request_schema_returns_permissive_for_unknown(self):
         from tokenpak.validation.request_schema import get_request_schema
-        schema = get_request_schema("google")
+        schema = get_request_schema("unknown-provider")
         # Unknown → no required fields, additionalProperties=True
         self.assertEqual(schema.get("required", []), [])
 
@@ -312,6 +346,48 @@ class TestOpenAIValidation(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# OpenAI Responses validation
+# ---------------------------------------------------------------------------
+
+class TestOpenAIResponsesValidation(unittest.TestCase):
+    def setUp(self):
+        from tokenpak.validation.request_validator import RequestValidator
+        self.validator = RequestValidator(mode="strict")
+
+    def test_valid_openai_responses_request(self):
+        result = self.validator.validate(_make_openai_responses_body(), "openai-codex")
+        self.assertTrue(result.valid, result.errors)
+
+    def test_missing_input_is_error(self):
+        data = json.loads(_make_openai_responses_body())
+        del data["input"]
+        result = self.validator.validate(json.dumps(data).encode(), "openai-codex")
+        self.assertFalse(result.valid)
+        fields = [e["field"] for e in result.errors]
+        self.assertIn("input", fields)
+
+
+# ---------------------------------------------------------------------------
+# Google validation
+# ---------------------------------------------------------------------------
+
+class TestGoogleValidation(unittest.TestCase):
+    def setUp(self):
+        from tokenpak.validation.request_validator import RequestValidator
+        self.validator = RequestValidator(mode="strict")
+
+    def test_valid_google_request(self):
+        result = self.validator.validate(_make_google_body(), "google")
+        self.assertTrue(result.valid, result.errors)
+
+    def test_missing_contents_is_error(self):
+        result = self.validator.validate(b'{"generationConfig": {}}', "google")
+        self.assertFalse(result.valid)
+        fields = [e["field"] for e in result.errors]
+        self.assertIn("contents", fields)
+
+
+# ---------------------------------------------------------------------------
 # Validation modes
 # ---------------------------------------------------------------------------
 
@@ -358,6 +434,22 @@ class TestValidationModes(unittest.TestCase):
         from tokenpak.validation.request_validator import RequestValidator
         v = RequestValidator(mode="strict")
         result = v.validate_bytes(b'{}', "https://api.openai.com/v1/chat/completions", "openai")
+        self.assertFalse(result.valid)
+
+    def test_validate_bytes_validates_openai_responses(self):
+        from tokenpak.validation.request_validator import RequestValidator
+        v = RequestValidator(mode="strict")
+        result = v.validate_bytes(b'{}', "https://api.openai.com/v1/responses", "openai-codex")
+        self.assertFalse(result.valid)
+
+    def test_validate_bytes_validates_google_generate_content(self):
+        from tokenpak.validation.request_validator import RequestValidator
+        v = RequestValidator(mode="strict")
+        result = v.validate_bytes(
+            b'{}',
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent",
+            "google",
+        )
         self.assertFalse(result.valid)
 
     def test_get_validation_mode_env_strict(self):

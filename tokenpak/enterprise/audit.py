@@ -33,7 +33,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, List
 
 # ---------------------------------------------------------------------------
 # DDL
@@ -303,7 +303,7 @@ class AuditLog:
 
         return len(rows)
 
-    def verify_chain(self) -> tuple[bool, list[str]]:
+    def verify_chain(self) -> tuple[bool, List[str]]:
         """Verify the hash chain integrity.
 
         Returns ``(ok, errors)`` where *errors* is a list of violation messages.

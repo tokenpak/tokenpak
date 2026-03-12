@@ -59,6 +59,12 @@ jobs:
           python scripts/check_benchmark_thresholds.py benchmark.json
           echo "✅ All compile-time thresholds passed"
 
+      - name: Generate benchmark report
+        run: |
+          python scripts/generate_benchmarks_report.py
+          test -f docs/BENCHMARKS.md
+          test -f artifacts/benchmark-summary.json
+
       # ── Regression detection (compare to baseline) ───────────────────
       - name: Regression detection vs baseline
         if: github.event_name == 'pull_request'
@@ -104,6 +110,8 @@ jobs:
           path: |
             benchmark.json
             benchmark_output.txt
+            artifacts/benchmark-summary.json
+            docs/BENCHMARKS.md
 
       # Save as new baseline when merging to main
       - name: Save baseline (main branch only)

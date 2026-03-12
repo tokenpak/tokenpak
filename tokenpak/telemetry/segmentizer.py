@@ -852,7 +852,7 @@ def summarize_anti_patterns(segments: list[Segment]) -> dict[str, object]:
             }
         )
 
-    offenders.sort(key=lambda item: int(item.get("order", 0)))
+    offenders.sort(key=lambda item: int(item.get("order", 0)))  # type: ignore
     return {
         "counts": counts,
         "top_offenders": offenders[:5],

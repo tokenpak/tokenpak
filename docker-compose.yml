@@ -1,0 +1,99 @@
+# TokenPak Docker Compose Configuration
+# Supports single-machine and multi-container deployments
+# Production defaults: logging enabled, metrics enabled, secure config
+
+version: '3.8'
+
+services:
+  tokenpak:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tokenpak-proxy
+    ports:
+      - "${TOKENPAK_PORT:-8766}:8766"
+    environment:
+      # TokenPak Settings
+      TOKENPAK_PORT: "${TOKENPAK_PORT:-8766}"
+      TOKENPAK_LOG_LEVEL: "${TOKENPAK_LOG_LEVEL:-info}"
+      TOKENPAK_ENABLE_METRICS: "${TOKENPAK_ENABLE_METRICS:-true}"
+      
+      # Python Settings
+      PYTHONUNBUFFERED: "1"
+    
+    # Volume mounts
+    volumes:
+      # Config volume (read-only)
+      - ./config/tokenpack.config.json:/app/tokenpack.config.json:ro
+      
+      # Logs volume (persistent)
+      - tokenpak-logs:/logs
+      
+      # Cache volume (optional, for cache persistence)
+      - tokenpak-cache:/cache
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Resource limits (optional, adjust based on your needs)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1'
+    #       memory: 512M
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 256M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=tokenpak"
+    
+    # Network
+    networks:
+      - tokenpak-network
+
+  # Optional: Redis cache service for distributed deployments
+  redis:
+    image: redis:7-alpine
+    container_name: tokenpak-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - tokenpak-network
+    profiles:
+      - "with-cache"
+
+# Named volumes for persistent storage
+volumes:
+  tokenpak-logs:
+    driver: local
+  tokenpak-cache:
+    driver: local
+  redis-data:
+    driver: local
+
+# Named network for service communication
+networks:
+  tokenpak-network:
+    driver: bridge

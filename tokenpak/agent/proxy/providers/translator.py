@@ -774,10 +774,10 @@ _RESPONSE_TRANSLATORS.update(
     {
         ("google", "anthropic"): _google_to_anthropic_response,
         ("anthropic", "google"): _anthropic_to_google_response,
-        ("google", "openai"): lambda d: _anthropic_to_openai_response(
+        ("google", "openai"): lambda d: _anthropic_to_openai_response(  # type: ignore
             _google_to_anthropic_response(d)
         ),
-        ("openai", "google"): lambda d: _anthropic_to_google_response(
+        ("openai", "google"): lambda d: _anthropic_to_google_response(  # type: ignore
             _openai_to_anthropic_response(d)
         ),
     }

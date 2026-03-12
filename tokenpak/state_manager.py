@@ -163,19 +163,226 @@ class StateManager:
         wire_text: full section string, e.g. 'STATE_JSON:\\n{...}'
         """
         lines = wire_text.strip().splitlines()
-        json_lines = [l for l in lines if not l.startswith("STATE_JSON")]
-        raw = "\n".join(json_lines).strip()
-        state = json.loads(raw)
 
-        mgr = cls.__new__(cls)
-        mgr.session_id = session_id
-        mgr.base_dir = Path(base_dir)
-        state_dir = mgr.base_dir / "state"
+
+# ---------------------------------------------------------------------------
+# Multi-schema support — intent-specific state
+# ---------------------------------------------------------------------------
+
+import copy as _copy
+
+try:
+    from jsonschema import ValidationError as _ValidationError, validate as _validate  # noqa: F401, F811
+    _HAS_JSONSCHEMA_MS = True
+except ImportError:
+    _HAS_JSONSCHEMA_MS = False
+
+# Lazy import to avoid circular dependencies
+_SCHEMAS_DIR_CACHE = None
+
+
+def _get_schemas_dir():
+    global _SCHEMAS_DIR_CACHE
+    if _SCHEMAS_DIR_CACHE is None:
+        _SCHEMAS_DIR_CACHE = Path(__file__).parent / "agent" / "state_schemas"
+    return _SCHEMAS_DIR_CACHE
+
+
+class IntentStateManager:
+    """
+    Intent-specific state manager.
+
+    Maintains a separate compact state blob per intent, injecting only
+    the fields relevant to that intent into the LLM context.
+
+    Persists to: .ocp/state/session_<id>.<intent>.state.json
+    Wire format: compact JSON, prefixed with STATE_JSON[<intent>]:
+    """
+
+    # Intent → default empty state initializer
+    _DEFAULTS = {
+        "debug": {
+            "error": "",
+            "affected_files": [],
+            "changed_files": [],
+            "failing_tests": [],
+            "recent_deploy": "",
+        },
+        "create": {
+            "audience": "",
+            "tone": "",
+            "cta": "",
+            "brand_constraints": [],
+            "source_points": [],
+        },
+        "plan": {
+            "objective": "",
+            "constraints": [],
+            "options": [],
+            "blockers": [],
+            "deadline": "",
+        },
+        "execute": {
+            "service_status": {},
+            "recent_changes": [],
+            "health_checks": [],
+            "env_drift": [],
+        },
+        "query": {
+            "schema": {},
+            "source_type": "",
+            "output_format": "json",
+        },
+        "search": {
+            "schema": {},
+            "source_type": "",
+            "output_format": "json",
+        },
+    }
+
+    def __init__(self, session_id, intent, base_dir=".ocp"):
+        self.session_id = session_id
+        self.intent = intent
+        self.base_dir = Path(base_dir)
+        state_dir = self.base_dir / "state"
         state_dir.mkdir(parents=True, exist_ok=True)
-        mgr.state_path = state_dir / f"session_{session_id}.state.json"
-        mgr.state = state
-        return mgr
+        self.state_path = state_dir / f"session_{session_id}.{intent}.state.json"
+        self._schema = self._load_schema()
+        self.state = self.load()
 
-    def __repr__(self) -> str:
-        goal_preview = repr(self.state.get("goal", "")[:40])
-        return f"<StateManager session={self.session_id!r} goal={goal_preview}>"
+    # ── Schema ───────────────────────────────────────────────────────────────
+
+    def _load_schema(self):
+        """Load the JSON schema file for this intent (if it exists)."""
+        schemas_dir = _get_schemas_dir()
+        try:
+            from tokenpak.agent.state_schemas import INTENT_SCHEMA_MAP
+            filename = INTENT_SCHEMA_MAP.get(self.intent)
+            if filename:
+                schema_path = schemas_dir / filename
+                if schema_path.exists():
+                    with open(schema_path, encoding="utf-8") as f:
+                        return json.load(f)
+        except ImportError:
+            pass
+        return None
+
+    # ── Init / Load ──────────────────────────────────────────────────────────
+
+    def load(self):
+        """Load persisted state or initialize from defaults."""
+        if self.state_path.exists():
+            try:
+                with open(self.state_path, encoding="utf-8") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        return self._init_state()
+
+    def _init_state(self):
+        defaults = self._DEFAULTS.get(self.intent, {})
+        return _copy.deepcopy(defaults)
+
+    # ── Validation ───────────────────────────────────────────────────────────
+
+    def validate(self):
+        """Validate intent state against its JSON schema."""
+        if not _HAS_JSONSCHEMA_MS or self._schema is None:
+            return
+        _validate(instance=self.state, schema=self._schema)
+
+    # ── Persistence ──────────────────────────────────────────────────────────
+
+    def save(self):
+        """Validate and persist state."""
+        self.validate()
+        with open(self.state_path, "w", encoding="utf-8") as f:
+            json.dump(self.state, f, indent=2)
+
+    # ── Mutation ─────────────────────────────────────────────────────────────
+
+    def set(self, key, value):
+        """Set a field in the current intent state."""
+        self.state[key] = value
+
+    def get(self, key, default=None):
+        """Get a field from the current intent state."""
+        return self.state.get(key, default)
+
+    def update(self, patch):
+        """Shallow-merge a dict of updates into state."""
+        self.state.update(patch)
+
+    # ── Wire format ──────────────────────────────────────────────────────────
+
+    def to_wire_format(self):
+        """Compact JSON (no whitespace) — only fields relevant to this intent."""
+        return json.dumps(self.state, separators=(",", ":"))
+
+    def to_wire_section(self):
+        """Full STATE_JSON section tagged with intent."""
+        return f"STATE_JSON[{self.intent}]:\n{self.to_wire_format()}"
+
+    def __repr__(self):
+        return f"<IntentStateManager session={self.session_id!r} intent={self.intent!r}>"
+
+
+class MultiSchemaStateManager:
+    """
+    Facade that manages multiple IntentStateManagers for a session.
+
+    Usage::
+
+        mgr = MultiSchemaStateManager("sess-abc123")
+        mgr.for_intent("debug").set("error", "NullPointerException in auth.py")
+        mgr.for_intent("plan").set("objective", "migrate database to Postgres")
+        wire = mgr.build_wire_section("debug")  # only injects debug fields
+    """
+
+    def __init__(self, session_id, base_dir=".ocp"):
+        self.session_id = session_id
+        self.base_dir = base_dir
+        self._managers = {}
+
+    def for_intent(self, intent):
+        """Get or create the IntentStateManager for a given intent."""
+        if intent not in self._managers:
+            self._managers[intent] = IntentStateManager(
+                self.session_id, intent, self.base_dir
+            )
+        return self._managers[intent]
+
+    def save_all(self):
+        """Persist all active intent states."""
+        for mgr in self._managers.values():
+            mgr.save()
+
+    def build_wire_section(self, intent):
+        """
+        Build the STATE_JSON wire section for the given intent.
+
+        Only includes fields relevant to that intent — no cross-contamination.
+        """
+        return self.for_intent(intent).to_wire_section()
+
+    def active_intents(self):
+        """Return the list of intents with active state managers."""
+        return list(self._managers.keys())
+
+    def __repr__(self):
+        return (
+            f"<MultiSchemaStateManager session={self.session_id!r} "
+            f"active={self.active_intents()}>"
+        )
+
+
+def select_state_manager(session_id, intent, base_dir=".ocp"):
+    """
+    Factory: select and return the appropriate IntentStateManager for a classified intent.
+
+    This is the primary auto-selection entry point used by the proxy router:
+
+        mgr = select_state_manager(session_id, classified_intent)
+        # mgr already has the correct schema + default state for that intent
+    """
+    return IntentStateManager(session_id, intent, base_dir)

@@ -5,7 +5,7 @@ Compresses messages and state when passing between agents to stay
 within token budgets, and uses tokenpak HandoffManager for persistent tracking.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from tokenpak.agent.agentic.handoff import (
     ContextRef,
@@ -102,7 +102,7 @@ class TokenPakHandoff:
         except (ValueError, Exception):
             pass  # unknown agents OK in non-strict mode
 
-        return wire_obj.to_wire()
+        return cast(str, wire_obj.to_wire())
 
     def receive_handoff_wire(self, wire: str) -> Dict[str, Any]:
         """Deserialise a wire string and return the state dict.

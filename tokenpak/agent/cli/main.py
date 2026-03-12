@@ -252,6 +252,21 @@ def cmd_help(args):
                 ("help", "This help"),
             ],
         ),
+        (
+            "PRO",
+            [
+                ("optimize", "Auto-analyze session for cost + token efficiency (Pro+)"),
+                ("optimize --apply", "Auto-apply optimization recommendations (Pro+)"),
+                ("cost", "Token usage and cost reporting"),
+                ("budget intelligence", "Burn rate, ETA, trend, suggestions (Pro+)"),
+                ("prune", "Remove low-priority blocks from store (Pro+)"),
+                ("prune --dry-run", "Preview prune candidates without changes (Pro+)"),
+                ("prune --auto", "Auto-prune without confirmation (Pro+)"),
+                ("retain <id>", "Pin a block so it survives pruning (Pro+)"),
+                ("retain --list", "Show all pinned blocks (Pro+)"),
+                ("retain --remove <id>", "Unpin a block (Pro+)"),
+            ],
+        ),
     ]
     if target:
         flat = {cmd: desc for _, grp in CMDS for cmd, desc in grp}
@@ -268,6 +283,27 @@ def cmd_help(args):
     print(f"{SEP}")
     print("Flags: --verbose  --raw  --minimal")
     print("Tip:   tokenpak help <command>")
+
+
+# ---------------------------------------------------------------------------
+# savings argparse helper
+# ---------------------------------------------------------------------------
+
+
+def _savings_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.savings import run_savings_cmd
+
+    sp = argparse.ArgumentParser(prog="tokenpak savings", add_help=True)
+    sp.add_argument(
+        "--period",
+        default="24h",
+        choices=["24h", "7d", "30d"],
+        help="Time window (default: 24h)",
+    )
+    sp.add_argument("--verbose", "-v", action="store_true", help="Per-model breakdown")
+    sp.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
+    args = sp.parse_args(argv)
+    run_savings_cmd(args)
 
 
 # ---------------------------------------------------------------------------
@@ -288,6 +324,43 @@ def _cost_argparse(argv: list) -> None:
     cp.add_argument("--raw", action="store_true", help="Output raw JSON")
     args = cp.parse_args(argv)
     run_cost_cmd(args)
+
+
+def _diff_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+
+    dp = argparse.ArgumentParser(prog="tokenpak diff", add_help=True)
+    dp.add_argument("--verbose", "-v", action="store_true", help="Show token counts per block")
+    dp.add_argument("--json", dest="raw", action="store_true", help="Output raw JSON")
+    dp.add_argument("--since", default=None, help="Diff from specific ISO timestamp")
+    args = dp.parse_args(argv)
+    run_diff_cmd(args)
+
+
+def _prune_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.prune import run_prune
+
+    pp = argparse.ArgumentParser(prog="tokenpak prune", add_help=True)
+    pp.add_argument("--auto", action="store_true", help="Auto-prune without confirmation")
+    pp.add_argument("--dry-run", dest="dry_run", action="store_true", help="Preview without changes")
+    pp.add_argument(
+        "--threshold", type=float, default=0.4, metavar="SCORE",
+        help="Quality score below which blocks are pruned (default: 0.4)"
+    )
+    pp.add_argument("--json", dest="as_json", action="store_true", help="Output raw JSON")
+    args = pp.parse_args(argv)
+    run_prune(auto=args.auto, dry_run=args.dry_run, threshold=args.threshold, as_json=args.as_json)
+
+
+def _retain_argparse(argv: list) -> None:
+    from tokenpak.agent.cli.commands.retain import run_retain
+
+    rp = argparse.ArgumentParser(prog="tokenpak retain", add_help=True)
+    rp.add_argument("block_id", nargs="?", default=None, help="Block ID to pin")
+    rp.add_argument("--list", dest="list_pins", action="store_true", help="Show all pinned blocks")
+    rp.add_argument("--remove", metavar="BLOCK_ID", default=None, help="Unpin a block")
+    args = rp.parse_args(argv)
+    run_retain(block_id=args.block_id, list_pins=args.list_pins, remove=args.remove)
 
 
 def _budget_argparse(argv: list) -> None:
@@ -313,6 +386,10 @@ def _budget_argparse(argv: list) -> None:
     # tokenpak budget forecast
     bsub.add_parser("forecast", help="Projected spend forecast")
 
+    # tokenpak budget intelligence (Pro+)
+    intp = bsub.add_parser("intelligence", help="Pro: burn rate, ETA, trend, suggestions")
+    intp.add_argument("--json", dest="raw", action="store_true", help="Output raw JSON")
+
     bp.add_argument("--raw", action="store_true", help="Output raw JSON")
     args = bp.parse_args(argv)
     run_budget_cmd(args)
@@ -331,7 +408,7 @@ def main():
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
         sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-        sp.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
+        sp.add_argument("--port", type=int, default=8766, help="Bind port (default: 8766)")
         sp.add_argument(
             "--workers",
             type=int,
@@ -369,6 +446,17 @@ def main():
             workflow_cmd(standalone_mode=True)
         except ImportError as e:
             print(f"workflow command not available: {e}")
+            sys.exit(1)
+        return
+
+    # Delegate teacher subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "teacher":
+        try:
+            from tokenpak.agent.cli.commands.teacher import run_teacher_cmd
+
+            run_teacher_cmd(sys.argv[2:])
+        except ImportError as e:
+            print(f"teacher command not available: {e}")
             sys.exit(1)
         return
 
@@ -420,6 +508,18 @@ def main():
             sys.exit(1)
         return
 
+    # Delegate exec subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "exec":
+        try:
+            from tokenpak.agent.cli.commands.exec import exec_cmd
+
+            sys.argv = sys.argv[1:]
+            exec_cmd(standalone_mode=True)
+        except ImportError as e:
+            print(f"exec command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate metrics subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "metrics":
         import argparse as _ap
@@ -454,14 +554,62 @@ def main():
             mp.print_help()
         return
 
+    # Delegate savings subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "savings":
+        _savings_argparse(sys.argv[2:])
+        return
+
     # Delegate cost subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "cost":
         _cost_argparse(sys.argv[2:])
         return
 
+    # Delegate optimize subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "optimize":
+        import argparse as _ap
+        from tokenpak.agent.cli.commands.optimize import run_optimize
+        op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
+        op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
+        op.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
+        op.add_argument("--apply", action="store_true", help="Auto-apply recommendations")
+        oargs = op.parse_args(sys.argv[2:])
+        run_optimize(verbose=oargs.verbose, as_json=oargs.as_json, apply=oargs.apply)
+        return
+
     # Delegate budget subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "budget":
         _budget_argparse(sys.argv[2:])
+        return
+
+    # Delegate diff subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "diff":
+        _diff_argparse(sys.argv[2:])
+        return
+
+    # Delegate prune subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "prune":
+        _prune_argparse(sys.argv[2:])
+        return
+
+    # Delegate retain subcommand (Pro+)
+    if len(sys.argv) > 1 and sys.argv[1] == "retain":
+        _retain_argparse(sys.argv[2:])
+        return
+
+    # Delegate Enterprise policy/sla/compliance commands
+    if len(sys.argv) > 1 and sys.argv[1] == "policy":
+        from tokenpak.agent.cli.commands.policy import run as _policy_run
+        _policy_run(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "sla":
+        from tokenpak.agent.cli.commands.sla import run as _sla_run
+        _sla_run(sys.argv[2:])
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == "compliance":
+        from tokenpak.agent.cli.commands.compliance import run as _compliance_run
+        _compliance_run(sys.argv[2:])
         return
 
     p = argparse.ArgumentParser(prog="tokenpak", add_help=False)

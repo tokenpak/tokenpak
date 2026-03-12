@@ -84,6 +84,8 @@ class RequestValidationResult:
         provider_path = {
             "anthropic": "messages",
             "openai": "chat-completions",
+            "openai-codex": "responses",
+            "google": "google-generate-content",
         }.get(self.provider, "requests")
 
         return {
@@ -195,10 +197,20 @@ class RequestValidator:
     ) -> RequestValidationResult:
         """Convenience method — infers whether to validate based on URL pattern.
 
-        Only validates /messages and /chat/completions endpoints.
+        Validates adapter request endpoints:
+        - /v1/messages (Anthropic)
+        - /v1/chat/completions (OpenAI Chat)
+        - /v1/responses (OpenAI Responses/Codex)
+        - /models/*:generateContent (Google Gemini)
+
         Other endpoints are passed through as valid.
         """
-        is_messages_endpoint = "/v1/messages" in target_url or "/chat/completions" in target_url
+        is_messages_endpoint = (
+            "/v1/messages" in target_url
+            or "/chat/completions" in target_url
+            or "/v1/responses" in target_url
+            or ("/models/" in target_url and "generateContent" in target_url)
+        )
         if not is_messages_endpoint or not body:
             return RequestValidationResult(valid=True, provider=provider)
 
@@ -347,6 +359,10 @@ class RequestValidator:
             errors.extend(self._anthropic_semantics(data, warnings))
         elif provider == "openai":
             errors.extend(self._openai_semantics(data, warnings))
+        elif provider == "openai-codex":
+            errors.extend(self._openai_responses_semantics(data, warnings))
+        elif provider == "google":
+            errors.extend(self._google_semantics(data, warnings))
 
         return errors, warnings
 
@@ -440,6 +456,66 @@ class RequestValidator:
 
         return errors
 
+    def _openai_responses_semantics(
+        self,
+        data: Dict[str, Any],
+        warnings: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        errors: List[Dict[str, Any]] = []
+
+        model = data.get("model", "")
+        if model and not (
+            model.startswith("gpt-")
+            or model.startswith("o1")
+            or model.startswith("o3")
+            or "codex" in str(model).lower()
+            or "ft:" in model
+        ):
+            warnings.append(
+                {
+                    "field": "model",
+                    "error": (
+                        f"model '{model}' doesn't look like an OpenAI Responses model "
+                        "(expected gpt-*/o1/o3/codex)"
+                    ),
+                }
+            )
+
+        return errors
+
+    def _google_semantics(
+        self,
+        data: Dict[str, Any],
+        warnings: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        errors: List[Dict[str, Any]] = []
+
+        contents = data.get("contents", [])
+        if isinstance(contents, list):
+            for i, content in enumerate(contents):
+                if not isinstance(content, dict):
+                    errors.append({"field": f"contents[{i}]", "error": "must be an object"})
+                    continue
+                parts = content.get("parts")
+                if not isinstance(parts, list) or len(parts) == 0:
+                    errors.append(
+                        {
+                            "field": f"contents[{i}].parts",
+                            "error": "must be a non-empty array",
+                        }
+                    )
+
+        model = data.get("model", "")
+        if model and not str(model).startswith("gemini"):
+            warnings.append(
+                {
+                    "field": "model",
+                    "error": f"model '{model}' doesn't look like a Gemini model (expected gemini-*)",
+                }
+            )
+
+        return errors
+
     def _check_type(self, value: Any, expected: str) -> bool:
         type_map = {
             "string": str,
@@ -456,7 +532,7 @@ class RequestValidator:
         # Booleans are ints in Python — treat bool as NOT matching integer/number
         if expected in ("integer", "number") and isinstance(value, bool):
             return False
-        return isinstance(value, expected_types)
+        return isinstance(value, expected_types)  # type: ignore
 
     def _log_result(self, result: RequestValidationResult) -> None:
         """Log validation results based on mode."""

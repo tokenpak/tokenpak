@@ -197,3 +197,29 @@ Note: Latency includes upstream API time. TokenPak overhead is <50ms.
 - Compaction (hybrid, threshold=4,500 tokens): enabled
 
 > Note: All request/token/savings stats show zeros because the proxy was recently restarted. Stats are documented honestly per task spec.
+
+## Live Benchmarks (2026-03-09)
+
+**Date:** 2026-03-10 (rerun for 2026-03-09 task)
+**Status:** Development build with local health endpoint responding
+
+### Import Performance
+- `import tokenpak`: **470.3ms**
+
+### Codebase Stats
+- Python files: **345**
+- Total lines: **26,267**
+
+### Test Suite
+- Tests passing: **187**
+- Duration: **0.84s**
+
+### Proxy Status
+- `GET localhost:8766/health`: `status: ok`
+- Current runtime stats (from health payload at measurement time):
+  - requests: 1
+  - input_tokens: 24,727
+  - sent_input_tokens: 22,089
+  - saved_tokens: 2,638
+  - protected_tokens: 19,836
+  - errors: 3

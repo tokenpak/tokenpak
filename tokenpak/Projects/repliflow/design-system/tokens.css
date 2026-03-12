@@ -1,0 +1,146 @@
+:root {
+  --color-primary-50: #eef4ff;
+  --color-primary-100: #d9e6ff;
+  --color-primary-200: #b8ceff;
+  --color-primary-300: #8cadff;
+  --color-primary-400: #5e85ff;
+  --color-primary-500: #2f63f5;
+  --color-primary-600: #2149d6;
+  --color-primary-700: #1939ab;
+  --color-primary-800: #162f86;
+  --color-primary-900: #142a69;
+
+  --color-secondary-50: #eefbfa;
+  --color-secondary-100: #cff4f2;
+  --color-secondary-200: #a8e9e5;
+  --color-secondary-300: #75d9d2;
+  --color-secondary-400: #41beb4;
+  --color-secondary-500: #199f96;
+  --color-secondary-600: #127f79;
+  --color-secondary-700: #0f6661;
+  --color-secondary-800: #104f4c;
+  --color-secondary-900: #103f3d;
+
+  --color-accent-500: #f97316;
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+
+  --font-display: 'Sora', 'Manrope', 'Inter', sans-serif;
+  --font-body: 'Inter', 'Manrope', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', monospace;
+
+  --text-xs: 12px/18px var(--font-body);
+  --text-sm: 14px/20px var(--font-body);
+  --text-base: 16px/24px var(--font-body);
+  --text-lg: 18px/28px var(--font-body);
+  --text-xl: 20px/30px var(--font-body);
+  --text-2xl: 24px/34px var(--font-display);
+  --text-3xl: 30px/40px var(--font-display);
+  --text-4xl: 36px/46px var(--font-display);
+
+  --space-1: 0px;
+  --space-2: 2px;
+  --space-3: 4px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+  --space-8: 32px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 96px;
+  --space-12: 128px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 24px;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 8px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 10px 24px rgba(15, 23, 42, 0.14);
+  --shadow-xl: 0 20px 36px rgba(15, 23, 42, 0.18);
+  --shadow-2xl: 0 32px 48px rgba(15, 23, 42, 0.22);
+
+  --opacity-10: 0.1;
+  --opacity-25: 0.25;
+  --opacity-50: 0.5;
+  --opacity-75: 0.75;
+  --opacity-90: 0.9;
+
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 600ms;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.container {
+  width: min(100% - 2rem, 1280px);
+  margin-inline: auto;
+}
+
+.grid-12 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-7);
+}
+
+@media (min-width: 320px) {
+  :root { --bp-current: 320px; }
+}
+@media (min-width: 768px) {
+  :root { --bp-current: 768px; }
+}
+@media (min-width: 1024px) {
+  :root { --bp-current: 1024px; }
+}
+@media (min-width: 1280px) {
+  :root { --bp-current: 1280px; }
+}
+
+.btn {
+  border: 0;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.btn--sm { height: 32px; padding: 0 12px; font: var(--text-sm); }
+.btn--md { height: 40px; padding: 0 16px; font: var(--text-base); }
+.btn--lg { height: 48px; padding: 0 20px; font: var(--text-lg); }
+.btn--primary { background: var(--color-primary-500); color: white; }
+.btn--secondary { background: var(--color-secondary-500); color: white; }
+.btn--tertiary { background: transparent; color: var(--color-primary-600); border: 1px solid var(--color-primary-300); }
+.btn:hover { opacity: 0.92; }
+.btn:active { opacity: 0.84; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.input {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-neutral-300);
+  background: white;
+  color: var(--color-neutral-900);
+}
+.input--sm { height: 36px; padding: 0 12px; }
+.input--md { height: 44px; padding: 0 14px; }
+.input--lg { height: 52px; padding: 0 16px; }
+.input:focus { outline: 2px solid var(--color-primary-500); outline-offset: 2px; }
+.input[aria-invalid="true"] { border: 2px solid #dc2626; }
+
+.card {
+  border-radius: var(--radius-xl);
+  padding: var(--space-7);
+  box-shadow: var(--shadow-lg);
+  background: white;
+}

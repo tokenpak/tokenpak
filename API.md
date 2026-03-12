@@ -110,6 +110,92 @@ SSE events are forwarded verbatim from Anthropic: `message_start`, `content_bloc
 
 ---
 
+### POST /ingest
+
+Ingest custom telemetry entries into the proxy's metrics database.
+
+**Request body (single entry):**
+
+```json
+{
+  "model": "claude-opus-4-5",
+  "tokens": 5000,
+  "cost": 0.25,
+  "timestamp": "2026-03-10T16:03:00Z"
+}
+```
+
+**Required fields:**
+- `model` (string): Model identifier
+- `tokens` (integer): Total tokens used (≥ 0)
+- `cost` (number): Estimated cost in USD (≥ 0)
+
+**Optional fields:**
+- `timestamp` (ISO 8601 string): Entry time; defaults to current UTC if omitted
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "ids": ["entry_20260310_abc123"]
+}
+```
+
+**Error responses:**
+- `400 Bad Request`: Missing required fields, invalid JSON, or invalid field types
+- `413 Payload Too Large`: Request body exceeds 1MB
+- `422 Unprocessable Entity`: Field validation failed (invalid timestamp format, negative values)
+- `500 Internal Server Error`: Storage write failure
+
+---
+
+### POST /ingest/batch
+
+Bulk ingest multiple telemetry entries in a single request.
+
+**Request body:**
+
+```json
+{
+  "events": [
+    {
+      "model": "claude-opus-4-5",
+      "tokens": 5000,
+      "cost": 0.25,
+      "timestamp": "2026-03-10T16:03:00Z"
+    },
+    {
+      "model": "gpt-4o",
+      "tokens": 3000,
+      "cost": 0.15
+    }
+  ]
+}
+```
+
+**Constraints:**
+- `events` must be a list of 1–1000 entries
+- Each entry uses the same validation as `/ingest`
+- Batch processing is atomic: on error, the entire batch is rejected
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "ids": ["entry_20260310_abc123", "entry_20260310_def456"]
+}
+```
+
+**Error responses:**
+- `400 Bad Request`: Missing events field, empty list, or non-dict entries
+- `413 Payload Too Large`: Request body exceeds 1MB
+- `422 Unprocessable Entity`: One or more entries fail validation
+- `500 Internal Server Error`: Storage write failure
+
+---
+
 ### GET /health
 
 Proxy health check.

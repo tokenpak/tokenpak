@@ -48,7 +48,7 @@ def run_serve_cmd(args) -> None:
         sys.exit(1)
 
     host = getattr(args, "host", "127.0.0.1") or "127.0.0.1"
-    port = getattr(args, "port", 8765) or 8765
+    port = getattr(args, "port", 8766) or 8766
     workers = getattr(args, "workers", None)
 
     if workers is None:

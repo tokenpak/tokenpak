@@ -1,0 +1,74 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation (except README)
+*.md
+!README.md
+docs/
+
+# Tests
+tests/
+*.test.js
+*.test.py
+test_*.py
+*_test.py
+pytest.ini
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+npm-debug.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# Development
+.mypy_cache/
+.dmypy.json
+dmypy.json
+*.db
+*.sqlite
+monitor.db*
+telemetry.db*
+
+# Misc
+.tmp/
+.cache/
+local/

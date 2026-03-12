@@ -1,0 +1,24 @@
+{
+  "model": "gemini-2.0-flash",
+  "systemInstruction": {
+    "parts": [
+      {
+        "text": "You are a concise assistant."
+      }
+    ]
+  },
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "CRITICAL_FACT: project codenamed ORBIT. Please summarize this architecture note in plain language. Include only key points and remove repetition. The architecture note says the ingestion service validates schema, applies idempotency keys, retries transient upstream errors with capped backoff, and writes immutable audit entries for each operation. Repeat: ingestion service validates schema, applies idempotency keys, retries transient upstream errors with capped backoff, and writes immutable audit entries for each operation."
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "temperature": 0.1,
+    "maxOutputTokens": 512
+  }
+}

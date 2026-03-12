@@ -1,13 +1,14 @@
 # autogen-tokenpak
 
-TokenPak integration for AutoGen — automatic context compression for multi-agent conversations.
+TokenPak integration for Microsoft AutoGen — automatic context compression for multi-agent conversations.
 
-Reduces token costs in group chats by 30-50%.
+## Features
 
-[![PyPI version](https://img.shields.io/pypi/v/autogen-tokenpak)](https://pypi.org/project/autogen-tokenpak/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
----
+- **Automatic Context Compression**: Reduces token usage in AutoGen conversations without API changes
+- **Multi-Agent Support**: Compress system prompts, conversation history, and tool definitions across agents
+- **Transparent Integration**: Integrates via method patching — works with existing AutoGen workflows
+- **Compression Reports**: Get detailed metrics on compression applied
+- **Type-Safe**: Full mypy strict mode compliance
 
 ## Installation
 
@@ -15,158 +16,193 @@ Reduces token costs in group chats by 30-50%.
 pip install autogen-tokenpak
 ```
 
----
-
 ## Quick Start
 
-### Assistant with compression
-
 ```python
-from autogen_tokenpak import TokenPakAssistant, TokenPakGroupChat
+from autogen_tokenpak import TokenPakConversationHook
+from autogen import UserProxyAgent, AssistantAgent
 
-# Create agents with token budgets
-researcher = TokenPakAssistant(name="researcher", budget=4000)
-writer     = TokenPakAssistant(name="writer",     budget=4000)
+# Initialize compression hook
+hook = TokenPakConversationHook()
 
-# Group chat compresses history as it grows
-group = TokenPakGroupChat(
-    agents=[researcher, writer],
-    budget=8000,
+# Create your AutoGen agents
+user = UserProxyAgent("user")
+assistant = AssistantAgent(
+    "assistant",
+    llm_config={
+        "config_list": [{"model": "gpt-4", "api_key": "..."}]
+    }
 )
 
-researcher.receive_message("Analyze this dataset: ...", sender_name="user")
-messages = researcher.get_messages()   # auto-compressed to fit budget
-```
+# Apply compression
+hook.compress_agent(assistant)
 
-### Agent-to-agent handoffs
-
-```python
-from autogen_tokenpak import TokenPakAssistant
-
-alice = TokenPakAssistant(name="alice", budget=4000)
-bob   = TokenPakAssistant(name="bob",   budget=4000)
-
-# Alice does work, then hands off compressed context
-alice.receive_message("Research topic X", sender_name="user")
-wire = alice.prepare_handoff(
-    to_agent="bob",
-    what_was_done="Researched topic X across 20 documents",
-    whats_next="Summarize findings into a report",
+# Use agents normally — compression applied automatically
+user.initiate_chat(
+    assistant,
+    message="Help me solve this problem..."
 )
 
-# Bob receives compressed, structured context
-bob.apply_handoff_wire(wire)
-messages = bob.get_messages()
+# Get compression report
+report = hook.get_report("assistant")
+print(report)
 ```
 
-### Compress individual messages
+## Multi-Agent Workflow
 
 ```python
-from autogen_tokenpak import TokenPakMessage
-
-msg = TokenPakMessage(
-    content="Very long document...",
-    budget=500,
-    role="user",
+from autogen_tokenpak import (
+    TokenPakConversationHook,
+    AgentContextConfig,
 )
 
-compressed = msg.compress()
-print(f"Saved {msg.original_tokens - msg.compressed_tokens} tokens")
+hook = TokenPakConversationHook()
+
+# Create agents for a workflow
+researcher = AssistantAgent("researcher", llm_config={...})
+writer = AssistantAgent("writer", llm_config={...})
+reviewer = AssistantAgent("reviewer", llm_config={...})
+
+# Apply compression to all agents
+for agent in [researcher, writer, reviewer]:
+    hook.compress_agent(agent)
+
+# Or customize per-agent compression
+researcher_config = AgentContextConfig(
+    max_tokens=4096,
+    preserve_recent_messages=5,
+)
+hook.compress_agent(researcher, researcher_config)
+
+# Run your workflow...
 ```
 
----
+## Configuration
 
-## What is TokenPak?
+### Default Configuration
 
-TokenPak is an open protocol for AI context optimization. It compresses context blocks to fit within token budgets while keeping the highest-priority content intact.
+```python
+hook.compress_agent(agent)  # Uses defaults
+```
 
-Learn more: https://github.com/kaywhy331/tokenpak
+Defaults:
+- `max_tokens`: 4096
+- `preserve_recent_messages`: 5
+- `compress_system_prompt`: True
+- `compress_tools`: True
+- `compress_history`: True
 
----
+### Custom Configuration
+
+```python
+from autogen_tokenpak import AgentContextConfig
+
+config = AgentContextConfig(
+    max_tokens=2048,
+    preserve_recent_messages=3,
+    compress_system_prompt=True,
+    compress_tools=True,
+    compress_history=True,
+)
+
+hook.compress_agent(agent, config)
+```
 
 ## API Reference
 
-### `TokenPakAssistant`
+### `TokenPakConversationHook`
 
-```python
-class TokenPakAssistant:
-    def __init__(
-        self,
-        name: str,
-        budget: int = 4000,
-        **kwargs,
-    ) -> None: ...
+Main hook class for AutoGen compression.
 
-    def receive_message(
-        self,
-        message: str,
-        sender: Any = None,
-        sender_name: str = "",
-    ) -> None: ...
+#### Methods
 
-    def get_messages(self, compress: bool = True) -> List[Dict[str, Any]]: ...
+- **`compress_agent(agent, config=None)`**: Patch an agent to apply compression
+  - `agent`: AutoGen agent instance
+  - `config`: Optional `AgentContextConfig`
 
-    def prepare_handoff(
-        self,
-        to_agent: str,
-        what_was_done: str,
-        whats_next: str,
-    ) -> "HandoffWire": ...
+- **`restore_agent(agent)`**: Remove compression hook from an agent
+  - `agent`: AutoGen agent instance
 
-    def apply_handoff_wire(self, wire: "HandoffWire") -> None: ...
+- **`get_report(agent_name)`**: Get compression metrics for an agent
+  - `agent_name`: Name of the agent
+  - Returns: `TokenPakCompressionReport` or None
+
+### `TokenPakCompressionReport`
+
+Compression metrics report.
+
+#### Attributes
+
+- `agent_name`: Name of the agent
+- `original_tokens`: Estimated tokens before compression
+- `compressed_tokens`: Estimated tokens after compression
+- `compression_ratio`: Fraction of tokens saved
+- `messages_compressed`: Number of messages compressed
+- `tools_compressed`: Number of tools compressed
+- `system_prompt_length`: Length of system prompt after compression
+
+#### Methods
+
+- **`to_dict()`**: Convert report to dictionary
+- **`__str__()`**: Human-readable report string
+
+### `AgentContextConfig`
+
+Per-agent compression configuration.
+
+#### Attributes
+
+- `max_tokens`: Maximum tokens for compressed context (default: 4096)
+- `preserve_recent_messages`: Number of recent messages to keep uncompressed (default: 5)
+- `compress_system_prompt`: Compress system prompt (default: True)
+- `compress_tools`: Compress tool schemas (default: True)
+- `compress_history`: Compress message history (default: True)
+
+## Compression Strategy
+
+1. **System Prompt**: Normalize whitespace, remove redundant text
+2. **Message History**: Preserve recent messages; compress older ones
+3. **Tool Schemas**: Normalize descriptions and parameter docs
+4. **Deduplication**: Remove duplicate definitions and instructions
+
+## Example: Compression Report
+
+```
+TokenPak Compression Report (assistant)
+  Original tokens: 8542
+  Compressed tokens: 5123
+  Compression ratio: 40.09%
+  Messages compressed: 12
+  Tools compressed: 3
+  System prompt length: 245
 ```
 
-### `TokenPakGroupChat`
+## Design Notes
 
-```python
-class TokenPakGroupChat:
-    def __init__(
-        self,
-        agents: List[Any],
-        budget: int = 8000,
-        **kwargs,
-    ) -> None: ...
+- Follows the same integration pattern as `crewai-tokenpak`
+- Lazy imports for constrained environments
+- Deterministic compression for reproducible results
+- Zero breaking changes to AutoGen API
+- Hook-based patching: works with all AutoGen agent types
 
-    def add_message(self, message: Dict[str, Any]) -> None: ...
-    # messages auto-compressed when over budget
-    messages: List[Dict[str, Any]]
+## Testing
+
+```bash
+pytest tests/ -v
 ```
 
-### `TokenPakMessage`
+Coverage:
 
-```python
-class TokenPakMessage:
-    def __init__(
-        self,
-        content: str,
-        budget: int = 500,
-        role: str = "user",
-    ) -> None: ...
-
-    def compress(self) -> str: ...
-    original_tokens: int
-    compressed_tokens: int
+```bash
+pytest --cov=autogen_tokenpak --cov-report=term-missing tests/
 ```
-
----
-
-## Performance
-
-Typical savings in AutoGen workflows:
-
-| Conversation Length | Savings | Notes                         |
-|---------------------|---------|-------------------------------|
-| Short (< 10 turns)  | 10-20%  | Most content preserved        |
-| Medium (10-30 turns)| 30-40%  | Older turns compressed        |
-| Long (30+ turns)    | 45-60%  | Aggressive history compression|
-
----
-
-## Support
-
-- Issues: https://github.com/kaywhy331/tokenpak/issues
-- Discussions: https://github.com/kaywhy331/tokenpak/discussions
 
 ## License
 
 MIT
+
+## Support
+
+For issues, questions, or contributions:
+- GitHub: https://github.com/tokenpak/autogen-tokenpak
+- Docs: https://tokenpak.dev/integrations/autogen

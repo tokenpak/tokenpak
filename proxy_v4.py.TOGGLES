@@ -1,0 +1,6 @@
+
+# Phase 3 Toggles (2026-03-11)
+TOKENPAK_SESSION_CAPSULES   (default: 0) — compress session context across turns
+TOKENPAK_PRECONDITION_GATES (default: 0) — early rejection based on failure history
+TOKENPAK_QUERY_REWRITER     (default: 0) — optimize messages for compression
+TOKENPAK_STABILITY_SCORER   (default: 0) — track response consistency over time

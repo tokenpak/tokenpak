@@ -62,7 +62,7 @@ class DataProcessor:
         elif isinstance(data, list):
             if len(data) == 0:
                 return "[]"
-            return [self._extract_json_schema(data[0], depth + 1, max_depth)]
+            return [self._extract_json_schema(data[0], depth + 1, max_depth)]  # type: ignore[return-value]
         elif isinstance(data, str):
             return "string"
         elif isinstance(data, bool):

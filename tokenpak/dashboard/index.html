@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenPak Metrics Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TokenPak Metrics Dashboard</h1>
+            <div class="status">
+                <span id="connection-status" class="status-dot status-loading"></span>
+                <span id="status-text">Connecting...</span>
+                <span id="last-update" class="last-update"></span>
+            </div>
+        </header>
+
+        <div class="metrics-grid">
+            <!-- Top Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">Total Compression Events</div>
+                    <div class="stat-value" id="total-events">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Compression Ratio</div>
+                    <div class="stat-value" id="avg-ratio">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Tokens Saved</div>
+                    <div class="stat-value" id="tokens-saved">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Request Rate (req/s)</div>
+                    <div class="stat-value" id="request-rate">0</div>
+                </div>
+            </div>
+
+            <!-- Latency Stats -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">Compression Latency P50</div>
+                    <div class="stat-value" id="latency-p50">0ms</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Compression Latency P95</div>
+                    <div class="stat-value" id="latency-p95">0ms</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Uptime</div>
+                    <div class="stat-value" id="uptime">0s</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Proxy Health</div>
+                    <div class="stat-value" id="health-status">OK</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="chart-container request-rate-chart">
+                <h2>Request Rate (Last 1 Hour)</h2>
+                <canvas id="requestRateChart"></canvas>
+            </div>
+
+            <div class="chart-container compression-ratio-chart">
+                <h2>Compression Ratio by Document Type</h2>
+                <canvas id="compressionRatioChart"></canvas>
+            </div>
+
+            <div class="chart-container tokens-saved-chart">
+                <h2>Cumulative Tokens Saved</h2>
+                <canvas id="tokensSavedChart"></canvas>
+            </div>
+
+            <div class="chart-container top-types-chart">
+                <h2>Top Document Types by Frequency</h2>
+                <canvas id="topTypesChart"></canvas>
+            </div>
+
+            <!-- Goals Widget -->
+            <div class="goals-container">
+                <h2>💾 Savings Goals</h2>
+                <div id="goalsGrid" class="goals-grid">
+                    <p class="no-goals">No goals configured. Use `tokenpak goals --add` to create one.</p>
+                </div>
+            </div>
+
+            <!-- Document Type Table -->
+            <div class="table-container">
+                <h2>Top 10 Document Types</h2>
+                <table id="documentTypesTable">
+                    <thead>
+                        <tr>
+                            <th>Document Type</th>
+                            <th>Frequency</th>
+                            <th>Avg Compression</th>
+                            <th>Tokens Saved</th>
+                        </tr>
+                    </thead>
+                    <tbody id="documentTypesBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="metrics.js"></script>
+    <script src="charts.js"></script>
+    <script src="goals.js"></script>
+    <script>
+        // Auto-refresh every 5 seconds
+        setInterval(() => {
+            fetchAndUpdateMetrics();
+        }, 5000);
+        
+        // Initial load
+        fetchAndUpdateMetrics();
+    </script>
+</body>
+</html>
