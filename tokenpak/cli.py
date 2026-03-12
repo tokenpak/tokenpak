@@ -69,6 +69,7 @@ _COMMAND_GROUPS = {
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
+        ("fleet", "Multi-machine proxy fleet status"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1280,6 +1281,7 @@ def build_parser():
     _build_version_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
+    _build_fleet_parser(sub)
 
     return parser
 
@@ -4740,6 +4742,78 @@ def _build_validate_parser(sub):
     )
     p.set_defaults(func=cmd_validate)
     return p
+
+
+# ── Fleet Management ──────────────────────────────────────────────────────────
+
+def cmd_fleet(args):
+    """Query and manage a fleet of TokenPak proxy instances."""
+    from .fleet import (
+        load_fleet_config,
+        query_fleet,
+        render_fleet_table,
+        render_fleet_json,
+        interactive_add_machine,
+        save_fleet_config,
+    )
+
+    subcmd = getattr(args, "fleet_cmd", None)
+
+    if subcmd == "init":
+        # Interactive setup
+        machines = load_fleet_config()
+        print("╔═══════════════════════════════════════════════╗")
+        print("║  TokenPak Fleet Configuration                 ║")
+        print("╚═══════════════════════════════════════════════╝")
+        
+        if machines:
+            print(f"\nCurrent fleet ({len(machines)} machine(s)):")
+            for m in machines:
+                print(f"  • {m.name} @ {m.host}:{m.port}")
+            print()
+        
+        new_machine = interactive_add_machine(machines)
+        if new_machine:
+            machines.append(new_machine)
+            save_fleet_config(machines)
+            print(f"\n✅ Saved fleet config to ~/.tokenpak/fleet.yaml")
+    
+    else:
+        # Default: show status table
+        machines = load_fleet_config()
+        
+        if not machines:
+            print("❌ No machines configured in fleet.")
+            print("   Run: tokenpak fleet init")
+            sys.exit(1)
+        
+        # Query all machines
+        stats = query_fleet(machines)
+        
+        # Render output
+        if getattr(args, "json", False):
+            print(render_fleet_json(stats))
+        elif getattr(args, "compact", False):
+            print(render_fleet_table(stats, compact=True))
+        else:
+            print(render_fleet_table(stats, compact=False))
+
+
+def _build_fleet_parser(sub):
+    """Build the fleet command parser."""
+    p_fleet = sub.add_parser("fleet", help="Manage and query multi-machine proxy fleet")
+    
+    p_fleet.add_argument("--json", action="store_true", help="Output as JSON")
+    p_fleet.add_argument("--compact", action="store_true", help="Compact one-line output")
+    
+    fsub = p_fleet.add_subparsers(dest="fleet_cmd", required=False)
+    
+    # fleet init
+    p_init = fsub.add_parser("init", help="Interactively configure fleet")
+    p_init.set_defaults(func=cmd_fleet)
+    
+    p_fleet.set_defaults(func=cmd_fleet)
+    return p_fleet
 
 
 if __name__ == "__main__":
