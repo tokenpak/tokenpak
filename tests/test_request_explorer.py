@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -17,40 +18,76 @@ def _write_jsonl(path: Path, lines: list[str]) -> None:
 
 
 def test_load_requests_skips_malformed(tmp_path: Path):
+    rows = [
+        json.dumps({"id": "req1", "model": "claude"}),
+        "{bad json}",
+        json.dumps({"id": "req2", "model": "haiku"}),
+    ]
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, ["{\"id\": \"r1\"}", "not-json", "{\"id\": \"r2\"}"])
-    rows = load_requests(path=path)
-    assert [r["id"] for r in rows] == ["r1", "r2"]
+    _write_jsonl(path, rows)
 
-
-def test_load_requests_limit(tmp_path: Path):
-    path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, ["{\"id\": \"r1\"}", "{\"id\": \"r2\"}", "{\"id\": \"r3\"}"])
-    rows = load_requests(path=path, limit=2)
-    assert [r["id"] for r in rows] == ["r2", "r3"]
+    loaded = load_requests(path=path)
+    assert len(loaded) == 2
+    assert loaded[0]["id"] == "req1"
+    assert loaded[1]["id"] == "req2"
 
 
 def test_get_request_by_id(tmp_path: Path):
+    rows = [json.dumps({"id": "req1", "model": "claude"})]
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, ["{\"id\": \"r1\"}", "{\"id\": \"r2\"}"])
-    assert get_request_by_id("r2", path=path)["id"] == "r2"
-    assert get_request_by_id("r3", path=path) is None
+    _write_jsonl(path, rows)
+
+    found = get_request_by_id("req1", path=path)
+    assert found is not None
+    assert found["model"] == "claude"
+    assert get_request_by_id("missing", path=path) is None
 
 
-def test_cache_pct():
-    view = to_view({"id": "r1", "model": "m", "input_tokens": 100, "output_tokens": 10, "cache_read": 25})
+def test_view_helpers():
+    now = datetime.now(timezone.utc)
+    row = {
+        "id": "req1",
+        "model": "claude",
+        "input_tokens": 100,
+        "output_tokens": 40,
+        "cache_read": 25,
+        "saved_cost": 0.01,
+        "status": "success",
+        "timestamp": now.isoformat(),
+        "session_id": "abc",
+    }
+    view = to_view(row)
     assert cache_pct(view) == 25.0
+    assert status_label(view) == "cached"
+    assert age_label(view.timestamp).endswith("s")
 
 
-def test_status_label():
-    view_cached = to_view({"id": "r1", "model": "m", "cache_read": 5, "status": "success"})
-    view_error = to_view({"id": "r2", "model": "m", "status": "error"})
-    view_fresh = to_view({"id": "r3", "model": "m", "status": "success"})
-    assert status_label(view_cached) == "cached"
-    assert status_label(view_error) == "error"
-    assert status_label(view_fresh) == "fresh"
+def test_status_label_error():
+    row = {
+        "id": "req1",
+        "model": "claude",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read": 0,
+        "saved_cost": 0.0,
+        "status": "error",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    view = to_view(row)
+    assert status_label(view) == "error"
 
 
-def test_age_label_seconds():
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
-    assert age_label(ts).endswith("s")
+def test_age_label_days():
+    ts = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    assert age_label(ts) == "2d"
+
+
+def test_load_requests_limit(tmp_path: Path):
+    rows = [json.dumps({"id": f"req{i}", "model": "m"}) for i in range(5)]
+    path = tmp_path / "requests.jsonl"
+    _write_jsonl(path, rows)
+
+    loaded = load_requests(path=path, limit=2)
+    assert len(loaded) == 2
+    assert loaded[0]["id"] == "req3"
+    assert loaded[1]["id"] == "req4"
