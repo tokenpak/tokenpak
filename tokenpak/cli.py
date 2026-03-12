@@ -1056,7 +1056,6 @@ def cmd_requests(args):
         age_label,
     )
     import time as _time
-    import json
 
     request_id = getattr(args, "request_id", None)
     subcmd = getattr(args, "requests_cmd", None) or ("show" if request_id else "tail")
@@ -1755,7 +1754,6 @@ def build_parser():
 def cmd_status(args):
     """Show system status — live proxy data + budget tracking."""
     import time as _time
-    import json
 
     mode = resolve_mode(args)
     fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
@@ -4131,7 +4129,6 @@ def _build_forecast_parser(sub):
 
 def cmd_lock_claim(args):
     import time as _time
-    import json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError
 
@@ -4160,7 +4157,6 @@ def cmd_lock_release(args):
 
 def cmd_lock_query(args):
     import time as _time
-    import json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -4178,7 +4174,6 @@ def cmd_lock_query(args):
 
 def cmd_lock_list(args):
     import time as _time
-    import json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -4201,7 +4196,6 @@ def cmd_lock_list(args):
 
 def cmd_lock_renew(args):
     import time as _time
-    import json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
 
