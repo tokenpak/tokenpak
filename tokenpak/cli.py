@@ -1046,6 +1046,7 @@ class Colors:
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
     import json as _json
+    import time as _time
     from tokenpak.request_explorer import (
         REQUESTS_PATH,
         load_requests,
@@ -1055,17 +1056,16 @@ def cmd_requests(args):
         status_label,
         age_label,
     )
-    import time as _time
 
-    subcmd = getattr(args, "requests_cmd", None)
+    action = getattr(args, "action", None) or "tail"
     request_id = getattr(args, "request_id", None)
 
-    if not subcmd and request_id:
-        subcmd = "show"
-    if not subcmd:
-        subcmd = "tail"
+    # Allow `tokenpak requests <id>`
+    if action not in ("tail", "show"):
+        request_id = action
+        action = "show"
 
-    if subcmd == "tail":
+    if action == "tail":
         limit = getattr(args, "limit", 10)
         follow = not getattr(args, "once", False)
 
@@ -1073,12 +1073,10 @@ def cmd_requests(args):
             print("No request ledger found yet. Run requests through the proxy first.")
             return
 
-        header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
-
-        def _render(rows, show_header=False):
-            if show_header:
-                print(header)
-                print("─" * len(header))
+        def _render(rows):
+            header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
+            print(header)
+            print("─" * len(header))
             for row in rows:
                 view = to_view(row)
                 cache = f"{cache_pct(view):>5.0f}%"
@@ -1088,7 +1086,7 @@ def cmd_requests(args):
                 )
 
         rows = load_requests(limit=limit)
-        _render(rows, show_header=True)
+        _render(rows)
 
         if not follow:
             return
@@ -1109,7 +1107,7 @@ def cmd_requests(args):
                         row = _json.loads(line)
                     except _json.JSONDecodeError:
                         continue
-                    _render([row], show_header=False)
+                    _render([row])
             except KeyboardInterrupt:
                 return
 
@@ -1688,30 +1686,17 @@ def build_parser():
     p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
     p_preview.set_defaults(func=cmd_preview)
 
-
     p_agg = sub.add_parser("aggregate", help="Aggregate request ledger across machines")
-    p_req = sub.add_parser("requests", help="Live request explorer")
-    rsub = p_req.add_subparsers(dest="requests_cmd", required=False)
-
-    p_tail = rsub.add_parser("tail", help="Tail live request ledger")
-    p_tail.add_argument("--limit", "-n", type=int, default=10, help="Number of rows to show")
-    p_tail.add_argument("--once", action="store_true", help="Print once and exit")
-    p_tail.set_defaults(func=cmd_requests)
-
-    p_show = rsub.add_parser("show", help="Show request details")
-    p_show.add_argument("request_id", nargs="?", help="Request id")
-    p_show.set_defaults(func=cmd_requests)
-
-    # Allow `tokenpak requests <id>` shortcut
-    p_req.add_argument("request_id", nargs="?", help="Request id")
-    p_req.set_defaults(func=cmd_requests)
-
-    # Default to tail if no subcommand provided
-    p_req.set_defaults(requests_cmd="tail")
-
     p_agg.add_argument("--since", default="7d", help="Time window, e.g. 7d, 24h, 30m, or ISO date")
     p_agg.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
     p_agg.set_defaults(func=cmd_aggregate)
+
+    p_req = sub.add_parser("requests", help="Live request explorer")
+    p_req.add_argument("action", nargs="?", default="tail", help="tail | show | <request_id>")
+    p_req.add_argument("request_id", nargs="?", help="Request id (for show)")
+    p_req.add_argument("--limit", "-n", type=int, default=10, help="Number of rows to show")
+    p_req.add_argument("--once", action="store_true", help="Print once and exit")
+    p_req.set_defaults(func=cmd_requests)
 
     p_attr = sub.add_parser("attribution", help="View savings by agent/skill/model")
     p_attr.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
