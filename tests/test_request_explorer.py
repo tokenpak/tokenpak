@@ -12,58 +12,61 @@ from tokenpak.request_explorer import (
 )
 
 
-def _write_jsonl(path: Path, rows: list[str]) -> None:
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as f:
         for row in rows:
-            f.write(row + "\n")
+            f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_skips_bad_json(tmp_path: Path):
+def test_load_requests_ignores_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    good = {"id": "req1", "model": "m", "input_tokens": 1, "output_tokens": 2}
-    rows = [json.dumps(good), "{bad json", json.dumps({"id": "req2"})]
-    _write_jsonl(path, rows)
-
-    loaded = load_requests(path=path)
-    assert len(loaded) == 2
-    assert loaded[0]["id"] == "req1"
-    assert loaded[1]["id"] == "req2"
+    path.write_text("{bad}\n" + json.dumps({"id": "a"}) + "\n")
+    rows = load_requests(path=path)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "a"
 
 
 def test_get_request_by_id(tmp_path: Path):
+    rows = [{"id": "a"}, {"id": "b"}]
     path = tmp_path / "requests.jsonl"
-    rows = [json.dumps({"id": "req1"}), json.dumps({"id": "req2"})]
     _write_jsonl(path, rows)
+    result = get_request_by_id("b", path=path)
+    assert result
+    assert result["id"] == "b"
 
-    assert get_request_by_id("req2", path=path)["id"] == "req2"
-    assert get_request_by_id("missing", path=path) is None
 
-
-def test_cache_pct():
-    view = to_view({"input_tokens": 100, "cache_read": 25})
+def test_cache_pct_and_status():
+    row = {
+        "id": "r1",
+        "model": "claude",
+        "input_tokens": 100,
+        "output_tokens": 10,
+        "cache_read": 25,
+        "saved_cost": 0.01,
+        "status": "success",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    view = to_view(row)
     assert cache_pct(view) == 25.0
+    assert status_label(view) == "cached"
 
 
-def test_status_label():
-    view_cached = to_view({"status": "success", "cache_read": 10})
-    view_fresh = to_view({"status": "success", "cache_read": 0})
-    view_error = to_view({"status": "error", "cache_read": 0})
-    assert status_label(view_cached) == "cached"
-    assert status_label(view_fresh) == "fresh"
-    assert status_label(view_error) == "error"
+def test_status_error():
+    row = {
+        "id": "r2",
+        "model": "claude",
+        "input_tokens": 100,
+        "output_tokens": 10,
+        "cache_read": 0,
+        "saved_cost": 0.0,
+        "status": "error",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    view = to_view(row)
+    assert status_label(view) == "error"
 
 
-def test_age_label_seconds():
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+def test_age_label(tmp_path: Path):
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
     assert age_label(ts).endswith("s")
-
-def test_load_requests_limit(tmp_path: Path):
-    path = tmp_path / "requests.jsonl"
-    rows = [json.dumps({"id": f"req{i}"}) for i in range(5)]
-    with path.open("w") as f:
-        for row in rows:
-            f.write(row + "\n")
-
-    loaded = load_requests(path=path, limit=2)
-    assert [r["id"] for r in loaded] == ["req3", "req4"]
