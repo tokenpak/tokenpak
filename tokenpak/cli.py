@@ -70,6 +70,7 @@ _COMMAND_GROUPS = {
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
         ("attribution", "View savings by agent/skill/model"),
+        ("models", "Show per-model usage and efficiency breakdown"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
@@ -826,6 +827,91 @@ def cmd_stats(args):
     print(f"{'Uptime:':<17}{uptime_str}")
 
 
+def cmd_models(args):
+    """Show per-model breakdown of usage and efficiency."""
+    from .models import ModelAnalyzer
+    
+    # Load and aggregate stats
+    analyzer = ModelAnalyzer()
+    model_stats = analyzer.load_from_file(limit=1000)
+    
+    if not model_stats:
+        print("No model usage data yet. Run some requests through the proxy.")
+        return
+    
+    # Sort by requests (descending)
+    sorted_models = sorted(model_stats.values(), key=lambda s: s.requests, reverse=True)
+    
+    # If asking for a specific model
+    if getattr(args, "model", None):
+        target_model = args.model
+        matching = [m for m in sorted_models if target_model.lower() in m.model_name.lower()]
+        
+        if not matching:
+            print(f"No data found for model matching '{target_model}'")
+            return
+        
+        # Show detailed drill-down
+        for stats in matching:
+            costs = stats._cost_metrics()
+            
+            print(f"Model: {stats.model_name}")
+            print("─" * 60)
+            print(f"Status: active (last request available)")
+            print(f"Requests: {stats.requests} | Tokens: {stats.input_tokens + stats.output_tokens:,}")
+            print(f"  Input:  {stats.input_tokens:,} | Output: {stats.output_tokens:,}")
+            print(f"Cost: ${costs['sent']:.2f} (sent) | Saved: ${costs['saved']:.2f} (cache) | Net: ${costs['net']:.2f}")
+            print(f"Cache: {stats._cache_hit_rate()}% hit rate ({stats.cache_hits} hits)")
+            print(f"Compression: {stats._compression_efficiency()}% efficiency")
+            print(f"Latency: {stats._avg_latency()}ms avg")
+            print()
+        return
+    
+    # Show summary table
+    if getattr(args, "raw", False):
+        # JSON output
+        data = {
+            "models": [s.to_dict() for s in sorted_models],
+            "summary": analyzer.get_summary(),
+        }
+        print(json.dumps(data, indent=2))
+        return
+    
+    # Table format
+    summary = analyzer.get_summary()
+    
+    if summary["total_requests"] == 0:
+        print("No model usage data yet.")
+        return
+    
+    print("TokenPak Models Dashboard")
+    print("=" * 100)
+    print(f"{'Model':<30} {'Requests':>10} {'Tokens Sent':>14} {'Cache%':>8} {'Saved':>10} {'Efficiency':>12}")
+    print("─" * 100)
+    
+    for stats in sorted_models:
+        if stats.requests == 0:
+            continue
+        
+        costs = stats._cost_metrics()
+        model_short = stats.model_name[:28]
+        
+        print(
+            f"{model_short:<30} {stats.requests:>10} {stats.input_tokens + stats.output_tokens:>14,} "
+            f"{stats._cache_hit_rate():>7.0f}% ${costs['saved']:>9.2f} {stats._compression_efficiency():>11.0f}%"
+        )
+    
+    print("─" * 100)
+    total_tokens = summary["total_tokens_sent"]
+    print(
+        f"{'TOTAL':<30} {summary['total_requests']:>10} {total_tokens:>14,} "
+        f"{summary['overall_cache_hit_rate']:>7.0f}% ${summary['total_cost_saved']:>9.2f} "
+        f"{summary['overall_compression_efficiency']:>11.0f}%"
+    )
+    print()
+    print(f"💰 Total Cost: ${summary['total_cost_sent']:.2f} sent | ${summary['total_cost_saved']:.2f} saved | ${summary['total_cost_net']:.2f} net")
+
+
 def cmd_serve(args):
     """Start monitoring proxy or telemetry server (if available)."""
     if getattr(args, "telemetry", False):
@@ -1393,6 +1479,16 @@ def build_parser():
 
     p_stats = sub.add_parser("stats", help="Show registry stats")
     p_stats.set_defaults(func=cmd_stats)
+
+    p_models = sub.add_parser("models", help="Show per-model usage and efficiency breakdown")
+    p_models.add_argument(
+        "model",
+        nargs="?",
+        default=None,
+        help="Show details for a specific model (partial match, e.g. 'sonnet', 'gpt-4')",
+    )
+    p_models.add_argument("--raw", action="store_true", help="Output as JSON")
+    p_models.set_defaults(func=cmd_models)
 
     p_serve = sub.add_parser("serve", help="Start monitoring proxy or telemetry server")
     p_serve.add_argument("--port", type=int, default=8766)
