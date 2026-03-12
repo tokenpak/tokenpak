@@ -177,6 +177,21 @@ def _fmt_tokens(n: int) -> str:
         return str(n)
 
 
+def _calc_savings(s: "FleetStats") -> tuple:
+    """Return (compression_saved_$, cache_saved_$, total_saved_$).
+    
+    Compression: tokens removed before sending (input - sent) at full input rate.
+    Caching: cache_read_tokens at 90% discount (pay $0.30 instead of $3.00/MTok).
+    Rate assumes Sonnet-class pricing ($3/MTok input). Adjust via TOKENPAK_INPUT_RATE.
+    """
+    import os
+    rate = float(os.environ.get("TOKENPAK_INPUT_RATE", "3.0"))  # $/MTok
+
+    comp_saved = (s.saved / 1_000_000) * rate
+    cache_saved = (s.cache_read_tokens / 1_000_000) * (rate * 0.9)
+    return comp_saved, cache_saved, comp_saved + cache_saved
+
+
 def render_fleet_table(stats_list: List[FleetStats], compact: bool = False) -> str:
     """Render fleet stats — savings-focused, minimal format."""
     if not stats_list:
@@ -184,24 +199,23 @@ def render_fleet_table(stats_list: List[FleetStats], compact: bool = False) -> s
 
     lines = []
     total_cost = 0.0
-    total_saved_cost = 0.0
-    total_cache_read = 0
+    total_comp = 0.0
+    total_cache = 0.0
     total_requests = 0
 
     for s in stats_list:
-        # Estimate savings from cache reads (90% discount on cached tokens)
-        cache_savings = s.cache_read_tokens * 0.9  # tokens that cost 10% instead of 100%
+        comp, cache, total = _calc_savings(s)
         total_cost += s.cost
-        total_saved_cost += s.cost_saved
-        total_cache_read += s.cache_read_tokens
+        total_comp += comp
+        total_cache += cache
         total_requests += s.requests
 
-        status = s.health
-        line = f"{status} {s.name}: {s.requests} reqs, {_fmt_cost(s.cost)} spent, cache {s.cache_pct:.0f}%, {_fmt_tokens(s.cache_read_tokens)} cached reads"
+        line = f"{s.health} {s.name}: {s.requests} reqs | spent {_fmt_cost(s.cost)} | 💰 saved {_fmt_cost(total)} (compression {_fmt_cost(comp)}, cache {_fmt_cost(cache)})"
         lines.append(line)
 
+    grand_saved = total_comp + total_cache
     lines.append("")
-    lines.append(f"Fleet: {total_requests} reqs, {_fmt_cost(total_cost)} total, {_fmt_tokens(total_cache_read)} cache reads")
+    lines.append(f"Fleet: {total_requests} reqs | spent {_fmt_cost(total_cost)} | 💰 saved {_fmt_cost(grand_saved)} (compression {_fmt_cost(total_comp)}, cache {_fmt_cost(total_cache)})")
 
     return "\n".join(lines)
 
