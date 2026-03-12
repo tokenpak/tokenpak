@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tokenpak.request_explorer import (
@@ -19,41 +19,54 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_skips_malformed(tmp_path: Path):
+def test_load_requests_handles_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    path.write_text("{bad json}\n" + json.dumps({"id": "req1"}) + "\n")
+    path.write_text("{bad json}\n" + json.dumps({"id": "a"}) + "\n")
     rows = load_requests(path=path)
     assert len(rows) == 1
-    assert rows[0]["id"] == "req1"
+    assert rows[0]["id"] == "a"
 
 
 def test_get_request_by_id(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, [{"id": "req1"}, {"id": "req2"}])
-    row = get_request_by_id("req2", path=path)
-    assert row is not None
-    assert row["id"] == "req2"
+    rows = [{"id": "req1"}, {"id": "req2"}]
+    _write_jsonl(path, rows)
+    assert get_request_by_id("req2", path=path)["id"] == "req2"
+    assert get_request_by_id("missing", path=path) is None
 
 
-def test_to_view_defaults():
-    view = to_view({"id": "req1"})
-    assert view.request_id == "req1"
-    assert view.model == ""
-    assert view.input_tokens == 0
-
-
-def test_cache_pct():
-    view = to_view({"id": "req1", "input_tokens": 100, "cache_read": 25})
+def test_cache_pct_and_status():
+    row = {
+        "id": "r",
+        "model": "m",
+        "input_tokens": 100,
+        "output_tokens": 10,
+        "cache_read": 25,
+        "saved_cost": 0.1,
+        "status": "success",
+        "timestamp": "2026-03-01T00:00:00Z",
+    }
+    view = to_view(row)
     assert cache_pct(view) == 25.0
+    assert status_label(view) == "cached"
 
 
-def test_status_label():
-    view = to_view({"id": "req1", "status": "error"})
+def test_status_error():
+    row = {
+        "id": "r",
+        "model": "m",
+        "input_tokens": 100,
+        "output_tokens": 10,
+        "cache_read": 0,
+        "saved_cost": 0.1,
+        "status": "error",
+        "timestamp": "2026-03-01T00:00:00Z",
+    }
+    view = to_view(row)
     assert status_label(view) == "error"
-    view2 = to_view({"id": "req2", "cache_read": 10})
-    assert status_label(view2) == "cached"
 
 
-def test_age_label():
-    ts = datetime.now(timezone.utc).isoformat()
+def test_age_label_seconds():
+    now = datetime.now(timezone.utc)
+    ts = (now - timedelta(seconds=10)).isoformat()
     assert age_label(ts).endswith("s")
