@@ -120,6 +120,16 @@ def age_label(timestamp: str) -> str:
     return f"{days}d"
 
 
+
+
+def format_tokens(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}K"
+    return str(n)
+
+
 __all__ = [
     "REQUESTS_PATH",
     "RequestView",
@@ -129,4 +139,5 @@ __all__ = [
     "cache_pct",
     "status_label",
     "age_label",
+    "format_tokens",
 ]

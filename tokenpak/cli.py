@@ -1079,7 +1079,7 @@ def cmd_requests(args):
                 cache = f"{cache_pct(view):>5.0f}%"
                 saved = f"${view.saved_cost:.2f}" if view.saved_cost >= 0.01 else f"${view.saved_cost:.4f}"
                 print(
-                    f"{view.request_id[:8]:<10} {view.model:<17} {view.input_tokens:>6}  {view.output_tokens:>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
+                    f"{view.request_id[:8]:<10} {view.model:<17} {format_tokens(view.input_tokens):>6}  {format_tokens(view.output_tokens):>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
                 )
 
         rows = load_requests(limit=limit)
@@ -1102,7 +1102,7 @@ def cmd_requests(args):
                         continue
                     try:
                         row = _json.loads(line)
-                    except json.JSONDecodeError:
+                    except _json.JSONDecodeError:
                         continue
                     _render_rows([row])
             except KeyboardInterrupt:
@@ -1323,7 +1323,7 @@ def cmd_doctor(args):
                 json.load(f)
             print(Colors.ok(f"Config file         {config_path} — valid"))
             results["pass"] += 1
-        except json.JSONDecodeError:
+        except _json.JSONDecodeError:
             print(Colors.fail(f"Config file         {config_path} — invalid JSON"))
             results["fail"] += 1
             fixes_needed.append(("reset config", config_path))
@@ -1349,7 +1349,7 @@ def cmd_doctor(args):
                     )
                 )
                 results["warn"] += 1
-        except json.JSONDecodeError:
+        except _json.JSONDecodeError:
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
             results["fail"] += 1
     else:
