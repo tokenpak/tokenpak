@@ -1685,7 +1685,6 @@ def build_parser():
 
 
     p_agg = sub.add_parser("aggregate", help="Aggregate request ledger across machines")
-
     p_req = sub.add_parser("requests", help="Live request explorer")
     rsub = p_req.add_subparsers(dest="requests_cmd", required=False)
 
