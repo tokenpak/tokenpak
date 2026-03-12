@@ -1045,6 +1045,7 @@ class Colors:
 
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
+    import json as _json
     from tokenpak.request_explorer import (
         REQUESTS_PATH,
         load_requests,
@@ -1055,11 +1056,14 @@ def cmd_requests(args):
         age_label,
     )
     import time as _time
-    import json as _json
-    from tokenpak.aggregate import format_tokens
 
+    subcmd = getattr(args, "requests_cmd", None)
     request_id = getattr(args, "request_id", None)
-    subcmd = getattr(args, "requests_cmd", None) or ("show" if request_id else "tail")
+
+    if not subcmd and request_id:
+        subcmd = "show"
+    if not subcmd:
+        subcmd = "tail"
 
     if subcmd == "tail":
         limit = getattr(args, "limit", 10)
@@ -1070,20 +1074,21 @@ def cmd_requests(args):
             return
 
         header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
-        print(header)
-        print("─" * len(header))
 
-        def _render_rows(rows):
+        def _render(rows, show_header=False):
+            if show_header:
+                print(header)
+                print("─" * len(header))
             for row in rows:
                 view = to_view(row)
                 cache = f"{cache_pct(view):>5.0f}%"
                 saved = f"${view.saved_cost:.2f}" if view.saved_cost >= 0.01 else f"${view.saved_cost:.4f}"
                 print(
-                    f"{view.request_id[:8]:<10} {view.model:<17} {format_tokens(view.input_tokens):>6}  {format_tokens(view.output_tokens):>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
+                    f"{view.request_id[:8]:<10} {view.model:<17} {view.input_tokens:>6}  {view.output_tokens:>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
                 )
 
         rows = load_requests(limit=limit)
-        _render_rows(rows)
+        _render(rows, show_header=True)
 
         if not follow:
             return
@@ -1104,7 +1109,7 @@ def cmd_requests(args):
                         row = _json.loads(line)
                     except _json.JSONDecodeError:
                         continue
-                    _render_rows([row])
+                    _render([row], show_header=False)
             except KeyboardInterrupt:
                 return
 
