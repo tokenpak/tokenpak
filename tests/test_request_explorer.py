@@ -23,51 +23,47 @@ def test_load_requests_skips_malformed(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
     with path.open("w") as f:
         f.write("{bad json}\n")
-        f.write(json.dumps({"id": "r1"}) + "\n")
+        f.write(json.dumps({"id": "req1"}) + "\n")
     rows = load_requests(path=path)
     assert len(rows) == 1
-    assert rows[0]["id"] == "r1"
+    assert rows[0]["id"] == "req1"
 
 
 def test_load_requests_limit(tmp_path: Path):
+    rows = [{"id": f"req{i}"} for i in range(5)]
     path = tmp_path / "requests.jsonl"
-    rows = [{"id": f"r{i}"} for i in range(5)]
     _write_jsonl(path, rows)
-    limited = load_requests(path=path, limit=2)
-    assert [r["id"] for r in limited] == ["r3", "r4"]
+    loaded = load_requests(path=path, limit=2)
+    assert [r["id"] for r in loaded] == ["req3", "req4"]
 
 
 def test_get_request_by_id(tmp_path: Path):
+    rows = [{"id": "req1"}, {"id": "req2"}]
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, [{"id": "r1"}, {"id": "r2"}])
-    found = get_request_by_id("r2", path=path)
-    assert found is not None
-    assert found["id"] == "r2"
+    _write_jsonl(path, rows)
+    assert get_request_by_id("req2", path=path)["id"] == "req2"
 
 
-def test_view_helpers():
-    row = {
-        "id": "r1",
+def test_cache_pct_and_status_label():
+    view = to_view({
+        "id": "req1",
         "model": "claude",
         "input_tokens": 100,
-        "output_tokens": 20,
-        "cache_read": 40,
-        "saved_cost": 0.05,
+        "output_tokens": 10,
+        "cache_read": 25,
+        "saved_cost": 0.1,
         "status": "success",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_id": "abc",
-    }
-    view = to_view(row)
-    assert cache_pct(view) == 40.0
+    })
+    assert cache_pct(view) == 25.0
     assert status_label(view) == "cached"
 
 
 def test_status_label_error():
-    row = {"id": "r1", "status": "error", "timestamp": datetime.now(timezone.utc).isoformat()}
-    view = to_view(row)
+    view = to_view({"id": "req2", "status": "error"})
     assert status_label(view) == "error"
 
 
-def test_age_label_format():
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()
-    assert age_label(ts).endswith("s")
+def test_age_label():
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+    assert age_label(ts) in {"5s", "6s", "4s"}

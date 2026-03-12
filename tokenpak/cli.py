@@ -1046,7 +1046,6 @@ class Colors:
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
     import json as _json
-    import time as _time
     from tokenpak.request_explorer import (
         REQUESTS_PATH,
         load_requests,
@@ -1056,14 +1055,18 @@ def cmd_requests(args):
         status_label,
         age_label,
     )
+    import time as _time
 
-    action = getattr(args, "action", None) or "tail"
+    action = getattr(args, "requests_cmd", None) or getattr(args, "action", None)
     request_id = getattr(args, "request_id", None)
 
-    # Allow `tokenpak requests <id>`
-    if action not in ("tail", "show"):
+    if action and action not in ("tail", "show"):
+        # Allow `tokenpak requests <id>`
         request_id = action
         action = "show"
+
+    if action is None:
+        action = "show" if request_id else "tail"
 
     if action == "tail":
         limit = getattr(args, "limit", 10)
@@ -1073,9 +1076,9 @@ def cmd_requests(args):
             print("No request ledger found yet. Run requests through the proxy first.")
             return
 
-        def _render(rows, show_header=True):
+        def _print_rows(rows, with_header=False):
             header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
-            if show_header:
+            if with_header:
                 print(header)
                 print("─" * len(header))
             for row in rows:
@@ -1087,7 +1090,7 @@ def cmd_requests(args):
                 )
 
         rows = load_requests(limit=limit)
-        _render(rows)
+        _print_rows(rows, with_header=True)
 
         if not follow:
             return
@@ -1108,7 +1111,7 @@ def cmd_requests(args):
                         row = _json.loads(line)
                     except _json.JSONDecodeError:
                         continue
-                    _render([row], show_header=False)
+                    _print_rows([row], with_header=False)
             except KeyboardInterrupt:
                 return
 
