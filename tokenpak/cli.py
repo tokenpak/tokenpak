@@ -68,6 +68,7 @@ _COMMAND_GROUPS = {
         ("calibrate", "Calibrate worker count for this host"),
         ("doctor", "Run diagnostics"),
         ("dashboard", "Real-time health dashboard (TUI)"),
+        ("timeline", "View savings trend over 7/30 days"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
@@ -950,6 +951,22 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
+def cmd_timeline(args):
+    """View savings trend over 7/30 days."""
+    import json as _json
+    from tokenpak.timeline import get_timeline, format_timeline
+
+    days = getattr(args, "days", 7)
+    entries = get_timeline(days=days)
+
+    if getattr(args, "as_json", False):
+        print(_json.dumps(entries, indent=2))
+        return
+
+    show_chart = getattr(args, "chart", False)
+    print(format_timeline(entries, show_chart=show_chart))
+
+
 def cmd_preview(args):
     """Preview compression result for input text (dry-run)."""
     import sys
@@ -1425,6 +1442,12 @@ def build_parser():
     p_preview.add_argument("--verbose", action="store_true", help="Show detailed block breakdown")
     p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
     p_preview.set_defaults(func=cmd_preview)
+
+    p_timeline = sub.add_parser("timeline", help="View savings trend over 7/30 days")
+    p_timeline.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
+    p_timeline.add_argument("--chart", action="store_true", help="Show ASCII sparkline chart")
+    p_timeline.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
+    p_timeline.set_defaults(func=cmd_timeline)
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
