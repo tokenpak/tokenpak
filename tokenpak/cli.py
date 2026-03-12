@@ -71,6 +71,7 @@ _COMMAND_GROUPS = {
         ("timeline", "View savings trend over 7/30 days"),
         ("attribution", "View savings by agent/skill/model"),
         ("models", "Show per-model usage and efficiency breakdown"),
+        ("forecast", "Cost burn rate & projections"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
@@ -1579,6 +1580,7 @@ def build_parser():
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
     _build_budget_parser(sub)
+    _build_forecast_parser(sub)
     _build_goals_parser(sub)
     _build_lock_parser(sub)
     _build_agent_parser(sub)
@@ -3552,6 +3554,47 @@ def cmd_budget_history(args):
         )
 
 
+# ── Forecast (Burn Rate & Cost Projections) ──────────────────────────────────
+
+def cmd_forecast(args):
+    """Show cost burn rate analysis and projections."""
+    from .forecast import get_burn_rate, format_burn_rate_display
+    
+    tracker = _budget_tracker()
+    
+    # Get window size from args
+    period = getattr(args, 'period', '7d')
+    if period == '7d':
+        window_days = 7
+    elif period == '30d':
+        window_days = 30
+    elif period == '90d':
+        window_days = 90
+    else:
+        window_days = 7
+    
+    # Get threshold if set
+    threshold = getattr(args, 'alert', None)
+    if threshold is not None:
+        try:
+            threshold = float(threshold)
+        except (ValueError, TypeError):
+            print(f"Invalid threshold: {threshold}")
+            return
+    
+    # Calculate burn rate
+    analysis = get_burn_rate(tracker, window_days=window_days)
+    
+    # Display
+    output = format_burn_rate_display(analysis, threshold=threshold)
+    print(output)
+    
+    # Check threshold and alert if needed
+    if threshold and analysis.monthly_projection > threshold:
+        print()
+        print(f"⚠️  Alert: Projected monthly spend ${analysis.monthly_projection:.2f} exceeds threshold ${threshold:.2f}")
+
+
 # ── Goals (Savings Targets & Progress Tracking) ────────────────────────────────
 
 def _get_goal_manager():
@@ -3920,6 +3963,22 @@ def _build_budget_parser(sub):
     p_hist.add_argument("--month", action="store_true", help="Show this month")
     p_hist.set_defaults(func=cmd_budget_history)
 
+
+def _build_forecast_parser(sub):
+    p_forecast = sub.add_parser("forecast", help="Cost burn rate & projections")
+    p_forecast.add_argument(
+        "--period",
+        choices=["7d", "30d", "90d"],
+        default="7d",
+        help="Analysis window (default: 7d)"
+    )
+    p_forecast.add_argument(
+        "--alert",
+        type=float,
+        metavar="USD",
+        help="Alert if monthly projection exceeds this USD amount"
+    )
+    p_forecast.set_defaults(func=cmd_forecast)
 
 
 # ── top-level lock subcommand ─────────────────────────────────────────────────
