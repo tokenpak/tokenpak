@@ -1706,6 +1706,9 @@ def build_parser():
     p_req.add_argument("request_id", nargs="?", help="Request id")
     p_req.set_defaults(func=cmd_requests)
 
+    # Default to tail if no subcommand provided
+    p_req.set_defaults(requests_cmd="tail")
+
     p_agg.add_argument("--since", default="7d", help="Time window, e.g. 7d, 24h, 30m, or ISO date")
     p_agg.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
     p_agg.set_defaults(func=cmd_aggregate)
