@@ -69,6 +69,7 @@ _COMMAND_GROUPS = {
         ("doctor", "Run diagnostics"),
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
+        ("attribution", "View savings by agent/skill/model"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
@@ -951,6 +952,29 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
+def cmd_attribution(args):
+    """View savings breakdown by agent/skill/model."""
+    import json as _json
+    from tokenpak.attribution import AttributionTracker, format_attribution
+
+    tracker = AttributionTracker()
+    tracker.load()
+    days = getattr(args, "days", 7)
+
+    if getattr(args, "as_json", False):
+        import time
+        since = time.time() - (days * 86400)
+        data = {
+            "by_source": tracker.rollup_by_source(since=since),
+            "by_model": tracker.rollup_by_model(since=since),
+            "leakage_pct": tracker.leakage_pct(since=since),
+        }
+        print(_json.dumps(data, indent=2))
+        return
+
+    print(format_attribution(tracker, days=days))
+
+
 def cmd_timeline(args):
     """View savings trend over 7/30 days."""
     import json as _json
@@ -1442,6 +1466,13 @@ def build_parser():
     p_preview.add_argument("--verbose", action="store_true", help="Show detailed block breakdown")
     p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
     p_preview.set_defaults(func=cmd_preview)
+
+    p_attr = sub.add_parser("attribution", help="View savings by agent/skill/model")
+    p_attr.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
+    p_attr.add_argument("--agent", type=str, help="Filter by agent name")
+    p_attr.add_argument("--model", type=str, help="Filter by model")
+    p_attr.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
+    p_attr.set_defaults(func=cmd_attribution)
 
     p_timeline = sub.add_parser("timeline", help="View savings trend over 7/30 days")
     p_timeline.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
