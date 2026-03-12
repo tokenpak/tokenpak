@@ -1,59 +1,70 @@
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from tokenpak.request_explorer import (
-    load_requests,
-    get_request_by_id,
-    to_view,
-    cache_pct,
-    status_label,
-    age_label,
-)
+from tokenpak import request_explorer as rex
 
 
-def _write_jsonl(path: Path, rows: list[dict], add_bad: bool = False) -> None:
+def _write_lines(path: Path, lines: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as f:
-        for row in rows:
-            f.write(json.dumps(row) + "\n")
-        if add_bad:
-            f.write("{bad json}\n")
+    path.write_text("\n".join(lines) + "\n")
 
 
 def test_load_requests_skips_bad_json(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    rows = [{"id": "req1"}, {"id": "req2"}]
-    _write_jsonl(path, rows, add_bad=True)
-    loaded = load_requests(path=path)
-    assert len(loaded) == 2
+    _write_lines(path, ["{bad json}", '{"id": "a", "model": "m"}'])
+    rows = rex.load_requests(path=path)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "a"
 
 
 def test_load_requests_limit(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    rows = [{"id": f"req{i}"} for i in range(5)]
-    _write_jsonl(path, rows)
-    loaded = load_requests(path=path, limit=2)
-    assert [r["id"] for r in loaded] == ["req3", "req4"]
+    _write_lines(path, [
+        '{"id": "a"}',
+        '{"id": "b"}',
+        '{"id": "c"}',
+    ])
+    rows = rex.load_requests(path=path, limit=2)
+    assert [r["id"] for r in rows] == ["b", "c"]
 
 
 def test_get_request_by_id(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    rows = [{"id": "req1"}, {"id": "req2"}]
-    _write_jsonl(path, rows)
-    assert get_request_by_id("req2", path=path)["id"] == "req2"
+    _write_lines(path, ['{"id": "a", "model": "m"}'])
+    row = rex.get_request_by_id("a", path=path)
+    assert row is not None
+    assert row["model"] == "m"
 
 
-def test_cache_pct():
-    view = to_view({"id": "req", "model": "m", "input_tokens": 100, "cache_read": 25})
-    assert cache_pct(view) == 25.0
+def test_cache_pct_and_status_label():
+    view = rex.RequestView(
+        request_id="req",
+        model="m",
+        input_tokens=100,
+        output_tokens=10,
+        cache_read=25,
+        saved_cost=0.01,
+        status="success",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+    )
+    assert rex.cache_pct(view) == 25.0
+    assert rex.status_label(view) == "cached"
 
 
-def test_status_label_cached():
-    view = to_view({"id": "req", "model": "m", "input_tokens": 10, "cache_read": 1, "status": "success"})
-    assert status_label(view) == "cached"
+def test_status_label_error():
+    view = rex.RequestView(
+        request_id="req",
+        model="m",
+        input_tokens=0,
+        output_tokens=0,
+        cache_read=0,
+        saved_cost=0.0,
+        status="error",
+        timestamp="",
+    )
+    assert rex.status_label(view) == "error"
 
 
 def test_age_label_seconds():
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=10)).isoformat()
-    assert age_label(ts).endswith("s")
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+    assert rex.age_label(ts).endswith("s")
