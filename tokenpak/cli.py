@@ -147,12 +147,20 @@ def cmd_help(args):
     """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
     try:
         from tokenpak.agent.cli.commands.help import run as help_run
-        # args is a Namespace; get any extra command from sys.argv
-        import sys
-        help_args = sys.argv[2:]  # ['help', ...] -> skip 'tokenpak'
-        # Drop 'help' itself if present
-        if help_args and help_args[0] == 'help':
-            help_args = help_args[1:]
+        
+        # Build help_args list from parsed arguments
+        help_args = []
+        if args.more:
+            help_args.append("--more")
+        elif args.all:
+            help_args.append("--all")
+        elif args.minimal:
+            help_args.append("--minimal")
+        
+        if getattr(args, 'cmd_name', None):
+            help_args.append(args.cmd_name)
+        
+        # If no args, call with empty list (shows default help)
         help_run(help_args)
     except Exception:
         _print_full_help()
@@ -1091,6 +1099,10 @@ def build_parser():
 
     # ── Progressive disclosure: help + aliases ────────────────────────────────
     p_help = sub.add_parser("help", help="Show all commands grouped by category")
+    p_help.add_argument("cmd_name", nargs="?", default=None, help="Command name for detailed help")
+    p_help.add_argument("--more", action="store_true", help="Show essential + intermediate commands")
+    p_help.add_argument("--all", action="store_true", help="Show all commands")
+    p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")

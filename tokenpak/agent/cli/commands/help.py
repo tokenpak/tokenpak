@@ -2,7 +2,9 @@
 tokenpak help — Tier-aware, programmatic help system.
 
 Commands:
-    /tokenpak help                  Full filtered command list for current tier
+    /tokenpak help                  Essential commands only
+    /tokenpak help --more           Essential + intermediate commands
+    /tokenpak help --all            All commands (complete reference)
     /tokenpak help <command>        Detailed per-command help
     /tokenpak help --minimal        One-line command list
 """
@@ -14,6 +16,34 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
+
+# ─────────────────────────────────────────────
+# Command tiers (complexity-based, not license-based)
+# ─────────────────────────────────────────────
+
+_ESSENTIAL_COMMANDS = {
+    "setup": "Guided first-run configuration",
+    "start": "Start the proxy",
+    "stop": "Stop the proxy",
+    "status": "Health, stats, and savings summary",
+    "cost": "API spend and token usage",
+    "savings": "What TokenPak saved you",
+    "doctor": "Run diagnostics and health checks",
+    "dashboard": "Open web metrics dashboard",
+}
+
+_INTERMEDIATE_COMMANDS = {
+    "watch": "Live terminal savings dashboard",
+    "logs": "View proxy logs",
+    "stats": "Registry and cache statistics",
+    "config": "View/edit configuration",
+    "integrate": "Client-specific setup guides",
+    "index": "Index files for context retrieval",
+    "search": "Search indexed content",
+    "demo": "See compression on sample data",
+    "restart": "Restart the proxy",
+    "version": "Show current versions",
+}
 
 # ─────────────────────────────────────────────
 # Tier ordering (lower index = lower tier)
@@ -90,8 +120,54 @@ def _group_commands(commands: list[dict]) -> dict[str, list[dict]]:
     return groups
 
 
+def print_essential_help() -> None:
+    """Print essential commands only (default view for new users)."""
+    print("TokenPak — LLM Proxy with Context Compression\n")
+    print("Essential Commands:\n")
+    for cmd, desc in _ESSENTIAL_COMMANDS.items():
+        print(f"  {cmd:<14} {desc}")
+    print()
+    print("Run `tokenpak help --more` for intermediate commands.")
+    print("Run `tokenpak help --all` for all 93 commands.")
+    print("Run `tokenpak help <command>` for details on any command.")
+
+
+def print_intermediate_help() -> None:
+    """Print essential + intermediate commands."""
+    print("TokenPak — LLM Proxy with Context Compression\n")
+    
+    print("Essential Commands:\n")
+    for cmd, desc in _ESSENTIAL_COMMANDS.items():
+        print(f"  {cmd:<14} {desc}")
+    print()
+    
+    print("Monitoring:\n")
+    monitoring_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+                       if k in ["watch", "logs", "stats"]}
+    for cmd, desc in monitoring_cmds.items():
+        print(f"  {cmd:<14} {desc}")
+    print()
+    
+    print("Configuration:\n")
+    config_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+                   if k in ["config", "integrate", "restart", "version"]}
+    for cmd, desc in config_cmds.items():
+        print(f"  {cmd:<14} {desc}")
+    print()
+    
+    print("Content:\n")
+    content_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+                    if k in ["index", "search", "demo"]}
+    for cmd, desc in content_cmds.items():
+        print(f"  {cmd:<14} {desc}")
+    print()
+    
+    print("Run `tokenpak help --all` for all 93 commands.")
+    print("Run `tokenpak help <command>` for details on any command.")
+
+
 def print_full_help(tier: Optional[str] = None) -> None:
-    """Print tier-filtered full help."""
+    """Print all commands (tier-filtered for licensing, but not complexity-tiered)."""
     if tier is None:
         tier = _current_tier()
     tier_label = _TIER_LABELS.get(tier, tier.upper())
@@ -102,7 +178,7 @@ def print_full_help(tier: Optional[str] = None) -> None:
 
     print(f"TokenPak — LLM Proxy with Context Compression")
     print(f"Tier: {tier_label}\n")
-    print("Commands:\n")
+    print("All Commands:\n")
 
     for group_name, cmds in groups.items():
         print(f"  {group_name}:")
@@ -120,7 +196,6 @@ def print_full_help(tier: Optional[str] = None) -> None:
         print()
 
     print("Run `tokenpak help <command>` for details.")
-    print("Run `tokenpak help --minimal` for a compact list.")
 
 
 def print_minimal_help(tier: Optional[str] = None) -> None:
@@ -191,11 +266,26 @@ def print_command_help(command_name: str) -> None:
 # ─────────────────────────────────────────────
 
 def run(args: Optional[list[str]] = None) -> None:
-    """Entry point: parse args and dispatch to appropriate help function."""
+    """Entry point: parse args and dispatch to appropriate help function.
+    
+    Flags:
+      --more     Show essential + intermediate commands
+      --all      Show all commands (complete reference)
+      --minimal  One-line compact command list
+    """
     if args is None:
         args = sys.argv[2:]  # skip 'tokenpak' and 'help'
 
     if not args:
+        # Default: show essential commands only
+        print_essential_help()
+        return
+
+    if args[0] == "--more":
+        print_intermediate_help()
+        return
+
+    if args[0] == "--all":
         print_full_help()
         return
 
@@ -207,6 +297,7 @@ def run(args: Optional[list[str]] = None) -> None:
         print(f"Unknown option: {args[0]!r}")
         sys.exit(1)
 
+    # Assume it's a command name (e.g., 'tokenpak help start')
     print_command_help(args[0])
 
 
