@@ -62,7 +62,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Tuple, Optional, Any, Mapping
 from dataclasses import dataclass, field, asdict
 from collections import deque
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import uuid
 
 from tokenpak.proxy.adapters import build_default_registry
@@ -556,7 +556,7 @@ def _rate_limit_check(client_ip: str) -> bool:
 def _ollama_health_loop():
     """Background thread: ping ollama upstream every 30s.
     Pre-opens circuit if unreachable so requests fail instantly."""
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, parse_qs
     parsed = urlparse(OLLAMA_UPSTREAM)
     host = parsed.hostname
     port = parsed.port or 11434
@@ -1500,6 +1500,26 @@ def _header_mapping(headers: Any) -> Dict[str, str]:
     return result
 
 
+_DEF_AGENT_MACHINES = {"sue", "trix", "cali", "kevin"}
+
+
+def _extract_openclaw_agent(session_id: str, user_agent: str = "") -> str:
+    """Infer OpenClaw agent name from session id or user-agent."""
+    if session_id:
+        parts = session_id.split("-")
+        if len(parts) >= 2 and parts[0].lower() in _DEF_AGENT_MACHINES:
+            return parts[1].lower()
+        if len(parts) >= 2:
+            return parts[-1].lower()
+        return session_id[:32]
+    ua = (user_agent or "").lower()
+    if "openclaw" in ua:
+        return "openclaw"
+    return "unknown"
+
+
+
+
 def _detect_adapter(path: str, headers: Mapping[str, str], body_bytes: Optional[bytes] = None) -> FormatAdapter:
     return ADAPTER_REGISTRY.detect(path=path, headers=headers, body=body_bytes)
 
@@ -1901,7 +1921,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         remote.close()
 
     def do_GET(self):
-        if self.path == "/health":
+        parsed = urlparse(self.path)
+        path = parsed.path
+        query = parse_qs(parsed.query)
+        if path == "/health":
             vault_info = {
                 "available": VAULT_INDEX.available,
                 "blocks": len(VAULT_INDEX.blocks),
@@ -1935,36 +1958,85 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "stats": SESSION,
             })
             return
-        if self.path == "/stats":
+        if path == "/stats":
+        if path == "/stats/aggregate/local":
+            from tokenpak.aggregate import load_requests, aggregate_records, default_machine_name, parse_since
+            since_raw = query.get("since", [None])[0]
+            since_dt = parse_since(since_raw)
+            machine = default_machine_name()
+            rows, totals = aggregate_records(load_requests(since=since_dt), machine)
             self._send_json({
-                "session": SESSION,
-                "compilation_mode": COMPILATION_MODE,
-                "vault_index": {
-                    "available": VAULT_INDEX.available,
-                    "blocks": len(VAULT_INDEX.blocks),
-                },
-                "router": {"enabled": ROUTER_ENABLED},
-                "capsule_available": CAPSULE_BUILDER is not None,
-                "canon": {
-                    "enabled": CANON_AVAILABLE,
-                    "session_hits": SESSION.get("canon_hits", 0),
-                    "tokens_saved": SESSION.get("canon_tokens_saved", 0),
-                },
-                "skeleton": {"enabled": SKELETON_ENABLED},
-                "shadow_reader": {"enabled": SHADOW_ENABLED},
-                "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
-                "today": MONITOR.get_stats(),
-                "by_model": MONITOR.get_by_model(),
-                "recent": MONITOR.recent(10),
+                "machine": machine,
+                "since": since_raw,
+                "summary": totals,
+                "rows": [r.__dict__ for r in rows],
             })
             return
-        if self.path == "/cache-stats":
+        if path == "/stats/aggregate":
+            from tokenpak.aggregate import load_requests, aggregate_records, default_machine_name, parse_since
+            from tokenpak.fleet import load_fleet_config
+            import urllib.error as _uerr
+            import urllib.request as _urlreq
+
+            since_raw = query.get("since", [None])[0]
+            since_dt = parse_since(since_raw)
+            machine = default_machine_name()
+            results = {}
+
+            local_rows, local_totals = aggregate_records(load_requests(since=since_dt), machine)
+            results[machine] = {
+                "summary": local_totals,
+                "rows": [r.__dict__ for r in local_rows],
+            }
+
+            machines = load_fleet_config()
+            seen = {machine}
+            for m in machines:
+                if m.name in seen:
+                    continue
+                seen.add(m.name)
+                try:
+                    url = f"http://{m.host}:{m.port}/stats/aggregate/local"
+                    if since_raw:
+                        url += f"?since={since_raw}"
+                    resp = _urlreq.urlopen(url, timeout=2)
+                    payload = json.loads(resp.read())
+                    results[m.name] = {
+                        "summary": payload.get("summary", {}),
+                        "rows": payload.get("rows", []),
+                    }
+                except (_uerr.URLError, Exception) as e:
+                    results[m.name] = {"error": str(e)}
+
+            fleet_totals = {"total_requests": 0, "total_tokens": 0, "total_cost": 0.0, "total_saved": 0.0}
+            for data in results.values():
+                summary = data.get("summary") or {}
+                fleet_totals["total_requests"] += int(summary.get("requests", 0) or 0)
+                fleet_totals["total_tokens"] += int(summary.get("tokens", 0) or 0)
+                fleet_totals["total_cost"] += float(summary.get("cost", 0.0) or 0.0)
+                fleet_totals["total_saved"] += float(summary.get("saved", 0.0) or 0.0)
+
+            fleet_totals["total_cost"] = round(fleet_totals["total_cost"], 4)
+            fleet_totals["total_saved"] = round(fleet_totals["total_saved"], 4)
+
+            self._send_json({
+                "fleet": {
+                    "machines": list(results.keys()),
+                    "total_requests": fleet_totals["total_requests"],
+                    "total_tokens": fleet_totals["total_tokens"],
+                    "total_cost": fleet_totals["total_cost"],
+                    "total_saved": fleet_totals["total_saved"],
+                },
+                "per_machine": results,
+            })
+            return
+        if path == "/cache-stats":
             self._send_json(_build_cache_stats_payload())
             return
-        if self.path == "/recent":
+        if path == "/recent":
             self._send_json({"recent": MONITOR.recent(50)})
             return
-        if self.path == "/stats/last":
+        if path == "/stats/last":
             # Per-request stats for the most recent request
             with _LAST_REQUEST_LOCK:
                 if LAST_REQUEST["request_id"] is None:
@@ -1987,7 +2059,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         "output_tokens": LAST_REQUEST["output_tokens"],
                     })
             return
-        if self.path == "/stats/session":
+        if path == "/stats/session":
             # Session aggregates
             uptime_hours = round((time.time() - SESSION["start_time"]) / 3600, 2)
             self._send_json({
@@ -2003,7 +2075,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "avg_savings_pct": round(SESSION["saved_tokens"] / SESSION["input_tokens"] * 100, 1) if SESSION["input_tokens"] > 0 else 0.0,
             })
             return
-        if self.path == "/vault":
+        if path == "/vault":
             # Debug endpoint: show vault index state
             blocks_info = []
             for bid, block in VAULT_INDEX.blocks.items():
@@ -2021,7 +2093,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "block_list": blocks_info,
             })
             return
-        if self.path == "/trace/last":
+        if path == "/trace/last":
             trace = TRACE_STORAGE.get_last()
             if trace:
                 self._send_json(trace.to_dict())
@@ -2037,11 +2109,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "not found", "message": f"No trace found for request_id: {request_id}"})
             return
-        if self.path == "/traces":
+        if path == "/traces":
             traces = TRACE_STORAGE.get_all()
             self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
             return
-        if self.path == "/metrics":
+        if path == "/metrics":
             # Fix #3: Prometheus metrics export
             s = SESSION
             uptime = int(time.time() - s.get("start_time", time.time()))
@@ -2086,7 +2158,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             return
         if self.path.startswith("http"):
             self._forward_request("GET")
-        elif self.path == "/dashboard" or self.path.startswith("/dashboard/"):
+        elif path == "/dashboard" or self.path.startswith("/dashboard/"):
             self._serve_dashboard()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
@@ -2108,7 +2180,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._ollama_proxy("POST")
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
-        elif self.path == "/ingest" or self.path == "/ingest/batch":
+        elif path == "/ingest" or path == "/ingest/batch":
             self._ingest(self.path)
         else:
             # Fix #2: JSON 404 instead of HTML
@@ -2136,7 +2208,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         return 503 immediately instead of hanging for minutes.
         Connect timeout: 20s (configurable via TOKENPAK_OLLAMA_TIMEOUT).
         """
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, parse_qs
 
         # Check circuit breaker -- fail fast if upstream recently unreachable
         with _ollama_circuit_lock:
@@ -3143,6 +3215,52 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 cost_without_compression = estimate_cost(model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
                 cost_saved = max(0.0, cost_without_compression - cost)
                 sources_str = ",".join(injected_sources) if injected_sources else ""
+
+                session_id = self.headers.get("X-OpenClaw-Session", "")
+
+                user_agent = self.headers.get("User-Agent", "")
+
+                agent_name = _extract_openclaw_agent(session_id, user_agent)
+
+                request_id = trace.request_id if trace else str(uuid.uuid4())
+
+                try:
+
+                    from tokenpak.request_ledger import append_request
+
+                    append_request({
+
+                        "id": request_id,
+
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+
+                        "agent": agent_name,
+
+                        "session_id": session_id,
+
+                        "model": model,
+
+                        "input_tokens": input_tokens,
+
+                        "output_tokens": output_tokens,
+
+                        "cache_read": cache_read_tokens,
+
+                        "saved_tokens": saved,
+
+                        "cost": round(cost, 6),
+
+                        "saved_cost": round(cost_saved, 6),
+
+                        "status": "success" if status == 200 else "error",
+
+                        "latency_ms": latency_ms,
+
+                    })
+
+                except Exception as _ledger_err:
+
+                    SESSION["request_ledger_error"] = str(_ledger_err)
                 try:
                     MONITOR.log(model, sent_input_tokens, output_tokens, cost, latency_ms, status,
                                target_url, COMPILATION_MODE, protected_tokens, saved,
@@ -3208,7 +3326,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         pass
 
                 # Update last request stats for /stats/last endpoint
-                request_id = trace.request_id if trace else str(uuid.uuid4())[:8]
+                request_id = request_id if 'request_id' in locals() else (trace.request_id if trace else str(uuid.uuid4()))
                 update_last_request(
                     request_id=request_id,
                     model=model,
@@ -3408,7 +3526,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         dashboard_dir = Path(__file__).parent / "tokenpak" / "dashboard"
         
         # Default to index.html
-        if self.path == "/dashboard" or self.path == "/dashboard/":
+        if path == "/dashboard" or path == "/dashboard/":
             file_path = dashboard_dir / "index.html"
             content_type = "text/html; charset=utf-8"
         else:

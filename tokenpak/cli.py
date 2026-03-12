@@ -75,6 +75,7 @@ _COMMAND_GROUPS = {
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
         ("fleet", "Multi-machine proxy fleet status"),
+        ("aggregate", "Aggregate request ledger across machines"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1039,6 +1040,30 @@ class Colors:
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
 
 
+
+def cmd_aggregate(args):
+    """Aggregate request ledger across machines."""
+    import json as _json
+    from tokenpak.aggregate import load_requests, aggregate_records, render_table, parse_since, default_machine_name
+
+    since_raw = getattr(args, "since", None)
+    since_dt = parse_since(since_raw)
+    machine = default_machine_name()
+    rows, totals = aggregate_records(load_requests(since=since_dt), machine)
+
+    if getattr(args, "as_json", False):
+        payload = {
+            "machine": machine,
+            "since": since_raw,
+            "summary": totals,
+            "rows": [r.__dict__ for r in rows],
+        }
+        print(_json.dumps(payload, indent=2))
+        return
+
+    print(render_table(rows, totals))
+
+
 def cmd_attribution(args):
     """View savings breakdown by agent/skill/model."""
     import json as _json
@@ -1563,6 +1588,12 @@ def build_parser():
     p_preview.add_argument("--verbose", action="store_true", help="Show detailed block breakdown")
     p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
     p_preview.set_defaults(func=cmd_preview)
+
+
+    p_agg = sub.add_parser("aggregate", help="Aggregate request ledger across machines")
+    p_agg.add_argument("--since", default="7d", help="Time window, e.g. 7d, 24h, 30m, or ISO date")
+    p_agg.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
+    p_agg.set_defaults(func=cmd_aggregate)
 
     p_attr = sub.add_parser("attribution", help="View savings by agent/skill/model")
     p_attr.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
@@ -2776,6 +2807,7 @@ def main():
         "savings",
         "usage",
         "preview",
+        "aggregate",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
@@ -5620,6 +5652,8 @@ def cmd_fleet(args):
         load_fleet_config,
         query_fleet,
         render_fleet_table,
+        render_fleet_agent_table,
+        query_fleet_agent_rows,
         render_fleet_json,
         interactive_add_machine,
         save_fleet_config,
@@ -5657,6 +5691,7 @@ def cmd_fleet(args):
         
         # Query all machines
         stats = query_fleet(machines)
+        agent_rows, errors = query_fleet_agent_rows(machines)
         
         # Render output
         if getattr(args, "json", False):
@@ -5664,7 +5699,14 @@ def cmd_fleet(args):
         elif getattr(args, "compact", False):
             print(render_fleet_table(stats, compact=True))
         else:
-            print(render_fleet_table(stats, compact=False))
+            if agent_rows:
+                print(render_fleet_agent_table(agent_rows))
+                if errors:
+                    print("\n⚠️  Offline machines:")
+                    for err in errors:
+                        print(f"  - {err}")
+            else:
+                print(render_fleet_table(stats, compact=False))
 
 
 def _build_fleet_parser(sub):
