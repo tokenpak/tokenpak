@@ -70,3 +70,11 @@ def test_age_label_seconds():
     now = datetime.now(timezone.utc)
     ts = (now - timedelta(seconds=10)).isoformat()
     assert age_label(ts).endswith("s")
+
+
+def test_load_requests_limit(tmp_path: Path):
+    path = tmp_path / "requests.jsonl"
+    rows = [{"id": f"r{i}"} for i in range(5)]
+    _write_jsonl(path, rows)
+    limited = load_requests(path=path, limit=2)
+    assert [r["id"] for r in limited] == ["r3", "r4"]
