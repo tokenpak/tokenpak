@@ -1265,6 +1265,8 @@ def build_parser():
     _build_status_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
+    _build_report_parser(sub)
+    _build_alerts_parser(sub)
     _build_debug_parser(sub)
     _build_demo_parser(sub)
     _build_diff_parser(sub)
@@ -1465,6 +1467,46 @@ def cmd_savings(args):
     )
 
 
+def cmd_report(args):
+    """Generate and display daily savings report."""
+    from .daily_report import generate_report
+
+    format_type = "terminal"
+    if getattr(args, "markdown", False):
+        format_type = "markdown"
+    elif getattr(args, "json", False):
+        format_type = "json"
+
+    report = generate_report(format=format_type)
+
+    if format_type == "json":
+        import json as _json
+        print(_json.dumps(report, indent=2))
+    else:
+        print(report)
+
+
+def cmd_check_alerts(args):
+    """Evaluate alert rules and return exit code 1 if any fired."""
+    from .alerts import check_alerts
+
+    fired = check_alerts()
+
+    if not fired:
+        print("✅ All alert rules clear")
+        sys.exit(0)
+
+    # Print fired alerts
+    for rule, value in fired:
+        msg = rule.message
+        if value is not None and "{value" in msg:
+            msg = msg.format(value=value)
+        print(f"⚠️ {msg}")
+
+    print(f"\n{len(fired)} alert(s) fired.")
+    sys.exit(1)
+
+
 def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
@@ -1481,6 +1523,22 @@ def _build_savings_parser(sub):
     p_savings = sub.add_parser("savings", help="Show savings summary")
     p_savings.add_argument("--days", type=int, default=30, help="Rolling window in days")
     p_savings.set_defaults(func=cmd_savings)
+
+
+def _build_report_parser(sub):
+    """Build report command parser."""
+    p_report = sub.add_parser("report", help="Generate daily savings report")
+    p_report.add_argument(
+        "--markdown", action="store_true", help="Output markdown format (for messaging)"
+    )
+    p_report.add_argument("--json", action="store_true", help="Output JSON format")
+    p_report.set_defaults(func=cmd_report)
+
+
+def _build_alerts_parser(sub):
+    """Build check-alerts command parser."""
+    p_alerts = sub.add_parser("check-alerts", help="Evaluate alert rules and check health")
+    p_alerts.set_defaults(func=cmd_check_alerts)
 
 
 def _build_debug_parser(sub):
