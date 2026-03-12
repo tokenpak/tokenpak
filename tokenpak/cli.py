@@ -1057,7 +1057,7 @@ def cmd_requests(args):
         age_label,
     )
 
-    action = getattr(args, "action", None) or "tail"
+    action = getattr(args, "requests_cmd", None) or "tail"
     request_id = getattr(args, "request_id", None)
 
     # Allow `tokenpak requests <id>`
@@ -1073,10 +1073,11 @@ def cmd_requests(args):
             print("No request ledger found yet. Run requests through the proxy first.")
             return
 
-        def _render(rows):
+        def _render(rows, show_header=True):
             header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
-            print(header)
-            print("─" * len(header))
+            if show_header:
+                print(header)
+                print("─" * len(header))
             for row in rows:
                 view = to_view(row)
                 cache = f"{cache_pct(view):>5.0f}%"
@@ -1107,7 +1108,7 @@ def cmd_requests(args):
                         row = _json.loads(line)
                     except _json.JSONDecodeError:
                         continue
-                    _render([row])
+                    _render([row], show_header=False)
             except KeyboardInterrupt:
                 return
 
