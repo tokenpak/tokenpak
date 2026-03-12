@@ -171,6 +171,165 @@ def cmd_help(args):
 # ── Alias commands ────────────────────────────────────────────────────────────
 
 
+def cmd_setup(args):
+    """Interactive wizard for first-time TokenPak configuration."""
+    from pathlib import Path
+    from .profiles import get_profile, apply_profile
+    import yaml
+    import subprocess
+    import time
+    import os
+    
+    config_dir = Path.home() / ".tokenpak"
+    config_file = config_dir / "config.yaml"
+    
+    # Check for existing config
+    if config_file.exists():
+        print(f"Configuration already exists at {config_file}")
+        response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
+        if response not in ("yes", "y"):
+            print("Setup cancelled.")
+            return
+    
+    # Detect API keys from environment
+    print("\n🔍 Scanning for API keys...\n")
+    api_keys = {}
+    
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        print("✅ Found Anthropic API key")
+        api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
+    
+    if os.environ.get("OPENAI_API_KEY"):
+        print("✅ Found OpenAI API key")
+        api_keys["openai"] = os.environ["OPENAI_API_KEY"]
+    
+    if os.environ.get("GOOGLE_API_KEY"):
+        print("✅ Found Google API key")
+        api_keys["google"] = os.environ["GOOGLE_API_KEY"]
+    
+    if not api_keys:
+        print("⚠️  No API keys detected in environment variables.")
+        print("   Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY")
+        print("   Example: export ANTHROPIC_API_KEY='sk-...'")
+        return
+    
+    # Auto-detect primary provider
+    available_providers = list(api_keys.keys())
+    default_provider = available_providers[0] if available_providers else "anthropic"
+    
+    print(f"\nDetected providers: {', '.join(available_providers)}")
+    provider = input(f"Which provider to proxy? [{default_provider}]: ").strip()
+    if not provider:
+        provider = default_provider
+    
+    if provider not in api_keys:
+        print(f"Error: {provider} API key not found.")
+        return
+    
+    # Ask for port
+    port_input = input("Port number [8766]: ").strip()
+    port = int(port_input) if port_input else 8766
+    
+    # Ask for profile
+    print("\nChoose a compression profile:")
+    print("  [1] minimal    — compression only (safest, ~5% savings)")
+    print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
+    print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
+    
+    profile_input = input("\nProfile [2]: ").strip()
+    profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
+    profile_name = profile_map.get(profile_input, "balanced")
+    
+    # Build base config
+    config = {
+        "proxy": {
+            "port": port,
+            "host": "localhost",
+            "provider": provider,
+        },
+        "modules": {},
+    }
+    
+    # Apply profile
+    profile = get_profile(profile_name)
+    config["modules"] = profile["features"]
+    config["profile"] = profile_name
+    
+    # Create config directory and write config
+    config_dir.mkdir(parents=True, exist_ok=True)
+    with open(config_file, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"\n✅ Configuration saved to {config_file}")
+    print(f"   Profile: {profile_name} — {profile['description']}")
+    
+    # Start the proxy
+    print("\n🚀 Starting proxy...\n")
+    
+    import subprocess
+    import sys
+    
+    # Find proxy_v4.py
+    candidates = [
+        Path(__file__).resolve().parent.parent / "proxy_v4.py",
+        Path.home() / "tokenpak" / "proxy_v4.py",
+        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
+    ]
+    proxy_path = None
+    for c in candidates:
+        if c.exists():
+            proxy_path = c
+            break
+    
+    if not proxy_path:
+        print("Warning: proxy_v4.py not found. Skipping auto-start.")
+        return
+    
+    # Start proxy
+    env = os.environ.copy()
+    env["TOKENPAK_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, str(proxy_path)],
+        env=env,
+        cwd=str(proxy_path.parent),
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    
+    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid_path.write_text(str(proc.pid))
+    
+    # Wait and verify
+    time.sleep(1.5)
+    
+    # Try health check
+    try:
+        import urllib.request
+        import json
+        health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
+        health_data = json.loads(health_resp.read().decode())
+        mode = health_data.get("compilation_mode", "hybrid")
+        
+        print(f"✅ Proxy running on http://localhost:{port} (mode: {mode})")
+    except Exception:
+        print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
+    
+    # Success message with next steps
+    print("\nNext steps:")
+    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+    print(f"  2. Run: tokenpak status    (check health)")
+    print(f"  3. Run: tokenpak savings   (see your ROI)")
+    print()
+    print("💡 Quick commands:")
+    print("  tokenpak start      — start the proxy")
+    print("  tokenpak stop       — stop the proxy")
+    print("  tokenpak status     — check proxy health")
+    print("  tokenpak savings    — view compression savings")
+    print()
+
+
 def cmd_start(args):
     """Start the proxy on localhost:8766 (launches proxy_v4.py)."""
     import subprocess
@@ -234,8 +393,14 @@ def cmd_start(args):
     _t.sleep(1.5)
     health = _proxy_get("/health", port=port)
     if health:
-        mode = health.get("compilation_mode", "unknown")
-        print(f"Proxy started (PID {proc.pid}, port {port}, mode={mode}).")
+        mode = health.get("compilation_mode", "hybrid")
+        print(f"\n✅ Proxy running on http://localhost:{port} (mode: {mode})\n")
+        print("Next steps:")
+        print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+        print(f"  2. Run: tokenpak status    (check health)")
+        print(f"  3. Run: tokenpak savings   (see your ROI)")
+        print()
+        print("💡 First time? Run: tokenpak setup")
     else:
         print(f"Proxy launched (PID {proc.pid}, port {port}) — waiting for startup...")
         print("  Run `tokenpak status` to verify.")
@@ -1106,6 +1271,9 @@ def build_parser():
     p_help.add_argument("--all", action="store_true", help="Show all commands")
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
+
+    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
+    p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
     p_start.set_defaults(func=cmd_start)
