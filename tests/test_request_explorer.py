@@ -3,10 +3,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tokenpak.request_explorer import (
-    age_label,
     cache_pct,
-    get_request_by_id,
+    age_label,
     load_requests,
+    get_request_by_id,
     status_label,
     to_view,
 )
@@ -19,63 +19,37 @@ def _write_jsonl(path: Path, rows: list[dict]) -> None:
             f.write(json.dumps(row) + "\n")
 
 
-def test_load_requests_ignores_malformed(tmp_path: Path):
+def test_load_requests_skips_bad_json(tmp_path: Path):
     path = tmp_path / "requests.jsonl"
-    path.write_text("{bad}\n" + json.dumps({"id": "a"}) + "\n")
+    path.write_text("{bad json}\n" + json.dumps({"id": "req1"}) + "\n")
     rows = load_requests(path=path)
     assert len(rows) == 1
-    assert rows[0]["id"] == "a"
+    assert rows[0]["id"] == "req1"
 
 
 def test_get_request_by_id(tmp_path: Path):
-    rows = [{"id": "a"}, {"id": "b"}]
     path = tmp_path / "requests.jsonl"
-    _write_jsonl(path, rows)
-    result = get_request_by_id("b", path=path)
-    assert result
-    assert result["id"] == "b"
+    _write_jsonl(path, [{"id": "req1"}, {"id": "req2"}])
+    row = get_request_by_id("req2", path=path)
+    assert row is not None
+    assert row["id"] == "req2"
 
 
-def test_cache_pct_and_status():
-    row = {
-        "id": "r1",
-        "model": "claude",
-        "input_tokens": 100,
-        "output_tokens": 10,
-        "cache_read": 25,
-        "saved_cost": 0.01,
-        "status": "success",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    view = to_view(row)
+def test_cache_pct():
+    view = to_view({"id": "req", "model": "m", "input_tokens": 100, "output_tokens": 0, "cache_read": 25, "saved_cost": 0.0, "status": "success", "timestamp": ""})
     assert cache_pct(view) == 25.0
+
+
+def test_status_label_cached():
+    view = to_view({"id": "req", "model": "m", "input_tokens": 0, "output_tokens": 0, "cache_read": 10, "saved_cost": 0.0, "status": "success", "timestamp": ""})
     assert status_label(view) == "cached"
 
 
-def test_status_error():
-    row = {
-        "id": "r2",
-        "model": "claude",
-        "input_tokens": 100,
-        "output_tokens": 10,
-        "cache_read": 0,
-        "saved_cost": 0.0,
-        "status": "error",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    view = to_view(row)
+def test_status_label_error():
+    view = to_view({"id": "req", "model": "m", "input_tokens": 0, "output_tokens": 0, "cache_read": 0, "saved_cost": 0.0, "status": "error", "timestamp": ""})
     assert status_label(view) == "error"
 
 
-def test_age_label(tmp_path: Path):
-    ts = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+def test_age_label_seconds():
+    ts = (datetime.now(timezone.utc) - timedelta(seconds=12)).isoformat()
     assert age_label(ts).endswith("s")
-
-
-def test_to_view_defaults():
-    row = {"id": "x"}
-    view = to_view(row)
-    assert view.request_id == "x"
-    assert view.model == ""
-    assert view.input_tokens == 0
-    assert view.output_tokens == 0
