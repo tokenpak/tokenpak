@@ -116,6 +116,28 @@ class ASTParser:
                         )
                     )
 
+        # Capture module-level assignments as variables/constants.
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    for name in self._extract_python_target_names(target):
+                        nodes.append(ParsedNode(
+                            kind="variable",
+                            name=name,
+                            line_start=node.lineno,
+                            line_end=node.end_lineno or node.lineno,
+                            signature=f"{name} = ...",
+                        ))
+            elif isinstance(node, ast.AnnAssign):
+                for name in self._extract_python_target_names(node.target):
+                    nodes.append(ParsedNode(
+                        kind="variable",
+                        name=name,
+                        line_start=node.lineno,
+                        line_end=node.end_lineno or node.lineno,
+                        signature=f"{name}: ...",
+                    ))
+
         return sorted(nodes, key=lambda n: n.line_start)
 
     def _python_signature(self, node: ast.FunctionDef, lines: list[str]) -> str:
