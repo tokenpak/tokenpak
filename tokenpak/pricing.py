@@ -133,3 +133,11 @@ def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_
     cost = (total_input_tokens / 1_000_000) * input_rate
     cost += (output_tokens / 1_000_000) * output_rate
     return round(cost, 6)
+
+
+def get_price(model: str, direction: str = "input") -> float:
+    """Get per-million-token price for a model and direction (input/output)."""
+    rates = get_rates(model)
+    if direction == "output":
+        return rates.get("output_per_mtok", 15.0)
+    return rates.get("input_per_mtok", 3.0)
