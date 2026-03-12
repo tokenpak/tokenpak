@@ -70,3 +70,12 @@ def test_status_error():
 def test_age_label(tmp_path: Path):
     ts = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
     assert age_label(ts).endswith("s")
+
+
+def test_to_view_defaults():
+    row = {"id": "x"}
+    view = to_view(row)
+    assert view.request_id == "x"
+    assert view.model == ""
+    assert view.input_tokens == 0
+    assert view.output_tokens == 0
