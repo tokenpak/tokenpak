@@ -1293,11 +1293,60 @@ def cmd_preview(args):
 
 def cmd_dashboard(args):
     """Real-time TokenPak health dashboard."""
+    if getattr(args, "public", False):
+        _cmd_dashboard_public(args)
+        return
     from .agent.cli.commands.dashboard import run_dashboard
     run_dashboard(
         fleet=getattr(args, "fleet", False),
         json_export=getattr(args, "json_export", False),
     )
+
+
+def _cmd_dashboard_public(args):
+    """Print publicly accessible dashboard URLs with accessibility checks."""
+    import webbrowser
+    from .network_utils import get_reachable_addresses, is_port_accessible
+
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    new_token = getattr(args, "new_token", False)
+
+    # Load or create dashboard token
+    token_path = Path.home() / ".tokenpak" / "dashboard_token"
+    if new_token or not token_path.exists():
+        import secrets
+        token = secrets.token_urlsafe(24)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(token)
+    else:
+        token = token_path.read_text().strip()
+
+    # Detect all reachable addresses
+    urls = get_reachable_addresses(port, detect_public=True)
+
+    print(f"\n✅ TokenPak Dashboard")
+    print(f"{'─' * 50}")
+
+    first_accessible = None
+    for url in urls:
+        host = url.replace("http://", "").split(":")[0]
+        accessible = is_port_accessible(host, port, timeout=2)
+        status = "✅" if accessible else "⚠️"
+        full_url = f"{url}?token={token}"
+        print(f"{status} {full_url}")
+        if accessible and first_accessible is None:
+            first_accessible = full_url
+
+    print(f"\n💡 Copy and share the link with trusted users.")
+    print(f"🔑 Token: {token}")
+    print(f"\nRegenerate token: tokenpak dashboard --public --new-token\n")
+
+    # Open the first accessible URL in browser
+    if first_accessible:
+        webbrowser.open(first_accessible)
+    elif urls:
+        # Fall back to localhost even if not yet running
+        webbrowser.open(f"{urls[0]}?token={token}")
 
 
 def cmd_doctor(args):
@@ -1680,6 +1729,8 @@ def build_parser():
     p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI)")
     p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary")
     p_dashboard.add_argument("--json", dest="json_export", action="store_true", help="Export dashboard as JSON (non-interactive)")
+    p_dashboard.add_argument("--public", action="store_true", help="Print all reachable dashboard URLs (for sharing)")
+    p_dashboard.add_argument("--new-token", action="store_true", dest="new_token", help="Regenerate dashboard access token")
     p_dashboard.set_defaults(func=cmd_dashboard)
 
     p_preview = sub.add_parser("preview", help="Preview compression dry-run (show token savings before sending)")
