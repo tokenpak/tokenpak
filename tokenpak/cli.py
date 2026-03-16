@@ -74,6 +74,7 @@ _COMMAND_GROUPS = {
         ("forecast", "Cost burn rate & projections"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
+        ("vault-health", "Vault index health diagnostic and repair"),
         ("fleet", "Multi-machine proxy fleet status"),
         ("aggregate", "Aggregate request ledger across machines"),
         ("requests", "Live request explorer"),
@@ -1596,6 +1597,7 @@ def build_parser():
 
     _build_route_parser(sub)
     _build_validate_parser(sub)
+    _build_vault_health_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
@@ -5808,7 +5810,67 @@ def _build_validate_parser(sub):
     return p
 
 
-# ── Fleet Management ──────────────────────────────────────────────────────────
+# ── Vault Health Management ───────────────────────────────────────────────────
+
+def cmd_vault_health(args):
+    """Manage vault index health."""
+    from .vault_health import VaultHealth
+    
+    subcmd = getattr(args, "vault_health_cmd", None)
+    
+    if subcmd == "repair":
+        try:
+            health = VaultHealth()
+            
+            # Check if index exists
+            if not health.index_path.exists():
+                print(f"❌ Index not found: {health.index_path}")
+                sys.exit(2)
+            
+            print("\nTOKENPAK  |  Vault Health")
+            print("──────────────────────────────\n")
+            
+            # Get initial status
+            status = health.get_status()
+            print(f"Index: {health.index_path}")
+            print(f"Status: {status}\n")
+            
+            # Check if stale
+            is_stale = health.check_index_staleness()
+            
+            if not is_stale:
+                print("✅ Index is current (no rebuild needed)")
+                print(f"Exit code: 0\n")
+                sys.exit(0)
+            
+            # Rebuild needed
+            block_count = len(list(health.blocks_dir.iterdir()))
+            print(f"Index is stale: {block_count} blocks found, index mismatch detected\n")
+            print("Rebuilding index from blocks...")
+            
+            metrics = health.rebuild_index()
+            
+            print(f"✅ Rebuilt in {metrics['rebuild_time_seconds']:.2f} seconds")
+            print(f"Entries: {metrics['index_entries']:,}")
+            print(f"  Added: {metrics['entries_added']}")
+            print(f"  Removed: {metrics['entries_removed']}")
+            print(f"Index size: {metrics['index_size_bytes']:,} bytes")
+            print(f"\nExit code: 1 (rebuilt)\n")
+            sys.exit(1)
+        
+        except FileNotFoundError as e:
+            print(f"❌ Error: {e}")
+            sys.exit(2)
+        except Exception as e:
+            print(f"❌ Error during rebuild: {e}")
+            sys.exit(2)
+    
+    else:
+        print("Unknown vault-health subcommand. Use 'repair'.")
+        sys.exit(1)
+
+
+# ── Fleet Management ──────────────────────────────────────────────────────
 
 def cmd_fleet(args):
     """Query and manage a fleet of TokenPak proxy instances."""
@@ -5871,6 +5933,20 @@ def cmd_fleet(args):
                         print(f"  - {err}")
             else:
                 print(render_fleet_table(stats, compact=False))
+
+
+def _build_vault_health_parser(sub):
+    """Build the vault-health command parser."""
+    p_vh = sub.add_parser("vault-health", help="Vault index health diagnostic and repair")
+    
+    vhsub = p_vh.add_subparsers(dest="vault_health_cmd", required=True)
+    
+    # vault-health repair
+    p_repair = vhsub.add_parser("repair", help="Check and rebuild stale vault index")
+    p_repair.set_defaults(func=cmd_vault_health)
+    
+    p_vh.set_defaults(func=cmd_vault_health)
+    return p_vh
 
 
 def _build_fleet_parser(sub):
