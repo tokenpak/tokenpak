@@ -1131,7 +1131,7 @@ def cmd_requests(args):
                         continue
                     try:
                         row = _json.loads(line)
-                    except _json.JSONDecodeError:
+                    except json.JSONDecodeError:
                         continue
                     _print_rows([row], with_header=False)
             except KeyboardInterrupt:
@@ -1442,7 +1442,7 @@ def cmd_doctor(args):
                 json.load(f)
             print(Colors.ok(f"Config file         {config_path} — valid"))
             results["pass"] += 1
-        except _json.JSONDecodeError:
+        except json.JSONDecodeError:
             print(Colors.fail(f"Config file         {config_path} — invalid JSON"))
             results["fail"] += 1
             fixes_needed.append(("reset config", config_path))
@@ -1468,7 +1468,7 @@ def cmd_doctor(args):
                     )
                 )
                 results["warn"] += 1
-        except _json.JSONDecodeError:
+        except json.JSONDecodeError:
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
             results["fail"] += 1
     else:
