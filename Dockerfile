@@ -44,9 +44,10 @@ EXPOSE 8766
 USER tokenpak
 
 # Health check (Docker native health check)
-# Checks if /health endpoint returns 200 OK
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${TOKENPAK_PORT}/health || exit 1
+# Uses /ready — returns 200 only when fully initialised and accepting requests.
+# Allows 60s start-period so CI images don't fail before server finishes boot.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${TOKENPAK_PORT}/ready || exit 1
 
 # Start proxy (use proxy.py as entry point)
 # Note: assumes proxy.py has a main() that starts the server

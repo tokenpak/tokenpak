@@ -201,9 +201,72 @@ Proxy health and stats.
 
 ---
 
+### `GET /health`
+
+Structured health check. Returns component status, uptime, version, and actionable suggestions when degraded.
+
+**No authentication required.**
+
+**HTTP status codes:**
+- `200` — healthy or degraded
+- `503` — critical (all providers down)
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "uptime": 3600,
+  "version": "1.0.0",
+  "timestamp": "2026-03-16T19:10:00Z",
+  "components": {
+    "cache": { "status": "ok", "entries": 42 },
+    "provider_connections": {
+      "anthropic": { "status": "ok", "circuit_open": false, "failures": 0 },
+      "openai":    { "status": "ok", "circuit_open": false, "failures": 0 },
+      "google":    { "status": "ok", "circuit_open": false, "failures": 0 }
+    },
+    "config": { "status": "ok" }
+  },
+  "suggestions": []
+}
+```
+
+**`status` values:**
+
+| Value | Meaning | HTTP |
+|-------|---------|------|
+| `healthy` | All components nominal | 200 |
+| `degraded` | One or more providers circuit-open, or error rate >10% | 200 |
+| `critical` | All providers unreachable | 503 |
+
+---
+
+### `GET /ready`
+
+Kubernetes/Docker readiness probe. Returns `200` only when the proxy has fully initialised and is accepting requests. Returns `503` during startup or graceful shutdown. No authentication required. Response time < 50ms (no I/O).
+
+**Response (ready):**
+```json
+{ "ready": true, "status": "ready" }
+```
+
+**Response (503 — startup):**
+```json
+{ "ready": false, "status": "starting_up" }
+```
+
+**Response (503 — shutdown):**
+```json
+{ "ready": false, "status": "shutting_down" }
+```
+
+---
+
 ### `GET /v1/health`
 
-Detailed health check.
+> **Deprecated** — use `GET /health` instead (see above).
+
+Detailed health check (legacy).
 
 **Response:**
 ```json
