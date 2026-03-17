@@ -112,14 +112,13 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
 def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int = 0, cache_creation_tokens: int = 0, output_tokens: int = 0) -> float:
     """Calculate actual cost for a request routed through TokenPak."""
     rates = get_rates(model)
-    input_rate = rates.get("input_per_mtok", 3.0)
-    output_rate = rates.get("output_per_mtok", 15.0)
-    cache_read_rate = input_rate * 0.1  # Cache reads at 10% of input
-    cache_create_rate = input_rate * 1.25  # Cache creation at 125% of input
+    input_rate = rates.get("input", 3.0)
+    output_rate = rates.get("output", 15.0)
+    cache_rate = rates.get("cached", input_rate * 0.1)
 
     cost = (input_tokens / 1_000_000) * input_rate
-    cost += (cache_read_tokens / 1_000_000) * cache_read_rate
-    cost += (cache_creation_tokens / 1_000_000) * cache_create_rate
+    cost += (cache_read_tokens / 1_000_000) * cache_rate
+    cost += (cache_creation_tokens / 1_000_000) * input_rate * 1.25
     cost += (output_tokens / 1_000_000) * output_rate
     return round(cost, 6)
 
@@ -127,8 +126,8 @@ def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int
 def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_tokens: int = 0) -> float:
     """Calculate what a request would cost WITHOUT TokenPak (no cache, no compression)."""
     rates = get_rates(model)
-    input_rate = rates.get("input_per_mtok", 3.0)
-    output_rate = rates.get("output_per_mtok", 15.0)
+    input_rate = rates.get("input", 3.0)
+    output_rate = rates.get("output", 15.0)
 
     cost = (total_input_tokens / 1_000_000) * input_rate
     cost += (output_tokens / 1_000_000) * output_rate
@@ -136,8 +135,10 @@ def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_
 
 
 def get_price(model: str, direction: str = "input") -> float:
-    """Get per-million-token price for a model and direction (input/output)."""
+    """Get per-million-token price for a model and direction (input/output/cached)."""
     rates = get_rates(model)
     if direction == "output":
-        return rates.get("output_per_mtok", 15.0)
-    return rates.get("input_per_mtok", 3.0)
+        return rates.get("output", 15.0)
+    elif direction == "cached":
+        return rates.get("cached", 0.30)
+    return rates.get("input", 3.0)
