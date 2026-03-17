@@ -1314,10 +1314,51 @@ def cmd_preview(args):
 
 
 def cmd_dashboard(args):
-    """Real-time TokenPak health dashboard."""
-    if getattr(args, "public", False):
-        _cmd_dashboard_public(args)
+    """Real-time TokenPak health dashboard or public web dashboard URL."""
+    import socket
+    import webbrowser
+    from .token_manager import load_or_create_token, get_token, regenerate_token
+
+    # --show-token: display current token
+    if getattr(args, "show_token", False):
+        try:
+            token = load_or_create_token()
+        except Exception as e:
+            print(f"Error: {e}")
+            return
+        print(f"Dashboard token: {token}")
+        print(f"File: ~/.tokenpak/dashboard_token")
         return
+
+    # --new-token: regenerate token
+    if getattr(args, "new_token", False):
+        token = regenerate_token()
+        print(f"Token regenerated: {token}")
+        print("Old token is now invalid.")
+        return
+
+    # --public: show public URL with token
+    if getattr(args, "public", False):
+        from tokenpak.config_loader import get as _cfg  # noqa: F401
+        port = int(_cfg("port", 8766, "TOKENPAK_PORT", int))
+        token = load_or_create_token()
+        hostname = socket.gethostname()
+        try:
+            ip = socket.gethostbyname(hostname)
+        except Exception:
+            ip = "localhost"
+        url = f"http://{ip}:{port}/dashboard?token={token}"
+        print(f"\n✅ TokenPak Dashboard (Public)")
+        print(f"─────────────────────────────────")
+        print(f"URL:   {url}")
+        print(f"Token: {token}")
+        print(f"\n⚠️  Share this URL only with trusted users.")
+        print(f"Regenerate token: tokenpak dashboard --new-token\n")
+        webbrowser.open(url)
+        return
+
+    # Default: TUI dashboard
+
     from .agent.cli.commands.dashboard import run_dashboard
     run_dashboard(
         fleet=getattr(args, "fleet", False),
@@ -1750,11 +1791,13 @@ def build_parser():
     p_doctor.add_argument("--deploy", action="store_true", help="Push latest doctor to all agents (use with --fleet)")
     p_doctor.set_defaults(func=cmd_doctor)
 
-    p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI)")
-    p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary")
+    p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI) or public web URL")
+    p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary (TUI)")
     p_dashboard.add_argument("--json", dest="json_export", action="store_true", help="Export dashboard as JSON (non-interactive)")
-    p_dashboard.add_argument("--public", action="store_true", help="Print all reachable dashboard URLs (for sharing)")
-    p_dashboard.add_argument("--new-token", action="store_true", dest="new_token", help="Regenerate dashboard access token")
+    p_dashboard.add_argument("--public", action="store_true", help="Show public URL with token (accessible from any machine)")
+    p_dashboard.add_argument("--show-token", dest="show_token", action="store_true", help="Display current dashboard token")
+    p_dashboard.add_argument("--new-token", dest="new_token", action="store_true", help="Regenerate dashboard token")
+
     p_dashboard.set_defaults(func=cmd_dashboard)
 
     p_preview = sub.add_parser("preview", help="Preview compression dry-run (show token savings before sending)")
