@@ -57,6 +57,7 @@ dependencies = [
     "httpx>=0.26.0",
     "h2>=3,<5",
     "watchdog>=3.0.0",
+    "requests>=2.26.0",
 ]
 
 [project.license]
@@ -144,3 +145,6 @@ ignore = [
     "E741",
     "F841",
 ]
+
+[tool.mypy]
+ignore_missing_imports = true
