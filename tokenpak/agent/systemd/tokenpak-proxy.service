@@ -14,6 +14,11 @@ RestartSec=5s
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
+# Graceful shutdown: allow 35s for in-flight drain (proxy drains up to 30s via
+# TOKENPAK_SHUTDOWN_TIMEOUT, plus 5s buffer for cleanup and final log writes).
+# `systemctl stop` sends SIGTERM; proxy drains requests, persists stats, then exits 0.
+TimeoutStopSec=35
+
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=tokenpak-proxy
@@ -22,10 +27,13 @@ SyslogIdentifier=tokenpak-proxy
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=%h/.tokenpak
+ReadWritePaths=%h/.tokenpak %h/vault
 
 # Environment
 Environment=PYTHONUNBUFFERED=1
+# TOKENPAK_SHUTDOWN_TIMEOUT controls the in-flight drain window (default: 30s).
+# Set lower (e.g. 5) for faster deploys; set higher for long-running requests.
+Environment=TOKENPAK_SHUTDOWN_TIMEOUT=30
 # Add your API key env vars here (or use EnvironmentFile):
 # EnvironmentFile=%h/.tokenpak/env
 
