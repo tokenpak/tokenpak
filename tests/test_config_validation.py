@@ -1,302 +1,472 @@
-"""Tests for config_validator.py — proxy config validation on boot."""
+"""
+Tests for tokenpak.config_validator.ConfigValidator
 
-import json
+Validates config dict fields on proxy startup:
+- Required fields (api_keys)
+- Field types (port=int, cache_ttl=int, etc.)
+- Value ranges (port 1024-65535, TTL > 0)
+- Path existence (log_dir, cache_dir)
+- URL formats (provider_urls)
+"""
+
 import os
 import tempfile
-from pathlib import Path
-
 import pytest
-
+from pathlib import Path
 from tokenpak.config_validator import ConfigValidator, ConfigValidationError
 
 
 class TestConfigValidationError:
-    """Test ConfigValidationError data class."""
+    """Tests for ConfigValidationError class."""
 
-    def test_error_creation(self):
-        """Test creating a validation error."""
-        error = ConfigValidationError(
+    def test_error_has_all_fields(self):
+        """Error object contains all required fields."""
+        err = ConfigValidationError(
             field="port",
             expected="1024-65535",
-            actual=9999999,
+            actual=99,
             message="Port out of range",
-            suggestion="Use port between 1024-65535",
+            suggestion="Change port to 8766"
         )
-        assert error.field == "port"
-        assert error.expected == "1024-65535"
-        assert error.actual == 9999999
+        assert err.field == "port"
+        assert err.expected == "1024-65535"
+        assert err.actual == 99
+        assert err.message == "Port out of range"
+        assert err.suggestion == "Change port to 8766"
+
+    def test_error_string_format(self):
+        """Error renders nicely as string."""
+        err = ConfigValidationError(
+            field="port",
+            expected="1024-65535",
+            actual=99,
+            message="Port out of range",
+            suggestion="Change port to 8766"
+        )
+        s = str(err)
+        assert "port" in s.lower()
+        assert "1024-65535" in s
+        assert "99" in s
 
     def test_error_to_dict(self):
-        """Test error serialization."""
-        error = ConfigValidationError(
-            field="api_keys", expected="dict", actual="string", message="Wrong type", suggestion="Fix it"
+        """Error converts to dict."""
+        err = ConfigValidationError(
+            field="port",
+            expected="1024-65535",
+            actual=99,
+            message="Port out of range",
+            suggestion="Change port to 8766"
         )
-        d = error.to_dict()
-        assert d["field"] == "api_keys"
-        assert d["expected"] == "dict"
+        d = err.to_dict()
+        assert d["field"] == "port"
+        assert d["expected"] == "1024-65535"
+        assert d["actual"] == 99
 
 
-class TestConfigValidatorBasic:
-    """Test basic validator functionality."""
+class TestConfigValidatorRequired:
+    """Tests for required field validation."""
 
     def test_valid_minimal_config(self):
-        """Test minimal valid config (api_keys only)."""
-        validator = ConfigValidator()
+        """Minimal config with just api_keys is valid."""
         config = {"api_keys": {"anthropic": "sk-test"}}
+        validator = ConfigValidator()
         errors = validator.validate(config)
         assert len(errors) == 0
-        assert validator.is_valid(config)
 
-    def test_missing_required_field(self):
-        """Test detection of missing required field."""
+    def test_missing_api_keys(self):
+        """Missing api_keys produces error."""
+        config = {}
         validator = ConfigValidator()
-        config = {"port": 8766}
         errors = validator.validate(config)
         assert len(errors) == 1
         assert errors[0].field == "api_keys"
-        assert "missing" in errors[0].message.lower()
+        assert "missing" in errors[0].actual.lower()
 
-    def test_multiple_errors_reported_together(self):
-        """Test that all errors are reported at once."""
+    def test_error_has_suggestion(self):
+        """Each error includes a fix suggestion."""
+        config = {}
         validator = ConfigValidator()
-        config = {
-            "api_keys": "not-a-dict",  # wrong type
-            "port": 9999999,  # out of range
-            "cache_ttl": -1,  # invalid value
-        }
         errors = validator.validate(config)
-        assert len(errors) >= 3  # At least 3 errors
-        field_names = [e.field for e in errors]
-        assert "api_keys" in field_names
-        assert "port" in field_names
-        assert "cache_ttl" in field_names
+        assert len(errors) > 0
+        for err in errors:
+            assert err.suggestion
+            assert len(err.suggestion) > 0
 
 
 class TestConfigValidatorTypes:
-    """Test type validation."""
+    """Tests for field type validation."""
 
     def test_api_keys_must_be_dict(self):
-        """Test that api_keys must be a dict."""
+        """api_keys must be dict, not string."""
+        config = {"api_keys": "sk-test"}
         validator = ConfigValidator()
-        config = {"api_keys": "sk-test"}  # string instead of dict
         errors = validator.validate(config)
         assert len(errors) == 1
         assert errors[0].field == "api_keys"
         assert "dict" in errors[0].expected.lower()
 
     def test_port_must_be_int(self):
-        """Test that port must be an integer."""
+        """port must be int, not string."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "port": "8766"
+        }
         validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "port": "8766"}  # string instead of int
         errors = validator.validate(config)
-        port_errors = [e for e in errors if e.field == "port"]
-        assert len(port_errors) >= 1
-        assert "integer" in port_errors[0].expected.lower()
+        assert len(errors) == 1
+        assert errors[0].field == "port"
+        assert "integer" in errors[0].expected.lower()
 
     def test_cache_ttl_must_be_int(self):
-        """Test that cache_ttl must be an integer."""
-        validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "cache_ttl": "3600"}  # string instead of int
-        errors = validator.validate(config)
-        ttl_errors = [e for e in errors if e.field == "cache_ttl"]
-        assert len(ttl_errors) >= 1
-
-    def test_rate_limit_fields_must_be_int(self):
-        """Test that rate limit fields must be integers."""
-        validator = ConfigValidator()
+        """cache_ttl must be int, not string."""
         config = {
-            "api_keys": {"a": "k"},
-            "rate_limit_requests": "100",  # string instead of int
-            "rate_limit_window": "60",  # string instead of int
+            "api_keys": {"anthropic": "sk-test"},
+            "cache_ttl": "3600"
         }
-        errors = validator.validate(config)
-        rl_errors = [e for e in errors if "rate_limit" in e.field]
-        assert len(rl_errors) >= 2
-
-
-class TestConfigValidatorValues:
-    """Test value range validation."""
-
-    def test_port_range_validation(self):
-        """Test that port must be in range 1024-65535."""
         validator = ConfigValidator()
-
-        # Too low
-        config = {"api_keys": {"a": "k"}, "port": 100}
         errors = validator.validate(config)
-        port_errors = [e for e in errors if e.field == "port"]
-        assert len(port_errors) >= 1
+        assert len(errors) == 1
+        assert errors[0].field == "cache_ttl"
+        assert "integer" in errors[0].expected.lower()
 
-        # Too high
-        config = {"api_keys": {"a": "k"}, "port": 99999}
+    def test_rate_limit_requests_must_be_int(self):
+        """rate_limit_requests must be int."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "rate_limit_requests": "100"
+        }
+        validator = ConfigValidator()
         errors = validator.validate(config)
-        port_errors = [e for e in errors if e.field == "port"]
-        assert len(port_errors) >= 1
+        assert len(errors) == 1
+        assert errors[0].field == "rate_limit_requests"
 
-        # Valid
-        config = {"api_keys": {"a": "k"}, "port": 8766}
+    def test_rate_limit_window_must_be_int(self):
+        """rate_limit_window must be int."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "rate_limit_window": "60"
+        }
+        validator = ConfigValidator()
         errors = validator.validate(config)
-        port_errors = [e for e in errors if e.field == "port"]
-        assert len(port_errors) == 0
+        assert len(errors) == 1
+        assert errors[0].field == "rate_limit_window"
+
+
+class TestConfigValidatorRanges:
+    """Tests for value range validation."""
+
+    def test_port_minimum_range(self):
+        """port < 1024 produces error."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "port": 100
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "port"
+        assert "1024" in errors[0].expected
+
+    def test_port_maximum_range(self):
+        """port > 65535 produces error."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "port": 99999
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "port"
+        assert "65535" in errors[0].expected
+
+    def test_port_valid_range(self):
+        """port in range 1024-65535 is valid."""
+        for port in [1024, 8766, 65535]:
+            config = {
+                "api_keys": {"anthropic": "sk-test"},
+                "port": port
+            }
+            validator = ConfigValidator()
+            errors = validator.validate(config)
+            assert len(errors) == 0
 
     def test_cache_ttl_must_be_positive(self):
-        """Test that cache_ttl must be positive."""
-        validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "cache_ttl": 0}
-        errors = validator.validate(config)
-        ttl_errors = [e for e in errors if e.field == "cache_ttl"]
-        assert len(ttl_errors) >= 1
-        assert "positive" in ttl_errors[0].message.lower()
+        """cache_ttl <= 0 produces error."""
+        for ttl in [0, -1, -3600]:
+            config = {
+                "api_keys": {"anthropic": "sk-test"},
+                "cache_ttl": ttl
+            }
+            validator = ConfigValidator()
+            errors = validator.validate(config)
+            assert len(errors) == 1
+            assert errors[0].field == "cache_ttl"
+            assert "positive" in errors[0].expected.lower()
 
-    def test_rate_limit_values_must_be_positive(self):
-        """Test that rate limit values must be positive."""
-        validator = ConfigValidator()
+    def test_cache_ttl_valid_positive(self):
+        """cache_ttl > 0 is valid."""
         config = {
-            "api_keys": {"a": "k"},
-            "rate_limit_requests": 0,
-            "rate_limit_window": -1,
+            "api_keys": {"anthropic": "sk-test"},
+            "cache_ttl": 3600
         }
+        validator = ConfigValidator()
         errors = validator.validate(config)
-        rl_errors = [e for e in errors if "rate_limit" in e.field]
-        assert len(rl_errors) >= 2
+        assert len(errors) == 0
+
+    def test_rate_limit_requests_must_be_positive(self):
+        """rate_limit_requests <= 0 produces error."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "rate_limit_requests": 0
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "rate_limit_requests"
+
+    def test_rate_limit_window_must_be_positive(self):
+        """rate_limit_window <= 0 produces error."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "rate_limit_window": -60
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "rate_limit_window"
 
 
 class TestConfigValidatorURLs:
-    """Test provider URL validation."""
+    """Tests for provider URL validation."""
 
-    def test_valid_provider_url(self):
-        """Test that valid URLs pass validation."""
-        validator = ConfigValidator()
+    def test_valid_provider_urls(self):
+        """Valid URLs are accepted."""
         config = {
-            "api_keys": {"a": "k"},
-            "provider_urls": {"anthropic": "https://api.anthropic.com"},
-        }
-        errors = validator.validate(config)
-        url_errors = [e for e in errors if "provider_urls" in e.field]
-        assert len(url_errors) == 0
-
-    def test_invalid_provider_url(self):
-        """Test that invalid URLs are rejected."""
-        validator = ConfigValidator()
-        config = {
-            "api_keys": {"a": "k"},
-            "provider_urls": {"anthropic": "not-a-valid-url"},
-        }
-        errors = validator.validate(config)
-        url_errors = [e for e in errors if "provider_urls" in e.field]
-        assert len(url_errors) >= 1
-
-    def test_multiple_provider_urls(self):
-        """Test validation of multiple provider URLs."""
-        validator = ConfigValidator()
-        config = {
-            "api_keys": {"a": "k"},
+            "api_keys": {"anthropic": "sk-test"},
             "provider_urls": {
                 "anthropic": "https://api.anthropic.com",
-                "openai": "invalid",
-                "together": "https://api.together.com",
-            },
+                "openai": "https://api.openai.com"
+            }
         }
+        validator = ConfigValidator()
         errors = validator.validate(config)
-        url_errors = [e for e in errors if "provider_urls" in e.field]
-        assert len(url_errors) >= 1
-        assert "openai" in url_errors[0].field
+        assert len(errors) == 0
+
+    def test_invalid_provider_url_no_scheme(self):
+        """URL without scheme is invalid."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "provider_urls": {
+                "anthropic": "api.anthropic.com"  # missing https://
+            }
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert "provider_urls.anthropic" in errors[0].field
+
+    def test_invalid_provider_url_no_host(self):
+        """URL without host is invalid."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "provider_urls": {
+                "anthropic": "https://"
+            }
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+
+    def test_invalid_provider_url_plaintext(self):
+        """Plaintext URL is invalid."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "provider_urls": {
+                "anthropic": "not a url at all"
+            }
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
 
 
 class TestConfigValidatorPaths:
-    """Test file path validation."""
+    """Tests for file path validation."""
 
-    def test_existing_log_dir_passes(self):
-        """Test that existing log directory passes validation."""
+    def test_valid_log_dir_exists(self):
+        """Existing log_dir is valid."""
         with tempfile.TemporaryDirectory() as tmpdir:
+            config = {
+                "api_keys": {"anthropic": "sk-test"},
+                "log_dir": tmpdir
+            }
             validator = ConfigValidator()
-            config = {"api_keys": {"a": "k"}, "log_dir": tmpdir}
             errors = validator.validate(config)
-            log_errors = [e for e in errors if e.field == "log_dir"]
-            assert len(log_errors) == 0
+            assert len(errors) == 0
 
-    def test_missing_log_dir_fails(self):
-        """Test that missing log directory is detected."""
-        validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "log_dir": "/nonexistent/path/12345"}
-        errors = validator.validate(config)
-        log_errors = [e for e in errors if e.field == "log_dir"]
-        assert len(log_errors) >= 1
-        assert "does not exist" in log_errors[0].message.lower()
-
-    def test_existing_cache_dir_passes(self):
-        """Test that existing cache directory passes validation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            validator = ConfigValidator()
-            config = {"api_keys": {"a": "k"}, "cache_dir": tmpdir}
-            errors = validator.validate(config)
-            cache_errors = [e for e in errors if e.field == "cache_dir"]
-            assert len(cache_errors) == 0
-
-    def test_missing_cache_dir_fails(self):
-        """Test that missing cache directory is detected."""
-        validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "cache_dir": "/nonexistent/cache/12345"}
-        errors = validator.validate(config)
-        cache_errors = [e for e in errors if e.field == "cache_dir"]
-        assert len(cache_errors) >= 1
-
-
-class TestConfigValidatorFileHandling:
-    """Test config file validation."""
-
-    def test_valid_json_file_passes(self):
-        """Test that valid JSON config file passes validation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_file.write_text(json.dumps({"api_keys": {"anthropic": "sk-test"}}))
-            validator = ConfigValidator()
-            assert validator.validate_file(str(config_file)) is True
-
-    def test_missing_file_fails(self):
-        """Test that missing config file is detected."""
-        validator = ConfigValidator()
-        assert validator.validate_file("/nonexistent/config.json") is False
-
-    def test_invalid_json_fails(self):
-        """Test that invalid JSON is detected."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_file.write_text("{invalid json")
-            validator = ConfigValidator()
-            assert validator.validate_file(str(config_file)) is False
-
-    def test_file_with_validation_errors_fails(self):
-        """Test that file with validation errors fails."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = Path(tmpdir) / "config.json"
-            config_file.write_text(json.dumps({"api_keys": "not-a-dict"}))
-            validator = ConfigValidator()
-            assert validator.validate_file(str(config_file)) is False
-
-
-class TestConfigValidatorSuggestions:
-    """Test that error suggestions are helpful."""
-
-    def test_error_suggestions_present(self):
-        """Test that all errors have fix suggestions."""
-        validator = ConfigValidator()
+    def test_missing_log_dir(self):
+        """Non-existent log_dir produces error."""
         config = {
-            "api_keys": "wrong",
-            "port": 999999,
-            "cache_ttl": -1,
+            "api_keys": {"anthropic": "sk-test"},
+            "log_dir": "/nonexistent/path/that/does/not/exist/12345"
         }
-        errors = validator.validate(config)
-        for error in errors:
-            assert error.suggestion is not None
-            assert len(error.suggestion) > 0
-            assert "Fix:" in str(error) or error.suggestion in str(error)
-
-    def test_suggestion_is_actionable(self):
-        """Test that suggestions are actionable."""
         validator = ConfigValidator()
-        config = {"api_keys": {"a": "k"}, "port": 100}
         errors = validator.validate(config)
-        port_errors = [e for e in errors if e.field == "port"]
-        assert len(port_errors) > 0
-        assert "1024-65535" in port_errors[0].suggestion
+        assert len(errors) == 1
+        assert errors[0].field == "log_dir"
+        assert "does not exist" in errors[0].message
+
+    def test_valid_cache_dir_exists(self):
+        """Existing cache_dir is valid."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = {
+                "api_keys": {"anthropic": "sk-test"},
+                "cache_dir": tmpdir
+            }
+            validator = ConfigValidator()
+            errors = validator.validate(config)
+            assert len(errors) == 0
+
+    def test_missing_cache_dir(self):
+        """Non-existent cache_dir produces error."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "cache_dir": "/nonexistent/cache/path/54321"
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "cache_dir"
+
+    def test_both_dirs_missing(self):
+        """Multiple missing paths produce multiple errors."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "log_dir": "/nonexistent/logs",
+            "cache_dir": "/nonexistent/cache"
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 2
+        fields = [e.field for e in errors]
+        assert "log_dir" in fields
+        assert "cache_dir" in fields
+
+
+class TestConfigValidatorMultipleErrors:
+    """Tests for reporting multiple errors at once."""
+
+    def test_multiple_type_errors(self):
+        """Multiple type errors all reported."""
+        config = {
+            "api_keys": "not a dict",  # wrong type
+            "port": "not an int",  # wrong type
+            "cache_ttl": "3600"  # wrong type
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 3
+        fields = [e.field for e in errors]
+        assert "api_keys" in fields
+        assert "port" in fields
+        assert "cache_ttl" in fields
+
+    def test_type_and_range_errors(self):
+        """Type errors don't prevent range checks."""
+        config = {
+            "api_keys": {"anthropic": "sk-test"},
+            "port": 100  # out of range (but correct type)
+        }
+        validator = ConfigValidator()
+        errors = validator.validate(config)
+        assert len(errors) == 1
+        assert errors[0].field == "port"
+        assert "1024-65535" in errors[0].expected
+
+    def test_full_error_collection(self):
+        """All validation categories produce errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = {
+                # api_keys is missing (required)
+                "port": 100,  # out of range
+                "cache_ttl": -1,  # out of range
+                "log_dir": "/nonexistent/path",  # path missing
+                "provider_urls": {
+                    "test": "not a url"  # invalid URL
+                }
+            }
+            validator = ConfigValidator()
+            errors = validator.validate(config)
+            assert len(errors) >= 4
+            fields = [e.field for e in errors]
+            assert "api_keys" in fields
+            assert "port" in fields
+            assert "cache_ttl" in fields
+            assert "log_dir" in fields
+
+
+class TestConfigValidatorIsValid:
+    """Tests for is_valid() convenience method."""
+
+    def test_is_valid_returns_true_for_valid_config(self):
+        """is_valid() returns True when no errors."""
+        config = {"api_keys": {"anthropic": "sk-test"}}
+        validator = ConfigValidator()
+        assert validator.is_valid(config) is True
+
+    def test_is_valid_returns_false_for_invalid_config(self):
+        """is_valid() returns False when errors exist."""
+        config = {"api_keys": "not a dict"}
+        validator = ConfigValidator()
+        assert validator.is_valid(config) is False
+
+
+class TestConfigValidatorValidateFile:
+    """Tests for validate_file() method."""
+
+    def test_validate_file_reads_json(self):
+        """validate_file loads and validates JSON file."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            import json
+            json.dump({"api_keys": {"anthropic": "sk-test"}}, f)
+            f.flush()
+            
+            try:
+                validator = ConfigValidator()
+                result = validator.validate_file(f.name)
+                assert result is True
+            finally:
+                os.unlink(f.name)
+
+    def test_validate_file_missing_file(self):
+        """validate_file returns False for missing file."""
+        validator = ConfigValidator()
+        result = validator.validate_file("/nonexistent/config.json")
+        assert result is False
+
+    def test_validate_file_invalid_json(self):
+        """validate_file returns False for invalid JSON."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            f.write("{invalid json}")
+            f.flush()
+            
+            try:
+                validator = ConfigValidator()
+                result = validator.validate_file(f.name)
+                assert result is False
+            finally:
+                os.unlink(f.name)
+
+    def test_validate_file_invalid_config(self):
+        """validate_file returns False for invalid config."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            import json
+            json.dump({"api_keys": "not a dict"}, f)
+            f.flush()
+            
+            try:
+                validator = ConfigValidator()
+                result = validator.validate_file(f.name)
+                assert result is False
+            finally:
+                os.unlink(f.name)

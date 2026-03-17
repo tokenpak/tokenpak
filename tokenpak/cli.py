@@ -90,6 +90,7 @@ _COMMAND_GROUPS = {
         ("audit", "Enterprise audit log management"),
         ("compliance", "Generate compliance reports"),
         ("validate", "Validate a TokenPak JSON file"),
+        ("config-check", "Validate proxy config file"),
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
@@ -343,6 +344,26 @@ def cmd_start(args):
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+
+    # Validate config on boot (P1-T5)
+    config_path = Path.home() / ".tokenpak" / "config.json"
+    if config_path.exists():
+        try:
+            import json as _json
+            from tokenpak.config_validator import ConfigValidator
+            with open(config_path, "r") as _cf:
+                _config = _json.load(_cf)
+            _validator = ConfigValidator()
+            _errors = _validator.validate(_config)
+            if _errors:
+                import sys as _sys
+                print(f"\n✗ Config validation failed ({len(_errors)} error(s)):", file=_sys.stderr)
+                for _err in _errors:
+                    print(f"  {_err}", file=_sys.stderr)
+                print("\nFix config and retry. Use: tokenpak config-check <file>", file=_sys.stderr)
+                return
+        except Exception as _e:
+            print(f"Warning: Config validation skipped ({_e})")
 
     # Check if proxy is already responding (covers systemd, manual, PID file)
     health = _proxy_get("/health", port=port)
@@ -1598,6 +1619,7 @@ def build_parser():
     _build_route_parser(sub)
     _build_validate_parser(sub)
     _build_vault_health_parser(sub)
+    _build_config_check_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
@@ -5810,6 +5832,17 @@ def _build_validate_parser(sub):
     return p
 
 
+def _build_config_check_parser(sub):
+    """Register 'tokenpak config-check' command."""
+    p = sub.add_parser(
+        "config-check",
+        help="Validate a proxy config file (JSON)"
+    )
+    p.add_argument("file", help="Path to config file (JSON)")
+    p.set_defaults(func=cmd_config_check)
+    return p
+
+
 # ── Vault Health Management ───────────────────────────────────────────────────
 
 def cmd_vault_health(args):
@@ -5871,6 +5904,46 @@ def cmd_vault_health(args):
 
 
 # ── Fleet Management ──────────────────────────────────────────────────────
+
+def cmd_config_check(args):
+    """Validate a proxy config file (JSON)."""
+    from tokenpak.config_validator import ConfigValidator
+    import json
+    
+    config_path = Path(args.file).expanduser()
+    
+    if not config_path.exists():
+        print(f"ERROR: Config file not found: {config_path}")
+        sys.exit(2)
+    
+    # Load JSON
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in {config_path}: {e}")
+        sys.exit(2)
+    
+    # Validate
+    validator = ConfigValidator()
+    errors = validator.validate(config)
+    
+    if not errors:
+        print(f"✓ Config is valid: {config_path}")
+        sys.exit(0)
+    
+    # Print errors
+    print(f"✗ Config validation failed ({len(errors)} error(s)):\n")
+    for error in errors:
+        print(f"  Field: {error.field}")
+        print(f"    Expected: {error.expected}")
+        print(f"    Actual: {error.actual}")
+        print(f"    Message: {error.message}")
+        print(f"    Fix: {error.suggestion}")
+        print()
+    
+    sys.exit(1)
+
 
 def cmd_fleet(args):
     """Query and manage a fleet of TokenPak proxy instances."""
