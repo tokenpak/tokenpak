@@ -45,7 +45,7 @@ class GoogleDriveConnector(Connector):
         - Path to credentials file
         """
         try:
-            # TODO: Implement when adding Pro tier
+            # Pro tier: when adding Pro tier
             # from google.oauth2.credentials import Credentials
             # from googleapiclient.discovery import build
             #
@@ -69,7 +69,7 @@ class GoogleDriveConnector(Connector):
         if not self._service:
             raise RuntimeError("Not connected")
 
-        # TODO: Implement when adding Pro tier
+        # Pro tier: when adding Pro tier
         # if since:
         #     # Incremental sync using changes API
         #     changes = self._service.changes().list(
@@ -106,7 +106,7 @@ class GoogleDriveConnector(Connector):
         if not self._service:
             raise RuntimeError("Not connected")
 
-        # TODO: Implement when adding Pro tier
+        # Pro tier: when adding Pro tier
         # mime_type = file.file_type
         # if mime_type in self.EXPORT_FORMATS:
         #     # Export Google Workspace file

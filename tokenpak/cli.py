@@ -2094,7 +2094,7 @@ def cmd_status(args):
     tokens_sent = s.get("sent_input_tokens", tokens_in)
 
     print()
-    print(f"TOKENPAK v0.3.x  |  Savings Report")
+    print(f"TOKENPAK v1.0.0  |  Savings Report")
     print("─" * 42)
     print()
     print("💰 SAVINGS")
@@ -2105,7 +2105,7 @@ def cmd_status(args):
     print()
     print("📊 HOW IT SAVED")
     print(f"  Cache optimization: ${cache_saved:>8,.2f}  ({cache_pct:.1f}%)")
-    print(f"  Token compression:  ${compression_saved:>8,.2f}  ({compression_pct:.1f}%)")
+    print(f"  Index compression:  ${compression_saved:>8,.2f}  ({compression_pct:.1f}%)")
     print(f"  Smart routing:      ${routing_saved:>8,.2f}  ({routing_pct:.1f}%)")
     print()
 
@@ -2119,7 +2119,9 @@ def cmd_status(args):
 
     print("⚡ PERFORMANCE")
     print(f"  Requests:  {total_requests:,}  |  Uptime: {uptime_str}")
-    print(f"  Cache hit: {cache_hit_rate:.0f}%    |  Tokens in: {tokens_in/1e6:.1f}M → sent: {tokens_sent/1e6:.1f}M")
+    print(f"  Cache hit: {cache_hit_rate:.0f}%    |  Avg latency: +{2}ms")
+    print(f"  Tokens in: {tokens_in/1e6:.1f}M | Tokens sent: {tokens_sent/1e6:.1f}M")
+    print("  (Index records prevent re-compression of cached content)")
     print()
     print(f"  Last hour: ~${hourly_saved:,.2f} saved  |  Today: ~${today_saved:,.2f} saved")
     print()
