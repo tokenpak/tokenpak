@@ -1867,12 +1867,14 @@ def build_parser():
 
 
 def cmd_status(args):
-    """Show system status — live proxy data + budget tracking."""
+    """Show savings-first status (default). Use --full for legacy technical view."""
     import time as _time
-    import json as _json
+    import random as _random
 
+    use_full = getattr(args, "full", False)
+    use_minimal = getattr(args, "minimal", False)
+    no_meme = getattr(args, "no_meme", False)
     mode = resolve_mode(args)
-    fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
 
     # Fetch live proxy data
     health = _proxy_get("/health")
@@ -1880,6 +1882,7 @@ def cmd_status(args):
     cache = _proxy_get("/cache-stats")
 
     if mode == OutputMode.RAW:
+        fmt = OutputFormatter("Status", mode=mode)
         print(fmt.raw({
             "section": "status",
             "proxy": health,
@@ -1888,104 +1891,249 @@ def cmd_status(args):
         }))
         return
 
-    print(fmt.header())
+    # ─── LEGACY FULL VIEW (--full) ─────────────────────────────────────────
+    if use_full:
+        fmt = OutputFormatter("Status", mode=mode, minimal=False)
+        print(fmt.header())
+        print()
+
+        if health:
+            s = health.get("stats", {})
+            uptime_s = _time.time() - s.get("start_time", _time.time())
+            h, rem = divmod(int(uptime_s), 3600)
+            m_min = rem // 60
+            uptime_str = f"{h}h {m_min:02d}m" if h else f"{m_min}m"
+
+            print(fmt.signal(FS.ENABLED, f"Proxy: running (port {os.environ.get('TOKENPAK_PORT', '8766')})", tone="info"))
+            print(f"  Uptime:          {uptime_str}")
+            print(f"  Requests:        {s.get('requests', 0):,}")
+            print(f"  Errors:          {s.get('errors', 0)}")
+            print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+            print()
+
+            inp = s.get("input_tokens", 0)
+            sent = s.get("sent_input_tokens", 0)
+            saved = s.get("saved_tokens", 0)
+            protected = s.get("protected_tokens", 0)
+            pct = (saved / inp * 100) if inp > 0 else 0
+            print(f"  Tokens in:       {inp:,}")
+            print(f"  Tokens sent:     {sent:,}")
+            print(f"  Tokens saved:    {saved:,} ({pct:.1f}%)")
+            print(f"  Protected:       {protected:,}")
+            print()
+
+            cost = s.get("cost", 0)
+            cost_saved = s.get("cost_saved", 0)
+            print(f"  Cost:            ${cost:.4f}")
+            if cost_saved > 0:
+                print(f"  Cost saved:      ${cost_saved:.4f}")
+            print()
+
+            if cache:
+                hits = cache.get("cache_hits", 0)
+                misses = cache.get("cache_misses", 0)
+                total = hits + misses
+                hit_rate = (hits / total * 100) if total > 0 else 0
+                read_tokens = cache.get("cache_read_tokens", 0)
+                print(f"  Cache hit rate:  {hit_rate:.0f}% ({hits} hits / {misses} misses)")
+                print(f"  Cache reads:     {read_tokens:,} tokens")
+                miss_reasons = cache.get("miss_reasons", {})
+                if miss_reasons and any(v > 0 for v in miss_reasons.values()):
+                    reasons = [f"{k}={v}" for k, v in miss_reasons.items() if v > 0]
+                    print(f"  Miss reasons:    {', '.join(reasons)}")
+                print()
+
+            features = []
+            for feat_name, feat_key in [
+                ("skeleton", "skeleton"), ("shadow", "shadow_reader"),
+                ("canon", "canon"), ("capsule", "capsule_available"),
+            ]:
+                feat_data = health.get(feat_key, {})
+                enabled = feat_data.get("enabled", False) if isinstance(feat_data, dict) else bool(feat_data)
+                features.append(f"{feat_name} {'✅' if enabled else '❌'}")
+            print(f"  Features:        {' | '.join(features)}")
+
+            cbs = health.get("circuit_breakers", {})
+            if cbs:
+                cb_parts = [f"{k} {'✅' if not v.get('open') else '🔴'}" for k, v in cbs.items()]
+                print(f"  Circuits:        {' | '.join(cb_parts)}")
+
+            vault = health.get("vault_index", {})
+            if vault.get("available"):
+                print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+        else:
+            print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
+            print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+            print()
+
+        try:
+            from .budgeter import BudgetTracker
+            tracker = BudgetTracker()
+            rows = []
+            for period in ("daily", "weekly", "monthly"):
+                st = tracker.get_status(period)
+                if st:
+                    rows.append((
+                        f"{period.capitalize()} budget",
+                        f"${st.spent_usd:.4f} / ${st.limit_usd:.2f} ({st.percent_used:.1f}%)",
+                    ))
+            if rows:
+                print()
+                print(fmt.kv(rows))
+        except Exception:
+            pass
+        return
+
+    # ─── SAVINGS-FIRST VIEW (default) ──────────────────────────────────────
+    from .pricing import calculate_savings_from_proxy_stats
+
+    MEME_LINES = [
+        "Keep my tokens out yo damn prompt.",
+        "Your context window is not a trash can.",
+        "Cache is free real estate.",
+        "Compress or be compressed.",
+        "Every token costs money. Yours doesn't have to.",
+        "Cache hits: free. Cache misses: skill issue.",
+        "Your prompt is too long and you know it.",
+        "TokenPak: the only proxy that judges you.",
+        "Routing smarter so you don't have to.",
+        "Did you really need that system prompt?",
+        "I've seen your prompts. You need me.",
+        "Prompt compression: because size matters.",
+        "Your LLM bill called. It's embarrassed.",
+        "The vault remembers. Your wallet thanks it.",
+        "Skeleton mode: same vibes, fewer tokens.",
+        "Cache or cash. Your choice.",
+        "Smart routing enabled. Dumb spending disabled.",
+        "If your context had a BMI, I'd intervene.",
+        "Tokens in. Savings out. That's the deal.",
+        "Your API spend has been... audited.",
+        "Stop re-sending the same tokens. I said what I said.",
+        "The cache is the move. Always has been.",
+        "Compression ratio looking respectful today.",
+        "Another request. Another dollar saved.",
+        "Less prompt. More intelligence. Try it.",
+        "TokenPak: working while you sleep.",
+        "That cache hit just paid for lunch.",
+        "Your tokens, my rules, our savings.",
+    ]
+
+    if not health and not stats:
+        print("⚠️  TokenPak proxy not reachable.")
+        print("   Run: tokenpak start")
+        return
+
+    s = (stats or {}).get("session", stats or {})
+    by_model = (stats or {}).get("by_model", {})
+    sv = calculate_savings_from_proxy_stats(s, by_model)
+
+    # ── Minimal one-liner ──
+    if use_minimal:
+        total_saved = sv["total_saved"]
+        pct = sv["total_saved_pct"]
+        reqs = sv["total_requests"]
+        cache_hr = sv["cache_hit_rate"]
+        print(f"📦 TokenPak: ${total_saved:,.0f} saved ({pct:.0f}%) | {reqs:,} reqs | {cache_hr:.0f}% cache")
+        return
+
+    # ── Full savings-first layout ──
+    cost_without = sv["cost_without_tokenpak"]
+    cost_with = sv["cost_with_tokenpak"]
+    total_saved = sv["total_saved"]
+    pct = sv["total_saved_pct"]
+    cache_saved = sv["cache_saved"]
+    compression_saved = sv["compression_saved"]
+    routing_saved = sv["routing_saved"]
+    cache_hit_rate = sv["cache_hit_rate"]
+    total_requests = sv["total_requests"]
+    per_model = sv["per_model"]
+
+    # Compute savings-source percentages
+    cache_pct = (cache_saved / total_saved * 100.0) if total_saved > 0 else 0.0
+    compression_pct = (compression_saved / total_saved * 100.0) if total_saved > 0 else 0.0
+    routing_pct = (routing_saved / total_saved * 100.0) if total_saved > 0 else 0.0
+
+    # Uptime
+    uptime_str = "unknown"
+    errors = 0
+    if health:
+        hs = health.get("stats", {})
+        uptime_s = _time.time() - hs.get("start_time", _time.time())
+        h_u, rem = divmod(int(uptime_s), 3600)
+        m_u = rem // 60
+        uptime_str = f"{h_u}d {m_u:02d}h" if h_u >= 24 else f"{h_u}h {m_u:02d}m"
+        errors = hs.get("errors", 0)
+
+    # Hourly / 24h savings (from today stats if available)
+    today = (stats or {}).get("today", {})
+    today_cost = today.get("total_cost", 0.0)
+    today_input = today.get("input_tokens", 0)
+    today_cache_read = today.get("cache_read_tokens", 0)
+    today_output = today.get("output_tokens", 0)
+    # Rough today baseline using Sonnet rate
+    from .pricing import DEFAULT_RATE as _DR
+    today_baseline = (today_input / 1_000_000) * _DR["input"] + (today_output / 1_000_000) * _DR["output"]
+    today_saved = max(today_baseline - today_cost, 0.0)
+
+    # Session hours (rough)
+    uptime_hours = 1
+    if health:
+        hs = health.get("stats", {})
+        uptime_hours = max((_time.time() - hs.get("start_time", _time.time())) / 3600, 1)
+    hourly_saved = total_saved / uptime_hours
+
+    # All-systems health
+    all_healthy = True
+    if health:
+        cbs = health.get("circuit_breakers", {})
+        if any(v.get("open") for v in cbs.values()):
+            all_healthy = False
+
+    # Tokens in / sent
+    tokens_in = s.get("input_tokens", 0)
+    tokens_sent = s.get("sent_input_tokens", tokens_in)
+
+    print()
+    print(f"TOKENPAK v0.3.x  |  Savings Report")
+    print("─" * 42)
+    print()
+    print("💰 SAVINGS")
+    print(f"  Without TokenPak:  ${cost_without:>10,.2f}")
+    print(f"  With TokenPak:     ${cost_with:>10,.2f}")
+    print(f"  {'─' * 32}")
+    print(f"  Total saved:       ${total_saved:>10,.2f}  ({pct:.1f}%)")
+    print()
+    print("📊 HOW IT SAVED")
+    print(f"  Cache optimization: ${cache_saved:>8,.2f}  ({cache_pct:.1f}%)")
+    print(f"  Token compression:  ${compression_saved:>8,.2f}  ({compression_pct:.1f}%)")
+    print(f"  Smart routing:      ${routing_saved:>8,.2f}  ({routing_pct:.1f}%)")
     print()
 
-    if health:
-        s = health.get("stats", {})
-        uptime_s = _time.time() - s.get("start_time", _time.time())
-        h, rem = divmod(int(uptime_s), 3600)
-        m = rem // 60
-        uptime_str = f"{h}h {m:02d}m" if h else f"{m}m"
-
-        # Proxy status line
-        print(fmt.signal(FS.ENABLED, f"Proxy: running (port {os.environ.get('TOKENPAK_PORT', '8766')})", tone="info"))
-        print(f"  Uptime:          {uptime_str}")
-        print(f"  Requests:        {s.get('requests', 0):,}")
-        print(f"  Errors:          {s.get('errors', 0)}")
-        print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+    if per_model:
+        print("🤖 MODELS")
+        for row in per_model:
+            model_short = row["model"].replace("claude-", "").replace("gpt-", "gpt/")
+            cache_pct_m = row.get("cache_hit_rate", 0)
+            print(f"  {model_short:<22} {row['requests']:>5} reqs   ${row['cost']:>8,.2f}   {cache_pct_m:.0f}% cache")
         print()
 
-        # Token savings
-        inp = s.get("input_tokens", 0)
-        sent = s.get("sent_input_tokens", 0)
-        saved = s.get("saved_tokens", 0)
-        protected = s.get("protected_tokens", 0)
-        pct = (saved / inp * 100) if inp > 0 else 0
-        print(f"  Tokens in:       {inp:,}")
-        print(f"  Tokens sent:     {sent:,}")
-        print(f"  Tokens saved:    {saved:,} ({pct:.1f}%)")
-        print(f"  Protected:       {protected:,}")
-        print()
+    print("⚡ PERFORMANCE")
+    print(f"  Requests:  {total_requests:,}  |  Uptime: {uptime_str}")
+    print(f"  Cache hit: {cache_hit_rate:.0f}%    |  Tokens in: {tokens_in/1e6:.1f}M → sent: {tokens_sent/1e6:.1f}M")
+    print()
+    print(f"  Last hour: ~${hourly_saved:,.2f} saved  |  Today: ~${today_saved:,.2f} saved")
+    print()
 
-        # Cost
-        cost = s.get("cost", 0)
-        cost_saved = s.get("cost_saved", 0)
-        print(f"  Cost:            ${cost:.4f}")
-        if cost_saved > 0:
-            print(f"  Cost saved:      ${cost_saved:.4f}")
-        print()
-
-        # Cache
-        if cache:
-            hits = cache.get("cache_hits", 0)
-            misses = cache.get("cache_misses", 0)
-            total = hits + misses
-            hit_rate = (hits / total * 100) if total > 0 else 0
-            read_tokens = cache.get("cache_read_tokens", 0)
-            print(f"  Cache hit rate:  {hit_rate:.0f}% ({hits} hits / {misses} misses)")
-            print(f"  Cache reads:     {read_tokens:,} tokens")
-            miss_reasons = cache.get("miss_reasons", {})
-            if miss_reasons and any(v > 0 for v in miss_reasons.values()):
-                reasons = [f"{k}={v}" for k, v in miss_reasons.items() if v > 0]
-                print(f"  Miss reasons:    {', '.join(reasons)}")
-            print()
-
-        # Features
-        router = health.get("router", {})
-        components = router.get("components", {})
-        features = []
-        for feat_name, feat_key in [
-            ("skeleton", "skeleton"), ("shadow", "shadow_reader"),
-            ("canon", "canon"), ("capsule", "capsule_available"),
-        ]:
-            feat_data = health.get(feat_key, {})
-            enabled = feat_data.get("enabled", False) if isinstance(feat_data, dict) else bool(feat_data)
-            features.append(f"{feat_name} {'✅' if enabled else '❌'}")
-        print(f"  Features:        {' | '.join(features)}")
-
-        # Circuit breakers
-        cbs = health.get("circuit_breakers", {})
-        if cbs:
-            cb_parts = [f"{k} {'✅' if not v.get('open') else '🔴'}" for k, v in cbs.items()]
-            print(f"  Circuits:        {' | '.join(cb_parts)}")
-
-        # Vault
-        vault = health.get("vault_index", {})
-        if vault.get("available"):
-            print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+    if all_healthy:
+        print("✅ All systems healthy")
     else:
-        print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
-        print()
+        print("⚠️  Circuit breaker open — check: tokenpak status --full")
 
-    # Budget tracking (local DB)
-    try:
-        from .budgeter import BudgetTracker
-        tracker = BudgetTracker()
-        rows = []
-        for period in ("daily", "weekly", "monthly"):
-            status = tracker.get_status(period)
-            if status:
-                rows.append((
-                    f"{period.capitalize()} budget",
-                    f"${status.spent_usd:.4f} / ${status.limit_usd:.2f} ({status.percent_used:.1f}%)",
-                ))
-        if rows:
-            print()
-            print(fmt.kv(rows))
-    except Exception:
-        pass
+    if not no_meme:
+        meme = _random.choice(MEME_LINES)
+        print()
+        print(f"📦 {meme}")
+    print()
 
 
 def cmd_usage(args):
@@ -2187,8 +2335,11 @@ def cmd_check_alerts(args):
 
 
 def _build_status_parser(sub):
-    p_status = sub.add_parser("status", help="Show system status and recent retry events")
+    p_status = sub.add_parser("status", help="Show savings-first status (default) or technical detail")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
+    p_status.add_argument("--full", action="store_true", help="Show full technical output (legacy view)")
+    p_status.add_argument("--minimal", action="store_true", help="One-liner savings summary")
+    p_status.add_argument("--no-meme", action="store_true", dest="no_meme", help="Suppress meme line")
     p_status.set_defaults(func=cmd_status)
 
 

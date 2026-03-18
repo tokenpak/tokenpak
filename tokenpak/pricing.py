@@ -17,6 +17,7 @@ MODEL_RATES = {
     "claude-sonnet-4-5": {"input": 3.0, "cached": 0.30, "output": 15.0},
     "claude-sonnet-4-6": {"input": 3.0, "cached": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 0.80, "cached": 0.08, "output": 4.0},
+    "claude-haiku-4-6": {"input": 0.80, "cached": 0.08, "output": 4.0},
     "gpt-4o": {"input": 2.50, "cached": 1.25, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "cached": 0.075, "output": 0.60},
     "gpt-4-turbo": {"input": 10.0, "cached": 5.0, "output": 30.0},
@@ -142,3 +143,85 @@ def get_price(model: str, direction: str = "input") -> float:
     elif direction == "cached":
         return rates.get("cached", 0.30)
     return rates.get("input", 3.0)
+
+
+def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
+    """Calculate dollar savings broken down by source using live proxy stats.
+
+    Args:
+        stats: Session stats dict from /stats endpoint (``session`` key or top-level).
+        by_model: Per-model breakdown dict from /stats ``by_model`` key.
+
+    Returns:
+        Dict with keys: cost_without_tokenpak, cost_with_tokenpak, total_saved,
+        cache_saved, compression_saved, routing_saved, total_saved_pct,
+        cache_hit_rate, total_requests, per_model.
+    """
+    # Accept either /stats shape: top-level or nested under "session"
+    s = stats.get("session", stats)
+    total_requests = s.get("requests", 0)
+    input_tokens = s.get("input_tokens", 0)
+    saved_tokens = s.get("saved_tokens", 0)  # compression-only
+    output_tokens = s.get("output_tokens", 0)
+    cache_read_tokens = s.get("cache_read_tokens", 0)
+    actual_cost = s.get("cost", 0.0)
+    cache_hits = s.get("cache_hits", 0)
+    cache_misses = s.get("cache_misses", 0)
+    total_cache_decisions = cache_hits + cache_misses
+    cache_hit_rate = (cache_hits / total_cache_decisions * 100.0) if total_cache_decisions > 0 else 0.0
+
+    # Estimate baseline cost per model
+    cost_without = 0.0
+    per_model_rows = []
+    for model_name, mstats in (by_model or {}).items():
+        rates = get_rates(model_name)
+        m_input = mstats.get("input_tokens", 0)
+        m_output = mstats.get("output_tokens", 0)
+        m_cost_actual = mstats.get("cost", 0.0)
+        m_cache_read = mstats.get("cache_read_tokens", 0)
+        m_requests = mstats.get("requests", 0)
+
+        # Baseline = all tokens at full rates (no cache, no compression)
+        m_cost_baseline = (
+            (m_input / 1_000_000) * rates["input"]
+            + (m_output / 1_000_000) * rates["output"]
+        )
+        cost_without += m_cost_baseline
+
+        m_cache_hit_rate = 0.0
+        if m_input > 0:
+            m_cache_hit_rate = min((m_cache_read / m_input) * 100.0, 100.0)
+
+        per_model_rows.append({
+            "model": model_name,
+            "requests": m_requests,
+            "cost": round(m_cost_actual, 2),
+            "cost_baseline": round(m_cost_baseline, 2),
+            "cache_read_tokens": m_cache_read,
+            "cache_hit_rate": round(m_cache_hit_rate, 0),
+        })
+
+    per_model_rows.sort(key=lambda r: r["cost"], reverse=True)
+
+    total_saved = max(cost_without - actual_cost, 0.0)
+    total_saved_pct = (total_saved / cost_without * 100.0) if cost_without > 0 else 0.0
+
+    # Decompose savings sources using default Sonnet rate as proxy
+    default_input_rate = DEFAULT_RATE["input"]
+    default_cached_rate = DEFAULT_RATE["cached"]
+    compression_saved = (saved_tokens / 1_000_000) * default_input_rate
+    cache_saved = (cache_read_tokens / 1_000_000) * (default_input_rate - default_cached_rate)
+    routing_saved = max(total_saved - compression_saved - cache_saved, 0.0)
+
+    return {
+        "cost_without_tokenpak": round(cost_without, 2),
+        "cost_with_tokenpak": round(actual_cost, 2),
+        "total_saved": round(total_saved, 2),
+        "cache_saved": round(cache_saved, 2),
+        "compression_saved": round(compression_saved, 2),
+        "routing_saved": round(routing_saved, 2),
+        "total_saved_pct": round(total_saved_pct, 1),
+        "cache_hit_rate": round(cache_hit_rate, 1),
+        "total_requests": total_requests,
+        "per_model": per_model_rows,
+    }
