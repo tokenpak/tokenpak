@@ -206,12 +206,25 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
     total_saved = max(cost_without - actual_cost, 0.0)
     total_saved_pct = (total_saved / cost_without * 100.0) if cost_without > 0 else 0.0
 
-    # Decompose savings sources using default Sonnet rate as proxy
+    # Decompose savings sources — normalized to actual total_saved
     default_input_rate = DEFAULT_RATE["input"]
     default_cached_rate = DEFAULT_RATE["cached"]
-    compression_saved = (saved_tokens / 1_000_000) * default_input_rate
-    cache_saved = (cache_read_tokens / 1_000_000) * (default_input_rate - default_cached_rate)
-    routing_saved = max(total_saved - compression_saved - cache_saved, 0.0)
+    
+    # Calculate unnormalized contributions
+    cache_contrib = (cache_read_tokens / 1_000_000) * (default_input_rate - default_cached_rate)
+    compression_contrib = (saved_tokens / 1_000_000) * default_input_rate
+    
+    # Normalize so they sum to total_saved (avoid over-reporting)
+    contrib_sum = cache_contrib + compression_contrib
+    if contrib_sum > 0 and total_saved > 0:
+        scale_factor = total_saved / contrib_sum
+        cache_saved = cache_contrib * scale_factor
+        compression_saved = compression_contrib * scale_factor
+        routing_saved = 0.0  # Already accounted for in scaling
+    else:
+        cache_saved = 0.0
+        compression_saved = 0.0
+        routing_saved = total_saved  # All savings attributed to routing if no cache/compression
 
     return {
         "cost_without_tokenpak": round(cost_without, 2),
