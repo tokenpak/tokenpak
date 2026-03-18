@@ -4998,11 +4998,40 @@ def _build_demo_parser(sub):
     )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
+    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 24h of demo telemetry data (500+ requests)")
+    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from the dashboard")
     p_demo.set_defaults(func=cmd_demo)
 
 
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
+    # ── Demo data seeding
+    if args.seed:
+        from .demo import seed_demo_data
+        result = seed_demo_data()
+        print("✅ Demo data seeded successfully")
+        print(f"   • Events: {result['events']}")
+        print(f"   • Usage records: {result['usage']}")
+        print(f"   • Cost records: {result['costs']}")
+        print(f"   • Segments: {result['segments']}")
+        print(f"   • Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
+        print()
+        print("View the dashboard to see demo data populated.")
+        return
+
+    # ── Demo data cleanup
+    if args.clear:
+        from .demo import clear_demo_data
+        result = clear_demo_data()
+        print("✅ Demo data cleared successfully")
+        print(f"   • Deleted events: {result['deleted_events']}")
+        print(f"   • Deleted usage records: {result['deleted_usage']}")
+        print(f"   • Deleted cost records: {result['deleted_costs']}")
+        print(f"   • Deleted segments: {result['deleted_segments']}")
+        print()
+        print("Dashboard now shows empty/zero state.")
+        return
+
     from .agent.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
