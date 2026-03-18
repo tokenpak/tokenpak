@@ -1,0 +1,20 @@
+[Unit]
+Description=TokenPak Vault File Watcher for %i
+Documentation=https://docs.tokenpak.dev/file-watcher
+After=network.target
+
+[Service]
+Type=simple
+# %i is the systemd instance name — used as the path to watch
+# Usage: systemctl --user enable tokenpak-watcher@%2Fhome%2Fuser%2Fprojects
+ExecStart=tokenpak index %I --watch
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tokenpak-watcher
+
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

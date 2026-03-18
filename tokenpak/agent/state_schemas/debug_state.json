@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DebugState",
+  "description": "State schema for debug intent — error context and affected artifacts.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Primary error message or exception string"
+    },
+    "affected_files": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Files implicated in the error"
+    },
+    "changed_files": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Files recently changed that may be the cause"
+    },
+    "failing_tests": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Test identifiers currently failing"
+    },
+    "recent_deploy": {
+      "type": "string",
+      "description": "Timestamp or tag of the most recent deployment"
+    }
+  },
+  "required": ["error"],
+  "additionalProperties": false
+}

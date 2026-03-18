@@ -1,0 +1,28 @@
+{# Reusable skeleton loading states #}
+
+{% macro kpi_skeleton() %}
+<div class="skeleton-kpi">
+  <div class="skeleton sk-label"></div>
+  <div class="skeleton sk-value"></div>
+  <div class="skeleton sk-delta"></div>
+</div>
+{% endmacro %}
+
+{% macro chart_skeleton() %}
+<div class="skeleton-chart">
+  <div class="sk-placeholder">
+    <div class="skeleton" style="width:180px;height:16px;margin:auto"></div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro table_skeleton(rows=5) %}
+{% for i in range(rows) %}
+<div class="skeleton-table-row">
+  <div class="skeleton sk-cell"></div>
+  <div class="skeleton sk-cell"></div>
+  <div class="skeleton sk-cell"></div>
+  <div class="skeleton sk-cell"></div>
+</div>
+{% endfor %}
+{% endmacro %}

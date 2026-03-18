@@ -1,0 +1,54 @@
+# TokenPak — Anthropic / Claude Optimized Config
+# ================================================
+# All traffic routed to Anthropic. Claude-specific optimizations enabled.
+# Steps: 1) Set ANTHROPIC_API_KEY  2) tokenpak start
+#
+# Best for: teams fully committed to Claude, Claude-heavy workflows
+
+port: 8766
+mode: hybrid
+
+compression:
+  enabled: true
+  # Claude handles longer prompts well — compress at higher threshold
+  threshold_tokens: 6000
+  max_chars: 150
+  cache_size: 2000
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true
+  validation_gate: true
+  validation_gate_soft: true
+
+  # Claude-specific enhancements
+  capsule_builder: true       # Build reusable context capsules (great with Claude's long context)
+  semantic_cache: true        # Cache semantically similar Claude responses
+  term_resolver: true         # Resolve domain terms before sending (reduces hallucinations)
+  prefix_registry: true       # System prompt prefix caching (cuts costs on repeated system prompts)
+
+  # Keep off for single-provider simplicity
+  salience_router: false
+  budget_controller: false
+
+budget:
+  total_tokens: 12000
+  validation_gate_cap: 150000  # Claude Sonnet has 200k context — allow headroom
+
+capsule:
+  min_chars: 400
+  hot_window: 3   # Keep last 3 capsules hot (good for long Claude conversations)
+
+term_resolver:
+  top_k: 5        # Resolve up to 5 domain terms per request
+  max_bytes: 300
+
+upstream:
+  timeout: 600    # Claude can be slow on long generations — give it time
+
+failover:
+  enabled: false
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY

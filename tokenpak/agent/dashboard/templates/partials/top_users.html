@@ -1,0 +1,27 @@
+<div id="top-users-table">
+  {% if top_users %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Agent</th><th>Requests</th><th>Tokens</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in top_users %}
+        <tr>
+          <td class="rank">{{ loop.index }}</td>
+          <td><span class="agent-badge">{{ u.agent_id }}</span></td>
+          <td>{{ u.request_count }}</td>
+          <td>{{ "{:,}".format(u.total_tokens) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="color:var(--muted);text-align:center;padding:32px 0">
+    No agent activity for {{ query_date }}
+  </div>
+  {% endif %}
+</div>

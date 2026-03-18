@@ -1,0 +1,10 @@
+.git
+.github
+tests/
+docs/
+*.md
+__pycache__/
+.venv
+.pytest_cache/
+*.pyc
+.env.local

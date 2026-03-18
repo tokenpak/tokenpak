@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Alert Settings{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+
+  <!-- Page header -->
+  <div class="settings-header">
+    <h1 class="settings-title">Alert Configuration</h1>
+    <p class="settings-subtitle">Configure thresholds and notification channels for automated alerts.</p>
+  </div>
+
+  <!-- Validation error banner -->
+  <div id="alert-error-banner" class="alert-banner alert-banner-error" style="display:none;" role="alert" aria-live="assertive"></div>
+  <!-- Success toast placeholder -->
+  <div id="alert-success-banner" class="alert-banner alert-banner-success" style="display:none;" role="status" aria-live="polite"></div>
+
+  <form id="alert-config-form" novalidate>
+
+    <!-- ── Alert Thresholds ────────────────────────────────────────────── -->
+    <div class="settings-section">
+      <h2 class="settings-section-title">Alert Thresholds</h2>
+
+      <!-- Cost Spike -->
+      <div class="alert-card" id="card-cost-spike">
+        <div class="alert-card-header">
+          <div class="alert-card-title-row">
+            <h3 class="alert-card-title">Cost Spike Alert</h3>
+            <label class="toggle-switch" aria-label="Enable cost spike alert">
+              <input type="checkbox" name="cost_spike.enabled" id="cost-spike-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="alert-card-desc">Triggered when cost increases beyond threshold vs {{ config.cost_spike.basis_days|default(7) }}-day average.</p>
+        </div>
+        <div class="alert-fields">
+          <div class="field-row">
+            <label class="field-label" for="cost-spike-type">Threshold Type</label>
+            <select class="field-select" name="cost_spike.threshold_type" id="cost-spike-type" onchange="updateCostSpikeFields()">
+              <option value="pct" {% if config.cost_spike.threshold_type != 'abs' %}selected{% endif %}>Percentage</option>
+              <option value="abs" {% if config.cost_spike.threshold_type == 'abs' %}selected{% endif %}>Absolute ($)</option>
+            </select>
+          </div>
+          <div class="field-row" id="cost-spike-pct-row">
+            <label class="field-label" for="cost-spike-pct">% Increase</label>
+            <div class="field-input-group">
+              <input type="number" class="field-input" name="cost_spike.threshold_pct"
+                     id="cost-spike-pct" min="0" max="500" step="1"
+                     value="{{ config.cost_spike.threshold_pct|default(50) }}"
+                     aria-describedby="cost-spike-pct-hint">
+              <span class="field-suffix">%</span>
+            </div>
+            <span class="field-hint" id="cost-spike-pct-hint">0–500%</span>
+          </div>
+          <div class="field-row" id="cost-spike-abs-row" style="display:none;">
+            <label class="field-label" for="cost-spike-abs">Absolute Increase</label>
+            <div class="field-input-group">
+              <span class="field-prefix">$</span>
+              <input type="number" class="field-input" name="cost_spike.threshold_abs"
+                     id="cost-spike-abs" min="0" max="10000" step="0.01"
+                     value="{{ config.cost_spike.threshold_abs|default('') }}"
+                     aria-describedby="cost-spike-abs-hint">
+            </div>
+            <span class="field-hint" id="cost-spike-abs-hint">$0–$10,000</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="cost-spike-severity">Severity</label>
+            <select class="field-select" name="cost_spike.severity" id="cost-spike-severity">
+              <option value="info"     {% if config.cost_spike.severity == 'info' %}selected{% endif %}>ℹ Info</option>
+              <option value="warning"  {% if config.cost_spike.severity != 'info' and config.cost_spike.severity != 'critical' %}selected{% endif %}>⚠ Warning</option>
+              <option value="critical" {% if config.cost_spike.severity == 'critical' %}selected{% endif %}>🚨 Critical</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Savings Drop -->
+      <div class="alert-card" id="card-savings-drop">
+        <div class="alert-card-header">
+          <div class="alert-card-title-row">
+            <h3 class="alert-card-title">Savings Drop Alert</h3>
+            <label class="toggle-switch" aria-label="Enable savings drop alert">
+              <input type="checkbox" name="savings_drop.enabled" id="savings-drop-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="alert-card-desc">Triggered when savings rate drops vs previous period.</p>
+        </div>
+        <div class="alert-fields">
+          <div class="field-row">
+            <label class="field-label" for="savings-drop-pct">% Drop Threshold</label>
+            <div class="field-input-group">
+              <input type="number" class="field-input" name="savings_drop.threshold_pct"
+                     id="savings-drop-pct" min="0" max="100" step="1"
+                     value="{{ config.savings_drop.threshold_pct|default(30) }}">
+              <span class="field-suffix">%</span>
+            </div>
+            <span class="field-hint">0–100%</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="savings-drop-severity">Severity</label>
+            <select class="field-select" name="savings_drop.severity" id="savings-drop-severity">
+              <option value="info">ℹ Info</option>
+              <option value="warning" selected>⚠ Warning</option>
+              <option value="critical">🚨 Critical</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retry Spike -->
+      <div class="alert-card" id="card-retry-spike">
+        <div class="alert-card-header">
+          <div class="alert-card-title-row">
+            <h3 class="alert-card-title">Retry Spike Alert</h3>
+            <label class="toggle-switch" aria-label="Enable retry spike alert">
+              <input type="checkbox" name="retry_spike.enabled" id="retry-spike-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="alert-card-desc">Triggered when retry rate exceeds threshold in an hour.</p>
+        </div>
+        <div class="alert-fields">
+          <div class="field-row">
+            <label class="field-label" for="retry-spike-pct">Retry Rate Threshold</label>
+            <div class="field-input-group">
+              <input type="number" class="field-input" name="retry_spike.threshold_pct"
+                     id="retry-spike-pct" min="0" max="100" step="1"
+                     value="{{ config.retry_spike.threshold_pct|default(20) }}">
+              <span class="field-suffix">%</span>
+            </div>
+            <span class="field-hint">0–100% hourly retry rate</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="retry-spike-severity">Severity</label>
+            <select class="field-select" name="retry_spike.severity" id="retry-spike-severity">
+              <option value="info">ℹ Info</option>
+              <option value="warning">⚠ Warning</option>
+              <option value="critical" selected>🚨 Critical</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Latency Alert -->
+      <div class="alert-card" id="card-latency">
+        <div class="alert-card-header">
+          <div class="alert-card-title-row">
+            <h3 class="alert-card-title">Latency Alert</h3>
+            <label class="toggle-switch" aria-label="Enable latency alert">
+              <input type="checkbox" name="latency.enabled" id="latency-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="alert-card-desc">Triggered when request latency percentile exceeds threshold.</p>
+        </div>
+        <div class="alert-fields">
+          <div class="field-row">
+            <label class="field-label" for="latency-metric">Percentile</label>
+            <select class="field-select" name="latency.metric" id="latency-metric">
+              <option value="p95" {% if config.latency.metric != 'p99' %}selected{% endif %}>p95</option>
+              <option value="p99" {% if config.latency.metric == 'p99' %}selected{% endif %}>p99</option>
+            </select>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="latency-ms">Threshold</label>
+            <div class="field-input-group">
+              <input type="number" class="field-input" name="latency.threshold_ms"
+                     id="latency-ms" min="0" max="60000" step="100"
+                     value="{{ config.latency.threshold_ms|default(2000) }}">
+              <span class="field-suffix">ms</span>
+            </div>
+            <span class="field-hint">0–60,000 ms</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="latency-severity">Severity</label>
+            <select class="field-select" name="latency.severity" id="latency-severity">
+              <option value="info">ℹ Info</option>
+              <option value="warning" selected>⚠ Warning</option>
+              <option value="critical">🚨 Critical</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error Rate Alert -->
+      <div class="alert-card" id="card-error-rate">
+        <div class="alert-card-header">
+          <div class="alert-card-title-row">
+            <h3 class="alert-card-title">Error Rate Alert</h3>
+            <label class="toggle-switch" aria-label="Enable error rate alert">
+              <input type="checkbox" name="error_rate.enabled" id="error-rate-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="alert-card-desc">Triggered when API error rate exceeds threshold.</p>
+        </div>
+        <div class="alert-fields">
+          <div class="field-row">
+            <label class="field-label" for="error-rate-pct">Error Rate Threshold</label>
+            <div class="field-input-group">
+              <input type="number" class="field-input" name="error_rate.threshold_pct"
+                     id="error-rate-pct" min="0" max="100" step="1"
+                     value="{{ config.error_rate.threshold_pct|default(10) }}">
+              <span class="field-suffix">%</span>
+            </div>
+            <span class="field-hint">0–100%</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="error-rate-severity">Severity</label>
+            <select class="field-select" name="error_rate.severity" id="error-rate-severity">
+              <option value="info">ℹ Info</option>
+              <option value="warning" selected>⚠ Warning</option>
+              <option value="critical">🚨 Critical</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /alert thresholds -->
+
+    <!-- ── Notification Channels ──────────────────────────────────────── -->
+    <div class="settings-section">
+      <h2 class="settings-section-title">Notification Channels</h2>
+
+      <div class="alert-card">
+        <!-- In-App (always on) -->
+        <div class="channel-row">
+          <div class="channel-label">
+            <span class="channel-icon">🔔</span>
+            <div>
+              <div class="channel-name">In-App Notifications</div>
+              <div class="channel-desc">Always enabled — alerts appear in the dashboard.</div>
+            </div>
+          </div>
+          <span class="channel-always-on">Always On</span>
+        </div>
+
+        <!-- Email -->
+        <div class="channel-row channel-row-toggle">
+          <div class="channel-label">
+            <span class="channel-icon">✉️</span>
+            <div>
+              <div class="channel-name">Email Notifications</div>
+              <div class="channel-desc">Receive alerts by email.</div>
+            </div>
+          </div>
+          <label class="toggle-switch" aria-label="Enable email notifications">
+            <input type="checkbox" name="channels.email.enabled" id="email-enabled"
+                   onchange="toggleEmailFields(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="email-fields" class="channel-subfields" style="display:none;">
+          <div class="field-row">
+            <label class="field-label" for="email-address">Email Address</label>
+            <input type="email" class="field-input" name="channels.email.address"
+                   id="email-address" placeholder="you@example.com"
+                   autocomplete="email" aria-describedby="email-hint">
+            <span class="field-hint" id="email-hint">Alerts will be sent here</span>
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="email-min-severity">Minimum Severity</label>
+            <select class="field-select" name="channels.email.min_severity" id="email-min-severity">
+              <option value="info">ℹ Info (all alerts)</option>
+              <option value="warning" selected>⚠ Warning and above</option>
+              <option value="critical">🚨 Critical only</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Webhook (placeholder) -->
+        <div class="channel-row channel-row-disabled">
+          <div class="channel-label">
+            <span class="channel-icon">🔗</span>
+            <div>
+              <div class="channel-name">Webhook <span class="coming-soon-badge">Coming Soon</span></div>
+              <div class="channel-desc">POST alert payloads to a custom URL.</div>
+            </div>
+          </div>
+          <span class="channel-disabled-label">Disabled</span>
+        </div>
+
+      </div>
+    </div><!-- /channels -->
+
+    <!-- ── Quiet Hours ────────────────────────────────────────────────── -->
+    <div class="settings-section">
+      <h2 class="settings-section-title">Quiet Hours</h2>
+      <div class="alert-card">
+        <div class="channel-row">
+          <div class="channel-label">
+            <span class="channel-icon">🌙</span>
+            <div>
+              <div class="channel-name">Quiet Hours</div>
+              <div class="channel-desc">Only Critical alerts fire during quiet hours.</div>
+            </div>
+          </div>
+          <label class="toggle-switch" aria-label="Enable quiet hours">
+            <input type="checkbox" name="quiet_hours.enabled" id="quiet-hours-enabled"
+                   onchange="toggleQuietHours(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div id="quiet-hours-fields" class="channel-subfields" style="display:none;">
+          <div class="field-row">
+            <label class="field-label" for="quiet-start">Start Time</label>
+            <input type="time" class="field-input" name="quiet_hours.start"
+                   id="quiet-start" value="22:00">
+          </div>
+          <div class="field-row">
+            <label class="field-label" for="quiet-end">End Time</label>
+            <input type="time" class="field-input" name="quiet_hours.end"
+                   id="quiet-end" value="08:00">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Actions ────────────────────────────────────────────────────── -->
+    <div class="settings-actions">
+      <button type="submit" class="btn btn-primary" id="save-btn">Save Settings</button>
+      <button type="button" class="btn btn-secondary" id="test-alert-btn" onclick="sendTestAlert()">
+        🔔 Send Test Alert
+      </button>
+      <a class="settings-link" href="/dashboard/audit">View Alert History →</a>
+    </div>
+
+  </form>
+
+</div>
+
+<script src="/dashboard/static/js/alerts-settings.js" defer></script>
+<script>
+// Load current config from API and populate form on page load
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.AlertSettings) AlertSettings.loadAndPopulate();
+});
+</script>
+{% endblock %}

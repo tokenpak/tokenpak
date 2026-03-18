@@ -1,0 +1,515 @@
+{
+  "version": "1.0",
+  "commands": [
+    {
+      "command": "start",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Start the proxy (localhost:8766)",
+      "aliases": [],
+      "usage": "/tokenpak start [--port PORT]",
+      "detail": "Starts the TokenPak proxy server. Listens on localhost:8766 by default. All LLM requests routed through this port will be compressed and cached.",
+      "related": ["stop", "restart", "status"]
+    },
+    {
+      "command": "stop",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Stop the running proxy",
+      "aliases": [],
+      "usage": "/tokenpak stop",
+      "detail": "Gracefully stops the proxy. In-flight requests are completed before shutdown.",
+      "related": ["start", "restart"]
+    },
+    {
+      "command": "restart",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Restart the proxy",
+      "aliases": [],
+      "usage": "/tokenpak restart",
+      "detail": "Stops and restarts the proxy. Useful after config changes.",
+      "related": ["start", "stop", "config"]
+    },
+    {
+      "command": "status",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Check proxy health and connection status",
+      "aliases": [],
+      "usage": "/tokenpak status [--json]",
+      "detail": "Shows proxy uptime, port, compression ratio, and cache hit rate.",
+      "related": ["start", "logs", "doctor"]
+    },
+    {
+      "command": "logs",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Show recent proxy logs",
+      "aliases": [],
+      "usage": "/tokenpak logs [-n LINES]",
+      "detail": "Streams recent log output. Use -n to control line count (default: 50).",
+      "related": ["status", "debug"]
+    },
+    {
+      "command": "demo",
+      "tier": "oss",
+      "category": "Control",
+      "description": "See compression in action on sample data",
+      "aliases": [],
+      "usage": "/tokenpak demo",
+      "detail": "Runs a live compression demonstration on built-in sample prompts.",
+      "related": ["benchmark", "cost"]
+    },
+    {
+      "command": "cost",
+      "tier": "oss",
+      "category": "Visibility",
+      "description": "View your API spend and token usage",
+      "aliases": [],
+      "usage": "/tokenpak cost [--period DAY|WEEK|MONTH]",
+      "detail": "Shows cumulative API cost and token counts by model and time period.",
+      "related": ["savings", "budget", "metrics"]
+    },
+    {
+      "command": "index",
+      "tier": "oss",
+      "category": "Indexing",
+      "description": "Index a directory for context retrieval",
+      "aliases": [],
+      "usage": "/tokenpak index <path> [--status] [--workers N]",
+      "detail": "Indexes files into vault block storage for fast context retrieval and deduplication.",
+      "related": ["search", "vault"]
+    },
+    {
+      "command": "search",
+      "tier": "oss",
+      "category": "Indexing",
+      "description": "Search indexed content",
+      "aliases": [],
+      "usage": "/tokenpak search <query> [--limit N]",
+      "detail": "Semantic and keyword search over indexed vault content.",
+      "related": ["index"]
+    },
+    {
+      "command": "doctor",
+      "tier": "oss",
+      "category": "Visibility",
+      "description": "Run diagnostics and health checks",
+      "aliases": [],
+      "usage": "/tokenpak doctor",
+      "detail": "Checks proxy connectivity, config validity, dependency versions, and common issues.",
+      "related": ["status", "logs"]
+    },
+    {
+      "command": "version",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Show current versions (proxy, config, cli)",
+      "aliases": [],
+      "usage": "/tokenpak version",
+      "detail": "Prints proxy version, CLI version, and config schema version.",
+      "related": ["update"]
+    },
+    {
+      "command": "update",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Update TokenPak to the latest version",
+      "aliases": [],
+      "usage": "/tokenpak update [--check]",
+      "detail": "Pulls latest release from git/pypi. Use --check to see if an update is available without installing.",
+      "related": ["version"]
+    },
+    {
+      "command": "license",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Show license and edition info",
+      "aliases": [],
+      "usage": "/tokenpak license",
+      "detail": "Shows your current license tier, edition, and management commands.",
+      "related": ["activate", "plan"]
+    },
+    {
+      "command": "activate",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Activate a Pro/Team/Enterprise license key",
+      "aliases": [],
+      "usage": "/tokenpak activate <key>",
+      "detail": "Validates and stores a license key. Enables features for your tier immediately.",
+      "related": ["deactivate", "plan", "license"]
+    },
+    {
+      "command": "deactivate",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Remove license and revert to OSS",
+      "aliases": [],
+      "usage": "/tokenpak deactivate",
+      "detail": "Removes the stored license key and reverts to OSS (free) tier.",
+      "related": ["activate", "license"]
+    },
+    {
+      "command": "plan",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Show current tier, expiry, seats, and features",
+      "aliases": [],
+      "usage": "/tokenpak plan",
+      "detail": "Shows detailed license plan info: tier, status, expiry date, seat usage, and enabled features.",
+      "related": ["license", "activate"]
+    },
+    {
+      "command": "validate",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Validate a TokenPak JSON config file",
+      "aliases": [],
+      "usage": "/tokenpak validate <file>",
+      "detail": "Parses and validates a TokenPak JSON file against the current schema.",
+      "related": ["config", "doctor"]
+    },
+    {
+      "command": "config",
+      "tier": "oss",
+      "category": "Configuration",
+      "description": "Config sync, pull, and validate (version control)",
+      "aliases": [],
+      "usage": "/tokenpak config [sync|pull|validate]",
+      "detail": "Manages proxy configuration: sync to disk, pull remote settings, or validate the current config.",
+      "related": ["validate", "template", "route"]
+    },
+    {
+      "command": "stats",
+      "tier": "oss",
+      "category": "Visibility",
+      "description": "Show registry stats",
+      "aliases": [],
+      "usage": "/tokenpak stats",
+      "detail": "Shows token compression registry statistics: hit rates, model counts, cache size.",
+      "related": ["cost", "metrics"]
+    },
+    {
+      "command": "route",
+      "tier": "pro",
+      "category": "Configuration",
+      "description": "Manage model routing rules",
+      "aliases": [],
+      "usage": "/tokenpak route [list|add|remove] [--model MODEL]",
+      "detail": "Define routing rules to automatically select models based on request characteristics (cost, speed, quality).",
+      "related": ["recipe", "template", "optimize"]
+    },
+    {
+      "command": "recipe",
+      "tier": "pro",
+      "category": "Configuration",
+      "description": "Manage compression recipes",
+      "aliases": [],
+      "usage": "/tokenpak recipe [list|apply|create] <name>",
+      "detail": "Named compression presets for different use cases (code, docs, chat). Apply recipes to fine-tune compression behavior.",
+      "related": ["route", "template", "compression"]
+    },
+    {
+      "command": "template",
+      "tier": "pro",
+      "category": "Configuration",
+      "description": "Manage prompt templates",
+      "aliases": [],
+      "usage": "/tokenpak template [list|add|remove|apply] <name>",
+      "detail": "Reusable prompt templates with variable injection. Reduces redundant context in repeated requests.",
+      "related": ["recipe", "config"]
+    },
+    {
+      "command": "budget",
+      "tier": "pro",
+      "category": "Configuration",
+      "description": "Set API budget limits",
+      "aliases": [],
+      "usage": "/tokenpak budget [set|status|reset] [--limit AMOUNT]",
+      "detail": "Define daily/monthly spend caps. Requests are blocked or degraded when limits are reached.",
+      "related": ["cost", "savings", "metrics"]
+    },
+    {
+      "command": "optimize",
+      "tier": "pro",
+      "category": "Optimization",
+      "description": "Analyze cost and compression efficiency",
+      "aliases": ["auto-optimize"],
+      "usage": "/tokenpak optimize [--verbose]",
+      "detail": "Profiles your recent request history and suggests routing and compression improvements to reduce cost.",
+      "related": ["route", "benchmark", "savings"]
+    },
+    {
+      "command": "benchmark",
+      "tier": "pro",
+      "category": "Optimization",
+      "description": "Run compression benchmarks",
+      "aliases": [],
+      "usage": "/tokenpak benchmark [--file PATH] [--sample] [--json]",
+      "detail": "Measures compression ratio, latency, and throughput on sample or real data.",
+      "related": ["calibrate", "optimize"]
+    },
+    {
+      "command": "calibrate",
+      "tier": "pro",
+      "category": "Optimization",
+      "description": "Calibrate worker count for this host",
+      "aliases": [],
+      "usage": "/tokenpak calibrate [--workers N]",
+      "detail": "Runs a performance sweep to find the optimal number of parallel workers for your hardware.",
+      "related": ["benchmark"]
+    },
+    {
+      "command": "savings",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Show token and cost savings breakdown",
+      "aliases": [],
+      "usage": "/tokenpak savings [--period DAY|WEEK|MONTH]",
+      "detail": "Detailed breakdown of tokens saved and dollar savings by model, compression type, and time period.",
+      "related": ["cost", "budget", "metrics"]
+    },
+    {
+      "command": "metrics",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Show detailed performance metrics",
+      "aliases": [],
+      "usage": "/tokenpak metrics [--json] [--period DAY|WEEK|MONTH]",
+      "detail": "Latency percentiles, cache hit rates, compression ratios, model usage distribution.",
+      "related": ["stats", "cost", "savings"]
+    },
+    {
+      "command": "dashboard",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Real-time health dashboard (TUI)",
+      "aliases": [],
+      "usage": "/tokenpak dashboard",
+      "detail": "Interactive terminal dashboard showing live proxy metrics, request rates, and cost tracking.",
+      "related": ["status", "metrics", "logs"]
+    },
+    {
+      "command": "debug",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Toggle verbose debug logging",
+      "aliases": [],
+      "usage": "/tokenpak debug [on|off]",
+      "detail": "Enables/disables detailed request/response logging. Useful for tracing compression decisions.",
+      "related": ["logs", "replay"]
+    },
+    {
+      "command": "diff",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Show diff of compressed vs original context",
+      "aliases": [],
+      "usage": "/tokenpak diff <session_id>",
+      "detail": "Side-by-side comparison of original and compressed context for a given session.",
+      "related": ["replay", "compression"]
+    },
+    {
+      "command": "compression",
+      "tier": "pro",
+      "category": "Optimization",
+      "description": "Configure and inspect compression settings",
+      "aliases": [],
+      "usage": "/tokenpak compression [status|set|reset]",
+      "detail": "View active compression algorithms, configure aggressiveness, and inspect per-model settings.",
+      "related": ["recipe", "optimize", "diff"]
+    },
+    {
+      "command": "trigger",
+      "tier": "pro",
+      "category": "Automation",
+      "description": "Manage event triggers",
+      "aliases": [],
+      "usage": "/tokenpak trigger [list|add|remove|fire] <name>",
+      "detail": "Define conditional triggers that fire macros or routes based on request patterns.",
+      "related": ["macro", "workflow"]
+    },
+    {
+      "command": "macro",
+      "tier": "pro",
+      "category": "Automation",
+      "description": "Manage and run macros",
+      "aliases": [],
+      "usage": "/tokenpak macro [list|run|add|remove] <name>",
+      "detail": "Reusable command sequences. Chain multiple TokenPak operations into named macros.",
+      "related": ["trigger", "workflow"]
+    },
+    {
+      "command": "replay",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Inspect and re-run captured sessions",
+      "aliases": [],
+      "usage": "/tokenpak replay [list|show|run] <session_id>",
+      "detail": "Browse saved request/response pairs and replay them for testing or debugging.",
+      "related": ["diff", "debug"]
+    },
+    {
+      "command": "fingerprint",
+      "tier": "pro",
+      "category": "Optimization",
+      "description": "Fingerprint sync and cache management",
+      "aliases": [],
+      "usage": "/tokenpak fingerprint [sync|clear|status]",
+      "detail": "Manages content fingerprints used for deduplication and cache invalidation.",
+      "related": ["index", "compression"]
+    },
+    {
+      "command": "last",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Show the last request summary",
+      "aliases": [],
+      "usage": "/tokenpak last",
+      "detail": "Quick summary of the most recent proxied request: model, tokens, cost, latency.",
+      "related": ["replay", "metrics"]
+    },
+    {
+      "command": "serve",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Start proxy/telemetry server (low-level)",
+      "aliases": [],
+      "usage": "/tokenpak serve [--port PORT] [--telemetry] [--ingest]",
+      "detail": "Low-level server startup. Used for multi-node deployments, telemetry ingestion, and custom port bindings.",
+      "related": ["start", "workflow"]
+    },
+    {
+      "command": "agent",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Agent coordination (locks, registry)",
+      "aliases": [],
+      "usage": "/tokenpak agent [status|list|register|deregister]",
+      "detail": "Manages agent registrations in a shared proxy cluster. Enables multi-agent load balancing.",
+      "related": ["lock", "serve", "workflow"]
+    },
+    {
+      "command": "lock",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "File lock management",
+      "aliases": [],
+      "usage": "/tokenpak lock [list|release|status]",
+      "detail": "Manages distributed file locks for concurrent agent access control.",
+      "related": ["agent"]
+    },
+    {
+      "command": "run",
+      "tier": "team",
+      "category": "Automation",
+      "description": "Schedule and manage macro runs",
+      "aliases": [],
+      "usage": "/tokenpak run <macro> [--schedule CRON]",
+      "detail": "Run macros on demand or on a cron schedule. Supports distributed task queues.",
+      "related": ["macro", "trigger", "workflow"]
+    },
+    {
+      "command": "workflow",
+      "tier": "team",
+      "category": "Automation",
+      "description": "Manage multi-step automation workflows",
+      "aliases": [],
+      "usage": "/tokenpak workflow [list|run|status] <name>",
+      "detail": "Define and execute DAG-based workflows across multiple models and compression steps.",
+      "related": ["macro", "trigger", "handoff"]
+    },
+    {
+      "command": "handoff",
+      "tier": "team",
+      "category": "Automation",
+      "description": "Manage agent handoff protocols",
+      "aliases": [],
+      "usage": "/tokenpak handoff [status|configure]",
+      "detail": "Configures handoff behavior when an agent transfers context to another agent or model.",
+      "related": ["workflow", "agent"]
+    },
+    {
+      "command": "prune",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Prune old sessions and cache entries",
+      "aliases": [],
+      "usage": "/tokenpak prune [--older-than DAYS] [--dry-run]",
+      "detail": "Removes stale sessions, expired cache entries, and old replay data.",
+      "related": ["retain", "fingerprint"]
+    },
+    {
+      "command": "retain",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Configure retention policies",
+      "aliases": [],
+      "usage": "/tokenpak retain [set|show] [--days N]",
+      "detail": "Set data retention policies for sessions, logs, and cache entries.",
+      "related": ["prune"]
+    },
+    {
+      "command": "policy",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Manage routing and access policies",
+      "aliases": [],
+      "usage": "/tokenpak policy [list|apply|remove] <name>",
+      "detail": "Define team-wide routing policies, model allowlists, and budget enforcement rules.",
+      "related": ["route", "budget", "compliance"]
+    },
+    {
+      "command": "sla",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Configure SLA targets and alerting",
+      "aliases": [],
+      "usage": "/tokenpak sla [set|status|test]",
+      "detail": "Set latency and availability targets. Alerts fire when SLAs are breached.",
+      "related": ["metrics", "status", "workflow"]
+    },
+    {
+      "command": "maintenance",
+      "tier": "team",
+      "category": "Infrastructure",
+      "description": "Run maintenance tasks (vacuum, reindex)",
+      "aliases": [],
+      "usage": "/tokenpak maintenance [vacuum|reindex|all]",
+      "detail": "Runs database vacuum, re-indexes vault blocks, and clears expired cache entries.",
+      "related": ["prune", "doctor"]
+    },
+    {
+      "command": "compliance",
+      "tier": "enterprise",
+      "category": "Governance",
+      "description": "Generate compliance reports",
+      "aliases": [],
+      "usage": "/tokenpak compliance [report|export] [--format JSON|CSV|PDF]",
+      "detail": "Generates SOC2/GDPR-ready compliance reports covering data flow, access logs, and retention.",
+      "related": ["audit", "policy"]
+    },
+    {
+      "command": "audit",
+      "tier": "enterprise",
+      "category": "Governance",
+      "description": "Enterprise audit log management",
+      "aliases": [],
+      "usage": "/tokenpak audit [list|export|purge] [--since DATE]",
+      "detail": "Tamper-evident audit trail of all proxy requests, config changes, and user actions.",
+      "related": ["compliance", "policy"]
+    },
+    {
+      "command": "vault",
+      "tier": "enterprise",
+      "category": "Governance",
+      "description": "Vault block management and encryption",
+      "aliases": [],
+      "usage": "/tokenpak vault [status|encrypt|rotate-key]",
+      "detail": "Manages encrypted vault storage, key rotation, and block-level access control.",
+      "related": ["index", "audit", "compliance"]
+    }
+  ]
+}

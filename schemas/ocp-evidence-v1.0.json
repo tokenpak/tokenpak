@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ocp.dev/schema/ocp-evidence-v1.0.json",
+  "title": "OCP Evidence Pack v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "generated_at", "records", "summary"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "block_id", "agent", "captured_at", "provenance", "integrity"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "block_id": { "type": "string", "minLength": 1 },
+          "agent": { "type": "string", "minLength": 1 },
+          "captured_at": { "type": "string", "format": "date-time" },
+          "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "uri"],
+            "properties": {
+              "kind": { "type": "string" },
+              "uri": { "type": "string" }
+            }
+          },
+          "integrity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["algorithm", "value"],
+            "properties": {
+              "algorithm": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_count"],
+      "properties": {
+        "record_count": { "type": "integer", "minimum": 1 },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

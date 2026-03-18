@@ -1,0 +1,226 @@
+version: '1.0'
+intents:
+  usage:
+    description: Token usage, cost, and spend analytics
+    aliases:
+    - token usage
+    - token spend
+    - token cost
+    - spend
+    - how much did i spend
+    - how much have i spent
+    - billing
+    - bill
+    - how many tokens
+    - tokens used
+    - cost breakdown
+    - cost report
+    - usage report
+    - usage stats
+    - usage summary
+    - burn rate
+    - api spend
+    - model cost
+    - price
+    - pricing
+  status:
+    description: Health and liveness checks
+    aliases:
+    - health check
+    - healthcheck
+    - is it up
+    - is it running
+    - is it alive
+    - uptime
+    - ping
+    - are you running
+    - service status
+    - server status
+    - proxy status
+    - check status
+    - what is the status
+    - status of
+    - status check
+    - check the status
+  debug:
+    description: Error diagnosis and tracing
+    aliases:
+    - why is it broken
+    - what went wrong
+    - why did it fail
+    - error trace
+    - stack trace
+    - traceback
+    - diagnose
+    - troubleshoot
+    - investigate error
+    - why is this failing
+    - broken
+    - not working
+    - not responding
+    - crashes
+    - exception
+    - 500 error
+    - http error
+  summarize:
+    description: Summarize or condense content
+    aliases:
+    - tldr
+    - tl;dr
+    - brief recap
+    - quick summary
+    - summarise
+    - give me a summary
+    - sum up
+    - condense
+    - digest
+    - short version
+    - quick overview
+    - what happened
+    - recap
+  plan:
+    description: Planning, design, and architecture
+    aliases:
+    - make a plan
+    - design a
+    - architecture for
+    - how should i build
+    - roadmap
+    - strategy
+    - what's the approach
+    - what approach
+    - project plan
+    - sprint plan
+    - feature design
+    - system design
+  execute:
+    description: Run or execute commands and operations
+    aliases:
+    - kick off
+    - fire off
+    - trigger
+    - launch
+    - deploy
+    - run it
+    - start it
+    - go ahead and run
+    - execute now
+    - run the
+    - start the
+  explain:
+    description: Explain a concept, code, or system
+    aliases:
+    - how does it work
+    - what does it do
+    - can you explain
+    - tell me about
+    - describe
+    - help me understand
+    - walk me through
+    - what is
+    - how do i
+    - how does
+  search:
+    description: Find or look up information
+    aliases:
+    - look up
+    - find me
+    - where is
+    - locate
+    - which files
+    - which file
+    - show me all
+    - list all
+    - list the
+    - find the
+    - search for
+  create:
+    description: Create, generate, or build artifacts
+    aliases:
+    - write a
+    - write me
+    - generate a
+    - generate me
+    - build a
+    - make a
+    - add a
+    - implement
+    - scaffold
+    - create a
+    - new file
+    - new function
+    - new class
+    - new module
+    - new test
+    - new config
+entities:
+  tokens:
+    description: LLM token counts
+    aliases:
+    - token count
+    - token usage
+    - tokens consumed
+    - input tokens
+    - output tokens
+    - prompt tokens
+    - completion tokens
+  cost:
+    description: Monetary cost of API usage
+    aliases:
+    - spend
+    - spending
+    - price
+    - pricing
+    - bill
+    - billing
+    - charges
+    - dollar cost
+    - usd
+    - money
+  session:
+    description: A conversation or work session
+    aliases:
+    - conversation
+    - chat
+    - thread
+    - exchange
+    - dialog
+    - dialogue
+  vault:
+    description: The local knowledge vault
+    aliases:
+    - vault
+    - my vault
+    - the vault
+    - knowledge base
+    - notes
+    - local docs
+    - obsidian
+    - my notes
+  pipeline:
+    description: The compression/processing pipeline
+    aliases:
+    - compression pipeline
+    - processing pipeline
+    - the pipeline
+    - compress pipeline
+  proxy:
+    description: The TokenPak proxy server
+    aliases:
+    - tokenpak proxy
+    - the proxy
+    - proxy server
+    - local proxy
+  model:
+    description: An LLM model
+    aliases:
+    - llm
+    - language model
+    - ai model
+    - the model
+    - claude
+    - gpt
+    - gemini
+    - sonnet
+    - haiku
+    - opus

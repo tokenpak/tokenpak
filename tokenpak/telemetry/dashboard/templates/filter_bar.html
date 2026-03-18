@@ -1,0 +1,127 @@
+{# ============================================================
+   Global Filter Bar — TokenPak Dashboard
+   
+   Params expected in context:
+     days         — int (selected time range in days)
+     filter_provider — str (selected provider or "")
+     filter_model    — str (selected model or "")
+     filter_agent    — str (selected agent or "")
+     filter_status   — str (all|success|error|retry)
+     filter_compression — str (all|none|qmd|tokenpak|both)
+     providers    — list of provider strings
+     models       — list of model strings (optionally grouped)
+     agents       — list of agent_id strings
+     view         — str (finops|engineering|audit)
+   ============================================================ #}
+
+<div class="filter-bar" id="filter-bar" data-affected-by-filter role="search" aria-label="Dashboard filters">
+
+  {# ── Time Range ─────────────────────────────── #}
+  <div class="filter-group">
+    <label class="filter-label" for="filter-range">Range</label>
+    <select id="filter-range" name="days" class="filter-select filter-control"
+            title="Time range">
+      <option value="1"  {% if days == 1  %}selected{% endif %}>24h</option>
+      <option value="7"  {% if days == 7 or not days %}selected{% endif %}>7d</option>
+      <option value="30" {% if days == 30 %}selected{% endif %}>30d</option>
+      <option value="90" {% if days == 90 %}selected{% endif %}>90d</option>
+    </select>
+  </div>
+
+  <div class="filter-divider"></div>
+
+  {# ── Provider ────────────────────────────────── #}
+  <div class="filter-group">
+    <label class="filter-label" for="filter-provider">Provider</label>
+    <select id="filter-provider" name="provider" class="filter-select filter-control"
+            title="Filter by provider">
+      <option value="">All providers</option>
+      {% for p in providers %}
+        <option value="{{ p }}" {% if filter_provider == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {# ── Model ───────────────────────────────────── #}
+  <div class="filter-group">
+    <label class="filter-label" for="filter-model">Model</label>
+    <select id="filter-model" name="model" class="filter-select filter-control"
+            title="Filter by model">
+      <option value="">All models</option>
+      {% for m in models %}
+        <option value="{{ m }}" {% if filter_model == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {# ── Agent ───────────────────────────────────── #}
+  <div class="filter-group">
+    <label class="filter-label" for="filter-agent">Agent</label>
+    <select id="filter-agent" name="agent" class="filter-select filter-control"
+            title="Filter by agent">
+      <option value="">All agents</option>
+      {% for a in agents %}
+        <option value="{{ a }}" {% if filter_agent == a %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="filter-divider"></div>
+
+  {# ── Status Chips ────────────────────────────── #}
+  <div class="filter-group filter-chips-group">
+    <label class="filter-label">Status</label>
+    <div class="filter-chips" role="group" aria-label="Status filter">
+      {% set statuses = [('all','All'), ('success','✅ Success'), ('error','❌ Error'), ('retry','🔁 Retry')] %}
+      {% for val, label in statuses %}
+        <button type="button"
+                class="filter-chip filter-control {% if (filter_status or 'all') == val %}active{% endif %}"
+                data-filter="status"
+                data-value="{{ val }}"
+                aria-pressed="{{ 'true' if (filter_status or 'all') == val else 'false' }}">
+          {{ label }}
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# ── Compression Chips ───────────────────────── #}
+  <div class="filter-group filter-chips-group">
+    <label class="filter-label">Compression</label>
+    <div class="filter-chips" role="group" aria-label="Compression filter">
+      {% set compressions = [('all','All'), ('none','None'), ('qmd','QMD'), ('tokenpak','TP'), ('both','Both')] %}
+      {% for val, label in compressions %}
+        <button type="button"
+                class="filter-chip filter-control {% if (filter_compression or 'all') == val %}active{% endif %}"
+                data-filter="compression"
+                data-value="{{ val }}"
+                aria-pressed="{{ 'true' if (filter_compression or 'all') == val else 'false' }}">
+          {{ label }}
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="filter-spacer"></div>
+
+  {# ── Recent Filters (user-prefs.js populates this) ── #}
+  <div id="tp-recent-filters-container" class="filter-group tp-recent-filters" style="display:none" aria-label="Recent filter sets"></div>
+
+  {# ── Actions ─────────────────────────────────── #}
+  <div class="filter-group filter-actions">
+    <button type="button" class="btn btn-ghost filter-clear-btn" id="filter-clear-btn"
+            title="Reset all filters" aria-label="Clear all filters">
+      ✕ Clear
+    </button>
+    <button type="button" class="btn" id="filter-refresh-btn"
+            title="Refresh data" aria-label="Refresh dashboard">
+      <span class="htmx-indicator spinner" id="refresh-spinner"></span>
+      ↻ Refresh
+    </button>
+  </div>
+
+</div>
+
+{# ── Filter state: hidden inputs for form-style HTMX ── #}
+<input type="hidden" id="filter-status-input"      name="status"      value="{{ filter_status or 'all' }}">
+<input type="hidden" id="filter-compression-input" name="compression" value="{{ filter_compression or 'all' }}">

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tokenpak-config
+  namespace: tokenpak
+data:
+  log_level: "info"
+  mode: "hybrid"

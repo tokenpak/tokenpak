@@ -1,0 +1,62 @@
+{
+  "family": "tokenpak",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "tokenpak",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/tokenpak:latest",
+      "portMappings": [
+        {
+          "containerPort": 8766,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "TOKENPAK_PORT",
+          "value": "8766"
+        },
+        {
+          "name": "TOKENPAK_LOG_LEVEL",
+          "value": "info"
+        },
+        {
+          "name": "TOKENPAK_MODE",
+          "value": "hybrid"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:tokenpak/anthropic-api-key"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:tokenpak/openai-api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/tokenpak",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8766/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      },
+      "essential": true,
+      "readonlyRootFilesystem": false
+    }
+  ]
+}

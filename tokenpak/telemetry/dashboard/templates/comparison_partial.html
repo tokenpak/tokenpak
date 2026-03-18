@@ -1,0 +1,217 @@
+{# Comparison Mode Partial — period KPIs, provider table, model rankings #}
+
+<!-- Compare toggle + presets -->
+<div class="compare-controls">
+  <div class="compare-toggle-row">
+    <span class="compare-toggle-label">Compare periods</span>
+    <label class="toggle-switch" aria-label="Enable period comparison">
+      <input type="checkbox" id="compare-toggle" {% if compare %}checked{% endif %}
+             onchange="CompareMode.onToggle(this.checked)">
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="compare-presets" id="compare-presets" {% if not compare %}style="display:none"{% endif %}>
+    {% set presets = [
+      ('previous', 'vs Previous period'),
+      ('last_month', 'vs Last month'),
+      ('same_period_last_month', 'vs Same period last month'),
+    ] %}
+    {% for val, label in presets %}
+    <button class="preset-btn {% if compare_range == val %}active{% endif %}"
+            onclick="CompareMode.setRange('{{ val }}')">{{ label }}</button>
+    {% endfor %}
+  </div>
+</div>
+
+{% if compare and date_labels %}
+<!-- Period headers -->
+<div class="period-header-row">
+  <div class="period-badge current">📅 Current — {{ date_labels.current }}</div>
+  <div class="period-badge previous">📅 Previous — {{ date_labels.previous }}</div>
+</div>
+{% endif %}
+
+<!-- ── KPI Comparison Cards ─────────────────────────────────────────────── -->
+<div class="compare-kpi-grid">
+
+  {% set kpis = [
+    ('total_cost',    'Total Cost',     '$',  '', 'lower'),
+    ('total_tokens',  'Total Tokens',   '',   '', 'lower'),
+    ('total_savings', 'Total Savings',  '$',  '', 'higher'),
+    ('savings_pct',   'Savings Rate',   '',   '%','higher'),
+    ('request_count', 'Requests',       '',   '', 'neutral'),
+    ('avg_latency_ms','Avg Latency',    '',   'ms','lower'),
+  ] %}
+
+  {% for key, label, prefix, suffix, direction in kpis %}
+  <div class="compare-kpi-card">
+    <div class="kpi-label">{{ label }}</div>
+    <div class="kpi-current">
+      {{ prefix }}{{ current[key] | default(0) | round(2) }}{{ suffix }}
+    </div>
+    {% if compare and previous %}
+    {% set cur_val = current[key] | default(0) | float %}
+    {% set prev_val = previous[key] | default(0) | float %}
+    {% set delta = cur_val - prev_val %}
+    {% set delta_pct = ((delta / prev_val * 100) if prev_val != 0 else 0) | round(1) %}
+    {% set is_better = (direction == 'higher' and delta > 0) or (direction == 'lower' and delta < 0) %}
+    {% set is_worse  = (direction == 'higher' and delta < 0) or (direction == 'lower' and delta > 0) %}
+    <div class="kpi-previous">vs {{ prefix }}{{ prev_val | round(2) }}{{ suffix }}</div>
+    <div class="kpi-delta {{ 'delta-positive' if is_better else 'delta-negative' if is_worse else 'delta-neutral' }}">
+      {{ '+' if delta >= 0 else '' }}{{ prefix }}{{ delta | round(2) }}{{ suffix }}
+      ({{ '+' if delta_pct >= 0 else '' }}{{ delta_pct }}%)
+      {{ '↓' if direction == 'lower' and delta < 0 else '↑' if delta > 0 else '' }}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+</div>
+
+<!-- ── Comparison Table (period summary) ─────────────────────────────────── -->
+{% if compare and previous %}
+<div class="section-heading">Period Summary</div>
+<div class="compare-table-wrap">
+  <table class="compare-table" aria-label="Period comparison table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th>Current</th>
+        <th>Previous</th>
+        <th>Delta</th>
+        <th>% Change</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key, label, prefix, suffix, direction in kpis %}
+      {% set cur_val = current[key] | default(0) | float %}
+      {% set prev_val = previous[key] | default(0) | float %}
+      {% set delta = cur_val - prev_val %}
+      {% set delta_pct = ((delta / prev_val * 100) if prev_val != 0 else 0) | round(1) %}
+      {% set is_better = (direction == 'higher' and delta > 0) or (direction == 'lower' and delta < 0) %}
+      {% set is_worse  = (direction == 'higher' and delta < 0) or (direction == 'lower' and delta > 0) %}
+      <tr>
+        <td class="col-metric">{{ label }}</td>
+        <td>{{ prefix }}{{ cur_val | round(2) }}{{ suffix }}</td>
+        <td class="col-prev">{{ prefix }}{{ prev_val | round(2) }}{{ suffix }}</td>
+        <td class="col-delta {{ 'delta-positive' if is_better else 'delta-negative' if is_worse else '' }}">
+          {{ '+' if delta >= 0 else '' }}{{ prefix }}{{ delta | round(2) }}{{ suffix }}
+        </td>
+        <td class="col-pct {{ 'delta-positive' if is_better else 'delta-negative' if is_worse else '' }}">
+          {{ '+' if delta_pct >= 0 else '' }}{{ delta_pct }}%
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- ── Provider Comparison ────────────────────────────────────────────────── -->
+<div class="section-heading">
+  Provider Comparison
+  <span class="section-range">Last {{ days }} days</span>
+</div>
+
+{% if providers %}
+<div class="compare-table-wrap">
+  <table class="compare-table sortable-table" id="provider-table" aria-label="Provider comparison">
+    <thead>
+      <tr>
+        <th class="sort-col" data-col="provider" onclick="CompareMode.sortTable('provider-table','provider','str')">Provider ⇅</th>
+        <th class="sort-col" data-col="cost" onclick="CompareMode.sortTable('provider-table','cost','num')">Cost ⇅</th>
+        <th class="sort-col" data-col="tokens" onclick="CompareMode.sortTable('provider-table','tokens','num')">Tokens ⇅</th>
+        <th class="sort-col" data-col="requests" onclick="CompareMode.sortTable('provider-table','requests','num')">Requests ⇅</th>
+        <th class="sort-col" data-col="savings_pct" onclick="CompareMode.sortTable('provider-table','savings_pct','num')">Savings % ⇅</th>
+        <th class="sort-col" data-col="error_rate" onclick="CompareMode.sortTable('provider-table','error_rate','num')">Error Rate ⇅</th>
+        <th>Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in providers %}
+      {% set is_best = loop.index == 1 %}
+      <tr class="{{ 'row-best' if is_best else '' }}" data-provider="{{ p.provider }}">
+        <td class="col-metric">
+          {% if is_best %}<span class="best-badge" title="Highest cost">👑</span>{% endif %}
+          {{ p.provider }}
+        </td>
+        <td data-val="{{ p.cost }}">${{ p.cost }}</td>
+        <td data-val="{{ p.tokens }}">{{ p.tokens | int }}</td>
+        <td data-val="{{ p.requests }}">{{ p.requests }}</td>
+        <td data-val="{{ p.savings_pct }}" class="{{ 'delta-positive' if p.savings_pct > 20 else 'delta-negative' if p.savings_pct < 5 else '' }}">
+          {{ p.savings_pct }}%
+        </td>
+        <td data-val="{{ p.error_rate }}" class="{{ 'delta-negative' if p.error_rate > 0.05 else '' }}">
+          {{ (p.error_rate * 100) | round(1) }}%
+        </td>
+        <td>
+          <div class="efficiency-bar">
+            <div class="efficiency-fill" style="width:{{ [p.savings_pct * 2, 100] | min }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="compare-empty">No provider data for this range.</div>
+{% endif %}
+
+<!-- ── Model Comparison / Rankings ───────────────────────────────────────── -->
+<div class="section-heading">
+  Model Rankings
+  <span class="section-range">Sorted by efficiency · Last {{ days }} days</span>
+</div>
+
+{% if models %}
+<div class="compare-table-wrap">
+  <table class="compare-table sortable-table" id="model-table" aria-label="Model comparison">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th class="sort-col" onclick="CompareMode.sortTable('model-table','model','str')">Model ⇅</th>
+        <th>Provider</th>
+        <th class="sort-col" onclick="CompareMode.sortTable('model-table','cost_per_req','num')">$/req ⇅</th>
+        <th class="sort-col" onclick="CompareMode.sortTable('model-table','tokens_per_req','num')">Tokens/req ⇅</th>
+        <th class="sort-col" onclick="CompareMode.sortTable('model-table','savings_pct','num')">Savings % ⇅</th>
+        <th class="sort-col" onclick="CompareMode.sortTable('model-table','error_rate','num')">Error Rate ⇅</th>
+        <th>Efficiency</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in models %}
+      <tr class="{{ 'row-best' if loop.index == 1 else 'row-worst' if loop.index == models | length and models | length > 1 else '' }}">
+        <td class="col-rank">
+          {% if loop.index == 1 %}🥇
+          {% elif loop.index == 2 %}🥈
+          {% elif loop.index == 3 %}🥉
+          {% elif loop.index == models | length and models | length > 3 %}⚠️
+          {% else %}{{ loop.index }}{% endif %}
+        </td>
+        <td class="col-metric" data-val="{{ m.model }}">{{ m.model | truncate(30) }}</td>
+        <td class="col-provider">{{ m.provider }}</td>
+        <td data-val="{{ m.cost_per_req }}">${{ m.cost_per_req }}</td>
+        <td data-val="{{ m.tokens_per_req }}">{{ m.tokens_per_req | int }}</td>
+        <td data-val="{{ m.savings_pct }}" class="{{ 'delta-positive' if m.savings_pct > 20 else 'delta-negative' if m.savings_pct < 5 else '' }}">
+          {{ m.savings_pct }}%
+        </td>
+        <td data-val="{{ m.error_rate }}" class="{{ 'delta-negative' if m.error_rate > 0.05 else '' }}">
+          {{ (m.error_rate * 100) | round(1) }}%
+        </td>
+        <td>
+          <div class="efficiency-bar">
+            <div class="efficiency-fill" style="width:{{ [m.savings_pct * 2, 100] | min }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="compare-empty">No model data for this range.</div>
+{% endif %}
+
+<script src="/dashboard/static/js/comparison.js" defer></script>

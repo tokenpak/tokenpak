@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tokenpak
+  namespace: tokenpak
+  labels:
+    app: tokenpak
+spec:
+  selector:
+    app: tokenpak
+  ports:
+    - name: proxy
+      port: 8766
+      targetPort: 8766
+      protocol: TCP
+  type: ClusterIP
+---
+# Optional: LoadBalancer for external access
+# Uncomment to expose TokenPak outside the cluster
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: tokenpak-lb
+#   namespace: tokenpak
+# spec:
+#   selector:
+#     app: tokenpak
+#   ports:
+#     - port: 8766
+#       targetPort: 8766
+#   type: LoadBalancer

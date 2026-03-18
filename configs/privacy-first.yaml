@@ -1,0 +1,55 @@
+# TokenPak — Privacy First Config
+# ==================================
+# No request logging, PII redaction enabled, minimal data retention.
+# Steps: 1) Set ANTHROPIC_API_KEY  2) tokenpak start
+#
+# Best for: healthcare, legal, finance, anything with sensitive user data
+# What this does: disables all logging, enables redaction, no telemetry
+
+port: 8766
+mode: strict    # strict = enforce all limits, no soft failures
+
+compression:
+  enabled: true
+  threshold_tokens: 4500
+  max_chars: 120
+  # Smaller cache — minimize data held in memory
+  cache_size: 500
+
+features:
+  skeleton: true
+  shadow_reader: false      # Disabled — no background reads of user content
+  router: true
+  validation_gate: true
+  validation_gate_soft: false   # Hard fail — no silent bypasses
+
+  # Privacy-critical: all logging OFF
+  request_logger: false         # No request logs stored anywhere
+  trace: false                  # No trace data
+
+  # Minimize external data processing
+  semantic_cache: false         # Disabled — would cache user content in memory
+  capsule_builder: false        # No context stored between sessions
+  term_resolver: false          # No content sent to term resolution
+
+  # Keep operational features that don't touch content
+  budget_controller: true
+
+  # Security hardening
+  strict_mode: true             # Reject malformed or suspicious requests
+  error_normalizer: true        # Normalize error messages (don't leak internals)
+
+budget:
+  total_tokens: 12000
+  validation_gate_cap: 120000
+
+upstream:
+  timeout: 300
+
+rate_limit_rpm: 60
+
+failover:
+  enabled: false
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY

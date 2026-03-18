@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenPak — Cost Audit</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        header {
+            background: white;
+            border-bottom: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #0066cc;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+        .breakdown-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .breakdown-row {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .breakdown-row:last-child {
+            border-bottom: none;
+        }
+        .breakdown-label {
+            flex: 1;
+            font-weight: 500;
+        }
+        .breakdown-bar-container {
+            flex: 2;
+            height: 24px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 15px;
+        }
+        .breakdown-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0066cc, #0052a3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .breakdown-value {
+            flex: 1;
+            text-align: right;
+            font-family: 'Monaco', monospace;
+            font-size: 13px;
+        }
+        .breakdown-pct {
+            flex: 0 0 80px;
+            text-align: right;
+            color: #666;
+            font-weight: 500;
+        }
+        .color-model-0 { --color: #0066cc; }
+        .color-model-1 { --color: #00a3ff; }
+        .color-model-2 { --color: #4d99ff; }
+        .color-model-3 { --color: #99ccff; }
+        .breakdown-bar.color-0 { background: linear-gradient(90deg, #0066cc, #0052a3); }
+        .breakdown-bar.color-1 { background: linear-gradient(90deg, #00a3ff, #0088dd); }
+        .breakdown-bar.color-2 { background: linear-gradient(90deg, #4d99ff, #3385dd); }
+        .breakdown-bar.color-3 { background: linear-gradient(90deg, #99ccff, #80b3ff); }
+        .breakdown-bar.color-4 { background: linear-gradient(90deg, #ff6b6b, #dd5555); }
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #ddd;
+            margin-top: 40px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>💰 Cost Audit</h1>
+            <p class="subtitle">Where did your money go?</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Spend</div>
+                <div class="stat-value">${{ "%.2f"|format(total_spend) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Requests</div>
+                <div class="stat-value">{{ request_count }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Cost/Request</div>
+                <div class="stat-value">${{ "%.4f"|format(avg_cost) }}</div>
+            </div>
+        </div>
+
+        {% if models %}
+        <div class="breakdown-section">
+            <div class="section-title">By Model</div>
+            {% for model, data in models.items() %}
+            <div class="breakdown-row">
+                <div class="breakdown-label">{{ model }}</div>
+                <div class="breakdown-bar-container">
+                    <div class="breakdown-bar color-{{ loop.index0 % 5 }}" style="width: {{ data.percentage }}%">
+                        {% if data.percentage > 10 %}{{ data.percentage }}%{% endif %}
+                    </div>
+                </div>
+                <div class="breakdown-value">${{ "%.2f"|format(data.cost) }}</div>
+                <div class="breakdown-pct">{{ data.percentage }}%</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="breakdown-section">
+            <div class="empty-state">No data available</div>
+        </div>
+        {% endif %}
+
+        {% if features %}
+        <div class="breakdown-section">
+            <div class="section-title">By Feature</div>
+            {% for feature, data in features.items() %}
+            <div class="breakdown-row">
+                <div class="breakdown-label">
+                    {% if feature == "base" %}
+                    Base Inference
+                    {% elif feature == "caching" %}
+                    Token Caching
+                    {% elif feature == "compression" %}
+                    Token Compression
+                    {% elif feature == "tools" %}
+                    Tool Use
+                    {% else %}
+                    {{ feature }}
+                    {% endif %}
+                </div>
+                <div class="breakdown-bar-container">
+                    <div class="breakdown-bar color-{{ loop.index0 % 5 }}" style="width: {{ data.percentage }}%">
+                        {% if data.percentage > 10 %}{{ data.percentage }}%{% endif %}
+                    </div>
+                </div>
+                <div class="breakdown-value">${{ "%.2f"|format(data.cost) }}</div>
+                <div class="breakdown-pct">{{ data.percentage }}%</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="breakdown-section">
+            <div class="empty-state">No data available</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <footer>
+        <p>TokenPak Cost Audit — Understand your spending</p>
+        <p>Data for: <time>{{ query_date }}</time></p>
+    </footer>
+</body>
+</html>

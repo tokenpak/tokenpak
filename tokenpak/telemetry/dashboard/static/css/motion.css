@@ -1,0 +1,406 @@
+/**
+ * TokenPak Dashboard — Motion Choreography & Transitions
+ * Polished animations for filter changes, drilldowns, and depth transitions
+ * Philosophy: Users feel like they're "zooming into data", not switching pages
+ */
+
+/* ──────────────────────────────────────────────────────────
+   Custom Easing Functions
+   ────────────────────────────────────────────────────────── */
+
+:root {
+  /* Design spec easing */
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  
+  /* Duration standardization */
+  --duration-instant: 0ms;
+  --duration-micro: 150ms;
+  --duration-short: 200ms;
+  --duration-base: 300ms;
+  --duration-long: 500ms;
+}
+
+/* ──────────────────────────────────────────────────────────
+   1. NUMBER VALUE TRANSITIONS
+   ────────────────────────────────────────────────────────── */
+
+.kpi-value,
+.metric-number,
+[data-animate-number="true"] {
+  transition: all var(--duration-base) var(--ease-out);
+  will-change: contents;
+}
+
+.kpi-value.animating {
+  animation: pulse-number var(--duration-base) var(--ease-out);
+}
+
+@keyframes pulse-number {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.number-counter {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────────────────────────────────────────────
+   2. CHART TRANSITIONS
+   ────────────────────────────────────────────────────────── */
+
+.chart-container {
+  position: relative;
+  will-change: opacity;
+}
+
+.chart-fade-out {
+  animation: chart-fade-out var(--duration-micro) var(--ease-in);
+  pointer-events: none;
+}
+
+@keyframes chart-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.chart-fade-in {
+  animation: chart-fade-in var(--duration-short) var(--ease-out);
+}
+
+@keyframes chart-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.chart canvas,
+.chart svg {
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+.chart-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--tp-bg3) 0%,
+    var(--tp-bg2) 50%,
+    var(--tp-bg3) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-pulse 2s infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { background-position: 200% 0; }
+  50% { background-position: -200% 0; }
+}
+
+/* ──────────────────────────────────────────────────────────
+   3. FILTER CHANGE ANIMATION
+   ────────────────────────────────────────────────────────── */
+
+.filter-item.changed {
+  animation: filter-pulse var(--duration-base) var(--ease-out);
+}
+
+@keyframes filter-pulse {
+  0% { 
+    background-color: transparent;
+    transform: scale(1);
+  }
+  50% { 
+    background-color: rgba(99, 102, 241, 0.15);
+    transform: scale(1.02);
+  }
+  100% { 
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+.affected-section {
+  animation: section-fade-out var(--duration-micro) var(--ease-in);
+}
+
+@keyframes section-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0.4; filter: blur(2px); }
+}
+
+.affected-section.loading {
+  animation: section-skeleton-pulse 1.5s infinite;
+}
+
+@keyframes section-skeleton-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+.affected-section.loaded {
+  animation: section-fade-in var(--duration-short) var(--ease-out);
+}
+
+@keyframes section-fade-in {
+  0% { opacity: 0.4; filter: blur(2px); }
+  100% { opacity: 1; filter: blur(0); }
+}
+
+/* ──────────────────────────────────────────────────────────
+   4. DRILLDOWN "ZOOM" FEEL
+   ────────────────────────────────────────────────────────── */
+
+.chart-element.clicked {
+  animation: drill-highlight var(--duration-base) var(--ease-out);
+}
+
+@keyframes drill-highlight {
+  0% {
+    opacity: 1;
+    filter: brightness(1) drop-shadow(0 0 0 rgba(99, 102, 241, 0.5));
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.2) drop-shadow(0 0 8px rgba(99, 102, 241, 0.8));
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1) drop-shadow(0 0 0 rgba(99, 102, 241, 0));
+  }
+}
+
+.dashboard-content.zooming {
+  animation: content-zoom-focus var(--duration-base) var(--ease-out);
+}
+
+@keyframes content-zoom-focus {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.breadcrumb {
+  animation: breadcrumb-appear var(--duration-short) var(--ease-out);
+}
+
+@keyframes breadcrumb-appear {
+  0% { opacity: 0; transform: translateX(-12px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* ──────────────────────────────────────────────────────────
+   5. DEPTH LEVEL TRANSITIONS
+   ────────────────────────────────────────────────────────── */
+
+.depth-level {
+  transition: all var(--duration-base) var(--ease-out);
+  will-change: transform, opacity;
+}
+
+.depth-level.entering {
+  animation: depth-slide-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes depth-slide-in {
+  0% { opacity: 0; transform: translateX(100px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+.depth-level.exiting {
+  animation: depth-slide-out var(--duration-base) var(--ease-in);
+}
+
+@keyframes depth-slide-out {
+  0% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(100px); }
+}
+
+.depth-level.prev {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.depth-stack {
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+.depth-stack.collapsed {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.depth-stack.expanded {
+  max-height: 100%;
+  overflow: visible;
+  opacity: 1;
+}
+
+/* ──────────────────────────────────────────────────────────
+   6. DRAWER TRANSITIONS
+   ────────────────────────────────────────────────────────── */
+
+.drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 400px;
+  background: var(--tp-bg2);
+  border-left: 1px solid var(--tp-border);
+  z-index: 1000;
+  animation: drawer-slide-in var(--duration-base) var(--ease-out);
+  will-change: transform;
+}
+
+@keyframes drawer-slide-in {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+
+.drawer.closing {
+  animation: drawer-slide-out var(--duration-short) var(--ease-in);
+}
+
+@keyframes drawer-slide-out {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0);
+  animation: overlay-dim-in var(--duration-base) var(--ease-out);
+  z-index: 999;
+}
+
+@keyframes overlay-dim-in {
+  0% { background: rgba(0, 0, 0, 0); }
+  100% { background: rgba(0, 0, 0, 0.4); }
+}
+
+.drawer-overlay.closing {
+  animation: overlay-dim-out var(--duration-short) var(--ease-in);
+}
+
+@keyframes overlay-dim-out {
+  0% { background: rgba(0, 0, 0, 0.4); }
+  100% { background: rgba(0, 0, 0, 0); }
+}
+
+.drawer-content {
+  opacity: 0;
+  animation: drawer-content-fade-in var(--duration-short) var(--ease-out) var(--duration-micro) forwards;
+}
+
+@keyframes drawer-content-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ──────────────────────────────────────────────────────────
+   7. HOVER MICRO-INTERACTIONS
+   ────────────────────────────────────────────────────────── */
+
+.card,
+.metric-card,
+.chart-card {
+  transition: all 150ms var(--ease-out);
+  cursor: pointer;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.chart-bar,
+.chart-line-point,
+[data-chartjs],
+canvas {
+  transition: filter 150ms var(--ease-out), opacity 150ms var(--ease-out);
+}
+
+.chart-bar:hover,
+.chart-line-point:hover {
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));
+  opacity: 1;
+}
+
+button,
+.button,
+[role="button"] {
+  transition: all 150ms var(--ease-out);
+}
+
+button:hover:not(:disabled),
+.button:hover,
+[role="button"]:hover {
+  transform: scale(1.02);
+}
+
+button:active:not(:disabled),
+.button:active,
+[role="button"]:active {
+  transform: scale(0.98);
+}
+
+[data-clickable],
+a,
+button,
+[role="button"] {
+  cursor: pointer;
+  position: relative;
+}
+
+/* ──────────────────────────────────────────────────────────
+   8. MODE SWITCH ANIMATION
+   ────────────────────────────────────────────────────────── */
+
+.mode-section {
+  transition: all var(--duration-base) var(--ease-out);
+  overflow: hidden;
+}
+
+.mode-section.hidden {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  transform: scaleY(0);
+  transform-origin: top;
+}
+
+.mode-section.visible {
+  opacity: 1;
+  max-height: 100%;
+  transform: scaleY(1);
+  transform-origin: top;
+}
+
+.content-reflow {
+  transition: all var(--duration-base) var(--ease-out);
+}
+
+/* ──────────────────────────────────────────────────────────
+   9. PERFORMANCE & OPTIMIZATION
+   ────────────────────────────────────────────────────────── */
+
+.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

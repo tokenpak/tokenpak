@@ -1,0 +1,334 @@
+<!-- Audit Partial — refreshed by HTMX every 30s -->
+
+<!-- ── Stat Cards ──────────────────────────────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Traces</div>
+    <div class="stat-value accent" data-animate-number="true" data-format="number">{{ "{:,}".format(trace_count) }}</div>
+    <div class="stat-delta">{{ days }}-day window</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Tokens/Trace</div>
+    <div class="stat-value">
+      {% if trace_count and trace_count > 0 and totals.total_tokens %}
+        {{ "{:,}".format((totals.total_tokens // trace_count)) }}
+      {% else %}—{% endif %}
+    </div>
+    <div class="stat-delta">input + output</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Savings</div>
+    <div class="stat-value positive" data-animate-number="true" data-format="currency">${{ "%.2f"|format(totals.total_savings or 0) }}</div>
+    <div class="stat-delta">across all traces</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Error Rate</div>
+    <div class="stat-value">—</div>
+    <div class="stat-delta">last {{ days }} days</div>
+  </div>
+</div>
+
+
+<!-- ── Trace Timeline Chart ────────────────────────────────────────────── -->
+<div class="chart-section" id="audit-timeline-section" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Trace Timeline</h3>
+        <span class="chart-subtitle">Each dot = one trace · X = time · Y = tokens · Color = provider · Click dot → trace detail</span>
+      </div>
+      <div class="chart-actions">
+        <span id="audit-timeline-legend" style="display:flex;gap:12px;align-items:center;font-size:12px;color:var(--text-muted)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#4a90e2;display:inline-block"></span>anthropic</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#f44336;display:inline-block"></span>openai</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#4caf50;display:inline-block"></span>gemini/google</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#9c27b0;display:inline-block"></span>other</span>
+        </span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:240px;">
+      <canvas id="audit-trace-timeline"></canvas>
+      <div class="chart-empty" id="audit-timeline-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No trace data yet</p></div>
+    </div>
+  </div>
+</div>
+<script id="audit-timeline-data" type="application/json">
+{{ traces | tojson }}
+</script>
+
+<!-- ── Table Toolbar ───────────────────────────────────────────────────── -->
+<div class="table-toolbar">
+  <!-- Context: active filters + row count -->
+  <div class="table-context">
+    <span class="table-count">{{ "{:,}".format(trace_count) }} traces</span>
+    {% if filter_provider %}<span class="filter-chip">Provider: {{ filter_provider }} <a href="javascript:clearFilter('provider')">×</a></span>{% endif %}
+    {% if filter_model %}<span class="filter-chip">Model: {{ filter_model }} <a href="javascript:clearFilter('model')">×</a></span>{% endif %}
+    {% if filter_agent %}<span class="filter-chip">Agent: {{ filter_agent }} <a href="javascript:clearFilter('agent')">×</a></span>{% endif %}
+    {% if filter_status and filter_status != 'all' %}<span class="filter-chip">Status: {{ filter_status }} <a href="javascript:clearFilter('status')">×</a></span>{% endif %}
+    {% if search %}<span class="filter-chip">ID: {{ search }}… <a href="javascript:clearFilter('search')">×</a></span>{% endif %}
+    {% if filter_provider or filter_model or filter_agent or search %}
+    <a class="clear-all-link" href="javascript:clearAllFilters()">Clear all</a>
+    {% endif %}
+  </div>
+
+  <!-- Search + status filter -->
+  <div class="table-controls">
+    <input type="text" class="table-search" placeholder="Search trace ID…"
+           value="{{ search }}"
+           oninput="debounceSearch(this.value)"
+           spellcheck="false">
+    <select class="table-filter-select" onchange="applyFilter('status', this.value)">
+      <option value="all" {% if filter_status == 'all' or not filter_status %}selected{% endif %}>All Status</option>
+      <option value="ok" {% if filter_status == 'ok' %}selected{% endif %}>✓ Success</option>
+      <option value="error" {% if filter_status == 'error' %}selected{% endif %}>✗ Error</option>
+    </select>
+    <select class="table-filter-select" onchange="applyPageSize(this.value)">
+      <option value="25" {% if page_size == 25 %}selected{% endif %}>25 / page</option>
+      <option value="50" {% if page_size == 50 %}selected{% endif %}>50 / page</option>
+      <option value="100" {% if page_size == 100 %}selected{% endif %}>100 / page</option>
+      <option value="250" {% if page_size == 250 %}selected{% endif %}>250 / page</option>
+    </select>
+  </div>
+</div>
+
+<!-- ── Premium Trace Table ─────────────────────────────────────────────── -->
+<div class="table-card trace-table-card">
+  <div class="trace-table-wrapper">
+    <table class="trace-table" id="trace-table">
+      <thead>
+        <tr>
+          {% macro sort_th(col, label, align='left') %}
+          <th class="th-{{ col }} sortable {% if sort == col %}sort-active{% endif %} align-{{ align }}"
+              onclick="applySort('{{ col }}')"
+              title="Sort by {{ label }}">
+            {{ label }}
+            {% if sort == col %}
+              <span class="sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>
+            {% else %}
+              <span class="sort-arrow muted">↕</span>
+            {% endif %}
+          </th>
+          {% endmacro %}
+          {{ sort_th('ts',       'Timestamp') }}
+          <th class="th-trace-id">Trace ID</th>
+          {{ sort_th('provider', 'Provider') }}
+          {{ sort_th('model',    'Model') }}
+          {{ sort_th('agent',    'Agent') }}
+          {{ sort_th('input',    'Raw Tok',    'right') }}
+          {{ sort_th('output',   'Out Tok',    'right') }}
+          <th class="align-right" title="Raw - Final tokens">Saved Tok</th>
+          {{ sort_th('cost',     'Actual $',   'right') }}
+          {{ sort_th('savings',  'Savings $',  'right') }}
+          {{ sort_th('status',   'Status',     'center') }}
+          {{ sort_th('latency',  'Latency',    'right') }}
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in traces %}
+        {% set savings_tok = (t.input_billed or 0) - (t.input_billed or 0) %}
+        {% set has_savings = (t.savings_total or 0) > 0 %}
+        {% set is_error = t.status == 'error' %}
+        <tr class="trace-row {% if is_error %}row-error{% endif %}"
+            data-trace-id="{{ t.trace_id }}"
+            onclick="TokenPakDrawer.loadTrace('{{ t.trace_id }}')"
+            title="Click to inspect trace {{ t.trace_id }}">
+
+          <!-- Timestamp -->
+          <td class="td-ts">
+            <span class="ts-date">{{ t.ts_iso[:10] if t.ts_iso else '—' }}</span>
+            <span class="ts-time">{{ t.ts_iso[11:19] if t.ts_iso else '' }}</span>
+          </td>
+
+          <!-- Trace ID (truncated + copy) -->
+          <td class="td-trace-id">
+            <div class="trace-id-cell">
+              <code class="trace-id-short" title="{{ t.trace_id }}">{{ t.trace_id[:12] }}…</code>
+              <button class="copy-btn" title="Copy trace ID"
+                      onclick="event.stopPropagation(); copyText('{{ t.trace_id }}', this)">📋</button>
+              {% if (t.savings_total or 0) > 0 %}
+              <span class="data-dot data-estimated" title="Cost estimated"></span>
+              {% else %}
+              <span class="data-dot data-billed" title="Cost billed"></span>
+              {% endif %}
+            </div>
+          </td>
+
+          <!-- Provider (clickable filter) -->
+          <td class="td-provider">
+            {% if t.provider %}
+            <span class="clickable-filter" onclick="event.stopPropagation(); applyFilter('provider', '{{ t.provider }}')"
+                  title="Filter by {{ t.provider }}">{{ t.provider }}</span>
+            {% else %}—{% endif %}
+          </td>
+
+          <!-- Model (clickable filter) -->
+          <td class="td-model">
+            {% if t.model %}
+            <span class="clickable-filter model-name" onclick="event.stopPropagation(); applyFilter('model', '{{ t.model }}')"
+                  title="{{ t.model }}">{{ t.model|truncate(24, True, '…') }}</span>
+            {% else %}—{% endif %}
+          </td>
+
+          <!-- Agent -->
+          <td class="td-agent">
+            {% if t.agent_id %}
+            <span class="clickable-filter agent-name" onclick="event.stopPropagation(); applyFilter('agent', '{{ t.agent_id }}')"
+                  title="{{ t.agent_id }}">{{ t.agent_id|truncate(18, True, '…') }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+
+          <!-- Raw Tokens -->
+          <td class="align-right tabular">{{ "{:,}".format(t.input_billed or 0) }}</td>
+
+          <!-- Output Tokens -->
+          <td class="align-right tabular">{{ "{:,}".format(t.output_billed or 0) }}</td>
+
+          <!-- Saved Tokens (placeholder — would need raw vs final from segments) -->
+          <td class="align-right tabular positive">—</td>
+
+          <!-- Actual Cost -->
+          <td class="align-right tabular">${{ "%.4f"|format(t.actual_cost or 0) }}</td>
+
+          <!-- Savings $ -->
+          <td class="align-right tabular {% if has_savings %}positive{% endif %}">
+            {% if has_savings %}+${{ "%.4f"|format(t.savings_total) }}{% else %}—{% endif %}
+          </td>
+
+          <!-- Status badge -->
+          <td class="align-center">
+            {% if t.status == 'ok' %}
+            <span class="status-pill status-ok">✓ ok</span>
+            {% elif t.status == 'error' %}
+            <span class="status-pill status-error">✗ error</span>
+            {% else %}
+            <span class="status-pill status-unknown">{{ t.status or '?' }}</span>
+            {% endif %}
+          </td>
+
+          <!-- Latency -->
+          <td class="align-right tabular">
+            {% if t.duration_ms %}
+              {% if t.duration_ms >= 1000 %}{{ "%.1f"|format(t.duration_ms / 1000) }}s
+              {% else %}{{ t.duration_ms|int }}ms{% endif %}
+            {% else %}—{% endif %}
+          </td>
+
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="12" class="table-empty-cell">
+            <div class="table-empty">
+              <span class="table-empty-icon">🔍</span>
+              <p>No traces found for the selected filters</p>
+              <button class="btn btn-sm" onclick="clearAllFilters()">Clear filters</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Pagination ──────────────────────────────────────────────────────── -->
+  {% if total_pages > 1 %}
+  <div class="table-pagination">
+    <span class="pagination-info">
+      Showing {{ ((page - 1) * page_size + 1)|int }}–{{ [page * page_size, trace_count]|min|int }} of {{ "{:,}".format(trace_count) }}
+    </span>
+    <div class="pagination-controls">
+      {% if page > 1 %}
+      <button class="pagination-btn" onclick="applyPage({{ page - 1 }})">← Prev</button>
+      {% else %}
+      <button class="pagination-btn" disabled>← Prev</button>
+      {% endif %}
+
+      {% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
+      <button class="pagination-btn {% if p == page %}active{% endif %}" onclick="applyPage({{ p }})">{{ p }}</button>
+      {% endfor %}
+
+      {% if page < total_pages %}
+      <button class="pagination-btn" onclick="applyPage({{ page + 1 }})">Next →</button>
+      {% else %}
+      <button class="pagination-btn" disabled>Next →</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  // Filter helpers
+  function applyFilter(key, val) {
+    const url = new URL(window.location.href);
+    if (val && val !== 'all') url.searchParams.set(key, val);
+    else url.searchParams.delete(key);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+  }
+  window.applyFilter = applyFilter;
+
+  function clearFilter(key) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(key);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+  }
+  window.clearFilter = clearFilter;
+
+  function clearAllFilters() {
+    const url = new URL(window.location.href);
+    ['provider', 'model', 'agent', 'status', 'search', 'page'].forEach(k => url.searchParams.delete(k));
+    window.location.href = url.toString();
+  }
+  window.clearAllFilters = clearAllFilters;
+
+  function applySort(col) {
+    const url = new URL(window.location.href);
+    const currentSort = url.searchParams.get('sort');
+    const currentDir  = url.searchParams.get('sort_dir') || 'desc';
+    if (currentSort === col) {
+      url.searchParams.set('sort_dir', currentDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      url.searchParams.set('sort', col);
+      url.searchParams.set('sort_dir', 'desc');
+    }
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+  }
+  window.applySort = applySort;
+
+  function applyPage(p) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', p);
+    window.location.href = url.toString();
+  }
+  window.applyPage = applyPage;
+
+  function applyPageSize(size) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page_size', size);
+    url.searchParams.set('page', '1');
+    window.location.href = url.toString();
+  }
+  window.applyPageSize = applyPageSize;
+
+  // Debounced search
+  let _searchTimer = null;
+  function debounceSearch(val) {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => {
+      const url = new URL(window.location.href);
+      if (val.trim()) url.searchParams.set('search', val.trim());
+      else url.searchParams.delete('search');
+      url.searchParams.set('page', '1');
+      window.location.href = url.toString();
+    }, 400);
+  }
+  window.debounceSearch = debounceSearch;
+})();
+</script>
+
+<!-- ── Trace Detail Panel (HTMX drilldown target from timeline click) ── -->
+<div id="trace-detail-panel" style="margin-top:var(--space-xl,2rem)"></div>
+

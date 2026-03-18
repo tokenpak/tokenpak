@@ -1,0 +1,269 @@
+
+<!-- Compression Pipeline Explainer -->
+<div id="compression-explainer-container"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.CompressionExplainer) {
+    const data = {
+      raw: {{ summary.total_tokens|default(0) }},
+      qmd: Math.round({{ summary.total_tokens|default(0) }} * 0.84),
+      tokenpak: Math.round({{ summary.total_tokens|default(0) }} * 0.70),
+      final: Math.round({{ summary.total_tokens|default(0) }} * 0.60),
+      cost_raw: {{ summary.total_cost_usd|default(0) }} / 0.60,
+      cost_final: {{ summary.total_cost_usd|default(0) }},
+      savings: {{ summary.total_savings_usd|default(0) }},
+    };
+    CompressionExplainer.renderExplainer('compression-explainer-container', data);
+  }
+});
+</script>
+
+<!-- Segment Type Glossary -->
+<div id="segment-glossary-container"></div>
+<script>
+if (window.CompressionExplainer) {
+  CompressionExplainer.renderSegmentGlossary('segment-glossary-container');
+}
+</script>
+<!-- Engineering Partial — refreshed by HTMX every 30s -->
+
+<!-- ── Stat Cards ──────────────────────────────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Tokens</div>
+    <div class="stat-value accent" data-animate-number="true" data-format="number">{{ "{:,}".format(totals.total_tokens or 0) }}</div>
+    <div class="stat-delta">{{ days }}-day window</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Requests <span class="metric-info-icon" data-gloss="request_count" role="button" tabindex="0" aria-label="Learn about Request Count">ⓘ</span></div>
+    <div class="stat-value" data-animate-number="true" data-format="number">{{ "{:,}".format(totals.total_requests or 0) }}</div>
+    <div class="stat-delta">{{ days }} days</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Cache Tokens <span class="metric-info-icon" data-gloss="cache_tokens" role="button" tabindex="0" aria-label="Learn about Cache Tokens">ⓘ</span></div>
+    <div class="stat-value positive">{{ "{:,}".format(totals.total_cache_read or 0) }}</div>
+    <div class="stat-delta">from cache</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Tokens / Request</div>
+    <div class="stat-value">
+      {% if totals.total_requests and totals.total_requests > 0 %}
+        {{ "{:,.0f}".format((totals.total_tokens or 0) / totals.total_requests) }}
+      {% else %}—{% endif %}
+    </div>
+    <div class="stat-delta">avg per request</div>
+  </div>
+</div>
+
+<!-- ── Chart 1: Token Composition (full width) ────────────────────────── -->
+<div class="chart-section">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Token Composition</h3>
+        <span class="chart-subtitle">Tokens by segment type · {{ days }} days · Click legend to toggle</span>
+      </div>
+      <div class="chart-header-controls">
+        <div class="toggle-group">
+          <button class="toggle-btn active" data-token-mode="area">Area</button>
+          <button class="toggle-btn" data-token-mode="bar">Bar</button>
+        </div>
+        <div class="chart-actions">
+          <button class="chart-action" data-chart-id="eng-token-composition" data-action="csv">CSV</button>
+          <button class="chart-action" data-chart-id="eng-token-composition" data-action="png">PNG</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:240px;">
+      <canvas id="eng-token-composition"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;">
+        <p>No token data for this period</p>
+        <p class="chart-empty-hint">Try expanding the date range</p>
+      </div>
+    </div>
+    <div class="chart-legend" id="legend-eng-token-composition"></div>
+  </div>
+</div>
+
+<!-- ── Charts 2 & 3: Latency + Errors (half width each) ───────────────── -->
+<div class="charts-row-2col">
+
+  <!-- Latency Breakdown -->
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Latency Breakdown
+          <span class="metric-info-icon" data-gloss="latency_p95" role="button" tabindex="0" aria-label="Learn about Latency Percentiles (p95/p99)">ⓘ</span>
+        </h3>
+        <span class="chart-subtitle">Avg · p95 · p99 · Click spike to filter outliers</span>
+      </div>
+      <div class="chart-actions">
+        <button class="chart-action" data-chart-id="eng-latency" data-action="csv">CSV</button>
+        <button class="chart-action" data-chart-id="eng-latency" data-action="png">PNG</button>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:220px;">
+      <canvas id="eng-latency"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;">
+        <p>No latency data yet</p>
+        <p class="chart-empty-hint">Latency requires duration_ms to be recorded</p>
+      </div>
+    </div>
+    <div class="chart-legend" id="legend-eng-latency"></div>
+  </div>
+
+  <!-- Error & Retry Trends -->
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Error &amp; Retry Trends</h3>
+        <span class="chart-subtitle">Click error point → filter to errors · Dashed = 5% threshold</span>
+      </div>
+      <div class="chart-actions">
+        <button class="chart-action" data-chart-id="eng-errors" data-action="csv">CSV</button>
+        <button class="chart-action" data-chart-id="eng-errors" data-action="png">PNG</button>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:220px;">
+      <canvas id="eng-errors"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;">
+        <p>No errors recorded</p>
+        <p class="chart-empty-hint" style="color:var(--color-positive)">✓ System running clean</p>
+      </div>
+    </div>
+    <div class="chart-legend" id="legend-eng-errors"></div>
+  </div>
+
+</div>
+
+<!-- ── Agent Breakdown Table ──────────────────────────────────────────── -->
+{% if by_agent %}
+<div class="table-card">
+  <div class="table-card-header">
+    <span class="table-card-title">Agent Breakdown</span>
+    <button class="table-export-btn" onclick="exportTableCSV('tbl-eng-agent', 'agent-breakdown.csv')" title="Export CSV">↓ CSV</button>
+  </div>
+  <div style="overflow-x:auto">
+  <table id="tbl-eng-agent" class="rollup-table" data-sort-col="2" data-sort-dir="desc">
+    <thead>
+      <tr>
+        <th class="col-str" data-col="0" onclick="sortTable('tbl-eng-agent',0)">Agent ID <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="1" onclick="sortTable('tbl-eng-agent',1)">Requests <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="2" onclick="sortTable('tbl-eng-agent',2)" aria-sort="descending">Total Cost <span class="sort-icon sort-desc">▼</span></th>
+        <th class="col-num" data-col="3" onclick="sortTable('tbl-eng-agent',3)">Avg Cost/Req <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="4" onclick="sortTable('tbl-eng-agent',4)">Tokens Used <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="5" onclick="sortTable('tbl-eng-agent',5)">Avg Req Size <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="6" onclick="sortTable('tbl-eng-agent',6)">Savings <span class="sort-icon"></span></th>
+        <th class="col-num" data-col="7" onclick="sortTable('tbl-eng-agent',7)">Compression % <span class="sort-icon"></span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in by_agent %}
+      {% set row_cost = row.cost or 0 %}
+      {% set row_requests = row.requests or row.total_requests or 0 %}
+      {% set row_savings = row.savings or 0 %}
+      {% set raw_tokens = row.avg_raw_tokens or 0 %}
+      {% set final_tokens = row.avg_final_tokens or 0 %}
+      {% set avg_cost = (row_cost / row_requests) if row_requests > 0 else 0 %}
+      {% set compression_pct = ((raw_tokens - final_tokens) / raw_tokens * 100) if raw_tokens > 0 else 0 %}
+      <tr onclick="applyFilter('agent_id','{{ row.agent_id or '' }}')" style="cursor:pointer" title="Click to filter by this agent">
+        <td class="col-str"><span class="dim-pill">{{ row.agent_id or 'unknown' }}</span></td>
+        <td class="col-num" data-val="{{ row_requests }}">{{ "{:,}".format(row_requests|int) }}</td>
+        <td class="col-num" data-val="{{ row_cost }}">${{ "%.4f"|format(row_cost) }}</td>
+        <td class="col-num" data-val="{{ avg_cost }}">${{ "%.5f"|format(avg_cost) }}</td>
+        <td class="col-num" data-val="{{ final_tokens }}">{{ "{:,.0f}".format(final_tokens) }}</td>
+        <td class="col-num" data-val="{{ final_tokens }}">{{ "{:,.0f}".format(final_tokens) }}</td>
+        <td class="col-num positive" data-val="{{ row_savings }}">${{ "%.4f"|format(row_savings) }}</td>
+        <td class="col-num" data-val="{{ compression_pct }}">
+          {% if raw_tokens > 0 %}
+          <span class="savings-pct-badge" style="background:rgba(99,179,237,{{ [compression_pct/100*0.7,0.7]|min|round(2) }})">{{ "%.1f"|format(compression_pct) }}%</span>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="table-empty-state">No agent data — agent IDs not tracked or no multi-agent setup</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if by_agent %}
+    <tfoot>
+      <tr class="totals-row">
+        <td><strong>Total</strong></td>
+        <td class="col-num">{{ "{:,}".format((totals.total_requests or 0)|int) }}</td>
+        <td class="col-num">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</td>
+        <td class="col-num">${{ "%.5f"|format(totals.avg_cost or 0) }}</td>
+        <td class="col-num">{{ "{:,.0f}".format(totals.avg_final_tokens or 0) }}</td>
+        <td class="col-num">{{ "{:,.0f}".format(totals.avg_final_tokens or 0) }}</td>
+        <td class="col-num positive">${{ "%.4f"|format(totals.total_savings or 0) }}</td>
+        <td class="col-num">—</td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+  </div>
+</div>
+{% endif %}
+
+
+<!-- ── Largest Token Offenders Table ──────────────────────────────────── -->
+{% if top_traces %}
+<div class="table-card" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="table-card-header">
+    <span class="table-card-title">Largest Token Offenders</span>
+    <span class="table-card-subtitle" style="font-size:12px;color:var(--text-muted)">Top 20 · sorted by request tokens · click row → Audit view</span>
+  </div>
+  <div style="overflow-x:auto;max-height:420px;overflow-y:auto;">
+  <table id="tbl-eng-offenders" class="rollup-table" style="font-size:12px;">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Segment Type</th>
+        <th class="align-right">Req Tokens</th>
+        <th class="align-right">Final Tokens</th>
+        <th class="align-right">Savings %</th>
+        <th>Timestamp</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in top_traces %}
+      {% set raw_tok = t.input_billed or t.total_tokens_billed or 0 %}
+      {% set final_tok = t.input_billed or 0 %}
+      {% set savings_tok = (t.savings_total or 0) %}
+      {% set savings_pct = (savings_tok / (raw_tok + 0.0001) * 100) if raw_tok > 0 else 0 %}
+      <tr class="trace-row"
+          data-trace-id="{{ t.trace_id }}"
+          style="cursor:pointer"
+          onclick="window.location.href='/dashboard/audit?provider={{ t.provider or '' }}&amp;search={{ t.trace_id }}';"
+          title="Click to view trace {{ t.trace_id }} in Audit view">
+        <td class="col-str" title="{{ t.model }}">{{ (t.model or '—')[:28] }}{% if t.model and t.model|length > 28 %}…{% endif %}</td>
+        <td class="col-str" style="color:var(--text-muted)">—</td>
+        <td class="col-num">{{ "{:,}".format(raw_tok) }}</td>
+        <td class="col-num">{{ "{:,}".format(final_tok) }}</td>
+        <td class="col-num {% if savings_pct > 0 %}positive{% endif %}">{{ "%.1f"|format(savings_pct) }}%</td>
+        <td class="col-str" style="color:var(--text-muted);font-size:11px">{{ t.ts_iso or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Chart Initialization ────────────────────────────────────────────── -->
+<script>
+(function () {
+  const tokenTs      = {{ token_timeseries | tojson }};
+  const latencyTs    = {{ latency_timeseries | tojson }};
+  const errorTs      = {{ error_timeseries | tojson }};
+  const tokenComp    = {{ token_composition | tojson }};
+
+  if (window.TokenPakEngineering) {
+    TokenPakEngineering.init(tokenTs, latencyTs, errorTs, tokenComp);
+  } else {
+    window.addEventListener('load', function () {
+      if (window.TokenPakEngineering) {
+        TokenPakEngineering.init(tokenTs, latencyTs, errorTs, tokenComp);
+      }
+    });
+  }
+})();
+</script>

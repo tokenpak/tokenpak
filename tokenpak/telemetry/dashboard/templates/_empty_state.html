@@ -1,0 +1,14 @@
+{# Empty state component #}
+
+{% macro empty_state(icon="📊", title="No data", message="", action_label="", action_href="") %}
+<div class="empty-state">
+  <div class="empty-icon">{{ icon }}</div>
+  <div class="empty-title">{{ title }}</div>
+  {% if message %}
+  <div class="empty-message">{{ message }}</div>
+  {% endif %}
+  {% if action_label and action_href %}
+  <a href="{{ action_href }}" class="empty-action">{{ action_label }}</a>
+  {% endif %}
+</div>
+{% endmacro %}

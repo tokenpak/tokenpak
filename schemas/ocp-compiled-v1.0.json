@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ocp.dev/schema/ocp-compiled-v1.0.json",
+  "title": "OCP Compiled Artifact v1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ocp_version",
+    "schema_version",
+    "compiled_at",
+    "compiler",
+    "input_block_ids",
+    "ordered_blocks",
+    "evidence_pack",
+    "canonical_hash"
+  ],
+  "properties": {
+    "ocp_version": { "type": "string", "pattern": "^1\\.0$" },
+    "schema_version": { "type": "string", "pattern": "^1\\.0$" },
+    "compiled_at": { "type": "string", "format": "date-time" },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "input_block_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "ordered_blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "ocp-block-v1.0.json" }
+    },
+    "evidence_pack": { "$ref": "ocp-evidence-v1.0.json" },
+    "canonical_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,42 @@
+# TokenPak — OpenAI / GPT Optimized Config
+# ==========================================
+# All traffic routed to OpenAI. GPT-optimized settings.
+# Steps: 1) Set OPENAI_API_KEY  2) tokenpak start
+#
+# Best for: OpenAI-native codebases, GPT-4 heavy workloads
+
+port: 8766
+mode: hybrid
+
+compression:
+  enabled: true
+  threshold_tokens: 5000
+  max_chars: 130
+  cache_size: 2000
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true
+  validation_gate: true
+  validation_gate_soft: true
+
+  semantic_cache: true        # GPT responses are expensive — cache aggressively
+  request_logger: true        # OpenAI billing can surprise — log everything
+  budget_controller: true     # Hard stop before runaway spend
+  prefix_registry: false      # OpenAI doesn't benefit from prefix caching here
+
+budget:
+  total_tokens: 12000
+  validation_gate_cap: 100000
+
+upstream:
+  timeout: 300
+
+rate_limit_rpm: 60
+
+failover:
+  enabled: false
+  chain:
+    - provider: openai
+      credential_env: OPENAI_API_KEY
