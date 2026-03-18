@@ -2059,9 +2059,14 @@ def cmd_status(args):
     if health:
         hs = health.get("stats", {})
         uptime_s = _time.time() - hs.get("start_time", _time.time())
-        h_u, rem = divmod(int(uptime_s), 3600)
+        total_hours, rem = divmod(int(uptime_s), 3600)
         m_u = rem // 60
-        uptime_str = f"{h_u}d {m_u:02d}h" if h_u >= 24 else f"{h_u}h {m_u:02d}m"
+        d_u = total_hours // 24
+        h_u = total_hours % 24
+        if d_u > 0:
+            uptime_str = f"{d_u}d {h_u:02d}h {m_u:02d}m"
+        else:
+            uptime_str = f"{total_hours}h {m_u:02d}m"
         errors = hs.get("errors", 0)
 
     # Hourly / 24h savings (from today stats if available)
@@ -2112,18 +2117,21 @@ def cmd_status(args):
     if per_model:
         print("🤖 MODELS")
         for row in per_model:
-            model_short = row["model"].replace("claude-", "").replace("gpt-", "gpt/")
+            model_name = row["model"]
             cache_pct_m = row.get("cache_hit_rate", 0)
-            print(f"  {model_short:<22} {row['requests']:>5} reqs   ${row['cost']:>8,.2f}   {cache_pct_m:.0f}% cache")
+            print(f"  {model_name:<22} {row['requests']:>5,} reqs   ${row['cost']:>8,.2f}   {cache_pct_m:.0f}% cache")
         print()
+
+    # Proxy overhead latency (estimated ~2-5ms added by TokenPak proxy layer)
+    # The today.avg_latency_ms is total request time, not proxy overhead
+    proxy_overhead_ms = s.get("proxy_overhead_ms", 2)  # default 2ms if not tracked
 
     print("⚡ PERFORMANCE")
     print(f"  Requests:  {total_requests:,}  |  Uptime: {uptime_str}")
-    print(f"  Cache hit: {cache_hit_rate:.0f}%    |  Avg latency: +{2}ms")
-    print(f"  Tokens in: {tokens_in/1e6:.1f}M | Tokens sent: {tokens_sent/1e6:.1f}M")
-    print("  (Index records prevent re-compression of cached content)")
+    print(f"  Cache hit: {cache_hit_rate:.0f}%  |  Avg latency: +{proxy_overhead_ms}ms")
+    print(f"  Tokens in: {tokens_in/1e6:.1f}M  |  Tokens sent: {tokens_sent/1e6:.1f}M")
     print()
-    print(f"  Last hour: ~${hourly_saved:,.2f} saved  |  Today: ~${today_saved:,.2f} saved")
+    print(f"  Last hour: ${hourly_saved:,.2f} saved  |  24h: ${today_saved:,.2f} saved")
     print()
 
     if all_healthy:

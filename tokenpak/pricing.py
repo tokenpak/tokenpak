@@ -181,16 +181,20 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
         m_cache_read = mstats.get("cache_read_tokens", 0)
         m_requests = mstats.get("requests", 0)
 
-        # Baseline = all tokens at full rates (no cache, no compression)
+        # Baseline = ALL tokens at full rates (input + cache_read = what would
+        # have been charged without caching; cache_read are tokens that were
+        # served from Anthropic's prompt cache instead of being billed at full rate)
+        m_total_input = m_input + m_cache_read
         m_cost_baseline = (
-            (m_input / 1_000_000) * rates["input"]
+            (m_total_input / 1_000_000) * rates["input"]
             + (m_output / 1_000_000) * rates["output"]
         )
         cost_without += m_cost_baseline
 
+        # Cache hit rate: fraction of total input volume served from cache
         m_cache_hit_rate = 0.0
-        if m_input > 0:
-            m_cache_hit_rate = min((m_cache_read / m_input) * 100.0, 100.0)
+        if m_total_input > 0:
+            m_cache_hit_rate = (m_cache_read / m_total_input) * 100.0
 
         per_model_rows.append({
             "model": model_name,
@@ -206,25 +210,28 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
     total_saved = max(cost_without - actual_cost, 0.0)
     total_saved_pct = (total_saved / cost_without * 100.0) if cost_without > 0 else 0.0
 
-    # Decompose savings sources — normalized to actual total_saved
-    default_input_rate = DEFAULT_RATE["input"]
-    default_cached_rate = DEFAULT_RATE["cached"]
-    
-    # Calculate unnormalized contributions
-    cache_contrib = (cache_read_tokens / 1_000_000) * (default_input_rate - default_cached_rate)
-    compression_contrib = (saved_tokens / 1_000_000) * default_input_rate
-    
-    # Normalize so they sum to total_saved (avoid over-reporting)
-    contrib_sum = cache_contrib + compression_contrib
-    if contrib_sum > 0 and total_saved > 0:
-        scale_factor = total_saved / contrib_sum
-        cache_saved = cache_contrib * scale_factor
-        compression_saved = compression_contrib * scale_factor
-        routing_saved = 0.0  # Already accounted for in scaling
+    # Decompose savings sources using per-model rates for accuracy
+    # Cache saved = cache_read_tokens billed at cached rate instead of full rate
+    cache_saved_raw = 0.0
+    compression_saved_raw = 0.0
+    for model_name, mstats in (by_model or {}).items():
+        rates = get_rates(model_name)
+        m_cache_read = mstats.get("cache_read_tokens", 0)
+        # Cache savings: tokens served from cache at cached_rate vs full input_rate
+        cache_saved_raw += (m_cache_read / 1_000_000) * (rates["input"] - rates["cached"])
+
+    # Compression savings: tokens eliminated before sending (saved_tokens)
+    # Use weighted average input rate across all models
+    if input_tokens > 0 and cost_without > 0:
+        effective_input_rate = (cost_without / ((input_tokens + cache_read_tokens) / 1_000_000))
     else:
-        cache_saved = 0.0
-        compression_saved = 0.0
-        routing_saved = total_saved  # All savings attributed to routing if no cache/compression
+        effective_input_rate = DEFAULT_RATE["input"]
+    compression_saved_raw = (saved_tokens / 1_000_000) * effective_input_rate
+
+    # Routing savings = residual (model downgrades, smarter routing choices)
+    cache_saved = min(cache_saved_raw, total_saved)
+    compression_saved = min(compression_saved_raw, total_saved - cache_saved)
+    routing_saved = max(total_saved - cache_saved - compression_saved, 0.0)
 
     return {
         "cost_without_tokenpak": round(cost_without, 2),
