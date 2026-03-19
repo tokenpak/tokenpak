@@ -36,7 +36,7 @@ class DailySavingsData:
     estimated_monthly_rate: float
 
 
-def _proxy_get(path: str, port: int = None) -> dict | None:
+def _proxy_get(path: str, port: Optional[int] = None) -> dict | None:
     """Fetch JSON from running proxy. Returns None if unreachable."""
     import urllib.request as _urlreq
 
@@ -117,7 +117,7 @@ def _calculate_data() -> DailySavingsData:
                 # Estimate cost based on tokens (simplified)
                 model_costs[u.model] = u.request_count
             if model_costs:
-                top_model = max(model_costs, key=model_costs.get)
+                top_model = max(model_costs, key=lambda k: model_costs.get(k, 0))
                 top_model_savings = savings_amount  # Proxy: assume savings proportional
     except Exception:
         pass

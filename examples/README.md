@@ -24,7 +24,7 @@ This directory contains copy-paste-ready recipes for common TokenPak usage patte
 1. **Start the TokenPak ingest API server:**
    ```bash
    # In one terminal:
-   cd ~/vault/01_PROJECTS/ocp-protocol/packages/pypi
+   cd tokenpak/
    python -m tokenpak.agent.ingest.api
    ```
    
@@ -39,7 +39,7 @@ This directory contains copy-paste-ready recipes for common TokenPak usage patte
 ### Running an Example
 
 ```bash
-cd ~/vault/01_PROJECTS/ocp-protocol/packages/pypi/examples
+cd examples/
 
 # Basic Python usage
 python basic_python_usage.py
@@ -234,3 +234,4 @@ All examples can be customized:
 ---
 
 **Questions?** Check the main TokenPak documentation or open an issue on GitHub.
+

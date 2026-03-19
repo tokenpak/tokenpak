@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 PROXY_BASE = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 _MONITOR_DB = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+    os.path.expanduser("~/.openclaw/workspace/.tokenpak/monitor.db"),
 )
 SEP = "────────────────────────────────────────"
 

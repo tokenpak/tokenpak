@@ -17,7 +17,7 @@ Env vars (all optional):
     TOKENPAK_MODE          (default hybrid) — strict|hybrid|aggressive
     TOKENPAK_COMPACT       (default 1) — master on/off switch
     TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
-    TOKENPAK_DB            (default .ocp/monitor.db)
+    TOKENPAK_DB            (default .tokenpak/monitor.db)
 """
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""ContextAssembler — OCP Phase 1: CANON references + STATE_JSON.
+"""ContextAssembler — TokenPak Protocol Phase 1: CANON references + STATE_JSON.
 
 Builds the wire-format context payload for LLM requests. Deduplicates
 stable blocks by sending them in full only on the first turn (or when
@@ -29,13 +29,13 @@ class CanonBlockRegistry:
     Lightweight file-based registry for CANON blocks.
 
     Stores canonical block wire text at:
-      .ocp/blocks/BLOCK_ID@vN.ocpb
+      .tokenpak/blocks/BLOCK_ID@vN.tpkb
 
     Tracks versions in manifest:
-      .ocp/blocks/manifest.json  →  {block_id: {hash, version}}
+      .tokenpak/blocks/manifest.json  →  {block_id: {hash, version}}
     """
 
-    def __init__(self, base_dir: str = ".ocp"):
+    def __init__(self, base_dir: str = ".tokenpak"):
         self.blocks_dir = Path(base_dir) / "blocks"
         self.blocks_dir.mkdir(parents=True, exist_ok=True)
         self.manifest_path = self.blocks_dir / "manifest.json"
@@ -85,9 +85,9 @@ class CanonBlockRegistry:
 
         version_str = f"v{version}"
 
-        # Persist block content to .ocp/blocks/BLOCK_ID@vN.ocpb
-        ocpb_path = self.blocks_dir / f"{block_id}@{version_str}.ocpb"
-        ocpb_path.write_text(content, encoding="utf-8")
+        # Persist block content to .tokenpak/blocks/BLOCK_ID@vN.tpkb
+        block_path = self.blocks_dir / f"{block_id}@{version_str}.tpkb"
+        block_path.write_text(content, encoding="utf-8")
 
         # Update manifest
         self._manifest[block_id] = {
@@ -107,10 +107,10 @@ class CanonBlockRegistry:
         return None
 
     def read_block_content(self, block_id: str, version_str: str) -> Optional[str]:
-        """Read stored .ocpb content for a block/version pair."""
-        ocpb_path = self.blocks_dir / f"{block_id}@{version_str}.ocpb"
-        if ocpb_path.exists():
-            return ocpb_path.read_text(encoding="utf-8")
+        """Read stored .tpkb content for a block/version pair."""
+        block_path = self.blocks_dir / f"{block_id}@{version_str}.tpkb"
+        if block_path.exists():
+            return block_path.read_text(encoding="utf-8")
         return None
 
 
@@ -119,10 +119,10 @@ class CanonBlockRegistry:
 
 class ContextAssembler:
     """
-    Assembles OCP wire-format context payloads.
+    Assembles TokenPak wire-format context payloads.
 
     Session state (which blocks have been sent at which version) is
-    persisted to .ocp/state/session_<id>.state.json so it survives
+    persisted to .tokenpak/state/session_<id>.state.json so it survives
     across turns without holding all context in memory.
 
     Usage:
@@ -140,7 +140,7 @@ class ContextAssembler:
         # canon → "CANON:\n  SOUL=@SOUL#v1\n  TOOLS=@TOOLS#v1"
     """
 
-    def __init__(self, session_id: str, base_dir: str = ".ocp"):
+    def __init__(self, session_id: str, base_dir: str = ".tokenpak"):
         self.session_id = session_id
         self.base_dir = Path(base_dir)
         self.canon_registry = CanonBlockRegistry(base_dir=base_dir)
@@ -256,7 +256,7 @@ class ContextAssembler:
         budgeter=None,
     ) -> str:
         """
-        Build the complete OCP payload: CANON section + optional STATE_JSON.
+        Build the complete TokenPak payload: CANON section + optional STATE_JSON.
 
         Optionally enforces token budget via a Budgeter instance before
         assembling the final payload.

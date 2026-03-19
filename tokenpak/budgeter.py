@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Budgeter — token allocation and trim policy for OCP Phase 2.
+"""Budgeter — token allocation and trim policy for TokenPak Protocol Phase 2.
 
 Enforces a hard token budget across context buckets:
   STATE_JSON  8-15%   critical

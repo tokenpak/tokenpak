@@ -1,4 +1,4 @@
-# OCP Budget Configuration
+# TokenPak Budget Configuration
 # Controls token allocation across context buckets.
 # Loaded by Budgeter class in budgeter.py
 

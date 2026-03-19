@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ocp.dev/schema/ocp-evidence-v1.0.json",
-  "title": "OCP Evidence Pack v1.0",
+  "$id": "https://tokenpak.ai/schema/tokenpak-evidence-v1.0.json",
+  "title": "TokenPak Evidence Pack v1.0",
   "type": "object",
   "additionalProperties": false,
   "required": ["id", "generated_at", "records", "summary"],

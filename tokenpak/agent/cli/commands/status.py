@@ -17,9 +17,11 @@ except ImportError:
 # Import pricing module for savings calculations
 try:
     from tokenpak.pricing import estimate_savings
+    HAVE_ESTIMATE_SAVINGS = True
 except ImportError:
     # Fallback if pricing module not available
-    estimate_savings = None
+    estimate_savings = None  # type: ignore[assignment]
+    HAVE_ESTIMATE_SAVINGS = False
 
 
 def _fetch(url: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
@@ -91,7 +93,7 @@ def run(
     print()
 
     # Calculate and display savings summary
-    if estimate_savings and session:
+    if HAVE_ESTIMATE_SAVINGS and callable(estimate_savings) and session:
         savings_data = estimate_savings(session)
         print("💰  Session Savings")
         print(f"    Requests:      {requests:,}")

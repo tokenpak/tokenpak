@@ -23,7 +23,7 @@ try:
     _PRECOMPUTE_AVAILABLE = True
 except ImportError:
     _PRECOMPUTE_AVAILABLE = False
-    _recompute_all = None
+    _recompute_all = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # File classification

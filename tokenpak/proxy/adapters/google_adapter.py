@@ -13,6 +13,28 @@ from .canonical import CanonicalRequest
 class GoogleGenerativeAIAdapter(FormatAdapter):
     source_format = "google-generative-ai"
 
+    def validate_tools(self) -> None:
+        """
+        Validate that function calling is supported for Google adapter.
+
+        Google Gemini API supports function calling natively, but this adapter
+        does not yet translate tool schemas. This method raises NotImplementedError
+        to fail loudly rather than silently ignoring tool requests.
+
+        See: ~/vault/01_PROJECTS/tokenpak-oss/tokenpak/docs/provider-gaps.md — Gap #1
+        Status: Stub in place (2026-03-18). Real implementation in Q2 2026.
+        """
+        raise NotImplementedError(
+            "Function calling is not yet supported in the Google adapter. "
+            "This adapter does not translate tool schemas to Google "
+            "function_declarations format. "
+            "\n"
+            "Workaround: Use the OpenAI or Anthropic adapter for tool-calling workflows. "
+            "Both fully support function calling with bidirectional translation. "
+            "\n"
+            "Tracking: https://github.com/kaywhy331/tokenpak/issues/54"
+        )
+
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         lower_headers = {k.lower(): v for k, v in headers.items()}
         return "/v1beta/" in path or "x-goog-api-key" in lower_headers or "key=" in path
@@ -60,6 +82,10 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         )
 
     def denormalize(self, canonical: CanonicalRequest) -> bytes:
+        # Fail loudly if tools are requested but not yet supported
+        if canonical.tools is not None and len(canonical.tools) > 0:
+            self.validate_tools()
+
         payload: Dict[str, Any] = {
             "contents": self._to_google_contents(canonical.messages),
             "stream": canonical.stream,

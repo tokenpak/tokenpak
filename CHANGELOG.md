@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Core token counting with LRU caching and lazy loading
 - Context compilation pipeline (multi-mode)
-- Wire format generator (OCP v1.0)
+- Wire format generator (TokenPak Protocol v1.0)
 - CLI with parallel processing and batch operations
 - Heuristic rule-based compression engine
 - LLMLingua ML-powered compression engine
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - STATE_JSON management with patch applicator
 - Evidence span extraction and pack wire format
 - Response contract validation with auto-repair
-- JSON schemas for OCP v1.0 (block, compiled, evidence)
+- JSON schemas for TokenPak Protocol v1.0 (block, compiled, evidence)
 - Context budget tiers with quadratic allocation
 - Task complexity scoring and intent classification
 - ELO-based model ranking
@@ -54,3 +54,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive documentation (installation, configuration, CLI reference, architecture, security)
 
 [1.0.0]: https://github.com/tokenpak/tokenpak/releases/tag/v1.0.0
+

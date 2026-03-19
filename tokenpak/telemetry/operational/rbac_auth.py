@@ -447,7 +447,7 @@ def init_rbac(app, db_path: str) -> RBACStore:
 
     Usage::
 
-        store = init_rbac(app, "~/.openclaw/workspace/.ocp/rbac.db")
+        store = init_rbac(app, "~/.openclaw/workspace/.tokenpak/rbac.db")
     """
     store = RBACStore(db_path)
 

@@ -25,7 +25,7 @@ import urllib.request
 PROXY_BASE = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 PROXY_SERVICE = "tokenpak-proxy.service"
 SEP = "────────────────────────"
-DB_PATH = os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db")
+DB_PATH = os.path.expanduser("~/.openclaw/workspace/.tokenpak/monitor.db")
 
 
 # ---------------------------------------------------------------------------

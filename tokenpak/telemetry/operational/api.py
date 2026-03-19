@@ -28,8 +28,8 @@ app = Flask(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-DB_PATH = "~/.openclaw/workspace/.ocp/monitor.db"
-RBAC_DB_PATH = "~/.openclaw/workspace/.ocp/rbac.db"
+DB_PATH = "~/.openclaw/workspace/.tokenpak/monitor.db"
+RBAC_DB_PATH = "~/.openclaw/workspace/.tokenpak/rbac.db"
 CONFIG_PATH = "~/.openclaw/workspace/tokenpak.telemetry.json"
 
 # Override via environment variables if needed

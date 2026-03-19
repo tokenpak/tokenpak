@@ -14,7 +14,7 @@ SEP = "────────────────────────�
 # Reuse monitor DB for spend queries
 _MONITOR_DB = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+    os.path.expanduser("~/.openclaw/workspace/.tokenpak/monitor.db"),
 )
 _BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
 

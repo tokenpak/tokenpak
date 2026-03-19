@@ -346,7 +346,7 @@ class GoalManager:
         """Retrieve progress for a goal."""
         return self.progress.get(goal_id)
 
-    def list_goals(self, status: str = None, goal_type: str = None) -> List[Goal]:
+    def list_goals(self, status: Optional[str] = None, goal_type: Optional[str] = None) -> List[Goal]:
         """List all goals, optionally filtered.
         
         Args:

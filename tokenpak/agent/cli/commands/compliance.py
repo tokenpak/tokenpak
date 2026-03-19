@@ -80,9 +80,8 @@ def _run_report(standard: str, args: list[str]) -> None:
     try:
         report = reporter.generate(
             standard,
-            period_start=parsed.period_start,
-            period_end=parsed.period_end,
-            organization=parsed.org,
+            since=parsed.period_start,
+            until=parsed.period_end,
         )
 
         print()

@@ -26,13 +26,13 @@ _SCHEMA_PATH = Path(__file__).parent / "state_schema.json"
 
 class StateManager:
     """
-    Manages compact JSON session state for OCP protocol.
+    Manages compact JSON session state for TokenPak Protocol.
 
-    Persists to: .ocp/state/session_<id>.state.json
+    Persists to: .tokenpak/state/session_<id>.state.json
     Wire format: compact JSON (no whitespace), prefixed with STATE_JSON:
     """
 
-    def __init__(self, session_id: str, base_dir: str = ".ocp"):
+    def __init__(self, session_id: str, base_dir: str = ".tokenpak"):
         self.session_id = session_id
         self.base_dir = Path(base_dir)
         state_dir = self.base_dir / "state"
@@ -156,13 +156,18 @@ class StateManager:
     # ── Round-trip ───────────────────────────────────────────────────────────
 
     @classmethod
-    def from_wire(cls, wire_text: str, session_id: str, base_dir: str = ".ocp") -> "StateManager":
+    def from_wire(cls, wire_text: str, session_id: str, base_dir: str = ".tokenpak") -> "StateManager":
         """
         Parse a STATE_JSON wire section back into a StateManager.
 
         wire_text: full section string, e.g. 'STATE_JSON:\\n{...}'
         """
         lines = wire_text.strip().splitlines()
+        json_text = "\n".join(lines[1:]) if len(lines) > 1 else "{}"
+        state_dict = json.loads(json_text)
+        sm = cls(session_id, base_dir)
+        sm.state = state_dict
+        return sm
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +200,7 @@ class IntentStateManager:
     Maintains a separate compact state blob per intent, injecting only
     the fields relevant to that intent into the LLM context.
 
-    Persists to: .ocp/state/session_<id>.<intent>.state.json
+    Persists to: .tokenpak/state/session_<id>.<intent>.state.json
     Wire format: compact JSON, prefixed with STATE_JSON[<intent>]:
     """
 
@@ -240,7 +245,7 @@ class IntentStateManager:
         },
     }
 
-    def __init__(self, session_id, intent, base_dir=".ocp"):
+    def __init__(self, session_id, intent, base_dir=".tokenpak"):
         self.session_id = session_id
         self.intent = intent
         self.base_dir = Path(base_dir)
@@ -339,7 +344,7 @@ class MultiSchemaStateManager:
         wire = mgr.build_wire_section("debug")  # only injects debug fields
     """
 
-    def __init__(self, session_id, base_dir=".ocp"):
+    def __init__(self, session_id, base_dir=".tokenpak"):
         self.session_id = session_id
         self.base_dir = base_dir
         self._managers = {}
@@ -376,7 +381,7 @@ class MultiSchemaStateManager:
         )
 
 
-def select_state_manager(session_id, intent, base_dir=".ocp"):
+def select_state_manager(session_id, intent, base_dir=".tokenpak"):
     """
     Factory: select and return the appropriate IntentStateManager for a classified intent.
 

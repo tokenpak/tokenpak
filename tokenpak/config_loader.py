@@ -64,7 +64,7 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     return _config
 
 
-def get(key: str, default=None, env_var: str = None, cast=None):
+def get(key: str, default=None, env_var: Optional[str] = None, cast=None):
     """
     Get config value. Priority: env var > config file > default.
     

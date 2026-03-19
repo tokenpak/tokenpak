@@ -83,7 +83,7 @@ class AsyncLogger:
     
     def __init__(self, config: LoggingConfig):
         self.config = config
-        self.buffer = deque(maxlen=config.async_buffer_size)
+        self.buffer: deque = deque(maxlen=config.async_buffer_size)
         self.lock = threading.Lock()
         self.stop_event = threading.Event()
         

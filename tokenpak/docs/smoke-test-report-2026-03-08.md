@@ -117,7 +117,7 @@ Will update with final results below.
 
 ## Test Suite Results
 
-**Command:** `cd ~/vault/01_PROJECTS/ocp-protocol/packages/pypi && python3 -m pytest tokenpak/ tests/ -q --tb=line`
+**Command:** `python3 -m pytest tokenpak/ tests/ -q --tb=line`
 
 **Executed:** 2026-03-08 23:31 PST (Sue QA verification run)
 

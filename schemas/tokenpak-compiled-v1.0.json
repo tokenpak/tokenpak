@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://ocp.dev/schema/ocp-compiled-v1.0.json",
-  "title": "OCP Compiled Artifact v1.0",
+  "$id": "https://tokenpak.ai/schema/tokenpak-compiled-v1.0.json",
+  "title": "TokenPak Compiled Artifact v1.0",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "ocp_version",
+    "tokenpak_version",
     "schema_version",
     "compiled_at",
     "compiler",
@@ -15,7 +15,7 @@
     "canonical_hash"
   ],
   "properties": {
-    "ocp_version": { "type": "string", "pattern": "^1\\.0$" },
+    "tokenpak_version": { "type": "string", "pattern": "^1\\.0$" },
     "schema_version": { "type": "string", "pattern": "^1\\.0$" },
     "compiled_at": { "type": "string", "format": "date-time" },
     "compiler": {
@@ -35,9 +35,9 @@
     "ordered_blocks": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "ocp-block-v1.0.json" }
+      "items": { "$ref": "tokenpak-block-v1.0.json" }
     },
-    "evidence_pack": { "$ref": "ocp-evidence-v1.0.json" },
+    "evidence_pack": { "$ref": "tokenpak-evidence-v1.0.json" },
     "canonical_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
   }
 }

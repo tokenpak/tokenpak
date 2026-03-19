@@ -18,7 +18,7 @@ Usage (in your proxy's response handler)::
         # Graceful degradation: cost tracking failure never crashes the proxy
         print(f"[cost_tracker] warning: {e}")
 
-This is already wired into ~/.openclaw/workspace/.ocp/proxy.py.
+This is already wired into ~/.openclaw/workspace/.tokenpak/proxy.py.
 """
 
 from __future__ import annotations

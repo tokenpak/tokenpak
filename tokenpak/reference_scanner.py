@@ -63,7 +63,7 @@ _LINEAR_TICKET = re.compile(r"\b([A-Z]{2,6})-(\d+)\b")
 _JIRA_PREFIXES = {"JIRA", "PROJ", "BUG", "FEAT", "TASK", "INFRA", "OPS", "DATA"}
 
 # Well-known Linear prefixes (to distinguish from Jira)
-_LINEAR_PREFIXES = {"ENG", "TOK", "OCP", "DEV", "PROD", "SEC", "UX", "ML"}
+_LINEAR_PREFIXES = {"ENG", "TOK", "TPK", "DEV", "PROD", "SEC", "UX", "ML"}
 
 
 def scan_for_references(text: str) -> List[Reference]:

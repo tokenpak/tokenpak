@@ -160,10 +160,10 @@ def check_database(db_path: Optional[str] = None) -> CheckResult:
     """
     Check database existence and report size.
 
-    Defaults to ~/.openclaw/workspace/.ocp/monitor.db.
+    Defaults to ~/.openclaw/workspace/.tokenpak/monitor.db.
     """
     if db_path is None:
-        db_path = os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db")
+        db_path = os.path.expanduser("~/.openclaw/workspace/.tokenpak/monitor.db")
 
     path = Path(db_path)
     if not path.exists():
@@ -184,11 +184,11 @@ def check_index(index_path: Optional[str] = None, stale_hours: float = 24.0) -> 
     """
     Check pricing index freshness.
 
-    Defaults to ~/.openclaw/workspace/.ocp/pricing_index.json.
+    Defaults to ~/.openclaw/workspace/.tokenpak/pricing_index.json.
     Marks stale if older than stale_hours.
     """
     if index_path is None:
-        index_path = os.path.expanduser("~/.openclaw/workspace/.ocp/pricing_index.json")
+        index_path = os.path.expanduser("~/.openclaw/workspace/.tokenpak/pricing_index.json")
 
     path = Path(index_path)
     if not path.exists():

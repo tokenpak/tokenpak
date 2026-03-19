@@ -237,7 +237,7 @@ class SemanticResolver:
                 best_canonical = canonical
                 best_len = len(alias)
 
-        if best_alias is not None:
+        if best_alias is not None and best_canonical is not None:
             return ResolveResult(
                 canonical=best_canonical,
                 alias_matched=best_alias,
