@@ -2072,12 +2072,28 @@ def cmd_status(args):
     # Hourly / 24h savings (from today stats if available)
     today = (stats or {}).get("today", {})
     today_cost = today.get("total_cost", 0.0)
-    today_input = today.get("input_tokens", 0)
     today_cache_read = today.get("cache_read_tokens", 0)
-    today_output = today.get("output_tokens", 0)
-    # Rough today baseline using Sonnet rate
-    from .pricing import DEFAULT_RATE as _DR
-    today_baseline = (today_input / 1_000_000) * _DR["input"] + (today_output / 1_000_000) * _DR["output"]
+
+    # Calculate today's savings using per-model rates (not flat Sonnet rate)
+    # Use the session-level by_model data to derive a weighted baseline
+    from .pricing import get_rates as _get_rates
+    today_by_model = today.get("by_model", {})
+    if today_by_model:
+        # If today has per-model breakdown, use it directly
+        today_baseline = 0.0
+        for model_name, mstats in today_by_model.items():
+            rates = _get_rates(model_name)
+            m_input = mstats.get("input_tokens", 0)
+            m_output = mstats.get("output_tokens", 0)
+            m_cache_read = mstats.get("cache_read_tokens", 0)
+            today_baseline += ((m_input + m_cache_read) / 1_000_000) * rates["input"]
+            today_baseline += (m_output / 1_000_000) * rates["output"]
+    elif by_model and cost_without > 0 and cost_with > 0:
+        # Fallback: estimate today's savings using session-level savings ratio
+        session_savings_ratio = total_saved / cost_without if cost_without > 0 else 0.0
+        today_baseline = today_cost / (1.0 - session_savings_ratio) if session_savings_ratio < 1.0 else today_cost
+    else:
+        today_baseline = today_cost  # No data to estimate, assume no savings
     today_saved = max(today_baseline - today_cost, 0.0)
 
     # Session hours (rough)
