@@ -28,12 +28,20 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 ## 3 Commands to Savings
 
 ```bash
-pip install tokenpak          # install
-tokenpak serve --port 8766 --workers 4   # start proxy (4 CPU cores)
-tokenpak cost --week          # watch savings grow
+pip install tokenpak   # install
+tokenpak start         # start the proxy on localhost:8766
+tokenpak demo          # see compression in action
 ```
 
 Point your LLM client's base URL at `http://localhost:8766`. That's it — **zero config required.**
+
+### What do I do next?
+
+- **Check your savings:** `tokenpak cost --week`
+- **I use Claude Code:** `export ANTHROPIC_BASE_URL=http://localhost:8766`
+- **I use OpenAI SDK:** set `base_url="http://localhost:8766"` in your client
+- **I use LangChain:** set `openai_api_base="http://localhost:8766"`
+- **Full guide:** [docs/quickstart.md](docs/quickstart.md)
 
 ---
 

@@ -423,12 +423,29 @@ def cmd_start(args):
     if health:
         mode = health.get("compilation_mode", "hybrid")
         print(f"\n✅ Proxy running on http://localhost:{port} (mode: {mode})\n")
-        print("Next steps:")
-        print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-        print(f"  2. Run: tokenpak status    (check health)")
-        print(f"  3. Run: tokenpak savings   (see your ROI)")
-        print()
-        print("💡 First time? Run: tokenpak setup")
+        # Detect API key on first run and offer demo
+        has_api_key = any(
+            os.environ.get(k)
+            for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY")
+        )
+        if _is_first_run():
+            if has_api_key:
+                print("🎉 Welcome! Your API key is set — you're ready to go.")
+                print(f"   Point your LLM client at: http://localhost:{port}")
+                print()
+                print("   Run: tokenpak demo   → see compression in action")
+            else:
+                print("👋 Welcome! Set your API key to start compressing:")
+                print("   export ANTHROPIC_API_KEY='sk-...'  (or OPENAI_API_KEY)")
+                print(f"   Then point your LLM client at: http://localhost:{port}")
+                print()
+                print("   Run: tokenpak demo   → see compression in action (no key needed)")
+        else:
+            print("Next steps:")
+            print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+            print(f"  2. Run: tokenpak demo      (see compression in action)")
+            print(f"  3. Run: tokenpak cost      (view your savings)")
+            print()
     else:
         print(f"Proxy launched (PID {proc.pid}, port {port}) — waiting for startup...")
         print("  Run `tokenpak status` to verify.")
@@ -2023,8 +2040,29 @@ def cmd_status(args):
         print("   Run: tokenpak start")
         return
 
-    s = (stats or {}).get("session", stats or {})
-    by_model = (stats or {}).get("by_model", {})
+    # Use DB-sourced all_time stats (survives proxy restarts), fall back to session
+    all_time = (stats or {}).get("all_time", {})
+    if all_time and all_time.get("by_model"):
+        # Map DB field names to what calculate_savings_from_proxy_stats expects
+        s = {
+            "requests": all_time.get("requests", 0),
+            "input_tokens": all_time.get("input_tokens", 0),
+            "sent_input_tokens": all_time.get("input_tokens", 0) - all_time.get("compressed_tokens", 0),
+            "saved_tokens": all_time.get("compressed_tokens", 0),
+            "protected_tokens": all_time.get("protected_tokens", 0),
+            "output_tokens": all_time.get("output_tokens", 0),
+            "cost": all_time.get("total_cost", 0.0),
+            "cost_saved": 0.0,
+            "cache_read_tokens": all_time.get("cache_read_tokens", 0),
+            "cache_creation_tokens": all_time.get("cache_creation_tokens", 0),
+            "cache_hits": 0,  # Not tracked per-row in DB; use by_model cache rates
+            "cache_misses": 0,
+            "first_seen": all_time.get("first_seen"),
+        }
+        by_model = all_time.get("by_model", {})
+    else:
+        s = (stats or {}).get("session", stats or {})
+        by_model = (stats or {}).get("by_model", {})
     sv = calculate_savings_from_proxy_stats(s, by_model)
 
     # ── Minimal one-liner ──
@@ -2053,12 +2091,23 @@ def cmd_status(args):
     compression_pct = (compression_saved / total_saved * 100.0) if total_saved > 0 else 0.0
     routing_pct = (routing_saved / total_saved * 100.0) if total_saved > 0 else 0.0
 
-    # Uptime
+    # Uptime — from DB first_seen to now (survives restarts)
     uptime_str = "unknown"
     errors = 0
-    if health:
+    uptime_s = 0
+    first_seen = s.get("first_seen")
+    if first_seen:
+        from datetime import datetime as _dt
+        try:
+            first_dt = _dt.fromisoformat(first_seen)
+            uptime_s = (_time.time() - first_dt.timestamp())
+        except (ValueError, TypeError):
+            uptime_s = 0
+    if uptime_s <= 0 and health:
         hs = health.get("stats", {})
         uptime_s = _time.time() - hs.get("start_time", _time.time())
+        errors = hs.get("errors", 0)
+    if uptime_s > 0:
         total_hours, rem = divmod(int(uptime_s), 3600)
         m_u = rem // 60
         d_u = total_hours // 24
@@ -2067,31 +2116,29 @@ def cmd_status(args):
             uptime_str = f"{d_u}d {h_u:02d}h {m_u:02d}m"
         else:
             uptime_str = f"{total_hours}h {m_u:02d}m"
-        errors = hs.get("errors", 0)
 
-    # Hourly / 24h savings — calculated per-model from today.by_model
-    today = (stats or {}).get("today", {})
-    today_cost = today.get("total_cost", 0.0)
-
+    # Hourly / 24h savings — calculated per-model from DB queries
     from .pricing import get_rates as _get_rates
-    today_by_model = today.get("by_model", {})
-    today_baseline = 0.0
-    for model_name, mstats in today_by_model.items():
-        rates = _get_rates(model_name)
-        m_input = mstats.get("input_tokens", 0)
-        m_output = mstats.get("output_tokens", 0)
-        m_cache_read = mstats.get("cache_read_tokens", 0)
-        # Without TokenPak: all tokens (input + cache_read) at full input rate
-        today_baseline += ((m_input + m_cache_read) / 1_000_000) * rates["input"]
-        today_baseline += (m_output / 1_000_000) * rates["output"]
-    today_saved = max(today_baseline - today_cost, 0.0)
 
-    # Session hours (rough)
-    uptime_hours = 1
-    if health:
-        hs = health.get("stats", {})
-        uptime_hours = max((_time.time() - hs.get("start_time", _time.time())) / 3600, 1)
-    hourly_saved = total_saved / uptime_hours
+    def _calc_savings_from_by_model(period_data):
+        """Calculate exact savings from a period's by_model data."""
+        bm = period_data.get("by_model", {})
+        period_cost = period_data.get("total_cost", 0.0)
+        baseline = 0.0
+        for model_name, mstats in bm.items():
+            rates = _get_rates(model_name)
+            m_input = mstats.get("input_tokens", 0)
+            m_output = mstats.get("output_tokens", 0)
+            m_cache_read = mstats.get("cache_read_tokens", 0)
+            baseline += ((m_input + m_cache_read) / 1_000_000) * rates["input"]
+            baseline += (m_output / 1_000_000) * rates["output"]
+        return max(baseline - period_cost, 0.0)
+
+    today = (stats or {}).get("today", {})
+    today_saved = _calc_savings_from_by_model(today)
+
+    last_hour = (stats or {}).get("last_hour", {})
+    hourly_saved = _calc_savings_from_by_model(last_hour)
 
     # All-systems health
     all_healthy = True
@@ -5170,6 +5217,67 @@ def _build_demo_parser(sub):
     p_demo.set_defaults(func=cmd_demo)
 
 
+def _run_compression_demo():
+    """Show live compression on a sample prompt with before/after token counts."""
+    from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.engines.base import CompactionHints
+    from tokenpak.tokens import count_tokens
+
+    SAMPLE_PROMPT = """\
+You are a helpful assistant. Please help me understand the following documentation.
+
+The TokenPak library provides a comprehensive, all-inclusive solution for managing
+token budgets in large language model applications. It includes multiple compression
+strategies, various caching mechanisms, and detailed telemetry tools for monitoring
+usage and costs across all your API calls. The library has been carefully designed
+to be extremely easy to use out of the box while also providing powerful, advanced
+functionality for more sophisticated users who need fine-grained control.
+
+By compressing content intelligently before it reaches the model, you can fit more
+relevant information into fewer tokens, which reduces API costs significantly and
+can improve response quality in many cases. The heuristic engine utilizes rule-based
+text processing techniques to remove redundant, repetitive, and low-signal content
+while carefully preserving the most important, critical information that the model
+actually needs in order to produce high-quality, accurate results every time.
+
+This approach is fully deterministic, meaning that for any given input you will
+always receive the same compressed output each and every single time you run it,
+regardless of when or how many times the compression is applied.
+
+Question: How does TokenPak save tokens and money?"""
+
+    engine = HeuristicEngine()
+    hints = CompactionHints(target_tokens=120)
+    compressed = engine.compact(SAMPLE_PROMPT, hints)
+
+    tokens_in = count_tokens(SAMPLE_PROMPT)
+    tokens_out = count_tokens(compressed)
+    savings_pct = (1 - tokens_out / tokens_in) * 100 if tokens_in > 0 else 0
+
+    # Estimate cost savings at gpt-4o rates ($2.50 / 1M input tokens)
+    cost_per_token = 2.50 / 1_000_000
+    cost_saved = (tokens_in - tokens_out) * cost_per_token
+
+    print()
+    print("  TokenPak Compression Demo")
+    print("  " + "─" * 46)
+    print()
+    print(f"  Original prompt:    {tokens_in:,} tokens")
+    print(f"  Compressed:         {tokens_out:,} tokens")
+    print(f"  Savings:            {savings_pct:.0f}% fewer tokens")
+    print(f"  Cost saved (est.):  ${cost_saved:.4f} per call @ gpt-4o rates")
+    print()
+    print("  ── Compressed output (first 300 chars) ──────────────────────")
+    preview = compressed[:300].strip().replace("\n", "\n  ")
+    print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
+    print()
+    print("  Try it with your own content:")
+    print("    tokenpak start        → start the proxy (zero-config)")
+    print("    tokenpak cost         → track your real savings")
+    print("    tokenpak demo --list  → browse 50 built-in compression recipes")
+    print()
+
+
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
     # ── Demo data seeding
@@ -5232,6 +5340,11 @@ def cmd_demo(args):
             print("  (none)")
         for r in matches:
             print(f"  {r.name:<45} [{r.category}]  ~{int(r.compression_hint*100)}% savings")
+        return
+
+    # ── Default: live compression demo on sample prompt ───────────────────────
+    if not args.list and not args.category:
+        _run_compression_demo()
         return
 
     # ── List all (optionally filtered by category)
