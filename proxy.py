@@ -60,6 +60,19 @@ from collections import deque
 import uuid
 
 # ---------------------------------------------------------------------------
+# Auth Guard — Phase 1: consecutive 401/403 detection + Telegram alerts
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.auth_guard import AUTH_GUARD
+    from tokenpak.auth_alert import register_auth_alert_hook
+    register_auth_alert_hook()
+    AUTH_GUARD_AVAILABLE = True
+except Exception as _auth_guard_err:
+    AUTH_GUARD = None  # type: ignore[assignment]
+    AUTH_GUARD_AVAILABLE = False
+    print(f"  ⚠️  Auth guard unavailable: {_auth_guard_err}")
+
+# ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
 # ---------------------------------------------------------------------------
 @dataclass
@@ -1573,6 +1586,20 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "avg_savings_pct": round(SESSION["saved_tokens"] / SESSION["input_tokens"] * 100, 1) if SESSION["input_tokens"] > 0 else 0.0,
             })
             return
+        if self.path == "/stats/auth":
+            # Auth guard status
+            if AUTH_GUARD_AVAILABLE and AUTH_GUARD is not None:
+                self._send_json({
+                    "available": True,
+                    "counters": AUTH_GUARD.get_counters(),
+                    "last_alert_times": AUTH_GUARD.get_last_alert_times(),
+                    "threshold": int(os.environ.get("TOKENPAK_AUTH_FAILURE_THRESHOLD", "3")),
+                    "cooldown_sec": int(os.environ.get("TOKENPAK_AUTH_ALERT_COOLDOWN", "300")),
+                    "incident_log": str(AUTH_GUARD._log_incident.__func__.__code__.co_filename if False else "~/.tokenpak/incidents.log"),
+                })
+            else:
+                self._send_json({"available": False, "reason": "auth_guard import failed"})
+            return
         if self.path == "/vault":
             # Debug endpoint: show vault index state
             blocks_info = []
@@ -1936,6 +1963,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _rl_err:
                     import logging as _lg
                     _lg.getLogger(__name__).warning("Rate limit backoff error (skipping): %s", _rl_err)
+
+            # Auth guard — detect consecutive 401/403 and alert user
+            if AUTH_GUARD_AVAILABLE and AUTH_GUARD is not None:
+                _provider = "anthropic" if "anthropic.com" in target_url else (
+                    "openai" if "openai.com" in target_url else "unknown"
+                )
+                try:
+                    AUTH_GUARD.record_response(provider=_provider, status_code=status)
+                except Exception as _ag_err:
+                    pass  # never let auth guard break a request
 
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
