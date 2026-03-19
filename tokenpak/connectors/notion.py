@@ -46,7 +46,7 @@ class NotionConnector(Connector):
             "Content-Type": "application/json",
         }
 
-        # TODO: Implement connection test when adding Pro tier
+        # DEFERRED (Pro tier): Implement connection test when adding Pro tier
         # try:
         #     response = requests.get(
         #         f"{self.NOTION_API_BASE}/users/me",
@@ -64,7 +64,7 @@ class NotionConnector(Connector):
 
         Uses search API with last_edited_time filter for incremental sync.
         """
-        # TODO: Implement when adding Pro tier
+        # DEFERRED (Pro tier): Implement when adding Pro tier
         # filter_params = {}
         # if since:
         #     filter_params["filter"] = {
@@ -100,7 +100,7 @@ class NotionConnector(Connector):
 
         Recursively fetches nested blocks and converts to markdown.
         """
-        # TODO: Implement when adding Pro tier
+        # DEFERRED (Pro tier): Implement when adding Pro tier
         # blocks = []
         # has_more = True
         # start_cursor = None
@@ -152,7 +152,7 @@ class NotionConnector(Connector):
 
     def _blocks_to_markdown(self, blocks: list) -> str:
         """Convert Notion blocks to markdown."""
-        # TODO: Implement block-to-markdown conversion
+        # DEFERRED (Pro tier): Implement block-to-markdown conversion
         # This would handle: paragraph, heading_1/2/3, bulleted_list_item,
         # numbered_list_item, code, quote, callout, image, etc.
         lines = []

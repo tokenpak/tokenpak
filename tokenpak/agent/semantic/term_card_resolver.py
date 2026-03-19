@@ -3,7 +3,7 @@
 Placeholder for future term card resolution system.
 This module is referenced in tasks but not yet fully implemented.
 
-TODO: Implement actual term card resolution logic when needed.
+DEFERRED: Implement actual term card resolution logic when needed.
 """
 
 class TermCardResolver:

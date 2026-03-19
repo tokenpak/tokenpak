@@ -53,7 +53,7 @@ class GitHubConnector(Connector):
             "Accept": "application/vnd.github.v3+json",
         }
 
-        # TODO: Implement connection test when adding Pro tier
+        # DEFERRED (Pro tier): Implement connection test when adding Pro tier
         # try:
         #     response = requests.get(
         #         f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}",
@@ -71,7 +71,7 @@ class GitHubConnector(Connector):
 
         Uses commit SHA for incremental sync.
         """
-        # TODO: Implement when adding Pro tier
+        # DEFERRED (Pro tier): Implement when adding Pro tier
         # Get default branch
         # repo = requests.get(
         #     f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}",
@@ -99,7 +99,7 @@ class GitHubConnector(Connector):
 
     def get_content(self, file: RemoteFile) -> bytes:
         """Download file content from GitHub."""
-        # TODO: Implement when adding Pro tier
+        # DEFERRED (Pro tier): Implement when adding Pro tier
         # response = requests.get(
         #     f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}/git/blobs/{file.source_id}",
         #     headers=self._headers
@@ -115,7 +115,7 @@ class GitHubConnector(Connector):
 
     def list_issues(self, state: str = "all") -> Iterator[RemoteFile]:
         """List issues as virtual files."""
-        # TODO: Implement when adding Pro tier
+        # DEFERRED (Pro tier): Implement when adding Pro tier
         # page = 1
         # while True:
         #     response = requests.get(
