@@ -1,0 +1,98 @@
+version: "3.9"
+
+# ── TokenPak Full Docker Compose Stack ────────────────────────────────────────
+# Includes: proxy + Redis (for distributed cache) + Prometheus (metrics)
+#
+# Usage:
+#   cp .env.example .env && docker compose up -d
+#   curl http://localhost:8766/health
+#
+# Logs:
+#   docker compose logs -f tokenpak
+
+services:
+
+  # ── TokenPak Proxy ──────────────────────────────────────────────────────────
+  tokenpak:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+    container_name: tokenpak
+    ports:
+      - "${TOKENPAK_PORT:-8766}:8766"
+    environment:
+      - TOKENPAK_PORT=8766
+      - TOKENPAK_LOG_LEVEL=${TOKENPAK_LOG_LEVEL:-info}
+      - TOKENPAK_MODE=${TOKENPAK_MODE:-hybrid}
+      # Redis connection (optional — improves cache sharing across restarts)
+      - TOKENPAK_REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      # Persist vault index and telemetry DB across restarts
+      - tokenpak_data:/root/.tokenpak
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - tokenpak-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Redis Cache ─────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tokenpak-redis
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tokenpak-net
+
+  # ── Prometheus Metrics (optional) ──────────────────────────────────────────
+  # Comment this block out if you don't need metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tokenpak-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - tokenpak
+    restart: unless-stopped
+    networks:
+      - tokenpak-net
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  tokenpak-net:
+    driver: bridge
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  tokenpak_data:
+  redis_data:
+  prometheus_data:

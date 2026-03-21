@@ -16,12 +16,12 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 - 🧪 Validator: [`tokenpak/validator.py`](tokenpak/validator.py)
 - 🧩 Examples: [`examples/`](examples/)
 
-[![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
+[![CI](https://github.com/tokenpak/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenpak/tokenpak/actions)
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Downloads](https://static.pepy.tech/badge/tokenpak/month)](https://pepy.tech/project/tokenpak)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![codecov](https://codecov.io/gh/kaywhy331/tokenpak/branch/master/graph/badge.svg)](https://codecov.io/gh/kaywhy331/tokenpak)
+[![codecov](https://codecov.io/gh/tokenpak/tokenpak/branch/main/graph/badge.svg)](https://codecov.io/gh/tokenpak/tokenpak)
 
 ---
 
@@ -400,16 +400,16 @@ Default config: `~/.tokenpak/config.json`
 
 We welcome issues, pull requests, and feedback of all kinds!
 
-- 🐛 **Bug reports** → [Open an issue](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
-- 💡 **Feature requests** → [Request a feature](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
-- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
+- 🐛 **Bug reports** → [Open an issue](https://github.com/tokenpak/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Feature requests** → [Request a feature](https://github.com/tokenpak/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions)
 - 📖 **Full guide** → [CONTRIBUTING.md](CONTRIBUTING.md)
 - 📋 **Version history** → [CHANGELOG.md](CHANGELOG.md)
 
 ### Quick setup
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 pip install -e ".[dev]"
 pytest tests/ -q

@@ -80,11 +80,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/kaywhy331/tokenpak"
-Documentation = "https://github.com/kaywhy331/tokenpak/blob/master/README.md"
-"Bug Reports" = "https://github.com/kaywhy331/tokenpak/issues"
-"Source Code" = "https://github.com/kaywhy331/tokenpak"
-Changelog = "https://github.com/kaywhy331/tokenpak/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/tokenpak/tokenpak"
+Documentation = "https://github.com/tokenpak/tokenpak/blob/main/README.md"
+"Bug Reports" = "https://github.com/tokenpak/tokenpak/issues"
+"Source Code" = "https://github.com/tokenpak/tokenpak"
+Changelog = "https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
