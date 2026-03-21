@@ -44,7 +44,7 @@ Includes `pytest` and testing tools.
 ## Install from Source
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak.git
+git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
 pip install -e .
 ```

@@ -68,12 +68,12 @@ TokenPak is an open-source LLM proxy and context compression protocol. It helps:
 - **Improve quality**: Keep recent context intact
 - **Scale workflows**: Manage token budgets across agents
 
-Learn more: https://github.com/kaywhy331/tokenpak
+Learn more: https://github.com/tokenpak/tokenpak
 
 ## Support
 
-- Issues: https://github.com/kaywhy331/tokenpak/issues
-- Discussions: https://github.com/kaywhy331/tokenpak/discussions
+- Issues: https://github.com/tokenpak/tokenpak/issues
+- Discussions: https://github.com/tokenpak/tokenpak/discussions
 - Email: support@tokenpak.dev
 
 ## License

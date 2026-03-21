@@ -346,4 +346,4 @@ journalctl --user -u tokenpak -p err
 1. Run `tokenpak doctor` — it checks your install, config, and connectivity
 2. Enable debug: `TOKENPAK_DEBUG=1 tokenpak serve`
 3. Check the trace: `tokenpak trace --last`
-4. Open an issue: [github.com/kaywhy331/tokenpak/issues](https://github.com/kaywhy331/tokenpak/issues)
+4. Open an issue: [github.com/tokenpak/tokenpak/issues](https://github.com/tokenpak/tokenpak/issues)

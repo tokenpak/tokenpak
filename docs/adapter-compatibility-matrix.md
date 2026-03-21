@@ -236,7 +236,7 @@ LangChain may derive token counts differently than the underlying provider.
 1. **Identify the SDK/framework:** Does it have a documented API?
 2. **Check HTTP shape:** Can TokenPak translate HTTP requests/responses?
 3. **Token reporting:** Does the SDK report usage metrics?
-4. **Open an issue:** [TokenPak GitHub Issues](https://github.com/kaywhy331/tokenpak/issues)
+4. **Open an issue:** [TokenPak GitHub Issues](https://github.com/tokenpak/tokenpak/issues)
 
 Include:
 - SDK name and version

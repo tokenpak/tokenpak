@@ -119,7 +119,7 @@ Deterministic context compression for multi-agent AI systems.
 
 pip install tokenpak
 
-https://github.com/kaywhy331/tokenpak
+https://github.com/tokenpak/tokenpak
 ```
 
 ---

@@ -34,4 +34,4 @@ If you're seeing an error, paste it here (including traceback if helpful).
 
 ---
 
-💡 **Tip:** Questions might get faster answers in [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions/new?category=q-a) — try there first!
+💡 **Tip:** Questions might get faster answers in [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions/new?category=q-a) — try there first!

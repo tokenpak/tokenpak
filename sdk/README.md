@@ -21,7 +21,7 @@ pnpm add tokenpak
 
 Works with any LLM client (OpenAI SDK, Anthropic SDK, LangChain, etc.) — no proxy required.
 
-**Optional:** Run a local [TokenPak server](https://github.com/kaywhy331/tokenpak) for advanced caching and analytics:
+**Optional:** Run a local [TokenPak server](https://github.com/tokenpak/tokenpak) for advanced caching and analytics:
 ```bash
 pip install tokenpak
 tokenpak serve --port 8000
@@ -251,10 +251,10 @@ import type {
 
 ## Links
 
-- [Full documentation](https://github.com/kaywhy331/tokenpak/blob/main/README.md)
+- [Full documentation](https://github.com/tokenpak/tokenpak/blob/main/README.md)
 - [OCP Protocol spec](https://github.com/kaywhy331/ocp-protocol)
 - [Python package (PyPI)](https://pypi.org/project/tokenpak/)
-- [Issue tracker](https://github.com/kaywhy331/tokenpak/issues)
+- [Issue tracker](https://github.com/tokenpak/tokenpak/issues)
 
 ## License
 

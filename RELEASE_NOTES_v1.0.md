@@ -210,6 +210,6 @@ TokenPak v1.0 was built by Kevin Yang with execution support from Trix and Cali.
 
 ---
 
-*For bugs and feature requests: [GitHub Issues](https://github.com/kaywhy331/tokenpak/issues)*
+*For bugs and feature requests: [GitHub Issues](https://github.com/tokenpak/tokenpak/issues)*
 *For architecture details: [ARCHITECTURE.md](ARCHITECTURE.md)*
 *Full changelog: [CHANGELOG.md](CHANGELOG.md)*

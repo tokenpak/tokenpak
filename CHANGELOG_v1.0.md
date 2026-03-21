@@ -176,7 +176,7 @@ Internal beta release. Not distributed publicly.
 
 ## Links
 
-- [Releases on GitHub](https://github.com/kaywhy331/tokenpak/releases)
-- [v1.0.0](https://github.com/kaywhy331/tokenpak/releases/tag/v1.0.0)
+- [Releases on GitHub](https://github.com/tokenpak/tokenpak/releases)
+- [v1.0.0](https://github.com/tokenpak/tokenpak/releases/tag/v1.0.0)
 - [Migration Guide](RELEASE_NOTES_v1.0.md#migration-guide)
-- [Open Issues](https://github.com/kaywhy331/tokenpak/issues)
+- [Open Issues](https://github.com/tokenpak/tokenpak/issues)

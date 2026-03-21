@@ -61,7 +61,7 @@ pip install tokenpak[ml]         # ML-powered compression via LLMLingua
 ### Option 2: From Source
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 pip install -e .
 
@@ -73,10 +73,10 @@ pip install -e ".[tiktoken,ml]"
 
 ```bash
 # Pull from registry
-docker pull kaywhy331/tokenpak:latest
+docker pull tokenpak/tokenpak:latest
 
 # Or build from source
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 docker build -t tokenpak:local .
 ```
@@ -91,7 +91,7 @@ docker run -d \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   -e OPENAI_API_KEY="sk-..." \
   -v tokenpak-data:/home/tokenpak/.tokenpak \
-  kaywhy331/tokenpak:latest
+  tokenpak/tokenpak:latest
 ```
 
 > Binding to `127.0.0.1:8766` keeps the port local-only. Use a reverse proxy (nginx, Caddy) for external access.
@@ -219,7 +219,7 @@ Create the service file at `/etc/systemd/system/tokenpak.service`:
 ```ini
 [Unit]
 Description=TokenPak LLM Proxy
-Documentation=https://github.com/kaywhy331/tokenpak
+Documentation=https://github.com/tokenpak/tokenpak
 After=network-online.target
 Wants=network-online.target
 
@@ -281,7 +281,7 @@ version: "3.9"
 
 services:
   tokenpak:
-    image: kaywhy331/tokenpak:latest
+    image: tokenpak/tokenpak:latest
     container_name: tokenpak
     restart: unless-stopped
     ports:
@@ -637,7 +637,7 @@ Clients → Cloud Run (tokenpak, auto-scales 0→N)
 
 1. **Build and push image:**
    ```bash
-   git clone https://github.com/kaywhy331/tokenpak
+   git clone https://github.com/tokenpak/tokenpak
    cd tokenpak
    gcloud builds submit --tag gcr.io/YOUR_PROJECT/tokenpak
    ```
@@ -711,7 +711,7 @@ Clients → Azure Container Apps (tokenpak, auto-scale)
      --name tokenpak \
      --resource-group myRG \
      --environment tokenpak-env \
-     --image kaywhy331/tokenpak:latest \
+     --image tokenpak/tokenpak:latest \
      --target-port 8766 \
      --ingress internal \
      --min-replicas 1 \

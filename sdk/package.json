@@ -29,11 +29,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kaywhy331/tokenpak"
+    "url": "https://github.com/tokenpak/tokenpak"
   },
-  "homepage": "https://github.com/kaywhy331/tokenpak#readme",
+  "homepage": "https://github.com/tokenpak/tokenpak#readme",
   "bugs": {
-    "url": "https://github.com/kaywhy331/tokenpak/issues"
+    "url": "https://github.com/tokenpak/tokenpak/issues"
   },
   "dependencies": {
     "axios": "^1.7.0"

@@ -28,10 +28,10 @@ All local sources are consistent at `v1.0.0`.
 | Version | `1.0.0` |
 | Author | Kevin Yang (`kaywhy331@gmail.com`) |
 | License | MIT |
-| Homepage | https://github.com/kaywhy331/tokenpak |
-| Documentation | https://github.com/kaywhy331/tokenpak/blob/master/README.md |
-| Bug Reports | https://github.com/kaywhy331/tokenpak/issues |
-| Source Code | https://github.com/kaywhy331/tokenpak |
+| Homepage | https://github.com/tokenpak/tokenpak |
+| Documentation | https://github.com/tokenpak/tokenpak/blob/master/README.md |
+| Bug Reports | https://github.com/tokenpak/tokenpak/issues |
+| Source Code | https://github.com/tokenpak/tokenpak |
 
 ---
 

@@ -239,7 +239,7 @@ New options are optional — v0.1 configs work without modification.
 **A:** Internal APIs (anything not in `__all__`) may change in future versions. Consider migrating to the public API.
 
 ### Q: Where do I report issues?
-**A:** GitHub Issues: https://github.com/kaywhy331/tokenpak/issues
+**A:** GitHub Issues: https://github.com/tokenpak/tokenpak/issues
 
 ### Q: Where are the full docs?
 **A:** See `/docs/` in the repo or https://tokenpak.dev (coming soon)
@@ -262,7 +262,7 @@ Before deploying v1.0:
 ## Need Help?
 
 - **Docs:** `/docs/` directory
-- **Issues:** https://github.com/kaywhy331/tokenpak/issues
+- **Issues:** https://github.com/tokenpak/tokenpak/issues
 - **Changelog:** `/CHANGELOG.md`
 
 Welcome to TokenPak v1.0! 🎉

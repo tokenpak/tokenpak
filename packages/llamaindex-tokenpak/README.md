@@ -67,7 +67,7 @@ query_engine = index.as_query_engine()
 
 TokenPak is an open protocol for AI context optimization. It compresses context blocks to fit within token budgets while keeping the highest-priority content intact.
 
-Learn more: https://github.com/kaywhy331/tokenpak
+Learn more: https://github.com/tokenpak/tokenpak
 
 ---
 
@@ -157,8 +157,8 @@ Typical savings on RAG pipelines:
 
 ## Support
 
-- Issues: https://github.com/kaywhy331/tokenpak/issues
-- Discussions: https://github.com/kaywhy331/tokenpak/discussions
+- Issues: https://github.com/tokenpak/tokenpak/issues
+- Discussions: https://github.com/tokenpak/tokenpak/discussions
 
 ## License
 

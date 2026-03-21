@@ -108,7 +108,7 @@ See [API Reference](API.md) for full class documentation.
 ### Quick Dev Setup
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 pip install -e ".[dev]"
 pytest
@@ -131,10 +131,10 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for benchmarks.
 
 ## 🔗 External Links
 
-- **GitHub:** [github.com/kaywhy331/tokenpak](https://github.com/kaywhy331/tokenpak)
+- **GitHub:** [github.com/tokenpak/tokenpak](https://github.com/tokenpak/tokenpak)
 - **PyPI:** [pypi.org/project/tokenpak](https://pypi.org/project/tokenpak/)
-- **Issues:** [GitHub Issues](https://github.com/kaywhy331/tokenpak/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
+- **Issues:** [GitHub Issues](https://github.com/tokenpak/tokenpak/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions)
 
 ---
 

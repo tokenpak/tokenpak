@@ -47,7 +47,7 @@ pip install --upgrade tokenpak==X.Y.Z
 
 ## 📖 Documentation
 
-- [Full Changelog](https://github.com/kaywhy331/tokenpak/blob/master/CHANGELOG.md)
+- [Full Changelog](https://github.com/tokenpak/tokenpak/blob/master/CHANGELOG.md)
 - [Documentation](https://tokenpak.dev)
 - [API Reference](https://tokenpak.dev/api)
 

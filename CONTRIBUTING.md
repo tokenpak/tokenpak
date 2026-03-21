@@ -6,9 +6,9 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 
 ## Ways to Contribute
 
-- 🐛 **Report a bug** — [Open a bug report](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
-- 💡 **Request a feature** — [Open a feature request](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
-- 💬 **Ask a question** — Use [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions), not issues
+- 🐛 **Report a bug** — [Open a bug report](https://github.com/tokenpak/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Request a feature** — [Open a feature request](https://github.com/tokenpak/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Ask a question** — Use [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions), not issues
 - 📝 **Improve docs** — PRs for typos, outdated examples, and clarifications always welcome
 - 🔧 **Submit code** — See PR workflow below
 
@@ -26,7 +26,7 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 
 ```bash
 # Clone the repo
-git clone https://github.com/kaywhy331/tokenpak.git
+git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
 
 # Create a virtual environment
@@ -111,7 +111,7 @@ black --check .
 2. **Make focused changes** — one PR per concern
 3. **Write tests** for new behavior when practical
 4. **Run the full test suite** and confirm it passes
-5. **Update [CHANGELOG.md](CHANGELOG.md)** — add your change under `## [Unreleased]` in the correct section (Added / Changed / Fixed / Security). Link to your PR: `[#123](https://github.com/kaywhy331/tokenpak/pull/123)`
+5. **Update [CHANGELOG.md](CHANGELOG.md)** — add your change under `## [Unreleased]` in the correct section (Added / Changed / Fixed / Security). Link to your PR: `[#123](https://github.com/tokenpak/tokenpak/pull/123)`
 6. **Open a PR** with a clear description of what and why
 7. **Include** `git log --oneline -1` in your PR description
 
@@ -144,7 +144,7 @@ We aim to:
 
 ## Getting Help
 
-- Open a [GitHub Discussion](https://github.com/kaywhy331/tokenpak/discussions)
+- Open a [GitHub Discussion](https://github.com/tokenpak/tokenpak/discussions)
 - Tag @kaywhy331 for blocking issues
 - Read the docs under `/docs`
 
