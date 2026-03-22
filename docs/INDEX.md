@@ -39,6 +39,8 @@
 | Document | What It Covers |
 |----------|----------------|
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Production deployment, systemd, Docker, scaling |
+| [Troubleshooting](troubleshooting.md) | Symptom-first problem solving (12 categories) |
+| [Error Codes](errors.md) | Full error code reference (TP-Exxx) |
 | [Telemetry](telemetry.md) | Cost tracking, privacy model, data retention |
 | [FAQ](faq.md) | Common questions and troubleshooting |
 

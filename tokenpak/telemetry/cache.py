@@ -202,7 +202,7 @@ def cache_key(*parts: Any, prefix: str = "") -> str:
 
     # If key is very long, hash the suffix
     if len(key) > 128:
-        suffix = hashlib.md5(key.encode()).hexdigest()[:16]
+        suffix = hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:16]
         key = f"{key[:80]}...{suffix}"
 
     return key

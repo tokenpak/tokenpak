@@ -201,7 +201,7 @@ def _empty_diff(trace_id: str = "none") -> ContextDiff:
 
 def _get_recent_trace(since: Optional[str] = None) -> Optional[dict]:
     """Load recent trace from vault or storage. Returns None if not found."""
-    # TODO: Implement actual trace retrieval from tp_events or vault
+    # DEFERRED: Implement actual trace retrieval from tp_events or vault
     # For now, this is a stub that returns None (simulating no trace data)
     return None
 

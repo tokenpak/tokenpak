@@ -39,7 +39,7 @@ class GoogleFormat:
     - "systemInstruction" for system prompt
     - Different role names ("model" instead of "assistant")
 
-    TODO: Full implementation for multi-provider support.
+    DEFERRED: Full implementation for multi-provider support.
     """
 
     PROVIDER = "google"

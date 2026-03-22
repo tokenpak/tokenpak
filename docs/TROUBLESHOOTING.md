@@ -398,7 +398,288 @@ az container show --resource-group <rg> --name tokenpak --query "instanceView.ev
 
 ---
 
-## 7) Standard Health Commands
+## 7) OpenClaw Integration Issues (2026-03-12 Session)
+
+### 7.1 Primary model reverting after restart
+
+**Symptoms**
+- Gateway config shows TokenPak routing (e.g., `tokenpak-anthropic/claude-sonnet-4-6`)
+- After restart, reverts to direct provider (e.g., `anthropic/claude-haiku-4-5`)
+- Manual config patches don't persist
+
+**Root cause**
+The `tokenpak-inject.sh` script (runs as ExecStartPre) was overwriting manually-set TokenPak primaries during startup interleave process.
+
+**Diagnostics**
+```bash
+# Check primary model
+python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(f'Primary: {cfg[\"agents\"][\"defaults\"][\"model\"][\"primary\"]}')"
+
+# Check if it reverts after restart
+systemctl --user restart openclaw-gateway.service
+sleep 5
+python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(f'After restart: {cfg[\"agents\"][\"defaults\"][\"model\"][\"primary\"]}')"
+```
+
+**Fixes**
+1. **Root cause fix (permanent):** Modify `~/.local/bin/tokenpak-inject.sh` to preserve explicitly-set TokenPak primaries:
+```python
+# In the interleave() function, add early exit:
+if primary and is_tp(primary.split("/", 1)[0]):
+    # Primary is already tokenpak — don't change it
+    return model_cfg, False
+```
+
+2. **Workaround (temporary):** Use gateway config API instead of direct file edits:
+```bash
+# Set via API (persists better than file edits)
+python3 << 'PYEOF'
+import json
+from pathlib import Path
+cfg = json.load(open(Path.home() / '.openclaw/openclaw.json'))
+cfg['agents']['defaults']['model']['primary'] = 'tokenpak-anthropic/claude-sonnet-4-6'
+cfg['agents']['defaults']['model']['fallbacks'] = [
+    'tokenpak-anthropic/claude-haiku-4-5',
+    'anthropic/claude-haiku-4-5'
+]
+json.dump(cfg, open(Path.home() / '.openclaw/openclaw.json', 'w'), indent=2)
+PYEOF
+systemctl --user restart openclaw-gateway.service
+```
+
+3. **Verify fix:**
+```bash
+# Primary should persist after restart
+python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print('✅ PERSISTS' if 'tokenpak' in cfg['agents']['defaults']['model']['primary'] else '❌ REVERTED')"
+```
+
+---
+
+### 7.2 Missing TokenPak source files (bytecode only)
+
+**Symptoms**
+- ImportError: cannot import name 'server' from 'tokenpak.agent.proxy'
+- Only .pyc files exist in `~/vault/Projects/ocp-protocol/packages/pypi/tokenpak/`
+- Tests pass from cache but fresh imports fail
+
+**Root cause**
+Distribution package created from compiled Python bytecode without committing source files to git. When Python tries fresh import (not from cache), it fails because .pyc references missing source.
+
+**Diagnostics**
+```bash
+# Check file count mismatch
+find ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak -name "*.py" | wc -l
+find ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak -name "*.pyc" | wc -l
+
+# Try import (may work if cached)
+python3 -c "from tokenpak.telemetry.adapters import anthropic"
+
+# Fresh import (will fail if source missing)
+python3 << 'EOF'
+import sys
+sys.modules.pop('tokenpak', None)
+from tokenpak.telemetry.adapters import anthropic
+EOF
+```
+
+**Fixes**
+1. **Copy source from main repo (recommended):**
+```bash
+# Backup broken package
+mv ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak.broken
+
+# Copy complete source
+cp -r ~/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak
+
+# Verify import
+python3 -c "from tokenpak.agent.proxy import server; print('✅ Import works')"
+
+# Commit
+cd ~/vault && git add -A && git commit -m "trix: recover tokenpak source in ocp-protocol package"
+```
+
+2. **Decompile .pyc files (fallback):**
+```bash
+pip install uncompyle6
+uncompyle6 -r ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak/ -o ~/tokenpak-recovered/
+# Copy recovered source back to vault
+```
+
+---
+
+### 7.3 Agent missing module updates
+
+**Symptoms**
+- One machine (Sue) has import errors while others work
+- New modules/stubs created on Trix don't exist on Sue
+- Tests fail with ImportError for recently-added code
+
+**Root cause**
+Git pull/sync not updated on remote machines when new modules added to main repo.
+
+**Diagnostics**
+```bash
+# Compare available modules
+python3 -c "import tokenpak.agent.semantic.term_card_resolver; print('✅ Module found')" 2>&1 || echo "❌ Module missing"
+
+# Check git status
+cd ~/tokenpak && git status
+cd ~/tokenpak && git log --oneline -5 | head
+```
+
+**Fixes**
+1. **Pull latest code:**
+```bash
+cd ~/tokenpak && git pull origin master
+```
+
+2. **Verify update:**
+```bash
+python3 -c "from tokenpak.agent.semantic.term_card_resolver import TermCardResolver; print('✅ Updated')"
+```
+
+3. **If issues persist:** Check for merge conflicts or stale branches:
+```bash
+cd ~/tokenpak && git fetch --all && git status
+```
+
+---
+
+### 7.4 Case sensitivity collision in queue directories
+
+**Symptoms**
+- Tasks in `~/vault/Agents/trix/queue/` (lowercase) never execute
+- Same agent has `~/vault/Agents/Trix/queue/` (uppercase) with active tasks
+- Heartbeat script ignores lowercase directories
+
+**Root cause**
+Old automation created lowercase queue dirs; heartbeat monitoring scripts expect uppercase (case-sensitive filesystem). Tasks stuck in orphaned lowercase dirs.
+
+**Diagnostics**
+```bash
+# Find orphaned lowercase dirs
+find ~/vault/Agents -type d -name queue | grep -E 'trix|cali' | sort
+ls -la ~/vault/Agents/{Trix,trix,Cali,cali}/queue 2>&1
+```
+
+**Fixes**
+1. **Identify orphaned tasks:**
+```bash
+find ~/vault/Agents/{trix,cali}/queue -name "*.md" 2>/dev/null
+```
+
+2. **Delete lowercase directories:**
+```bash
+rm -rf ~/vault/Agents/trix/queue ~/vault/Agents/cali/queue
+cd ~/vault && git add -A && git commit -m "trix: cleanup — remove orphaned lowercase queue dirs"
+```
+
+3. **Verify only uppercase remain:**
+```bash
+ls -ld ~/vault/Agents/{Trix,Cali}/queue
+```
+
+---
+
+### 7.5 Stale compiled bytecode in __pycache__
+
+**Symptoms**
+- Fresh module added but old .pyc still loads
+- Import errors reference functions that don't exist in source
+- `__pycache__` directories growing large
+
+**Root cause**
+Python caches compiled .pyc files; if source changes but cache isn't invalidated, stale bytecode loads.
+
+**Diagnostics**
+```bash
+# Check __pycache__ size
+find ~/tokenpak -type d -name __pycache__ | wc -l
+du -sh ~/tokenpak/.
+
+# Check if .pyc is newer than .py
+stat ~/tokenpak/tokenpak/core.py | grep Modify
+stat ~/tokenpak/tokenpak/__pycache__/core*.pyc | grep Modify
+```
+
+**Fixes**
+1. **Clear Python cache:**
+```bash
+find ~/tokenpak -type d -name __pycache__ -exec rm -rf {} +
+find ~/tokenpak -name "*.pyc" -delete
+```
+
+2. **Force recompile on next import:**
+```bash
+python3 -c "import tokenpak; print('✅ Recompiled')"
+```
+
+3. **Verify no stale references:**
+```bash
+python3 -c "import tokenpak.agent.proxy.server; print(server.__file__)"
+```
+
+---
+
+### 7.6 Duplicate model aliases causing routing conflicts
+
+**Symptoms**
+- Multiple aliases point to same model
+- Unclear which route takes precedence
+- Model selection unpredictable under fallback conditions
+
+**Root cause**
+Manual config edits and deduplication logic left duplicate aliases across machines (e.g., `opus` as alias on both tokenpak and direct anthropic).
+
+**Diagnostics**
+```bash
+# Find duplicate aliases
+python3 << 'EOF'
+import json
+from pathlib import Path
+cfg = json.load(open(Path.home() / '.openclaw/openclaw.json'))
+models = cfg['agents']['defaults']['models']
+aliases = {}
+for model, spec in models.items():
+    alias = spec.get('alias')
+    if alias:
+        if alias in aliases:
+            print(f"❌ Duplicate: {alias} → {aliases[alias]} AND {model}")
+        else:
+            aliases[alias] = model
+EOF
+```
+
+**Fixes**
+1. **Consolidate to TokenPak versions (recommended):**
+```python
+# Remove aliases from direct providers; keep only on tokenpak-* versions
+# Example:
+# Remove: "anthropic/claude-opus-4-6": {"alias": "opus"}
+# Keep:   "tokenpak-anthropic/claude-opus-4-6": {"alias": "opus"}
+```
+
+2. **Verify no duplicates remain:**
+```bash
+python3 -c "
+import json
+from pathlib import Path
+cfg = json.load(open(Path.home() / '.openclaw/openclaw.json'))
+models = cfg['agents']['defaults']['models']
+aliases = {}
+for m, s in models.items():
+    a = s.get('alias')
+    if a and a in aliases:
+        print(f'❌ {a}: {aliases[a]} + {m}')
+    elif a:
+        aliases[a] = m
+print(f'✅ {len(aliases)} unique aliases')
+"
+```
+
+---
+
+## 8) Standard Health Commands
 
 ```bash
 # Health

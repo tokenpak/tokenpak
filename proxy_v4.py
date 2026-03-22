@@ -217,6 +217,8 @@ except ImportError:
     print("📄 Config: env vars only (config_loader not available)")
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
+LISTEN_ADDRESS = _cfg("listen_address", "0.0.0.0", "TOKENPAK_LISTEN_ADDRESS", str)
+DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOARD_AUTH", bool)
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
@@ -3405,6 +3407,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
     def _serve_dashboard(self):
         """Serve static dashboard files (HTML/CSS/JS)."""
+        # Token auth gate
+        if DASHBOARD_AUTH_ENABLED:
+            from urllib.parse import urlparse, parse_qs
+            from tokenpak.token_manager import load_or_create_token
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            provided = params.get("token", [None])[0]
+            expected = load_or_create_token()
+            if not provided or provided != expected:
+                self._send_json(
+                    {"error": {"type": "unauthorized", "message": "Dashboard token required. Append ?token=<your-token> to the URL."}},
+                    status=401,
+                )
+                return
+            # Use path without query string for file resolution
+            self.path = parsed.path
+
         dashboard_dir = Path(__file__).parent / "tokenpak" / "dashboard"
         
         # Default to index.html
@@ -3550,6 +3569,42 @@ class ThreadedHTTPServer(HTTPServer):
                     _active_requests_drained.set()
 
 
+def validate_tokenpak_config():
+    """Validate and auto-correct TokenPak config at startup."""
+    expected = {
+        'TOKENPAK_SEMANTIC_CACHE': '1',
+        'TOKENPAK_PREFIX_REGISTRY': '1',
+        'TOKENPAK_COMPRESSION_DICT': '1',
+        'TOKENPAK_TRACE': '1',
+        'TOKENPAK_BUDGET_CONTROLLER': '1',
+        'TOKENPAK_REQUEST_LOGGER': '1',
+        'TOKENPAK_ERROR_NORMALIZER': '1',
+        'TOKENPAK_SALIENCE_ROUTER': '1',
+        'TOKENPAK_CACHE_REGISTRY': '1',
+        'TOKENPAK_RETRIEVAL_WATCHDOG': '1',
+        'TOKENPAK_FAILURE_MEMORY': '1',
+        'TOKENPAK_FIDELITY_TIERS': '1',
+        'TOKENPAK_PRECONDITION_GATES': '1',
+        'TOKENPAK_QUERY_REWRITER': '1',
+        'TOKENPAK_SESSION_CAPSULES': '1',
+        'TOKENPAK_STABILITY_SCORER': '1',
+        'TOKENPAK_MODE': 'hybrid',
+        'TOKENPAK_PORT': '8766',
+    }
+    
+    drift_found = False
+    for key, expected_val in expected.items():
+        actual_val = os.getenv(key, '')
+        if actual_val != expected_val:
+            print(f"⚠️  CONFIG DRIFT: {key}={actual_val}, expected {expected_val}")
+            os.environ[key] = expected_val
+            drift_found = True
+    
+    if drift_found:
+        print("🔧 TokenPak config auto-corrected")
+    else:
+        print("✅ TokenPak config validated - all settings correct")
+
 def main():
     port = PROXY_PORT
     mode_desc = {
@@ -3557,6 +3612,9 @@ def main():
         "hybrid": "Protected/Code strict, Narrative compressed",
         "aggressive": "Everything except protected gets compressed",
     }
+
+    # Validate config at startup
+    validate_tokenpak_config()
 
     # Load vault index on startup
     VAULT_INDEX.maybe_reload()
@@ -3615,7 +3673,7 @@ def main():
     except Exception:
         pass
 
-    server = ThreadedHTTPServer(("0.0.0.0", port), ForwardProxyHandler)
+    server = ThreadedHTTPServer((LISTEN_ADDRESS, port), ForwardProxyHandler)
 
     # Write PID file for CLI stop/restart
     _pid_path = Path.home() / ".tokenpak" / "proxy.pid"

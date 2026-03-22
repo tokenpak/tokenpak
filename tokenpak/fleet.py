@@ -42,6 +42,18 @@ class FleetStats:
     cache_read_tokens: int = 0
 
 
+@dataclass
+class FleetAgentRow:
+    """Per-agent breakdown row."""
+    machine: str
+    agent: str
+    model: str
+    requests: int = 0
+    tokens: int = 0
+    cost: float = 0.0
+    saved: float = 0.0
+
+
 # ── Fleet configuration ───────────────────────────────────────────────────────
 
 def _get_fleet_config_path() -> Path:
@@ -92,6 +104,43 @@ def save_fleet_config(machines: List[FleetMachine]):
 
 
 # ── Health & stats queries ────────────────────────────────────────────────────
+
+def _query_machine_aggregate(machine: FleetMachine, timeout: float = 3.0, since: Optional[str] = None) -> tuple[list[dict], Optional[str]]:
+    """Query per-agent breakdown from /stats/aggregate/local."""
+    try:
+        url = f"http://{machine.host}:{machine.port}/stats/aggregate/local"
+        if since:
+            url += f"?since={since}"
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            payload = json.loads(resp.read())
+        return payload.get("rows", []), None
+    except urllib.error.URLError as e:
+        return [], str(e)
+    except Exception as e:
+        return [], str(e)
+
+
+def query_fleet_agent_rows(machines: List[FleetMachine], since: Optional[str] = None) -> tuple[list[FleetAgentRow], list[str]]:
+    """Query all machines for per-agent rows."""
+    rows: list[FleetAgentRow] = []
+    errors: list[str] = []
+    for machine in machines:
+        data, err = _query_machine_aggregate(machine, since=since)
+        if err:
+            errors.append(f"{machine.name}: {err}")
+            continue
+        for row in data:
+            rows.append(FleetAgentRow(
+                machine=row.get("machine", machine.name),
+                agent=row.get("agent", "unknown"),
+                model=row.get("model", "unknown"),
+                requests=int(row.get("requests", 0) or 0),
+                tokens=int(row.get("tokens", 0) or 0),
+                cost=float(row.get("cost", 0.0) or 0.0),
+                saved=float(row.get("saved", 0.0) or 0.0),
+            ))
+    return rows, errors
+
 
 def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
     """Query a single machine for health and stats."""
@@ -217,6 +266,36 @@ def render_fleet_table(stats_list: List[FleetStats], compact: bool = False) -> s
     lines.append("")
     lines.append(f"Fleet: {total_requests} reqs | spent {_fmt_cost(total_cost)} | 💰 saved {_fmt_cost(grand_saved)} (compression {_fmt_cost(total_comp)}, cache {_fmt_cost(total_cache)})")
 
+    return "\n".join(lines)
+
+
+def render_fleet_agent_table(rows: List[FleetAgentRow]) -> str:
+    """Render per-agent breakdown for the fleet."""
+    if not rows:
+        return "No fleet agent data available."
+
+    header = "Machine  Agent   Model             Requests  Tokens   Spent    Saved"
+    lines = [header, "─" * len(header)]
+
+    total_requests = 0
+    total_tokens = 0
+    total_cost = 0.0
+    total_saved = 0.0
+
+    rows_sorted = sorted(rows, key=lambda r: (-r.cost, r.machine, r.agent, r.model))
+    for r in rows_sorted:
+        lines.append(
+            f"{r.machine:<8} {r.agent:<7} {r.model:<17} {r.requests:>8}  {_fmt_tokens(r.tokens):>6}  {_fmt_cost(r.cost):>7}  {_fmt_cost(r.saved):>7}"
+        )
+        total_requests += r.requests
+        total_tokens += r.tokens
+        total_cost += r.cost
+        total_saved += r.saved
+
+    lines.append("─" * len(header))
+    lines.append(
+        f"TOTAL{'':<3}{'':<7}{'':<17} {total_requests:>8}  {_fmt_tokens(total_tokens):>6}  {_fmt_cost(total_cost):>7}  {_fmt_cost(total_saved):>7}"
+    )
     return "\n".join(lines)
 
 

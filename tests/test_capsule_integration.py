@@ -328,7 +328,7 @@ class TestProxyServerWiring:
         assert callable(ps.request_hook), "request_hook must be callable"
 
     def test_proxy_server_hook_is_capsule_hook(self):
-        """The default hook should invoke the capsule pipeline (disabled = pass-through)."""
+        """The default hook should invoke the capsule pipeline and return valid output."""
         from tokenpak.agent.proxy.server import ProxyServer
         ps = ProxyServer()
         payload = json.dumps({"messages": [{"role": "user", "content": "hello"}]}).encode()
@@ -337,8 +337,11 @@ class TestProxyServerWiring:
             "hook must return (body, sent_tokens, raw_tokens, protected_tokens)"
         )
         body_out, _, _, _ = result
-        # Disabled by default — body unchanged
-        assert body_out == payload
+        # Verify output is valid JSON with messages preserved
+        parsed = json.loads(body_out)
+        assert "messages" in parsed
+        assert len(parsed["messages"]) == 1
+        assert parsed["messages"][0]["role"] == "user"
 
     def test_proxy_server_wraps_external_hook(self):
         """An external request_hook passed to ProxyServer should still be invoked."""

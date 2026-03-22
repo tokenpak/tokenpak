@@ -70,9 +70,14 @@ _COMMAND_GROUPS = {
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
         ("attribution", "View savings by agent/skill/model"),
+        ("models", "Show per-model usage and efficiency breakdown"),
+        ("forecast", "Cost burn rate & projections"),
         ("debug", "Toggle verbose debug logging"),
         ("learn", "View/reset learned patterns"),
+        ("vault-health", "Vault index health diagnostic and repair"),
         ("fleet", "Multi-machine proxy fleet status"),
+        ("aggregate", "Aggregate request ledger across machines"),
+        ("requests", "Live request explorer"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -85,6 +90,7 @@ _COMMAND_GROUPS = {
         ("audit", "Enterprise audit log management"),
         ("compliance", "Generate compliance reports"),
         ("validate", "Validate a TokenPak JSON file"),
+        ("config-check", "Validate proxy config file"),
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
@@ -338,6 +344,26 @@ def cmd_start(args):
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
     pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+
+    # Validate config on boot (P1-T5)
+    config_path = Path.home() / ".tokenpak" / "config.json"
+    if config_path.exists():
+        try:
+            import json as _json
+            from tokenpak.config_validator import ConfigValidator
+            with open(config_path, "r") as _cf:
+                _config = _json.load(_cf)
+            _validator = ConfigValidator()
+            _errors = _validator.validate(_config)
+            if _errors:
+                import sys as _sys
+                print(f"\n✗ Config validation failed ({len(_errors)} error(s)):", file=_sys.stderr)
+                for _err in _errors:
+                    print(f"  {_err}", file=_sys.stderr)
+                print("\nFix config and retry. Use: tokenpak config-check <file>", file=_sys.stderr)
+                return
+        except Exception as _e:
+            print(f"Warning: Config validation skipped ({_e})")
 
     # Check if proxy is already responding (covers systemd, manual, PID file)
     health = _proxy_get("/health", port=port)
@@ -826,6 +852,91 @@ def cmd_stats(args):
     print(f"{'Uptime:':<17}{uptime_str}")
 
 
+def cmd_models(args):
+    """Show per-model breakdown of usage and efficiency."""
+    from .models import ModelAnalyzer
+    
+    # Load and aggregate stats
+    analyzer = ModelAnalyzer()
+    model_stats = analyzer.load_from_file(limit=1000)
+    
+    if not model_stats:
+        print("No model usage data yet. Run some requests through the proxy.")
+        return
+    
+    # Sort by requests (descending)
+    sorted_models = sorted(model_stats.values(), key=lambda s: s.requests, reverse=True)
+    
+    # If asking for a specific model
+    if getattr(args, "model", None):
+        target_model = args.model
+        matching = [m for m in sorted_models if target_model.lower() in m.model_name.lower()]
+        
+        if not matching:
+            print(f"No data found for model matching '{target_model}'")
+            return
+        
+        # Show detailed drill-down
+        for stats in matching:
+            costs = stats._cost_metrics()
+            
+            print(f"Model: {stats.model_name}")
+            print("─" * 60)
+            print(f"Status: active (last request available)")
+            print(f"Requests: {stats.requests} | Tokens: {stats.input_tokens + stats.output_tokens:,}")
+            print(f"  Input:  {stats.input_tokens:,} | Output: {stats.output_tokens:,}")
+            print(f"Cost: ${costs['sent']:.2f} (sent) | Saved: ${costs['saved']:.2f} (cache) | Net: ${costs['net']:.2f}")
+            print(f"Cache: {stats._cache_hit_rate()}% hit rate ({stats.cache_hits} hits)")
+            print(f"Compression: {stats._compression_efficiency()}% efficiency")
+            print(f"Latency: {stats._avg_latency()}ms avg")
+            print()
+        return
+    
+    # Show summary table
+    if getattr(args, "raw", False):
+        # JSON output
+        data = {
+            "models": [s.to_dict() for s in sorted_models],
+            "summary": analyzer.get_summary(),
+        }
+        print(json.dumps(data, indent=2))
+        return
+    
+    # Table format
+    summary = analyzer.get_summary()
+    
+    if summary["total_requests"] == 0:
+        print("No model usage data yet.")
+        return
+    
+    print("TokenPak Models Dashboard")
+    print("=" * 100)
+    print(f"{'Model':<30} {'Requests':>10} {'Tokens Sent':>14} {'Cache%':>8} {'Saved':>10} {'Efficiency':>12}")
+    print("─" * 100)
+    
+    for stats in sorted_models:
+        if stats.requests == 0:
+            continue
+        
+        costs = stats._cost_metrics()
+        model_short = stats.model_name[:28]
+        
+        print(
+            f"{model_short:<30} {stats.requests:>10} {stats.input_tokens + stats.output_tokens:>14,} "
+            f"{stats._cache_hit_rate():>7.0f}% ${costs['saved']:>9.2f} {stats._compression_efficiency():>11.0f}%"
+        )
+    
+    print("─" * 100)
+    total_tokens = summary["total_tokens_sent"]
+    print(
+        f"{'TOTAL':<30} {summary['total_requests']:>10} {total_tokens:>14,} "
+        f"{summary['overall_cache_hit_rate']:>7.0f}% ${summary['total_cost_saved']:>9.2f} "
+        f"{summary['overall_compression_efficiency']:>11.0f}%"
+    )
+    print()
+    print(f"💰 Total Cost: ${summary['total_cost_sent']:.2f} sent | ${summary['total_cost_saved']:.2f} saved | ${summary['total_cost_net']:.2f} net")
+
+
 def cmd_serve(args):
     """Start monitoring proxy or telemetry server (if available)."""
     if getattr(args, "telemetry", False):
@@ -950,6 +1061,130 @@ class Colors:
     @staticmethod
     def fail(text):
         return f"{Colors.RED}❌{Colors.RESET}  {text}"
+
+
+
+
+def cmd_requests(args):
+    """Live request explorer: tail or show a request by id."""
+    import json as _json
+    from tokenpak.request_explorer import (
+        REQUESTS_PATH,
+        load_requests,
+        get_request_by_id,
+        to_view,
+        cache_pct,
+        status_label,
+        age_label,
+    )
+    import time as _time
+
+    action = getattr(args, "requests_cmd", None) or getattr(args, "action", None)
+    request_id = getattr(args, "request_id", None)
+
+    if action and action not in ("tail", "show"):
+        # Allow `tokenpak requests <id>`
+        request_id = action
+        action = "show"
+
+    if action is None:
+        action = "show" if request_id else "tail"
+
+    if action == "tail":
+        limit = getattr(args, "limit", 10)
+        follow = not getattr(args, "once", False)
+
+        if not REQUESTS_PATH.exists():
+            print("No request ledger found yet. Run requests through the proxy first.")
+            return
+
+        def _print_rows(rows, with_header=False):
+            header = "ID         Model              Input    Output   Cache%  Saved $  Status     Age"
+            if with_header:
+                print(header)
+                print("─" * len(header))
+            for row in rows:
+                view = to_view(row)
+                cache = f"{cache_pct(view):>5.0f}%"
+                saved = f"${view.saved_cost:.2f}" if view.saved_cost >= 0.01 else f"${view.saved_cost:.4f}"
+                print(
+                    f"{view.request_id[:8]:<10} {view.model:<17} {view.input_tokens:>6}  {view.output_tokens:>6}  {cache:>6}  {saved:>7}  {status_label(view):<8} {age_label(view.timestamp):>4}"
+                )
+
+        rows = load_requests(limit=limit)
+        _print_rows(rows, with_header=True)
+
+        if not follow:
+            return
+
+        # Follow new entries
+        with REQUESTS_PATH.open("r") as f:
+            f.seek(0, 2)
+            try:
+                while True:
+                    line = f.readline()
+                    if not line:
+                        _time.sleep(0.5)
+                        continue
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = _json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    _print_rows([row], with_header=False)
+            except KeyboardInterrupt:
+                return
+
+    # default: show single request
+    if not request_id:
+        print("Provide a request id (e.g. tokenpak requests <id>).")
+        return
+
+    row = get_request_by_id(request_id)
+    if not row:
+        print(f"Request '{request_id}' not found.")
+        return
+
+    view = to_view(row)
+    print(f"Request ID: {view.request_id}")
+    print("─" * 45)
+    print(f"Model:     {view.model}")
+    print(f"Status:    {status_label(view)}")
+    print(f"Age:       {age_label(view.timestamp)}")
+    if view.session_id:
+        print(f"Session:   {view.session_id}")
+
+    print("\nTokens:")
+    print(f"  Input:   {view.input_tokens:,}")
+    print(f"  Output:  {view.output_tokens:,}")
+    if view.cache_read:
+        print(f"  Cache:   {view.cache_read:,} (read)")
+    print(f"  Saved:   ${view.saved_cost:.4f}")
+
+
+def cmd_aggregate(args):
+    """Aggregate request ledger across machines."""
+    import json as _json
+    from tokenpak.aggregate import load_requests, aggregate_records, render_table, parse_since, default_machine_name
+
+    since_raw = getattr(args, "since", None)
+    since_dt = parse_since(since_raw)
+    machine = default_machine_name()
+    rows, totals = aggregate_records(load_requests(since=since_dt), machine)
+
+    if getattr(args, "as_json", False):
+        payload = {
+            "machine": machine,
+            "since": since_raw,
+            "summary": totals,
+            "rows": [r.__dict__ for r in rows],
+        }
+        print(_json.dumps(payload, indent=2))
+        return
+
+    print(render_table(rows, totals))
 
 
 def cmd_attribution(args):
@@ -1079,12 +1314,102 @@ def cmd_preview(args):
 
 
 def cmd_dashboard(args):
-    """Real-time TokenPak health dashboard."""
+    """Real-time TokenPak health dashboard or public web dashboard URL."""
+    import socket
+    import webbrowser
+    from .token_manager import load_or_create_token, get_token, regenerate_token
+
+    # --show-token: display current token
+    if getattr(args, "show_token", False):
+        try:
+            token = load_or_create_token()
+        except Exception as e:
+            print(f"Error: {e}")
+            return
+        print(f"Dashboard token: {token}")
+        print(f"File: ~/.tokenpak/dashboard_token")
+        return
+
+    # --new-token: regenerate token
+    if getattr(args, "new_token", False):
+        token = regenerate_token()
+        print(f"Token regenerated: {token}")
+        print("Old token is now invalid.")
+        return
+
+    # --public: show public URL with token
+    if getattr(args, "public", False):
+        from tokenpak.config_loader import get as _cfg  # noqa: F401
+        port = int(_cfg("port", 8766, "TOKENPAK_PORT", int))
+        token = load_or_create_token()
+        hostname = socket.gethostname()
+        try:
+            ip = socket.gethostbyname(hostname)
+        except Exception:
+            ip = "localhost"
+        url = f"http://{ip}:{port}/dashboard?token={token}"
+        print(f"\n✅ TokenPak Dashboard (Public)")
+        print(f"─────────────────────────────────")
+        print(f"URL:   {url}")
+        print(f"Token: {token}")
+        print(f"\n⚠️  Share this URL only with trusted users.")
+        print(f"Regenerate token: tokenpak dashboard --new-token\n")
+        webbrowser.open(url)
+        return
+
+    # Default: TUI dashboard
+
     from .agent.cli.commands.dashboard import run_dashboard
     run_dashboard(
         fleet=getattr(args, "fleet", False),
         json_export=getattr(args, "json_export", False),
     )
+
+
+def _cmd_dashboard_public(args):
+    """Print publicly accessible dashboard URLs with accessibility checks."""
+    import webbrowser
+    from .network_utils import get_reachable_addresses, is_port_accessible
+
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    new_token = getattr(args, "new_token", False)
+
+    # Load or create dashboard token
+    token_path = Path.home() / ".tokenpak" / "dashboard_token"
+    if new_token or not token_path.exists():
+        import secrets
+        token = secrets.token_urlsafe(24)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(token)
+    else:
+        token = token_path.read_text().strip()
+
+    # Detect all reachable addresses
+    urls = get_reachable_addresses(port, detect_public=True)
+
+    print(f"\n✅ TokenPak Dashboard")
+    print(f"{'─' * 50}")
+
+    first_accessible = None
+    for url in urls:
+        host = url.replace("http://", "").split(":")[0]
+        accessible = is_port_accessible(host, port, timeout=2)
+        status = "✅" if accessible else "⚠️"
+        full_url = f"{url}?token={token}"
+        print(f"{status} {full_url}")
+        if accessible and first_accessible is None:
+            first_accessible = full_url
+
+    print(f"\n💡 Copy and share the link with trusted users.")
+    print(f"🔑 Token: {token}")
+    print(f"\nRegenerate token: tokenpak dashboard --public --new-token\n")
+
+    # Open the first accessible URL in browser
+    if first_accessible:
+        webbrowser.open(first_accessible)
+    elif urls:
+        # Fall back to localhost even if not yet running
+        webbrowser.open(f"{urls[0]}?token={token}")
 
 
 def cmd_doctor(args):
@@ -1334,6 +1659,8 @@ def build_parser():
 
     _build_route_parser(sub)
     _build_validate_parser(sub)
+    _build_vault_health_parser(sub)
+    _build_config_check_parser(sub)
 
     p_index = sub.add_parser("index", help="Index a directory")
     p_index.add_argument("directory", nargs="?", default=None, help="Directory to index")
@@ -1393,6 +1720,16 @@ def build_parser():
 
     p_stats = sub.add_parser("stats", help="Show registry stats")
     p_stats.set_defaults(func=cmd_stats)
+
+    p_models = sub.add_parser("models", help="Show per-model usage and efficiency breakdown")
+    p_models.add_argument(
+        "model",
+        nargs="?",
+        default=None,
+        help="Show details for a specific model (partial match, e.g. 'sonnet', 'gpt-4')",
+    )
+    p_models.add_argument("--raw", action="store_true", help="Output as JSON")
+    p_models.set_defaults(func=cmd_models)
 
     p_serve = sub.add_parser("serve", help="Start monitoring proxy or telemetry server")
     p_serve.add_argument("--port", type=int, default=8766)
@@ -1454,9 +1791,13 @@ def build_parser():
     p_doctor.add_argument("--deploy", action="store_true", help="Push latest doctor to all agents (use with --fleet)")
     p_doctor.set_defaults(func=cmd_doctor)
 
-    p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI)")
-    p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary")
+    p_dashboard = sub.add_parser("dashboard", help="Real-time health dashboard (TUI) or public web URL")
+    p_dashboard.add_argument("--fleet", action="store_true", help="Show fleet-wide summary (TUI)")
     p_dashboard.add_argument("--json", dest="json_export", action="store_true", help="Export dashboard as JSON (non-interactive)")
+    p_dashboard.add_argument("--public", action="store_true", help="Show public URL with token (accessible from any machine)")
+    p_dashboard.add_argument("--show-token", dest="show_token", action="store_true", help="Display current dashboard token")
+    p_dashboard.add_argument("--new-token", dest="new_token", action="store_true", help="Regenerate dashboard token")
+
     p_dashboard.set_defaults(func=cmd_dashboard)
 
     p_preview = sub.add_parser("preview", help="Preview compression dry-run (show token savings before sending)")
@@ -1466,6 +1807,18 @@ def build_parser():
     p_preview.add_argument("--verbose", action="store_true", help="Show detailed block breakdown")
     p_preview.add_argument("--json", action="store_true", help="Output as JSON (machine-readable)")
     p_preview.set_defaults(func=cmd_preview)
+
+    p_agg = sub.add_parser("aggregate", help="Aggregate request ledger across machines")
+    p_agg.add_argument("--since", default="7d", help="Time window, e.g. 7d, 24h, 30m, or ISO date")
+    p_agg.add_argument("--json", dest="as_json", action="store_true", help="JSON output")
+    p_agg.set_defaults(func=cmd_aggregate)
+
+    p_req = sub.add_parser("requests", help="Live request explorer")
+    p_req.add_argument("action", nargs="?", default="tail", help="tail | show | <request_id>")
+    p_req.add_argument("request_id", nargs="?", help="Request id (for show)")
+    p_req.add_argument("--limit", "-n", type=int, default=10, help="Number of rows to show")
+    p_req.add_argument("--once", action="store_true", help="Print once and exit")
+    p_req.set_defaults(func=cmd_requests)
 
     p_attr = sub.add_parser("attribution", help="View savings by agent/skill/model")
     p_attr.add_argument("--days", type=int, default=7, help="Number of days (default 7)")
@@ -1483,6 +1836,7 @@ def build_parser():
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
     _build_budget_parser(sub)
+    _build_forecast_parser(sub)
     _build_goals_parser(sub)
     _build_lock_parser(sub)
     _build_agent_parser(sub)
@@ -1515,6 +1869,7 @@ def build_parser():
 def cmd_status(args):
     """Show system status — live proxy data + budget tracking."""
     import time as _time
+    import json as _json
 
     mode = resolve_mode(args)
     fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
@@ -2678,6 +3033,8 @@ def main():
         "savings",
         "usage",
         "preview",
+        "aggregate",
+        "requests",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
@@ -3456,6 +3813,47 @@ def cmd_budget_history(args):
         )
 
 
+# ── Forecast (Burn Rate & Cost Projections) ──────────────────────────────────
+
+def cmd_forecast(args):
+    """Show cost burn rate analysis and projections."""
+    from .forecast import get_burn_rate, format_burn_rate_display
+    
+    tracker = _budget_tracker()
+    
+    # Get window size from args
+    period = getattr(args, 'period', '7d')
+    if period == '7d':
+        window_days = 7
+    elif period == '30d':
+        window_days = 30
+    elif period == '90d':
+        window_days = 90
+    else:
+        window_days = 7
+    
+    # Get threshold if set
+    threshold = getattr(args, 'alert', None)
+    if threshold is not None:
+        try:
+            threshold = float(threshold)
+        except (ValueError, TypeError):
+            print(f"Invalid threshold: {threshold}")
+            return
+    
+    # Calculate burn rate
+    analysis = get_burn_rate(tracker, window_days=window_days)
+    
+    # Display
+    output = format_burn_rate_display(analysis, threshold=threshold)
+    print(output)
+    
+    # Check threshold and alert if needed
+    if threshold and analysis.monthly_projection > threshold:
+        print()
+        print(f"⚠️  Alert: Projected monthly spend ${analysis.monthly_projection:.2f} exceeds threshold ${threshold:.2f}")
+
+
 # ── Goals (Savings Targets & Progress Tracking) ────────────────────────────────
 
 def _get_goal_manager():
@@ -3825,12 +4223,29 @@ def _build_budget_parser(sub):
     p_hist.set_defaults(func=cmd_budget_history)
 
 
+def _build_forecast_parser(sub):
+    p_forecast = sub.add_parser("forecast", help="Cost burn rate & projections")
+    p_forecast.add_argument(
+        "--period",
+        choices=["7d", "30d", "90d"],
+        default="7d",
+        help="Analysis window (default: 7d)"
+    )
+    p_forecast.add_argument(
+        "--alert",
+        type=float,
+        metavar="USD",
+        help="Alert if monthly projection exceeds this USD amount"
+    )
+    p_forecast.set_defaults(func=cmd_forecast)
+
 
 # ── top-level lock subcommand ─────────────────────────────────────────────────
 
 
 def cmd_lock_claim(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError
 
@@ -3859,6 +4274,7 @@ def cmd_lock_release(args):
 
 def cmd_lock_query(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -3876,6 +4292,7 @@ def cmd_lock_query(args):
 
 def cmd_lock_list(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -3898,6 +4315,7 @@ def cmd_lock_list(args):
 
 def cmd_lock_renew(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
 
@@ -4580,11 +4998,40 @@ def _build_demo_parser(sub):
     )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
+    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 24h of demo telemetry data (500+ requests)")
+    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from the dashboard")
     p_demo.set_defaults(func=cmd_demo)
 
 
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
+    # ── Demo data seeding
+    if args.seed:
+        from .demo import seed_demo_data
+        result = seed_demo_data()
+        print("✅ Demo data seeded successfully")
+        print(f"   • Events: {result['events']}")
+        print(f"   • Usage records: {result['usage']}")
+        print(f"   • Cost records: {result['costs']}")
+        print(f"   • Segments: {result['segments']}")
+        print(f"   • Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
+        print()
+        print("View the dashboard to see demo data populated.")
+        return
+
+    # ── Demo data cleanup
+    if args.clear:
+        from .demo import clear_demo_data
+        result = clear_demo_data()
+        print("✅ Demo data cleared successfully")
+        print(f"   • Deleted events: {result['deleted_events']}")
+        print(f"   • Deleted usage records: {result['deleted_usage']}")
+        print(f"   • Deleted cost records: {result['deleted_costs']}")
+        print(f"   • Deleted segments: {result['deleted_segments']}")
+        print()
+        print("Dashboard now shows empty/zero state.")
+        return
+
     from .agent.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
@@ -5457,7 +5904,118 @@ def _build_validate_parser(sub):
     return p
 
 
-# ── Fleet Management ──────────────────────────────────────────────────────────
+def _build_config_check_parser(sub):
+    """Register 'tokenpak config-check' command."""
+    p = sub.add_parser(
+        "config-check",
+        help="Validate a proxy config file (JSON)"
+    )
+    p.add_argument("file", help="Path to config file (JSON)")
+    p.set_defaults(func=cmd_config_check)
+    return p
+
+
+# ── Vault Health Management ───────────────────────────────────────────────────
+
+def cmd_vault_health(args):
+    """Manage vault index health."""
+    from .vault_health import VaultHealth
+    
+    subcmd = getattr(args, "vault_health_cmd", None)
+    
+    if subcmd == "repair":
+        try:
+            health = VaultHealth()
+            
+            # Check if index exists
+            if not health.index_path.exists():
+                print(f"❌ Index not found: {health.index_path}")
+                sys.exit(2)
+            
+            print("\nTOKENPAK  |  Vault Health")
+            print("──────────────────────────────\n")
+            
+            # Get initial status
+            status = health.get_status()
+            print(f"Index: {health.index_path}")
+            print(f"Status: {status}\n")
+            
+            # Check if stale
+            is_stale = health.check_index_staleness()
+            
+            if not is_stale:
+                print("✅ Index is current (no rebuild needed)")
+                print(f"Exit code: 0\n")
+                sys.exit(0)
+            
+            # Rebuild needed
+            block_count = len(list(health.blocks_dir.iterdir()))
+            print(f"Index is stale: {block_count} blocks found, index mismatch detected\n")
+            print("Rebuilding index from blocks...")
+            
+            metrics = health.rebuild_index()
+            
+            print(f"✅ Rebuilt in {metrics['rebuild_time_seconds']:.2f} seconds")
+            print(f"Entries: {metrics['index_entries']:,}")
+            print(f"  Added: {metrics['entries_added']}")
+            print(f"  Removed: {metrics['entries_removed']}")
+            print(f"Index size: {metrics['index_size_bytes']:,} bytes")
+            print(f"\nExit code: 1 (rebuilt)\n")
+            sys.exit(1)
+        
+        except FileNotFoundError as e:
+            print(f"❌ Error: {e}")
+            sys.exit(2)
+        except Exception as e:
+            print(f"❌ Error during rebuild: {e}")
+            sys.exit(2)
+    
+    else:
+        print("Unknown vault-health subcommand. Use 'repair'.")
+        sys.exit(1)
+
+
+# ── Fleet Management ──────────────────────────────────────────────────────
+
+def cmd_config_check(args):
+    """Validate a proxy config file (JSON)."""
+    from tokenpak.config_validator import ConfigValidator
+    import json
+    
+    config_path = Path(args.file).expanduser()
+    
+    if not config_path.exists():
+        print(f"ERROR: Config file not found: {config_path}")
+        sys.exit(2)
+    
+    # Load JSON
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in {config_path}: {e}")
+        sys.exit(2)
+    
+    # Validate
+    validator = ConfigValidator()
+    errors = validator.validate(config)
+    
+    if not errors:
+        print(f"✓ Config is valid: {config_path}")
+        sys.exit(0)
+    
+    # Print errors
+    print(f"✗ Config validation failed ({len(errors)} error(s)):\n")
+    for error in errors:
+        print(f"  Field: {error.field}")
+        print(f"    Expected: {error.expected}")
+        print(f"    Actual: {error.actual}")
+        print(f"    Message: {error.message}")
+        print(f"    Fix: {error.suggestion}")
+        print()
+    
+    sys.exit(1)
+
 
 def cmd_fleet(args):
     """Query and manage a fleet of TokenPak proxy instances."""
@@ -5465,6 +6023,8 @@ def cmd_fleet(args):
         load_fleet_config,
         query_fleet,
         render_fleet_table,
+        render_fleet_agent_table,
+        query_fleet_agent_rows,
         render_fleet_json,
         interactive_add_machine,
         save_fleet_config,
@@ -5502,6 +6062,7 @@ def cmd_fleet(args):
         
         # Query all machines
         stats = query_fleet(machines)
+        agent_rows, errors = query_fleet_agent_rows(machines)
         
         # Render output
         if getattr(args, "json", False):
@@ -5509,7 +6070,28 @@ def cmd_fleet(args):
         elif getattr(args, "compact", False):
             print(render_fleet_table(stats, compact=True))
         else:
-            print(render_fleet_table(stats, compact=False))
+            if agent_rows:
+                print(render_fleet_agent_table(agent_rows))
+                if errors:
+                    print("\n⚠️  Offline machines:")
+                    for err in errors:
+                        print(f"  - {err}")
+            else:
+                print(render_fleet_table(stats, compact=False))
+
+
+def _build_vault_health_parser(sub):
+    """Build the vault-health command parser."""
+    p_vh = sub.add_parser("vault-health", help="Vault index health diagnostic and repair")
+    
+    vhsub = p_vh.add_subparsers(dest="vault_health_cmd", required=True)
+    
+    # vault-health repair
+    p_repair = vhsub.add_parser("repair", help="Check and rebuild stale vault index")
+    p_repair.set_defaults(func=cmd_vault_health)
+    
+    p_vh.set_defaults(func=cmd_vault_health)
+    return p_vh
 
 
 def _build_fleet_parser(sub):

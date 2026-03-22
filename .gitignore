@@ -61,3 +61,37 @@ elo_ratings.json
 node_modules/
 dist/
 >>>>>>> 2a1287e92675787cd8cb17653be8891a1d32243b
+
+# Database files
+telemetry.db*
+*.db-shm
+*.db-wal
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+.ruff_cache/
+.mypy_cache/
+
+# Build output
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+*.icloud
+
+# Temporary
+.tmp/
+*.tmp
