@@ -2422,10 +2422,29 @@ def _get_audit_db(args) -> str:
     return str(home / "audit.db")
 
 
+def _require_enterprise_feature(feature_name: str):
+    """Require enterprise feature availability (from tokenpak-pro)."""
+    print(f"TOKENPAK  |  Enterprise Feature: {feature_name}")
+    print("────────────────────────────────────────")
+    print()
+    print("This feature requires an Enterprise license (tokenpak-pro).")
+    print("The module has been moved to tokenpak-pro for licensed users.")
+    print()
+    print("To use this feature:")
+    print("1. Install tokenpak-pro: pip install tokenpak-pro")
+    print("2. Activate your Enterprise license")
+    print()
+    print("Learn more: https://tokenpak.dev/enterprise")
+    sys.exit(2)
+
+
 def cmd_audit_list(args):
     import json as _json
 
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Log")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2460,7 +2479,10 @@ def cmd_audit_list(args):
 
 
 def cmd_audit_export(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Export")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2475,7 +2497,10 @@ def cmd_audit_export(args):
 
 
 def cmd_audit_verify(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Verification")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2490,7 +2515,10 @@ def cmd_audit_verify(args):
 
 
 def cmd_audit_prune(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Pruning")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2499,7 +2527,10 @@ def cmd_audit_prune(args):
 
 
 def cmd_audit_summary(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Summary")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2556,7 +2587,10 @@ def _build_compliance_parser(sub):
 def cmd_compliance_report(args):
     import os
 
-    from tokenpak.enterprise.compliance import ComplianceReporter
+    try:
+        from tokenpak.enterprise.compliance import ComplianceReporter
+    except ImportError:
+        _require_enterprise_feature("Compliance Reporting")
 
     org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
     db_path = _get_audit_db(args)

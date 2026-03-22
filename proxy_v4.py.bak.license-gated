@@ -937,7 +937,7 @@ def _bm25_tokenize(text: str) -> List[str]:
 
 # Apply license tier gates to all configured features
 # This happens after config loading but before module initialization
-# _apply_license_gates()  # disabled — all features unlocked
+_apply_license_gates()
 
 # Global vault index instance — backend-aware
 if RETRIEVAL_BACKEND == "sqlite":

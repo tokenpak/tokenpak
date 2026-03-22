@@ -9,7 +9,6 @@ Quick start:
 
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
-    from tokenpak.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
 """
@@ -27,7 +26,7 @@ __description__ = "Deterministic compression for multi-agent AI workflows"
 # ---------------------------------------------------------------------------
 # Sub-packages (for advanced use)
 # ---------------------------------------------------------------------------
-from tokenpak import agent, connectors, proxy
+from tokenpak import agent, proxy
 
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
@@ -42,14 +41,27 @@ from tokenpak.budgeter import Budgeter
 # CLI
 # ---------------------------------------------------------------------------
 from tokenpak.cli import main
-from tokenpak.engines import get_engine
 
 # ---------------------------------------------------------------------------
-# Compression / Compaction Engines
+# Compression / Compaction Engines (Enterprise feature — removed from OSS)
 # ---------------------------------------------------------------------------
-# CompressionEngine: abstract base for all compaction strategies
-from tokenpak.engines.base import CompactionEngine as CompressionEngine
-from tokenpak.engines.heuristic import HeuristicEngine
+# NOTE: Compaction engines have been moved to tokenpak-pro for Enterprise users.
+# Users with Enterprise licenses should import from tokenpak_pro instead:
+#   from tokenpak_pro.features.engines import get_engine, CompactionEngine
+try:
+    from tokenpak.engines import get_engine
+    from tokenpak.engines.base import CompactionEngine as CompressionEngine
+    from tokenpak.engines.heuristic import HeuristicEngine
+except ImportError:
+    # Graceful degradation for OSS
+    def get_engine(*args, **kwargs):
+        raise NotImplementedError(
+            "Compression engines require tokenpak-pro Enterprise license. "
+            "Install: pip install tokenpak-pro"
+        )
+    CompressionEngine = None
+    HeuristicEngine = None
+
 from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
 
 # ---------------------------------------------------------------------------
@@ -157,7 +169,6 @@ __all__ = [
     # CLI
     "main",
     # Sub-packages
-    "connectors",
     "agent",
     "proxy",
     # Agentic handoff protocol
