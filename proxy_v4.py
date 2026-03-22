@@ -239,13 +239,14 @@ SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENA
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
-# Tier 1 modules
+# Tier 1 modules (gated by feature_gates)
+# NOTE: After license resolution (below), gated features will be disabled unless ACTIVE_FEATURES includes them
 SEMANTIC_CACHE_ENABLED: bool = _cfg("features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool)
 PREFIX_REGISTRY_ENABLED: bool = _cfg("features.prefix_registry", False, "TOKENPAK_PREFIX_REGISTRY", bool)
 COMPRESSION_DICT_ENABLED: bool = _cfg("features.compression_dict", False, "TOKENPAK_COMPRESSION_DICT", bool)
 TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
 
-# Tier 2 modules
+# Tier 2 modules (gated by feature_gates)
 ERROR_NORMALIZER_ENABLED: bool = _cfg("features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool)
 BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", False, "TOKENPAK_BUDGET_CONTROLLER", bool)
 REQUEST_LOGGER_ENABLED: bool = _cfg("features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool)
@@ -255,7 +256,7 @@ RETRIEVAL_WATCHDOG_ENABLED: bool = _cfg("features.retrieval_watchdog", False, "T
 FAILURE_MEMORY_ENABLED: bool = _cfg("features.failure_memory", False, "TOKENPAK_FAILURE_MEMORY", bool)
 FIDELITY_TIERS_ENABLED: bool = _cfg("features.fidelity_tiers", False, "TOKENPAK_FIDELITY_TIERS", bool)
 
-# Phase 3 modules
+# Phase 3 modules (gated by feature_gates)
 SESSION_CAPSULES_ENABLED: bool = _cfg("features.session_capsules", False, "TOKENPAK_SESSION_CAPSULES", bool)
 PRECONDITION_GATES_ENABLED: bool = _cfg("features.precondition_gates", False, "TOKENPAK_PRECONDITION_GATES", bool)
 QUERY_REWRITER_ENABLED: bool = _cfg("features.query_rewriter", False, "TOKENPAK_QUERY_REWRITER", bool)
@@ -300,6 +301,135 @@ _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
 
 ADAPTER_REGISTRY = build_default_registry()
+
+# ---------------------------------------------------------------------------
+# License Tier Resolution — startup feature gating (WS-1)
+# Resolves the current license tier and caches active features.
+# Happens ONCE at startup, zero per-request latency impact.
+# ---------------------------------------------------------------------------
+
+CURRENT_TIER = "oss"  # default fallback
+ACTIVE_FEATURES: set = set()  # cache of active feature IDs
+
+try:
+    from tokenpak.agent.license.activation import get_plan
+    from tokenpak.feature_gates import resolve_active_features, describe_tier, LicenseTier
+    
+    # Get the current license plan (safe: returns OSS on any error)
+    plan_result = get_plan()
+    CURRENT_TIER = plan_result.tier.value
+    
+    # Resolve which features are active for this tier
+    ACTIVE_FEATURES = resolve_active_features(plan_result.tier)
+    
+    # Log license status at startup
+    feature_count = len(ACTIVE_FEATURES)
+    expires = plan_result.expires_at or "never"
+    status_symbol = "✓" if plan_result.status.value == "valid" else "⚠️"
+    print(f"  {status_symbol} License: {describe_tier(plan_result.tier)} — {feature_count} features active")
+    
+    if plan_result.expires_at:
+        print(f"     Expires: {expires}")
+    if plan_result.status.value in ("grace", "offline"):
+        print(f"     Status: {plan_result.status.value.upper()}")
+        
+except Exception as e:
+    # Graceful fallback: if license module unavailable, run as OSS
+    CURRENT_TIER = "oss"
+    ACTIVE_FEATURES = set()  # Empty means no gated features active
+    print(f"  ⚠️ License check failed ({type(e).__name__}) — running as OSS")
+
+
+# Helper: Apply license gates to feature flags
+def _apply_license_gates():
+    """
+    Apply license tier gates to feature flags.
+    Disables any gated feature not in ACTIVE_FEATURES.
+    Called after license resolution and config loading.
+    """
+    global SEMANTIC_CACHE_ENABLED, PREFIX_REGISTRY_ENABLED, COMPRESSION_DICT_ENABLED
+    global TRACE_ENABLED, ERROR_NORMALIZER_ENABLED, BUDGET_CONTROLLER_ENABLED
+    global REQUEST_LOGGER_ENABLED, SALIENCE_ROUTER_ENABLED, CACHE_REGISTRY_ENABLED
+    global RETRIEVAL_WATCHDOG_ENABLED, FAILURE_MEMORY_ENABLED, FIDELITY_TIERS_ENABLED
+    global SESSION_CAPSULES_ENABLED, PRECONDITION_GATES_ENABLED, QUERY_REWRITER_ENABLED
+    global STABILITY_SCORER_ENABLED, TERM_RESOLVER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED
+    global ENABLE_CAPSULE_BUILDER, ROUTER_ENABLED
+    
+    # Map feature flags to feature IDs (for gating)
+    feature_gates = {
+        "semantic_cache": SEMANTIC_CACHE_ENABLED,
+        "prefix_registry": PREFIX_REGISTRY_ENABLED,
+        "compression_dict": COMPRESSION_DICT_ENABLED,
+        "trace_mode": TRACE_ENABLED,
+        "error_normalizer": ERROR_NORMALIZER_ENABLED,
+        "budget_controller": BUDGET_CONTROLLER_ENABLED,
+        "request_logger": REQUEST_LOGGER_ENABLED,
+        "salience_router": SALIENCE_ROUTER_ENABLED,
+        "cache_registry": CACHE_REGISTRY_ENABLED,
+        "retrieval_watchdog": RETRIEVAL_WATCHDOG_ENABLED,
+        "failure_memory": FAILURE_MEMORY_ENABLED,
+        "fidelity_tiers": FIDELITY_TIERS_ENABLED,
+        "session_capsules": SESSION_CAPSULES_ENABLED,
+        "precondition_gates": PRECONDITION_GATES_ENABLED,
+        "query_rewriter": QUERY_REWRITER_ENABLED,
+        "stability_scorer": STABILITY_SCORER_ENABLED,
+        "term_resolver": TERM_RESOLVER_ENABLED,
+        "skeleton_extraction": SKELETON_ENABLED,
+        "shadow_reader": SHADOW_ENABLED,
+        "capsule_builder": ENABLE_CAPSULE_BUILDER,
+        "model_routing_intelligent": ROUTER_ENABLED,  # smart routing is Pro+
+    }
+    
+    disabled_count = 0
+    for feature_id, is_configured in feature_gates.items():
+        if is_configured and feature_id not in ACTIVE_FEATURES:
+            # Feature is configured but gated by license
+            if feature_id == "semantic_cache":
+                SEMANTIC_CACHE_ENABLED = False
+            elif feature_id == "prefix_registry":
+                PREFIX_REGISTRY_ENABLED = False
+            elif feature_id == "compression_dict":
+                COMPRESSION_DICT_ENABLED = False
+            elif feature_id == "trace_mode":
+                TRACE_ENABLED = False
+            elif feature_id == "error_normalizer":
+                ERROR_NORMALIZER_ENABLED = False
+            elif feature_id == "budget_controller":
+                BUDGET_CONTROLLER_ENABLED = False
+            elif feature_id == "request_logger":
+                REQUEST_LOGGER_ENABLED = False
+            elif feature_id == "salience_router":
+                SALIENCE_ROUTER_ENABLED = False
+            elif feature_id == "cache_registry":
+                CACHE_REGISTRY_ENABLED = False
+            elif feature_id == "retrieval_watchdog":
+                RETRIEVAL_WATCHDOG_ENABLED = False
+            elif feature_id == "failure_memory":
+                FAILURE_MEMORY_ENABLED = False
+            elif feature_id == "fidelity_tiers":
+                FIDELITY_TIERS_ENABLED = False
+            elif feature_id == "session_capsules":
+                SESSION_CAPSULES_ENABLED = False
+            elif feature_id == "precondition_gates":
+                PRECONDITION_GATES_ENABLED = False
+            elif feature_id == "query_rewriter":
+                QUERY_REWRITER_ENABLED = False
+            elif feature_id == "stability_scorer":
+                STABILITY_SCORER_ENABLED = False
+            elif feature_id == "term_resolver":
+                TERM_RESOLVER_ENABLED = False
+            elif feature_id == "skeleton_extraction":
+                SKELETON_ENABLED = False
+            elif feature_id == "shadow_reader":
+                SHADOW_ENABLED = False
+            elif feature_id == "capsule_builder":
+                ENABLE_CAPSULE_BUILDER = False
+            elif feature_id == "model_routing_intelligent":
+                ROUTER_ENABLED = False
+            disabled_count += 1
+    
+    if disabled_count > 0:
+        print(f"  🔒 {disabled_count} gated feature(s) disabled by license tier")
 
 
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
@@ -804,6 +934,10 @@ class VaultIndex:
 def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r'[a-z0-9_]+', text.lower())
 
+
+# Apply license tier gates to all configured features
+# This happens after config loading but before module initialization
+_apply_license_gates()
 
 # Global vault index instance — backend-aware
 if RETRIEVAL_BACKEND == "sqlite":
@@ -1935,6 +2069,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
                 "circuit_breakers": {p: {"open": cb["open"], "failures": cb["failures"]} for p, cb in _provider_circuits.items()},
                 "stats": SESSION,
+            })
+            return
+        if self.path == "/license":
+            # License status endpoint (WS-1)
+            self._send_json({
+                "tier": CURRENT_TIER,
+                "features": len(ACTIVE_FEATURES),
+                "active_features": sorted(list(ACTIVE_FEATURES)) if ACTIVE_FEATURES else [],
+                "status": "gated by license tier",
             })
             return
         if self.path == "/stats":
