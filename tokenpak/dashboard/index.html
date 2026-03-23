@@ -19,105 +19,133 @@
         </header>
 
         <div class="metrics-grid">
-            <!-- Top Stats -->
+            <!-- KEY METRIC 1: Request Count + Throughput -->
             <div class="stats-row">
                 <div class="stat-card">
-                    <div class="stat-label">Total Compression Events</div>
-                    <div class="stat-value" id="total-events">0</div>
+                    <div class="stat-label">📊 Total Requests (24h)</div>
+                    <div class="stat-value" id="metric1-requests">0</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Avg Compression Ratio</div>
-                    <div class="stat-value" id="avg-ratio">0%</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Total Tokens Saved</div>
-                    <div class="stat-value" id="tokens-saved">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Request Rate (req/s)</div>
-                    <div class="stat-value" id="request-rate">0</div>
+                    <div class="stat-label">⚡ Throughput (req/sec)</div>
+                    <div class="stat-value" id="metric1-throughput">0</div>
                 </div>
             </div>
 
-            <!-- Latency Stats -->
+            <!-- KEY METRIC 2: Latency Histogram (p50, p95, p99) -->
             <div class="stats-row">
                 <div class="stat-card">
-                    <div class="stat-label">Compression Latency P50</div>
-                    <div class="stat-value" id="latency-p50">0ms</div>
+                    <div class="stat-label">📈 Latency P50</div>
+                    <div class="stat-value" id="metric2-p50">0ms</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Compression Latency P95</div>
-                    <div class="stat-value" id="latency-p95">0ms</div>
+                    <div class="stat-label">📈 Latency P95</div>
+                    <div class="stat-value" id="metric2-p95">0ms</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Uptime</div>
-                    <div class="stat-value" id="uptime">0s</div>
+                    <div class="stat-label">📈 Latency P99</div>
+                    <div class="stat-value" id="metric2-p99">0ms</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Proxy Health</div>
-                    <div class="stat-value" id="health-status">OK</div>
+                    <div class="stat-label">📊 Avg Latency</div>
+                    <div class="stat-value" id="metric2-avg">0ms</div>
                 </div>
             </div>
 
-            <!-- Charts -->
-            <div class="chart-container request-rate-chart">
-                <h2>Request Rate (Last 1 Hour)</h2>
-                <canvas id="requestRateChart"></canvas>
-            </div>
-
-            <div class="chart-container compression-ratio-chart">
-                <h2>Compression Ratio by Document Type</h2>
-                <canvas id="compressionRatioChart"></canvas>
-            </div>
-
-            <div class="chart-container tokens-saved-chart">
-                <h2>Cumulative Tokens Saved</h2>
-                <canvas id="tokensSavedChart"></canvas>
-            </div>
-
-            <div class="chart-container top-types-chart">
-                <h2>Top Document Types by Frequency</h2>
-                <canvas id="topTypesChart"></canvas>
-            </div>
-
-            <!-- Goals Widget -->
-            <div class="goals-container">
-                <h2>💾 Savings Goals</h2>
-                <div id="goalsGrid" class="goals-grid">
-                    <p class="no-goals">No goals configured. Use `tokenpak goals --add` to create one.</p>
+            <!-- KEY METRIC 3: Model Provider Distribution -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">🤖 Active Models</div>
+                    <div class="stat-value" id="metric3-model-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">💰 Top Model Cost</div>
+                    <div class="stat-value" id="metric3-top-cost">$0</div>
                 </div>
             </div>
 
-            <!-- Document Type Table -->
+            <!-- KEY METRIC 4 & 5: Routing + Cache (combined row) -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">🎯 Routing Hit Rate</div>
+                    <div class="stat-value" id="metric4-routing">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">💾 Cache Hit Ratio</div>
+                    <div class="stat-value" id="metric5-cache-ratio">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">📦 Cache Read Tokens</div>
+                    <div class="stat-value" id="metric5-cache-read">0</div>
+                </div>
+            </div>
+
+            <!-- KEY METRIC 6: Error Rate + Top Failures -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">❌ Error Rate</div>
+                    <div class="stat-value" id="metric6-error-rate">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">⚠️ Error Count</div>
+                    <div class="stat-value" id="metric6-error-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">🔥 Top Failure Type</div>
+                    <div class="stat-value" id="metric6-top-failure">None</div>
+                </div>
+            </div>
+
+            <!-- KEY METRIC 7: Streaming Request Count -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">🌊 Streaming Requests</div>
+                    <div class="stat-value" id="metric7-streaming">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">⏱️ Uptime</div>
+                    <div class="stat-value" id="metric7-uptime">0s</div>
+                </div>
+            </div>
+
+            <!-- KEY METRIC 8: 24-Hour Rolling Window -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">📥 Input Tokens (24h)</div>
+                    <div class="stat-value" id="metric8-input">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">📤 Output Tokens (24h)</div>
+                    <div class="stat-value" id="metric8-output">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">💰 Total Cost (24h)</div>
+                    <div class="stat-value" id="metric8-cost">$0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">✂️ Protected Tokens</div>
+                    <div class="stat-value" id="metric8-protected">0</div>
+                </div>
+            </div>
+
+            <!-- Models breakdown table -->
             <div class="table-container">
-                <h2>Top 10 Document Types</h2>
-                <table id="documentTypesTable">
+                <h2>📊 Model Distribution (24h Window)</h2>
+                <table id="modelsTable">
                     <thead>
                         <tr>
-                            <th>Document Type</th>
-                            <th>Frequency</th>
-                            <th>Avg Compression</th>
-                            <th>Tokens Saved</th>
+                            <th>Model</th>
+                            <th>Requests</th>
+                            <th>Input Tokens</th>
+                            <th>Cost</th>
                         </tr>
                     </thead>
-                    <tbody id="documentTypesBody">
+                    <tbody id="modelsBody">
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <script src="metrics.js"></script>
-    <script src="charts.js"></script>
-    <script src="goals.js"></script>
-    <script>
-        // Auto-refresh every 5 seconds
-        setInterval(() => {
-            fetchAndUpdateMetrics();
-        }, 5000);
-        
-        // Initial load
-        fetchAndUpdateMetrics();
-    </script>
+    <script src="dashboard-metrics.js"></script>
 </body>
 </html>

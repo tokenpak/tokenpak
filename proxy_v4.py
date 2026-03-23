@@ -2086,9 +2086,140 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body_out)
             return
+        if self.path == "/metrics/dashboard":
+            # New: Comprehensive dashboard metrics endpoint with 8 key metrics
+            # 1. Request count + throughput (req/sec)
+            # 2. Latency histogram (p50, p95, p99)
+            # 3. Model provider distribution
+            # 4. Routing decisions (smart routing hit rate)
+            # 5. Cache hit ratio
+            # 6. Error rate + top failure types
+            # 7. Live streaming request count
+            # 8. 24-hour rolling window
+            
+            today_stats = MONITOR.get_stats(hours=24)
+            recent_reqs = MONITOR.recent(limit=100)
+            by_model = MONITOR.get_by_model()
+            uptime_secs = int(time.time() - SESSION["start_time"])
+            uptime_hours = max(0.01, uptime_secs / 3600.0)
+            
+            # Calculate throughput (req/sec over last hour or since start)
+            if len(recent_reqs) > 1:
+                first_ts = datetime.fromisoformat(recent_reqs[-1]["timestamp"])
+                last_ts = datetime.fromisoformat(recent_reqs[0]["timestamp"])
+                time_diff_secs = max(1, (last_ts - first_ts).total_seconds())
+                throughput = len(recent_reqs) / time_diff_secs
+            else:
+                throughput = today_stats["requests"] / uptime_hours / 3600.0
+            
+            # Latency percentiles from recent requests
+            latencies = [r.get("latency_ms", 0) for r in recent_reqs if r.get("latency_ms")]
+            latencies.sort()
+            p50 = latencies[len(latencies)//2] if latencies else 0
+            p95 = latencies[int(len(latencies)*0.95)] if latencies else 0
+            p99 = latencies[int(len(latencies)*0.99)] if latencies else 0
+            avg_latency = today_stats.get("avg_latency_ms", 0)
+            
+            # Error rate and top failure types
+            error_count = sum(1 for r in recent_reqs if r.get("status_code", 200) >= 400)
+            error_rate = error_count / len(recent_reqs) if recent_reqs else 0
+            
+            # Top failure types (group by status code)
+            failure_types = {}
+            for r in recent_reqs:
+                sc = r.get("status_code", 200)
+                if sc >= 400:
+                    failure_types[str(sc)] = failure_types.get(str(sc), 0) + 1
+            
+            # Cache metrics
+            total_cache_read = today_stats.get("cache_read_tokens", 0)
+            total_cache_creation = today_stats.get("cache_creation_tokens", 0)
+            cache_hit_ratio = 0.0
+            if total_cache_read > 0 or total_cache_creation > 0:
+                cache_hit_ratio = total_cache_read / (total_cache_read + total_cache_creation) if (total_cache_read + total_cache_creation) > 0 else 0.0
+            
+            # Model distribution
+            model_dist = {}
+            for model, data in by_model.items():
+                model_dist[model] = {
+                    "requests": data.get("requests", 0),
+                    "input_tokens": data.get("input_tokens", 0),
+                    "cost": data.get("cost", 0.0),
+                }
+            
+            # Routing decisions (smart routing hit rate) — placeholder
+            routing_hit_rate = 0.0  # TODO: implement when routing stats available
+            
+            # Streaming request count — placeholder
+            streaming_count = 0  # TODO: implement when streaming detection available
+            
+            dashboard_data = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "uptime_seconds": uptime_secs,
+                "uptime_hours": round(uptime_hours, 2),
+                
+                # Key Metric 1: Request count + throughput
+                "requests": {
+                    "total": today_stats.get("requests", 0),
+                    "throughput_req_per_sec": round(throughput, 3),
+                    "24h_window": True,
+                },
+                
+                # Key Metric 2: Latency histogram
+                "latency": {
+                    "p50_ms": round(p50, 1),
+                    "p95_ms": round(p95, 1),
+                    "p99_ms": round(p99, 1),
+                    "avg_ms": round(avg_latency, 1),
+                    "samples": len(latencies),
+                },
+                
+                # Key Metric 3: Model provider distribution
+                "models": model_dist,
+                "model_count": len(model_dist),
+                
+                # Key Metric 4: Routing decisions
+                "routing": {
+                    "smart_routing_hit_rate": round(routing_hit_rate, 3),
+                    "fallback_chain_usage": 0,  # TODO: implement
+                },
+                
+                # Key Metric 5: Cache hit ratio
+                "cache": {
+                    "hit_ratio": round(cache_hit_ratio, 3),
+                    "read_tokens": total_cache_read,
+                    "creation_tokens": total_cache_creation,
+                },
+                
+                # Key Metric 6: Error rate + top failure types
+                "errors": {
+                    "error_rate": round(error_rate, 4),
+                    "error_count": error_count,
+                    "top_failures": dict(sorted(failure_types.items(), key=lambda x: x[1], reverse=True)[:5]),
+                },
+                
+                # Key Metric 7: Streaming request count
+                "streaming": {
+                    "count": streaming_count,
+                    "percentage": 0.0,
+                },
+                
+                # Key Metric 8: 24-hour rolling window stats
+                "window_24h": {
+                    "input_tokens": today_stats.get("input_tokens", 0),
+                    "output_tokens": today_stats.get("output_tokens", 0),
+                    "protected_tokens": today_stats.get("protected_tokens", 0),
+                    "compressed_tokens": today_stats.get("compressed_tokens", 0),
+                    "injected_tokens": today_stats.get("injected_tokens", 0),
+                    "total_cost": today_stats.get("total_cost", 0.0),
+                },
+            }
+            
+            self._send_json(dashboard_data)
+            return
         if self.path.startswith("http"):
             self._forward_request("GET")
-        elif self.path == "/dashboard" or self.path.startswith("/dashboard/"):
+        elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith("/dashboard/"):
             self._serve_dashboard()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
