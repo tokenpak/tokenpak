@@ -1,106 +1,148 @@
-# TokenPak Installation Guide
+# TokenPak Python SDK: Installation Guide
 
-Everything you need to install the TokenPak Python SDK and verify it's working.
+## System Requirements
 
----
+- **Python version:** 3.8 or later
+- **OS:** Linux, macOS, or Windows
+- **pip:** Version 20.0 or later (usually included with Python)
 
-## Python Version Requirements
+## Basic Installation
 
-TokenPak requires **Python 3.8 or higher**.
-
-Recommended: Python 3.11+ for best performance. Check your version:
-
-```bash
-python3 --version
-```
-
----
-
-## Install via pip
-
-**Basic install:**
+The simplest way to install TokenPak:
 
 ```bash
 pip install tokenpak
 ```
 
-**With accurate token counting (recommended for production):**
+This installs the core library with heuristic-based compression.
+
+## Optional Dependencies
+
+TokenPak has optional extras for advanced features:
 
 ```bash
-pip install tokenpak[tiktoken]
-```
-
-**With ML-powered compression (advanced, larger install):**
-
-```bash
+# Install with ML-based compression support
 pip install tokenpak[ml]
+
+# Install with all features (recommended)
+pip install tokenpak[ml,tiktoken]
+
+# Or install each extra separately
+pip install tokenpak tiktoken
 ```
 
----
+## Using a Virtual Environment (Recommended)
 
-## Virtual Environment Setup (Recommended)
-
-Isolate TokenPak from your global Python environment:
+**Option 1: venv (built-in)**
 
 ```bash
 # Create a virtual environment
-python3 -m venv .venv
+python3 -m venv ~/my_tokenpak_env
 
 # Activate it
-source .venv/bin/activate        # macOS / Linux
-.venv\Scripts\activate           # Windows
+source ~/my_tokenpak_env/bin/activate  # Linux/macOS
+# or
+~/my_tokenpak_env\Scripts\activate     # Windows
 
 # Install TokenPak
-pip install tokenpak
+pip install tokenpak[ml,tiktoken]
 
 # Deactivate when done
 deactivate
 ```
 
-Using [uv](https://github.com/astral-sh/uv)? Even faster:
+**Option 2: uv (faster, modern)**
 
 ```bash
-uv venv && uv pip install tokenpak
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate environment
+uv venv ~/my_tokenpak_env
+source ~/my_tokenpak_env/bin/activate
+
+# Install TokenPak
+pip install tokenpak[ml,tiktoken]
 ```
 
----
+## Verify Your Installation
 
-## Verify Your Install
-
-Run a quick import check:
+After installing, verify that TokenPak works:
 
 ```bash
-python3 -c "from tokenpak import HeuristicEngine; print('TokenPak OK ✅')"
+python3 -c "from tokenpak import HeuristicEngine; print('✓ TokenPak installed!')"
 ```
 
-Expected output:
-
-```
-TokenPak OK ✅
-```
-
-Check the installed version:
+Or run a quick test:
 
 ```bash
-python3 -c "import tokenpak; print(tokenpak.__version__)"
-```
+python3 << 'EOF'
+from tokenpak import HeuristicEngine
+from tokenpak.engines.base import CompactionHints
 
----
+engine = HeuristicEngine()
+text = "This is a test. " * 100
+hints = CompactionHints(target_tokens=50)
+result = engine.compact(text, hints)
+print(f"Compressed {len(text)} chars to {len(result)} chars")
+print("✓ Installation successful!")
+EOF
+```
 
 ## Troubleshooting
 
-**`ModuleNotFoundError: No module named 'tokenpak'`**
-→ Make sure your virtual environment is activated and you ran `pip install tokenpak` inside it.
+### Issue: "ModuleNotFoundError: No module named 'tokenpak'"
 
-**`pip: command not found`**
-→ Try `pip3` instead, or use `python3 -m pip install tokenpak`.
+**Solution:** Make sure you're running Python from the correct environment:
+```bash
+which python3  # Should show path in your venv
+pip list | grep tokenpak  # Should show tokenpak installed
+```
 
-**SSL errors during install**
-→ Upgrade pip first: `pip install --upgrade pip`, then retry.
+If not in a venv, reinstall:
+```bash
+pip install --upgrade tokenpak
+```
 
-**Version conflicts**
-→ Install in a fresh virtual environment to avoid dependency clashes.
+### Issue: "tiktoken not found" or encoding errors
 
----
+**Solution:** Install the tiktoken extra:
+```bash
+pip install tokenpak[tiktoken]
+```
 
-> For more help, see [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) or open an issue on GitHub.
+### Issue: "Permission denied" when installing
+
+**Solution:** Use `--user` flag or a virtual environment:
+```bash
+pip install --user tokenpak  # Install to user directory
+# OR use a venv (recommended)
+```
+
+### Issue: Python version error (3.7 or earlier)
+
+**Solution:** TokenPak requires Python 3.8+. Upgrade Python or use a package manager:
+```bash
+# macOS (homebrew)
+brew install python@3.11
+
+# Ubuntu/Debian
+sudo apt-get install python3.11
+
+# Then install TokenPak with the new version
+python3.11 -m pip install tokenpak
+```
+
+## Upgrading TokenPak
+
+To upgrade to the latest version:
+
+```bash
+pip install --upgrade tokenpak
+```
+
+## What's Next?
+
+- **[Quick Start Guide](./quickstart.md)** — Get running in 5 minutes
+- **[API Reference](./api-reference.md)** — Explore the full API
+- **[Examples](../examples/)** — Real-world usage patterns
