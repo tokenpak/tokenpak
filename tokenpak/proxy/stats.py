@@ -1,0 +1,183 @@
+"""
+tokenpak.proxy.stats — Real-time metrics collector for the TokenPak proxy.
+
+Provides a thread-safe StatsCollector class that tracks:
+  - Uptime and request throughput
+  - Compression ratios (tokens before/after)
+  - Model routing breakdown
+  - Error rates by type
+  - Vault search cache hit/miss rates
+  - Latest request latency
+
+Usage (in proxy_v4.py):
+    from tokenpak.proxy.stats import STATS
+
+    STATS.record_request(model="anthropic/claude-3-5-sonnet",
+                         tokens_in=1000, tokens_out=400,
+                         compressed=True, latency_ms=120)
+    STATS.record_error("AUTH_001")
+    STATS.record_vault_search(hit=True)
+
+    payload = STATS.snapshot()   # → dict matching /stats JSON schema
+"""
+
+from __future__ import annotations
+
+import threading
+import time
+from datetime import datetime, timezone
+from typing import Dict, Optional
+
+
+class StatsCollector:
+    """Thread-safe metrics collector."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._start_time: float = time.monotonic()
+
+        # Request counters
+        self._requests_total: int = 0
+        self._compressed_total: int = 0
+        self._skipped_total: int = 0
+
+        # Token counters
+        self._tokens_before: int = 0   # raw input tokens (before compression)
+        self._tokens_after: int = 0    # tokens actually sent upstream
+
+        # Routing breakdown  { "anthropic/claude-3-5-sonnet": 12, ... }
+        self._routing: Dict[str, int] = {}
+
+        # Error counts  { "AUTH_001": 3, ... }
+        self._errors: Dict[str, int] = {}
+
+        # Vault search cache
+        self._vault_hits: int = 0
+        self._vault_misses: int = 0
+
+        # Latest request latency (ms)
+        self._latest_latency_ms: Optional[float] = None
+
+    # ------------------------------------------------------------------
+    # Recording helpers
+    # ------------------------------------------------------------------
+
+    def record_request(
+        self,
+        model: str = "unknown",
+        tokens_in: int = 0,
+        tokens_out: int = 0,
+        compressed: bool = False,
+        tokens_saved: int = 0,
+        latency_ms: float = 0.0,
+    ) -> None:
+        """Record a completed proxy request."""
+        with self._lock:
+            self._requests_total += 1
+            raw_in = tokens_in + tokens_saved  # tokens_in = sent; raw = sent + saved
+            self._tokens_before += raw_in
+            self._tokens_after += tokens_in
+            if compressed:
+                self._compressed_total += 1
+            else:
+                self._skipped_total += 1
+            # Routing breakdown — normalise key
+            key = self._normalise_model(model)
+            self._routing[key] = self._routing.get(key, 0) + 1
+            self._latest_latency_ms = latency_ms
+
+    def record_error(self, error_code: str) -> None:
+        """Record a proxy error by code (e.g. 'AUTH_001')."""
+        with self._lock:
+            self._errors[error_code] = self._errors.get(error_code, 0) + 1
+
+    def record_vault_search(self, hit: bool) -> None:
+        """Record a vault search cache event."""
+        with self._lock:
+            if hit:
+                self._vault_hits += 1
+            else:
+                self._vault_misses += 1
+
+    def reset(self) -> None:
+        """Reset all counters (start_time included)."""
+        with self._lock:
+            self._start_time = time.monotonic()
+            self._requests_total = 0
+            self._compressed_total = 0
+            self._skipped_total = 0
+            self._tokens_before = 0
+            self._tokens_after = 0
+            self._routing = {}
+            self._errors = {}
+            self._vault_hits = 0
+            self._vault_misses = 0
+            self._latest_latency_ms = None
+
+    # ------------------------------------------------------------------
+    # Snapshot
+    # ------------------------------------------------------------------
+
+    def snapshot(self) -> dict:
+        """Return a JSON-serialisable metrics snapshot."""
+        with self._lock:
+            uptime = time.monotonic() - self._start_time
+            rps = self._requests_total / max(uptime, 1.0)
+
+            before = self._tokens_before
+            after = self._tokens_after
+            ratio = round(after / before, 4) if before > 0 else 0.0
+
+            total_errors = sum(self._errors.values())
+
+            total_searches = self._vault_hits + self._vault_misses
+            hit_rate = round(self._vault_hits / total_searches, 4) if total_searches > 0 else 0.0
+
+            return {
+                "uptime_seconds": round(uptime, 2),
+                "requests_total": self._requests_total,
+                "requests_per_sec": round(rps, 4),
+                "compression": {
+                    "tokens_before": before,
+                    "tokens_after": after,
+                    "ratio": ratio,
+                    "compressed": self._compressed_total,
+                    "skipped": self._skipped_total,
+                },
+                "routing": dict(self._routing),
+                "errors": {
+                    **dict(self._errors),
+                    "total": total_errors,
+                },
+                "vault_search": {
+                    "cache_hits": self._vault_hits,
+                    "cache_misses": self._vault_misses,
+                    "hit_rate": hit_rate,
+                },
+                "latest_request_ms": self._latest_latency_ms,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalise_model(model: str) -> str:
+        """Map raw model strings to canonical routing bucket names."""
+        m = model.lower()
+        if "claude" in m or "anthropic" in m:
+            return "anthropic_claude"
+        if "gemini" in m or "google" in m:
+            return "google_gemini"
+        if "gpt" in m or "openai" in m or "o1" in m or "o3" in m:
+            return "openai"
+        if "ollama" in m or "llama" in m or "mistral" in m:
+            return "ollama"
+        return model  # keep unknown as-is
+
+
+# ---------------------------------------------------------------------------
+# Module-level singleton — import and use directly
+# ---------------------------------------------------------------------------
+STATS = StatsCollector()
