@@ -55,6 +55,7 @@ import gzip
 import io
 import math
 import hashlib
+import asyncio
 import http.client
 from functools import lru_cache
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -261,6 +262,10 @@ SESSION_CAPSULES_ENABLED: bool = _cfg("features.session_capsules", False, "TOKEN
 PRECONDITION_GATES_ENABLED: bool = _cfg("features.precondition_gates", False, "TOKENPAK_PRECONDITION_GATES", bool)
 QUERY_REWRITER_ENABLED: bool = _cfg("features.query_rewriter", False, "TOKENPAK_QUERY_REWRITER", bool)
 STABILITY_SCORER_ENABLED: bool = _cfg("features.stability_scorer", False, "TOKENPAK_STABILITY_SCORER", bool)
+
+# WebSocket proxy
+WS_PORT: int = int(os.environ.get("TOKENPAK_WS_PORT", "8767"))
+WS_MAX_CONNECTIONS: int = int(os.environ.get("TOKENPAK_WS_MAX_CONNECTIONS", "50"))
 
 # --- Tier 2B Cache Registry singleton (initialized at module load if enabled) ---
 _cache_registry = None
@@ -3867,6 +3872,158 @@ def validate_tokenpak_config():
     else:
         print("✅ TokenPak config validated - all settings correct")
 
+
+# ---------------------------------------------------------------------------
+# WebSocket proxy — /ws endpoint on WS_PORT (default 8767)
+# ---------------------------------------------------------------------------
+
+_ws_active_connections: int = 0
+_ws_active_connections_lock = threading.Lock()
+
+
+async def _ws_handler(websocket) -> None:
+    """Handle a single WebSocket connection: receive JSON, compress, proxy to Anthropic, stream back."""
+    global _ws_active_connections
+
+    # Check path — only /ws is supported
+    req_path = "/"
+    try:
+        req_path = websocket.request.path
+    except Exception:
+        pass
+    if req_path != "/ws":
+        await websocket.close(1008, "Not found")
+        return
+
+    # Enforce max connections
+    with _ws_active_connections_lock:
+        if _ws_active_connections >= WS_MAX_CONNECTIONS:
+            await websocket.close(1008, "Too many connections")
+            return
+        _ws_active_connections += 1
+
+    try:
+        # Receive request JSON from client
+        try:
+            raw = await asyncio.wait_for(websocket.recv(), timeout=30.0)
+        except asyncio.TimeoutError:
+            await websocket.close(1008, "Receive timeout")
+            return
+
+        try:
+            req_data = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            await websocket.close(1003, "Invalid JSON")
+            return
+
+        # Force streaming
+        req_data["stream"] = True
+        body_bytes: bytes = json.dumps(req_data).encode()
+
+        # Apply TokenPak compression pipeline (sync — run in thread executor)
+        loop = asyncio.get_event_loop()
+        try:
+            compressed_body, _sent, _orig, _prot = await loop.run_in_executor(
+                None, compact_request_body, body_bytes
+            )
+        except Exception:
+            compressed_body = body_bytes
+
+        # Resolve Anthropic upstream
+        upstream_base = UPSTREAM_ROUTES.get("anthropic-messages", "https://api.anthropic.com")
+        parsed_up = urlparse(upstream_base)
+        upstream_host = parsed_up.netloc or "api.anthropic.com"
+        upstream_path = "/v1/messages"
+
+        # Forward headers: pass through auth headers from WS upgrade request
+        fwd_headers: Dict[str, str] = {
+            "Content-Type": "application/json",
+            "Content-Length": str(len(compressed_body)),
+            "Host": upstream_host,
+            "anthropic-version": "2023-06-01",
+        }
+        try:
+            for hname, hval in websocket.request.headers.items():
+                hl = hname.lower()
+                if hl in ("x-api-key", "authorization", "anthropic-version", "anthropic-beta"):
+                    fwd_headers[hl] = hval
+        except Exception:
+            pass
+
+        # Connect to upstream and stream SSE back (sync — run in executor)
+        def _connect_upstream():
+            ctx = ssl.create_default_context()
+            conn = http.client.HTTPSConnection(upstream_host, timeout=UPSTREAM_TIMEOUT, context=ctx)
+            conn.request("POST", upstream_path, body=compressed_body, headers=fwd_headers)
+            return conn, conn.getresponse()
+
+        try:
+            conn, resp = await loop.run_in_executor(None, _connect_upstream)
+        except Exception as exc:
+            await websocket.close(1011, f"Upstream connection failed: {str(exc)[:100]}")
+            return
+
+        # Non-2xx: close with error code 1011
+        if resp.status >= 400:
+            try:
+                err_body = await loop.run_in_executor(None, resp.read)
+                await websocket.send(err_body.decode("utf-8", errors="replace"))
+            except Exception:
+                pass
+            await websocket.close(1011, f"Upstream error {resp.status}")
+            return
+
+        # Stream SSE chunks back as text frames
+        while True:
+            chunk = await loop.run_in_executor(None, resp.read, 4096)
+            if not chunk:
+                break
+            try:
+                await websocket.send(chunk.decode("utf-8", errors="replace"))
+            except Exception:
+                break  # client disconnected
+
+        await websocket.close(1000, "Done")
+
+    except Exception as exc:
+        try:
+            await websocket.close(1011, str(exc)[:123])
+        except Exception:
+            pass
+    finally:
+        with _ws_active_connections_lock:
+            _ws_active_connections -= 1
+
+
+def _start_ws_server() -> threading.Thread:
+    """Start the asyncio WebSocket server in a daemon thread on WS_PORT."""
+    try:
+        from websockets.asyncio.server import serve as ws_serve
+    except ImportError:
+        print("[ws] websockets library not installed — WebSocket server disabled. Run: pip install websockets>=12.0")
+        return None  # type: ignore[return-value]
+
+    async def _serve() -> None:
+        try:
+            async with ws_serve(_ws_handler, "0.0.0.0", WS_PORT):
+                print(f"[ws] TokenPak WebSocket server ready — port={WS_PORT}")
+                await asyncio.Future()  # run until cancelled
+        except Exception as exc:
+            print(f"[ws] WebSocket server error: {exc}")
+
+    def _run() -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_serve())
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_run, daemon=True, name="tokenpak-ws-server")
+    t.start()
+    return t
+
+
 def main():
     port = PROXY_PORT
     mode_desc = {
@@ -3935,24 +4092,8 @@ def main():
     except Exception:
         pass
 
-    # Start WebSocket proxy server alongside HTTP proxy (port+1 by default)
-    ws_port = int(os.environ.get("TOKENPAK_WS_PORT", port + 1))
-    _ws_server = None
-    try:
-        import sys as _sys
-        _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from websocket_proxy import start_websocket_server_thread, WEBSOCKETS_AVAILABLE
-        if WEBSOCKETS_AVAILABLE:
-            _ws_thread = start_websocket_server_thread(
-                host=LISTEN_ADDRESS, port=ws_port,
-                proxy_state={"mode": COMPILATION_MODE}
-            )
-            if _ws_thread:
-                print(f"[ws] WebSocket proxy listening on ws://{LISTEN_ADDRESS}:{ws_port}/ws")
-        else:
-            print("[ws] WebSocket support disabled — install websockets: pip install websockets")
-    except Exception as _ws_err:
-        print(f"[ws] WebSocket proxy not started: {_ws_err}")
+    # Start WebSocket proxy server on WS_PORT (default 8767)
+    _start_ws_server()
 
     server = ThreadedHTTPServer((LISTEN_ADDRESS, port), ForwardProxyHandler)
 
