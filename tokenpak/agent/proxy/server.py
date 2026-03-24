@@ -727,11 +727,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_success = False  # track whether request succeeded for circuit breaker
 
             output_tokens = 0
+            # Per-request timeout: override pool default when TOKENPAK_REQUEST_TIMEOUT is set
+            _req_timeout = ps.request_timeout if ps.request_timeout > 0 else None
+
             if is_streaming:
                 # ── Streaming (SSE) path ──────────────────────────────────
                 # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
-                with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
+                _stream_kwargs: Dict[str, Any] = dict(method=method, url=target_url, content=body, headers=fwd_headers)
+                if _req_timeout is not None:
+                    _stream_kwargs["timeout"] = _req_timeout
+                with pool.stream(**_stream_kwargs) as resp:
                     self.send_response(resp.status_code)
                     has_content_type = False
                     has_cache_control = False
@@ -773,7 +779,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
-                resp = pool.request(method, target_url, content=body, headers=fwd_headers)
+                _req_kwargs: Dict[str, Any] = dict(method=method, url=target_url, content=body, headers=fwd_headers)
+                if _req_timeout is not None:
+                    _req_kwargs["timeout"] = _req_timeout
+                resp = pool.request(**_req_kwargs)
 
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
@@ -1254,6 +1263,11 @@ class ProxyServer:
         except Exception:  # pragma: no cover — import failure gracefully degrades
             pass
 
+        # Per-request timeout (seconds). 0 = disabled. Env: TOKENPAK_REQUEST_TIMEOUT
+        self.request_timeout: float = float(
+            os.environ.get("TOKENPAK_REQUEST_TIMEOUT", "0")
+        )
+
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
         self.session_filter = SessionFilter()
@@ -1444,6 +1458,15 @@ class ProxyServer:
             s.get("state") in ("open", "half_open")
             for s in cb_statuses.values()
         )
+        # Index freshness — read mtime of ~/.tokenpak/index.json
+        _index_path = Path.home() / ".tokenpak" / "index.json"
+        try:
+            _index_mtime = _index_path.stat().st_mtime
+            _index_age_s = round(time.time() - _index_mtime)
+            _index_fresh = _index_age_s < 600  # stale after 10 min
+            _index_info = {"age_seconds": _index_age_s, "fresh": _index_fresh, "path": str(_index_path)}
+        except OSError:
+            _index_info = {"age_seconds": None, "fresh": False, "path": str(_index_path)}
         result = {
             "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
@@ -1465,6 +1488,8 @@ class ProxyServer:
                 "any_open": cb_any_open,
                 "providers": cb_statuses,
             },
+            "index_freshness": _index_info,
+            "request_timeout_seconds": self.request_timeout if self.request_timeout > 0 else None,
         }
         if deep:
             import shutil
