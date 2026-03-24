@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head><title>TokenPak — Return on Investment</title></head>
+<body>
+  <h1>Return on Investment</h1>
+  {% if roi is defined and roi %}
+  <p>ROI: {{ roi.roi_percent | default(0) }}%</p>
+  {% endif %}
+</body>
+</html>
