@@ -246,3 +246,75 @@ def format_error(exc: Exception) -> str:
             "Check TokenPak logs for details.",
         )
         return str(error)
+
+
+# ---------------------------------------------------------------------------
+# Proxy errors (from Sue's implementation)
+# ---------------------------------------------------------------------------
+
+class ProxyStartupError(TokenPakError):
+    """Error during proxy server startup."""
+    def __init__(self, message: str, suggestion: Optional[str] = None, context: Optional[str] = None):
+        super().__init__(code="TP-E100", message=message, suggestion=suggestion or "Check proxy configuration.", context=context)
+
+
+class PortInUseError(ProxyStartupError):
+    """Proxy port is already in use."""
+    def __init__(self, port: int):
+        super().__init__(
+            message=f"Port {port} is already in use",
+            suggestion=f"Use a different port: tokenpak start --port <PORT>, or stop the process using port {port}.",
+            context=f"port={port}",
+        )
+
+
+class PermissionDeniedError(ProxyStartupError):
+    """Insufficient permissions for proxy operation."""
+    def __init__(self, message: str = "Permission denied"):
+        super().__init__(message=message, suggestion="Run with appropriate permissions or check file ownership.")
+
+
+class MissingDependencyError(ProxyStartupError):
+    """Required dependency not installed."""
+    def __init__(self, dependency: str):
+        super().__init__(
+            message=f"Missing required dependency: {dependency}",
+            suggestion=f"Install it: pip install {dependency}",
+            context=f"dependency={dependency}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Integration errors
+# ---------------------------------------------------------------------------
+
+class LiteLLMError(TokenPakError):
+    """Error from LiteLLM integration."""
+    def __init__(self, message: str, suggestion: Optional[str] = None, context: Optional[str] = None):
+        super().__init__(code="TP-E501", message=message, suggestion=suggestion or "Check LiteLLM configuration.", context=context)
+
+
+# ---------------------------------------------------------------------------
+# Validation and CLI errors
+# ---------------------------------------------------------------------------
+
+class ValidationError(TokenPakError):
+    """General validation error (non-config)."""
+    def __init__(self, message: str, suggestion: Optional[str] = None, context: Optional[str] = None):
+        super().__init__(code="TP-E601", message=message, suggestion=suggestion or "Check input values.", context=context)
+
+
+class CLIError(TokenPakError):
+    """CLI-specific error."""
+    def __init__(self, message: str, suggestion: Optional[str] = None, context: Optional[str] = None):
+        super().__init__(code="TP-E602", message=message, suggestion=suggestion or "Run 'tokenpak help' for usage.", context=context)
+
+
+class UnknownCommandError(CLIError):
+    """Unknown CLI command."""
+    def __init__(self, command: str, suggestion: Optional[str] = None):
+        super().__init__(
+            message=f"Unknown command: '{command}'",
+            suggestion=suggestion or "Run 'tokenpak help' for available commands.",
+            context=f"command={command}",
+        )

@@ -259,6 +259,27 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     # Read body
     body = await request.body()
 
+    # Check request size against thresholds (monitoring)
+    try:
+        from tokenpak.monitoring.request_size import get_monitor
+        monitor = get_monitor()
+        # Extract session ID from headers if available
+        session_id = request.headers.get("X-Session-ID", None)
+        size_alert = monitor.check_request_size(len(body), session_id=session_id)
+        if size_alert and ps.telemetry_events:
+            # Log alert to telemetry
+            ps.telemetry_events.append({
+                "type": "request_size_alert",
+                "timestamp": datetime.now().isoformat(),
+                "level": size_alert.level.value,
+                "size_bytes": size_alert.size_bytes,
+                "message": size_alert.message,
+                "session_id": session_id,
+            })
+    except Exception:
+        # Silently ignore monitoring errors
+        pass
+
     model = "unknown"
     input_tokens = 0
     sent_input_tokens = 0

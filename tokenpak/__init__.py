@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 """TokenPak — Universal Content Compiler for LLMs.
 
-Public API surface for TokenPak v1.0.0.
+Public API surface for TokenPak v1.0.1.
 Formalizes importable classes for agent integrations, deployment, and testing.
 
 Quick start:
@@ -9,6 +9,7 @@ Quick start:
 
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
+    from tokenpak.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
 """
@@ -26,7 +27,7 @@ __description__ = "Deterministic compression for multi-agent AI workflows"
 # ---------------------------------------------------------------------------
 # Sub-packages (for advanced use)
 # ---------------------------------------------------------------------------
-from tokenpak import agent, proxy
+from tokenpak import agent, connectors, proxy
 
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
@@ -43,11 +44,10 @@ from tokenpak.budgeter import Budgeter
 from tokenpak.cli import main
 
 # ---------------------------------------------------------------------------
-# Compression / Compaction Engines (Enterprise feature — removed from OSS)
+# Compression / Compaction Engines
 # ---------------------------------------------------------------------------
-# NOTE: Compaction engines have been moved to tokenpak-pro for Enterprise users.
-# Users with Enterprise licenses should import from tokenpak_pro instead:
-#   from tokenpak_pro.features.engines import get_engine, CompactionEngine
+# CompressionEngine: abstract base for all compaction strategies
+# Graceful degradation if engines are not available (pro-only installs)
 try:
     from tokenpak.engines import get_engine
     from tokenpak.engines.base import CompactionEngine as CompressionEngine
@@ -102,17 +102,6 @@ from tokenpak.trace import (  # noqa: F401
 # Agent Handoff Protocol
 # ---------------------------------------------------------------------------
 from tokenpak.agent.agentic.handoff import (
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire as Handoff,
-    ContextRef,
-    TokenPak,
-)
-# ---------------------------------------------------------------------------
-# Agentic handoff protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
     ContextRef,
     HandoffBlock,
     HandoffManager,
@@ -164,19 +153,13 @@ __all__ = [
     "HandoffManager",
     "HandoffStatus",
     "Handoff",
+    "HandoffWire",
     "ContextRef",
     "TokenPak",
     # CLI
     "main",
     # Sub-packages
+    "connectors",
     "agent",
     "proxy",
-    # Agentic handoff protocol
-    "ContextRef",
-    "Handoff",
-    "HandoffBlock",
-    "HandoffManager",
-    "HandoffStatus",
-    "HandoffWire",
-    "TokenPak",
 ]

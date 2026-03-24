@@ -23,7 +23,7 @@ except ImportError:
         sys.exit(2)
 
 
-DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/System", "~/vault/Agents"]
+DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/06_RUNTIME/SYSTEM", "~/vault/03_AGENT_PACKS"]
 DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
 DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
 

@@ -104,6 +104,7 @@ include = [
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
+    "runtime/*.py",
 ]
 
 [tool.pytest.ini_options]
