@@ -72,6 +72,11 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
                 "parts": self._to_google_parts(canonical.system)
             }
 
+        # Validate tool support before serializing
+        # Only raise if tools is a non-empty list or dict (actual tools present)
+        if canonical.tools is not None and canonical.tools:
+            self._validate_tool_support()
+        
         if canonical.tools is not None:
             payload["tools"] = copy.deepcopy(canonical.tools)
 
@@ -127,3 +132,25 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
                 return [{"text": content["text"]}]
             return [copy.deepcopy(content)]
         return [{"text": str(content)}]
+
+    def _validate_tool_support(self) -> None:
+        """
+        Raise NotImplementedError for function calling requests.
+
+        Google Generative AI (Gemini) does not yet support function calling
+        in this adapter. While Gemini natively supports functionDeclarations,
+        the TokenPak adapter does not yet translate OpenAI/Anthropic tool
+        schemas to Google's format.
+
+        Workaround: Use the OpenAI or Anthropic adapter for tool-calling workflows.
+        ETA: Google function calling support planned Q2 2026.
+
+        Reference:
+        - https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/function-calling
+        - ~/vault/01_PROJECTS/.../docs/provider-gaps.md (Gap #1)
+        """
+        raise NotImplementedError(
+            "Google adapter does not support function calling. "
+            "Use TokenPak with the OpenAI or Anthropic adapter instead. "
+            "See https://...provider-gaps.md for details and ETA."
+        )
