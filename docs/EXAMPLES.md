@@ -393,3 +393,75 @@ TOKENPAK_INJECT_MIN_SCORE=0.6   # Minimum similarity score for vault injection
 - [API Reference](../API.md) — Full endpoint documentation
 - [Production SLA](production-sla.md) — Performance targets
 - [Index Compression Analysis](../analysis/index-compression-2026-03.md) — Optimization guide
+
+---
+
+## Config Scenarios
+
+### Scenario 1: Personal Dev Machine
+```toml
+# ~/.tokenpak/config.toml — lightweight local setup
+[proxy]
+port = 8766
+mode = "hybrid"
+log_level = "warning"
+
+[compression]
+protect_system_prompts = true
+preserve_code_blocks = true
+target_ratio = 0.5
+
+[vault]
+enabled = false  # skip vault injection for local dev
+```
+
+### Scenario 2: CI/CD Pipeline
+```toml
+# Optimize for speed, disable vault, structured logs
+[proxy]
+port = 8766
+mode = "off"       # passthrough only — don't compress CI prompts
+log_level = "error"
+
+[vault]
+enabled = false
+
+[cache]
+enabled = true     # cache deterministic responses between runs
+ttl_seconds = 3600
+```
+
+### Scenario 3: Production Team Deployment
+```toml
+# Multi-user team proxy with full telemetry
+[proxy]
+port = 8766
+mode = "hybrid"
+bind = "0.0.0.0"   # allow LAN connections
+max_connections = 50
+
+[compression]
+protect_system_prompts = true
+preserve_code_blocks = true
+target_ratio = 0.45
+
+[vault]
+enabled = true
+index_path = "/shared/vault/.tokenpak"
+inject_budget_tokens = 2200
+min_score = 0.6
+
+[telemetry]
+enabled = true
+export_format = "json"
+flush_interval_seconds = 60
+```
+
+---
+
+## Provider Integration Guides
+
+- [Anthropic Claude](integrations/anthropic.md) — Drop-in `base_url` replacement
+- [Google Gemini](integrations/google-gemini.md) — REST + LiteLLM patterns
+- [OpenAI](integrations/openai.md) — Drop-in `base_url` replacement + env override
+- [LiteLLM](integrations/litellm.md) — Unified multi-provider interface
