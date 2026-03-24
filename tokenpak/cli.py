@@ -1868,15 +1868,12 @@ def build_parser():
     _build_learn_parser(sub)
     _build_user_template_parser(sub)
     _build_audit_parser(sub)
+    _build_audit_log_parser(sub)
     _build_compliance_parser(sub)
     _build_version_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
-
-    p_monitor = sub.add_parser("monitor", help="Start live monitor dashboard")
-    p_monitor.add_argument("--port", type=int, default=8767, help="Port to listen on (default: 8767)")
-    p_monitor.set_defaults(func=cmd_monitor)
 
     return parser
 
@@ -2442,6 +2439,80 @@ def _get_audit_db(args) -> str:
         return args.audit_db
     home = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
     return str(home / "audit.db")
+
+
+def _build_audit_log_parser(sub):
+    """Build audit-log subcommand (Pro feature usage tracking)."""
+    p = sub.add_parser("audit-log", help="Pro feature usage audit log")
+    asub = p.add_subparsers(dest="audit_log_cmd", required=True)
+
+    p_show = asub.add_parser("show", help="Show recent feature usage")
+    p_show.add_argument("--days", type=int, default=7, help="Rolling window in days (default: 7)")
+    p_show.add_argument("--feature", default=None, help="Filter by feature name")
+    p_show.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_show.set_defaults(func=cmd_audit_log_show)
+
+    p_stats = asub.add_parser("stats", help="Aggregate stats by feature/adapter")
+    p_stats.add_argument("--feature", default=None, help="Filter by feature name")
+    p_stats.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_stats.set_defaults(func=cmd_audit_log_stats)
+
+    p_export = asub.add_parser("export", help="Export all records as JSON to stdout")
+    p_export.set_defaults(func=cmd_audit_log_export)
+
+
+def cmd_audit_log_show(args):
+    """Show recent feature usage records."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        rows = log.get_feature_usage(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+            days=getattr(args, "days", 7),
+        )
+    if not rows:
+        print("No usage records found.")
+        return
+    header = f"{'Time':<28} {'Adapter':<20} {'Model':<24} {'Feature':<20}"
+    print(header)
+    print("-" * len(header))
+    for r in rows:
+        print(
+            f"{r.get('ts', '')[:27]:<28} "
+            f"{r.get('adapter', ''):<20} "
+            f"{r.get('model', ''):<24} "
+            f"{r.get('feature', ''):<20}"
+        )
+    print(f"\n{len(rows)} record(s)")
+
+
+def cmd_audit_log_stats(args):
+    """Show aggregate stats by feature/adapter."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        stats = log.get_stats(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+        )
+    print(f"Total events: {stats['total']}")
+    if stats["by_feature"]:
+        print("\nBy feature:")
+        for feat, count in sorted(stats["by_feature"].items(), key=lambda x: -x[1]):
+            print(f"  {feat:<24} {count}")
+    if stats["by_adapter"]:
+        print("\nBy adapter:")
+        for adpt, count in sorted(stats["by_adapter"].items(), key=lambda x: -x[1]):
+            print(f"  {adpt:<24} {count}")
+
+
+def cmd_audit_log_export(args):
+    """Export all audit log records as JSON to stdout."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        print(log.export_json())
 
 
 def _require_enterprise_feature(feature_name: str):
@@ -3091,6 +3162,7 @@ def main():
         "preview",
         "aggregate",
         "requests",
+        "audit-log",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
