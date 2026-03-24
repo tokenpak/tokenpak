@@ -68,6 +68,14 @@ dmypy.json
 monitor.db*
 telemetry.db*
 
+# Large data / dev artifacts
+artifacts/
+benchmarks/
+charts/
+archive/
+*.json.bak
+*.log
+
 # Misc
 .tmp/
 .cache/

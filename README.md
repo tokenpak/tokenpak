@@ -436,6 +436,61 @@ This pushes to both remotes and SSH-verifies the commit hash landed. **Never use
 
 ---
 
+## Docker
+
+The fastest way to run TokenPak with zero local Python setup.
+
+### Quick Start
+
+```bash
+# Pull and run
+docker pull tokenpak/tokenpak:latest
+docker run -d --name tokenpak -p 8766:8766 tokenpak/tokenpak:latest
+
+# Confirm it's healthy
+curl http://localhost:8766/health
+```
+
+Point your LLM client at `http://localhost:8766` — same as the local install.
+
+### Build from Source
+
+```bash
+git clone https://github.com/tokenpak/tokenpak
+cd tokenpak
+docker build -t tokenpak:latest .
+docker run -d --name tokenpak -p 8766:8766 tokenpak:latest
+```
+
+### Docker Compose (recommended for production)
+
+```bash
+# Copy the example config and edit as needed
+cp config/tokenpak.config.json.example config/tokenpak.config.json
+
+# Start the proxy
+docker compose up -d
+
+# Start with Redis distributed cache (optional)
+docker compose --profile with-cache up -d
+
+# View logs
+docker compose logs -f tokenpak
+
+# Stop
+docker compose down
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOKENPAK_PORT` | `8766` | Proxy listen port |
+| `TOKENPAK_LOG_LEVEL` | `info` | Log verbosity (`debug`\|`info`\|`warning`\|`error`) |
+| `TOKENPAK_ENABLE_METRICS` | `true` | Enable `/metrics` endpoint |
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
