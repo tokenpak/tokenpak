@@ -1016,6 +1016,13 @@ def cmd_serve(args):
             print("Run the existing proxy directly if needed.")
 
 
+def cmd_monitor(args):
+    """Start the live monitor dashboard."""
+    from tokenpak.monitor.server import run
+    port = getattr(args, "port", 8767)
+    run(port=port)
+
+
 def cmd_benchmark(args):
     """Run compression benchmark (default) or latency benchmark (--latency)."""
     file_arg = getattr(args, "file", None)
@@ -1748,6 +1755,10 @@ def build_parser():
     )
     p_serve.set_defaults(func=cmd_serve)
 
+    p_monitor = sub.add_parser("monitor", help="Start live monitor dashboard (port 8767)")
+    p_monitor.add_argument("--port", type=int, default=8767, help="Dashboard port (default: 8767)")
+    p_monitor.set_defaults(func=cmd_monitor)
+
     p_bench = sub.add_parser(
         "benchmark", help="Benchmark compression performance on sample or real data"
     )
@@ -1863,7 +1874,18 @@ def build_parser():
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
 
+    p_monitor = sub.add_parser("monitor", help="Start live monitor dashboard")
+    p_monitor.add_argument("--port", type=int, default=8767, help="Port to listen on (default: 8767)")
+    p_monitor.set_defaults(func=cmd_monitor)
+
     return parser
+
+
+def cmd_monitor(args):
+    """Start the live monitor dashboard HTTP server."""
+    from .monitor import run as _run_monitor
+    port = getattr(args, "port", 8767)
+    _run_monitor(port)
 
 
 def cmd_status(args):

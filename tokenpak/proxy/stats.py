@@ -181,3 +181,60 @@ class StatsCollector:
 # Module-level singleton — import and use directly
 # ---------------------------------------------------------------------------
 STATS = StatsCollector()
+
+# Aliases for compatibility
+StatsCollector.to_dict = StatsCollector.snapshot
+
+def to_text(self: "StatsCollector") -> str:
+    """Return plaintext representation suitable for grep/bash scripting."""
+    d = self.snapshot()
+    c = d["compression"]
+    v = d["vault_search"]
+    lines = [
+        f"uptime_seconds={d['uptime_seconds']}",
+        f"requests_total={d['requests_total']}",
+        f"requests_per_sec={d['requests_per_sec']}",
+        f"compression_ratio={c['ratio']}",
+        f"tokens_before={c['tokens_before']}",
+        f"tokens_after={c['tokens_after']}",
+        f"compressed={c['compressed']}",
+        f"skipped={c['skipped']}",
+        f"errors_total={d['errors']['total']}",
+        f"vault_hit_rate={v['hit_rate']}",
+        f"vault_hits={v['cache_hits']}",
+        f"vault_misses={v['cache_misses']}",
+        f"latest_request_ms={d['latest_request_ms']}",
+        f"timestamp={d['timestamp']}",
+    ]
+    for provider, count in d["routing"].items():
+        lines.append(f"routing_{provider}={count}")
+    for code, count in d["errors"].items():
+        if code != "total":
+            lines.append(f"error_{code}={count}")
+    return "\n".join(lines)
+
+StatsCollector.to_text = to_text  # type: ignore[method-assign]
+
+# ---- Singleton helpers ----
+_SINGLETON_LOCK = threading.Lock()
+_SINGLETON: Optional[StatsCollector] = None
+
+
+def get_stats_collector() -> StatsCollector:
+    """Return the process-global StatsCollector (same as STATS)."""
+    global _SINGLETON
+    if _SINGLETON is None:
+        with _SINGLETON_LOCK:
+            if _SINGLETON is None:
+                _SINGLETON = STATS
+    return _SINGLETON
+
+
+def reset_stats_collector() -> None:
+    """Replace the global singleton with a fresh instance (for testing)."""
+    global _SINGLETON, STATS
+    with _SINGLETON_LOCK:
+        _SINGLETON = StatsCollector()
+        # Update module-level STATS as well
+        import sys
+        sys.modules[__name__].STATS = _SINGLETON

@@ -2043,10 +2043,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "circuit_breakers": {p: {"open": cb["open"], "failures": cb["failures"]} for p, cb in _provider_circuits.items()},
                 "stats": {
                     "requests": SESSION.get("requests", 0),
+                    "input_tokens": SESSION.get("input_tokens", 0),
+                    "sent_input_tokens": SESSION.get("sent_input_tokens", 0),
+                    "saved_tokens": SESSION.get("saved_tokens", 0),
                     "errors": SESSION.get("errors", 0),
                     "cache_hits": SESSION.get("cache_hits", 0),
                     "cache_misses": SESSION.get("cache_misses", 0),
-                    "saved_tokens": SESSION.get("saved_tokens", 0),
                     "cost": SESSION.get("cost", 0),
                 },
             }
