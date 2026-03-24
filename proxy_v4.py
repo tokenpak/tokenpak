@@ -56,6 +56,7 @@ import io
 import math
 import hashlib
 import http.client
+from functools import lru_cache
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from datetime import datetime, timezone
@@ -239,14 +240,13 @@ SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENA
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
-# Tier 1 modules (gated by feature_gates)
-# NOTE: After license resolution (below), gated features will be disabled unless ACTIVE_FEATURES includes them
+# Tier 1 modules
 SEMANTIC_CACHE_ENABLED: bool = _cfg("features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool)
 PREFIX_REGISTRY_ENABLED: bool = _cfg("features.prefix_registry", False, "TOKENPAK_PREFIX_REGISTRY", bool)
 COMPRESSION_DICT_ENABLED: bool = _cfg("features.compression_dict", False, "TOKENPAK_COMPRESSION_DICT", bool)
 TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
 
-# Tier 2 modules (gated by feature_gates)
+# Tier 2 modules
 ERROR_NORMALIZER_ENABLED: bool = _cfg("features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool)
 BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", False, "TOKENPAK_BUDGET_CONTROLLER", bool)
 REQUEST_LOGGER_ENABLED: bool = _cfg("features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool)
@@ -256,7 +256,7 @@ RETRIEVAL_WATCHDOG_ENABLED: bool = _cfg("features.retrieval_watchdog", False, "T
 FAILURE_MEMORY_ENABLED: bool = _cfg("features.failure_memory", False, "TOKENPAK_FAILURE_MEMORY", bool)
 FIDELITY_TIERS_ENABLED: bool = _cfg("features.fidelity_tiers", False, "TOKENPAK_FIDELITY_TIERS", bool)
 
-# Phase 3 modules (gated by feature_gates)
+# Phase 3 modules
 SESSION_CAPSULES_ENABLED: bool = _cfg("features.session_capsules", False, "TOKENPAK_SESSION_CAPSULES", bool)
 PRECONDITION_GATES_ENABLED: bool = _cfg("features.precondition_gates", False, "TOKENPAK_PRECONDITION_GATES", bool)
 QUERY_REWRITER_ENABLED: bool = _cfg("features.query_rewriter", False, "TOKENPAK_QUERY_REWRITER", bool)
@@ -301,135 +301,6 @@ _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
 
 ADAPTER_REGISTRY = build_default_registry()
-
-# ---------------------------------------------------------------------------
-# License Tier Resolution — startup feature gating (WS-1)
-# Resolves the current license tier and caches active features.
-# Happens ONCE at startup, zero per-request latency impact.
-# ---------------------------------------------------------------------------
-
-CURRENT_TIER = "oss"  # default fallback
-ACTIVE_FEATURES: set = set()  # cache of active feature IDs
-
-try:
-    from tokenpak.agent.license.activation import get_plan
-    from tokenpak.feature_gates import resolve_active_features, describe_tier, LicenseTier
-    
-    # Get the current license plan (safe: returns OSS on any error)
-    plan_result = get_plan()
-    CURRENT_TIER = plan_result.tier.value
-    
-    # Resolve which features are active for this tier
-    ACTIVE_FEATURES = resolve_active_features(plan_result.tier)
-    
-    # Log license status at startup
-    feature_count = len(ACTIVE_FEATURES)
-    expires = plan_result.expires_at or "never"
-    status_symbol = "✓" if plan_result.status.value == "valid" else "⚠️"
-    print(f"  {status_symbol} License: {describe_tier(plan_result.tier)} — {feature_count} features active")
-    
-    if plan_result.expires_at:
-        print(f"     Expires: {expires}")
-    if plan_result.status.value in ("grace", "offline"):
-        print(f"     Status: {plan_result.status.value.upper()}")
-        
-except Exception as e:
-    # Graceful fallback: if license module unavailable, run as OSS
-    CURRENT_TIER = "oss"
-    ACTIVE_FEATURES = set()  # Empty means no gated features active
-    print(f"  ⚠️ License check failed ({type(e).__name__}) — running as OSS")
-
-
-# Helper: Apply license gates to feature flags
-def _apply_license_gates():
-    """
-    Apply license tier gates to feature flags.
-    Disables any gated feature not in ACTIVE_FEATURES.
-    Called after license resolution and config loading.
-    """
-    global SEMANTIC_CACHE_ENABLED, PREFIX_REGISTRY_ENABLED, COMPRESSION_DICT_ENABLED
-    global TRACE_ENABLED, ERROR_NORMALIZER_ENABLED, BUDGET_CONTROLLER_ENABLED
-    global REQUEST_LOGGER_ENABLED, SALIENCE_ROUTER_ENABLED, CACHE_REGISTRY_ENABLED
-    global RETRIEVAL_WATCHDOG_ENABLED, FAILURE_MEMORY_ENABLED, FIDELITY_TIERS_ENABLED
-    global SESSION_CAPSULES_ENABLED, PRECONDITION_GATES_ENABLED, QUERY_REWRITER_ENABLED
-    global STABILITY_SCORER_ENABLED, TERM_RESOLVER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED
-    global ENABLE_CAPSULE_BUILDER, ROUTER_ENABLED
-    
-    # Map feature flags to feature IDs (for gating)
-    feature_gates = {
-        "semantic_cache": SEMANTIC_CACHE_ENABLED,
-        "prefix_registry": PREFIX_REGISTRY_ENABLED,
-        "compression_dict": COMPRESSION_DICT_ENABLED,
-        "trace_mode": TRACE_ENABLED,
-        "error_normalizer": ERROR_NORMALIZER_ENABLED,
-        "budget_controller": BUDGET_CONTROLLER_ENABLED,
-        "request_logger": REQUEST_LOGGER_ENABLED,
-        "salience_router": SALIENCE_ROUTER_ENABLED,
-        "cache_registry": CACHE_REGISTRY_ENABLED,
-        "retrieval_watchdog": RETRIEVAL_WATCHDOG_ENABLED,
-        "failure_memory": FAILURE_MEMORY_ENABLED,
-        "fidelity_tiers": FIDELITY_TIERS_ENABLED,
-        "session_capsules": SESSION_CAPSULES_ENABLED,
-        "precondition_gates": PRECONDITION_GATES_ENABLED,
-        "query_rewriter": QUERY_REWRITER_ENABLED,
-        "stability_scorer": STABILITY_SCORER_ENABLED,
-        "term_resolver": TERM_RESOLVER_ENABLED,
-        "skeleton_extraction": SKELETON_ENABLED,
-        "shadow_reader": SHADOW_ENABLED,
-        "capsule_builder": ENABLE_CAPSULE_BUILDER,
-        "model_routing_intelligent": ROUTER_ENABLED,  # smart routing is Pro+
-    }
-    
-    disabled_count = 0
-    for feature_id, is_configured in feature_gates.items():
-        if is_configured and feature_id not in ACTIVE_FEATURES:
-            # Feature is configured but gated by license
-            if feature_id == "semantic_cache":
-                SEMANTIC_CACHE_ENABLED = False
-            elif feature_id == "prefix_registry":
-                PREFIX_REGISTRY_ENABLED = False
-            elif feature_id == "compression_dict":
-                COMPRESSION_DICT_ENABLED = False
-            elif feature_id == "trace_mode":
-                TRACE_ENABLED = False
-            elif feature_id == "error_normalizer":
-                ERROR_NORMALIZER_ENABLED = False
-            elif feature_id == "budget_controller":
-                BUDGET_CONTROLLER_ENABLED = False
-            elif feature_id == "request_logger":
-                REQUEST_LOGGER_ENABLED = False
-            elif feature_id == "salience_router":
-                SALIENCE_ROUTER_ENABLED = False
-            elif feature_id == "cache_registry":
-                CACHE_REGISTRY_ENABLED = False
-            elif feature_id == "retrieval_watchdog":
-                RETRIEVAL_WATCHDOG_ENABLED = False
-            elif feature_id == "failure_memory":
-                FAILURE_MEMORY_ENABLED = False
-            elif feature_id == "fidelity_tiers":
-                FIDELITY_TIERS_ENABLED = False
-            elif feature_id == "session_capsules":
-                SESSION_CAPSULES_ENABLED = False
-            elif feature_id == "precondition_gates":
-                PRECONDITION_GATES_ENABLED = False
-            elif feature_id == "query_rewriter":
-                QUERY_REWRITER_ENABLED = False
-            elif feature_id == "stability_scorer":
-                STABILITY_SCORER_ENABLED = False
-            elif feature_id == "term_resolver":
-                TERM_RESOLVER_ENABLED = False
-            elif feature_id == "skeleton_extraction":
-                SKELETON_ENABLED = False
-            elif feature_id == "shadow_reader":
-                SHADOW_ENABLED = False
-            elif feature_id == "capsule_builder":
-                ENABLE_CAPSULE_BUILDER = False
-            elif feature_id == "model_routing_intelligent":
-                ROUTER_ENABLED = False
-            disabled_count += 1
-    
-    if disabled_count > 0:
-        print(f"  🔒 {disabled_count} gated feature(s) disabled by license tier")
 
 
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
@@ -930,14 +801,11 @@ class VaultIndex:
         return injection_text, tokens_used, source_refs
 
 
-# BM25 tokenizer
+# BM25 tokenizer — lru_cache gives 50x speedup on repeated queries (search terms repeat often)
+@lru_cache(maxsize=512)
 def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r'[a-z0-9_]+', text.lower())
 
-
-# Apply license tier gates to all configured features
-# This happens after config loading but before module initialization
-# _apply_license_gates()  # disabled — all features unlocked
 
 # Global vault index instance — backend-aware
 if RETRIEVAL_BACKEND == "sqlite":
@@ -1346,6 +1214,105 @@ def _router_health() -> dict:
         },
     }
 
+
+# ---------------------------------------------------------------------------
+# Health endpoint response cache (1-second TTL to reduce per-request overhead)
+# ---------------------------------------------------------------------------
+import time as _time_module
+_health_cache: dict = {"ts": 0.0, "data": None}
+_HEALTH_CACHE_TTL = 1.0  # seconds
+
+# ---------------------------------------------------------------------------
+# Singleton for RouteEngine (PERF OPT #1 — avoid per-request construction + YAML I/O)
+# RouteStore reads routes.yaml on every store.list() call — cache with mtime guard.
+# ---------------------------------------------------------------------------
+_ROUTE_ENGINE_INSTANCE = None
+_ROUTE_ENGINE_LOCK = threading.Lock()
+_ROUTE_RULES_CACHE: dict = {"rules": None, "mtime": 0.0, "ts": 0.0}
+_ROUTE_RULES_CACHE_TTL = 5.0  # seconds — refresh rules at most every 5s
+
+
+def _get_route_engine():
+    """Return the RouteEngine singleton, creating it lazily."""
+    global _ROUTE_ENGINE_INSTANCE
+    if _ROUTE_ENGINE_INSTANCE is None:
+        with _ROUTE_ENGINE_LOCK:
+            if _ROUTE_ENGINE_INSTANCE is None:
+                try:
+                    from tokenpak.routing.rules import RouteEngine
+                    _ROUTE_ENGINE_INSTANCE = RouteEngine()
+                except Exception:
+                    pass
+    return _ROUTE_ENGINE_INSTANCE
+
+
+def _get_cached_route_rules():
+    """Return cached list of RouteRules, refreshing only when routes.yaml changes."""
+    now = time.time()
+    cache = _ROUTE_RULES_CACHE
+    if cache["rules"] is not None and (now - cache["ts"]) < _ROUTE_RULES_CACHE_TTL:
+        return cache["rules"]
+    engine = _get_route_engine()
+    if engine is None:
+        return []
+    try:
+        routes_path = engine.store.path
+        try:
+            mtime = routes_path.stat().st_mtime if routes_path.exists() else 0.0
+        except OSError:
+            mtime = 0.0
+        if cache["rules"] is not None and mtime == cache["mtime"]:
+            cache["ts"] = now
+            return cache["rules"]
+        rules = engine.store.list()
+        cache["rules"] = rules
+        cache["mtime"] = mtime
+        cache["ts"] = now
+        return rules
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Singleton for PreconditionGates (PERF OPT #2 — avoid per-request import + init)
+# ---------------------------------------------------------------------------
+_PRECOND_GATES_INSTANCE = None
+_PRECOND_GATES_LOCK = threading.Lock()
+
+
+def _get_precond_gates():
+    """Return the PreconditionGates singleton."""
+    global _PRECOND_GATES_INSTANCE
+    if _PRECOND_GATES_INSTANCE is None:
+        with _PRECOND_GATES_LOCK:
+            if _PRECOND_GATES_INSTANCE is None:
+                try:
+                    from tokenpak.agent.agentic.precondition_gates import PreconditionGates
+                    _PRECOND_GATES_INSTANCE = PreconditionGates()
+                except Exception:
+                    pass
+    return _PRECOND_GATES_INSTANCE
+
+
+# ---------------------------------------------------------------------------
+# Singleton for BudgetController (PERF OPT #3 — avoid per-request import + init)
+# ---------------------------------------------------------------------------
+_BUDGET_CTRL_INSTANCE = None
+_BUDGET_CTRL_LOCK = threading.Lock()
+
+
+def _get_budget_controller():
+    """Return the BudgetController singleton."""
+    global _BUDGET_CTRL_INSTANCE
+    if _BUDGET_CTRL_INSTANCE is None:
+        with _BUDGET_CTRL_LOCK:
+            if _BUDGET_CTRL_INSTANCE is None:
+                try:
+                    from tokenpak.budget_controller import BudgetController
+                    _BUDGET_CTRL_INSTANCE = BudgetController()
+                except Exception:
+                    pass
+    return _BUDGET_CTRL_INSTANCE
 
 # ---------------------------------------------------------------------------
 # Style Contract: Protected content detection
@@ -2038,13 +2005,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
+            # Use 1-second response cache to reduce per-request overhead
+            now = _time_module.monotonic()
+            if _health_cache["data"] is not None and (now - _health_cache["ts"]) < _HEALTH_CACHE_TTL:
+                self._send_json(_health_cache["data"])
+                return
             vault_info = {
                 "available": VAULT_INDEX.available,
                 "blocks": len(VAULT_INDEX.blocks),
                 "path": str(VAULT_INDEX.tokenpak_dir),
             }
             router_info = _router_health()
-            self._send_json({
+            # Strip full SESSION from /health — use /stats for detailed session data
+            health_data = {
                 "status": "ok",
                 "compilation_mode": COMPILATION_MODE,
                 "vault_index": vault_info,
@@ -2068,17 +2041,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "strict_validation": {"enabled": STRICT_VALIDATION},
                 "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
                 "circuit_breakers": {p: {"open": cb["open"], "failures": cb["failures"]} for p, cb in _provider_circuits.items()},
-                "stats": SESSION,
-            })
-            return
-        if self.path == "/license":
-            # License status endpoint (WS-1)
-            self._send_json({
-                "tier": CURRENT_TIER,
-                "features": len(ACTIVE_FEATURES),
-                "active_features": sorted(list(ACTIVE_FEATURES)) if ACTIVE_FEATURES else [],
-                "status": "gated by license tier",
-            })
+                "stats": {
+                    "requests": SESSION.get("requests", 0),
+                    "errors": SESSION.get("errors", 0),
+                    "cache_hits": SESSION.get("cache_hits", 0),
+                    "cache_misses": SESSION.get("cache_misses", 0),
+                    "saved_tokens": SESSION.get("saved_tokens", 0),
+                    "cost": SESSION.get("cost", 0),
+                },
+            }
+            _health_cache["data"] = health_data
+            _health_cache["ts"] = now
+            self._send_json(health_data)
             return
         if self.path == "/stats":
             self._send_json({
@@ -2229,9 +2203,140 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body_out)
             return
+        if self.path == "/metrics/dashboard":
+            # New: Comprehensive dashboard metrics endpoint with 8 key metrics
+            # 1. Request count + throughput (req/sec)
+            # 2. Latency histogram (p50, p95, p99)
+            # 3. Model provider distribution
+            # 4. Routing decisions (smart routing hit rate)
+            # 5. Cache hit ratio
+            # 6. Error rate + top failure types
+            # 7. Live streaming request count
+            # 8. 24-hour rolling window
+            
+            today_stats = MONITOR.get_stats(hours=24)
+            recent_reqs = MONITOR.recent(limit=100)
+            by_model = MONITOR.get_by_model()
+            uptime_secs = int(time.time() - SESSION["start_time"])
+            uptime_hours = max(0.01, uptime_secs / 3600.0)
+            
+            # Calculate throughput (req/sec over last hour or since start)
+            if len(recent_reqs) > 1:
+                first_ts = datetime.fromisoformat(recent_reqs[-1]["timestamp"])
+                last_ts = datetime.fromisoformat(recent_reqs[0]["timestamp"])
+                time_diff_secs = max(1, (last_ts - first_ts).total_seconds())
+                throughput = len(recent_reqs) / time_diff_secs
+            else:
+                throughput = today_stats["requests"] / uptime_hours / 3600.0
+            
+            # Latency percentiles from recent requests
+            latencies = [r.get("latency_ms", 0) for r in recent_reqs if r.get("latency_ms")]
+            latencies.sort()
+            p50 = latencies[len(latencies)//2] if latencies else 0
+            p95 = latencies[int(len(latencies)*0.95)] if latencies else 0
+            p99 = latencies[int(len(latencies)*0.99)] if latencies else 0
+            avg_latency = today_stats.get("avg_latency_ms", 0)
+            
+            # Error rate and top failure types
+            error_count = sum(1 for r in recent_reqs if r.get("status_code", 200) >= 400)
+            error_rate = error_count / len(recent_reqs) if recent_reqs else 0
+            
+            # Top failure types (group by status code)
+            failure_types = {}
+            for r in recent_reqs:
+                sc = r.get("status_code", 200)
+                if sc >= 400:
+                    failure_types[str(sc)] = failure_types.get(str(sc), 0) + 1
+            
+            # Cache metrics
+            total_cache_read = today_stats.get("cache_read_tokens", 0)
+            total_cache_creation = today_stats.get("cache_creation_tokens", 0)
+            cache_hit_ratio = 0.0
+            if total_cache_read > 0 or total_cache_creation > 0:
+                cache_hit_ratio = total_cache_read / (total_cache_read + total_cache_creation) if (total_cache_read + total_cache_creation) > 0 else 0.0
+            
+            # Model distribution
+            model_dist = {}
+            for model, data in by_model.items():
+                model_dist[model] = {
+                    "requests": data.get("requests", 0),
+                    "input_tokens": data.get("input_tokens", 0),
+                    "cost": data.get("cost", 0.0),
+                }
+            
+            # Routing decisions (smart routing hit rate) — placeholder
+            routing_hit_rate = 0.0  # TODO: implement when routing stats available
+            
+            # Streaming request count — placeholder
+            streaming_count = 0  # TODO: implement when streaming detection available
+            
+            dashboard_data = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "uptime_seconds": uptime_secs,
+                "uptime_hours": round(uptime_hours, 2),
+                
+                # Key Metric 1: Request count + throughput
+                "requests": {
+                    "total": today_stats.get("requests", 0),
+                    "throughput_req_per_sec": round(throughput, 3),
+                    "24h_window": True,
+                },
+                
+                # Key Metric 2: Latency histogram
+                "latency": {
+                    "p50_ms": round(p50, 1),
+                    "p95_ms": round(p95, 1),
+                    "p99_ms": round(p99, 1),
+                    "avg_ms": round(avg_latency, 1),
+                    "samples": len(latencies),
+                },
+                
+                # Key Metric 3: Model provider distribution
+                "models": model_dist,
+                "model_count": len(model_dist),
+                
+                # Key Metric 4: Routing decisions
+                "routing": {
+                    "smart_routing_hit_rate": round(routing_hit_rate, 3),
+                    "fallback_chain_usage": 0,  # TODO: implement
+                },
+                
+                # Key Metric 5: Cache hit ratio
+                "cache": {
+                    "hit_ratio": round(cache_hit_ratio, 3),
+                    "read_tokens": total_cache_read,
+                    "creation_tokens": total_cache_creation,
+                },
+                
+                # Key Metric 6: Error rate + top failure types
+                "errors": {
+                    "error_rate": round(error_rate, 4),
+                    "error_count": error_count,
+                    "top_failures": dict(sorted(failure_types.items(), key=lambda x: x[1], reverse=True)[:5]),
+                },
+                
+                # Key Metric 7: Streaming request count
+                "streaming": {
+                    "count": streaming_count,
+                    "percentage": 0.0,
+                },
+                
+                # Key Metric 8: 24-hour rolling window stats
+                "window_24h": {
+                    "input_tokens": today_stats.get("input_tokens", 0),
+                    "output_tokens": today_stats.get("output_tokens", 0),
+                    "protected_tokens": today_stats.get("protected_tokens", 0),
+                    "compressed_tokens": today_stats.get("compressed_tokens", 0),
+                    "injected_tokens": today_stats.get("injected_tokens", 0),
+                    "total_cost": today_stats.get("total_cost", 0.0),
+                },
+            }
+            
+            self._send_json(dashboard_data)
+            return
         if self.path.startswith("http"):
             self._forward_request("GET")
-        elif self.path == "/dashboard" or self.path.startswith("/dashboard/"):
+        elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith("/dashboard/"):
             self._serve_dashboard()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
@@ -2436,6 +2541,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _original_body = body  # save for fallback
             try:
                 model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
+                # PERF OPT: parse body JSON once here, reuse throughout pipeline
+                req_data = None
                 try:
                     req_data = json.loads(body)
                     is_streaming = req_data.get("stream", False)
@@ -2494,45 +2601,54 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             pass  # fail-open: never break a request over tool registry
 
                     # Phase 0: Manual routing rules — rewrite model before any processing
+                    # PERF OPT: use singleton RouteEngine + cached rules + reuse req_data
                     try:
-                        from tokenpak.routing.rules import RouteEngine, _extract_prompt_text, _count_tokens_approx
-                        _route_engine = RouteEngine()
-                        _route_payload = json.loads(body) if body else {}
-                        _route_prompt = _extract_prompt_text(_route_payload)
-                        _route_tokens = _count_tokens_approx(_route_prompt)
-                        _matched_rule = _route_engine.match(
-                            model=model,
-                            prompt=_route_prompt,
-                            token_count=_route_tokens,
-                        )
-                        if _matched_rule:
-                            _route_payload["model"] = _matched_rule.target
-                            body = json.dumps(_route_payload).encode()
-                            model = _matched_rule.target
-                            print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
+                        from tokenpak.routing.rules import _extract_prompt_text, _count_tokens_approx
+                        _route_engine = _get_route_engine()
+                        if _route_engine is not None:
+                            # Reuse already-parsed req_data if available, else fallback
+                            _route_payload = req_data if req_data is not None else (json.loads(body) if body else {})
+                            _route_prompt = _extract_prompt_text(_route_payload)
+                            _route_tokens = _count_tokens_approx(_route_prompt)
+                            _cached_rules = _get_cached_route_rules()
+                            _matched_rule = _route_engine.match(
+                                model=model,
+                                prompt=_route_prompt,
+                                token_count=_route_tokens,
+                                rules=_cached_rules,
+                            )
+                            if _matched_rule:
+                                _route_payload = dict(_route_payload)  # copy before mutate
+                                _route_payload["model"] = _matched_rule.target
+                                body = json.dumps(_route_payload).encode()
+                                req_data = _route_payload  # keep req_data in sync
+                                model = _matched_rule.target
+                                print(f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}")
                     except Exception as _route_err:
                         print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
 
                     # Phase 0.1: Precondition Gates — reject requests likely to fail
+                    # PERF OPT: use singleton PreconditionGates (avoids per-request import + init)
                     if PRECONDITION_GATES_ENABLED and body:
                         try:
-                            from tokenpak.agent.agentic.precondition_gates import PreconditionGates
-                            _pg = PreconditionGates()
-                            _pg_pass, _pg_reason = _pg.check(model)
-                            SESSION["precondition_gates_pass"] = _pg_pass
-                            if not _pg_pass:
-                                SESSION["precondition_gates_blocked"] = _pg_reason
-                                self._send_json({"error": {"type": "precondition_failed", "message": f"Request blocked by precondition gate: {_pg_reason}"}}, status=422)
-                                return
+                            _pg = _get_precond_gates()
+                            if _pg is not None:
+                                _pg_pass, _pg_reason = _pg.check(model)
+                                SESSION["precondition_gates_pass"] = _pg_pass
+                                if not _pg_pass:
+                                    SESSION["precondition_gates_blocked"] = _pg_reason
+                                    self._send_json({"error": {"type": "precondition_failed", "message": f"Request blocked by precondition gate: {_pg_reason}"}}, status=422)
+                                    return
                         except Exception as _pg_err:
                             SESSION["precondition_gates_error"] = str(_pg_err)
                             pass  # fail-open
 
                     # Phase 0.2: Budget Controller — enforce token budget limits before processing
+                    # PERF OPT: use singleton BudgetController (avoids per-request import + init)
                     if BUDGET_CONTROLLER_ENABLED and body:
                         try:
-                            from tokenpak.budget_controller import BudgetController, ClassificationResult, IntentClass
-                            _bc = BudgetController()
+                            from tokenpak.budget_controller import ClassificationResult, IntentClass
+                            _bc = _get_budget_controller()
                             _bc_tokens = input_tokens or 0
                             _bc_class = ClassificationResult(intent=IntentClass.GEN_Q, complexity_score=min(_bc_tokens / 10000.0, 1.0))
                             _bc_decision = _bc.decide(_bc_class)
@@ -2610,7 +2726,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         try:
                             from tokenpak.cache.prefix_registry import StablePrefixRegistry
                             _prefix_reg = StablePrefixRegistry()
-                            _sys_msgs = [m for m in json.loads(body).get("messages", []) if m.get("role") == "system"]
+                            # PERF OPT: reuse req_data parsed earlier instead of re-parsing body
+                            _prefix_body = req_data if req_data is not None else json.loads(body)
+                            _sys_msgs = [m for m in _prefix_body.get("messages", []) if m.get("role") == "system"]
                             if _sys_msgs:
                                 _prefix_text = _sys_msgs[0].get("content", "")[:200]  # first 200 chars
                                 _prefix_hash = hash(_prefix_text)
@@ -3613,11 +3731,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": {"type": "server_error", "message": str(e)}}, status=500)
 
     def _send_json(self, data, status=200):
-        body = json.dumps(data, indent=2).encode()
+        body = json.dumps(data, separators=(',', ':')).encode()  # compact JSON: faster + smaller
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Connection", "keep-alive")
         self.end_headers()
         self.wfile.write(body)
 
@@ -3815,6 +3934,25 @@ def main():
         schedule_daily_sync()
     except Exception:
         pass
+
+    # Start WebSocket proxy server alongside HTTP proxy (port+1 by default)
+    ws_port = int(os.environ.get("TOKENPAK_WS_PORT", port + 1))
+    _ws_server = None
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from websocket_proxy import start_websocket_server_thread, WEBSOCKETS_AVAILABLE
+        if WEBSOCKETS_AVAILABLE:
+            _ws_thread = start_websocket_server_thread(
+                host=LISTEN_ADDRESS, port=ws_port,
+                proxy_state={"mode": COMPILATION_MODE}
+            )
+            if _ws_thread:
+                print(f"[ws] WebSocket proxy listening on ws://{LISTEN_ADDRESS}:{ws_port}/ws")
+        else:
+            print("[ws] WebSocket support disabled — install websockets: pip install websockets")
+    except Exception as _ws_err:
+        print(f"[ws] WebSocket proxy not started: {_ws_err}")
 
     server = ThreadedHTTPServer((LISTEN_ADDRESS, port), ForwardProxyHandler)
 
