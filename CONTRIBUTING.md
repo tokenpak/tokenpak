@@ -153,3 +153,83 @@ We aim to:
 ## License
 
 By contributing, you agree your contributions will be licensed under the [MIT License](LICENSE).
+
+---
+
+## Writing a Plugin
+
+TokenPak supports custom compressor plugins that run before the built-in compaction pipeline.
+
+### The Interface
+
+Subclass `CompressorPlugin` from `tokenpak.plugins.base`:
+
+```python
+from tokenpak.plugins.base import CompressorPlugin
+
+class MyPlugin(CompressorPlugin):
+    name = "my_plugin"          # unique identifier — required
+
+    def compress(self, text: str, context: dict) -> dict:
+        """Transform text and return a result dict.
+
+        Args:
+            text:    The message content to compress.
+            context: Runtime metadata — keys include ``mode``, ``input_tokens``,
+                     ``request_id``.
+
+        Returns:
+            dict with at minimum ``{"text": str, "metadata": dict}``.
+        """
+        compressed = text.replace("verbose phrase", "short")
+        return {
+            "text": compressed,
+            "metadata": {"plugin": self.name, "bytes_saved": len(text) - len(compressed)},
+        }
+
+    def priority(self) -> int:
+        """Higher number runs first.  Default: 50."""
+        return 75
+```
+
+The `compress()` method **must** return a dict with:
+- `text` (str) — the (possibly modified) output text
+- `metadata` (dict) — arbitrary info about what the plugin did
+
+### Registering a Plugin
+
+**Option 1 — Environment variable** (recommended for quick testing):
+
+```bash
+export TOKENPAK_PLUGINS=my_package.my_module.MyPlugin
+```
+
+Multiple plugins are comma-separated:
+
+```bash
+export TOKENPAK_PLUGINS=my_pkg.pluginA.PluginA,my_pkg.pluginB.PluginB
+```
+
+**Option 2 — Config file** (`tokenpak.config.json` in the working directory):
+
+```json
+{
+  "plugins": [
+    "my_package.my_module.MyPlugin"
+  ]
+}
+```
+
+Both sources are loaded at startup; env var plugins are registered first.
+
+### Plugin Execution Order
+
+Plugins with a **higher** `priority()` value run first.  The default priority is 50.  Built-in compaction runs after all plugins have completed.
+
+### Error Handling
+
+If a plugin raises an exception, TokenPak logs a warning and continues — the original message text is preserved and the next plugin (or built-in compactor) runs normally.
+
+### Example Plugin
+
+See [`tokenpak/plugins/examples/passthrough.py`](tokenpak/plugins/examples/passthrough.py) for a minimal no-op example you can use as a starting template.

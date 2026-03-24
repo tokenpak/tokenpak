@@ -273,6 +273,23 @@ if CACHE_REGISTRY_ENABLED:
         print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
         CACHE_REGISTRY_ENABLED = False
 
+# ---------------------------------------------------------------------------
+# Plugin system — run custom compressors first
+# ---------------------------------------------------------------------------
+_plugin_registry = None
+try:
+    from tokenpak.plugins.registry import PluginRegistry as _PluginRegistry
+    _plugin_registry = _PluginRegistry()
+    _plugin_registry.discover()
+    _loaded = _plugin_registry.get_plugins()
+    if _loaded:
+        print(f"  🔌 Plugin system: {len(_loaded)} plugin(s) loaded: {[p.name for p in _loaded]}")
+    else:
+        print("  🔌 Plugin system: no plugins configured")
+except Exception as _plugin_init_err:
+    print(f"  ⚠️ Plugin system init failed (disabled): {_plugin_init_err}")
+    _plugin_registry = None
+
 # Upstream
 UPSTREAM_TIMEOUT: int = _cfg("upstream.timeout", 300, "TOKENPAK_UPSTREAM_TIMEOUT", int)
 STRICT_VALIDATION: bool = _cfg("features.strict_mode", False, "TOKENPAK_STRICT_MODE", bool)
@@ -2880,6 +2897,30 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         except Exception as _ft_err:
                             SESSION["fidelity_tier_error"] = str(_ft_err)
                             pass  # fail-open
+
+                    # Plugin system — run custom compressors first
+                    if _plugin_registry is not None and body:
+                        _plugin_context = {
+                            "mode": COMPILATION_MODE,
+                            "input_tokens": input_tokens,
+                            "request_id": SESSION.get("request_id", ""),
+                        }
+                        for _plugin in _plugin_registry.get_plugins():
+                            try:
+                                _req_data = json.loads(body)
+                                for _msg in _req_data.get("messages", []):
+                                    _content = _msg.get("content", "")
+                                    if isinstance(_content, str):
+                                        _plugin_result = _plugin.compress(_content, _plugin_context)
+                                        _msg["content"] = _plugin_result["text"]
+                                body = json.dumps(_req_data, separators=(',', ':'))
+                            except Exception as _plugin_run_err:
+                                import logging as _logging
+                                _logging.getLogger(__name__).warning(
+                                    "Plugin '%s' raised an error: %s — skipping",
+                                    getattr(_plugin, 'name', repr(_plugin)),
+                                    _plugin_run_err,
+                                )
 
                     # Phase 2: Compaction (AFTER injection)
                     t_compact = time.time()
