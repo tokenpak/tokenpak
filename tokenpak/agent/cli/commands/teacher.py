@@ -4,12 +4,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from tokenpak.agent.teacher import build_teacher_pack
+try:
+    from tokenpak.agent.teacher import build_teacher_pack
+except ImportError:
+    def build_teacher_pack(*args, **kwargs):
+        print("TOKENPAK  |  Enterprise Feature: Teacher Pack Builder")
+        print("────────────────────────────────────────")
+        print()
+        print("This feature requires an Enterprise license (tokenpak-pro).")
+        print()
+        print("To use this feature:")
+        print("1. Install tokenpak-pro: pip install tokenpak-pro")
+        print("2. Activate your Enterprise license")
+        print()
+        sys.exit(2)
 
 
-DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/System", "~/vault/Agents"]
+DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/06_RUNTIME/SYSTEM", "~/vault/03_AGENT_PACKS"]
 DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
 DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
 

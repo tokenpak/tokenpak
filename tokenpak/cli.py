@@ -18,7 +18,7 @@ from .formatting import symbols as FS
 
 # ── Live Proxy Access ─────────────────────────────────────────────────────────
 
-def _proxy_get(path: str, port: int = None) -> "dict | None":
+def _proxy_get(path: str, port: Optional[int] = None) -> "dict | None":
     """Fetch JSON from running proxy. Returns None if unreachable."""
     import urllib.request as _urlreq
     port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -2422,10 +2422,29 @@ def _get_audit_db(args) -> str:
     return str(home / "audit.db")
 
 
+def _require_enterprise_feature(feature_name: str):
+    """Require enterprise feature availability (from tokenpak-pro)."""
+    print(f"TOKENPAK  |  Enterprise Feature: {feature_name}")
+    print("────────────────────────────────────────")
+    print()
+    print("This feature requires an Enterprise license (tokenpak-pro).")
+    print("The module has been moved to tokenpak-pro for licensed users.")
+    print()
+    print("To use this feature:")
+    print("1. Install tokenpak-pro: pip install tokenpak-pro")
+    print("2. Activate your Enterprise license")
+    print()
+    print("Learn more: https://tokenpak.dev/enterprise")
+    sys.exit(2)
+
+
 def cmd_audit_list(args):
     import json as _json
 
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Log")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2460,7 +2479,10 @@ def cmd_audit_list(args):
 
 
 def cmd_audit_export(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Export")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2475,7 +2497,10 @@ def cmd_audit_export(args):
 
 
 def cmd_audit_verify(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Verification")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2490,7 +2515,10 @@ def cmd_audit_verify(args):
 
 
 def cmd_audit_prune(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Pruning")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2499,7 +2527,10 @@ def cmd_audit_prune(args):
 
 
 def cmd_audit_summary(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Summary")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2556,7 +2587,10 @@ def _build_compliance_parser(sub):
 def cmd_compliance_report(args):
     import os
 
-    from tokenpak.enterprise.compliance import ComplianceReporter
+    try:
+        from tokenpak.enterprise.compliance import ComplianceReporter
+    except ImportError:
+        _require_enterprise_feature("Compliance Reporting")
 
     org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
     db_path = _get_audit_db(args)
@@ -3038,22 +3072,30 @@ def main():
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
-        print(f"Unknown command '{raw_cmd}'.")
+        print(f"❌ Unknown command: '{raw_cmd}'")
+        
         if suggestion:
-            print(f"Did you mean: tokenpak {suggestion}?")
+            print(f"   Did you mean: tokenpak {suggestion}?")
         else:
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
-                "compress": "Compression happens automatically through the proxy.\nRun `tokenpak demo` to see it in action.",
-                "run": "Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
-                "proxy": "Use `tokenpak start` to start the proxy on localhost:8766.",
-                "kill": "Use `tokenpak stop` to stop the running proxy.",
+                "compress": "→ Compression happens automatically through the proxy.\n   Run `tokenpak demo` to see it in action.",
+                "run": "→ Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
+                "proxy": "→ Use `tokenpak start` to start the proxy on localhost:8766.",
+                "kill": "→ Use `tokenpak stop` to stop the running proxy.",
+                "test": "→ Use `tokenpak demo` to test compression, or `tokenpak doctor` to test installation.",
+                "config": "→ Use `tokenpak config-check <file>` to validate config.\n   Or `tokenpak setup` to interactively create config.",
             }
             hint = _COMMAND_HINTS.get(raw_cmd)
             if hint:
                 print(hint)
             else:
-                print("Run `tokenpak help` to see all available commands.")
+                print("\n📖 Available commands (by category):")
+                for group, cmds in list(_COMMAND_GROUPS.items())[:3]:  # Show first 3 groups
+                    print(f"\n   {group}:")
+                    for cmd, desc in cmds[:3]:  # Show first 3 in each
+                        print(f"     • {cmd:<15} {desc}")
+                print("\n   (Use `tokenpak help` to see all commands)")
         sys.exit(1)
 
     args = parser.parse_args()
@@ -4998,43 +5040,106 @@ def _build_demo_parser(sub):
     )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
-    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 24h of demo telemetry data (500+ requests)")
-    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from the dashboard")
+    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 500 realistic demo events (24h window)")
+    p_demo.add_argument("--seed-count", type=int, default=500, metavar="N", help="Number of demo events to generate (default: 500)")
+    p_demo.add_argument("--seed-hours", type=int, default=24, metavar="H", help="Time window in hours (default: 24)")
+    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from telemetry storage")
     p_demo.set_defaults(func=cmd_demo)
+
+
+def _run_compression_demo():
+    """Show live compression on a sample prompt with before/after token counts."""
+    from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.engines.base import CompactionHints
+    from tokenpak.tokens import count_tokens
+
+    SAMPLE_PROMPT = """\
+You are a helpful assistant. Please help me understand the following documentation.
+
+The TokenPak library provides a comprehensive, all-inclusive solution for managing
+token budgets in large language model applications. It includes multiple compression
+strategies, various caching mechanisms, and detailed telemetry tools for monitoring
+usage and costs across all your API calls. The library has been carefully designed
+to be extremely easy to use out of the box while also providing powerful, advanced
+functionality for more sophisticated users who need fine-grained control.
+
+By compressing content intelligently before it reaches the model, you can fit more
+relevant information into fewer tokens, which reduces API costs significantly and
+can improve response quality in many cases. The heuristic engine utilizes rule-based
+text processing techniques to remove redundant, repetitive, and low-signal content
+while carefully preserving the most important, critical information that the model
+actually needs in order to produce high-quality, accurate results every time.
+
+This approach is fully deterministic, meaning that for any given input you will
+always receive the same compressed output each and every single time you run it,
+regardless of when or how many times the compression is applied.
+
+Question: How does TokenPak save tokens and money?"""
+
+    engine = HeuristicEngine()
+    hints = CompactionHints(target_tokens=120)
+    compressed = engine.compact(SAMPLE_PROMPT, hints)
+
+    tokens_in = count_tokens(SAMPLE_PROMPT)
+    tokens_out = count_tokens(compressed)
+    savings_pct = (1 - tokens_out / tokens_in) * 100 if tokens_in > 0 else 0
+
+    # Estimate cost savings at gpt-4o rates ($2.50 / 1M input tokens)
+    cost_per_token = 2.50 / 1_000_000
+    cost_saved = (tokens_in - tokens_out) * cost_per_token
+
+    print()
+    print("  TokenPak Compression Demo")
+    print("  " + "─" * 46)
+    print()
+    print(f"  Original prompt:    {tokens_in:,} tokens")
+    print(f"  Compressed:         {tokens_out:,} tokens")
+    print(f"  Savings:            {savings_pct:.0f}% fewer tokens")
+    print(f"  Cost saved (est.):  ${cost_saved:.4f} per call @ gpt-4o rates")
+    print()
+    print("  ── Compressed output (first 300 chars) ──────────────────────")
+    preview = compressed[:300].strip().replace("\n", "\n  ")
+    print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
+    print()
+    print("  Try it with your own content:")
+    print("    tokenpak start        → start the proxy (zero-config)")
+    print("    tokenpak cost         → track your real savings")
+    print("    tokenpak demo --list  → browse 50 built-in compression recipes")
+    print()
 
 
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
-    # ── Demo data seeding
-    if args.seed:
-        from .demo import seed_demo_data
-        result = seed_demo_data()
-        print("✅ Demo data seeded successfully")
-        print(f"   • Events: {result['events']}")
-        print(f"   • Usage records: {result['usage']}")
-        print(f"   • Cost records: {result['costs']}")
-        print(f"   • Segments: {result['segments']}")
-        print(f"   • Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
-        print()
-        print("View the dashboard to see demo data populated.")
-        return
-
-    # ── Demo data cleanup
-    if args.clear:
-        from .demo import clear_demo_data
-        result = clear_demo_data()
-        print("✅ Demo data cleared successfully")
-        print(f"   • Deleted events: {result['deleted_events']}")
-        print(f"   • Deleted usage records: {result['deleted_usage']}")
-        print(f"   • Deleted cost records: {result['deleted_costs']}")
-        print(f"   • Deleted segments: {result['deleted_segments']}")
-        print()
-        print("Dashboard now shows empty/zero state.")
-        return
-
     from .agent.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
+
+    # ── Demo data seeding
+    if args.seed:
+        from .agent.telemetry.demo import seed_demo_data
+        result = seed_demo_data(count=args.seed_count, hours=args.seed_hours)
+        print(f"✅ Seeded {result['events']} demo events")
+        print(f"   Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
+        print(f"   Total events now: {result['total_events']}")
+        print(f"   Total cache-read: {result['cache_read_total']:,}")
+        print()
+        print("Dashboard should now show demo data with realistic patterns.")
+        return
+
+    if args.clear:
+        """Clear all demo data from telemetry storage."""
+        from .agent.telemetry.demo import clear_demo_data
+        result = clear_demo_data()
+        print(f"✅ Cleared {result['deleted_events']} demo events")
+        print(f"   Remaining events: {result['remaining_events']}")
+        if result['remaining_events'] == 0:
+            print("   Dashboard is now empty (ready for real traffic)")
+        return
+
+    # ── Default: live compression demo on sample prompt
+    if not getattr(args, 'list', False) and not getattr(args, 'category', None) and not getattr(args, 'recipe', None) and not getattr(args, 'file', None):
+        _run_compression_demo()
+        return
 
     # ── Single recipe detail
     if args.recipe:
