@@ -15,6 +15,7 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 - ✅ Schema: [`schemas/tokenpak-v1.0.json`](schemas/tokenpak-v1.0.json)
 - 🧪 Validator: [`tokenpak/validator.py`](tokenpak/validator.py)
 - 🧩 Examples: [`examples/`](examples/)
+- 📖 Usage Examples: [`docs/EXAMPLES.md`](docs/EXAMPLES.md)
 
 [![CI](https://github.com/tokenpak/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenpak/tokenpak/actions)
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
