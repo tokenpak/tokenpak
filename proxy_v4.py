@@ -3423,6 +3423,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # never break the proxy
+                try:
+                    from tokenpak.telemetry.otel_exporter import record_request as _otel_record
+                    _otel_record(
+                        model=model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        compression_ratio=round(sent_input_tokens / input_tokens, 4) if input_tokens else 1.0,
+                        cache_hit=cache_read_tokens > 0,
+                        status_code=status,
+                        duration_ms=latency_ms,
+                    )
+                except Exception:
+                    pass  # never break the proxy
                 SESSION["requests"] += 1
                 SESSION["input_tokens"] += input_tokens
                 SESSION["sent_input_tokens"] += sent_input_tokens

@@ -80,6 +80,12 @@ docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.5.0",
 ]
+otel = [
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/tokenpak/tokenpak"
