@@ -1,6 +1,7 @@
 """Tests for tiered help system (essential, intermediate, all commands)."""
 
 import sys
+from pathlib import Path
 import subprocess
 from io import StringIO
 from contextlib import redirect_stdout
@@ -210,7 +211,7 @@ class TestCLIIntegration:
             ["python3", "-m", "tokenpak.cli", "help"],
             capture_output=True,
             text=True,
-            cwd="/home/cali/tokenpak",
+            cwd=str(Path(__file__).parent.parent),
         )
         # Should succeed (exit code 0) or produce output
         # Output should contain TokenPak header
@@ -222,7 +223,7 @@ class TestCLIIntegration:
             ["python3", "-m", "tokenpak.cli", "help", "--more"],
             capture_output=True,
             text=True,
-            cwd="/home/cali/tokenpak",
+            cwd=str(Path(__file__).parent.parent),
         )
         # Should produce output
         assert "TokenPak" in result.stdout or "TokenPak" in result.stderr
@@ -233,7 +234,7 @@ class TestCLIIntegration:
             ["python3", "-m", "tokenpak.cli", "help", "--all"],
             capture_output=True,
             text=True,
-            cwd="/home/cali/tokenpak",
+            cwd=str(Path(__file__).parent.parent),
         )
         # Should produce output
         assert "TokenPak" in result.stdout or "TokenPak" in result.stderr
@@ -244,7 +245,7 @@ class TestCLIIntegration:
             ["python3", "-m", "tokenpak.cli", "help", "start"],
             capture_output=True,
             text=True,
-            cwd="/home/cali/tokenpak",
+            cwd=str(Path(__file__).parent.parent),
         )
         # Should produce output (either help or error message)
         assert "tokenpak" in result.stdout.lower() or "command" in result.stderr.lower()

@@ -16,19 +16,19 @@ class TestScriptHooks:
         assert callable(fire_on_budget_alert)
     
     def test_fire_hook_returns_none_or_result(self):
-        result = fire_hook("test_hook")
+        result = fire_hook("test_hook", context={})
         assert result is None or isinstance(result, (str, dict, list))
     
     def test_fire_on_error_call(self):
-        result = fire_on_error("test error")
+        result = fire_on_error("gpt-4o", "openai", "timeout", "Request timed out")
         assert result is None or isinstance(result, (str, dict))
     
     def test_fire_on_request_call(self):
-        result = fire_on_request("GET", "/test")
+        result = fire_on_request("gpt-4o", "openai", messages_count=1)
         assert result is None or isinstance(result, (str, dict))
     
     def test_fire_on_budget_alert_call(self):
-        result = fire_on_budget_alert(0.75)
+        result = fire_on_budget_alert("default", 10.0, 7.5)
         assert result is None or isinstance(result, (str, dict))
     
     def test_hook_names_exist(self):
