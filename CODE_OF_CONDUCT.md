@@ -36,7 +36,7 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Instances of unacceptable behavior may be reported to the project team at
-**conduct@tokenpak.dev**. All complaints will be reviewed and investigated
+**kaywhy331@gmail.com**. All complaints will be reviewed and investigated
 promptly and fairly.
 
 ## Attribution
