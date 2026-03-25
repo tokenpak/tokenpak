@@ -1846,6 +1846,7 @@ def build_parser():
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
+    _build_costs_parser(sub)
     _build_budget_parser(sub)
     _build_forecast_parser(sub)
     _build_goals_parser(sub)
@@ -4379,6 +4380,98 @@ def _build_cost_parser(sub):
     p_show_budget = cost_sub.add_parser("show-budget", help="Show budget status and alerts")
     p_show_budget.add_argument("--config", help="Path to tokenpak config file")
     p_show_budget.set_defaults(func=cmd_cost_show_budget)
+
+
+def cmd_costs(args):
+    """Aggregate cost report with CSV export and burn-rate alarms."""
+    from tokenpak.cost.cost_aggregator import CostAggregator
+
+    days = args.days
+    fmt = args.format
+    monthly_budget = args.monthly_budget
+    alarm_pct = args.alarm_pct
+
+    agg = CostAggregator()
+
+    if fmt == "csv":
+        print(agg.export_csv(days=days, by_model=not args.no_model), end="")
+        return
+
+    # Default: human-readable summary
+    summaries = agg.daily_summaries(days=days)
+    totals = agg.aggregate(days=days)
+
+    if not summaries:
+        print(f"No cost data found for the last {days} day(s).")
+        return
+
+    print(f"TokenPak Cost Report — last {days} day(s)")
+    print(f"{'DATE':<12} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+    print("-" * 48)
+    for s in summaries:
+        print(
+            f"{s.day:<12} {s.total_requests:>9,} {s.total_tokens:>12,} ${s.total_cost_usd:>9.4f}"
+        )
+    print("-" * 48)
+    print(
+        f"{'TOTAL':<12} {totals['total_requests']:>9,} {totals['total_tokens']:>12,} "
+        f"${totals['total_cost_usd']:>9.4f}"
+    )
+    if totals["avg_daily_cost_usd"] > 0:
+        print(f"\n  Avg daily:  ${totals['avg_daily_cost_usd']:.4f}")
+
+    if args.by_model and totals["by_model"]:
+        print(f"\n{'MODEL':<30} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+        print("-" * 65)
+        for m in totals["by_model"]:
+            print(
+                f"{(m['model'] or 'unknown'):<30} {m['requests']:>9,} "
+                f"{m['total_tokens']:>12,} ${m['cost_usd']:>9.4f}"
+            )
+
+    # Burn-rate alarms
+    if monthly_budget is not None and monthly_budget > 0:
+        alarms = agg.check_burn_rate(
+            monthly_budget_usd=monthly_budget,
+            threshold_pct=alarm_pct,
+            days=days,
+        )
+        if alarms:
+            print()
+            for alarm in alarms:
+                print(alarm.message)
+        else:
+            print(
+                f"\n✅ No burn-rate alarms (threshold: {alarm_pct:.0f}% of "
+                f"${monthly_budget:.2f}/mo = ${monthly_budget * alarm_pct / 100:.2f}/day)"
+            )
+
+
+def _build_costs_parser(sub):
+    p = sub.add_parser("costs", help="Aggregate cost report (multi-day, CSV export)")
+    p.add_argument("--days", type=int, default=7, help="Number of days to report (default: 7)")
+    p.add_argument(
+        "--format",
+        choices=["table", "csv", "json"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    p.add_argument("--by-model", action="store_true", help="Break down by model")
+    p.add_argument("--no-model", action="store_true", help="Suppress per-model rows in CSV")
+    p.add_argument(
+        "--monthly-budget",
+        type=float,
+        metavar="USD",
+        help="Monthly budget USD — enables burn-rate alarm check",
+    )
+    p.add_argument(
+        "--alarm-pct",
+        type=float,
+        default=20.0,
+        metavar="PCT",
+        help="Alarm when daily spend exceeds this %% of monthly budget (default: 20)",
+    )
+    p.set_defaults(func=cmd_costs)
 
 
 def _build_budget_parser(sub):
