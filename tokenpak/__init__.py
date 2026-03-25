@@ -16,7 +16,7 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "Kevin Yang"
 __license__ = "MIT"
 __description__ = "Deterministic compression for multi-agent AI workflows"

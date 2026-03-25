@@ -4,6 +4,24 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-03-25
+
+### 🚀 OSS Launch
+- Public OSS launch on GitHub with full CI pipeline.
+- Migrated to pyproject.toml packaging standard.
+- GitHub Actions CI with matrix testing (Python 3.10–3.13).
+
+### Changed
+- Version bumped from 1.0.1 to 1.0.2 for OSS launch.
+- Updated packaging to pyproject.toml (replaces legacy setup.py).
+- README badges updated to live CI status.
+
+## [1.0.1] - 2026-03-18
+
+### Changed
+- Minor stability fixes and dependency updates.
+- Improved error handling in fallback routing.
+
 ## [1.0.0] - 2026-03-10
 
 ### 🚀 Highlights

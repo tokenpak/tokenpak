@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenpak"
-version = "1.0.1"
+version = "1.0.2"
 description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -91,6 +91,7 @@ Changelog = "https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
+tokenpak-main = "tokenpak.cli.main:main"
 tokenpak-admin = "tokenpak.agent.license.admin_cli:main"
 
 [tool.setuptools.packages.find]
