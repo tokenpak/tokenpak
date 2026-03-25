@@ -75,9 +75,9 @@ def _check_pro_access(request: Request) -> Optional[str]:
             }
         )
 
-    # TODO: Check tier from license payload
-    # For now, assume any licensed user is Pro+
-    # Future: verify tier == "pro" | "team" | "enterprise"
+    # License tier check: currently any licensed user is treated as Pro+.
+    # Granular tier verification ("pro" | "team" | "enterprise") will be added
+    # when the license payload includes a tier field.
 
     return key_id
 
@@ -122,7 +122,7 @@ def _load_usage_data(key_id: str, start_date: str, end_date: str) -> list[dict]:
             if summary and summary.get("total_input", 0) > 0:
                 results.append({
                     "date": date_str,
-                    "model": "all",  # TODO: break down by model
+                    "model": "all",  # per-model breakdown requires metering.db schema update
                     "input_tokens": summary.get("total_input", 0),
                     "output_tokens": summary.get("total_output", 0),
                     "saved_tokens": summary.get("total_saved", 0),

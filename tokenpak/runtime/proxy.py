@@ -556,10 +556,31 @@ def _circuit_record_success(provider: str):
             cb["failures"] = 0
             cb["open"] = False
 
-# Fix #7: Per-IP rate limiting — token bucket, 60 req/min per IP by default
+# Per-IP rate limiting — token bucket, 60 req/min per IP by default
 _RATE_LIMIT_RPM = _cfg("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
 _rate_buckets: dict = {}
 _rate_bucket_lock = threading.Lock()
+
+# Request body size limit — configurable, default 10 MB
+_MAX_REQUEST_BYTES: int = int(os.environ.get("TOKENPAK_MAX_REQUEST_SIZE", str(10 * 1024 * 1024)))
+
+# Headers that must NEVER be forwarded upstream (security / hop-by-hop)
+_BLOCKED_FORWARD_HEADERS: frozenset = frozenset({
+    "host", "proxy-connection", "proxy-authorization", "proxy-authenticate",
+    "connection", "keep-alive", "transfer-encoding", "te", "trailer",
+    "upgrade", "content-length", "accept-encoding",
+    "x-forwarded-for", "x-real-ip", "x-forwarded-host",  # prevent IP spoofing upstream
+})
+
+
+def _sanitize_headers(raw_headers) -> dict:
+    """Build a clean forwarding header dict, stripping hop-by-hop and dangerous headers."""
+    result = {}
+    for key in raw_headers:
+        if key.lower() in _BLOCKED_FORWARD_HEADERS:
+            continue
+        result[key] = raw_headers[key]
+    return result
 
 def _rate_limit_check(client_ip: str) -> bool:
     """Return True if request is ALLOWED. False = throttle (429)."""
@@ -1955,7 +1976,7 @@ def _extract_sse_tokens(sse_bytes):
                 continue
             try:
                 event = json.loads(data_str)
-            except:
+            except Exception:
                 continue
             if event.get("type") == "message_start":
                 usage = event.get("message", {}).get("usage", {})
@@ -2011,7 +2032,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     break
             except BlockingIOError:
                 pass
-            except:
+            except Exception:
                 break
             try:
                 data = remote.recv(65536)
@@ -2023,7 +2044,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     break
             except BlockingIOError:
                 pass
-            except:
+            except Exception:
                 break
             if not data_moved:
                 time.sleep(0.01)
@@ -2189,42 +2210,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
             return
         if self.path == "/metrics":
-            # Fix #3: Prometheus metrics export
-            s = SESSION
-            uptime = int(time.time() - s.get("start_time", time.time()))
-            lines = [
-                "# HELP tokenpak_requests_total Total requests processed",
-                "# TYPE tokenpak_requests_total counter",
-                f'tokenpak_requests_total {s.get("requests", 0)}',
-                "# HELP tokenpak_tokens_input_total Total input tokens seen",
-                "# TYPE tokenpak_tokens_input_total counter",
-                f'tokenpak_tokens_input_total {s.get("input_tokens", 0)}',
-                "# HELP tokenpak_tokens_saved_total Total tokens saved by compression",
-                "# TYPE tokenpak_tokens_saved_total counter",
-                f'tokenpak_tokens_saved_total {s.get("saved_tokens", 0)}',
-                "# HELP tokenpak_tokens_injected_total Total tokens injected from vault",
-                "# TYPE tokenpak_tokens_injected_total counter",
-                f'tokenpak_tokens_injected_total {s.get("injected_tokens", 0)}',
-                "# HELP tokenpak_cache_read_tokens_total Total cache read tokens",
-                "# TYPE tokenpak_cache_read_tokens_total counter",
-                f'tokenpak_cache_read_tokens_total {s.get("cache_read_tokens", 0)}',
-                "# HELP tokenpak_cost_usd_total Total estimated cost in USD",
-                "# TYPE tokenpak_cost_usd_total counter",
-                f'tokenpak_cost_usd_total {s.get("cost", 0.0):.6f}',
-                "# HELP tokenpak_errors_total Total errors",
-                "# TYPE tokenpak_errors_total counter",
-                f'tokenpak_errors_total {s.get("errors", 0)}',
-                "# HELP tokenpak_uptime_seconds Proxy uptime in seconds",
-                "# TYPE tokenpak_uptime_seconds gauge",
-                f'tokenpak_uptime_seconds {uptime}',
-                "# HELP tokenpak_canon_tokens_saved_total Tokens saved by CANON dedup",
-                "# TYPE tokenpak_canon_tokens_saved_total counter",
-                f'tokenpak_canon_tokens_saved_total {s.get("canon_tokens_saved", 0)}',
-                "# HELP tokenpak_vault_blocks Vault index blocks loaded",
-                "# TYPE tokenpak_vault_blocks gauge",
-                f'tokenpak_vault_blocks {len(VAULT_INDEX.blocks) if VAULT_INDEX.available else 0}',
-            ]
-            body_out = "\n".join(lines).encode()
+            # Prometheus text format metrics (labeled, with histogram)
+            try:
+                from tokenpak.metrics.prometheus import build_metrics_text
+                vault_blocks = len(VAULT_INDEX.blocks) if VAULT_INDEX.available else 0
+                body_out = build_metrics_text(SESSION, MONITOR, vault_blocks=vault_blocks).encode()
+            except Exception:
+                # Fallback: minimal unlabeled metrics if module unavailable
+                s = SESSION
+                uptime = int(time.time() - s.get("start_time", time.time()))
+                lines = [
+                    f"tokenpak_requests_total {s.get('requests', 0)}",
+                    f"tokenpak_tokens_input_total {s.get('input_tokens', 0)}",
+                    f"tokenpak_tokens_saved_total {s.get('saved_tokens', 0)}",
+                    f"tokenpak_errors_total {s.get('errors', 0)}",
+                    f"tokenpak_uptime_seconds {uptime}",
+                ]
+                body_out = "\n".join(lines).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
             self.send_header("Content-Length", len(body_out))
@@ -2292,11 +2294,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "cost": data.get("cost", 0.0),
                 }
 
-            # Routing decisions (smart routing hit rate) — placeholder
-            routing_hit_rate = 0.0  # TODO: implement when routing stats available
+            # Routing decisions (smart routing hit rate) — not yet tracked; returns 0.0 until
+            # routing telemetry is wired into the stats aggregator.
+            routing_hit_rate = 0.0
 
-            # Streaming request count — placeholder
-            streaming_count = 0  # TODO: implement when streaming detection available
+            # Streaming request count — not yet tracked; returns 0 until streaming detection
+            # is added to the request lifecycle.
+            streaming_count = 0
 
             dashboard_data = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -2326,7 +2330,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Key Metric 4: Routing decisions
                 "routing": {
                     "smart_routing_hit_rate": round(routing_hit_rate, 3),
-                    "fallback_chain_usage": 0,  # TODO: implement
+                    "fallback_chain_usage": 0,  # not yet tracked; wired when fallback telemetry lands
                 },
 
                 # Key Metric 5: Cache hit ratio
@@ -2366,6 +2370,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._forward_request("GET")
         elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith("/dashboard/"):
             self._serve_dashboard()
+        elif self.path == "/docs" or self.path == "/docs/":
+            self._serve_api_docs()
+        elif self.path == "/openapi.yaml":
+            self._serve_openapi_yaml()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
         else:
@@ -2430,7 +2438,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         self.send_header("Content-Length", len(err))
                         self.end_headers()
                         self.wfile.write(err)
-                    except:
+                    except Exception:
                         pass
                     return
                 else:
@@ -2458,7 +2466,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(err))
                 self.end_headers()
                 self.wfile.write(err)
-            except:
+            except Exception:
                 pass
             return
 
@@ -2489,13 +2497,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         t0 = time.time()
         parsed = urlparse(target_url)
         content_length = int(self.headers.get("Content-Length", 0))
-        # Fix #1: Body size cap — reject requests over 10MB to prevent OOM
-        MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
-        if content_length > MAX_BODY_BYTES:
+        # Body size cap — configurable via TOKENPAK_MAX_REQUEST_SIZE (default 10 MB)
+        if content_length > _MAX_REQUEST_BYTES:
             self.send_response(413)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"type": "request_too_large", "message": f"Request body exceeds 10MB limit ({content_length} bytes)"}}).encode())
+            self.wfile.write(json.dumps({
+                "error": {
+                    "type": "request_too_large",
+                    "message": f"Request body exceeds limit ({content_length} bytes > {_MAX_REQUEST_BYTES} bytes). "
+                               "Set TOKENPAK_MAX_REQUEST_SIZE to raise the limit.",
+                }
+            }).encode())
             return
         body = self.rfile.read(content_length) if content_length > 0 else None
         active_adapter = adapter
@@ -2574,7 +2587,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 try:
                     req_data = json.loads(body)
                     is_streaming = req_data.get("stream", False)
-                except:
+                except Exception:
                     pass
 
                 # Phase -3: Request Logger — generate request ID and start logging
@@ -3051,14 +3064,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _gate_err:
                     print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
-        fwd_headers = {}
-        for key in self.headers:
-            if key.lower() in ("host", "proxy-connection", "proxy-authorization",
-                               "connection", "keep-alive", "transfer-encoding",
-                               "te", "trailer", "upgrade", "content-length",
-                               "accept-encoding"):
-                continue
-            fwd_headers[key] = self.headers[key]
+        fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
@@ -3396,14 +3402,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if "gzip" in resp.getheader("Content-Encoding", ""):
                         try:
                             resp_for_metrics = gzip.decompress(resp_body)
-                        except:
+                        except Exception:
                             pass
                     output_tokens = extract_response_tokens(resp_for_metrics, adapter=active_adapter)
                     try:
                         usage = json.loads(resp_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
-                    except:
+                    except Exception:
                         pass
 
             conn.close()
@@ -3596,7 +3602,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", len(err))
                 self.end_headers()
                 self.wfile.write(err)
-            except:
+            except Exception:
                 pass
 
     def _ingest(self, path):
@@ -3744,6 +3750,66 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         else:
             # All events failed
             self._send_json({"error": f"all events failed: {'; '.join(errors)}"}, status=422)
+
+    def _serve_api_docs(self):
+        """Serve Swagger UI for interactive API documentation."""
+        html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenPak API Docs</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    body { margin: 0; background: #fafafa; }
+    .swagger-ui .topbar { background: #1a1a2e; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      SwaggerUIBundle({
+        url: "/openapi.yaml",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: "StandaloneLayout",
+        deepLinking: true,
+        defaultModelsExpandDepth: 1,
+        tryItOutEnabled: true,
+      });
+    };
+  </script>
+</body>
+</html>"""
+        body_bytes = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
+
+    def _serve_openapi_yaml(self):
+        """Serve the OpenAPI YAML spec file."""
+        import pathlib
+        # Look for openapi.yaml in the docs directory adjacent to the package
+        candidates = [
+            pathlib.Path(__file__).parent.parent.parent / "docs" / "openapi.yaml",
+            pathlib.Path(__file__).parent.parent / "docs" / "openapi.yaml",
+        ]
+        for spec_path in candidates:
+            if spec_path.exists():
+                body_bytes = spec_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/yaml")
+                self.send_header("Content-Length", str(len(body_bytes)))
+                self.end_headers()
+                self.wfile.write(body_bytes)
+                return
+        self._send_json({"error": {"type": "not_found", "message": "openapi.yaml not found"}}, status=404)
 
     def _serve_dashboard(self):
         """Serve static dashboard files (HTML/CSS/JS)."""

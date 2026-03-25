@@ -14,30 +14,64 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 
 ---
 
+## Quick Start
+
+```bash
+git clone https://github.com/tokenpak/tokenpak.git
+cd tokenpak
+make dev      # create .venv + install tokenpak[dev] in editable mode
+make check    # lint + format check + full test suite
+```
+
+That's it. See `make help` for all available targets.
+
 ## Development Setup
 
 ### Prerequisites
 
 - Python 3.10+
-- pip or uv (recommended)
+- pip
 - Git
+- GNU Make (pre-installed on macOS and Linux)
 
 ### Clone and Install
 
 ```bash
-# Clone the repo
+# One-command setup (recommended)
+make dev
+
+# Or manually:
 git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
-
-# Create a virtual environment
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-# Install in development mode with dev dependencies
 pip install -e ".[dev]"
-
-# Verify setup
 tokenpak --version
+```
+
+### Makefile Targets
+
+| Target | Description |
+|---|---|
+| `make dev` | Create `.venv` and install in editable mode |
+| `make test` | Run full pytest suite |
+| `make test-fast` | Run tests, stop on first failure (`-x`) |
+| `make test-cov` | Run tests with HTML coverage report |
+| `make lint` | Run ruff linter |
+| `make format` | Auto-fix formatting with ruff |
+| `make check` | Lint + format check + tests (CI gate) |
+| `make build` | Build wheel and sdist into `dist/` |
+| `make docs` | Build MkDocs site |
+| `make hooks` | Install pre-commit hooks |
+| `make clean` | Remove build artifacts and caches |
+| `make clean-all` | Remove everything including `.venv` |
+
+### Pre-commit Hooks
+
+```bash
+make hooks   # install hooks into .git/hooks/
+# Hooks: ruff lint+format, trailing-whitespace, end-of-file-fixer,
+#        check-yaml, check-toml, check-json, detect-secrets
 ```
 
 ### Project Structure
