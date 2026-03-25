@@ -17,7 +17,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
 

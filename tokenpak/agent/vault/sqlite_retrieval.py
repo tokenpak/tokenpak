@@ -41,8 +41,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-
+from typing import Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # BM25 tokenizer (mirrors proxy_v4._bm25_tokenize)

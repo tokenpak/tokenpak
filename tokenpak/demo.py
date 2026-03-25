@@ -17,9 +17,7 @@ import random
 import sqlite3
 import time
 import uuid
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from .telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from .telemetry.storage import TelemetryDB

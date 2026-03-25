@@ -269,6 +269,7 @@ class SliceStore:
 
     def _load(self) -> None:
         import json
+
         from tokenpak.agent.vault.slicer import SliceRecord
 
         path = Path(self._path).expanduser()

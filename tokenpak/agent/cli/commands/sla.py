@@ -99,7 +99,7 @@ def _run_set(args: list[str]) -> None:
 
     parsed = p.parse_args(args)
 
-    from tokenpak.enterprise.sla import SLAProfile, SLATier, SLARouter
+    from tokenpak.enterprise.sla import SLAProfile, SLARouter, SLATier
 
     profile = SLAProfile(
         name=parsed.name,

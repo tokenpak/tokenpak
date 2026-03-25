@@ -18,7 +18,7 @@ CODE_WITH_TEMPLATES
 import hashlib
 import re
 from enum import Enum
-from typing import List, Optional, Set
+from typing import List, Set
 
 # ============================================================
 # COMPACTION MODES

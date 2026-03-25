@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -193,8 +192,9 @@ class ProxyMetricsCollector:
         """Return cache entries, memory bytes, and hit-ratio from CacheRegistry."""
         defaults = {"entries": 0, "memory_bytes": 0, "hit_ratio": 0.0}
         try:
-            from tokenpak.cache.registry import CacheRegistry
             import sys as _sys
+
+            from tokenpak.cache.registry import CacheRegistry
             summary = CacheRegistry.summary()
             total_entries = sum(v.get("size", 0) for v in summary.values())
             # Estimate memory for each registered cache

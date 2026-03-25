@@ -1,14 +1,12 @@
 """Main provider router orchestrator."""
 
-from typing import Dict, Any, Optional, List
-import asyncio
 import logging
-import json
+from typing import Any, Dict, List, Optional
 
-from .detector import Provider, ProviderDetector
-from .registry import AdapterRegistry
-from .failover import FailoverHandler
 from .costs import CostTracker
+from .detector import Provider, ProviderDetector
+from .failover import FailoverHandler
+from .registry import AdapterRegistry
 
 logger = logging.getLogger(__name__)
 

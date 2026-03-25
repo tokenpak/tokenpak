@@ -1,9 +1,11 @@
 """test_savings_display.py — Tests for enhanced savings display in status and savings commands."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from tokenpak.pricing import estimate_savings, get_rates, MODEL_RATES
-from tokenpak.agent.cli.commands import status, savings
+
+from tokenpak.agent.cli.commands import savings, status
+from tokenpak.pricing import estimate_savings, get_rates
 
 
 class TestPricingModule:

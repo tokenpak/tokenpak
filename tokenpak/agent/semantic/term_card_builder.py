@@ -326,7 +326,7 @@ def validation_report(cards: dict[str, Any]) -> str:
     for card in cards.values():
         tier_counts[card.get("tier", "?")] += 1
 
-    lines.append(f"=== TokenPak Term-Card Validation Report ===")
+    lines.append("=== TokenPak Term-Card Validation Report ===")
     lines.append(f"Total cards : {len(cards)}")
     for t in sorted(k for k in tier_counts if isinstance(k, int)):
         lines.append(f"  Tier {t}    : {tier_counts[t]}")

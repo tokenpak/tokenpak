@@ -25,47 +25,45 @@ Env vars:
     TOKENPAK_CAPSULE_BUILDER  (default: 0) — enable capsule builder stage (0|1)
     TOKENPAK_CAPSULE_MIN_CHARS (default: 400) — min chars for a block to be capsulised
     TOKENPAK_CAPSULE_HOT_WINDOW (default: 2) — trailing messages excluded from capsule compression
-    
+
     # Tier 1 Modules (2026-03-11, all default OFF for safe rollout)
     TOKENPAK_SEMANTIC_CACHE     (default: 0) — enable short-circuit cache for duplicate queries
     TOKENPAK_PREFIX_REGISTRY    (default: 0) — enable stable prefix tracking for cache optimization
     TOKENPAK_COMPRESSION_DICT   (default: 0) — enable post-compaction dictionary compression
     TOKENPAK_TRACE             (default: 0) — enable pipeline tracing (WIP)
-    
+
     # Tier 2A Modules (2026-03-11, all default OFF)
     TOKENPAK_ERROR_NORMALIZER  (default: 0) — normalize error responses across providers
     TOKENPAK_BUDGET_CONTROLLER (default: 0) — enforce token budget limits per request
     TOKENPAK_REQUEST_LOGGER    (default: 0) — structured request/response logging
     TOKENPAK_SALIENCE_ROUTER   (default: 0) — content-type-aware extraction before compaction
-    
+
     # Tier 2B Cache (2026-03-11, all default OFF)
     TOKENPAK_CACHE_REGISTRY    (default: 0) — unified stable/volatile cache registry
 """
 
+import asyncio
+import gzip
+import http.client
 import json
-import time
-import threading
+import math
+import os
+import re
+import signal
 import socket
 import ssl
-import signal
-import os
 import sys
-import re
-import gzip
-import io
-import math
-import hashlib
-import asyncio
-import http.client
-from functools import lru_cache
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import Dict, List, Tuple, Optional, Any, Mapping
-from dataclasses import dataclass, field, asdict
-from collections import deque
-from urllib.parse import urlparse
+import threading
+import time
 import uuid
+from collections import deque
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from functools import lru_cache
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import urlparse
 
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
@@ -74,10 +72,11 @@ from tokenpak.proxy.adapters.base import FormatAdapter
 # Feature imports — CANON dedup
 # ---------------------------------------------------------------------------
 try:
-    import sys as _sys_canon
     import os as _os_canon
+    import sys as _sys_canon
     _sys_canon.path.insert(0, _os_canon.path.expanduser("~/.openclaw/workspace/.ocp"))
-    from canon_session import apply_canon_refs, get_session as get_canon_session
+    from canon_session import apply_canon_refs
+    from canon_session import get_session as get_canon_session
     CANON_AVAILABLE = True
 except ImportError:
     CANON_AVAILABLE = False
@@ -90,6 +89,8 @@ except ImportError:
 try:
     from tokenpak.agent.proxy.prompt_builder import (
         apply_stable_cache_control as _apply_stable_cache_control,
+    )
+    from tokenpak.agent.proxy.prompt_builder import (
         inject_with_cache_boundary as _inject_with_cache_boundary,
     )
     PROMPT_BUILDER_AVAILABLE = True
@@ -587,10 +588,10 @@ def _ollama_health_loop():
     host = parsed.hostname
     port = parsed.port or 11434
     check_interval = 30  # seconds between checks
-    
+
     # Initial check on startup
     time.sleep(0.5)  # let proxy finish starting
-    
+
     while True:
         try:
             probe = socket.create_connection((host, port), timeout=5)
@@ -607,7 +608,7 @@ def _ollama_health_loop():
                 _ollama_circuit["last_failure"] = time.time()
             if not was_open:
                 print(f"  \u26a0\ufe0f Ollama upstream {host}:{port} unreachable — circuit opened")
-        
+
         time.sleep(check_interval)
 
 
@@ -960,8 +961,8 @@ def _get_router():
             try:
                 sys.path.insert(0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"))
                 from tokenpak.agent.compression.pipeline import CompressionPipeline
-                from tokenpak.agent.compression.slot_filler import SlotFiller
                 from tokenpak.agent.compression.recipes import RecipeEngine
+                from tokenpak.agent.compression.slot_filler import SlotFiller
                 from tokenpak.agent.proxy.intent_policy import decide as _policy_decide
                 try:
                     from tokenpak.validation_gate import ValidationGate
@@ -1242,6 +1243,7 @@ def _router_health() -> dict:
 # Health endpoint response cache (1-second TTL to reduce per-request overhead)
 # ---------------------------------------------------------------------------
 import time as _time_module
+
 _health_cache: dict = {"ts": 0.0, "data": None}
 _HEALTH_CACHE_TTL = 1.0  # seconds
 
@@ -1394,6 +1396,7 @@ def can_compress(risk_class: str, mode: str) -> bool:
 # SQLite monitor
 # ---------------------------------------------------------------------------
 import sqlite3
+
 
 class Monitor:
     def __init__(self, db_path):
@@ -1563,7 +1566,7 @@ LAST_REQUEST = {
 }
 _LAST_REQUEST_LOCK = threading.Lock()
 
-def update_last_request(request_id: str, model: str, input_raw: int, input_sent: int, 
+def update_last_request(request_id: str, model: str, input_raw: int, input_sent: int,
                        tokens_saved: int, cost_saved: float, output_tokens: int):
     """Thread-safe update of last request stats."""
     with _LAST_REQUEST_LOCK:
@@ -1709,7 +1712,7 @@ def inject_vault_context(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
     elif injection_text:
         combined_injection = injection_text
         combined_tokens = tokens_used
-    
+
     if not combined_injection:
         return body_bytes, 0, []
 
@@ -2238,13 +2241,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # 6. Error rate + top failure types
             # 7. Live streaming request count
             # 8. 24-hour rolling window
-            
+
             today_stats = MONITOR.get_stats(hours=24)
             recent_reqs = MONITOR.recent(limit=100)
             by_model = MONITOR.get_by_model()
             uptime_secs = int(time.time() - SESSION["start_time"])
             uptime_hours = max(0.01, uptime_secs / 3600.0)
-            
+
             # Calculate throughput (req/sec over last hour or since start)
             if len(recent_reqs) > 1:
                 first_ts = datetime.fromisoformat(recent_reqs[-1]["timestamp"])
@@ -2253,7 +2256,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 throughput = len(recent_reqs) / time_diff_secs
             else:
                 throughput = today_stats["requests"] / uptime_hours / 3600.0
-            
+
             # Latency percentiles from recent requests
             latencies = [r.get("latency_ms", 0) for r in recent_reqs if r.get("latency_ms")]
             latencies.sort()
@@ -2261,25 +2264,25 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             p95 = latencies[int(len(latencies)*0.95)] if latencies else 0
             p99 = latencies[int(len(latencies)*0.99)] if latencies else 0
             avg_latency = today_stats.get("avg_latency_ms", 0)
-            
+
             # Error rate and top failure types
             error_count = sum(1 for r in recent_reqs if r.get("status_code", 200) >= 400)
             error_rate = error_count / len(recent_reqs) if recent_reqs else 0
-            
+
             # Top failure types (group by status code)
             failure_types = {}
             for r in recent_reqs:
                 sc = r.get("status_code", 200)
                 if sc >= 400:
                     failure_types[str(sc)] = failure_types.get(str(sc), 0) + 1
-            
+
             # Cache metrics
             total_cache_read = today_stats.get("cache_read_tokens", 0)
             total_cache_creation = today_stats.get("cache_creation_tokens", 0)
             cache_hit_ratio = 0.0
             if total_cache_read > 0 or total_cache_creation > 0:
                 cache_hit_ratio = total_cache_read / (total_cache_read + total_cache_creation) if (total_cache_read + total_cache_creation) > 0 else 0.0
-            
+
             # Model distribution
             model_dist = {}
             for model, data in by_model.items():
@@ -2288,25 +2291,25 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "input_tokens": data.get("input_tokens", 0),
                     "cost": data.get("cost", 0.0),
                 }
-            
+
             # Routing decisions (smart routing hit rate) — placeholder
             routing_hit_rate = 0.0  # TODO: implement when routing stats available
-            
+
             # Streaming request count — placeholder
             streaming_count = 0  # TODO: implement when streaming detection available
-            
+
             dashboard_data = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "uptime_seconds": uptime_secs,
                 "uptime_hours": round(uptime_hours, 2),
-                
+
                 # Key Metric 1: Request count + throughput
                 "requests": {
                     "total": today_stats.get("requests", 0),
                     "throughput_req_per_sec": round(throughput, 3),
                     "24h_window": True,
                 },
-                
+
                 # Key Metric 2: Latency histogram
                 "latency": {
                     "p50_ms": round(p50, 1),
@@ -2315,37 +2318,37 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "avg_ms": round(avg_latency, 1),
                     "samples": len(latencies),
                 },
-                
+
                 # Key Metric 3: Model provider distribution
                 "models": model_dist,
                 "model_count": len(model_dist),
-                
+
                 # Key Metric 4: Routing decisions
                 "routing": {
                     "smart_routing_hit_rate": round(routing_hit_rate, 3),
                     "fallback_chain_usage": 0,  # TODO: implement
                 },
-                
+
                 # Key Metric 5: Cache hit ratio
                 "cache": {
                     "hit_ratio": round(cache_hit_ratio, 3),
                     "read_tokens": total_cache_read,
                     "creation_tokens": total_cache_creation,
                 },
-                
+
                 # Key Metric 6: Error rate + top failure types
                 "errors": {
                     "error_rate": round(error_rate, 4),
                     "error_count": error_count,
                     "top_failures": dict(sorted(failure_types.items(), key=lambda x: x[1], reverse=True)[:5]),
                 },
-                
+
                 # Key Metric 7: Streaming request count
                 "streaming": {
                     "count": streaming_count,
                     "percentage": 0.0,
                 },
-                
+
                 # Key Metric 8: 24-hour rolling window stats
                 "window_24h": {
                     "input_tokens": today_stats.get("input_tokens", 0),
@@ -2356,7 +2359,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "total_cost": today_stats.get("total_cost", 0.0),
                 },
             }
-            
+
             self._send_json(dashboard_data)
             return
         if self.path.startswith("http"):
@@ -2432,7 +2435,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     return
                 else:
                     _ollama_circuit["open"] = False
-                    print(f"  \U0001f504 Ollama circuit breaker reset -- retrying upstream")
+                    print("  \U0001f504 Ollama circuit breaker reset -- retrying upstream")
 
         # Probe upstream connectivity with short timeout before committing
         parsed = urlparse(OLLAMA_UPSTREAM)
@@ -2628,7 +2631,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 0: Manual routing rules — rewrite model before any processing
                     # PERF OPT: use singleton RouteEngine + cached rules + reuse req_data
                     try:
-                        from tokenpak.routing.rules import _extract_prompt_text, _count_tokens_approx
+                        from tokenpak.routing.rules import (
+                            _count_tokens_approx,
+                            _extract_prompt_text,
+                        )
                         _route_engine = _get_route_engine()
                         if _route_engine is not None:
                             # Reuse already-parsed req_data if available, else fallback
@@ -2701,7 +2707,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 0.4: Context contract enforcement — quota + scope + omission
                     try:
-                        from tokenpak.agent.proxy.intent_policy import resolve_policy as _resolve_policy
+                        from tokenpak.agent.proxy.intent_policy import (
+                            resolve_policy as _resolve_policy,
+                        )
                         _contract_policy = _resolve_policy(_intent_for_contract, {}, 1.0)
                         _, _pre_contract_tokens = extract_request_tokens(body, adapter=active_adapter)
                         if _pre_contract_tokens > _contract_policy.context_quota:
@@ -2810,7 +2818,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
                     if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
                         try:
-                            from tokenpak.agent.regression.retrieval_watchdog import RetrievalQualityWatchdog, QueryRetrievalRecord
+                            from tokenpak.agent.regression.retrieval_watchdog import (
+                                QueryRetrievalRecord,
+                                RetrievalQualityWatchdog,
+                            )
                             _rw = RetrievalQualityWatchdog()
                             _rw_chunk_count = len(injected_sources) if injected_sources else 0
                             _rw_record = QueryRetrievalRecord(
@@ -2857,7 +2868,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
                     if SALIENCE_ROUTER_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.salience.router import detect_content_type, extract as salience_extract
+                            from tokenpak.agent.compression.salience.router import (
+                                detect_content_type,
+                            )
+                            from tokenpak.agent.compression.salience.router import (
+                                extract as salience_extract,
+                            )
                             _req_data = json.loads(body)
                             _salience_applied = 0
                             for _msg in _req_data.get("messages", []):
@@ -2894,7 +2910,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
                     if FIDELITY_TIERS_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.fidelity_tiers import TierSelector, FidelityTier
+                            from tokenpak.agent.compression.fidelity_tiers import (
+                                TierSelector,
+                            )
                             _ts = TierSelector()
                             _complexity = min(1.0, (input_tokens or 0) / 10000.0)  # simple heuristic
                             _budget_remaining = max(0.0, 1.0 - _complexity)
@@ -3176,7 +3194,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Tier 2C: Failure Memory — record error signature for future avoidance
                     if FAILURE_MEMORY_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.failure_memory import FailureMemoryDB, FailureSignature
+                            from tokenpak.agent.agentic.failure_memory import (
+                                FailureMemoryDB,
+                                FailureSignature,
+                            )
                             _fm = FailureMemoryDB()
                             _fm_msg = _normalized.get("error", {}).get("message", "")
                             _fm_type = _normalized.get("error", {}).get("type", "unknown")
@@ -3350,11 +3371,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             resp_body = json.dumps(resp_json).encode()
                     except Exception:
                         pass  # fail-open
-                
+
                 # Phase 2.2: Session Capsules — compress and store session context
                 if SESSION_CAPSULES_ENABLED and body:
                     try:
-                        from tokenpak.agent.memory.session_capsules import build_session_capsule, serialize_capsule
+                        from tokenpak.agent.memory.session_capsules import (
+                            build_session_capsule,
+                            serialize_capsule,
+                        )
                         _session_id = self.headers.get("X-OpenClaw-Session", model)
                         _capsule_text = body.decode('utf-8') if isinstance(body, bytes) else body
                         _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
@@ -3364,7 +3388,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     except Exception as _sc_err:
                         SESSION["session_capsule_error"] = str(_sc_err)
                         pass  # fail-open
-                
+
                 self.wfile.write(resp_body)
                 self.wfile.flush()
                 if should_log and is_messages:
@@ -3403,7 +3427,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Post-request: Stability Scorer — track response consistency over time
             if STABILITY_SCORER_ENABLED:
                 try:
-                    from tokenpak.agent.regression.stability_scorer import StabilityScorer, RunRecord
+                    from tokenpak.agent.regression.stability_scorer import (
+                        RunRecord,
+                        StabilityScorer,
+                    )
                     _ss = StabilityScorer()
                     _workflow_id = self.headers.get("X-OpenClaw-Session", model)
                     _resp_text = ""
@@ -3513,7 +3540,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Workflow tracking: mark forward done → log_metrics → complete
                 if _wf_id:
                     try:
-                        from tokenpak.agent.agentic.proxy_workflow import advance_step, complete_workflow
+                        from tokenpak.agent.agentic.proxy_workflow import (
+                            advance_step,
+                            complete_workflow,
+                        )
                         advance_step(_wf_id, "forward", "log_metrics")
                         complete_workflow(_wf_id)
                     except Exception:
@@ -3578,45 +3608,45 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         if content_length > 1024 * 1024:  # 1MB limit for ingest payloads
             self._send_json({"error": "request body too large (max 1MB)"}, status=413)
             return
-        
+
         try:
             body = self.rfile.read(content_length)
             payload = json.loads(body.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             self._send_json({"error": f"invalid JSON: {e}"}, status=400)
             return
-        
+
         if path == "/ingest":
             self._ingest_single(payload)
         elif path == "/ingest/batch":
             self._ingest_batch(payload)
-    
+
     def _ingest_single(self, payload):
         """Handle single entry ingest."""
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
             return
-        
+
         # Validate required fields
         required = {"model", "tokens", "cost"}
         missing = required - set(payload.keys())
         if missing:
             self._send_json({"error": f"missing required fields: {', '.join(missing)}"}, status=400)
             return
-        
+
         try:
             # Basic type validation
             model = payload.get("model")
             tokens = payload.get("tokens")
             cost = payload.get("cost")
-            
+
             if not isinstance(model, str) or not model:
                 raise ValueError("model must be a non-empty string")
             if not isinstance(tokens, int) or tokens < 0:
                 raise ValueError("tokens must be a non-negative integer")
             if not isinstance(cost, (int, float)) or cost < 0:
                 raise ValueError("cost must be a non-negative number")
-            
+
             # Validate timestamp if provided
             timestamp = payload.get("timestamp")
             if timestamp is not None:
@@ -3631,7 +3661,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Use current UTC time
                 timestamp = datetime.now(timezone.utc).isoformat()
                 payload["timestamp"] = timestamp
-            
+
             # Write entry
             entry_id = _ingest_write_entry(payload)
             self._send_json({"status": "ok", "ids": [entry_id]}, status=200)
@@ -3640,56 +3670,56 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": str(e)}, status=422)
         except Exception as e:
             self._send_json({"error": f"internal error: {e}"}, status=500)
-    
+
     def _ingest_batch(self, payload):
         """Handle batch entry ingest."""
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
             return
-        
+
         if "events" not in payload:
             self._send_json({"error": "missing 'events' field"}, status=400)
             return
-        
+
         events = payload["events"]
         if not isinstance(events, list):
             self._send_json({"error": "events must be a list"}, status=400)
             return
-        
+
         if len(events) == 0:
             self._send_json({"error": "events list cannot be empty"}, status=400)
             return
-        
+
         if len(events) > 1000:
             self._send_json({"error": "events list too large (max 1000)"}, status=400)
             return
-        
+
         ids = []
         errors = []
-        
+
         for i, event in enumerate(events):
             if not isinstance(event, dict):
                 errors.append(f"event[{i}]: expected object, got {type(event).__name__}")
                 continue
-            
+
             required = {"model", "tokens", "cost"}
             missing = required - set(event.keys())
             if missing:
                 errors.append(f"event[{i}]: missing fields {', '.join(missing)}")
                 continue
-            
+
             try:
                 model = event.get("model")
                 tokens = event.get("tokens")
                 cost = event.get("cost")
-                
+
                 if not isinstance(model, str) or not model:
                     raise ValueError("model must be non-empty string")
                 if not isinstance(tokens, int) or tokens < 0:
                     raise ValueError("tokens must be non-negative int")
                 if not isinstance(cost, (int, float)) or cost < 0:
                     raise ValueError("cost must be non-negative number")
-                
+
                 timestamp = event.get("timestamp")
                 if timestamp is not None:
                     if not isinstance(timestamp, str):
@@ -3701,12 +3731,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 else:
                     timestamp = datetime.now(timezone.utc).isoformat()
                     event["timestamp"] = timestamp
-                
+
                 entry_id = _ingest_write_entry(event)
                 ids.append(entry_id)
             except ValueError as e:
                 errors.append(f"event[{i}]: {e}")
-        
+
         # Return success if we got any entries
         if ids:
             self._send_json({"status": "ok", "ids": ids, "errors": errors if errors else None}, status=200)
@@ -3719,7 +3749,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         """Serve static dashboard files (HTML/CSS/JS)."""
         # Token auth gate
         if DASHBOARD_AUTH_ENABLED:
-            from urllib.parse import urlparse, parse_qs
+            from urllib.parse import parse_qs, urlparse
+
             from tokenpak.token_manager import load_or_create_token
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
@@ -3735,7 +3766,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self.path = parsed.path
 
         dashboard_dir = Path(__file__).parent / "tokenpak" / "dashboard"
-        
+
         # Default to index.html
         if self.path == "/dashboard" or self.path == "/dashboard/":
             file_path = dashboard_dir / "index.html"
@@ -3744,12 +3775,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Parse requested file
             rel_path = self.path[len("/dashboard/"):]
             file_path = (dashboard_dir / rel_path).resolve()
-            
+
             # Security: prevent directory traversal
             if not str(file_path).startswith(str(dashboard_dir.resolve())):
                 self._send_json({"error": {"type": "forbidden", "message": "Access denied"}}, status=403)
                 return
-            
+
             # Determine content type
             if rel_path.endswith(".html"):
                 content_type = "text/html; charset=utf-8"
@@ -3761,12 +3792,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 content_type = "application/json"
             else:
                 content_type = "application/octet-stream"
-        
+
         # Serve file
         if not file_path.exists():
             self._send_json({"error": {"type": "not_found", "message": f"File not found: {rel_path}"}}, status=404)
             return
-        
+
         try:
             body = file_path.read_bytes()
             self.send_response(200)
@@ -3799,7 +3830,7 @@ def _ingest_write_entry(entry: Dict[str, Any]) -> str:
     """Append a single entry to the JSONL file, return its id."""
     entry_id = entry.setdefault("id", str(uuid.uuid4()))
     date_str = None
-    
+
     # Use timestamp date if provided, else today
     ts = entry.get("timestamp")
     if ts:
@@ -3808,20 +3839,20 @@ def _ingest_write_entry(entry: Dict[str, Any]) -> str:
             date_str = dt.strftime("%Y-%m-%d")
         except Exception:
             pass
-    
+
     if date_str is None:
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     # Create entries directory
     INGEST_ENTRIES_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # Append to JSONL file
     entries_file = INGEST_ENTRIES_DIR / f"{date_str}.jsonl"
     with open(entries_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
         f.flush()
         os.fsync(f.fileno())
-    
+
     return entry_id
 
 
@@ -3902,7 +3933,7 @@ def validate_tokenpak_config():
         'TOKENPAK_MODE': 'hybrid',
         'TOKENPAK_PORT': '8766',
     }
-    
+
     drift_found = False
     for key, expected_val in expected.items():
         actual_val = os.getenv(key, '')
@@ -3910,7 +3941,7 @@ def validate_tokenpak_config():
             print(f"⚠️  CONFIG DRIFT: {key}={actual_val}, expected {expected_val}")
             os.environ[key] = expected_val
             drift_found = True
-    
+
     if drift_found:
         print("🔧 TokenPak config auto-corrected")
     else:
@@ -4175,7 +4206,7 @@ def main():
     else:
         print("[shutdown] ✅ No in-flight requests — clean exit")
 
-    print(f"\n📊 Session Summary:")
+    print("\n📊 Session Summary:")
     print(f"   Mode:            {COMPILATION_MODE}")
     print(f"   Requests:        {SESSION['requests']}")
     print(f"   Input:           {SESSION['input_tokens']:,} tokens")

@@ -12,7 +12,7 @@ Validates proxy config on boot:
 
 Usage:
     from tokenpak.config_validator import ConfigValidator
-    
+
     validator = ConfigValidator()
     errors = validator.validate(config_dict)
     if errors:
@@ -23,9 +23,7 @@ Usage:
 """
 
 import os
-import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 
@@ -107,7 +105,7 @@ class ConfigValidator:
                         field=field,
                         expected="present",
                         actual="missing",
-                        message=f"Required field missing",
+                        message="Required field missing",
                         suggestion=f'Add "{field}" to config (required for proxy operation)',
                     )
                 )
@@ -193,7 +191,7 @@ class ConfigValidator:
                         expected="positive integer",
                         actual=ttl,
                         message="Cache TTL must be positive",
-                        suggestion=f"Change cache_ttl to positive integer (e.g., 3600)",
+                        suggestion="Change cache_ttl to positive integer (e.g., 3600)",
                     )
                 )
 
@@ -236,7 +234,7 @@ class ConfigValidator:
                                 expected="valid URL",
                                 actual=url,
                                 message=f"Invalid URL for provider {provider}",
-                                suggestion=f'Use valid URL: "https://api.provider.com"',
+                                suggestion='Use valid URL: "https://api.provider.com"',
                             )
                         )
 

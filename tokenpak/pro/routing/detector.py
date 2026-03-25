@@ -1,8 +1,8 @@
 """Provider detection from API keys and request headers."""
 
 import re
-from typing import Optional, Tuple
 from enum import Enum
+from typing import Optional, Tuple
 
 
 class Provider(str, Enum):
@@ -141,16 +141,16 @@ class ProviderDetector:
         if api_key:
             provider = self.detect_from_key(api_key)
             if provider:
-                return provider, f"detected from API key format"
+                return provider, "detected from API key format"
 
         if model:
             provider = self.detect_from_model(model)
             if provider:
-                return provider, f"detected from model name"
+                return provider, "detected from model name"
 
         if headers:
             provider = self.detect_from_headers(headers)
             if provider:
-                return provider, f"detected from request headers"
+                return provider, "detected from request headers"
 
         return None, "no provider detected"

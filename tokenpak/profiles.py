@@ -3,10 +3,9 @@
 Predefined configurations for different use cases.
 """
 
-from pathlib import Path
-from typing import Dict, Any
-import yaml
+from typing import Any, Dict
 
+import yaml
 
 PROFILES = {
     "minimal": {
@@ -80,13 +79,13 @@ PROFILES = {
 
 def get_profile(name: str) -> Dict[str, Any]:
     """Get a profile by name.
-    
+
     Args:
         name: Profile name (minimal, balanced, or aggressive)
-        
+
     Returns:
         Profile configuration dict
-        
+
     Raises:
         ValueError: If profile name not found
     """
@@ -98,11 +97,11 @@ def get_profile(name: str) -> Dict[str, Any]:
 
 def apply_profile(name: str, config: Dict[str, Any]) -> Dict[str, Any]:
     """Apply a profile to a config dict.
-    
+
     Args:
         name: Profile name
         config: Existing config dict
-        
+
     Returns:
         Updated config with profile features applied
     """
@@ -116,11 +115,11 @@ def apply_profile(name: str, config: Dict[str, Any]) -> Dict[str, Any]:
 
 def profile_to_yaml(name: str, config_base: Dict[str, Any]) -> str:
     """Convert a profile to YAML format.
-    
+
     Args:
         name: Profile name
         config_base: Base config dict with proxy settings
-        
+
     Returns:
         YAML string
     """

@@ -1,11 +1,11 @@
 """Cost tracking per provider and request."""
 
-from typing import Dict, Optional
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import json
-import logging
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -98,26 +98,28 @@ class CostTracker:
     def track_request(
         self,
         provider: str,
+        model: Optional[str] = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
         input_cost: float = 0.0,
         output_cost: float = 0.0,
         request_cost: float = 0.0,
-        model: Optional[str] = None,
         status: str = "success",
         metadata: Optional[dict] = None,
     ) -> CostEntry:
         """
         Track a request's cost.
 
+        Signature: track_request(provider, model, input_tokens, output_tokens, input_cost, ...)
+
         Args:
             provider: Provider name
+            model: Model name
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             input_cost: Cost for input tokens
             output_cost: Cost for output tokens
             request_cost: Fixed request cost
-            model: Model name
             status: Request status (success, error, timeout)
             metadata: Additional metadata
 

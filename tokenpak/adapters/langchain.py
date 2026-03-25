@@ -46,7 +46,6 @@ from typing import Any
 from tokenpak.adapters.anthropic import AnthropicAdapter
 from tokenpak.adapters.base import (
     TokenPakAdapter,
-    TokenPakAdapterError,
     TokenPakConfigError,
 )
 from tokenpak.adapters.openai import OpenAIAdapter

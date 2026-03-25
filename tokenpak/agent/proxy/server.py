@@ -22,6 +22,7 @@ Env vars (all optional):
 from __future__ import annotations
 
 import warnings as _warnings
+
 _warnings.warn(
     "tokenpak.agent.proxy.server is deprecated — use proxy_v4.py instead. "
     "Run `tokenpak start` to launch the current proxy.",
@@ -30,51 +31,46 @@ _warnings.warn(
 )
 
 import gzip
-import http.client
 import json
 import os
-import re
 import signal
 import socket
-import ssl
 import sys
 import threading
 import time
 import uuid
 from collections import deque
 from contextlib import contextmanager
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
-import httpx
-
-from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
-
-from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
-from .streaming import extract_sse_tokens
-from .passthrough import forward_headers, validate_auth, PassthroughConfig, CredentialPassthrough
-from .stats import CompressionStats
-from .degradation import get_degradation_tracker, DegradationEventType
-from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
-from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
-from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
 from tokenpak.agent.adapters.registry import detect_platform
 from tokenpak.agent.config import get_stats_footer_enabled
 from tokenpak.agent.dashboard.export_api import ExportAPI
 from tokenpak.agent.dashboard.session_filter import (
-    SessionFilter,
     FilterParams,
-    get_distinct_models,
+    SessionFilter,
 )
 from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
-from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
+from tokenpak.cache.telemetry import CacheMetrics
+from tokenpak.cache.telemetry import get_collector as _get_cache_collector
+from tokenpak.monitoring.request_logger import log_request
+from tokenpak.monitoring.request_logger import new_request_id as _new_request_id
 
+from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
+from .connection_pool import ConnectionPool, PoolConfig
+from .degradation import DegradationEventType, get_degradation_tracker
+from .passthrough import PassthroughConfig, forward_headers, validate_auth
+from .router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
+from .startup import format_startup_report, run_startup_checks
+from .stats import CompressionStats
+from .streaming import extract_sse_tokens
 
 # ---------------------------------------------------------------------------
 # Pipeline trace types
@@ -319,7 +315,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # Always allow /health during shutdown (needed for health-check polling)
         if path == "/health" or path.startswith("/health?"):
-            from urllib.parse import parse_qs, urlparse as _urlparse
+            from urllib.parse import parse_qs
+            from urllib.parse import urlparse as _urlparse
             parsed_path = _urlparse(path)
             qs = parse_qs(parsed_path.query)
             deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
@@ -344,14 +341,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/dashboard"):
             # Serve dashboard UI files
-            from tokenpak.dashboard import serve_dashboard_file
             import asyncio
-            
+
+            from tokenpak.dashboard import serve_dashboard_file
+
             # Extract dashboard path
             dashboard_path = path[10:]  # Remove '/dashboard' prefix
             if not dashboard_path:
                 dashboard_path = '/'
-            
+
             # Serve the file
             result = asyncio.run(serve_dashboard_file(dashboard_path))
             if result:
@@ -1129,56 +1127,56 @@ def _extract_response_tokens(body: bytes) -> int:
 def auto_detect_upstream(request_headers: dict) -> str:
     """
     Detect target upstream from request headers.
-    
+
     Supports zero-config mode: when no explicit provider URL is configured,
     this function uses request headers to identify the intended LLM provider
     and route to the correct upstream.
-    
+
     Header priority:
     1. Authorization: Bearer sk-ant-* → Anthropic
     2. Authorization: Bearer sk-* (non-Anthropic) → OpenAI
     3. x-goog-api-key → Google
     4. anthropic-* headers → Anthropic
     5. Default → Anthropic (most common reverse-proxy use case)
-    
+
     Args:
         request_headers: Dictionary of HTTP request headers (case-insensitive lookup)
-    
+
     Returns:
         Upstream provider base URL
-        
+
     Examples:
         >>> auto_detect_upstream({"authorization": "Bearer sk-ant-abc123"})
         'https://api.anthropic.com'
-        
+
         >>> auto_detect_upstream({"authorization": "Bearer sk-openai-xyz"})
         'https://api.openai.com'
-        
+
         >>> auto_detect_upstream({"x-goog-api-key": "AIza..."})
         'https://generativelanguage.googleapis.com'
     """
     # Case-insensitive header lookup
     lower_headers = {k.lower(): v for k, v in request_headers.items()}
-    
+
     # Check Authorization header
     auth = lower_headers.get("authorization", "").lower()
-    
+
     # Anthropic token pattern: sk-ant-*
     if auth.startswith("bearer sk-ant-"):
         return "https://api.anthropic.com"
-    
+
     # OpenAI token pattern: sk-* (but not sk-ant-*)
     if auth.startswith("bearer sk-"):
         return "https://api.openai.com"
-    
+
     # Google API key
     if "x-goog-api-key" in lower_headers:
         return "https://generativelanguage.googleapis.com"
-    
+
     # Anthropic-specific headers (x-api-key, anthropic-version, etc)
     if "x-api-key" in lower_headers or "anthropic-version" in lower_headers:
         return "https://api.anthropic.com"
-    
+
     # Default to Anthropic (most common reverse-proxy use case)
     return "https://api.anthropic.com"
 
@@ -1493,6 +1491,7 @@ class ProxyServer:
         }
         if deep:
             import shutil
+
             import psutil  # optional; fall back gracefully
             # providers: list active providers with their circuit-breaker status
             providers = [

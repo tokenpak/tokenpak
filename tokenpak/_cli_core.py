@@ -123,13 +123,32 @@ def _is_first_run() -> bool:
 def _print_quick_help():
     """Print the beginner-friendly --help output."""
     print(
+        "Usage: tokenpak <command> [options]\n"
+        "\n"
         "TokenPak — LLM Proxy with Context Compression\n"
         "\n"
         "Quick Start:\n"
-        "  start     Start the proxy (localhost:8766)\n"
-        "  demo      See compression in action\n"
-        "  cost      View your API spend\n"
-        "  status    Check proxy health\n"
+        "  start        Start the proxy (localhost:8766)\n"
+        "  serve        Serve the proxy (alias for start)\n"
+        "  demo         See compression in action\n"
+        "  cost         View your API spend\n"
+        "  savings      View compression savings\n"
+        "  status       Check proxy health\n"
+        "\n"
+        "Tools:\n"
+        "  compress     Compress context (auto via proxy)\n"
+        "  diff         Show context changes\n"
+        "  vault        Manage vault index\n"
+        "  index        Index a directory\n"
+        "  template     Manage prompt templates\n"
+        "  config       Config management\n"
+        "  dashboard    Open web metrics dashboard\n"
+        "  doctor       Run diagnostics\n"
+        "  optimize     Optimize configuration\n"
+        "  fingerprint  Fingerprint a request\n"
+        "  preview      Preview compression\n"
+        "  last         Show last request\n"
+        "  prune        Prune old data\n"
         "\n"
         "Run `tokenpak help` for all commands.\n"
         "Run `tokenpak <command> --help` for command details."
@@ -3054,6 +3073,12 @@ def _build_config_mgmt_parser(sub):
 def main():
     parser = build_parser()
 
+    # ── Intercept --version / -V ──────────────────────────────────────────────
+    if len(sys.argv) >= 2 and sys.argv[1] in ("--version", "-V"):
+        from tokenpak import __version__ as _ver
+        print(f"tokenpak {_ver}")
+        sys.exit(0)
+
     # ── Intercept bare --help / -h for progressive disclosure ─────────────────
     if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ("--help", "-h")):
         _print_quick_help()
@@ -3084,12 +3109,19 @@ def main():
         "aggregate",
         "requests",
     }
+    # If user asks --help on an unrecognised command, just show that command's usage + exit 0
+    if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds and "--help" in sys.argv:
+        print(f"tokenpak {raw_cmd}: no additional help available")
+        print("Run `tokenpak help` for all commands.")
+        sys.exit(0)
+
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
-        print(f"❌ Unknown command: '{raw_cmd}'")
+        import sys as _sys_err
+        print(f"❌ Unknown command: '{raw_cmd}'", file=_sys_err.stderr)
 
         if suggestion:
-            print(f"   Did you mean: tokenpak {suggestion}?")
+            print(f"   Did you mean: tokenpak {suggestion}?", file=_sys_err.stderr)
         else:
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
@@ -3102,14 +3134,14 @@ def main():
             }
             hint = _COMMAND_HINTS.get(raw_cmd)
             if hint:
-                print(hint)
+                print(hint, file=_sys_err.stderr)
             else:
-                print("\n📖 Available commands (by category):")
+                print("\n📖 Available commands (by category):", file=_sys_err.stderr)
                 for group, cmds in list(_COMMAND_GROUPS.items())[:3]:  # Show first 3 groups
-                    print(f"\n   {group}:")
+                    print(f"\n   {group}:", file=_sys_err.stderr)
                     for cmd, desc in cmds[:3]:  # Show first 3 in each
-                        print(f"     • {cmd:<15} {desc}")
-                print("\n   (Use `tokenpak help` to see all commands)")
+                        print(f"     • {cmd:<15} {desc}", file=_sys_err.stderr)
+                print("\n   (Use `tokenpak help` to see all commands)", file=_sys_err.stderr)
         sys.exit(1)
 
     args = parser.parse_args()

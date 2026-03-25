@@ -17,7 +17,7 @@ Zero per-request latency impact.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Set, Optional
+from typing import Dict, Optional, Set
 
 # ─────────────────────────────────────────────────────────────────────
 # License Tier Enum (must match validator.py)

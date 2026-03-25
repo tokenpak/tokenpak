@@ -13,11 +13,10 @@ Tests:
 import json
 import os
 import tempfile
-import time
 import threading
+import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 # Override incident log path before importing module
 _tmp = tempfile.mkdtemp()
@@ -27,7 +26,9 @@ os.environ["TOKENPAK_INCIDENT_LOG"] = os.path.join(_tmp, "incidents.log")
 
 # Re-import to pick up env overrides
 import importlib
+
 import tokenpak.auth_guard as auth_guard_module
+
 importlib.reload(auth_guard_module)
 from tokenpak.auth_guard import AuthGuard
 

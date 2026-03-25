@@ -400,10 +400,134 @@ def _budget_argparse(argv: list) -> None:
 # ---------------------------------------------------------------------------
 
 
+def cmd_last(args):
+    """Show last request stats."""
+    from datetime import datetime
+
+    oneline = getattr(args, "oneline", False)
+    no_session = getattr(args, "no_session", False)
+    raw = getattr(args, "raw", False)
+
+    d = proxy_get("/stats/last") or proxy_err()
+
+    if raw:
+        print(json.dumps(d, indent=2))
+        return
+
+    request = d.get("request")
+    session = d.get("session", {})
+
+    if not request:
+        print("⚠ No requests captured yet")
+        return
+
+    tokens_saved = request.get("tokens_saved", 0)
+    percent_saved = request.get("percent_saved", 0)
+    cost_saved = request.get("cost_saved", 0)
+    request_id = request.get("request_id", "unknown")
+    timestamp = request.get("timestamp", "")
+
+    if oneline:
+        # Format: ⚡ TokenPak: -312 tokens (18%) | $0.003 saved | Session: $1.24 total
+        if tokens_saved == 0:
+            footer = "⚡ TokenPak: 0 tokens saved"
+        else:
+            footer = f"⚡ TokenPak: -{tokens_saved:,} tokens ({percent_saved:.0f}%) | ${cost_saved:.3f} saved"
+
+        if not no_session and session:
+            session_total = session.get("session_total_cost_saved", 0)
+            footer += f" | Session: ${session_total:.2f} total"
+
+        print(footer)
+        return
+
+    # Full format
+    print(header("Last Request"))
+    print()
+    print(f"Request ID:              {request_id}")
+    if timestamp:
+        try:
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            print(f"Time:                    {dt.strftime('%H:%M:%S')}")
+        except Exception:
+            print(f"Time:                    {timestamp}")
+    print()
+
+    # Tokens section
+    input_raw = request.get("input_tokens_raw", 0)
+    input_sent = request.get("input_tokens_sent", 0)
+
+    print("Tokens:")
+    print(f"  Raw Input:             {input_raw:,}")
+    print(f"  Sent:                  {input_sent:,}")
+    print(f"  Saved:                 {tokens_saved:,} ({percent_saved:.1f}%)")
+    print()
+
+    # Cost section
+    print("Cost:")
+    print(f"  This Request:          ${cost_saved:.3f} saved")
+
+    if session:
+        session_total = session.get("session_total_cost_saved", 0)
+        print(f"  Session Total:         ${session_total:.2f} saved")
+
+    print()
+
+    # Session stats
+    if session and not no_session:
+        requests = session.get("session_requests", 0)
+        print(f"Requests This Session:   {requests}")
+
+
+def _dispatch_license(args) -> None:
+    """Handle tokenpak activate / deactivate / plan."""
+    from tokenpak.agent.cli.commands.license import _run_activate, _run_deactivate, _run_plan
+
+    if args.cmd == "activate":
+        _run_activate(args.key)
+    elif args.cmd == "deactivate":
+        _run_deactivate()
+    elif args.cmd == "plan":
+        _run_plan()
+
+
+def _dispatch_debug(args) -> None:
+    from tokenpak.agent.cli.commands.debug import debug_cmd
+
+    debug_cmd(args)
+
+
+def _dispatch_agent(args) -> None:
+    """Handle `tokenpak agent <subcommand>` commands."""
+    from tokenpak.agent.cli.commands.handoff import handoff_cmd
+
+    agent_cmd = getattr(args, "agent_cmd", None)
+    if agent_cmd == "handoff":
+        handoff_cmd(args)
+    else:
+        print("Usage: tokenpak agent <handoff>")
+
+
+def _dispatch_learn(args) -> None:
+    """Handle `tokenpak learn status` and `tokenpak learn reset`."""
+    from tokenpak.agent.agentic.learning import cmd_learn_status, learn, reset
+
+    learn_cmd = getattr(args, "learn_cmd", None)
+    if learn_cmd == "reset":
+        reset()
+        print("✓ Learning store cleared.")
+    elif learn_cmd == "status":
+        # Refresh from current telemetry files first
+        learn()
+        cmd_learn_status()
+    else:
+        print("Usage: tokenpak learn <status|reset>")
+
 def main():
     # Delegate serve subcommand (Phase 5A: Ingest API)
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         import argparse as _ap
+
         from tokenpak.agent.cli.commands.serve import _default_workers
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
@@ -527,8 +651,10 @@ def main():
         from tokenpak.agent.cli.commands.metrics import (
             cmd_history,
             cmd_preview,
-            cmd_status,
             cmd_sync,
+        )
+        from tokenpak.agent.cli.commands.metrics import (
+            cmd_status as metrics_cmd_status,
         )
 
         mp = _ap.ArgumentParser(prog="tokenpak metrics", add_help=True)
@@ -542,7 +668,7 @@ def main():
         ss.add_argument("--dry-run", dest="dry_run", action="store_true")
         margs = mp.parse_args(sys.argv[2:])
         dispatch_m = {
-            "status": cmd_status,
+            "status": metrics_cmd_status,
             "preview": cmd_preview,
             "history": cmd_history,
             "sync": cmd_sync,
@@ -567,6 +693,7 @@ def main():
     # Delegate optimize subcommand (Pro+)
     if len(sys.argv) > 1 and sys.argv[1] == "optimize":
         import argparse as _ap
+
         from tokenpak.agent.cli.commands.optimize import run_optimize
         op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
         op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
@@ -727,129 +854,7 @@ def main():
         cmd_help(args)
 
 
+
+
 if __name__ == "__main__":
     main()
-
-
-def cmd_last(args):
-    """Show last request stats."""
-    from datetime import datetime
-
-    oneline = getattr(args, "oneline", False)
-    no_session = getattr(args, "no_session", False)
-    raw = getattr(args, "raw", False)
-
-    d = proxy_get("/stats/last") or proxy_err()
-
-    if raw:
-        print(json.dumps(d, indent=2))
-        return
-
-    request = d.get("request")
-    session = d.get("session", {})
-
-    if not request:
-        print("⚠ No requests captured yet")
-        return
-
-    tokens_saved = request.get("tokens_saved", 0)
-    percent_saved = request.get("percent_saved", 0)
-    cost_saved = request.get("cost_saved", 0)
-    request_id = request.get("request_id", "unknown")
-    timestamp = request.get("timestamp", "")
-
-    if oneline:
-        # Format: ⚡ TokenPak: -312 tokens (18%) | $0.003 saved | Session: $1.24 total
-        if tokens_saved == 0:
-            footer = "⚡ TokenPak: 0 tokens saved"
-        else:
-            footer = f"⚡ TokenPak: -{tokens_saved:,} tokens ({percent_saved:.0f}%) | ${cost_saved:.3f} saved"
-
-        if not no_session and session:
-            session_total = session.get("session_total_cost_saved", 0)
-            footer += f" | Session: ${session_total:.2f} total"
-
-        print(footer)
-        return
-
-    # Full format
-    print(header("Last Request"))
-    print()
-    print(f"Request ID:              {request_id}")
-    if timestamp:
-        try:
-            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            print(f"Time:                    {dt.strftime('%H:%M:%S')}")
-        except Exception:
-            print(f"Time:                    {timestamp}")
-    print()
-
-    # Tokens section
-    input_raw = request.get("input_tokens_raw", 0)
-    input_sent = request.get("input_tokens_sent", 0)
-
-    print("Tokens:")
-    print(f"  Raw Input:             {input_raw:,}")
-    print(f"  Sent:                  {input_sent:,}")
-    print(f"  Saved:                 {tokens_saved:,} ({percent_saved:.1f}%)")
-    print()
-
-    # Cost section
-    print("Cost:")
-    print(f"  This Request:          ${cost_saved:.3f} saved")
-
-    if session:
-        session_total = session.get("session_total_cost_saved", 0)
-        print(f"  Session Total:         ${session_total:.2f} saved")
-
-    print()
-
-    # Session stats
-    if session and not no_session:
-        requests = session.get("session_requests", 0)
-        print(f"Requests This Session:   {requests}")
-
-
-def _dispatch_license(args) -> None:
-    """Handle tokenpak activate / deactivate / plan."""
-    from tokenpak.agent.cli.commands.license import _run_activate, _run_deactivate, _run_plan
-
-    if args.cmd == "activate":
-        _run_activate(args.key)
-    elif args.cmd == "deactivate":
-        _run_deactivate()
-    elif args.cmd == "plan":
-        _run_plan()
-
-
-def _dispatch_debug(args) -> None:
-    from tokenpak.agent.cli.commands.debug import debug_cmd
-
-    debug_cmd(args)
-
-
-def _dispatch_agent(args) -> None:
-    """Handle `tokenpak agent <subcommand>` commands."""
-    from tokenpak.agent.cli.commands.handoff import handoff_cmd
-
-    agent_cmd = getattr(args, "agent_cmd", None)
-    if agent_cmd == "handoff":
-        handoff_cmd(args)
-    else:
-        print("Usage: tokenpak agent <handoff>")
-
-
-def _dispatch_learn(args) -> None:
-    """Handle `tokenpak learn status` and `tokenpak learn reset`."""
-    from tokenpak.agent.agentic.learning import cmd_learn_status, learn, reset
-
-    learn_cmd = getattr(args, "learn_cmd", None)
-    if learn_cmd == "reset":
-        reset()
-        print("✓ Learning store cleared.")
-    elif learn_cmd == "status":
-        # Refresh from current telemetry files first
-        learn()
-        cmd_learn_status()
-    else:
-        print("Usage: tokenpak learn <status|reset>")

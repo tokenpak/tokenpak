@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from tokenpak.telemetry.segmentizer import compute_coverage_score, extract_query_terms
-
 
 RetrieveFn = Callable[..., list[dict[str, Any]]]
 PackFn = Callable[[list[dict[str, Any]], int], dict[str, Any]]

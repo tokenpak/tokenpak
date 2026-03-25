@@ -7,12 +7,11 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import List, Optional
 
 import yaml
-
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -22,7 +21,7 @@ class FleetMachine:
     name: str
     host: str
     port: int
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -64,18 +63,18 @@ def _get_fleet_config_path() -> Path:
 def load_fleet_config() -> List[FleetMachine]:
     """Load fleet.yaml and return list of machines."""
     config_path = _get_fleet_config_path()
-    
+
     if not config_path.exists():
         return []
-    
+
     try:
         with open(config_path, "r") as f:
             data = yaml.safe_load(f) or {}
-        
+
         # Support both old "agents" key and new "fleet" key
         machines_data = data.get("fleet") or data.get("agents") or []
         machines = []
-        
+
         for item in machines_data:
             machine = FleetMachine(
                 name=item.get("name", "unknown"),
@@ -83,7 +82,7 @@ def load_fleet_config() -> List[FleetMachine]:
                 port=item.get("port", 8766),
             )
             machines.append(machine)
-        
+
         return machines
     except Exception as e:
         print(f"Error loading fleet config: {e}", file=sys.stderr)
@@ -94,11 +93,11 @@ def save_fleet_config(machines: List[FleetMachine]):
     """Save machines to fleet.yaml."""
     config_path = _get_fleet_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     data = {
         "fleet": [m.to_dict() for m in machines]
     }
-    
+
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
@@ -145,18 +144,18 @@ def query_fleet_agent_rows(machines: List[FleetMachine], since: Optional[str] = 
 def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
     """Query a single machine for health and stats."""
     stats = FleetStats(name=machine.name)
-    
+
     try:
         # Query /health endpoint
         health_url = f"http://{machine.host}:{machine.port}/health"
         with urllib.request.urlopen(health_url, timeout=timeout) as resp:
             health_data = json.loads(resp.read())
-        
+
         # Query /stats endpoint
         stats_url = f"http://{machine.host}:{machine.port}/stats"
         with urllib.request.urlopen(stats_url, timeout=timeout) as resp:
             stats_data = json.loads(resp.read())
-        
+
         # Extract stats
         session_stats = stats_data.get("session", {})
         stats.requests = session_stats.get("requests", 0)
@@ -164,18 +163,18 @@ def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
         stats.cost = session_stats.get("cost", 0.0)
         stats.cost_saved = session_stats.get("cost_saved", 0.0)
         stats.cache_read_tokens = session_stats.get("cache_read_tokens", 0)
-        
+
         # Calculate cache percentage
         inp = session_stats.get("input_tokens", 0)
         sent = session_stats.get("sent_input_tokens", 0)
         stats.cache_pct = ((inp - sent) / inp * 100) if inp > 0 else 0.0
-        
+
         # Calculate compression
         total_out = session_stats.get("output_tokens", 0)
         if total_out > 0:
             sent_out = session_stats.get("sent_output_tokens", 0)
             stats.compression = ((total_out - sent_out) / total_out * 100)
-        
+
         # Determine health status
         health_status = health_data.get("status", "unknown")
         if health_status in ("ok", "healthy"):
@@ -184,14 +183,14 @@ def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
             stats.health = "⚠️"
         else:
             stats.health = "❌"
-    
+
     except urllib.error.URLError as e:
         stats.health = "❌"
         stats.error = str(e)
     except Exception as e:
         stats.health = "❌"
         stats.error = str(e)
-    
+
     return stats
 
 
@@ -228,12 +227,11 @@ def _fmt_tokens(n: int) -> str:
 
 def _calc_savings(s: "FleetStats") -> tuple:
     """Return (compression_saved_$, cache_saved_$, total_saved_$).
-    
+
     Compression: tokens removed before sending (input - sent) at full input rate.
     Caching: cache_read_tokens at 90% discount (pay $0.30 instead of $3.00/MTok).
     Rate assumes Sonnet-class pricing ($3/MTok input). Adjust via TOKENPAK_INPUT_RATE.
     """
-    import os
     rate = float(os.environ.get("TOKENPAK_INPUT_RATE", "3.0"))  # $/MTok
 
     comp_saved = (s.saved / 1_000_000) * rate
@@ -305,14 +303,14 @@ def render_fleet_json(stats_list: List[FleetStats]) -> str:
         "machines": [asdict(s) for s in stats_list],
         "timestamp": time.time(),
     }
-    
+
     # Add totals
     totals = {
         "requests": sum(s.requests for s in stats_list),
         "saved": sum(s.saved for s in stats_list),
     }
     data["totals"] = totals
-    
+
     return json.dumps(data, indent=2)
 
 
@@ -321,33 +319,33 @@ def render_fleet_json(stats_list: List[FleetStats]) -> str:
 def interactive_add_machine(machines: List[FleetMachine]) -> Optional[FleetMachine]:
     """Prompt user to add a new machine to the fleet."""
     print("\n📋 Add machine to fleet")
-    
+
     name = input("Machine name (e.g., 'sue', 'trix'): ").strip()
     if not name:
         print("Cancelled (no name provided)")
         return None
-    
+
     # Check for duplicates
     if any(m.name == name for m in machines):
         print(f"⚠️  Machine '{name}' already exists in fleet")
         return None
-    
-    host = input(f"Host/IP (default: localhost): ").strip() or "localhost"
-    
-    port_str = input(f"Port (default: 8766): ").strip() or "8766"
+
+    host = input("Host/IP (default: localhost): ").strip() or "localhost"
+
+    port_str = input("Port (default: 8766): ").strip() or "8766"
     try:
         port = int(port_str)
     except ValueError:
         print(f"Invalid port: {port_str}")
         return None
-    
+
     # Create machine
     machine = FleetMachine(name=name, host=host, port=port)
-    
+
     # Test connection
     print(f"\n⏳ Testing connection to {host}:{port}...")
     stats = _query_machine(machine, timeout=3.0)
-    
+
     if stats.health == "✅":
         print(f"✅ {name} is healthy!")
         return machine

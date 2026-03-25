@@ -3,21 +3,15 @@ Tests for tokenpak.vault_health — Phase 1a
 """
 
 import json
-import tempfile
-import time
-from pathlib import Path
 
 import pytest
 
 from tokenpak.vault_health import (
-    HealthCheckResult,
     IndexStatus,
-    RepairResult,
     VaultHealth,
     _make_block_id,
     _parse_frontmatter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

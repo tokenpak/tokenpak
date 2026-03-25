@@ -10,13 +10,12 @@ Thresholds:
   - RED (700 KB): Run /compact NOW to avoid slowdowns
 """
 
-import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from threading import Lock
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +69,14 @@ class RequestSizeMonitor:
     ) -> Optional[SizeAlert]:
         """
         Check request size against thresholds.
-        
+
         Returns alert if threshold breached (first-breach-only per session).
         Returns None if no threshold exceeded or if alert already sent for this level.
-        
+
         Args:
             request_body_size: Request body size in bytes
             session_id: Optional session identifier for tracking
-            
+
         Returns:
             SizeAlert if new threshold breached, None otherwise
         """
@@ -86,7 +85,7 @@ class RequestSizeMonitor:
 
         # Determine alert level based on size
         alert_level = self._get_alert_level(request_body_size)
-        
+
         if alert_level is None:
             # No threshold exceeded
             return None
@@ -94,23 +93,23 @@ class RequestSizeMonitor:
         with self._lock:
             # Check if we've already alerted at this level for this session
             last_level = self._last_level.get(session_id)
-            
+
             if last_level == alert_level:
                 # Already alerted at this level, don't repeat
                 return None
-            
+
             # New alert — update tracking and record
             self._last_level[session_id] = alert_level
             self._alert_counts[alert_level] += 1
-            
+
             alert = self._create_alert(alert_level, request_body_size, session_id)
-            
+
             if self.config.track_history:
                 self._alert_history.append(alert)
                 # Trim history if it gets too large
                 if len(self._alert_history) > self.config.max_history_size:
                     self._alert_history = self._alert_history[-self.config.max_history_size:]
-            
+
             return alert
 
     def _get_alert_level(self, size_bytes: int) -> Optional[AlertLevel]:
@@ -131,13 +130,13 @@ class RequestSizeMonitor:
     ) -> SizeAlert:
         """Create alert object with appropriate message."""
         size_kb = size_bytes / 1024
-        
+
         messages = {
             AlertLevel.YELLOW: f"Context is growing large ({size_kb:.1f} KB). Monitor with `openclaw session status`.",
             AlertLevel.ORANGE: f"Large context detected ({size_kb:.1f} KB). Consider `/compact` to reduce overhead.",
             AlertLevel.RED: f"Very large context ({size_kb:.1f} KB). Run `/compact` NOW to avoid slowdowns.",
         }
-        
+
         return SizeAlert(
             timestamp=datetime.utcnow(),
             level=level,
@@ -203,10 +202,10 @@ _monitor_lock = Lock()
 def get_monitor(config: Optional[RequestSizeConfig] = None) -> RequestSizeMonitor:
     """Get or create the singleton monitor instance."""
     global _monitor
-    
+
     if _monitor is not None:
         return _monitor
-    
+
     with _monitor_lock:
         if _monitor is None:
             _monitor = RequestSizeMonitor(config)

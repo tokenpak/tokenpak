@@ -1,7 +1,7 @@
 """TokenPak proxy utilities."""
 
+from .cache import CacheEntry, CacheMetrics, LRUCache  # noqa: F401
 from .credential_passthrough import CredentialPassthrough  # noqa: F401
-from .cache import LRUCache, CacheEntry, CacheMetrics  # noqa: F401
 
 
 class ProxyStats:

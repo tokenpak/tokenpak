@@ -33,7 +33,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, Union, List
+from typing import Any, List, Optional, Union
 
 # ---------------------------------------------------------------------------
 # DDL

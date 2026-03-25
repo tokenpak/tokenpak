@@ -8,11 +8,11 @@ Provides a thread-safe in-memory cache with:
 """
 
 import sys
-import time
 import threading
+import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Optional, Dict
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 
 @dataclass

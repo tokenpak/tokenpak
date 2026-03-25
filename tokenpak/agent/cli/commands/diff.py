@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, Any
-
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Data Classes
@@ -269,7 +266,7 @@ def print_diff(diff: ContextDiff, verbose: bool = False, raw: bool = False) -> N
 
     # Retained section (Pinned)
     if diff.retained:
-        print(f"RETAINED (Pinned)")
+        print("RETAINED (Pinned)")
         for block in diff.retained:
             tokens_str = f" ({block.tokens_before} tokens)" if verbose else ""
             print(f"  {block.symbol} {block.name}{tokens_str}")
@@ -291,9 +288,10 @@ def run_diff_cmd(args) -> None:
     from tokenpak.agent.license.activation import is_pro
 
     if not is_pro():
-        print("⚠ Context Diff requires a Pro (or higher) license.")
+        print("⚠ Context Diff required: Pro (or higher) license.")
         print("  Run: tokenpak license activate <key>")
-        return
+        import sys as _sys_diff
+        _sys_diff.exit(1)
 
     verbose = getattr(args, "verbose", False)
     raw = getattr(args, "json", False) or getattr(args, "raw", False)

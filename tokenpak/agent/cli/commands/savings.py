@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -127,7 +126,7 @@ def _query_savings(period: str = "24h", model: Optional[str] = None) -> dict:
         est_cost_saved = tokens_saved * cost_per_token
     else:
         est_cost_saved = 0.0
-    
+
     # Calculate before/after costs
     cost_without_tokenpak = total_raw * (total_cost / total_compressed) if total_compressed > 0 else 0.0
     cost_with_tokenpak = total_cost
@@ -241,7 +240,7 @@ def _print_summary(data: dict, period: str) -> None:
     print(f"  📊  This Session ({label})")
     print(f"      Total requests:    {_fmt_n(requests)}")
     print()
-    print(f"      Compression:")
+    print("      Compression:")
     print(f"        Tokens trimmed:  {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
     print(f"        Est. saved:      {_fmt_cost(cost_saved)}")
     print()
@@ -251,8 +250,8 @@ def _print_summary(data: dict, period: str) -> None:
         print(f"      📉 With TokenPak:    {_fmt_cost(cost_with)}")
         print(f"      🔥 Reduction:        {cost_reduction:.0f}%")
     print()
-    print(f"  💡 Enable more modules for higher savings:")
-    print(f"     tokenpak config profile aggressive")
+    print("  💡 Enable more modules for higher savings:")
+    print("     tokenpak config profile aggressive")
     print()
 
 

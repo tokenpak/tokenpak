@@ -575,7 +575,7 @@ def print_budget_intelligence(raw: bool = False) -> None:
     # Trend arrow
     trend_pct = burn["trend_7d_pct"]
     if abs(trend_pct) < 1.0:
-        trend_str = f"→ flat"
+        trend_str = "→ flat"
     elif trend_pct > 0:
         trend_str = f"▲ {trend_pct:.1f}% vs last week"
     else:

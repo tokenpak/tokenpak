@@ -43,7 +43,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def walk_directory(root: str, max_size: int = MAX_FILE_SIZE) -> List[Tuple[str, str, int]]:
     """
     Recursively walk a directory and return processable files.
-    
+
     Returns:
         List of (absolute_path, file_type, size_bytes) tuples.
     """

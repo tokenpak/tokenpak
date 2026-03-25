@@ -1,8 +1,9 @@
 """Failover handler for multi-adapter request retrying."""
 
-from typing import Callable, Any, Optional, List
 import asyncio
 import logging
+from typing import Any, Callable, List
+
 from .detector import Provider
 
 logger = logging.getLogger(__name__)

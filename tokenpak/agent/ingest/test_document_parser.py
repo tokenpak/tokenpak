@@ -1,13 +1,11 @@
 """Tests for DocumentParser — structural document parsing."""
 
 import pytest
+
 from tokenpak.agent.ingest.document_parser import (
     DocumentParser,
-    DocumentSection,
     DocumentStructure,
     SectionType,
-    Table,
-    HeadingNode,
 )
 
 
@@ -19,7 +17,7 @@ class TestMarkdownHeadingHierarchy:
         content = "# Introduction\n\nSome content."
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         assert result.title == "Introduction"
         assert len(result.sections) == 1
         assert result.sections[0].level == 1
@@ -44,7 +42,7 @@ Content 2.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         assert result.title == "Main Title"
         # Parser returns all headings including nested ones
         assert len(result.sections) >= 3  # H1, H2, H3, H2
@@ -63,7 +61,7 @@ Content 2.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         assert result.headings_tree is not None
         assert result.headings_tree.text == "Root"
         assert len(result.headings_tree.children) == 2
@@ -83,7 +81,7 @@ class TestTableExtraction:
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         assert len(result.sections) > 0
         # Find section with table
         section_with_table = None
@@ -91,7 +89,7 @@ class TestTableExtraction:
             if section.tables:
                 section_with_table = section
                 break
-        
+
         assert section_with_table is not None
         assert len(section_with_table.tables) == 1
         table = section_with_table.tables[0]
@@ -112,7 +110,7 @@ class TestTableExtraction:
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Second section should have the table
         assert len(result.sections) > 1
         data_section = next((s for s in result.sections if s.heading == "Data"), None)
@@ -134,7 +132,7 @@ class TestTableExtraction:
 """
         parser = DocumentParser()
         result = parser.parse(content, format="html")
-        
+
         # Find table in sections
         has_table = any(len(s.tables) > 0 for s in result.sections)
         assert has_table
@@ -203,7 +201,7 @@ More content.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="plaintext")
-        
+
         assert result.title is not None
         assert "INTRODUCTION" in result.title or any("INTRODUCTION" in s.heading for s in result.sections)
 
@@ -216,7 +214,7 @@ Content below.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="plaintext")
-        
+
         # Should detect something (heuristic may vary)
         assert result.sections is not None
 
@@ -244,7 +242,7 @@ Text 4.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         assert result.title == "Level 1"
         # All headings should be parsed
         assert len(result.sections) == 4
@@ -263,7 +261,7 @@ Text 4.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         tree = result.headings_tree
         assert tree is not None
         assert tree.level == 1
@@ -282,7 +280,7 @@ class TestEmptyAndMalformedDocs:
         """Handle empty markdown."""
         parser = DocumentParser()
         result = parser.parse("", format="markdown")
-        
+
         assert isinstance(result, DocumentStructure)
         assert result.title is None
 
@@ -291,7 +289,7 @@ class TestEmptyAndMalformedDocs:
         content = "Just some random text.\n\nMore text without structure."
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Should create a default section
         assert len(result.sections) >= 1
         assert result.sections[0].content is not None
@@ -304,7 +302,7 @@ class TestEmptyAndMalformedDocs:
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Should not crash
         assert isinstance(result, DocumentStructure)
 
@@ -313,7 +311,7 @@ class TestEmptyAndMalformedDocs:
         content = "Line 1\nLine 2\nLine 3\n"
         parser = DocumentParser()
         result = parser.parse(content, format="plaintext")
-        
+
         assert isinstance(result, DocumentStructure)
         assert len(result.sections) >= 1
 
@@ -335,7 +333,7 @@ Outcomes.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         methods = result.find_section("Methods")
         assert methods is not None
         assert methods.heading == "Methods"
@@ -355,7 +353,7 @@ More text.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Check that code block was extracted
         assert any(len(s.code_blocks) > 0 for s in result.sections)
 
@@ -374,7 +372,7 @@ Paragraph.
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Should extract lists
         assert any(len(s.lists) > 0 for s in result.sections)
 
@@ -388,7 +386,7 @@ More details in [ref1].
 """
         parser = DocumentParser()
         result = parser.parse(content, format="markdown")
-        
+
         # Check citations
         citations = []
         for section in result.sections:

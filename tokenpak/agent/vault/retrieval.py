@@ -202,7 +202,6 @@ def measure_injection_consistency(
 # Multi-Signal Scoring + Coverage Score
 # ===========================================================================
 
-import math
 import re
 
 # ---------------------------------------------------------------------------

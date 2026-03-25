@@ -24,7 +24,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -489,7 +488,7 @@ def decide(
                 skip_compression=FALLBACK_POLICY.skip_compression,
             ),
             fallback=True,
-            fallback_reason=f"unknown_intent",
+            fallback_reason="unknown_intent",
             confidence=0.0,
         )
 

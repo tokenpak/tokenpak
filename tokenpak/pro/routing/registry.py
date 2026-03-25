@@ -1,7 +1,8 @@
 """Adapter registry and loader for multi-provider support."""
 
-from typing import Dict, Optional, Type, Any
 import importlib
+from typing import Any, Dict, Optional, Type
+
 from .detector import Provider
 
 

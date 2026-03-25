@@ -1,17 +1,19 @@
 """tokenpak/agent/dashboard/app.py — Phase 5C Dashboard UI"""
 from __future__ import annotations
-import json, logging, os
+
+import json
+import logging
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from tokenpak.agent.query.api import EntryStore
-from tokenpak.agent.query.timeline import TimelineGenerator
 from tokenpak.agent.query.audit import AuditGenerator
+from tokenpak.agent.query.timeline import TimelineGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -104,16 +106,16 @@ def dashboard_timeline(request: Request, hours: int = Query(24, ge=1, le=168)):
     start_date = _days_ago(hours // 24 + 1)
     end_date = _today()
     entries = _store.read_entries(start_date, end_date)
-    
+
     # Generate hourly buckets
     now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
     buckets = _timeline.hourly_buckets(entries, start_hour=now, num_hours=hours)
-    
+
     # Extract chart data
     chart_labels = json.dumps([b["hour"] for b in buckets])
     chart_costs = json.dumps([round(b["cost"], 4) for b in buckets])
     chart_requests = json.dumps([b["requests"] for b in buckets])
-    
+
     return templates.TemplateResponse(request, "timeline.html", {
         "hours": hours,
         "bucket_count": len(buckets),
@@ -134,11 +136,11 @@ def api_timeline_data(
     if not start_date or not end_date:
         end_date = _today()
         start_date = _days_ago(hours // 24 + 1)
-    
+
     entries = _store.read_entries(start_date, end_date)
     now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
     buckets = _timeline.hourly_buckets(entries, start_hour=now, num_hours=hours)
-    
+
     return {
         "hours": hours,
         "buckets": buckets,
@@ -155,16 +157,16 @@ def dashboard_audit(request: Request, date_str: Optional[str] = Query(None, alia
     q = date_str or _today()
     entries = _store.read_entries(q, q)
     audit = _audit.session_audit(entries)
-    
+
     # Prepare chart data
     models_labels = json.dumps(list(audit["models"].keys()))
     models_costs = json.dumps([audit["models"][m]["cost"] for m in audit["models"].keys()])
     models_pcts = json.dumps([audit["models"][m]["percentage"] for m in audit["models"].keys()])
-    
+
     features_labels = json.dumps(list(audit["features"].keys()))
     features_costs = json.dumps([audit["features"][f]["cost"] for f in audit["features"].keys()])
     features_pcts = json.dumps([audit["features"][f]["percentage"] for f in audit["features"].keys()])
-    
+
     return templates.TemplateResponse(request, "audit.html", {
         "query_date": q,
         "today": _today(),

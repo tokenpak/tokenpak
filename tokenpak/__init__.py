@@ -62,6 +62,17 @@ except ImportError:
     CompressionEngine = None
     HeuristicEngine = None
 
+# ---------------------------------------------------------------------------
+# Agent Handoff Protocol
+# ---------------------------------------------------------------------------
+from tokenpak.agent.agentic.handoff import (
+    ContextRef,
+    HandoffBlock,
+    HandoffManager,
+    HandoffStatus,
+    HandoffWire,
+    TokenPak,
+)
 from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
 
 # ---------------------------------------------------------------------------
@@ -88,27 +99,15 @@ from tokenpak.tokens import count_tokens
 from tokenpak.trace import (  # noqa: F401
     TokenPakTrace,
     TraceBuilder,
-    attach_trace_header,
+    assert_no_leak,
     attach_trace_envelope,
+    attach_trace_header,
+    read_trace_envelope,
+    read_trace_header,
     strip_trace,
     strip_trace_header,
-    read_trace_header,
-    read_trace_envelope,
-    assert_no_leak,
 )
 
-
-# ---------------------------------------------------------------------------
-# Agent Handoff Protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    ContextRef,
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire,
-    TokenPak,
-)
 # HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
 # The internal Handoff dataclass (file-based) is available via
 # tokenpak.agent.agentic.handoff.Handoff

@@ -1,10 +1,10 @@
 # TokenPak
 
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-54%25-brightgreen)
+
+
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![PyPI](https://img.shields.io/badge/pypi-1.0.0-blue)
+
 
 > **Zero-token operations. Maximum context efficiency.**
 
@@ -17,7 +17,7 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 - 🧩 Examples: [`examples/`](examples/)
 - 📖 Usage Examples: [`docs/EXAMPLES.md`](docs/EXAMPLES.md)
 
-[![CI](https://github.com/tokenpak/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenpak/tokenpak/actions)
+[![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Downloads](https://static.pepy.tech/badge/tokenpak/month)](https://pepy.tech/project/tokenpak)

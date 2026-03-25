@@ -34,11 +34,10 @@ Usage::
 """
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .request_logger import RequestLogger, RequestLogRecord, LEVEL_DEBUG
+from .request_logger import LEVEL_DEBUG, RequestLogger, RequestLogRecord
 
 
 class AuditTrail:
