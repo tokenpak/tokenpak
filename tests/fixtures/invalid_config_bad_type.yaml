@@ -1,0 +1,8 @@
+# Invalid: port is string instead of int
+port: "not_a_number"
+mode: hybrid
+
+compression:
+  enabled: true
+  max_chars: 120
+  threshold_tokens: 4500

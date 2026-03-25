@@ -1,0 +1,32 @@
+# Valid TokenPak configuration for testing
+port: 8766
+mode: hybrid
+
+compression:
+  enabled: true
+  max_chars: 120
+  threshold_tokens: 4500
+  cache_size: 2000
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true
+  validation_gate: true
+  validation_gate_soft: true
+  capsule_builder: false
+  term_resolver: false
+
+budget:
+  total_tokens: 12000
+  validation_gate_cap: 120000
+
+vault:
+  index_path: ~/vault/.tokenpak
+  inject_budget: 4000
+  inject_top_k: 5
+  inject_min_score: 2.0
+
+upstream:
+  timeout: 300
+  ollama: http://localhost:11434
