@@ -1,0 +1,6 @@
+{
+  "messages": [
+    {"role": "user", "content": "Show me a Python function that computes Fibonacci"},
+    {"role": "assistant", "content": "```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Compute the nth Fibonacci number using memoization.\n    \n    Args:\n        n: Position in Fibonacci sequence (0-indexed)\n        \n    Returns:\n        The nth Fibonacci number\n        \n    Example:\n        >>> fibonacci(5)\n        5\n        >>> fibonacci(10)\n        55\n    \"\"\"\n    if n < 0:\n        raise ValueError(\"n must be non-negative\")\n    if n <= 1:\n        return n\n    \n    # Use memoization for efficiency\n    memo = {0: 0, 1: 1}\n    \n    def _fib(x):\n        if x not in memo:\n            memo[x] = _fib(x - 1) + _fib(x - 2)\n        return memo[x]\n    \n    return _fib(n)\n\n\n# Test cases\nif __name__ == \"__main__\":\n    for i in range(12):\n        print(f\"fib({i}) = {fibonacci(i)}\")\n```\n\nThis implementation uses memoization to avoid redundant calculations, achieving O(n) time complexity."}
+  ]
+}

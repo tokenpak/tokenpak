@@ -4322,6 +4322,50 @@ def _build_goals_parser(sub):
     p_goals.set_defaults(func=cmd_goals_list)
 
 
+def cmd_cost_show_budget(args):
+    """Show budget status and spending progress."""
+    import json
+    try:
+        from tokenpak.cost.budget_tracker import BudgetTracker
+    except ImportError:
+        print("Budget tracking module not available.")
+        return 1
+
+    config_path = getattr(args, "config", None)
+    config = {}
+    if config_path:
+        try:
+            with open(config_path) as f:
+                config_data = json.load(f)
+                config = config_data.get("cost_budget", {})
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            return 1
+
+    tracker = BudgetTracker(config)
+    summary = tracker.get_budget_summary()
+
+    print("\n📊 TokenPak Budget Status\n" + "=" * 40)
+    if not summary.get("enabled"):
+        print("Budget tracking: DISABLED")
+        print("  Set 'cost_budget.daily_limit' in tokenpak.json to enable.")
+    else:
+        if summary.get("daily_limit"):
+            print(f"Daily limit:  ${summary['daily_limit']:.2f}")
+        if summary.get("weekly_limit"):
+            print(f"Weekly limit: ${summary['weekly_limit']:.2f}")
+        print(f"Alert cooldown: {summary.get('alert_cooldown_minutes', 5):.0f} minutes")
+        alerts = summary.get("last_alerts", {})
+        if alerts:
+            print("\nRecent Alerts:")
+            for k, v in alerts.items():
+                print(f"  • {k}: {v}")
+        else:
+            print("\nNo alerts triggered yet.")
+    print("=" * 40 + "\n")
+    return 0
+
+
 def _build_cost_parser(sub):
     p_cost = sub.add_parser("cost", help="Show API cost summary")
     p_cost.add_argument("--week", action="store_true", help="Show weekly totals")
@@ -4329,6 +4373,12 @@ def _build_cost_parser(sub):
     p_cost.add_argument("--by-model", action="store_true", help="Break down by model")
     p_cost.add_argument("--export-csv", action="store_true", help="Export as CSV")
     p_cost.set_defaults(func=cmd_cost)
+
+    # Subcommands for cost
+    cost_sub = p_cost.add_subparsers(dest="cost_subcmd")
+    p_show_budget = cost_sub.add_parser("show-budget", help="Show budget status and alerts")
+    p_show_budget.add_argument("--config", help="Path to tokenpak config file")
+    p_show_budget.set_defaults(func=cmd_cost_show_budget)
 
 
 def _build_budget_parser(sub):

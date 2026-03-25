@@ -227,7 +227,7 @@ def account_usage(request: Request,
     total_output = sum(daily_totals[d]["output"] for d in daily_totals)
     total_saved = sum(daily_totals[d]["saved"] for d in daily_totals)
     
-    return templates.TemplateResponse(request, "usage.html", {
+    return templates.TemplateResponse("usage.html", {"request": request,
         "key_id": key_id,
         "days": days,
         "start_date": start_date.isoformat(),
@@ -318,7 +318,7 @@ def account_savings(request: Request,
             "requests": totals["requests"],
         })
     
-    return templates.TemplateResponse(request, "savings.html", {
+    return templates.TemplateResponse("savings.html", {"request": request,
         "key_id": key_id,
         "days": days,
         "breakdown": breakdown,
@@ -347,7 +347,7 @@ def account_roi(request: Request):
     
     roi = _calculate_roi(total_saved)
     
-    return templates.TemplateResponse(request, "roi.html", {
+    return templates.TemplateResponse("roi.html", {"request": request,
         "key_id": key_id,
         "total_saved": total_saved,
         "estimated_savings_usd": roi["estimated_savings_usd"],

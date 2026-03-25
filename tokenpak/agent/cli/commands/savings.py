@@ -242,8 +242,10 @@ def _print_summary(data: dict, period: str) -> None:
     print(f"      Total requests:    {_fmt_n(requests)}")
     print()
     print(f"      Compression:")
-    print(f"        Tokens trimmed:  {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
-    print(f"        Est. saved:      {_fmt_cost(cost_saved)}")
+    print(f"        Raw Avg tokens:      {_fmt_n(avg_raw)}")
+    print(f"        Compressed Avg:      {_fmt_n(avg_comp)}")
+    print(f"        Tokens Saved:        {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
+    print(f"        Est. saved:          {_fmt_cost(cost_saved)}")
     print()
     if cost_without > 0:
         print(f"      💰 TOTAL SAVED:    {_fmt_cost(cost_saved)}")

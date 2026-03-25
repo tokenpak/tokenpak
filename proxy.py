@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TokenPak Forward Proxy v4 — Two-Tier Context Injection
+TokenPak Proxy — Intelligent Context Injection & Compression
 
 Changes from v3:
 - Two-Tier Index: loads BOTH workspace + vault indexes
@@ -69,6 +69,7 @@ import uuid
 
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
+from provider_health import get_monitor as get_health_monitor, record_provider_request
 
 # ---------------------------------------------------------------------------
 # Feature imports — CANON dedup
@@ -201,6 +202,9 @@ TRACE_STORAGE = TraceStorage(max_traces=10)
 
 
 # ---------------------------------------------------------------------------
+# ── Version ───────────────────────────────────────────────────────────────────
+PROXY_VERSION = "1.0.1"
+
 # Config — reads ~/.tokenpak/config.yaml with env var overrides
 # ---------------------------------------------------------------------------
 try:
@@ -1507,6 +1511,11 @@ class Monitor:
 MONITOR = Monitor(MONITOR_DB)
 
 # ---------------------------------------------------------------------------
+# Provider Health Monitor
+# ---------------------------------------------------------------------------
+PROVIDER_HEALTH_MONITOR = get_health_monitor()
+
+# ---------------------------------------------------------------------------
 # Session stats
 # ---------------------------------------------------------------------------
 SESSION = {
@@ -2042,6 +2051,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Strip full SESSION from /health — use /stats for detailed session data
             health_data = {
                 "status": "ok",
+                "version": PROXY_VERSION,
                 "compilation_mode": COMPILATION_MODE,
                 "vault_index": vault_info,
                 "router": {"enabled": ROUTER_ENABLED, **router_info},
@@ -2078,6 +2088,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _health_cache["data"] = health_data
             _health_cache["ts"] = now
             self._send_json(health_data)
+            return
+        if self.path == "/health/providers":
+            # Provider-level health metrics
+            self._send_json(PROVIDER_HEALTH_MONITOR.get_all_health())
             return
         if self.path == "/stats":
             self._send_json({
@@ -3137,6 +3151,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             conn.request(method, path, body=body, headers=fwd_headers)
             resp = conn.getresponse()
             status = resp.status
+            t_resp = time.time()
+            resp_latency_ms = (t_resp - t0) * 1000
+            
+            # Record provider health metrics
+            try:
+                record_provider_request(_cb_provider, resp_latency_ms, status)
+            except Exception:
+                pass  # Never fail request over health monitoring
+            
             # Fix #5: Record success/failure for circuit breaker
             if status >= 500:
                 _circuit_record_failure(_cb_provider)

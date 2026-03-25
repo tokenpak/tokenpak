@@ -91,6 +91,55 @@ class TelemetryStorage:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def query_requests(
+        self,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        model: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 100_000,
+    ) -> list[dict]:
+        """Return requests filtered by date range and optional fields.
+
+        Parameters
+        ----------
+        start, end:
+            ISO-8601 datetime strings (inclusive).  ``None`` means unbounded.
+        model:
+            Exact match on ``model`` column (silently ignored if column absent).
+        status:
+            Exact match on ``status`` column (silently ignored if column absent).
+        limit:
+            Maximum rows to return.
+        """
+        conn = self._conn()
+        # Detect available columns so we can skip unknown filters gracefully
+        pragma = conn.execute("PRAGMA table_info(tp_requests)").fetchall()
+        columns = {row[1] for row in pragma}
+
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if start:
+            conditions.append("timestamp >= ?")
+            params.append(start)
+        if end:
+            conditions.append("timestamp <= ?")
+            params.append(end)
+        if model and "model" in columns:
+            conditions.append("model = ?")
+            params.append(model)
+        if status and "status" in columns:
+            conditions.append("status = ?")
+            params.append(status)
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        sql = f"SELECT * FROM tp_requests {where} ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
     def save_session(self, session: SessionStats, ended_at: Optional[datetime] = None) -> int:
         """Persist session summary and return the row id."""
         conn = self._conn()

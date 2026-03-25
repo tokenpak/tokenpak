@@ -192,7 +192,7 @@
     </div>
     
     <script>
-        const STATS_URL = '/stats/session';
+        const STATS_URL = '/stats';
         const REFRESH_INTERVAL = 30000;
         
         let costCtx, cacheCtx;
@@ -230,39 +230,41 @@
         }
         
         function updateDashboard(stats) {
-            if (!stats) return;
+            if (!stats || !stats.session) return;
             
-            const s = stats;
+            const s = stats.session;
             const now = new Date();
             
             // Request count
-            document.getElementById('request-count').textContent = formatNumber(s.session_requests || 0);
-            document.getElementById('request-errors').textContent = `${s.errors || 0} error${(s.errors || 0) !== 1 ? 's' : ''}`;
+            document.getElementById('request-count').textContent = formatNumber(s.requests);
+            document.getElementById('request-errors').textContent = `${s.errors} error${s.errors !== 1 ? 's' : ''}`;
             
             // Compression ratio
-            const savedTokens = s.tokens_saved || 0;
-            const totalInput = s.tokens_sent || 0;
+            const savedTokens = s.saved_tokens || 0;
+            const totalInput = s.sent_input_tokens || 0;
             const compressionRatio = totalInput > 0 ? savedTokens / totalInput : 0;
             document.getElementById('compression-ratio').textContent = formatPercent(compressionRatio);
-            document.getElementById('compression-info').textContent = `${formatNumber(savedTokens)} of ${formatNumber(totalInput)} tokens`;
+            document.getElementById('compression-info').textContent = `${formatNumber(savedTokens)} tokens compressed`;
             
             // Token savings
             document.getElementById('tokens-saved').textContent = formatNumber(savedTokens);
-            document.getElementById('tokens-info').textContent = `compression rate: ${(s.avg_savings_pct || 0).toFixed(1)}%`;
+            document.getElementById('tokens-info').textContent = `of ${formatNumber(totalInput)} sent`;
             
             // Cost
-            document.getElementById('cost').textContent = formatCost(s.total_cost || 0);
-            document.getElementById('cost-info').textContent = `${formatNumber(s.session_requests || 0)} requests`;
+            document.getElementById('cost').textContent = formatCost(s.cost);
+            document.getElementById('cost-info').textContent = `${s.requests} requests`;
             
-            // Uptime (approximation for cache health indicator)
-            const uptime = s.uptime_hours || 0;
-            document.getElementById('cache-hit-rate').textContent = formatPercent(Math.min(uptime / 24, 1));
-            document.getElementById('cache-info').textContent = `${uptime.toFixed(2)} hours uptime`;
+            // Cache hit rate
+            const cacheHits = s.cache_hits || 0;
+            const cacheMisses = s.cache_misses || 0;
+            const cacheHitRate = (cacheHits + cacheMisses) > 0 ? cacheHits / (cacheHits + cacheMisses) : 0;
+            document.getElementById('cache-hit-rate').textContent = formatPercent(cacheHitRate);
+            document.getElementById('cache-info').textContent = `${cacheHits} hits, ${cacheMisses} misses`;
             
             // Error rate
-            const errorRate = (s.session_requests || 0) > 0 ? (s.errors || 0) / (s.session_requests || 0) : 0;
+            const errorRate = s.requests > 0 ? s.errors / s.requests : 0;
             document.getElementById('error-rate').textContent = formatPercent(errorRate);
-            document.getElementById('error-info').textContent = `${s.errors || 0} of ${s.session_requests || 0} requests`;
+            document.getElementById('error-info').textContent = `${s.errors} of ${s.requests} requests`;
             
             // Style error card
             const errorCard = document.getElementById('error-card');
@@ -287,6 +289,7 @@
         }
         
         function updateCostChart(s) {
+            const costPerToken = s.requests > 0 ? s.cost / (s.sent_input_tokens + s.output_tokens) : 0;
             const ctx = document.getElementById('cost-chart');
             
             if (!costCtx) {
@@ -297,7 +300,8 @@
             
             // Simple bar chart
             const barWidth = 60;
-            const maxCost = Math.max(s.total_cost || 0.1, 0.1);
+            const barGap = 20;
+            const maxCost = Math.max(s.cost || 0.1, 0.1);
             const scale = 150 / maxCost;
             
             costCtx.fillStyle = '#0a0a0a';
@@ -313,7 +317,7 @@
             costCtx.stroke();
             
             // Bar
-            const barHeight = (s.total_cost || 0) * scale;
+            const barHeight = (s.cost || 0) * scale;
             const barX = 60;
             const barY = 170 - barHeight;
             costCtx.fillStyle = '#10b981';
@@ -325,7 +329,7 @@
             costCtx.textAlign = 'center';
             costCtx.fillText('Session', barX + barWidth / 2, 190);
             costCtx.textAlign = 'right';
-            costCtx.fillText(formatCost(s.total_cost || 0), 35, 175);
+            costCtx.fillText(formatCost(s.cost), 35, 175);
         }
         
         function updateCacheChart(s) {
@@ -337,10 +341,9 @@
                 cacheCtx = ctx.getContext('2d');
             }
             
-            const raw = s.tokens_raw || 0;
-            const sent = s.tokens_sent || 0;
-            const saved = raw - sent;
-            const total = raw || 1;
+            const hits = s.cache_hits || 0;
+            const misses = s.cache_misses || 0;
+            const total = hits + misses || 1;
             
             cacheCtx.fillStyle = '#0a0a0a';
             cacheCtx.fillRect(0, 0, ctx.width, ctx.height);
@@ -355,26 +358,26 @@
             cacheCtx.stroke();
             
             const barWidth = 50;
-            const sentHeight = (sent / total) * 150;
-            const savedHeight = (saved / total) * 150;
+            const hitsHeight = (hits / total) * 150;
+            const missHeight = (misses / total) * 150;
             
-            // Sent bar
-            cacheCtx.fillStyle = '#3b82f6';
-            cacheCtx.fillRect(60, 170 - sentHeight, barWidth, sentHeight);
-            
-            // Saved bar
+            // Hits bar
             cacheCtx.fillStyle = '#10b981';
-            cacheCtx.fillRect(130, 170 - savedHeight, barWidth, savedHeight);
+            cacheCtx.fillRect(60, 170 - hitsHeight, barWidth, hitsHeight);
+            
+            // Misses bar
+            cacheCtx.fillStyle = '#f59e0b';
+            cacheCtx.fillRect(130, 170 - missHeight, barWidth, missHeight);
             
             // Labels
             cacheCtx.fillStyle = '#71717a';
             cacheCtx.font = '12px sans-serif';
             cacheCtx.textAlign = 'center';
-            cacheCtx.fillText('Sent', 85, 190);
-            cacheCtx.fillText('Saved', 155, 190);
+            cacheCtx.fillText('Hits', 85, 190);
+            cacheCtx.fillText('Misses', 155, 190);
             cacheCtx.fillStyle = '#e4e4e7';
-            cacheCtx.fillText(formatNumber(sent), 85, 160);
-            cacheCtx.fillText(formatNumber(saved), 155, 160);
+            cacheCtx.fillText(hits, 85, 160);
+            cacheCtx.fillText(misses, 155, 160);
         }
         
         async function init() {

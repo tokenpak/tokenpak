@@ -248,8 +248,9 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
         _stats.record_breakpoint("tools_last", False)
 
     # Breakpoints 3 & 4: conversation midpoint and second-to-last assistant
+    # Only apply message breakpoints if a system prompt is present (no point caching messages without system)
     messages = data.get("messages")
-    if isinstance(messages, list) and messages:
+    if isinstance(messages, list) and messages and data.get("system"):
         messages_out = [dict(m) if isinstance(m, dict) else m for m in messages]
 
         midpoint_idx = len(messages_out) // 2

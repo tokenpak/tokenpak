@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {"role": "user", "content": "Explain quantum computing"},
+    {"role": "assistant", "content": "Quantum computing uses quantum mechanics principles. Unlike classical bits (0 or 1), quantum bits (qubits) can exist in superposition—being 0 and 1 simultaneously. This allows quantum computers to explore multiple solutions in parallel. Key concepts include superposition, entanglement, and interference. Entanglement links qubits so the state of one instantly affects others, regardless of distance. Interference allows quantum algorithms to amplify correct answers and cancel out wrong ones. Current quantum computers are small with high error rates, but they show promise for optimization, cryptography, and drug discovery problems."},
+    {"role": "user", "content": "What are practical applications?"},
+    {"role": "assistant", "content": "Near-term: Optimization (portfolio management, logistics), machine learning, drug simulation. Medium-term: Breaking RSA encryption (requires large quantum computers), database search acceleration. Long-term: Arbitrary polynomial-time problems. Current challenges: Decoherence (qubits lose quantum state), gate errors, lack of error correction."},
+    {"role": "user", "content": "Compare with classical computing"},
+    {"role": "assistant", "content": "Classical: Deterministic, reliable, mature. Good for everyday tasks. Quantum: Probabilistic, noisy, experimental. Only faster for specific problem classes. Hybrid approaches combine both—classical for setup, quantum for hard subproblems, classical for result interpretation. Neither replaces the other; they complement."},
+    {"role": "user", "content": "Future outlook?"},
+    {"role": "assistant", "content": "5-10 years: Error-corrected systems handling 100-1000 logical qubits. 10-20 years: Practical quantum advantage for real business problems. 20+ years: Scalable fault-tolerant quantum computers. Investment from IBM, Google, Amazon, Microsoft. Open research areas: topological qubits, photonic systems, trapped ions."},
+    {"role": "user", "content": "Best resources to learn?"},
+    {"role": "assistant", "content": "Books: 'Quantum Mechanics: The Theoretical Minimum' (Susskind). Online: MIT OpenCourseWare, QuTiP docs, IBM Quantum Network. Courses: Stanford online quantum computing, Coursera quantum mechanics intro. Hands-on: IBM Qiskit, Google Cirq simulators."}
+  ]
+}

@@ -5,6 +5,7 @@ from .collector import RequestStats, SessionStats, TelemetryCollector, get_colle
 from .demo import print_demo, run_demo
 from .footer import render_footer, render_footer_compact, render_footer_oneline
 from .replay import ReplayEntry, ReplayStore, get_replay_store
+from .export import TelemetryExporter
 from .storage import TelemetryStorage, get_telemetry_storage
 
 __all__ = [
@@ -16,6 +17,8 @@ __all__ = [
     # storage
     "TelemetryStorage",
     "get_telemetry_storage",
+    # export
+    "TelemetryExporter",
     # footer
     "render_footer",
     "render_footer_oneline",

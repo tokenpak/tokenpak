@@ -1,0 +1,68 @@
+{
+  "01_small_chat": {
+    "original_size": 384,
+    "compressed_size": 371,
+    "ratio": 0.0339,
+    "file": "regression/payloads/01_small_chat.json"
+  },
+  "02_large_chat": {
+    "original_size": 2325,
+    "compressed_size": 1695,
+    "ratio": 0.271,
+    "file": "regression/payloads/02_large_chat.json"
+  },
+  "03_code_block": {
+    "original_size": 1029,
+    "compressed_size": 136,
+    "ratio": 0.8678,
+    "file": "regression/payloads/03_code_block.json"
+  },
+  "04_system_prompt": {
+    "original_size": 1107,
+    "compressed_size": 232,
+    "ratio": 0.7904,
+    "file": "regression/payloads/04_system_prompt.json"
+  },
+  "05_tool_calls": {
+    "original_size": 1266,
+    "compressed_size": 1253,
+    "ratio": 0.0103,
+    "file": "regression/payloads/05_tool_calls.json"
+  },
+  "06_mixed_content": {
+    "original_size": 1111,
+    "compressed_size": 123,
+    "ratio": 0.8893,
+    "file": "regression/payloads/06_mixed_content.json"
+  },
+  "07_json_heavy": {
+    "original_size": 1473,
+    "compressed_size": 113,
+    "ratio": 0.9233,
+    "file": "regression/payloads/07_json_heavy.json"
+  },
+  "08_markdown": {
+    "original_size": 1402,
+    "compressed_size": 110,
+    "ratio": 0.9215,
+    "file": "regression/payloads/08_markdown.json"
+  },
+  "09_multilingual": {
+    "original_size": 1953,
+    "compressed_size": 134,
+    "ratio": 0.9314,
+    "file": "regression/payloads/09_multilingual.json"
+  },
+  "10_edge_cases": {
+    "original_size": 79,
+    "compressed_size": 66,
+    "ratio": 0.1646,
+    "file": "regression/payloads/10_edge_cases.json"
+  },
+  "11_repeated_content": {
+    "original_size": 514,
+    "compressed_size": 501,
+    "ratio": 0.0253,
+    "file": "regression/payloads/11_repeated_content.json"
+  }
+}
