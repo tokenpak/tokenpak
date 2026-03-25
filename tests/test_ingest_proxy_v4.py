@@ -17,10 +17,18 @@ from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
 # Add the proxy module to path
+import importlib.util
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Load proxy_v4 as isolated module (lives at repo root, not a package)
+_PROXY_V4_PATH = Path(__file__).parent.parent / "proxy_v4.py"
+_spec = importlib.util.spec_from_file_location("_test_pv4_ingest", _PROXY_V4_PATH)
+_pv4 = importlib.util.module_from_spec(_spec)
+sys.modules["_test_pv4_ingest"] = _pv4
+_spec.loader.exec_module(_pv4)
+
 # Import the ingest write function
-from proxy_v4 import _ingest_write_entry, INGEST_ENTRIES_DIR
+from _test_pv4_ingest import _ingest_write_entry, INGEST_ENTRIES_DIR
 
 
 class TestIngestSingleEntry:
