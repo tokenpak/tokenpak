@@ -246,6 +246,13 @@ def print_command_help(command_name: str) -> None:
         print(f"  {detail}")
         print()
 
+    examples = target.get("examples", [])
+    if examples:
+        print("  Examples:")
+        for ex in examples:
+            print(f"    $ {ex}")
+        print()
+
     aliases = target.get("aliases", [])
     if aliases:
         print(f"  Aliases  : {', '.join(aliases)}")
