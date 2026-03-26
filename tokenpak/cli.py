@@ -66,6 +66,7 @@ _COMMAND_GROUPS = {
     "Operations": [
         ("benchmark", "Run compression benchmarks"),
         ("calibrate", "Calibrate worker count for this host"),
+        ("diagnose", "Health checks: config, index, cache, proxy, permissions, disk"),
         ("doctor", "Run diagnostics"),
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
@@ -1428,6 +1429,12 @@ def _cmd_dashboard_public(args):
         webbrowser.open(f"{urls[0]}?token={token}")
 
 
+def cmd_diagnose(args):
+    """Run tokenpak diagnose — health check, index integrity, cache stats."""
+    from .cli_diagnose import cmd_diagnose as _run
+    _run(args)
+
+
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
     if getattr(args, "fleet", False):
@@ -1800,6 +1807,11 @@ def build_parser():
     p_cal.add_argument("--max-workers", type=int, default=8)
     p_cal.add_argument("--rounds", type=int, default=2)
     p_cal.set_defaults(func=cmd_calibrate)
+
+    p_diagnose = sub.add_parser("diagnose", help="Run health checks: config, vault index, cache, proxy, permissions, disk")
+    p_diagnose.add_argument("--json", dest="json_output", action="store_true", help="Output as machine-parseable JSON")
+    p_diagnose.add_argument("--verbose", action="store_true", help="Show extra detail for each check")
+    p_diagnose.set_defaults(func=cmd_diagnose)
 
     p_doctor = sub.add_parser("doctor", help="Run system diagnostics")
     p_doctor.add_argument("--fix", action="store_true", help="Auto-fix issues where possible")
@@ -3083,6 +3095,7 @@ def main():
         "preview",
         "aggregate",
         "requests",
+        "diagnose",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
