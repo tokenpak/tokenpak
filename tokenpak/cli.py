@@ -331,7 +331,7 @@ def cmd_setup(args):
     print(f"  3. Run: tokenpak savings   (see your ROI)")
     print()
     print("💡 Quick commands:")
-    print("  tokenpak start      — start the proxy")
+    print("  tokenpak serve      — start the proxy")
     print("  tokenpak stop       — stop the proxy")
     print("  tokenpak status     — check proxy health")
     print("  tokenpak savings    — view compression savings")
@@ -1508,7 +1508,7 @@ def cmd_doctor(args):
             else:
                 results["pass"] += 1
     else:
-        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak start)"))
+        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak serve)"))
         results["warn"] += 1
 
     # Check 5: Disk usage
@@ -1986,7 +1986,7 @@ def cmd_status(args):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+        print("  Run `tokenpak serve` or check if proxy_v4.py is running.")
         print()
 
     # Budget tracking (local DB)
@@ -3175,8 +3175,8 @@ def main():
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
                 "compress": "→ Compression happens automatically through the proxy.\n   Run `tokenpak demo` to see it in action.",
-                "run": "→ Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
-                "proxy": "→ Use `tokenpak start` to start the proxy on localhost:8766.",
+                "run": "→ Use `tokenpak serve` to start the proxy.",
+                "proxy": "→ Use `tokenpak serve` to start the proxy on localhost:8766.",
                 "kill": "→ Use `tokenpak stop` to stop the running proxy.",
                 "test": "→ Use `tokenpak demo` to test compression, or `tokenpak doctor` to test installation.",
                 "config": "→ Use `tokenpak config-check <file>` to validate config.\n   Or `tokenpak setup` to interactively create config.",
@@ -5339,7 +5339,7 @@ Question: How does TokenPak save tokens and money?"""
     print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
     print()
     print("  Try it with your own content:")
-    print("    tokenpak start        → start the proxy (zero-config)")
+    print("    tokenpak serve        → start the proxy (zero-config)")
     print("    tokenpak cost         → track your real savings")
     print("    tokenpak demo --list  → browse 50 built-in compression recipes")
     print()

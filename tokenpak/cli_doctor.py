@@ -147,7 +147,7 @@ def cmd_doctor(args):
                 print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK (health endpoint failed)"))
                 results["pass"] += 1
             else:
-                print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"))
+                print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak serve)"))
                 results["warn"] += 1
                 fixes_needed.append("start proxy")
         except Exception:

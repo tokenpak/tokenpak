@@ -7,6 +7,7 @@ from .session_capsules import (
     score_capsule_sections,
     serialize_capsule,
 )
+from .decision_memory import DecisionMemoryDB, DecisionRecord
 
 __all__ = [
     "REQUIRED_CAPSULE_SECTIONS",
@@ -14,4 +15,6 @@ __all__ = [
     "capsule_retrieval_score",
     "score_capsule_sections",
     "serialize_capsule",
+    "DecisionMemoryDB",
+    "DecisionRecord",
 ]

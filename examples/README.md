@@ -127,6 +127,40 @@ Expected output (shape):
 - No external API calls are required for execution.
 - Safe to run in CI or local dev environments.
 
+## Setting up API Keys
+
+TokenPak proxy passes your API calls to upstream providers (Anthropic, OpenAI, Google, etc.).
+
+### Option A: Proxy passes through your key (default)
+
+Set your API keys as environment variables before running these examples:
+
+```bash
+# For Anthropic/Claude
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# For OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# For Google Gemini
+export GEMINI_API_KEY="your-gemini-key"
+```
+
+Then in your Python code, use the proxy as the base URL:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    base_url="http://localhost:8766",  # TokenPak proxy
+    api_key="sk-ant-...",  # Your real API key
+)
+```
+
+### Option B: Proxy validates incoming requests (advanced)
+
+For multi-user or production setups, you can configure the proxy to require and validate API keys. See the main README for advanced proxy configuration.
+
 ## API docs
 
 - Project README: `../README.md`

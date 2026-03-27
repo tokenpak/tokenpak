@@ -1,4 +1,11 @@
 # tokenpak.agent.agentic — Agentic Layer
+from .memory_promoter import (
+    PROMOTION_RULES,
+    TIER_NAMES,
+    DEFAULT_TTL,
+    Lesson,
+    MemoryPromoter,
+)
 from .handoff import (
     DEFAULT_HANDOFF_DIR,
     REGISTERED_AGENTS,
@@ -27,6 +34,7 @@ from .prefetcher import (
     PredictivePrefetcher,
 )
 from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
+from .case_memory import CaseMemoryDB, CaseRecord
 
 __all__ = [
     "FileLockManager",
@@ -56,6 +64,13 @@ __all__ = [
     "ErrorNormalizer",
     "FailureSignatureDB",
     "MergeSuggestion",
+    "CaseMemoryDB",
+    "CaseRecord",
+    "PROMOTION_RULES",
+    "TIER_NAMES",
+    "DEFAULT_TTL",
+    "Lesson",
+    "MemoryPromoter",
 ]
 from .state_collector import (
     SCHEMA_VERSION,
