@@ -1,56 +1,203 @@
-# TokenPak Documentation
+---
+title: "README"
+created: 2026-03-24T19:05:55Z
+---
+# TokenPak — FREE Package Documentation
 
-This directory contains user-facing documentation for TokenPak.
-
-## Quick Start
-
-- **[Installation](./installation.md)** — Get TokenPak running in 5 minutes
-- **[Configuration](./configuration.md)** — Set up providers, cache, and logging
-- **[Usage Guide](./usage.md)** — Common commands and API examples
-
-## Troubleshooting
-
-**Something broken? [Start here →](./troubleshooting.md)**
-
-Common issues:
-- Connection refused → Check port binding
-- 401 Unauthorized → Verify API key
-- 502 Bad Gateway → Provider error
-- 429 Rate Limited → Rate limit hit
-- Config won't load → Syntax error
-- Docker exits → Check mounts & env vars
-- pip install fails → Python version
-- High latency → Cache hit rate
-- Cost data missing → Token counting
-- Logs not showing → Log level
-
-[See full troubleshooting guide](./troubleshooting.md) for all 10+ problem categories with step-by-step fixes.
-
-## Reference
-
-- **[API Reference](./api.md)** — HTTP endpoints and response formats
-- **[Error Codes](./error-codes.md)** — Full list of error codes and what they mean
-
-## Advanced
-
-- **[Architecture](./architecture.md)** — How TokenPak works internally
-- **[Performance Tuning](./performance.md)** — Cache optimization, rate limiting, compression
-- **[Deployment](./deployment.md)** — Docker, systemd, cloud platforms
+Welcome to TokenPak! This documentation covers the **free, open-source package** (`tokenpak` on PyPI).
 
 ---
 
-## Need Help?
+## What is TokenPak?
 
-If you encounter an issue:
+TokenPak is a **provider-agnostic proxy layer** that sits between your application and LLM providers (Anthropic, OpenAI, Google, etc.). It lets you write once and route flexibly, automatically count tokens across providers, and compress context to reduce API costs.
 
-1. **Check [Troubleshooting](./troubleshooting.md)** — Find your symptom and follow the fix steps
-2. **Search [GitHub Issues](https://github.com/suewu/tokenpak/issues)** — Your problem might already have a solution
-3. **File a new issue** — Include error message, config (sanitized), and reproduction steps
+### Key Capabilities (FREE tier)
+
+✅ **Smart Adapter System** — Convert between provider request/response formats seamlessly
+✅ **Token Counting** — Accurate token counts across all supported providers
+✅ **Fallback Chains** — Specify backup providers if your primary goes down
+✅ **Circuit Breaker** — Automatic recovery from rate limits and transient failures
+✅ **Streaming Support** — First-class support for streaming and non-streaming responses
+✅ **Compression Suite** — Document, instruction, and deduplication compression
+✅ **Error Handling** — Normalized error messages across all providers
+✅ **Cost Tracking** — Basic token usage and cost tallying
+✅ **Vault Integration** — Automatically inject and index local documents
+
+### What's NOT in FREE
+
+The PRO package adds:
+- Advanced compression algorithms (dict-based, code/log extraction)
+- Dashboard UI for cost management and real-time monitoring
+- Budget enforcement and alerts
+- Advanced agentic features (function calling optimization, retry orchestration)
+- Team/multi-user features
+
+**Goal:** Get the core proxy working, understand the patterns, and level up when you need advanced features.
 
 ---
 
-## Contributing
+## Quick Links
 
-Found a docs typo or want to improve this guide? Contributions are welcome! 
+- **[Architecture](./architecture.md)** — How TokenPak works under the hood
+- **[Installation Guide](./installation.md)** — Get TokenPak running in 5 minutes
+- **[Feature Matrix](./features.md)** — What's included in FREE vs PRO
+- **[Adapter Reference](./adapters.md)** — All 5 adapters with code examples
+- **[Error Handling Guide](./error-handling.md)** — Common issues and solutions
+- **[Quick Start](./QUICKSTART.md)** — 30-second working example
+- **[Observability](./observability.md)** — Monitor your proxy activity
 
-Submit a pull request or open an issue on GitHub.
+---
+
+## 30-Second Example
+
+```python
+from tokenpak import Client
+
+# 1. Create a client
+client = Client(
+    api_key="sk-...",  # Your API key
+    model="claude-opus-4-6"  # Default model
+)
+
+# 2. Make a request (routed through the proxy)
+response = client.messages.create(
+    model="claude-opus-4-6",
+    messages=[{"role": "user", "content": "What is 2+2?"}],
+    max_tokens=100
+)
+
+print(response.content[0].text)
+```
+
+That's it. Your request went through TokenPak's proxy, which handled:
+- Token counting
+- Cost tracking
+- Error handling
+- Adapter translation (if needed)
+
+---
+
+## How It Works (Conceptually)
+
+```
+┌─────────────┐
+│  Your Code  │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│  TokenPak Proxy (port 8000)          │
+│  ├─ Router (which model?)            │
+│  ├─ Adapter (format conversion)      │
+│  ├─ Compression (save tokens)        │
+│  ├─ Error handler (normalize errors) │
+│  └─ Telemetry (track costs)          │
+└──────┬───────────────────────────────┘
+       │
+       ├──────────────▶ OpenAI
+       ├──────────────▶ Anthropic (Claude)
+       ├──────────────▶ Google (Gemini)
+       └──────────────▶ Azure / Other
+```
+
+**What happens in a typical request:**
+
+1. **Your code** sends a message to the TokenPak proxy
+2. **Router** determines the best provider (default or custom logic)
+3. **Adapter** converts your request to the provider's format
+4. **Compression** trims unnecessary context (optional, free)
+5. **Request is sent** to the actual provider
+6. **Response** is converted back to your format
+7. **Telemetry** logs tokens, cost, and latency
+8. **Your code** gets a consistent response format
+
+---
+
+## Core Concepts
+
+### Adapters
+
+An **adapter** is a converter between your code's format and a provider's format. TokenPak includes 5 adapters:
+
+| Adapter | Converts To | Status |
+|---------|-------------|--------|
+| `anthropic` | Claude API format | ✅ |
+| `openai_chat` | OpenAI Chat format | ✅ |
+| `openai_responses` | OpenAI Responses (legacy) | ✅ |
+| `google` | Google Gemini format | ✅ |
+| `passthrough` | Raw JSON (debugging) | ✅ |
+
+See [Adapter Reference](./adapters.md) for examples.
+
+### Fallback Chains
+
+You can specify multiple providers in order of preference. If the primary provider fails, TokenPak automatically tries the next:
+
+```yaml
+providers:
+  - anthropic       # Try Claude first
+  - google          # Fall back to Gemini
+  - openai_chat     # Then OpenAI
+```
+
+See [Error Handling Guide](./error-handling.md) for circuit breaker logic.
+
+### Compression
+
+TokenPak can automatically reduce token usage by:
+
+- **Deduplication** — Remove repeated sections
+- **Document compression** — Summarize long documents
+- **Instruction table** — Compress repetitive instruction blocks
+- **Fingerprinting** — Reference cached content instead of re-sending
+
+All compression is **optional and safe** — results are always semantically equivalent.
+
+### Token Counting
+
+TokenPak counts tokens accurately for all providers:
+
+```python
+tokens = client.count_tokens(
+    model="claude-opus-4-6",
+    messages=[{"role": "user", "content": "..."}]
+)
+print(f"This message is {tokens} tokens")
+```
+
+---
+
+## Installation & Setup
+
+### 5-Minute Setup
+
+1. **Install:** `pip install tokenpak`
+2. **Set API key:** `export ANTHROPIC_API_KEY=sk-...`
+3. **Run:** `tokenpak serve`
+4. **Test:** curl or Python client (see [Installation Guide](./installation.md))
+
+---
+
+## Getting Help
+
+- **Questions?** → Check [Error Handling Guide](./error-handling.md) or the [Troubleshooting Guide](./troubleshooting.md)
+- **Found a bug?** → Open an issue on GitHub
+- **Want to contribute?** → PRs welcome!
+
+---
+
+## Next Steps
+
+- **New to TokenPak?** → Read [Installation Guide](./installation.md)
+- **Want to use a specific provider?** → See [Adapter Reference](./adapters.md)
+- **Setting up for production?** → Check [Error Handling](./error-handling.md) for circuit breakers
+- **Curious about features?** → [Feature Matrix](./features.md)
+
+---
+
+## License
+
+TokenPak (FREE) is distributed under the **MIT License**. Use it however you like.
+
+PRO package has additional licensing terms. See the PRO docs for details.

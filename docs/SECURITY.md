@@ -1,31 +1,48 @@
-# Security Policy
+# TokenPak Security Notes
 
-## Reporting a Vulnerability
-If you discover a security issue, please email **security@tokenpak.dev**. Do not open a public issue.
+## Header Security
 
-## Responsible Disclosure
-We follow a 90‑day disclosure timeline:
-1. Report received
-2. Acknowledge within 48 hours
-3. Patch targeted within 30 days
-4. Public disclosure 90 days after report
+### Server Version Disclosure (Fixed 2026-03-26)
 
-## Supported Versions
-- v1.0.x — security updates
-- v0.9.x — critical fixes only
-- Earlier — unsupported
+**Issue:** Default `BaseHTTPServer` emitted `Server: BaseHTTP/0.6 Python/3.12.3` in all responses, leaking runtime version.
 
-## Best Practices
+**Fix:** `ForwardProxyHandler.server_version = "TokenPak"` and `sys_version = ""` — response header is now `Server: TokenPak`.
 
-### For Users
-- Keep TokenPak updated
-- Treat prompts as sensitive data
-- Avoid logging raw prompts or compressed blocks
-- Use separate keys for dev/prod
+**Verification:**
+```
+HTTP/1.0 200 OK
+Server: TokenPak
+```
 
-### For Contributors
-- Never commit secrets or API keys
-- Validate all user inputs
-- Use parameterized database access
-- Keep dependencies current
+### Upstream Authorization Headers
 
+**Status:** ✅ Not forwarded to clients
+
+The proxy **strips** the following headers from upstream responses before relaying to the client:
+- `Authorization`
+- `X-Api-Key`
+- `Anthropic-Api-Key`
+- `Server`
+- `X-Powered-By`
+
+Outgoing requests to upstream also strip: `host`, `proxy-authorization`, `proxy-connection`, `connection`, `keep-alive`, `transfer-encoding`, `accept-encoding`.
+
+### Security Headers
+
+**`X-Content-Type-Options: nosniff`** is added to all proxied responses.
+
+### Internal Path Exposure
+
+The `/health` and `/stats` endpoints expose operational data (token counts, cost, circuit breaker state). These endpoints are **localhost-only** by design — the proxy binds to `127.0.0.1:8766` and is not externally accessible.
+
+## Auth Key Handling
+
+API keys are passed to upstream providers in outbound requests. They are:
+- Never logged
+- Never echoed in responses
+- Stored only in `~/.openclaw/.env` (not in config files or vault)
+
+## Known Limitations
+
+- No HTTPS on the proxy listener (localhost-only, low risk)
+- `/stats` exposes cost and token data (localhost-only, acceptable)
