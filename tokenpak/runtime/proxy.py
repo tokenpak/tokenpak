@@ -242,6 +242,9 @@ SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENA
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
+# Swap pressure monitoring
+SWAP_PRESSURE_THRESHOLD_MB: float = float(os.environ.get("TOKENPAK_SWAP_THRESHOLD_MB", "600"))
+
 # Tier 1 modules
 SEMANTIC_CACHE_ENABLED: bool = _cfg("features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool)
 PREFIX_REGISTRY_ENABLED: bool = _cfg("features.prefix_registry", False, "TOKENPAK_PREFIX_REGISTRY", bool)
@@ -1551,6 +1554,50 @@ _active_request_lock = threading.Lock()
 _active_requests_drained = threading.Event()
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Swap Pressure Monitoring
+# ---------------------------------------------------------------------------
+
+def get_swap_mb(pid: Optional[int] = None) -> float:
+    """Read VmSwap from /proc/{pid}/status and return swap usage in MB.
+
+    Returns 0.0 if the file is unavailable or VmSwap is not present.
+    """
+    if pid is None:
+        pid = os.getpid()
+    try:
+        status_path = f"/proc/{pid}/status"
+        with open(status_path) as fh:
+            for line in fh:
+                if line.startswith("VmSwap:"):
+                    # Format: "VmSwap:   1234 kB"
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        kb = float(parts[1])
+                        return round(kb / 1024.0, 2)
+    except (OSError, ValueError):
+        pass
+    return 0.0
+
+
+def check_swap_pressure(threshold_mb: float = SWAP_PRESSURE_THRESHOLD_MB) -> float:
+    """Check swap usage and log a warning if above threshold.
+
+    Returns the current swap usage in MB.
+    """
+    swap_mb = get_swap_mb()
+    if swap_mb > threshold_mb:
+        import logging
+        logging.getLogger(__name__).warning(
+            "⚠️  High swap pressure: %.1f MB (threshold %.0f MB) — "
+            "proxy may experience compression timeouts",
+            swap_mb,
+            threshold_mb,
+        )
+    return swap_mb
+
+
+# ---------------------------------------------------------------------------
 # Last Request Stats — captures most recent request for /stats/last
 # ---------------------------------------------------------------------------
 LAST_REQUEST = {
@@ -2083,6 +2130,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json(health_data)
             return
         if self.path == "/stats":
+            swap_mb = check_swap_pressure()
             self._send_json({
                 "session": SESSION,
                 "compilation_mode": COMPILATION_MODE,
@@ -2100,6 +2148,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "skeleton": {"enabled": SKELETON_ENABLED},
                 "shadow_reader": {"enabled": SHADOW_ENABLED},
                 "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
+                "swap_mb": swap_mb,
+                "swap_pressure_threshold_mb": SWAP_PRESSURE_THRESHOLD_MB,
                 "today": MONITOR.get_stats(),
                 "by_model": MONITOR.get_by_model(),
                 "recent": MONITOR.recent(10),
