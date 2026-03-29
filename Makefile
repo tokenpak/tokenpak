@@ -46,6 +46,9 @@ install:  ## Install tokenpak (non-editable, no dev extras)
 test:  ## Run full test suite
 	$(PYTEST) tests/ -q --tb=short
 
+test-quick:  ## Run quick audit subset (<30s, no live proxy needed)
+	$(PYTEST) -m quick -q --tb=short
+
 test-fast:  ## Run tests, stop on first failure
 	$(PYTEST) tests/ -q --tb=short -x
 
