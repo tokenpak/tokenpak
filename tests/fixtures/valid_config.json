@@ -1,0 +1,8 @@
+{
+  "port": 8766,
+  "mode": "hybrid",
+  "compression": {
+    "enabled": true,
+    "max_chars": 120
+  }
+}

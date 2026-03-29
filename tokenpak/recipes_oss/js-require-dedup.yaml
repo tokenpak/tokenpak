@@ -1,0 +1,14 @@
+name: js-require-dedup
+category: javascript
+description: Remove duplicate CommonJS require() calls.
+pattern:
+  match: extension
+  extensions:
+  - .js
+  - .cjs
+  keywords:
+  - require(
+action:
+  operations:
+  - type: js_require_dedup
+  compression_hint: 0.05

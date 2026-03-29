@@ -30,7 +30,7 @@ from .keys import (
     generate_keypair,
     sign_license,
 )
-from .validator import LicenseValidator
+from tokenpak.infrastructure.license_validation import LicenseValidator
 
 # ─────────────────────────────────────────────
 # Helpers

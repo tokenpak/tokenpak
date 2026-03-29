@@ -1,0 +1,11 @@
+name: cp-base64-truncation
+category: common_patterns
+description: Truncate base64-encoded content strings to first 64 chars + ellipsis.
+pattern:
+  match: any
+action:
+  operations:
+  - type: regex_replace
+    pattern: (?<=["\s:,])([A-Za-z0-9+/]{64,}={0,2})(?=["\s,}])
+    replacement: \1[:64]...
+  compression_hint: 0.15

@@ -1,0 +1,13 @@
+name: md-table-compression
+category: markdown
+description: Remove empty/whitespace-only columns from Markdown tables.
+pattern:
+  match: extension
+  extensions:
+  - .md
+  - .markdown
+  - .mdx
+action:
+  operations:
+  - type: md_prune_empty_table_columns
+  compression_hint: 0.12

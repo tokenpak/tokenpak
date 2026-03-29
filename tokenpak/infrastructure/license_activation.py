@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from .validator import (
+from tokenpak.infrastructure.license_validation import (
     LicenseStatus,
     LicenseTier,
     LicenseValidator,
