@@ -11,9 +11,8 @@ Validates config dict fields on proxy startup:
 
 import os
 import tempfile
-import pytest
-from pathlib import Path
-from tokenpak.config_validator import ConfigValidator, ConfigValidationError
+
+from tokenpak.config_validator import ConfigValidationError, ConfigValidator
 
 
 class TestConfigValidationError:
@@ -430,7 +429,7 @@ class TestConfigValidatorValidateFile:
             import json
             json.dump({"api_keys": {"anthropic": "sk-test"}}, f)
             f.flush()
-            
+
             try:
                 validator = ConfigValidator()
                 result = validator.validate_file(f.name)
@@ -449,7 +448,7 @@ class TestConfigValidatorValidateFile:
         with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
             f.write("{invalid json}")
             f.flush()
-            
+
             try:
                 validator = ConfigValidator()
                 result = validator.validate_file(f.name)
@@ -463,7 +462,7 @@ class TestConfigValidatorValidateFile:
             import json
             json.dump({"api_keys": "not a dict"}, f)
             f.flush()
-            
+
             try:
                 validator = ConfigValidator()
                 result = validator.validate_file(f.name)

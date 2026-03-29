@@ -3,9 +3,8 @@
 Covers: config_validator.py — configuration validation, error reporting.
 """
 
-import pytest
 
-from tokenpak.config_validator import ConfigValidationError, ConfigValidator
+from tokenpak.config_validator import ConfigValidator
 
 
 class TestBasicConfigValidation:
@@ -81,14 +80,14 @@ class TestPortValidation:
     def test_port_out_of_range(self):
         """Ports outside 1024-65535 are rejected."""
         validator = ConfigValidator()
-        
+
         # Too low
         errors_low = validator.validate({
             "api_keys": {"anthropic": "key"},
             "port": 100
         })
         assert any("port" in str(e.field).lower() for e in errors_low)
-        
+
         # Too high
         errors_high = validator.validate({
             "api_keys": {"anthropic": "key"},

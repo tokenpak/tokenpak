@@ -3,8 +3,9 @@
 Covers: schemas/artifact.py, schemas/chunk.py, etc. — schema validation, serialization.
 """
 
-import pytest
 from dataclasses import asdict, is_dataclass
+
+import pytest
 
 
 class TestSchemaStructures:

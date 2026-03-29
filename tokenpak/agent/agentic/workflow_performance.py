@@ -9,11 +9,11 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from workflow import WorkflowManager, WorkflowStatus, WorkflowRecord
+from workflow import WorkflowRecord, WorkflowStatus
 
 DEFAULT_STATS_FILE = Path(os.path.expanduser("~/.tokenpak/workflow_stats.json"))
 
@@ -247,7 +247,7 @@ def record_workflow_execution(
 ):
     """
     Convenience function to record a completed workflow execution.
-    
+
     Args:
         workflow: The completed WorkflowRecord
         tokens_used: Total tokens used during execution

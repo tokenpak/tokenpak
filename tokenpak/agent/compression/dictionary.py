@@ -32,12 +32,11 @@ can be exported via :meth:`suggest_entries`.
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 _DEFAULT_DICT_PATH = Path.home() / ".tokenpak" / "compression_dict.json"
 

@@ -276,7 +276,7 @@ def _detect_intent(query_lower: str, context_lower: str, file_paths: List[str]) 
         if has_code_signal:
             scores[IntentClass.CODE_Q] += 2.0
 
-    # File path alone signals CODE_Q  
+    # File path alone signals CODE_Q
     if _FILE_PATH_PATTERN.search(query_lower) and not (scores[IntentClass.CODE_EDIT] > 0 or scores[IntentClass.DOC_EDIT] > 0):
         scores[IntentClass.CODE_Q] += 1.0
 

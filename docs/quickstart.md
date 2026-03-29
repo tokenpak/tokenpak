@@ -1,100 +1,89 @@
-# TokenPak Quick Start Guide
-
-Get up and running with the TokenPak Python SDK in 5 minutes.
-
----
+# TokenPak Python SDK: Quick Start Guide
 
 ## What is TokenPak?
 
-TokenPak is a context compression library for LLM-powered applications. When your prompts grow large — chat histories, document dumps, multi-turn dialogues — TokenPak compresses them intelligently before they hit the model. The result: 40–60% fewer tokens, lower API costs, and no meaningful loss of context.
+TokenPak is a context compression library for LLM agents and applications. It reduces the size of long context blocks by 40-60% while preserving semantic meaning, allowing you to stay within token budgets without sacrificing information. Works with any LLM provider (OpenAI, Anthropic, Google, local models, etc.).
 
-It works with any LLM provider (Anthropic, OpenAI, Gemini, etc.) and drops into any existing Python stack. Compression is deterministic: same input always produces the same output, which means it's safe to cache and predictable in production.
+## Installation
 
----
-
-## Install
+Install TokenPak via pip:
 
 ```bash
 pip install tokenpak
 ```
 
-For more accurate token counting (recommended for production):
+If you need ML-based compression features, install the full extras:
 
 ```bash
-pip install tokenpak[tiktoken]
+pip install tokenpak[ml,tiktoken]
 ```
 
-> Requires Python 3.8+. See [install-guide.md](./install-guide.md) for virtual env setup and troubleshooting.
-
----
-
 ## Basic Example
+
+Here's a minimal 5-minute example to get you started:
 
 ```python
 from tokenpak import HeuristicEngine
 from tokenpak.engines.base import CompactionHints
 
-# Your long context (could be chat history, docs, instructions, etc.)
+# Your long context (could be from a file, API, chat history, etc.)
 context = """
-    The TokenPak library provides a comprehensive solution for managing token budgets
-    in large language model applications. It includes multiple compression strategies,
-    caching mechanisms, and telemetry tools. The library is designed to be easy to use
-    while providing powerful functionality for advanced users. By compressing content,
-    you can fit more information into fewer tokens, reducing API costs and improving
-    response quality. The heuristic engine uses rule-based text processing to remove
-    redundant content while preserving the most important information.
+Long document with 10,000+ tokens...
+[Your actual long text here]
 """
 
-# Initialize the engine
+# Create a compression engine
 engine = HeuristicEngine()
 
-# Compress with a token budget
-hints = CompactionHints(target_tokens=100)
+# Define a target budget (tokens)
+hints = CompactionHints(target_tokens=2048)
+
+# Compress the context
 compressed = engine.compact(context, hints)
 
-# Use the compressed context in your prompt
-question = "What does TokenPak do?"
-prompt = f"Context:\n{compressed}\n\nQuestion: {question}"
-print(prompt)
+# Use the compressed result in your LLM prompt
+prompt = f"""
+Context (compressed):
+{compressed}
+
+Question: What are the key points?
+"""
+
+print(f"Original: {len(context.split())} words")
+print(f"Compressed: {len(compressed.split())} words")
+print(f"Savings: {100 * (1 - len(compressed) / len(context)):.1f}%")
 ```
-
-To compress without a specific token target (uses default heuristics):
-
-```python
-compressed = engine.compact(context)
-```
-
----
 
 ## What Just Happened?
 
-Here's what TokenPak did under the hood:
-
-1. **Tokenization** — The engine estimated token counts for each sentence and block in your context.
-2. **Block-based compression** — Content was split into semantic blocks (sentences, paragraphs, code chunks). Each block was scored by information density.
-3. **Heuristic filtering** — Low-signal sentences (filler, redundant restatements, over-explained comments) were dropped. High-value content — code, headers, list items, key facts — was preserved.
-4. **Deterministic output** — Given the same input and the same hints, you'll always get the same compressed output. No randomness, no drift.
-
-The net result: fewer tokens sent to the model, with the substance of your context intact.
-
----
+1. **Tokenization:** TokenPak tokenizes your input using tiktoken or a compatible tokenizer.
+2. **Block-based compression:** The heuristic engine identifies important blocks (headers, summaries, semantic boundaries) and removes or condenses less critical content.
+3. **Deterministic output:** The same input always produces the same compressed output, making it safe for reproducible LLM workflows.
+4. **Budget compliance:** The engine respects your target token count while prioritizing information density.
 
 ## Common Use Cases
 
-- **Chat history compression** — Trim multi-turn conversation logs before appending to a new prompt
-- **Document retrieval augmentation (RAG)** — Compress retrieved chunks before injecting into context
-- **Multi-turn dialogue context** — Keep system context lean as conversations grow
-- **Code review tools** — Strip redundant comments from large files before analysis
+- **Chat history compression** — Keep long conversation threads within token limits while preserving context
+- **Document retrieval augmentation** — Compress search results before feeding them to your LLM
+- **Multi-turn dialogue** — Maintain context across many exchanges without hitting rate limits
+- **Batch processing** — Process large document collections with a fixed token budget per item
 
----
+## Verify Your Install
+
+Test that everything is working:
+
+```bash
+python3 -c "from tokenpak import HeuristicEngine; print('TokenPak installed successfully!')"
+```
 
 ## Next Steps
 
-- 📖 [Full API Reference](./api-reference.md) — All classes, methods, and parameters
-- ⚙️ [Configuration Options](./compression.md) — Tune compression aggressiveness, preserve lists/code, set custom budgets
-- 🧪 [Advanced Examples](../examples/README.md) — Async compression, streaming, LangChain integration, FastAPI middleware
-- 🔧 [Install Guide](./install-guide.md) — Virtual envs, extras, and troubleshooting
+- **[Installation Guide](./install-guide.md)** — Detailed setup, Python versions, virtual environments
+- **[API Reference](./api-reference.md)** — Full API documentation and all available options
+- **[Compression Options](./compression.md)** — Advanced configuration and custom engines
+- **[Examples](./examples/README.md)** — Real-world examples and patterns
+- **[CLI Reference](./cli-reference.md)** — Command-line tools for compression tasks
 
----
+## Support
 
-> **Tip:** TokenPak also ships a proxy server (`tokenpak serve`) that transparently compresses requests to any OpenAI-compatible endpoint. No code changes needed — see the [CLI Reference](./cli-reference.md) for details.
+For questions, issues, or feature requests, visit the [TokenPak GitHub repository](https://github.com/tokenpak/tokenpak).

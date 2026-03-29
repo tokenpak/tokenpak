@@ -32,23 +32,23 @@ Quick start::
     print(block_id)   # "spfx-3a7f1c..."
 """
 
-from .stable_cache import StableCache
-from .volatile_cache import VolatileCache
+from .prefix_registry import (
+    StablePrefixRegistry,
+    canonicalize,
+    fingerprint,
+    get_registry,
+    reset_registry,
+)
 from .registry import CacheRegistry
-from .telemetry import CacheMetrics, CacheTelemetryCollector, get_collector, reset_collector
 from .semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,
     SemanticCacheEntry,
     SemanticCacheLookup,
 )
-from .prefix_registry import (
-    StablePrefixRegistry,
-    fingerprint,
-    canonicalize,
-    get_registry,
-    reset_registry,
-)
+from .stable_cache import StableCache
+from .telemetry import CacheMetrics, CacheTelemetryCollector, get_collector, reset_collector
+from .volatile_cache import VolatileCache
 
 __all__ = [
     "StableCache",

@@ -47,6 +47,7 @@ def register_preview(subparsers):
 def cmd_preview(args):
     """Run compression dry-run and show preview."""
     import sys
+
     from tokenpak.compression.core import Compressor
     from tokenpak.formatting import OutputFormatter, OutputMode
 

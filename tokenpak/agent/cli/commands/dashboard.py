@@ -21,14 +21,11 @@ from __future__ import annotations
 
 import json
 import os
-import socket
-import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 
 PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
 AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
@@ -163,8 +160,8 @@ def collect_local_data() -> Dict[str, Any]:
 
 def collect_fleet_data() -> List[Dict[str, Any]]:
     """Gather data from all fleet agents via SSH."""
-    import subprocess
     import concurrent.futures
+    import subprocess
 
     if not FLEET_CONFIG_FILE.exists():
         return [collect_local_data()]
@@ -219,11 +216,11 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
 def _render_dashboard(data: Dict[str, Any]) -> None:
     """Print a single dashboard frame using rich."""
     try:
-        from rich.console import Console
-        from rich.table import Table
-        from rich.panel import Panel
-        from rich.columns import Columns
         from rich import box
+        from rich.columns import Columns
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
         from rich.text import Text
     except ImportError:
         _render_plain(data)
@@ -289,9 +286,9 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
 def _render_fleet_dashboard(fleet_data: List[Dict[str, Any]]) -> None:
     """Print fleet-wide summary."""
     try:
+        from rich import box
         from rich.console import Console
         from rich.table import Table
-        from rich import box
     except ImportError:
         for d in fleet_data:
             _render_plain(d)

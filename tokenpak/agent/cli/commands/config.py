@@ -95,6 +95,7 @@ def run_set(key: str, value: str) -> None:
 
 try:
     import click
+    from .validate_config import validate_config_cmd
 
     @click.group("config")
     def config_cmd():
@@ -113,6 +114,9 @@ try:
     def config_set_cmd(key, value):
         """Set a persistent config value. Example: tokenpak config set stats_footer true"""
         run_set(key, value)
+
+    # Add validate subcommand
+    config_cmd.add_command(validate_config_cmd)
 
     # Keep bare `tokenpak config` (no subcommand) as an alias for show
     @config_cmd.result_callback()

@@ -16,8 +16,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -53,7 +53,7 @@ DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
 @dataclass
 class Lesson:
     """A learned lesson with promotion tracking."""
-    
+
     lesson_id: str
     content: str                    # The actual lesson text
     tier: int                       # 1-4
@@ -192,7 +192,7 @@ class MemoryPromoter:
 
         # Check promotion gates
         success_rate = lesson.success_rate()
-        
+
         if lesson.tier == 1 and self._check_tier1_to_2(lesson):
             self._promote(lesson, 2)
             return True
@@ -202,7 +202,7 @@ class MemoryPromoter:
         elif lesson.tier == 3 and self._check_tier3_to_4(lesson):
             self._promote(lesson, 4)
             return True
-        
+
         return False
 
     def _check_tier1_to_2(self, lesson: Lesson) -> bool:
@@ -296,7 +296,7 @@ class MemoryPromoter:
         total_lessons = len(self.lessons)
         for lesson in self.lessons.values():
             by_tier[lesson.tier] += 1
-        
+
         return {
             "total_lessons": total_lessons,
             "by_tier": by_tier,

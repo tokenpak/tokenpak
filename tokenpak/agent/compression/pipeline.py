@@ -11,8 +11,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from .dedup import dedup_messages
 from .alias_compressor import AliasCompressor, AliasResult
+from .dedup import dedup_messages
 from .directives import DirectiveApplier
 from .instruction_table import InstructionTable
 from .segmentizer import Segment, segmentize

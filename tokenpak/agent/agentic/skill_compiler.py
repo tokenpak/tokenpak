@@ -177,7 +177,7 @@ class SkillStore:
 
     def _build_macro_steps(self, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert extracted skill steps to MacroStep-compatible format.
-        
+
         Handles both formats:
         - MacroStep format: {'name': ..., 'cmd': ...}
         - Tool format: {'tool': ..., 'args': ...}

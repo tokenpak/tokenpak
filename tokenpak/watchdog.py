@@ -9,16 +9,13 @@ Monitors proxy health and automatically fixes common issues:
 - Logs to ~/.tokenpak/watchdog.log
 """
 
-import os
+import json
+import logging
+import subprocess
 import sys
 import time
-import json
-import subprocess
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-
+from typing import Dict, List
 
 # Configuration
 PROXY_PORT = 8766

@@ -96,8 +96,9 @@ def _load_config(config_path: str) -> Dict[str, Any]:
 
     # Try YAML if pyyaml is available
     try:
-        import yaml
         from typing import cast as _cast_t
+
+        import yaml
         return _cast_t(Dict[str, Any], yaml.safe_load(text))
     except ImportError:
         pass

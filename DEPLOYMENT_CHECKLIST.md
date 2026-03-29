@@ -1,183 +1,224 @@
 # TokenPak v1.0 Deployment Checklist
 
-> **Purpose:** Step-by-step release gate for TokenPak v1.0.0. Complete each section in order. Check off items as you go. Don't skip staging — release day has high cognitive load and this list exists so your brain doesn't have to.
+**Release Date:** TBD  
+**Release Manager:** [Name]  
+**Last Updated:** 2026-03-22
+
+This checklist ensures a smooth, risk-free deployment of TokenPak v1.0 to production.
 
 ---
 
-## Phase 1 — Pre-Release (1–2 days before) · ~45 min
+## Pre-Release (1-2 days before)
+**Estimated time: ~45 minutes**
 
-### Code Quality
-- [ ] All tests pass with exit code 0
+- [ ] All critical P0/P1 tests passing
   ```bash
-  cd ~/tokenpak && pytest tests/ -v --tb=short
+  cd ~/Projects/tokenpak && pytest tests/ -v --tb=short
+  # Expected exit code: 0
   ```
-- [ ] No ruff lint errors
+
+- [ ] Code linting passes (ruff, mypy)
   ```bash
-  ruff check tokenpak/
+  ruff check . && mypy tokenpak/
   ```
-- [ ] No obvious security issues
+
+- [ ] Security audit clean (bandit)
   ```bash
-  pip audit
   bandit -r tokenpak/ -ll
   ```
-- [ ] Dependencies up to date (no known CVEs blocking release)
+
+- [ ] Dependencies up to date
   ```bash
-  pip list --outdated
+  pip audit
+  # No critical vulnerabilities
   ```
 
-### Documentation
-- [ ] `CHANGELOG.md` — merge `[Unreleased]` into `[1.0.0]` section, date it
-- [ ] `RELEASE_NOTES_v1.0.md` — final review, no TODOs remaining
-- [ ] `README.md` — version badges, install command, and feature list are accurate
-- [ ] `DEPLOYMENT.md` — no broken commands or stale config examples
-- [ ] No `TODO` stubs left in any `.md` file
-  ```bash
-  grep -r "TODO" docs/ *.md --include="*.md" | grep -v CHANGELOG
-  ```
+- [ ] Documentation is complete (no TODO stubs)
+  - [ ] README.md reviewed
+  - [ ] docs/ folder has all sections
+  - [ ] API documentation generated
+  - [ ] Quickstart guide is clear
 
-### Version Consistency Check
-- [ ] `pyproject.toml` version is `1.0.0`
-  ```bash
-  grep '^version' pyproject.toml
-  ```
-- [ ] `tokenpak/__init__.py` `__version__` matches
-  ```bash
-  python -c "import tokenpak; print(tokenpak.__version__)"
-  ```
-- [ ] Release notes version matches pyproject.toml
+- [ ] Changelog finalized and reviewed
+  - [ ] `CHANGELOG_v1.0.md` lists all features
+  - [ ] Breaking changes clearly marked
+  - [ ] Migration guide (if needed) provided
+
+- [ ] Release notes match actual feature list
+  - [ ] Cross-check against merged PRs
+  - [ ] No exaggerated claims
 
 ---
 
-## Phase 2 — Staging Dry Run (24 hours before) · ~30 min
+## Staging Deployment (24 hours before)
+**Estimated time: ~30 minutes**
 
-- [ ] Start proxy in test mode, confirm it boots clean
+- [ ] Deploy to staging environment
   ```bash
-  tokenpak serve --port 8765 --config tokenpak.yaml
+  # (if staging exists)
+  cd /staging/tokenpak && git pull origin v1.0.0
   ```
-- [ ] Run smoke test against local staging proxy
-  ```bash
-  curl -s http://localhost:8765/health | python -m json.tool
-  ```
-- [ ] Verify all three provider adapters respond (may require live API keys)
-  ```bash
-  # OpenAI
-  curl -X POST http://localhost:8765/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"ping"}]}'
 
-  # Anthropic
-  curl -X POST http://localhost:8765/v1/chat/completions \
+- [ ] Run smoke tests against staging
+  ```bash
+  curl -X POST http://staging:8766/v1/compress \
     -H "Content-Type: application/json" \
-    -d '{"model":"claude-haiku-3","messages":[{"role":"user","content":"ping"}]}'
+    -d '{"text": "sample prompt", "format": "compact"}'
+  # Expected: 200 OK with compression result
+  ```
 
-  # Google
-  curl -X POST http://localhost:8765/v1/chat/completions \
-    -H "Content-Type: application/json" \
-    -d '{"model":"gemini-2.0-flash","messages":[{"role":"user","content":"ping"}]}'
-  ```
-- [ ] Test fallback chain — force a provider failure, confirm fallback activates
-- [ ] Check error logs — no new warnings or tracebacks at startup
+- [ ] Load test with 10x expected traffic
   ```bash
-  tokenpak serve --log-level debug 2>&1 | head -50
+  ab -n 1000 -c 50 http://staging:8766/health
+  # Should sustain <100ms latency at p99
   ```
-- [ ] Load test — simulate burst traffic
+
+- [ ] Check error logs for new warnings
   ```bash
-  # 50 concurrent requests, 100 total
-  ab -n 100 -c 50 http://localhost:8765/health
+  tail -100 /var/log/tokenpak/error.log | grep WARN
+  ```
+
+- [ ] Verify provider adapters respond
+  - [ ] OpenAI adapter health check
+  - [ ] Anthropic adapter health check
+  - [ ] Google adapter health check
+
+- [ ] Test fallback chains (provider A fails → use provider B)
+  ```bash
+  # Kill OpenAI endpoint, verify fallback to Anthropic
+  # Should not error; should route to fallback
   ```
 
 ---
 
-## Phase 3 — PyPI Release · ~20 min
+## PyPI Release
+**Estimated time: ~20 minutes**
 
-- [ ] Create and push Git tag
+- [ ] Version bumped in `pyproject.toml`
   ```bash
-  git tag v1.0.0
+  # Should read: version = "1.0.0"
+  grep "^version" pyproject.toml
+  ```
+
+- [ ] Git tag created
+  ```bash
+  git tag -a v1.0.0 -m "Release TokenPak v1.0.0"
   git push origin v1.0.0
   ```
-- [ ] Build distribution wheel + sdist
+
+- [ ] Build wheel
   ```bash
   python -m build
-  ls -lh dist/
+  ls -lh dist/tokenpak-1.0.0-py3-none-any.whl
   ```
-- [ ] Verify wheel contents look right (no accidental files included)
+
+- [ ] Verify wheel contents
   ```bash
-  unzip -l dist/tokenpak-1.0.0-py3-none-any.whl | head -40
+  unzip -l dist/tokenpak-1.0.0-py3-none-any.whl | head -30
+  # Should contain: tokenpak/, docs/, README.md, etc.
   ```
-- [ ] Test install from wheel in a clean venv
-  ```bash
-  python -m venv /tmp/tp-release-test
-  source /tmp/tp-release-test/bin/activate
-  pip install dist/tokenpak-1.0.0-py3-none-any.whl
-  tokenpak --version
-  deactivate
-  ```
+
 - [ ] Upload to PyPI
   ```bash
-  twine upload dist/tokenpak-1.0.0*
+  twine upload dist/tokenpak-1.0.0-py3-none-any.whl
+  # Watch for: "Uploading tokenpak-1.0.0-py3-none-any.whl (XXX)"
   ```
-- [ ] Verify PyPI listing: https://pypi.org/project/tokenpak/
-  - Version shows `1.0.0`
-  - Description renders correctly
-  - Install command works: `pip install tokenpak==1.0.0`
-- [ ] Create GitHub Release at `v1.0.0` tag
-  - Title: `TokenPak v1.0.0 — First Stable Release`
-  - Body: paste `RELEASE_NOTES_v1.0.md`
-  - Attach wheel as a binary artifact
+
+- [ ] Verify PyPI page
+  - [ ] https://pypi.org/project/tokenpak/ shows v1.0.0
+  - [ ] Download links working
+  - [ ] Readme renders correctly
+
+- [ ] Create GitHub release
+  - [ ] Tag: `v1.0.0`
+  - [ ] Title: "TokenPak v1.0.0 — Production Ready"
+  - [ ] Body: Full `CHANGELOG_v1.0.md` content
+  - [ ] Attach: `dist/tokenpak-1.0.0-py3-none-any.whl`
 
 ---
 
-## Phase 4 — Post-Release Watch (first 24 hours) · ~15 min active
+## Post-Release (first 24 hours)
+**Estimated time: ~15 minutes per check**
 
-- [ ] Monitor PyPI downloads (check next day): https://pypistats.org/packages/tokenpak
-- [ ] Check GitHub Issues for `[bug]` labels — any "upgrade broke my code" reports?
-- [ ] Search PyPI/GitHub for integration breakage (search `tokenpak` on GitHub)
-- [ ] Confirm docs site reflects new version (if hosted separately)
-- [ ] Send release announcement
-  - Tweet / X: short + punchy, link to PyPI
-  - Email beta testers / supporters with release notes
-  - Post in relevant Discord/Slack communities
-
----
-
-## Phase 5 — Ongoing (weekly, first month) · ~30 min/week
-
-- [ ] Review open GitHub Issues each Monday
-- [ ] Triage bug reports: P0 (crash) → hotfix same day, P1 (data loss) → within 48h
-- [ ] Track performance in production: median latency, compression ratio, error rate
+- [ ] Monitor PyPI downloads
   ```bash
-  tokenpak stats --since 7d
+  # Check after 2 hours, 12 hours, 24 hours
+  curl https://pepy.tech/api/v2/projects/tokenpak | grep downloads
   ```
-- [ ] Plan v1.0.1 patch if any critical bugs found — don't let them sit
-- [ ] Solicit structured feedback from early adopters (GitHub Discussions or form)
+
+- [ ] Check GitHub issues for "upgrade broke my code" reports
+  - [ ] Filter by label: `regression`
+  - [ ] Response time: < 4 hours for P0 issues
+
+- [ ] Monitor error logs for new failure patterns
+  ```bash
+  tail -f /var/log/tokenpak/error.log
+  # Watch for: ImportError, AttributeError, unexpected exceptions
+  ```
+
+- [ ] Verify documentation site updated
+  - [ ] https://tokenpak.dev shows v1.0.0
+  - [ ] All links working
+
+- [ ] Announce release
+  - [ ] Tweet from @tokenpak account (if exists)
+  - [ ] Email beta testers / early adopters
+  - [ ] Post in relevant communities (HN, Reddit, Discord)
+
+- [ ] Provide support for common questions
+  - [ ] Have upgrade FAQ ready
+  - [ ] Monitor Discord/Slack for help requests
 
 ---
 
-## Emergency Rollback (if PyPI release is broken)
+## Ongoing (weekly for first month)
+**Estimated time: ~30 minutes/week**
+
+- [ ] Review bug reports and triage
+  - [ ] P0/critical: assign immediately
+  - [ ] P1/high: assign within 24 hours
+  - [ ] P2/medium: backlog
+
+- [ ] Plan v1.0.1 patch release if critical bugs found
+  - [ ] Test fix against issue reproduction case
+  - [ ] Update changelog for patch
+  - [ ] Repeat PyPI upload process
+
+- [ ] Track performance metrics
+  - [ ] Compression ratio (target: 50%+ reduction)
+  - [ ] Latency at p99 (target: <100ms)
+  - [ ] Error rate (target: <0.1%)
+
+- [ ] Solicit user feedback
+  - [ ] GitHub Discussions: "What's working? What's not?"
+  - [ ] Collect feature requests
+  - [ ] Plan v1.1 based on feedback
+
+---
+
+## Emergency Rollback (if critical issue found post-release)
+
+If a critical bug is discovered after release:
 
 ```bash
-# Yank the broken release (hides it from pip install, doesn't delete)
-twine upload --skip-existing dist/tokenpak-0.9.0*  # republish last stable
-# OR use PyPI web UI: Manage → Yank version
+# Remove from PyPI (requires PyPI admin access)
+pip index versions tokenpak
+
+# Yank v1.0.0 release (mark as unavailable)
+# (contact PyPI support or use twine)
+
+# Create hotfix on main
+git checkout main
+git pull origin main
+# Fix the bug
+git add -A && git commit -m "fix: critical issue in v1.0.0"
+git tag -a v1.0.1 -m "Hotfix for v1.0.0"
+
+# Re-upload
+python -m build && twine upload dist/tokenpak-1.0.1-py3-none-any.whl
 ```
 
-> **Note:** PyPI doesn't allow re-uploading the same version. If `1.0.0` is broken, you must release `1.0.1`.
-
 ---
 
-## Quick Reference
-
-| Action | Command |
-|---|---|
-| Run tests | `pytest tests/ -v` |
-| Lint | `ruff check tokenpak/` |
-| Security scan | `pip audit && bandit -r tokenpak/ -ll` |
-| Build | `python -m build` |
-| Upload | `twine upload dist/tokenpak-1.0.0*` |
-| Tag | `git tag v1.0.0 && git push origin v1.0.0` |
-| Smoke test | `curl http://localhost:8765/health` |
-| Stats | `tokenpak stats --since 7d` |
-
----
-
-*Last updated: 2026-03-08 · Maintained by Trix*
+**Release sign-off:** ____________________  
+**Date:** ____________________

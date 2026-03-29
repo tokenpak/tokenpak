@@ -12,7 +12,6 @@ Provides:
 
 from __future__ import annotations
 
-import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -20,7 +19,6 @@ from typing import Any, Dict, Optional
 import httpx
 
 from tokenpak import __version__ as _proxy_version
-
 
 # ---------------------------------------------------------------------------
 # Provider connectivity check

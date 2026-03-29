@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # Data types
@@ -59,12 +59,12 @@ class CoverageScoreResult:
 
 def extract_must_hit_terms(query: str) -> List[str]:
     """Extract identifiers from query for must-hit validation.
-    
+
     Identifies: function names, class names, error codes, variable names.
-    
+
     Args:
         query: The search query string.
-        
+
     Returns:
         List of extracted terms (lowercase).
     """
@@ -76,12 +76,12 @@ def extract_must_hit_terms(query: str) -> List[str]:
         r'[A-Z_]{3,}',  # CONSTANT_VALUE (3+ chars all caps)
         r'\b[a-z_]{3,}\b',  # identifier
     ]
-    
+
     terms = set()
     for pattern in patterns:
         matches = re.findall(pattern, query, re.IGNORECASE)
         terms.update(m.strip().lower() for m in matches if m.strip())
-    
+
     return sorted(list(terms))
 
 
@@ -90,24 +90,24 @@ def check_must_hit_coverage(
     chunks: List[Dict[str, Any]],
 ) -> Tuple[bool, List[str], List[str]]:
     """Check if must-hit terms appear in retrieved chunks.
-    
+
     Args:
         query: Original query string.
         chunks: List of (block_dict, score) tuples or just block dicts.
-        
+
     Returns:
         Tuple of (all_found: bool, must_hit_terms: list, found_terms: list)
     """
     must_hit_terms = extract_must_hit_terms(query)
     if not must_hit_terms:
         return True, [], []  # No must-hit terms = trivially satisfied
-    
+
     # Normalize chunks if they're tuples
     if chunks and isinstance(chunks[0], tuple):
         contents = " ".join(str(c[0].get("content", "")) for c in chunks)
     else:
         contents = " ".join(str(c.get("content", "")) for c in chunks)
-    
+
     found = [term for term in must_hit_terms if re.search(r'\b' + re.escape(term) + r'\b', contents, re.IGNORECASE)]
     return len(found) == len(must_hit_terms), must_hit_terms, found
 
@@ -121,7 +121,7 @@ def compute_final_score(
     query: str = "",
 ) -> float:
     """Compute final relevance score from multiple signals.
-    
+
     Formula:
         score = (
             0.45 * sem_norm +
@@ -133,11 +133,11 @@ def compute_final_score(
             - stale_penalty
             - noise_penalty
         )
-    
+
     Args:
         signals: ScoringSignals object with input metrics.
         query: Original query (for path matching).
-        
+
     Returns:
         Final score (typically 0.0-1.5 range, can exceed 1.0 with boosts).
     """
@@ -145,34 +145,34 @@ def compute_final_score(
     bm25_norm = min(1.0, max(0.0, signals.bm25_score / 10.0))  # Assume BM25 in 0-10 range
     sem_norm = min(1.0, max(0.0, signals.semantic_score))
     meta_norm = 0.5 if not signals.is_boilerplate else 0.1  # Simple metadata signal
-    
+
     # Base weighted sum
     score = (
         0.45 * sem_norm +
         0.45 * bm25_norm +
         0.10 * meta_norm
     )
-    
+
     # Boosts (only if query is substantial)
     if query and len(query) > 3:
         # Symbol boost: +0.15 if query contains class/function patterns
         if re.search(r'[A-Z][a-zA-Z]+|[a-z_]+\(', query):
             score += 0.15
-        
+
         # Path boost: +0.10 if query references file path patterns
         if re.search(r'\.py|\.js|/src/|/lib/|\.tsx?', query, re.IGNORECASE):
             score += 0.10
-    
+
     # Recency boost
     if signals.is_current_commit or signals.is_latest_artifact:
         score += 0.05
-    
+
     # Penalties
     if signals.is_stale_artifact:
         score -= 0.15
     if signals.is_boilerplate:
         score -= 0.10
-    
+
     # Clamp to reasonable range
     return max(0.0, min(2.0, score))
 
@@ -187,14 +187,14 @@ def compute_coverage_score(
     scores: List[float],
 ) -> CoverageScoreResult:
     """Compute overall retrieval coverage score.
-    
+
     Coverage = must_hit_factor + concentration_factor + mass_factor
-    
+
     Args:
         query: Search query.
         chunks: Retrieved chunks.
         scores: Final scores for each chunk (same order as chunks).
-        
+
     Returns:
         CoverageScoreResult with score + interpretation.
     """
@@ -206,11 +206,11 @@ def compute_coverage_score(
             mass_factor=0.0,
             interpretation="weak"
         )
-    
+
     # Factor 1: Must-hit terms (45% of max coverage)
     all_found, _, found = check_must_hit_coverage(query, chunks)
     must_hit_factor = 0.45 if all_found else 0.0
-    
+
     # Factor 2: Concentration (file diversity; max 25%)
     # Fewer files = higher concentration = better coverage
     # But only up to 3 files for full credit
@@ -224,16 +224,16 @@ def compute_coverage_score(
     else:
         # More files = lower concentration credit
         concentration_factor = max(0.0, 0.15 - (unique_files - 3) * 0.05)
-    
+
     # Factor 3: Mass (top-5 average score; max 30%)
     top_5_scores = sorted(scores, reverse=True)[:5]
     avg_top_5 = sum(top_5_scores) / len(top_5_scores) if top_5_scores else 0.0
     # Scale average to 30% max
     mass_factor = max(0.0, min(0.30, (avg_top_5 / 1.0) * 0.30))
-    
+
     # Total coverage
     coverage_score = must_hit_factor + concentration_factor + mass_factor
-    
+
     # Interpretation
     if coverage_score >= 0.75:
         interpretation = "strong"
@@ -241,7 +241,7 @@ def compute_coverage_score(
         interpretation = "ok"
     else:
         interpretation = "weak"
-    
+
     return CoverageScoreResult(
         score=coverage_score,
         must_hit_found=all_found,

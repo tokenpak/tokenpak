@@ -29,14 +29,12 @@ import asyncio
 import gzip
 import json
 import os
-import signal
-import sys
 import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 import httpx
 from starlette.applications import Starlette

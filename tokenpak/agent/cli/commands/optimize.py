@@ -12,7 +12,7 @@ import os
 import sqlite3
 import sys
 import urllib.request
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -365,7 +365,7 @@ def _render_text(
     recs: List[Dict[str, Any]],
     verbose: bool = False,
 ) -> None:
-    print(f"\nTOKENPAK  |  Optimization Analysis")
+    print("\nTOKENPAK  |  Optimization Analysis")
     print(SEP)
     print()
 
@@ -397,7 +397,7 @@ def _render_text(
     stale = redundancy["expired_telemetry_caches"]
     total_r = redundancy["total_redundant_blocks"]
     if total_r > 0:
-        print(f"  Redundant Context:")
+        print("  Redundant Context:")
         if dup:
             print(f"    • {dup} duplicate memory block{'s' if dup != 1 else ''}")
         if stale:
@@ -405,11 +405,11 @@ def _render_text(
         if redundancy["redundant_tokens"]:
             print(f"    • ~{redundancy['redundant_tokens']:,} redundant tokens")
     else:
-        print(f"  Redundant Context:          None detected")
+        print("  Redundant Context:          None detected")
     print()
 
     # Recommendations
-    print(f"  Recommendations:")
+    print("  Recommendations:")
     for r in recs:
         if r["label"] == "No significant optimizations found":
             print(f"  ✓ {r['detail']}")
@@ -422,7 +422,7 @@ def _render_text(
 
     # Verbose: per-block analysis
     if verbose:
-        print(f"  Per-Block Analysis (verbose):")
+        print("  Per-Block Analysis (verbose):")
         print(SEP)
         print(f"  Avg Input Tokens:           {model['avg_input_tokens']:,}")
         print(f"  Avg Output Tokens:          {model['avg_output_tokens']:,}")
@@ -505,7 +505,7 @@ def run_optimize(verbose: bool = False, as_json: bool = False, apply: bool = Fal
     else:
         _render_text(compression, model, redundancy, recs, verbose=verbose)
         if apply:
-            print(f"  Auto-Applying Recommendations:")
+            print("  Auto-Applying Recommendations:")
             _apply_recommendations(recs)
 
 

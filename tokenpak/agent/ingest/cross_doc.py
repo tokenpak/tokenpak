@@ -30,7 +30,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-
 # ---------------------------------------------------------------------------
 # DocCard — compact normalized schema for a single document
 # ---------------------------------------------------------------------------

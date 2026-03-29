@@ -172,7 +172,8 @@ class StateManager:
 import copy as _copy
 
 try:
-    from jsonschema import ValidationError as _ValidationError, validate as _validate  # noqa: F401, F811
+    from jsonschema import ValidationError as _ValidationError  # noqa: F401, F811
+    from jsonschema import validate as _validate
     _HAS_JSONSCHEMA_MS = True
 except ImportError:
     _HAS_JSONSCHEMA_MS = False

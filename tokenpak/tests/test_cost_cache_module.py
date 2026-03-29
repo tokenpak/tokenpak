@@ -11,10 +11,9 @@ Covers:
 - Eviction policy behavior
 """
 
-import pytest
 import time
-from typing import Dict, Any
 
+import pytest
 
 # ─────────────────────────────────────────────────────────────────────────
 # COST MODULE TESTS (50 tests)

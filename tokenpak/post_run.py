@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-
 _NEED_CONTEXT_PATTERNS = (
     "need more context",
     "need additional context",

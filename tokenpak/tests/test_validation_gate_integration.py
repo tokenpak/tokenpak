@@ -4,7 +4,6 @@ Covers: validation_gate.py — validation rules, error handling, bypass modes.
 """
 
 import json
-import pytest
 
 from tokenpak.validation_gate import ValidationGate, ValidationResult
 
@@ -122,10 +121,10 @@ class TestValidationIntegration:
         gate = ValidationGate()
         request1 = {"model": "claude-sonnet-4-6"}
         request2 = {"model": "gpt-4-turbo"}
-        
+
         result1 = gate.validate(request1)
         result2 = gate.validate(request2)
-        
+
         assert result1 is not None
         assert result2 is not None
 
@@ -138,11 +137,11 @@ class TestValidationPerformance:
         import time
         gate = ValidationGate()
         request = {"model": "claude-sonnet-4-6", "messages": []}
-        
+
         start = time.time()
         result = gate.validate(request)
         elapsed = time.time() - start
-        
+
         assert result is not None
         assert elapsed < 0.1  # Should be < 100ms
 
@@ -154,7 +153,7 @@ class TestValidationPerformance:
             for i in range(100)
         ]
         request = {"model": "claude-sonnet-4-6", "messages": messages}
-        
+
         result = gate.validate(request)
         assert result is not None
 
@@ -167,7 +166,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {"model": "claude-sonnet-4-6", "messages": []}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -179,7 +178,7 @@ class TestValidateRequestMethod:
         """validate_request rejects invalid JSON."""
         gate = ValidationGate()
         request_body = b'{"invalid json"}'
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -193,7 +192,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate(token_budget_cap=1000)
         payload = {"model": "claude-sonnet-4-6"}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -207,7 +206,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate(token_budget_cap=1000)
         payload = {"model": "claude-sonnet-4-6"}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -220,7 +219,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {"dry_run": True}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -233,7 +232,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {"tokenpak": {"dry_run": True}}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -246,7 +245,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {"tokenpak": {"deterministic": True}}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -260,7 +259,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {"tokenpak": {"deterministic": True}}  # No context_block
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -280,7 +279,7 @@ class TestValidateRequestMethod:
             }
         }
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -295,7 +294,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -310,7 +309,7 @@ class TestValidateRequestMethod:
         gate = ValidationGate()
         payload = {}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -331,7 +330,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=0)
         payload = {}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         result = gate.validate_request(
             request_body=request_body,
             model="claude-sonnet-4-6",
@@ -344,7 +343,7 @@ class TestBudgetValidation:
         gate = ValidationGate(token_budget_cap=5000)
         payload = {}
         request_body = json.dumps(payload).encode('utf-8')
-        
+
         # Within budget
         result1 = gate.validate_request(
             request_body=request_body,

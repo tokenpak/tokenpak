@@ -9,10 +9,9 @@ Level strategy (cheapest -> most expensive):
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 LEVEL_SUMMARY_MAP = 1
 LEVEL_SECTION_SUMMARIES = 2

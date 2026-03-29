@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Pattern, Set
 
+
 def _default_pattern_path() -> Path:
     return Path.home() / ".tokenpak" / "error_patterns.json"
 

@@ -3,9 +3,9 @@
 Covers: telemetry/collector.py, telemetry/storage.py — event collection, storage, retrieval.
 """
 
-import pytest
 import tempfile
-from pathlib import Path
+
+import pytest
 
 
 class TestTelemetryCollectorBasics:
@@ -33,7 +33,7 @@ class TestTelemetryCollectorBasics:
                 collector = TelemetryCollector()
             except TypeError:
                 pytest.skip("TelemetryCollector constructor signature unclear")
-            
+
             event = {
                 "event_type": "completion",
                 "model": "claude-sonnet-4-6",
@@ -59,7 +59,7 @@ class TestEventTracking:
                 collector = TelemetryCollector()
             except TypeError:
                 pytest.skip("TelemetryCollector constructor signature unclear")
-            
+
             try:
                 collector.record_event({
                     "type": "completion",
@@ -81,7 +81,7 @@ class TestEventTracking:
                 collector = TelemetryCollector()
             except TypeError:
                 pytest.skip("TelemetryCollector constructor signature unclear")
-            
+
             try:
                 collector.record_event({
                     "type": "error",
@@ -109,7 +109,7 @@ class TestTelemetryStorage:
                     "model": "claude-sonnet-4-6",
                     "tokens": 100,
                 })
-                
+
                 # Create second instance and verify data persists
                 collector2 = TelemetryCollector(db_path=tmpdir)
                 # Should have access to persisted data
@@ -130,7 +130,7 @@ class TestTelemetryStorage:
                         "model": "claude-sonnet-4-6",
                         "tokens": 100 + i,
                     })
-                
+
                 # Should be able to query events
                 events = collector.get_events()
                 assert events is not None
@@ -154,7 +154,7 @@ class TestTelemetryAggregation:
                 ]
                 for evt in events:
                     collector.record_event(evt)
-                
+
                 # Should be able to get total tokens
                 total = collector.get_total_tokens()
                 if total is not None:
@@ -175,7 +175,7 @@ class TestTelemetryAggregation:
                 ]
                 for evt in events:
                     collector.record_event(evt)
-                
+
                 # Should calculate total cost
                 total_cost = collector.get_total_cost()
                 if total_cost is not None:
@@ -199,7 +199,7 @@ class TestTelemetryMetrics:
                         "type": "completion",
                         "tokens": tokens,
                     })
-                
+
                 avg = collector.get_average_tokens_per_event()
                 if avg is not None:
                     expected_avg = sum(tokens_list) / len(tokens_list)
@@ -220,7 +220,7 @@ class TestTelemetryMetrics:
                         "model": model,
                         "tokens": 100,
                     })
-                
+
                 distribution = collector.get_model_distribution()
                 if distribution is not None:
                     assert isinstance(distribution, dict)
@@ -262,7 +262,7 @@ class TestEdgeCases:
             from tokenpak.telemetry.collector import TelemetryCollector
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
-                
+
                 start = time.time()
                 for i in range(100):
                     collector.record_event({
@@ -271,7 +271,7 @@ class TestEdgeCases:
                         "tokens": 100 + i,
                     })
                 elapsed = time.time() - start
-                
+
                 # Should handle 100 events in < 1s
                 assert elapsed < 1.0
         except (ImportError, AttributeError, TypeError):

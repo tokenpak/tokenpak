@@ -27,8 +27,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional, Sequence
-
+from typing import Any, Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # NormalizedTable — structured representation of a single table

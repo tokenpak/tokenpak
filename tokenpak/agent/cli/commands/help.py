@@ -12,7 +12,6 @@ Commands:
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -135,33 +134,33 @@ def print_essential_help() -> None:
 def print_intermediate_help() -> None:
     """Print essential + intermediate commands."""
     print("TokenPak — LLM Proxy with Context Compression\n")
-    
+
     print("Essential Commands:\n")
     for cmd, desc in _ESSENTIAL_COMMANDS.items():
         print(f"  {cmd:<14} {desc}")
     print()
-    
+
     print("Monitoring:\n")
-    monitoring_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+    monitoring_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
                        if k in ["watch", "logs", "stats"]}
     for cmd, desc in monitoring_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
-    
+
     print("Configuration:\n")
-    config_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+    config_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
                    if k in ["config", "integrate", "restart", "version"]}
     for cmd, desc in config_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
-    
+
     print("Content:\n")
-    content_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items() 
+    content_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
                     if k in ["index", "search", "demo"]}
     for cmd, desc in content_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
-    
+
     print("Run `tokenpak help --all` for all 93 commands.")
     print("Run `tokenpak help <command>` for details on any command.")
 
@@ -176,7 +175,7 @@ def print_full_help(tier: Optional[str] = None) -> None:
     visible = [c for c in commands if _is_visible(c.get("tier", "oss"), tier)]
     groups = _group_commands(visible)
 
-    print(f"TokenPak — LLM Proxy with Context Compression")
+    print("TokenPak — LLM Proxy with Context Compression")
     print(f"Tier: {tier_label}\n")
     print("All Commands:\n")
 
@@ -267,7 +266,7 @@ def print_command_help(command_name: str) -> None:
 
 def run(args: Optional[list[str]] = None) -> None:
     """Entry point: parse args and dispatch to appropriate help function.
-    
+
     Flags:
       --more     Show essential + intermediate commands
       --all      Show all commands (complete reference)

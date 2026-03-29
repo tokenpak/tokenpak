@@ -48,8 +48,8 @@ import re
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 

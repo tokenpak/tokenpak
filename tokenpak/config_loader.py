@@ -67,7 +67,7 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
 def get(key: str, default=None, env_var: str = None, cast=None):
     """
     Get config value. Priority: env var > config file > default.
-    
+
     Args:
         key: Dot-path into config YAML (e.g. 'compression.threshold_tokens')
         default: Default value if not found

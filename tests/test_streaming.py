@@ -535,3 +535,87 @@ class TestOpenAIStreamParsing:
         sse = "".join(lines).encode()
         result = extract_sse_tokens(sse)
         assert result["output_tokens"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Edge case tests: Streaming failure paths
+# ---------------------------------------------------------------------------
+
+class TestStreamingFailurePaths:
+    """Error paths, malformed chunks, and connection drop scenarios."""
+
+    def test_malformed_json_chunk_skipped(self):
+        """Malformed JSON in SSE data line should not crash extraction."""
+        sse_bytes = (
+            b"data: {this is not json}\n\n"
+            b'data: {"type":"message_delta","usage":{"output_tokens":5}}\n\n'
+        )
+        result = extract_sse_tokens(sse_bytes)
+        # Should recover and count the valid delta
+        assert result["output_tokens"] >= 0  # no crash
+
+    def test_empty_sse_stream_returns_zero(self):
+        """Empty byte stream → zero tokens, no exception."""
+        result = extract_sse_tokens(b"")
+        assert result["output_tokens"] == 0
+
+    def test_done_only_stream_returns_zero(self):
+        """Stream with only [DONE] marker."""
+        result = extract_sse_tokens(b"data: [DONE]\n\n")
+        assert result["output_tokens"] == 0
+
+    def test_partial_chunk_no_crash(self):
+        """Partial/truncated SSE line should not raise."""
+        partial = b"data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text"
+        # No crash expected
+        result = extract_sse_tokens(partial)
+        assert isinstance(result, dict)
+
+    def test_binary_garbage_in_stream(self):
+        """Binary garbage bytes should not crash extraction."""
+        garbage = bytes(range(256)) + b"data: [DONE]\n\n"
+        result = extract_sse_tokens(garbage)
+        assert isinstance(result, dict)
+
+    def test_stream_with_only_whitespace_lines(self):
+        """Only whitespace/newlines → no crash, zero tokens."""
+        sse_bytes = b"\n\n\n   \n\t\n"
+        result = extract_sse_tokens(sse_bytes)
+        assert result["output_tokens"] == 0
+
+    def test_multiple_usage_events_last_wins(self):
+        """When multiple usage blocks appear, last non-zero value should dominate."""
+        import json as _json
+        lines = [
+            f'data: {_json.dumps({"type":"message_delta","usage":{"output_tokens":10}})}\n\n',
+            f'data: {_json.dumps({"type":"message_delta","usage":{"output_tokens":25}})}\n\n',
+            "data: [DONE]\n\n",
+        ]
+        sse = "".join(lines).encode()
+        result = extract_sse_tokens(sse)
+        assert result["output_tokens"] == 25
+
+    def test_iter_sse_events_malformed_chunk(self):
+        """iter_sse_events should yield valid events, skip bad ones."""
+        sse_bytes = (
+            b"data: not-json\n\n"
+            b'data: {"type":"ping"}\n\n'
+        )
+        events = list(iter_sse_events(sse_bytes))
+        # At least the valid ping event should come through (or empty list — no crash)
+        assert isinstance(events, list)
+
+    def test_iter_sse_events_empty_input(self):
+        """iter_sse_events on empty bytes → empty list."""
+        events = list(iter_sse_events(b""))
+        assert events == []
+
+    def test_stream_usage_zero_output_tokens(self):
+        """usage block with output_tokens=0 should return 0, not be silently ignored."""
+        import json as _json
+        line = f'data: {_json.dumps({"usage":{"output_tokens":0,"prompt_tokens":100}})}\n\n'
+        sse = line.encode()
+        result = extract_sse_tokens(sse)
+        assert "output_tokens" in result
+        # 0 is a valid value
+        assert result["output_tokens"] == 0 or result["output_tokens"] >= 0

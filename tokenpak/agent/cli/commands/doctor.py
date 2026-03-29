@@ -309,11 +309,10 @@ except ImportError:
 # Fleet Doctor — tokenpak doctor --fleet
 # ===========================================================================
 
-import subprocess
 import concurrent.futures
-from pathlib import Path
-import yaml
+import subprocess
 
+import yaml
 
 FLEET_CONFIG_FILE = Path.home() / ".tokenpak" / "fleet.yaml"
 

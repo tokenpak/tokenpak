@@ -725,7 +725,6 @@ def create_dashboard_router(
     ):
         """Generate executive summary in paragraph or bullet format."""
         import asyncio
-
         import functools
         loop = asyncio.get_event_loop()
         summary = await loop.run_in_executor(
