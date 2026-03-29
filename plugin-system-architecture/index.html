@@ -1,0 +1,3344 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+        <meta name="author" content="TokenPak Contributors">
+      
+      
+        <link rel="canonical" href="https://docs.tokenpak.ai/plugin-system-architecture/">
+      
+      
+        <link rel="prev" href="../plugin-guide/">
+      
+      
+        <link rel="next" href="../OSS-PRO-BOUNDARY/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Plugin System Architecture - TokenPak</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tokenpak-plugin-system-architecture-v1-proposal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TokenPak" class="md-header__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TokenPak
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plugin System Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../adapters/openai-compat/" class="md-tabs__link">
+          
+  
+  
+  Adapters
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../observability/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../recipes/01-multi-provider-fallback/" class="md-tabs__link">
+          
+  
+  
+  Recipes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../FAQ/" class="md-tabs__link">
+          
+  
+  
+  Support
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TokenPak" class="md-nav__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    TokenPak
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env-vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../error-handling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCKER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAVINGS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPONENT-DIAGRAM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Diagram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference (Extended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Directory Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-manifest-spec-pluginyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Manifest Spec (plugin.yaml)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-types-base-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Types &amp; Base Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin Types &amp; Base Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-adapter-plugin-kind-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Adapter Plugin (kind: adapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-compressor-plugin-kind-compressor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Compressor Plugin (kind: compressor)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-metrics-plugin-kind-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Metrics Plugin (kind: metrics)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle-hook-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle Hook Points
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lifecycle Hook Points">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#context-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Safety Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-error-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Error Isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-permission-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Permission Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-no-subprocess-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. No Subprocess / Exec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-plugin-sandboxing-v1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Plugin Sandboxing (v1 scope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-name-collision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Name Collision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-config-schema-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Config Schema Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-architecture-flowchart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Architecture Flowchart
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-plugin-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Plugin Templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Plugin Templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#template-1-custom-adapter-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 1: Custom Adapter (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#template-2-custom-compressor-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 2: Custom Compressor (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#template-3-custom-metrics-forwarder-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 3: Custom Metrics Forwarder (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-test-skeleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Test Skeleton
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-sue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions for Sue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-touched-by-this-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Touched by This Design
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OSS-PRO-BOUNDARY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OSS / PRO Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../assets/DIAGRAMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Diagrams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/openai-compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/litellm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LiteLLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/langchain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LangChain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/google/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--active"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../production-sla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production SLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPRESSION_TUNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compression Tuning
+  
+
+    
+      <br>
+      <small>Optimize token savings vs latency tradeoffs for your use case</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LATENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Latency Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/memory-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/01-multi-provider-fallback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Provider Fallback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/02-budget-caps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Budget Caps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/03-per-user-rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User Rate Limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/04-model-routing-by-use-case/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Routing by Use Case
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/05-cost-monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/06-streaming-responses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/07-local-development-mock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Development Mock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Support
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Directory Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-manifest-spec-pluginyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Manifest Spec (plugin.yaml)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-types-base-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Types &amp; Base Classes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Plugin Types &amp; Base Classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-adapter-plugin-kind-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Adapter Plugin (kind: adapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-compressor-plugin-kind-compressor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Compressor Plugin (kind: compressor)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-metrics-plugin-kind-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Metrics Plugin (kind: metrics)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle-hook-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle Hook Points
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lifecycle Hook Points">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#context-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Safety Boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Safety Boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-error-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Error Isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-permission-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Permission Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-no-subprocess-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. No Subprocess / Exec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-plugin-sandboxing-v1-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Plugin Sandboxing (v1 scope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-name-collision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Name Collision
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-config-schema-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Config Schema Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugin-architecture-flowchart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Architecture Flowchart
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-plugin-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Plugin Templates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Plugin Templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#template-1-custom-adapter-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 1: Custom Adapter (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#template-2-custom-compressor-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 2: Custom Compressor (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#template-3-custom-metrics-forwarder-stub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Template 3: Custom Metrics Forwarder (stub)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-test-skeleton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Test Skeleton
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions-for-sue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open Questions for Sue
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-touched-by-this-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Touched by This Design
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tokenpak-plugin-system-architecture-v1-proposal">TokenPak Plugin System Architecture — v1 Proposal<a class="headerlink" href="#tokenpak-plugin-system-architecture-v1-proposal" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> Draft for Sue review<br />
+<strong>Author:</strong> Trix<br />
+<strong>Date:</strong> 2026-03-26<br />
+<strong>Task:</strong> p2-tokenpak-plugin-system-foundations-2026-03-26</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>TokenPak already has a narrow <code>CompressorPlugin</code> system (text→text transforms). This proposal expands that into a full extensibility layer covering adapters, compression, metrics collection, and lifecycle hooks — without touching the existing <code>CompressorPlugin</code> contract.</p>
+<p>The goal: users can drop plugins into <code>~/.tokenpak/plugins/</code> (or declare them in <code>config.yaml</code>) and extend TokenPak behavior without modifying core.</p>
+<hr />
+<h2 id="plugin-directory-structure">Plugin Directory Structure<a class="headerlink" href="#plugin-directory-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>~/.tokenpak/
+└── plugins/
+    ├── my-adapter/
+    │   ├── plugin.yaml          # Manifest (required)
+    │   └── my_adapter.py        # Entry point
+    ├── my-compressor/
+    │   ├── plugin.yaml
+    │   └── my_compressor.py
+    └── my-metrics/
+        ├── plugin.yaml
+        └── my_metrics.py
+</code></pre></div>
+<p><strong>Discovery order (highest priority first):</strong>
+1. <code>TOKENPAK_PLUGINS</code> env var (comma-separated <code>module.ClassName</code> paths) — dev/testing
+2. <code>config.yaml</code> → <code>plugins.enabled</code> list — canonical prod config
+3. <code>~/.tokenpak/plugins/*/plugin.yaml</code> filesystem scan — drop-in install</p>
+<hr />
+<h2 id="plugin-manifest-spec-pluginyaml">Plugin Manifest Spec (<code>plugin.yaml</code>)<a class="headerlink" href="#plugin-manifest-spec-pluginyaml" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># plugin.yaml — required fields</span>
+<span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-custom-adapter</span><span class="w">          </span><span class="c1"># Unique slug (lowercase, hyphens ok)</span>
+<span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1.0.0&quot;</span><span class="w">                 </span><span class="c1"># SemVer string</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">adapter</span><span class="w">                    </span><span class="c1"># adapter | compressor | metrics</span>
+
+<span class="c1"># optional</span>
+<span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Translates</span><span class="nv"> </span><span class="s">MyAPI</span><span class="nv"> </span><span class="s">format</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">canonical&quot;</span>
+<span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Kevin</span><span class="nv"> </span><span class="s">Yang&quot;</span>
+<span class="nt">min_tokenpak_version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.9.0&quot;</span><span class="w">   </span><span class="c1"># Semver range, defaults to any</span>
+
+<span class="c1"># Hook declarations (what lifecycle events does this plugin use?)</span>
+<span class="nt">hooks</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">on_startup</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">on_request</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">on_response</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">on_error</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">on_shutdown</span>
+
+<span class="c1"># Config schema (jsonschema subset)</span>
+<span class="nt">config_schema</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+<span class="w">  </span><span class="nt">properties</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">timeout_ms</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+<span class="w">      </span><span class="nt">default</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5000</span>
+<span class="w">    </span><span class="nt">upstream_url</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+<span class="w">  </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span>
+
+<span class="c1"># Permission declarations (explicit capabilities)</span>
+<span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">network_outbound</span><span class="w">    </span><span class="c1"># may make HTTP calls</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">filesystem_read</span><span class="w">     </span><span class="c1"># may read local files</span>
+<span class="w">  </span><span class="c1"># filesystem_write    # may write files (not declared = denied)</span>
+<span class="w">  </span><span class="c1"># subprocess          # may spawn processes</span>
+</code></pre></div>
+<p><strong>Validation rules:</strong>
+- <code>name</code>, <code>version</code>, <code>kind</code> are required
+- <code>kind</code> must be one of: <code>adapter</code>, <code>compressor</code>, <code>metrics</code>
+- <code>hooks</code> must be a subset of the defined hook points
+- <code>permissions</code> must be from the allowed set — unlisted perms are denied at runtime</p>
+<hr />
+<h2 id="plugin-types-base-classes">Plugin Types &amp; Base Classes<a class="headerlink" href="#plugin-types-base-classes" title="Permanent link">&para;</a></h2>
+<h3 id="1-adapter-plugin-kind-adapter">1. Adapter Plugin (<code>kind: adapter</code>)<a class="headerlink" href="#1-adapter-plugin-kind-adapter" title="Permanent link">&para;</a></h3>
+<p>Extends <code>FormatAdapter</code> (the existing proxy adapter contract). Allows third-party providers (e.g., Bedrock, Groq, custom APIs) without PRs to core.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># tokenpak/plugins/base.py (extended)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AdapterPlugin</span><span class="p">(</span><span class="n">FormatAdapter</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Base for format adapter plugins.</span>
+
+<span class="sd">    Lifecycle: on_startup → on_request → on_response → on_shutdown</span>
+<span class="sd">                                       ↘ on_error (on exception)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>          <span class="c1"># Must match plugin.yaml name</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0.0.0&quot;</span>
+
+    <span class="c1"># Inherited from FormatAdapter:</span>
+    <span class="c1"># detect(path, headers, body) → bool</span>
+    <span class="c1"># normalize(body) → CanonicalRequest</span>
+    <span class="c1"># denormalize(canonical) → bytes</span>
+    <span class="c1"># get_default_upstream() → str</span>
+</code></pre></div>
+<h3 id="2-compressor-plugin-kind-compressor">2. Compressor Plugin (<code>kind: compressor</code>)<a class="headerlink" href="#2-compressor-plugin-kind-compressor" title="Permanent link">&para;</a></h3>
+<p>Extends the existing <code>CompressorPlugin</code>. No changes needed — existing API is the spec.</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">CompressorPlugin</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compress</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">priority</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span> <span class="k">return</span> <span class="mi">50</span>
+</code></pre></div>
+<h3 id="3-metrics-plugin-kind-metrics">3. Metrics Plugin (<code>kind: metrics</code>)<a class="headerlink" href="#3-metrics-plugin-kind-metrics" title="Permanent link">&para;</a></h3>
+<p>Receives telemetry events and can forward them to external systems (Prometheus, Datadog, custom).</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MetricsPlugin</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_request_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">MetricsEvent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_cache_hit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">MetricsEvent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">:</span> <span class="n">MetricsEvent</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span>  <span class="c1"># Called on shutdown</span>
+</code></pre></div>
+<hr />
+<h2 id="lifecycle-hook-points">Lifecycle Hook Points<a class="headerlink" href="#lifecycle-hook-points" title="Permanent link">&para;</a></h2>
+<p>All plugin kinds share a common lifecycle. Hook names match <code>plugin.yaml</code> declarations.</p>
+<div class="highlight"><pre><span></span><code>Proxy startup
+    │
+    └─► on_startup(config: dict) → None
+            Initialize resources (connections, caches, counters)
+
+Incoming request
+    │
+    └─► on_request(ctx: RequestContext) → RequestContext | None
+            Inspect/modify request before routing
+            Return None to pass-through unchanged
+
+Upstream response received
+    │
+    └─► on_response(ctx: ResponseContext) → ResponseContext | None
+            Inspect/modify response before returning to client
+
+Any exception during request/response
+    │
+    └─► on_error(ctx: ErrorContext) → None
+            Log, alert, or increment counters (cannot recover)
+
+Proxy shutdown
+    │
+    └─► on_shutdown() → None
+            Flush buffers, close connections, persist state
+</code></pre></div>
+<h3 id="context-types">Context Types<a class="headerlink" href="#context-types" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RequestContext</span><span class="p">:</span>
+    <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">headers</span><span class="p">:</span> <span class="nb">dict</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span>
+    <span class="n">provider</span><span class="p">:</span> <span class="nb">str</span>         <span class="c1"># detected provider name</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span>        <span class="c1"># mutable — plugins can add keys</span>
+
+<span class="nd">@dataclass</span>  
+<span class="k">class</span><span class="w"> </span><span class="nc">ResponseContext</span><span class="p">:</span>
+    <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">status_code</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span>
+    <span class="n">provider</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">input_tokens</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">output_tokens</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">latency_ms</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span>        <span class="c1"># carries plugin data from on_request phase</span>
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ErrorContext</span><span class="p">:</span>
+    <span class="n">request_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">exception</span><span class="p">:</span> <span class="ne">Exception</span>
+    <span class="n">phase</span><span class="p">:</span> <span class="nb">str</span>            <span class="c1"># &quot;request&quot; | &quot;response&quot; | &quot;routing&quot;</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span>
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MetricsEvent</span><span class="p">:</span>
+    <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">provider</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">model</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">data</span><span class="p">:</span> <span class="nb">dict</span>
+</code></pre></div>
+<hr />
+<h2 id="safety-boundaries">Safety Boundaries<a class="headerlink" href="#safety-boundaries" title="Permanent link">&para;</a></h2>
+<h3 id="1-error-isolation">1. Error Isolation<a class="headerlink" href="#1-error-isolation" title="Permanent link">&para;</a></h3>
+<p>Plugin failures must never crash the proxy. Each hook call is wrapped:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Pseudocode — actual impl in plugin runner</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">plugin</span><span class="o">.</span><span class="n">on_request</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Plugin &#39;</span><span class="si">%s</span><span class="s2">&#39; on_request failed: </span><span class="si">%s</span><span class="s2"> — skipping&quot;</span><span class="p">,</span> <span class="n">plugin</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># fall through, unmodified</span>
+</code></pre></div>
+<p>No plugin exception propagates to the request path.</p>
+<h3 id="2-permission-model">2. Permission Model<a class="headerlink" href="#2-permission-model" title="Permanent link">&para;</a></h3>
+<p>Declared in <code>plugin.yaml</code> under <code>permissions</code>. At load time, the registry:</p>
+<ol>
+<li>Reads declared permissions</li>
+<li>Checks against host policy (configurable in <code>config.yaml</code> under <code>plugins.allowed_permissions</code>)</li>
+<li><strong>Logs a warning</strong> if plugin requests a perm not in allowed list</li>
+<li><strong>Refuses to load</strong> if plugin requests <code>subprocess</code> or <code>filesystem_write</code> and those aren't explicitly allowed</li>
+</ol>
+<p>Default allowed permissions: <code>network_outbound</code>, <code>filesystem_read</code><br />
+Default denied: <code>filesystem_write</code>, <code>subprocess</code></p>
+<h3 id="3-no-subprocess-exec">3. No Subprocess / Exec<a class="headerlink" href="#3-no-subprocess-exec" title="Permanent link">&para;</a></h3>
+<p>Plugin base classes do not provide subprocess utilities. The manifest <code>subprocess</code> permission gates the ability to declare intent, but there's no enforcement at runtime in v1 — this is documentation + audit trail. (v2: use <code>restrictedpython</code> or subprocess patching.)</p>
+<h3 id="4-plugin-sandboxing-v1-scope">4. Plugin Sandboxing (v1 scope)<a class="headerlink" href="#4-plugin-sandboxing-v1-scope" title="Permanent link">&para;</a></h3>
+<p>v1: <strong>trust-based</strong> — plugins run in the same process, same Python interpreter. No memory/CPU isolation. This is acceptable for self-hosted use (personal/team deployments). OSS launch doc will state: "Only install plugins you trust."</p>
+<p>v2 (post-launch): subprocess isolation via <code>multiprocessing</code> workers with timeout + memory cap.</p>
+<h3 id="5-name-collision">5. Name Collision<a class="headerlink" href="#5-name-collision" title="Permanent link">&para;</a></h3>
+<p>Registry raises <code>ValueError</code> on duplicate <code>name</code>. Load fails loudly — no silent shadowing.</p>
+<h3 id="6-config-schema-validation">6. Config Schema Validation<a class="headerlink" href="#6-config-schema-validation" title="Permanent link">&para;</a></h3>
+<p>At load time, the registry validates plugin config against <code>config_schema</code> using jsonschema. Plugin won't load if config is invalid.</p>
+<hr />
+<h2 id="plugin-architecture-flowchart">Plugin Architecture Flowchart<a class="headerlink" href="#plugin-architecture-flowchart" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>                    ┌──────────────────────────────────┐
+                    │         Plugin Registry           │
+                    │                                   │
+  startup ─────────►│  1. Scan ~/.tokenpak/plugins/     │
+                    │  2. Load plugin.yaml manifests    │
+                    │  3. Validate manifests + perms    │
+                    │  4. Import entry point module     │
+                    │  5. Instantiate + call on_startup │
+                    │  6. Register by kind + name       │
+                    └──────────┬────────────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+    ┌─────────▼────┐  ┌───────▼──────┐  ┌──────▼───────┐
+    │ AdapterPlugin│  │Compressor    │  │MetricsPlugin │
+    │ Registry     │  │Plugin        │  │Registry      │
+    │              │  │Registry      │  │              │
+    │ detect()     │  │              │  │on_request_   │
+    │ normalize()  │  │compress()    │  │  complete()  │
+    │ denormalize()│  │priority()    │  │on_cache_hit()│
+    │ on_request() │  │              │  │on_error()    │
+    │ on_response()│  │              │  │flush()       │
+    └──────────────┘  └──────────────┘  └──────────────┘
+</code></pre></div>
+<hr />
+<h2 id="example-plugin-templates">Example Plugin Templates<a class="headerlink" href="#example-plugin-templates" title="Permanent link">&para;</a></h2>
+<h3 id="template-1-custom-adapter-stub">Template 1: Custom Adapter (stub)<a class="headerlink" href="#template-1-custom-adapter-stub" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ~/.tokenpak/plugins/my-api/my_adapter.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">AdapterPlugin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.proxy.adapters.canonical</span><span class="w"> </span><span class="kn">import</span> <span class="n">CanonicalRequest</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyAPIAdapter</span><span class="p">(</span><span class="n">AdapterPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;my-api&quot;</span>
+    <span class="n">version</span> <span class="o">=</span> <span class="s2">&quot;0.1.0&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">detect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">headers</span><span class="p">,</span> <span class="n">body</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">path</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;/v1/my-api/&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">normalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">body</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CanonicalRequest</span><span class="p">:</span>
+        <span class="c1"># TODO: parse my-api format → CanonicalRequest</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">denormalize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">canonical</span><span class="p">:</span> <span class="n">CanonicalRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+        <span class="c1"># TODO: CanonicalRequest → my-api format</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_default_upstream</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;https://api.my-service.com&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;my_api_trace&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">request_id</span>
+        <span class="k">return</span> <span class="n">ctx</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_response</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="c1"># log latency</span>
+        <span class="k">return</span> <span class="n">ctx</span>
+</code></pre></div>
+<h3 id="template-2-custom-compressor-stub">Template 2: Custom Compressor (stub)<a class="headerlink" href="#template-2-custom-compressor-stub" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ~/.tokenpak/plugins/my-compressor/my_compressor.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompressorPlugin</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCompressor</span><span class="p">(</span><span class="n">CompressorPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;my-compressor&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">compress</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+        <span class="c1"># TODO: implement compression logic</span>
+        <span class="n">compressed</span> <span class="o">=</span> <span class="n">text</span>  <span class="c1"># no-op stub</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">compressed</span><span class="p">,</span>
+            <span class="s2">&quot;metadata&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;plugin&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="s2">&quot;original_len&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">),</span>
+                <span class="s2">&quot;compressed_len&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">compressed</span><span class="p">),</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">priority</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">75</span>  <span class="c1"># runs before default (50), after ultra-high (100)</span>
+</code></pre></div>
+<h3 id="template-3-custom-metrics-forwarder-stub">Template 3: Custom Metrics Forwarder (stub)<a class="headerlink" href="#template-3-custom-metrics-forwarder-stub" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># ~/.tokenpak/plugins/my-metrics/my_metrics.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">MetricsPlugin</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyMetricsForwarder</span><span class="p">(</span><span class="n">MetricsPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;my-metrics&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_request_complete</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_cache_hit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="k">pass</span>  <span class="c1"># not tracked</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">event</span><span class="p">):</span>
+        <span class="c1"># forward errors immediately</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">([</span><span class="n">event</span><span class="p">])</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_send</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_buffer</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_send</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">events</span><span class="p">):</span>
+        <span class="c1"># TODO: HTTP POST to external system</span>
+        <span class="k">pass</span>
+</code></pre></div>
+<hr />
+<h2 id="integration-test-skeleton">Integration Test Skeleton<a class="headerlink" href="#integration-test-skeleton" title="Permanent link">&para;</a></h2>
+<p>File: <code>packages/core/tests/test_plugin_system_lifecycle.py</code></p>
+<div class="highlight"><pre><span></span><code><span class="sd">&quot;&quot;&quot;Integration test skeleton for plugin lifecycle.</span>
+
+<span class="sd">No assertions yet — structure only. Tests will be completed post-architecture review.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.plugins.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompressorPlugin</span><span class="p">,</span> <span class="n">AdapterPlugin</span><span class="p">,</span> <span class="n">MetricsPlugin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.plugins.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">PluginRegistry</span>
+
+
+<span class="c1"># ── Stub plugins for lifecycle testing ─────────────────────────────────────</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">LifecycleTracker</span><span class="p">:</span>
+    <span class="n">events</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TrackedCompressor</span><span class="p">(</span><span class="n">CompressorPlugin</span><span class="p">):</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;tracked-compressor&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compress</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+        <span class="n">LifecycleTracker</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;compress&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">text</span><span class="p">,</span> <span class="s2">&quot;metadata&quot;</span><span class="p">:</span> <span class="p">{}}</span>
+
+
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">fixture</span><span class="p">(</span><span class="n">autouse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">clear_tracker</span><span class="p">():</span>
+    <span class="n">LifecycleTracker</span><span class="o">.</span><span class="n">events</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">yield</span>
+
+
+<span class="c1"># ── Test stubs ──────────────────────────────────────────────────────────────</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_plugin_loads_from_manifest</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Plugin discovery reads plugin.yaml and instantiates correctly.&quot;&quot;&quot;</span>
+    <span class="c1"># TODO: write plugin.yaml + entry point to tmp_path, call registry.discover()</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_startup_called_for_all_plugins</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;on_startup() is invoked for each plugin during proxy init.&quot;&quot;&quot;</span>
+    <span class="c1"># TODO: mock proxy startup, verify on_startup called on registered plugins</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_request_hook_receives_context</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;on_request() receives RequestContext with correct fields.&quot;&quot;&quot;</span>
+    <span class="c1"># TODO: build synthetic RequestContext, pass through plugin chain</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_response_hook_receives_context</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;on_response() receives ResponseContext with tokens and latency.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_error_hook_called_on_upstream_failure</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;on_error() is called when upstream returns 500.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_on_shutdown_called_on_proxy_stop</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;on_shutdown() is invoked on graceful shutdown.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_plugin_failure_does_not_crash_request</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A plugin that raises in on_request does not propagate the exception.&quot;&quot;&quot;</span>
+    <span class="c1"># TODO: register ExplodingPlugin, verify request still succeeds</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_name_collision_raises_on_register</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Registering two plugins with same name raises ValueError.&quot;&quot;&quot;</span>
+    <span class="n">registry</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">()</span>
+    <span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">TrackedCompressor</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">pytest</span><span class="o">.</span><span class="n">raises</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="n">match</span><span class="o">=</span><span class="s2">&quot;collision&quot;</span><span class="p">):</span>
+        <span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">TrackedCompressor</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_manifest_with_unknown_permission_logs_warning</span><span class="p">(</span><span class="n">caplog</span><span class="p">,</span> <span class="n">tmp_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Plugin declaring unknown permission logs a warning and still loads.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_manifest_with_denied_permission_refuses_load</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Plugin declaring &#39;subprocess&#39; without host allowance is rejected.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_config_schema_validation_rejects_bad_config</span><span class="p">(</span><span class="n">tmp_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Plugin config that fails jsonschema validation prevents load.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_compressor_plugin_priority_ordering</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Plugins are returned highest-priority first.&quot;&quot;&quot;</span>
+    <span class="n">registry</span> <span class="o">=</span> <span class="n">PluginRegistry</span><span class="p">()</span>
+    <span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">TrackedCompressor</span><span class="p">)</span>
+    <span class="n">plugins</span> <span class="o">=</span> <span class="n">registry</span><span class="o">.</span><span class="n">get_plugins</span><span class="p">()</span>
+    <span class="n">priorities</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">priority</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">plugins</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="n">priorities</span> <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">priorities</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">test_metrics_plugin_flush_called_on_shutdown</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MetricsPlugin.flush() is called during proxy shutdown.&quot;&quot;&quot;</span>
+    <span class="k">pass</span>
+</code></pre></div>
+<hr />
+<h2 id="open-questions-for-sue">Open Questions for Sue<a class="headerlink" href="#open-questions-for-sue" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Sandboxing timeline</strong> — Should v1 doc say "no isolation, trust-based" explicitly, or defer to v1.1?</li>
+<li><strong>AdapterPlugin vs FormatAdapter</strong> — Should <code>AdapterPlugin</code> extend <code>FormatAdapter</code> directly, or compose it? Composition gives cleaner separation but more boilerplate.</li>
+<li><strong>Permission enforcement</strong> — v1 is documentation-only (manifest declares intent, no runtime enforcement). Acceptable for OSS launch?</li>
+<li><strong>Manifest format</strong> — YAML vs JSON? YAML is friendlier for humans; JSON is easier to validate. Current preference: YAML with jsonschema validation.</li>
+<li><strong><code>~/.tokenpak/plugins/</code> default dir</strong> — Confirm this path is correct for the OSS install convention.</li>
+</ol>
+<hr />
+<h2 id="files-touched-by-this-design">Files Touched by This Design<a class="headerlink" href="#files-touched-by-this-design" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>packages/core/tokenpak/plugins/base.py</code></td>
+<td>Extend with <code>AdapterPlugin</code>, <code>MetricsPlugin</code>, context dataclasses</td>
+</tr>
+<tr>
+<td><code>packages/core/tokenpak/plugins/registry.py</code></td>
+<td>Extend with manifest discovery, permission validation, per-kind registries</td>
+</tr>
+<tr>
+<td><code>packages/core/tokenpak/plugins/examples/passthrough.py</code></td>
+<td>Existing — no changes</td>
+</tr>
+<tr>
+<td><code>packages/core/tokenpak/plugins/examples/my_adapter.py</code></td>
+<td>New template</td>
+</tr>
+<tr>
+<td><code>packages/core/tokenpak/plugins/examples/my_compressor.py</code></td>
+<td>New template</td>
+</tr>
+<tr>
+<td><code>packages/core/tokenpak/plugins/examples/my_metrics.py</code></td>
+<td>New template</td>
+</tr>
+<tr>
+<td><code>packages/core/tests/test_plugin_system_lifecycle.py</code></td>
+<td>New integration test skeleton</td>
+</tr>
+<tr>
+<td><code>docs/plugin-system-architecture.md</code></td>
+<td>This file</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Submitted for architecture review. No implementation yet — pending Sue sign-off on hook signatures, permission model, and sandboxing stance.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 TokenPak Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/tokenpak/tokenpak" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

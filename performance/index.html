@@ -1,0 +1,3777 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+        <meta name="author" content="TokenPak Contributors">
+      
+      
+        <link rel="canonical" href="https://docs.tokenpak.ai/performance/">
+      
+      
+        <link rel="prev" href="../production-sla/">
+      
+      
+        <link rel="next" href="../PERFORMANCE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Performance Overview - TokenPak</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tokenpak-performance-benchmarks" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TokenPak" class="md-header__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TokenPak
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Performance Overview
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../adapters/openai-compat/" class="md-tabs__link">
+          
+  
+  
+  Adapters
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../observability/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../recipes/01-multi-provider-fallback/" class="md-tabs__link">
+          
+  
+  
+  Recipes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../FAQ/" class="md-tabs__link">
+          
+  
+  
+  Support
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TokenPak" class="md-nav__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    TokenPak
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env-vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../error-handling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCKER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAVINGS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPONENT-DIAGRAM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Diagram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference (Extended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-system-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OSS-PRO-BOUNDARY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OSS / PRO Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../assets/DIAGRAMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Diagrams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/openai-compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/litellm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LiteLLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/langchain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LangChain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/google/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--active"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../production-sla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production SLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trixbot-cachethroughput-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrixBot (cache/throughput benchmarks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibot-latencycompression-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CaliBOT (latency/compression benchmarks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Latency
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Latency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serial-health-endpoint-100-sequential-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serial — /health endpoint (100 sequential requests)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrent-50-simultaneous-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrent — 50 simultaneous requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sustained-load-100-rps-5-seconds-20-concurrent-workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sustained Load — 100 RPS (5 seconds, 20 concurrent workers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#throughput-and-cache-hit-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Throughput and Cache Hit Rate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Throughput and Cache Hit Rate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-light-100-unique-prompts-50-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: light (100 unique prompts, 50% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-medium-500-unique-prompts-70-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: medium (500 unique prompts, 70% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-heavy-1000-unique-prompts-85-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: heavy (1,000 unique prompts, 85% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compression-ratios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Ratios
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compression Ratios">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#by-content-type-measured-on-vault-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By Content Type (measured on vault files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregated-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregated Stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#by-content-category-estimated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By Content Category (estimated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Savings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Token Savings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-request-savings-compression-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Request Savings (compression only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#at-scale-estimated-1000-requestsday" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At Scale (estimated, 1,000 requests/day)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vault-injection-benefit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Injection Benefit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory Footprint
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory Footprint">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-memory-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Memory Scaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-index-lookup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Index Lookup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sla-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SLA Thresholds
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the Benchmarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running the Benchmarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-benchmark-in-process-no-api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick benchmark (in-process, no API calls)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-benchmark-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full benchmark suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-target-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make target (CI)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-the-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting the Numbers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPRESSION_TUNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compression Tuning
+  
+
+    
+      <br>
+      <small>Optimize token savings vs latency tradeoffs for your use case</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LATENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Latency Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="memory-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/01-multi-provider-fallback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Provider Fallback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/02-budget-caps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Budget Caps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/03-per-user-rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User Rate Limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/04-model-routing-by-use-case/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Routing by Use Case
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/05-cost-monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/06-streaming-responses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/07-local-development-mock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Development Mock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Support
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#trixbot-cachethroughput-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TrixBot (cache/throughput benchmarks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#calibot-latencycompression-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CaliBOT (latency/compression benchmarks)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Latency
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Latency">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serial-health-endpoint-100-sequential-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serial — /health endpoint (100 sequential requests)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrent-50-simultaneous-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrent — 50 simultaneous requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sustained-load-100-rps-5-seconds-20-concurrent-workers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sustained Load — 100 RPS (5 seconds, 20 concurrent workers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#throughput-and-cache-hit-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Throughput and Cache Hit Rate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Throughput and Cache Hit Rate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#profile-light-100-unique-prompts-50-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: light (100 unique prompts, 50% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-medium-500-unique-prompts-70-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: medium (500 unique prompts, 70% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#profile-heavy-1000-unique-prompts-85-repeat-rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile: heavy (1,000 unique prompts, 85% repeat rate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compression-ratios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Ratios
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compression Ratios">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#by-content-type-measured-on-vault-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By Content Type (measured on vault files)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aggregated-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregated Stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#by-content-category-estimated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By Content Category (estimated)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token Savings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Token Savings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-request-savings-compression-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Request Savings (compression only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#at-scale-estimated-1000-requestsday" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At Scale (estimated, 1,000 requests/day)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vault-injection-benefit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Injection Benefit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory Footprint
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Memory Footprint">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cache-memory-scaling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache Memory Scaling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vault-index-lookup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Index Lookup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sla-thresholds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SLA Thresholds
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the Benchmarks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running the Benchmarks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-benchmark-in-process-no-api-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick benchmark (in-process, no API calls)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-benchmark-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full benchmark suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-target-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make target (CI)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interpreting-the-numbers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpreting the Numbers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tokenpak-performance-benchmarks">TokenPak Performance Benchmarks<a class="headerlink" href="#tokenpak-performance-benchmarks" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Data sources:</strong> In-process benchmarks run 2026-03-26 on CaliBOT; cache/throughput
+benchmarks run 2026-03-26 on TrixBot. All numbers are reproducible via
+<code>python benchmarks/performance_benchmark.py</code>. No real API calls are made in
+any benchmark — deterministic, CI-safe.</p>
+</blockquote>
+<hr />
+<h2 id="contents">Contents<a class="headerlink" href="#contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#environment">Environment</a></li>
+<li><a href="#proxy-latency">Proxy Latency</a></li>
+<li><a href="#throughput-and-cache-hit-rate">Throughput &amp; Cache Hit Rate</a></li>
+<li><a href="#compression-ratios">Compression Ratios</a></li>
+<li><a href="#token-savings">Token Savings</a></li>
+<li><a href="#memory-footprint">Memory Footprint</a></li>
+<li><a href="#vault-index-lookup">Vault Index Lookup</a></li>
+<li><a href="#sla-thresholds">SLA Thresholds</a></li>
+<li><a href="#running-the-benchmarks">Running the Benchmarks</a></li>
+</ol>
+<hr />
+<h2 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h2>
+<h3 id="trixbot-cachethroughput-benchmarks">TrixBot (cache/throughput benchmarks)<a class="headerlink" href="#trixbot-cachethroughput-benchmarks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>TrixBot (<code>trix@trixbot</code>)</td>
+</tr>
+<tr>
+<td>OS</td>
+<td>Linux 6.17.0-14-generic</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.12.3</td>
+</tr>
+<tr>
+<td>CPU</td>
+<td>4 cores</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>4 GiB total</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Proxy port</td>
+<td>8766 (in-process mock)</td>
+</tr>
+<tr>
+<td>Mode</td>
+<td>hybrid (BM25 + vector routing)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="calibot-latencycompression-benchmarks">CaliBOT (latency/compression benchmarks)<a class="headerlink" href="#calibot-latencycompression-benchmarks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Host</td>
+<td>CaliBOT (<code>cali@calibot</code>)</td>
+</tr>
+<tr>
+<td>OS</td>
+<td>Linux 6.17.0-19-generic</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.12.3</td>
+</tr>
+<tr>
+<td>CPU</td>
+<td>4 cores</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>3.7 GiB total / 1.2 GiB available</td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Vault index</td>
+<td>7,938 blocks (~150 MB)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="proxy-latency">Proxy Latency<a class="headerlink" href="#proxy-latency" title="Permanent link">&para;</a></h2>
+<p>Latency measured at the <strong>proxy layer only</strong> (HTTP round-trip to local proxy endpoint,
+no upstream LLM call). Upstream API latency (typically 200–2,000ms) is additive and
+entirely determined by the chosen LLM provider.</p>
+<h3 id="serial-health-endpoint-100-sequential-requests">Serial — <code>/health</code> endpoint (100 sequential requests)<a class="headerlink" href="#serial-health-endpoint-100-sequential-requests" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>p50</td>
+<td>0.85 ms</td>
+<td>Typical warm-path latency</td>
+</tr>
+<tr>
+<td>p95</td>
+<td>0.95 ms</td>
+<td>Very tight — near-zero variance at p95</td>
+</tr>
+<tr>
+<td>p99</td>
+<td>37.19 ms</td>
+<td>GC/initialization outlier on first request</td>
+</tr>
+<tr>
+<td>min</td>
+<td>0.76 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>max</td>
+<td>37.19 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>mean</td>
+<td>1.22 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>stdev</td>
+<td>3.63 ms</td>
+<td></td>
+</tr>
+<tr>
+<td>n</td>
+<td>100</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> The p99 spike (37ms) is a one-time GC / first-request initialization
+event. Steady-state p99 is &lt; 2ms. This is a known Python GIL characteristic on
+constrained hardware.</p>
+</blockquote>
+<h3 id="concurrent-50-simultaneous-requests">Concurrent — 50 simultaneous requests<a class="headerlink" href="#concurrent-50-simultaneous-requests" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total elapsed</td>
+<td>1,234.2 ms</td>
+</tr>
+<tr>
+<td>Success rate</td>
+<td>100% (50/50)</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>40.5 req/s</td>
+</tr>
+<tr>
+<td>p50</td>
+<td>946.32 ms</td>
+</tr>
+<tr>
+<td>p95</td>
+<td>1,127.65 ms</td>
+</tr>
+<tr>
+<td>p99</td>
+<td>1,139.58 ms</td>
+</tr>
+<tr>
+<td>mean</td>
+<td>946.96 ms</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong> Concurrent p50 jumps to ~946ms due to Python's single-threaded
+<code>HTTPServer</code> serializing requests. This is the baseline before connection pooling.
+The proxy itself processes each request in &lt;2ms; the queuing delay dominates.</p>
+</blockquote>
+<h3 id="sustained-load-100-rps-5-seconds-20-concurrent-workers">Sustained Load — 100 RPS (5 seconds, 20 concurrent workers)<a class="headerlink" href="#sustained-load-100-rps-5-seconds-20-concurrent-workers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Throughput</td>
+<td>~98.3 RPS</td>
+</tr>
+<tr>
+<td>Total requests</td>
+<td>493</td>
+</tr>
+<tr>
+<td>Error rate</td>
+<td>0.00%</td>
+</tr>
+<tr>
+<td>p50 latency</td>
+<td>4.55 ms</td>
+</tr>
+<tr>
+<td>p95 latency</td>
+<td>5.51 ms</td>
+</tr>
+<tr>
+<td>p99 latency</td>
+<td>159.74 ms</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>p99 at 159ms under 100 RPS burst is expected on 4-core/4GB hardware under GIL
++ GC pressure. p50 and p95 remain well within target (&lt; 10ms).</p>
+</blockquote>
+<hr />
+<h2 id="throughput-and-cache-hit-rate">Throughput and Cache Hit Rate<a class="headerlink" href="#throughput-and-cache-hit-rate" title="Permanent link">&para;</a></h2>
+<p>Benchmarks run using in-process mock proxy with zlib compression envelope and
+2–8ms simulated model latency. Three runs averaged for stability.</p>
+<h3 id="profile-light-100-unique-prompts-50-repeat-rate">Profile: <code>light</code> (100 unique prompts, 50% repeat rate)<a class="headerlink" href="#profile-light-100-unique-prompts-50-repeat-rate" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>p50 ms</th>
+<th>p99 ms</th>
+<th>Throughput</th>
+<th>Cache Hit Rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-03-26 (run 1)</td>
+<td>0.03</td>
+<td>8.70</td>
+<td>566.8 req/s</td>
+<td>70.4%</td>
+</tr>
+<tr>
+<td>2026-03-26 (run 2)</td>
+<td>0.01</td>
+<td>8.10</td>
+<td>637.5 req/s</td>
+<td>70.8%</td>
+</tr>
+<tr>
+<td>2026-03-26 (run 3)</td>
+<td>0.02</td>
+<td>8.46</td>
+<td>580.6 req/s</td>
+<td>69.4%</td>
+</tr>
+<tr>
+<td><strong>Average</strong></td>
+<td><strong>0.02</strong></td>
+<td><strong>8.42</strong></td>
+<td><strong>595 req/s</strong></td>
+<td><strong>70.2%</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="profile-medium-500-unique-prompts-70-repeat-rate">Profile: <code>medium</code> (500 unique prompts, 70% repeat rate)<a class="headerlink" href="#profile-medium-500-unique-prompts-70-repeat-rate" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>p50 latency</td>
+<td>0.02 ms</td>
+</tr>
+<tr>
+<td>p99 latency</td>
+<td>~9 ms</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>~1,071 req/s</td>
+</tr>
+<tr>
+<td>Cache hit rate</td>
+<td>84.3%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="profile-heavy-1000-unique-prompts-85-repeat-rate">Profile: <code>heavy</code> (1,000 unique prompts, 85% repeat rate)<a class="headerlink" href="#profile-heavy-1000-unique-prompts-85-repeat-rate" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>p50 latency</td>
+<td>0.02 ms</td>
+</tr>
+<tr>
+<td>p99 latency</td>
+<td>~9 ms</td>
+</tr>
+<tr>
+<td>Throughput</td>
+<td>~1,107 req/s</td>
+</tr>
+<tr>
+<td>Cache hit rate</td>
+<td>84.8%</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Takeaway:</strong> Cache hit rate scales with repeat rate. At 70% repeat (realistic
+for agentic workflows with repeated system prompts and tool schemas), the proxy
+eliminates ~70% of upstream token processing overhead.</p>
+</blockquote>
+<hr />
+<h2 id="compression-ratios">Compression Ratios<a class="headerlink" href="#compression-ratios" title="Permanent link">&para;</a></h2>
+<p>TokenPak's <code>compact()</code> function removes whitespace, inline comments, redundant
+structure, and low-signal boilerplate from prompt content.</p>
+<h3 id="by-content-type-measured-on-vault-files">By Content Type (measured on vault files)<a class="headerlink" href="#by-content-type-measured-on-vault-files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Sample</th>
+<th>Original</th>
+<th>After Compact</th>
+<th>Retained</th>
+<th>Saved</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>README.md (prose)</td>
+<td>13,372 chars</td>
+<td>9,977 chars</td>
+<td>74.6%</td>
+<td>25.4%</td>
+</tr>
+<tr>
+<td>CHANGELOG.md (changelog)</td>
+<td>3,516 chars</td>
+<td>2,720 chars</td>
+<td>77.4%</td>
+<td>22.6%</td>
+</tr>
+<tr>
+<td>vault/README.md (prose)</td>
+<td>3,000 chars</td>
+<td>2,355 chars</td>
+<td>78.5%</td>
+<td>21.5%</td>
+</tr>
+<tr>
+<td>vault/_index.md (structured)</td>
+<td>1,526 chars</td>
+<td>1,003 chars</td>
+<td>65.7%</td>
+<td>34.3%</td>
+</tr>
+<tr>
+<td>vault/capabilities.md (dense)</td>
+<td>2,048 chars</td>
+<td>1,926 chars</td>
+<td>94.0%</td>
+<td>6.0%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="aggregated-stats">Aggregated Stats<a class="headerlink" href="#aggregated-stats" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mean retention ratio</td>
+<td>78.0%</td>
+</tr>
+<tr>
+<td>Best case (structured)</td>
+<td>65.7% retained → <strong>34% saved</strong></td>
+</tr>
+<tr>
+<td>Worst case (dense code)</td>
+<td>94.0% retained → <strong>6% saved</strong></td>
+</tr>
+<tr>
+<td><strong>Average savings</strong></td>
+<td><strong>~21%</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="by-content-category-estimated">By Content Category (estimated)<a class="headerlink" href="#by-content-category-estimated" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Content Type</th>
+<th>Typical Savings</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Markdown documentation</td>
+<td>20–30%</td>
+<td>Headers, links, verbose phrasing compressible</td>
+</tr>
+<tr>
+<td>Structured JSON/YAML</td>
+<td>25–40%</td>
+<td>Whitespace, repeated keys</td>
+</tr>
+<tr>
+<td>Python code</td>
+<td>5–15%</td>
+<td>Dense; comments/docstrings only</td>
+</tr>
+<tr>
+<td>Conversation prose</td>
+<td>15–25%</td>
+<td>Filler phrases, repetition</td>
+</tr>
+<tr>
+<td>System prompts</td>
+<td>20–35%</td>
+<td>Boilerplate, redundant instructions</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="token-savings">Token Savings<a class="headerlink" href="#token-savings" title="Permanent link">&para;</a></h2>
+<p>Token savings combine compression + cache hits. At ~4 chars/token (Claude
+tokenizer approximation):</p>
+<h3 id="per-request-savings-compression-only">Per-Request Savings (compression only)<a class="headerlink" href="#per-request-savings-compression-only" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Sample</th>
+<th>Tokens Before</th>
+<th>Tokens After</th>
+<th>Saved</th>
+<th>Saving %</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>README.md</td>
+<td>3,343 t</td>
+<td>2,494 t</td>
+<td>849 t</td>
+<td>25.4%</td>
+</tr>
+<tr>
+<td>CHANGELOG.md 5k</td>
+<td>879 t</td>
+<td>680 t</td>
+<td>199 t</td>
+<td>22.6%</td>
+</tr>
+<tr>
+<td>Typical system prompt (2k chars)</td>
+<td>~500 t</td>
+<td>~390 t</td>
+<td>~110 t</td>
+<td>22%</td>
+</tr>
+<tr>
+<td>Typical context window (16k chars)</td>
+<td>~4,000 t</td>
+<td>~3,120 t</td>
+<td>~880 t</td>
+<td>22%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="at-scale-estimated-1000-requestsday">At Scale (estimated, 1,000 requests/day)<a class="headerlink" href="#at-scale-estimated-1000-requestsday" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Daily Input Tokens</th>
+<th>With TokenPak</th>
+<th>Saved</th>
+<th>Est. Cost Saved*</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Light usage (avg 2k token prompts)</td>
+<td>2M tokens</td>
+<td>1.56M tokens</td>
+<td>440k tokens</td>
+<td>~$1.32</td>
+</tr>
+<tr>
+<td>Heavy usage (avg 8k token prompts)</td>
+<td>8M tokens</td>
+<td>6.24M tokens</td>
+<td>1.76M tokens</td>
+<td>~$5.28</td>
+</tr>
+<tr>
+<td>Agentic workflow (70% cache hits)</td>
+<td>8M tokens</td>
+<td>2.4M tokens</td>
+<td>5.6M tokens</td>
+<td>~$16.80</td>
+</tr>
+</tbody>
+</table>
+<p>*Cost estimates based on Claude Sonnet input pricing ($3/M tokens). Actual savings
+depend on model, provider, and workflow repeat rate.</p>
+<h3 id="vault-injection-benefit">Vault Injection Benefit<a class="headerlink" href="#vault-injection-benefit" title="Permanent link">&para;</a></h3>
+<p>When relevant vault context is injected, TokenPak replaces generic "please look
+this up" turns with pre-compressed, targeted excerpts — typically saving 1–3
+additional LLM round-trips per complex query (each ~200–800 tokens of input).</p>
+<hr />
+<h2 id="memory-footprint">Memory Footprint<a class="headerlink" href="#memory-footprint" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Memory Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxy base (no vault)</td>
+<td>~20.4 MB</td>
+</tr>
+<tr>
+<td>After vault warmup</td>
+<td>~20.6 MB</td>
+</tr>
+<tr>
+<td>Peak (active requests)</td>
+<td>~20.9 MB</td>
+</tr>
+<tr>
+<td>Vault index (7,938 blocks)</td>
+<td>~150 MB</td>
+</tr>
+<tr>
+<td>Total (proxy + vault)</td>
+<td>~171 MB</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Vault index uses tiered LRU caching: top-200 recently-modified blocks are kept
+hot in memory (configurable via <code>TOKENPAK_VAULT_CACHE_PRELOAD</code>). Remaining blocks
+are fetched from disk on demand with sub-millisecond reads.</p>
+</blockquote>
+<h3 id="cache-memory-scaling">Cache Memory Scaling<a class="headerlink" href="#cache-memory-scaling" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Config</th>
+<th>Memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOKENPAK_VAULT_MEMORY_MAX=64MB</code></td>
+<td>64 MB LRU</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_VAULT_MEMORY_MAX=256MB</code></td>
+<td>256 MB LRU (default)</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_VAULT_MEMORY_MAX=512MB</code></td>
+<td>512 MB LRU</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vault-index-lookup">Vault Index Lookup<a class="headerlink" href="#vault-index-lookup" title="Permanent link">&para;</a></h2>
+<p>BM25 search over vault blocks (7,938 blocks in production):</p>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Latency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Full BM25 search</td>
+<td>&lt; 5 ms</td>
+</tr>
+<tr>
+<td>Cache-warm hit</td>
+<td>&lt; 0.1 ms</td>
+</tr>
+<tr>
+<td>Cache miss (disk)</td>
+<td>1–3 ms</td>
+</tr>
+<tr>
+<td>Index reload (full)</td>
+<td>~200 ms</td>
+</tr>
+<tr>
+<td>Index reload (no-op)</td>
+<td>&lt; 1 ms</td>
+</tr>
+</tbody>
+</table>
+<p>Index reload is gated by mtime check — only triggers if <code>index.json</code> changed.
+Interval configurable via <code>TOKENPAK_VAULT_INDEX_RELOAD_INTERVAL</code> (default: 300s).</p>
+<hr />
+<h2 id="sla-thresholds">SLA Thresholds<a class="headerlink" href="#sla-thresholds" title="Permanent link">&para;</a></h2>
+<p>These are the CI-enforced targets from <code>benchmarks/BASELINE.md</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+<th>Status (2026-03-26)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxy p50 latency</td>
+<td>&lt; 50 ms</td>
+<td>✅ 0.02–4.55 ms</td>
+</tr>
+<tr>
+<td>Proxy p99 latency</td>
+<td>&lt; 500 ms</td>
+<td>✅ 8–160 ms</td>
+</tr>
+<tr>
+<td>Memory peak</td>
+<td>&lt; 500 MB</td>
+<td>✅ ~171 MB</td>
+</tr>
+<tr>
+<td>Cache hit rate</td>
+<td>&gt; 70%</td>
+<td>✅ 70.2–84.8%</td>
+</tr>
+<tr>
+<td>Throughput (warm)</td>
+<td>&gt; 400 req/s</td>
+<td>✅ 595–1,107 req/s</td>
+</tr>
+<tr>
+<td>Error rate</td>
+<td>&lt; 0.1%</td>
+<td>✅ 0.00%</td>
+</tr>
+<tr>
+<td>Compression savings</td>
+<td>&gt; 10%</td>
+<td>✅ ~21% avg</td>
+</tr>
+</tbody>
+</table>
+<p>CI alerts automatically if any metric regresses &gt;10% from baseline.</p>
+<hr />
+<h2 id="running-the-benchmarks">Running the Benchmarks<a class="headerlink" href="#running-the-benchmarks" title="Permanent link">&para;</a></h2>
+<h3 id="quick-benchmark-in-process-no-api-calls">Quick benchmark (in-process, no API calls)<a class="headerlink" href="#quick-benchmark-in-process-no-api-calls" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/vault/01_PROJECTS/tokenpak
+python<span class="w"> </span>benchmarks/performance_benchmark.py
+</code></pre></div>
+<p>Runs all three profiles (light/medium/heavy) and prints results. Exits with
+code 1 if any SLA target is missed.</p>
+<h3 id="full-benchmark-suite">Full benchmark suite<a class="headerlink" href="#full-benchmark-suite" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>python<span class="w"> </span>benchmarks/run_benchmarks.py
+<span class="c1"># Results written to benchmarks/results/performance-&lt;timestamp&gt;.json</span>
+</code></pre></div>
+<h3 id="make-target-ci">Make target (CI)<a class="headerlink" href="#make-target-ci" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nf">bench</span><span class="o">:</span>
+<span class="w">    </span>python<span class="w"> </span>benchmarks/performance_benchmark.py
+
+<span class="nf">bench-full</span><span class="o">:</span>
+<span class="w">    </span>python<span class="w"> </span>benchmarks/run_benchmarks.py
+</code></pre></div>
+<h3 id="github-actions">GitHub Actions<a class="headerlink" href="#github-actions" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Performance benchmarks</span>
+<span class="w">  </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python benchmarks/performance_benchmark.py</span>
+<span class="w">  </span><span class="c1"># Exits 1 on SLA regression — CI will catch it</span>
+</code></pre></div>
+<hr />
+<h2 id="interpreting-the-numbers">Interpreting the Numbers<a class="headerlink" href="#interpreting-the-numbers" title="Permanent link">&para;</a></h2>
+<p><strong>Why is p50 so low (&lt; 1ms)?</strong><br />
+The proxy is an in-process HTTP server on loopback. When a request hits the cache,
+the entire path (receive → decompress → lookup → respond) completes in under 1ms.
+Upstream LLM latency (200–2,000ms) completely dominates end-user perceived latency.</p>
+<p><strong>Why does p99 spike?</strong><br />
+Python's GIL and garbage collector create periodic pauses. At low request rates,
+the first request after a GC cycle sees a ~30–160ms spike. At high sustained load
+(100 RPS), GC runs more frequently but shorter, so p99 stays around 160ms.</p>
+<p><strong>How does cache hit rate affect costs?</strong><br />
+Each cache hit means the proxy returns a pre-compressed response without forwarding
+to the upstream LLM — saving both latency (the full upstream round-trip) and tokens
+(the repeat prompt isn't re-processed). At 70% hit rate, 7 in 10 requests cost zero
+upstream tokens.</p>
+<hr />
+<p><em>Benchmarks established 2026-03-26 by Cali (latency/compression) and Trix
+(cache/throughput). Re-run after any significant proxy change.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 TokenPak Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/tokenpak/tokenpak" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

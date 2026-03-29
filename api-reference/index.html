@@ -1,0 +1,6076 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+        <meta name="author" content="TokenPak Contributors">
+      
+      
+        <link rel="canonical" href="https://docs.tokenpak.ai/api-reference/">
+      
+      
+        <link rel="prev" href="../API/">
+      
+      
+        <link rel="next" href="../features/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>API Reference (Extended) - TokenPak</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tokenpak-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TokenPak" class="md-header__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TokenPak
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API Reference (Extended)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../adapters/openai-compat/" class="md-tabs__link">
+          
+  
+  
+  Adapters
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../observability/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../recipes/01-multi-provider-fallback/" class="md-tabs__link">
+          
+  
+  
+  Recipes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../FAQ/" class="md-tabs__link">
+          
+  
+  
+  Support
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TokenPak" class="md-nav__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    TokenPak
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env-vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../error-handling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCKER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAVINGS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPONENT-DIAGRAM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Diagram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference (Extended)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference (Extended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-http-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy HTTP API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy HTTP API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-statslast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats/last
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-statssession" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats/session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-savingssinceiso-date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /savings[?since=&lt;ISO-date&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-cache-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /cache-stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-recent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /recent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-tracelast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /trace/last
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-tracerequest_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /trace/&lt;request_id&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /traces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /vault
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metricsdashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics/dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-dashboard-get-dashboardpath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /dashboard / GET /dashboard/&lt;path&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-docs-get-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /docs / GET /docs/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-openapiyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /openapi.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-v1messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v1/messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-v1chatcompletions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v1/chat/completions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-ingest-post-ingestbatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /ingest / POST /ingest/batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-configreload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /config/reload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sdk-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDK Adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SDK Adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-adapter-tokenpakadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base Adapter (TokenPakAdapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#anthropicadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnthropicAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openaiadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAIAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#langchainadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LangChainAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#litellmadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LiteLLMAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exception-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exception Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#proxy-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Lifecycle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexing-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Indexing &amp; Search
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Indexing &amp; Search">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-index-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak index [directory]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-search-query" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak search &lt;query&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-calibrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak calibrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring &amp; Stats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monitoring &amp; Stats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-savingssincedate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak savings[?since=&lt;date&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak compare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-leaderboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak leaderboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak timeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-aggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak aggregate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-check-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak check-alerts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-preview-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak preview &lt;file&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-debug-onoffstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak debug on|off|status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-learn-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak learn status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-learn-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak learn reset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-validate-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak validate &lt;file&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak diff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-vault-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak vault-health
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak route
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak serve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-macro" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak macro
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak recipe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak fleet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compression-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vault-context-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Context Injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-system-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OSS-PRO-BOUNDARY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OSS / PRO Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../assets/DIAGRAMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Diagrams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/openai-compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/litellm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LiteLLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/langchain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LangChain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/google/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--active"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../production-sla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production SLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPRESSION_TUNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compression Tuning
+  
+
+    
+      <br>
+      <small>Optimize token savings vs latency tradeoffs for your use case</small>
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LATENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Latency Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/memory-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/01-multi-provider-fallback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Provider Fallback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/02-budget-caps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Budget Caps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/03-per-user-rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User Rate Limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/04-model-routing-by-use-case/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Routing by Use Case
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/05-cost-monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/06-streaming-responses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/07-local-development-mock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Development Mock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Support
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proxy-http-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy HTTP API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy HTTP API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GET Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /health
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-statslast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats/last
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-statssession" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /stats/session
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-savingssinceiso-date" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /savings[?since=&lt;ISO-date&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-cache-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /cache-stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-recent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /recent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-tracelast" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /trace/last
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-tracerequest_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /trace/&lt;request_id&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-traces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /traces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /vault
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-metricsdashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /metrics/dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-dashboard-get-dashboardpath" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /dashboard / GET /dashboard/&lt;path&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-docs-get-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /docs / GET /docs/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-openapiyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GET /openapi.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST Endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="POST Endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#post-v1messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v1/messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-v1chatcompletions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /v1/chat/completions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-ingest-post-ingestbatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /ingest / POST /ingest/batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-configreload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POST /config/reload
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sdk-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDK Adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SDK Adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-adapter-tokenpakadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base Adapter (TokenPakAdapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#anthropicadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AnthropicAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openaiadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAIAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#langchainadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LangChainAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#litellmadapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LiteLLMAdapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exception-hierarchy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exception Hierarchy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CLI Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#proxy-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy Lifecycle
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proxy Lifecycle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak update
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indexing-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Indexing &amp; Search
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Indexing &amp; Search">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-index-directory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak index [directory]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-search-query" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak search &lt;query&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-calibrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak calibrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring &amp; Stats
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monitoring &amp; Stats">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak stats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-savingssincedate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak savings[?since=&lt;date&gt;]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak usage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak compare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-leaderboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak leaderboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak requests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak timeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-aggregate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak aggregate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-monitor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak monitor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-check-alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak check-alerts
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-preview-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak preview &lt;file&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-debug-onoffstatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak debug on|off|status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-learn-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak learn status
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-learn-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak learn reset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak replay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-validate-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak validate &lt;file&gt;
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak diff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-vault-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak vault-health
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Management
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config Management">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak route
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak serve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak benchmark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-macro" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak macro
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak recipe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-fleet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak fleet
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-template" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak template
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenpak-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tokenpak audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Environment Variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#compression-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Settings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vault-context-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vault Context Injection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Features
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tokenpak-api-reference">TokenPak API Reference<a class="headerlink" href="#tokenpak-api-reference" title="Permanent link">&para;</a></h1>
+<p><strong>Complete reference for the TokenPak proxy HTTP API, SDK adapters, and CLI.</strong></p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#proxy-http-api">Proxy HTTP API</a></li>
+<li><a href="#authentication">Authentication</a></li>
+<li><a href="#get-endpoints">GET Endpoints</a></li>
+<li><a href="#post-endpoints">POST Endpoints</a></li>
+<li><a href="#error-format">Error Format</a></li>
+<li><a href="#sdk-adapters">SDK Adapters</a></li>
+<li><a href="#base-adapter-tokenpakadapter">Base Adapter (TokenPakAdapter)</a></li>
+<li><a href="#anthropicadapter">AnthropicAdapter</a></li>
+<li><a href="#openaiadapter">OpenAIAdapter</a></li>
+<li><a href="#langchainadapter">LangChainAdapter</a></li>
+<li><a href="#litellmadapter">LiteLLMAdapter</a></li>
+<li><a href="#exception-hierarchy">Exception Hierarchy</a></li>
+<li><a href="#cli-commands">CLI Commands</a></li>
+<li><a href="#proxy-lifecycle">Proxy Lifecycle</a></li>
+<li><a href="#indexing--search">Indexing &amp; Search</a></li>
+<li><a href="#monitoring--stats">Monitoring &amp; Stats</a></li>
+<li><a href="#diagnostics">Diagnostics</a></li>
+<li><a href="#config-management">Config Management</a></li>
+<li><a href="#advanced-commands">Advanced Commands</a></li>
+<li><a href="#configuration-reference">Configuration Reference</a></li>
+<li><a href="#environment-variables">Environment Variables</a></li>
+<li><a href="#configyaml">config.yaml</a></li>
+</ol>
+<hr />
+<h2 id="proxy-http-api">Proxy HTTP API<a class="headerlink" href="#proxy-http-api" title="Permanent link">&para;</a></h2>
+<p>The TokenPak proxy runs on <code>localhost:8766</code> by default. It accepts standard HTTP requests and transparently forwards them to upstream providers after applying compression and context injection.</p>
+<h3 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h3>
+<p>By default, TokenPak allows unauthenticated requests from localhost. For remote clients, authentication is required via header:</p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>X-TokenPak-Key</code></td>
+<td><code>&lt;your-proxy-key&gt;</code></td>
+<td>Required for non-localhost clients</td>
+</tr>
+<tr>
+<td><code>x-api-key</code></td>
+<td><code>&lt;provider-api-key&gt;</code></td>
+<td>Provider key, forwarded to upstream</td>
+</tr>
+<tr>
+<td><code>Authorization</code></td>
+<td><code>Bearer &lt;token&gt;</code></td>
+<td>Alternative to <code>x-api-key</code></td>
+</tr>
+</tbody>
+</table>
+<p>Requests from non-localhost without <code>X-TokenPak-Key</code> receive <code>401 Unauthorized</code>.</p>
+<hr />
+<h3 id="get-endpoints">GET Endpoints<a class="headerlink" href="#get-endpoints" title="Permanent link">&para;</a></h3>
+<h4 id="get"><code>GET /</code><a class="headerlink" href="#get" title="Permanent link">&para;</a></h4>
+<p>Welcome / status endpoint. Returns proxy identity and available endpoints.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;TokenPak&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0.5.0&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;running&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;endpoints&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;health&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/health&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/stats&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;docs&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/docs&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;proxy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/v1/messages (POST), /v1/chat/completions (POST)&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;docs&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://github.com/kaywhy331/tokenpak&quot;</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-health"><code>GET /health</code><a class="headerlink" href="#get-health" title="Permanent link">&para;</a></h4>
+<p>Lightweight health check. Cached for 1 second to reduce overhead.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ok&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;compilation_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hybrid&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vault_index&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;blocks&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/home/user/vault/.tokenpak&quot;</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;router&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;rules_loaded&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;capsule_available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;budget&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4000</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;circuit_breakers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;anthropic&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;open&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;stats&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">142</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">380000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;sent_input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">210000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;saved_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">170000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cache_hits&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">37</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.85</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;latency&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;p50_latency_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">320</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;p99_latency_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1840</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;samples&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p>Also supports <code>HEAD /health</code> (returns 200 with no body — useful for Kubernetes liveness probes).</p>
+<hr />
+<h4 id="get-stats"><code>GET /stats</code><a class="headerlink" href="#get-stats" title="Permanent link">&para;</a></h4>
+<p>Full session statistics. Heavier than <code>/health</code> — includes per-model breakdown and recent requests.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;session&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">142</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">380000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;sent_input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">210000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;saved_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">170000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">95000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.85</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cost_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;start_time&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1711584000.0</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cache_hits&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">37</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;compilation_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hybrid&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;vault_index&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;blocks&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;router&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;today&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;by_model&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;claude-sonnet-4-6&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">250000</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;recent&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-statslast"><code>GET /stats/last</code><a class="headerlink" href="#get-statslast" title="Permanent link">&para;</a></h4>
+<p>Per-request stats for the most recent proxied request.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;req_abc123&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-28T16:00:00Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;claude-sonnet-4-6&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tokens_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1240</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;percent_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">28.3</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;cost_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0037</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;session_total_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.42</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;session_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">142</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;input_tokens_raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4380</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;input_tokens_sent&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3140</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">512</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Error (no requests yet):</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;no_requests&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;No requests captured yet. Send a message to see stats.&quot;</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-statssession"><code>GET /stats/session</code><a class="headerlink" href="#get-statssession" title="Permanent link">&para;</a></h4>
+<p>Session aggregate summary with uptime and average savings.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;session_requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">142</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;session_total_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.42</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tokens_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">170000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tokens_sent&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">210000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tokens_raw&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">380000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">95000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;total_cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.85</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;uptime_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">4.5</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;avg_savings_pct&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">44.7</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-savingssinceiso-date"><code>GET /savings[?since=&lt;ISO-date&gt;]</code><a class="headerlink" href="#get-savingssinceiso-date" title="Permanent link">&para;</a></h4>
+<p>Savings report, optionally filtered by start date.</p>
+<p><strong>Query Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>since</code></td>
+<td>ISO-8601 date string</td>
+<td>Filter to requests on/after this date</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example:</strong> <code>GET /savings?since=2026-03-01</code></p>
+<hr />
+<h4 id="get-cache-stats"><code>GET /cache-stats</code><a class="headerlink" href="#get-cache-stats" title="Permanent link">&para;</a></h4>
+<p>Detailed cache hit/miss breakdown.</p>
+<hr />
+<h4 id="get-recent"><code>GET /recent</code><a class="headerlink" href="#get-recent" title="Permanent link">&para;</a></h4>
+<p>Last 50 requests with per-request metadata.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;recent&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-28T16:00:00Z&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;claude-sonnet-4-6&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4380</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;latency_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">320</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;status_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;tokens_saved&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1240</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-tracelast"><code>GET /trace/last</code><a class="headerlink" href="#get-tracelast" title="Permanent link">&para;</a></h4>
+<p>Full pipeline trace for the most recent request (debugging).</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;request_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;req_abc123&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-28T16:00:00Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stages&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;compaction&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;duration_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">45</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tokens_before&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4380</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tokens_after&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3140</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;vault_inject&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;duration_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;blocks_injected&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;upstream_forward&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;duration_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">260</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;provider&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;anthropic&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-tracerequest_id"><code>GET /trace/&lt;request_id&gt;</code><a class="headerlink" href="#get-tracerequest_id" title="Permanent link">&para;</a></h4>
+<p>Pipeline trace for a specific request by ID.</p>
+<hr />
+<h4 id="get-traces"><code>GET /traces</code><a class="headerlink" href="#get-traces" title="Permanent link">&para;</a></h4>
+<p>All stored pipeline traces (up to last N requests).</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;traces&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-vault"><code>GET /vault</code><a class="headerlink" href="#get-vault" title="Permanent link">&para;</a></h4>
+<p>Vault index debug info — lists all indexed blocks.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;blocks&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;total_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">185000</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/home/user/vault/.tokenpak&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;block_list&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;block_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;vault_001&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;source_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;04_KNOWLEDGE/concepts/tokenpak.md&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;risk_class&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;safe&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;raw_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1240</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-metrics"><code>GET /metrics</code><a class="headerlink" href="#get-metrics" title="Permanent link">&para;</a></h4>
+<p>Prometheus-compatible metrics in text format.</p>
+<p><strong>Content-Type:</strong> <code>text/plain; version=0.0.4; charset=utf-8</code></p>
+<p><strong>Example output:</strong>
+<div class="highlight"><pre><span></span><code># HELP tokenpak_requests_total Total proxied requests
+# TYPE tokenpak_requests_total counter
+tokenpak_requests_total 142
+tokenpak_tokens_input_total 380000
+tokenpak_tokens_saved_total 170000
+tokenpak_errors_total 2
+tokenpak_uptime_seconds 16200
+</code></pre></div></p>
+<hr />
+<h4 id="get-metricsdashboard"><code>GET /metrics/dashboard</code><a class="headerlink" href="#get-metricsdashboard" title="Permanent link">&para;</a></h4>
+<p>Comprehensive dashboard metrics with 8 key metrics in JSON format.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-03-28T16:00:00Z&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;uptime_seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">16200</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">142</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;throughput_req_per_sec&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.009</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;24h_window&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;latency&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;p50_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">320.0</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;p95_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">980.0</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;p99_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1840.0</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;avg_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">415.0</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;samples&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;models&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;claude-sonnet-4-6&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;requests&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">100</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">250000</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;routing&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;smart_routing_hit_rate&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;cache&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;hit_ratio&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.42</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;read_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">85000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;creation_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">118000</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;errors&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;error_rate&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.014</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;error_count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;top_failures&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;429&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;503&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;streaming&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;percentage&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">&quot;window_24h&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">380000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">95000</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;total_cost&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">0.85</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="get-dashboard-get-dashboardpath"><code>GET /dashboard</code> / <code>GET /dashboard/&lt;path&gt;</code><a class="headerlink" href="#get-dashboard-get-dashboardpath" title="Permanent link">&para;</a></h4>
+<p>Serves the built-in HTML monitoring dashboard.</p>
+<hr />
+<h4 id="get-docs-get-docs"><code>GET /docs</code> / <code>GET /docs/</code><a class="headerlink" href="#get-docs-get-docs" title="Permanent link">&para;</a></h4>
+<p>Serves the built-in API documentation page (HTML).</p>
+<hr />
+<h4 id="get-openapiyaml"><code>GET /openapi.yaml</code><a class="headerlink" href="#get-openapiyaml" title="Permanent link">&para;</a></h4>
+<p>OpenAPI 3.0 spec for the proxy HTTP API.</p>
+<hr />
+<h3 id="post-endpoints">POST Endpoints<a class="headerlink" href="#post-endpoints" title="Permanent link">&para;</a></h3>
+<h4 id="post-v1messages"><code>POST /v1/messages</code><a class="headerlink" href="#post-v1messages" title="Permanent link">&para;</a></h4>
+<p>Anthropic Messages API — the primary proxy path for Claude models.</p>
+<p>TokenPak intercepts this request, applies compression, and forwards to the upstream Anthropic API. The response is transparently passed back.</p>
+<p><strong>Headers:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Content-Type</code></td>
+<td><code>application/json</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>x-api-key</code></td>
+<td><code>&lt;anthropic-api-key&gt;</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>anthropic-version</code></td>
+<td><code>2023-06-01</code></td>
+<td>Recommended</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Body:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;claude-sonnet-4-6&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;max_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4096</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;messages&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Explain quantum entanglement.&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;system&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;You are a helpful physics tutor.&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stream&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Request Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Model ID (e.g. <code>claude-sonnet-4-6</code>)</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td>array</td>
+<td>Yes</td>
+<td>Conversation history — <code>role</code> + <code>content</code> pairs</td>
+</tr>
+<tr>
+<td><code>max_tokens</code></td>
+<td>integer</td>
+<td>Yes</td>
+<td>Maximum tokens in the response</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>string</td>
+<td>No</td>
+<td>System prompt</td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td>boolean</td>
+<td>No</td>
+<td>Enable SSE streaming (default: false)</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>float</td>
+<td>No</td>
+<td>Sampling temperature (0.0–1.0)</td>
+</tr>
+<tr>
+<td><code>top_p</code></td>
+<td>float</td>
+<td>No</td>
+<td>Nucleus sampling threshold</td>
+</tr>
+<tr>
+<td><code>stop_sequences</code></td>
+<td>array</td>
+<td>No</td>
+<td>Custom stop strings</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>array</td>
+<td>No</td>
+<td>Tool/function definitions</td>
+</tr>
+<tr>
+<td><code>tool_choice</code></td>
+<td>object</td>
+<td>No</td>
+<td>Tool selection policy</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;msg_abc123&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;message&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assistant&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;text&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;text&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Quantum entanglement is...&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;claude-sonnet-4-6&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stop_reason&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;end_turn&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;usage&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3140</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;output_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">512</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cache_read_input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1200</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;cache_creation_input_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">800</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h4 id="post-v1chatcompletions"><code>POST /v1/chat/completions</code><a class="headerlink" href="#post-v1chatcompletions" title="Permanent link">&para;</a></h4>
+<p>OpenAI Chat Completions API — compatible path for OpenAI SDK clients, LangChain, and LiteLLM.</p>
+<p><strong>Headers:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Header</th>
+<th>Value</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Content-Type</code></td>
+<td><code>application/json</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>Authorization</code></td>
+<td><code>Bearer &lt;api-key&gt;</code></td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Body:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;model&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gpt-4o&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;messages&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;system&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;You are a helpful assistant.&quot;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">&quot;role&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;user&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Hello!&quot;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="p">],</span>
+<span class="w">  </span><span class="nt">&quot;max_tokens&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1024</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;stream&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Request Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Model ID</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td>array</td>
+<td>Yes</td>
+<td>Message list with <code>role</code> and <code>content</code></td>
+</tr>
+<tr>
+<td><code>max_tokens</code></td>
+<td>integer</td>
+<td>No</td>
+<td>Maximum response tokens</td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td>boolean</td>
+<td>No</td>
+<td>Enable SSE streaming</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td>float</td>
+<td>No</td>
+<td>Sampling temperature</td>
+</tr>
+<tr>
+<td><code>functions</code></td>
+<td>array</td>
+<td>No</td>
+<td>Function/tool definitions (legacy)</td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td>array</td>
+<td>No</td>
+<td>Tool definitions</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="post-ingest-post-ingestbatch"><code>POST /ingest</code> / <code>POST /ingest/batch</code><a class="headerlink" href="#post-ingest-post-ingestbatch" title="Permanent link">&para;</a></h4>
+<p>Ingest context blocks directly into the vault index at runtime.</p>
+<p><strong>Request Body:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;block_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-context-001&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;content&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;This is important context to inject...&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;source_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;custom/context.md&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;risk_class&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;safe&quot;</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Batch variant</strong> (<code>/ingest/batch</code>) accepts an array of blocks.</p>
+<hr />
+<h4 id="post-configreload"><code>POST /config/reload</code><a class="headerlink" href="#post-configreload" title="Permanent link">&para;</a></h4>
+<p>Hot-reload configuration from environment variables (localhost only).</p>
+<p>Equivalent to sending <code>SIGHUP</code> to the proxy process.</p>
+<p><strong>Response:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;status&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ok&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Config reloaded: TOKENPAK_MODE=hybrid, TOKENPAK_COMPACT=1&quot;</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Note:</strong> Only accepts requests from <code>127.0.0.1</code> or <code>::1</code>. Remote calls receive <code>403 Forbidden</code>.</p>
+<hr />
+<h3 id="error-format">Error Format<a class="headerlink" href="#error-format" title="Permanent link">&para;</a></h3>
+<p>All error responses use a consistent JSON structure:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;error&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;error_type&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;message&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Human-readable description&quot;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><strong>Common error types:</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th><code>error.type</code></th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td><code>bad_request</code></td>
+<td>Malformed request body</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>unauthorized</code></td>
+<td>Missing or invalid <code>X-TokenPak-Key</code></td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>forbidden</code></td>
+<td>Operation not allowed from this IP</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>not_found</code></td>
+<td>Unknown endpoint path</td>
+</tr>
+<tr>
+<td>405</td>
+<td><code>method_not_allowed</code></td>
+<td>Wrong HTTP method (e.g. GET on POST-only path)</td>
+</tr>
+<tr>
+<td>429</td>
+<td><code>rate_limit_exceeded</code></td>
+<td>Too many requests from this IP</td>
+</tr>
+<tr>
+<td>500</td>
+<td><code>internal_error</code></td>
+<td>Proxy-side error</td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>circuit_open</code></td>
+<td>Upstream provider circuit breaker open</td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>upstream_unreachable</code></td>
+<td>Cannot reach upstream provider</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="sdk-adapters">SDK Adapters<a class="headerlink" href="#sdk-adapters" title="Permanent link">&para;</a></h2>
+<p>TokenPak provides adapters that route requests through the proxy while preserving the native API shape of each SDK.</p>
+<h3 id="base-adapter-tokenpakadapter">Base Adapter (<code>TokenPakAdapter</code>)<a class="headerlink" href="#base-adapter-tokenpakadapter" title="Permanent link">&para;</a></h3>
+<p>All adapters inherit from <code>TokenPakAdapter</code> and implement four lifecycle hooks.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenPakAdapter</span>
+</code></pre></div>
+<p><strong>Constructor Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_url</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Proxy URL, e.g. <code>http://127.0.0.1:8766</code></td>
+</tr>
+<tr>
+<td><code>api_key</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Provider API key (forwarded to upstream)</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td>float</td>
+<td>No</td>
+<td><code>120.0</code></td>
+<td>Request timeout in seconds</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Lifecycle Methods:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prepare_request</code></td>
+<td><code>(request: dict) -&gt; dict</code></td>
+<td>Validate and normalise request</td>
+</tr>
+<tr>
+<td><code>send</code></td>
+<td><code>(prepared: dict) -&gt; dict</code></td>
+<td>POST to proxy, return raw response</td>
+</tr>
+<tr>
+<td><code>parse_response</code></td>
+<td><code>(response: dict) -&gt; dict</code></td>
+<td>Convert to SDK-native format</td>
+</tr>
+<tr>
+<td><code>extract_tokens</code></td>
+<td><code>(response: dict) -&gt; dict</code></td>
+<td>Extract <code>{input, output, cache_read, cache_creation}</code> token counts</td>
+</tr>
+</tbody>
+</table>
+<p><strong>High-level call method:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Convenience: calls prepare_request → send → parse_response</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">request_dict</span><span class="p">)</span>
+
+<span class="c1"># Extract token usage</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">extract_tokens</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+<span class="c1"># tokens = {&quot;input_tokens&quot;: 3140, &quot;output_tokens&quot;: 512, ...}</span>
+</code></pre></div>
+<hr />
+<h3 id="anthropicadapter">AnthropicAdapter<a class="headerlink" href="#anthropicadapter" title="Permanent link">&para;</a></h3>
+<p>Routes requests to <code>/v1/messages</code> on the proxy.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnthropicAdapter</span>
+
+<span class="n">adapter</span> <span class="o">=</span> <span class="n">AnthropicAdapter</span><span class="p">(</span>
+    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://127.0.0.1:8766&quot;</span><span class="p">,</span>
+    <span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;sk-ant-api03-...&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">response</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">call</span><span class="p">({</span>
+    <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;claude-sonnet-4-6&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;max_tokens&quot;</span><span class="p">:</span> <span class="mi">1024</span><span class="p">,</span>
+    <span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;What is 2 + 2?&quot;</span><span class="p">}</span>
+    <span class="p">],</span>
+<span class="p">})</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;text&quot;</span><span class="p">])</span>
+<span class="n">tokens</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">extract_tokens</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Input tokens: </span><span class="si">{</span><span class="n">tokens</span><span class="p">[</span><span class="s1">&#39;input_tokens&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Proxy Path:</strong> <code>POST /v1/messages</code></p>
+<p><strong>Required Request Fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td>Claude model ID</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td>list</td>
+<td>Non-empty list of <code>{role, content}</code> dicts</td>
+</tr>
+<tr>
+<td><code>max_tokens</code></td>
+<td>integer</td>
+<td>Maximum completion tokens</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Added Defaults (if not present):</strong>
+- <code>stream</code> defaults to <code>false</code></p>
+<p><strong>Extra Headers Sent:</strong>
+- <code>anthropic-version: 2023-06-01</code></p>
+<p><strong><code>extract_tokens</code> Return:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+  <span class="s2">&quot;input_tokens&quot;</span><span class="p">:</span> <span class="mi">3140</span><span class="p">,</span>
+  <span class="s2">&quot;output_tokens&quot;</span><span class="p">:</span> <span class="mi">512</span><span class="p">,</span>
+  <span class="s2">&quot;cache_read_input_tokens&quot;</span><span class="p">:</span> <span class="mi">1200</span><span class="p">,</span>
+  <span class="s2">&quot;cache_creation_input_tokens&quot;</span><span class="p">:</span> <span class="mi">800</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h3 id="openaiadapter">OpenAIAdapter<a class="headerlink" href="#openaiadapter" title="Permanent link">&para;</a></h3>
+<p>Routes requests to <code>/v1/chat/completions</code> on the proxy.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIAdapter</span>
+
+<span class="n">adapter</span> <span class="o">=</span> <span class="n">OpenAIAdapter</span><span class="p">(</span>
+    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://127.0.0.1:8766&quot;</span><span class="p">,</span>
+    <span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;sk-...&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">response</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">call</span><span class="p">({</span>
+    <span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;gpt-4o&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;messages&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;Hello, world!&quot;</span><span class="p">}</span>
+    <span class="p">],</span>
+<span class="p">})</span>
+</code></pre></div>
+<p><strong>Proxy Path:</strong> <code>POST /v1/chat/completions</code></p>
+<p><strong>Required Request Fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td>OpenAI model ID</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td>list</td>
+<td>Non-empty list of <code>{role, content}</code> dicts</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="langchainadapter">LangChainAdapter<a class="headerlink" href="#langchainadapter" title="Permanent link">&para;</a></h3>
+<p>Drop-in adapter for LangChain integrations.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters</span><span class="w"> </span><span class="kn">import</span> <span class="n">LangChainAdapter</span>
+
+<span class="n">adapter</span> <span class="o">=</span> <span class="n">LangChainAdapter</span><span class="p">(</span>
+    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://127.0.0.1:8766&quot;</span><span class="p">,</span>
+    <span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Constructor Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_url</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Proxy URL</td>
+</tr>
+<tr>
+<td><code>api_key</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Provider API key</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td>float</td>
+<td>No</td>
+<td><code>120.0</code></td>
+<td>Request timeout</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="litellmadapter">LiteLLMAdapter<a class="headerlink" href="#litellmadapter" title="Permanent link">&para;</a></h3>
+<p>Drop-in adapter for LiteLLM integrations.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters</span><span class="w"> </span><span class="kn">import</span> <span class="n">LiteLLMAdapter</span>
+
+<span class="n">adapter</span> <span class="o">=</span> <span class="n">LiteLLMAdapter</span><span class="p">(</span>
+    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://127.0.0.1:8766&quot;</span><span class="p">,</span>
+    <span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Constructor Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_url</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Proxy URL</td>
+</tr>
+<tr>
+<td><code>api_key</code></td>
+<td>str</td>
+<td>Yes</td>
+<td>—</td>
+<td>Provider API key</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td>float</td>
+<td>No</td>
+<td><code>120.0</code></td>
+<td>Request timeout</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="exception-hierarchy">Exception Hierarchy<a class="headerlink" href="#exception-hierarchy" title="Permanent link">&para;</a></h3>
+<p>All adapters raise canonical exceptions — never raw <code>requests</code> exceptions.</p>
+<div class="highlight"><pre><span></span><code>TokenPakAdapterError (base)
+├── TokenPakTimeoutError      — proxy did not respond within timeout_s
+├── TokenPakConfigError       — missing required fields / bad config
+└── TokenPakAuthError         — 401 or 403 from proxy
+</code></pre></div>
+<p><strong>Usage:</strong>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.adapters.base</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TokenPakAdapterError</span><span class="p">,</span>
+    <span class="n">TokenPakTimeoutError</span><span class="p">,</span>
+    <span class="n">TokenPakAuthError</span><span class="p">,</span>
+    <span class="n">TokenPakConfigError</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">TokenPakTimeoutError</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Proxy timed out&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">TokenPakAuthError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Auth failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2"> (HTTP </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">TokenPakConfigError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Config error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">TokenPakAdapterError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Adapter error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2"> (HTTP </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">status_code</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</code></pre></div></p>
+<hr />
+<h2 id="cli-commands">CLI Commands<a class="headerlink" href="#cli-commands" title="Permanent link">&para;</a></h2>
+<p>All commands are invoked as <code>tokenpak &lt;command&gt; [options]</code>.</p>
+<h3 id="proxy-lifecycle">Proxy Lifecycle<a class="headerlink" href="#proxy-lifecycle" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-start"><code>tokenpak start</code><a class="headerlink" href="#tokenpak-start" title="Permanent link">&para;</a></h4>
+<p>Start the proxy (default: <code>localhost:8766</code>).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>start<span class="w">                    </span><span class="c1"># Start on default port 8766</span>
+tokenpak<span class="w"> </span>start<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span><span class="w">        </span><span class="c1"># Custom port</span>
+tokenpak<span class="w"> </span>start<span class="w"> </span>--debug<span class="w">            </span><span class="c1"># Verbose logging</span>
+tokenpak<span class="w"> </span>start<span class="w"> </span>--background<span class="w">       </span><span class="c1"># Run as background daemon</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--port</code></td>
+<td>int</td>
+<td><code>8766</code></td>
+<td>Port to listen on</td>
+</tr>
+<tr>
+<td><code>--debug</code></td>
+<td>flag</td>
+<td>off</td>
+<td>Enable debug logging</td>
+</tr>
+<tr>
+<td><code>--background</code></td>
+<td>flag</td>
+<td>off</td>
+<td>Daemonize the process</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="tokenpak-stop"><code>tokenpak stop</code><a class="headerlink" href="#tokenpak-stop" title="Permanent link">&para;</a></h4>
+<p>Stop the running proxy process.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>stop
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-restart"><code>tokenpak restart</code><a class="headerlink" href="#tokenpak-restart" title="Permanent link">&para;</a></h4>
+<p>Restart the proxy (stop + start).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>restart
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-logs"><code>tokenpak logs</code><a class="headerlink" href="#tokenpak-logs" title="Permanent link">&para;</a></h4>
+<p>Show recent proxy log output.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>logs<span class="w">                </span><span class="c1"># Last 50 lines</span>
+tokenpak<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span><span class="m">100</span><span class="w">         </span><span class="c1"># Last 100 lines</span>
+tokenpak<span class="w"> </span>logs<span class="w"> </span>--follow<span class="w">       </span><span class="c1"># Stream new log lines (tail -f)</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-n</code>, <code>--lines</code></td>
+<td>int</td>
+<td><code>50</code></td>
+<td>Number of log lines to show</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="tokenpak-status"><code>tokenpak status</code><a class="headerlink" href="#tokenpak-status" title="Permanent link">&para;</a></h4>
+<p>Show system status and recent retry events.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>status
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-version"><code>tokenpak version</code><a class="headerlink" href="#tokenpak-version" title="Permanent link">&para;</a></h4>
+<p>Show current versions (proxy, config, CLI).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>version
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-update"><code>tokenpak update</code><a class="headerlink" href="#tokenpak-update" title="Permanent link">&para;</a></h4>
+<p>Update TokenPak to latest version from git/PyPI.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>update
+</code></pre></div>
+<hr />
+<h3 id="indexing-search">Indexing &amp; Search<a class="headerlink" href="#indexing-search" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-index-directory"><code>tokenpak index [directory]</code><a class="headerlink" href="#tokenpak-index-directory" title="Permanent link">&para;</a></h4>
+<p>Index a directory for vault-based context injection.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>index<span class="w"> </span>~/vault<span class="w">           </span><span class="c1"># Index the vault</span>
+tokenpak<span class="w"> </span>index<span class="w"> </span>~/vault<span class="w"> </span>--watch<span class="w">   </span><span class="c1"># Watch and auto-reindex on changes</span>
+tokenpak<span class="w"> </span>index<span class="w"> </span>--status<span class="w">          </span><span class="c1"># Show indexed file count by type</span>
+tokenpak<span class="w"> </span>index<span class="w"> </span>-w<span class="w"> </span><span class="m">8</span><span class="w">              </span><span class="c1"># Use 8 parallel workers</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>directory</code></td>
+<td>path</td>
+<td>—</td>
+<td>Directory to index (positional)</td>
+</tr>
+<tr>
+<td><code>--status</code></td>
+<td>flag</td>
+<td>off</td>
+<td>Show indexed file count by type</td>
+</tr>
+<tr>
+<td><code>--workers</code>, <code>-w</code></td>
+<td>int</td>
+<td><code>4</code></td>
+<td>Parallel indexing workers</td>
+</tr>
+<tr>
+<td><code>--watch</code></td>
+<td>flag</td>
+<td>off</td>
+<td>Watch for file changes and auto-reindex</td>
+</tr>
+<tr>
+<td><code>--recalibrate</code></td>
+<td>flag</td>
+<td>off</td>
+<td>Run worker calibration before indexing</td>
+</tr>
+<tr>
+<td><code>--max-workers</code></td>
+<td>int</td>
+<td><code>8</code></td>
+<td>Worker cap for auto-calibration</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="tokenpak-search-query"><code>tokenpak search &lt;query&gt;</code><a class="headerlink" href="#tokenpak-search-query" title="Permanent link">&para;</a></h4>
+<p>Search the indexed vault content using BM25.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;compression budget&quot;</span>
+tokenpak<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;rate limits&quot;</span><span class="w"> </span>--top<span class="w"> </span><span class="m">10</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td>—</td>
+<td>Search query (positional)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="tokenpak-calibrate"><code>tokenpak calibrate</code><a class="headerlink" href="#tokenpak-calibrate" title="Permanent link">&para;</a></h4>
+<p>Calibrate the optimal worker count for parallel indexing on this host.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>calibrate
+</code></pre></div>
+<hr />
+<h3 id="monitoring-stats">Monitoring &amp; Stats<a class="headerlink" href="#monitoring-stats" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-stats"><code>tokenpak stats</code><a class="headerlink" href="#tokenpak-stats" title="Permanent link">&para;</a></h4>
+<p>Show registry statistics (request counts, token usage, cost breakdown).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>stats
+tokenpak<span class="w"> </span>stats<span class="w"> </span>--raw<span class="w">             </span><span class="c1"># JSON output</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-models"><code>tokenpak models</code><a class="headerlink" href="#tokenpak-models" title="Permanent link">&para;</a></h4>
+<p>Show per-model usage and efficiency breakdown.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>models<span class="w">                      </span><span class="c1"># Summary table</span>
+tokenpak<span class="w"> </span>models<span class="w"> </span>--detail<span class="w"> </span>sonnet<span class="w">      </span><span class="c1"># Detailed view for models matching &quot;sonnet&quot;</span>
+tokenpak<span class="w"> </span>models<span class="w"> </span>--raw<span class="w">                </span><span class="c1"># JSON output</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--detail</code></td>
+<td>string</td>
+<td>Show details for a specific model (partial match)</td>
+</tr>
+<tr>
+<td><code>--raw</code></td>
+<td>flag</td>
+<td>Output as JSON</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h4 id="tokenpak-savingssincedate"><code>tokenpak savings[?since=&lt;date&gt;]</code><a class="headerlink" href="#tokenpak-savingssincedate" title="Permanent link">&para;</a></h4>
+<p>Show savings summary — tokens and cost saved by compression.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>savings
+tokenpak<span class="w"> </span>savings<span class="w"> </span>--since<span class="w"> </span><span class="m">2026</span>-03-01
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-usage"><code>tokenpak usage</code><a class="headerlink" href="#tokenpak-usage" title="Permanent link">&para;</a></h4>
+<p>Show model usage summary.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>usage
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-compare"><code>tokenpak compare</code><a class="headerlink" href="#tokenpak-compare" title="Permanent link">&para;</a></h4>
+<p>Show before/after cost comparison for the last proxied request.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>compare
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-leaderboard"><code>tokenpak leaderboard</code><a class="headerlink" href="#tokenpak-leaderboard" title="Permanent link">&para;</a></h4>
+<p>Show per-model efficiency ranking (savings rate, cost per token).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>leaderboard
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-report"><code>tokenpak report</code><a class="headerlink" href="#tokenpak-report" title="Permanent link">&para;</a></h4>
+<p>Generate a daily savings report.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>report
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-requests"><code>tokenpak requests</code><a class="headerlink" href="#tokenpak-requests" title="Permanent link">&para;</a></h4>
+<p>Live request explorer — browse recent proxied requests interactively.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>requests
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-timeline"><code>tokenpak timeline</code><a class="headerlink" href="#tokenpak-timeline" title="Permanent link">&para;</a></h4>
+<p>View savings trend over the last 7 or 30 days.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>timeline
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-attribution"><code>tokenpak attribution</code><a class="headerlink" href="#tokenpak-attribution" title="Permanent link">&para;</a></h4>
+<p>View savings broken down by agent, skill, and model.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>attribution
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-aggregate"><code>tokenpak aggregate</code><a class="headerlink" href="#tokenpak-aggregate" title="Permanent link">&para;</a></h4>
+<p>Aggregate request ledger data across multiple machines.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>aggregate
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-monitor"><code>tokenpak monitor</code><a class="headerlink" href="#tokenpak-monitor" title="Permanent link">&para;</a></h4>
+<p>Start the live monitor dashboard on port 8767.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>monitor
+tokenpak<span class="w"> </span>monitor<span class="w"> </span>--port<span class="w"> </span><span class="m">8768</span><span class="w">     </span><span class="c1"># Custom port</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-dashboard"><code>tokenpak dashboard</code><a class="headerlink" href="#tokenpak-dashboard" title="Permanent link">&para;</a></h4>
+<p>Real-time health dashboard (TUI) or serve the public web dashboard URL.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>dashboard<span class="w">               </span><span class="c1"># TUI view</span>
+tokenpak<span class="w"> </span>dashboard<span class="w"> </span>--public<span class="w">      </span><span class="c1"># Open web dashboard in browser</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-check-alerts"><code>tokenpak check-alerts</code><a class="headerlink" href="#tokenpak-check-alerts" title="Permanent link">&para;</a></h4>
+<p>Evaluate alert rules and report any health violations.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>check-alerts
+</code></pre></div>
+<hr />
+<h3 id="diagnostics">Diagnostics<a class="headerlink" href="#diagnostics" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-doctor"><code>tokenpak doctor</code><a class="headerlink" href="#tokenpak-doctor" title="Permanent link">&para;</a></h4>
+<p>Run comprehensive system diagnostics.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>doctor
+</code></pre></div>
+<p>Checks:
+- Proxy connectivity (port 8766)
+- Upstream provider reachability
+- API key validity
+- Vault index health
+- Config file validity</p>
+<hr />
+<h4 id="tokenpak-preview-file"><code>tokenpak preview &lt;file&gt;</code><a class="headerlink" href="#tokenpak-preview-file" title="Permanent link">&para;</a></h4>
+<p>Preview compression dry-run on a file — shows token savings before sending to API.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>preview<span class="w"> </span>prompt.txt
+tokenpak<span class="w"> </span>preview<span class="w"> </span>--mode<span class="w"> </span>aggressive<span class="w"> </span>prompt.txt
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-debug-onoffstatus"><code>tokenpak debug on|off|status</code><a class="headerlink" href="#tokenpak-debug-onoffstatus" title="Permanent link">&para;</a></h4>
+<p>Toggle verbose debug logging or check current debug state.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>debug<span class="w"> </span>on
+tokenpak<span class="w"> </span>debug<span class="w"> </span>off
+tokenpak<span class="w"> </span>debug<span class="w"> </span>status
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-learn-status"><code>tokenpak learn status</code><a class="headerlink" href="#tokenpak-learn-status" title="Permanent link">&para;</a></h4>
+<p>Show learned compression patterns from telemetry.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>learn<span class="w"> </span>status
+</code></pre></div>
+<h4 id="tokenpak-learn-reset"><code>tokenpak learn reset</code><a class="headerlink" href="#tokenpak-learn-reset" title="Permanent link">&para;</a></h4>
+<p>Clear all learned data and reset to baseline.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>learn<span class="w"> </span>reset
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-replay"><code>tokenpak replay</code><a class="headerlink" href="#tokenpak-replay" title="Permanent link">&para;</a></h4>
+<p>List, inspect, and re-run captured sessions (zero API cost).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>replay<span class="w"> </span>list<span class="w">             </span><span class="c1"># List recent captured sessions</span>
+tokenpak<span class="w"> </span>replay<span class="w"> </span>show<span class="w"> </span>&lt;id&gt;<span class="w">        </span><span class="c1"># Show full details</span>
+tokenpak<span class="w"> </span>replay<span class="w"> </span>run<span class="w"> </span>&lt;id&gt;<span class="w">         </span><span class="c1"># Re-run with different settings</span>
+tokenpak<span class="w"> </span>replay<span class="w"> </span>clear<span class="w">            </span><span class="c1"># Remove all entries</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-validate-file"><code>tokenpak validate &lt;file&gt;</code><a class="headerlink" href="#tokenpak-validate-file" title="Permanent link">&para;</a></h4>
+<p>Validate a TokenPak JSON file against the v1.0 schema.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>validate<span class="w"> </span>my-config.json
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-diff"><code>tokenpak diff</code><a class="headerlink" href="#tokenpak-diff" title="Permanent link">&para;</a></h4>
+<p>Show context changes (removed/compressed/retained blocks) for a request.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>diff
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-vault-health"><code>tokenpak vault-health</code><a class="headerlink" href="#tokenpak-vault-health" title="Permanent link">&para;</a></h4>
+<p>Vault index health diagnostic and repair.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>vault-health<span class="w">            </span><span class="c1"># Check index health</span>
+tokenpak<span class="w"> </span>vault-health<span class="w"> </span>repair<span class="w">     </span><span class="c1"># Rebuild stale vault index</span>
+</code></pre></div>
+<hr />
+<h3 id="config-management">Config Management<a class="headerlink" href="#config-management" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-setup"><code>tokenpak setup</code><a class="headerlink" href="#tokenpak-setup" title="Permanent link">&para;</a></h4>
+<p>Interactive first-time configuration wizard.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>setup
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-config"><code>tokenpak config</code><a class="headerlink" href="#tokenpak-config" title="Permanent link">&para;</a></h4>
+<p>Config management subcommands.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>config<span class="w"> </span>show<span class="w">             </span><span class="c1"># Show merged config (file + env overrides)</span>
+tokenpak<span class="w"> </span>config<span class="w"> </span>sync<span class="w">             </span><span class="c1"># Sync config from canonical source</span>
+tokenpak<span class="w"> </span>config<span class="w"> </span>pull<span class="w">             </span><span class="c1"># Pull config from git or URL</span>
+tokenpak<span class="w"> </span>config<span class="w"> </span>validate<span class="w">         </span><span class="c1"># Validate config against schema</span>
+tokenpak<span class="w"> </span>config<span class="w"> </span>init<span class="w">             </span><span class="c1"># Create default config.yaml</span>
+tokenpak<span class="w"> </span>config<span class="w"> </span>path<span class="w">             </span><span class="c1"># Print config file path</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-route"><code>tokenpak route</code><a class="headerlink" href="#tokenpak-route" title="Permanent link">&para;</a></h4>
+<p>Manage manual model routing rules.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>route<span class="w"> </span>list<span class="w">              </span><span class="c1"># List routing rules</span>
+tokenpak<span class="w"> </span>route<span class="w"> </span>add<span class="w">               </span><span class="c1"># Add a rule</span>
+tokenpak<span class="w"> </span>route<span class="w"> </span>remove<span class="w"> </span>&lt;id&gt;<span class="w">       </span><span class="c1"># Remove a rule</span>
+</code></pre></div>
+<hr />
+<h3 id="advanced-commands">Advanced Commands<a class="headerlink" href="#advanced-commands" title="Permanent link">&para;</a></h3>
+<h4 id="tokenpak-serve"><code>tokenpak serve</code><a class="headerlink" href="#tokenpak-serve" title="Permanent link">&para;</a></h4>
+<p>Start monitoring proxy or telemetry ingest server.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve<span class="w">                   </span><span class="c1"># Standard proxy</span>
+tokenpak<span class="w"> </span>serve<span class="w"> </span>--telemetry<span class="w">       </span><span class="c1"># Telemetry ingest server</span>
+tokenpak<span class="w"> </span>serve<span class="w"> </span>--ingest<span class="w">          </span><span class="c1"># Phase 5A ingest API server</span>
+tokenpak<span class="w"> </span>serve<span class="w"> </span>--workers<span class="w"> </span><span class="m">2</span><span class="w">       </span><span class="c1"># Multiple uvicorn workers</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-benchmark"><code>tokenpak benchmark</code><a class="headerlink" href="#tokenpak-benchmark" title="Permanent link">&para;</a></h4>
+<p>Benchmark compression performance.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>benchmark<span class="w">               </span><span class="c1"># Built-in sample data</span>
+tokenpak<span class="w"> </span>benchmark<span class="w"> </span>--file<span class="w"> </span>prompt.txt
+tokenpak<span class="w"> </span>benchmark<span class="w"> </span>--latency<span class="w"> </span>~/vault<span class="w">   </span><span class="c1"># Latency/indexing benchmark</span>
+tokenpak<span class="w"> </span>benchmark<span class="w"> </span>--json<span class="w">        </span><span class="c1"># JSON output</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-macro"><code>tokenpak macro</code><a class="headerlink" href="#tokenpak-macro" title="Permanent link">&para;</a></h4>
+<p>Manage and run compression macros.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>macro<span class="w"> </span>list<span class="w">              </span><span class="c1"># List all macros</span>
+tokenpak<span class="w"> </span>macro<span class="w"> </span>run<span class="w"> </span>&lt;name&gt;<span class="w">        </span><span class="c1"># Run a macro</span>
+tokenpak<span class="w"> </span>macro<span class="w"> </span>create<span class="w">            </span><span class="c1"># Create a user-defined YAML macro</span>
+tokenpak<span class="w"> </span>macro<span class="w"> </span>show<span class="w"> </span>&lt;name&gt;<span class="w">       </span><span class="c1"># Show macro definition</span>
+tokenpak<span class="w"> </span>macro<span class="w"> </span>delete<span class="w"> </span>&lt;name&gt;<span class="w">     </span><span class="c1"># Delete a user-defined macro</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-recipe"><code>tokenpak recipe</code><a class="headerlink" href="#tokenpak-recipe" title="Permanent link">&para;</a></h4>
+<p>Manage compression recipes (YAML workflow definitions).</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>recipe<span class="w"> </span>create<span class="w">           </span><span class="c1"># Scaffold a new recipe YAML</span>
+tokenpak<span class="w"> </span>recipe<span class="w"> </span>validate<span class="w"> </span>&lt;file&gt;<span class="w">  </span><span class="c1"># Validate recipe against schema</span>
+tokenpak<span class="w"> </span>recipe<span class="w"> </span><span class="nb">test</span><span class="w"> </span>&lt;file&gt;<span class="w">      </span><span class="c1"># Test recipe against sample input</span>
+tokenpak<span class="w"> </span>recipe<span class="w"> </span>benchmark<span class="w"> </span>&lt;file&gt;<span class="w"> </span><span class="c1"># Benchmark recipe performance</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-fleet"><code>tokenpak fleet</code><a class="headerlink" href="#tokenpak-fleet" title="Permanent link">&para;</a></h4>
+<p>Manage and query a multi-machine proxy fleet.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>fleet<span class="w"> </span>init<span class="w">              </span><span class="c1"># Configure fleet interactively</span>
+tokenpak<span class="w"> </span>fleet<span class="w"> </span>status<span class="w">            </span><span class="c1"># Show fleet health</span>
+tokenpak<span class="w"> </span>fleet<span class="w"> </span>list<span class="w">              </span><span class="c1"># List fleet members</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-template"><code>tokenpak template</code><a class="headerlink" href="#tokenpak-template" title="Permanent link">&para;</a></h4>
+<p>Manage local user prompt templates.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>template<span class="w"> </span>list
+tokenpak<span class="w"> </span>template<span class="w"> </span>add<span class="w"> </span>&lt;name&gt;<span class="w">     </span><span class="c1"># Add or update a template</span>
+tokenpak<span class="w"> </span>template<span class="w"> </span>show<span class="w"> </span>&lt;name&gt;<span class="w">    </span><span class="c1"># Display a template</span>
+tokenpak<span class="w"> </span>template<span class="w"> </span>remove<span class="w"> </span>&lt;name&gt;<span class="w">  </span><span class="c1"># Delete a template</span>
+tokenpak<span class="w"> </span>template<span class="w"> </span>use<span class="w"> </span>&lt;name&gt;<span class="w">     </span><span class="c1"># Expand a template with variables</span>
+</code></pre></div>
+<hr />
+<h4 id="tokenpak-audit"><code>tokenpak audit</code><a class="headerlink" href="#tokenpak-audit" title="Permanent link">&para;</a></h4>
+<p>Enterprise audit log management.</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>audit<span class="w"> </span>list<span class="w">              </span><span class="c1"># List audit log entries</span>
+tokenpak<span class="w"> </span>audit<span class="w"> </span><span class="nb">export</span><span class="w">            </span><span class="c1"># Export to file</span>
+tokenpak<span class="w"> </span>audit<span class="w"> </span>verify<span class="w">            </span><span class="c1"># Verify hash chain integrity</span>
+tokenpak<span class="w"> </span>audit<span class="w"> </span>prune<span class="w">             </span><span class="c1"># Remove old entries</span>
+tokenpak<span class="w"> </span>audit<span class="w"> </span>summary<span class="w">           </span><span class="c1"># Show audit stats</span>
+</code></pre></div>
+<hr />
+<h2 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h2>
+<h3 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<p>The proxy reads configuration from <code>~/.tokenpak/config.yaml</code> with environment variable overrides. Environment variables always take precedence.</p>
+<h4 id="core-settings">Core Settings<a class="headerlink" href="#core-settings" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOKENPAK_PORT</code></td>
+<td><code>8766</code></td>
+<td>Proxy listen port</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_MODE</code></td>
+<td><code>hybrid</code></td>
+<td>Compression mode: <code>strict</code>, <code>hybrid</code>, <code>aggressive</code></td>
+</tr>
+<tr>
+<td><code>TOKENPAK_COMPACT</code></td>
+<td><code>1</code></td>
+<td>Master on/off switch (0 = disable all compression)</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_DB</code></td>
+<td><code>.tokenpak/monitor.db</code></td>
+<td>SQLite database path</td>
+</tr>
+</tbody>
+</table>
+<h4 id="compression-settings">Compression Settings<a class="headerlink" href="#compression-settings" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOKENPAK_COMPACT_MAX_CHARS</code></td>
+<td><code>120</code></td>
+<td>Maximum chars for compressed text chunks</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_COMPACT_THRESHOLD_TOKENS</code></td>
+<td><code>4500</code></td>
+<td>Skip compression below this token count</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_COMPACT_CACHE_SIZE</code></td>
+<td><code>2000</code></td>
+<td>Compression result cache entries</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_MAX_COMPRESSION_TIME_MS</code></td>
+<td><code>5000</code></td>
+<td>Max compression time before skipping (0 = no cap)</td>
+</tr>
+</tbody>
+</table>
+<h4 id="vault-context-injection">Vault Context Injection<a class="headerlink" href="#vault-context-injection" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOKENPAK_VAULT_INDEX</code></td>
+<td><code>~/vault/.tokenpak</code></td>
+<td>Path to vault index directory</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_INJECT_BUDGET</code></td>
+<td><code>4000</code></td>
+<td>Max tokens to inject from vault per request</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_INJECT_TOP_K</code></td>
+<td><code>5</code></td>
+<td>Max vault blocks to inject per request</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_INJECT_MIN_SCORE</code></td>
+<td><code>2.0</code></td>
+<td>Minimum BM25 score to include a block</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_RETRIEVAL_BACKEND</code></td>
+<td><code>json_blocks</code></td>
+<td>Vault backend: <code>json_blocks</code> or <code>sqlite</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="key-management">Key Management<a class="headerlink" href="#key-management" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code></td>
+<td>—</td>
+<td>Primary Anthropic API key</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_OAUTH_TOKEN</code></td>
+<td>—</td>
+<td>Rotation key 2</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_OAUTH_TOKEN2</code></td>
+<td>—</td>
+<td>Rotation key 3</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_KEY_ROTATION</code></td>
+<td><code>failover</code></td>
+<td>Key rotation mode: <code>failover</code> or <code>roundrobin</code></td>
+</tr>
+<tr>
+<td><code>TOKENPAK_KEY_COOLDOWN_429</code></td>
+<td><code>60</code></td>
+<td>Rate-limit cooldown seconds</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_KEY_COOLDOWN_401</code></td>
+<td><code>300</code></td>
+<td>Invalid-key cooldown seconds</td>
+</tr>
+</tbody>
+</table>
+<h4 id="advanced-features">Advanced Features<a class="headerlink" href="#advanced-features" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>TOKENPAK_CAPSULE_BUILDER</code></td>
+<td><code>0</code></td>
+<td>Enable capsule builder stage (<code>0</code> or <code>1</code>)</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_CAPSULE_MIN_CHARS</code></td>
+<td><code>400</code></td>
+<td>Min chars for a block to be capsulised</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_ROUTER_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Enable smart model router</td>
+</tr>
+<tr>
+<td><code>TOKENPAK_HTTP100_KEEPALIVE</code></td>
+<td><code>0</code></td>
+<td>Send HTTP 100 Continue before compression</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="configyaml">config.yaml<a class="headerlink" href="#configyaml" title="Permanent link">&para;</a></h3>
+<p>Default location: <code>~/.tokenpak/config.yaml</code></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># TokenPak configuration</span>
+<span class="c1"># All settings can also be overridden via environment variables</span>
+
+<span class="nt">compression</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hybrid</span><span class="w">               </span><span class="c1"># strict | hybrid | aggressive</span>
+<span class="w">  </span><span class="nt">max_chars</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">120</span><span class="w">             </span><span class="c1"># Max chars per compressed chunk</span>
+<span class="w">  </span><span class="nt">threshold_tokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4500</span><span class="w">     </span><span class="c1"># Skip compression below this token count</span>
+
+<span class="nt">cache</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">memory</span><span class="w">               </span><span class="c1"># memory | disk</span>
+<span class="w">  </span><span class="nt">ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+<span class="w">  </span><span class="nt">max_size_mb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">256</span>
+
+<span class="nt">logging</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">level</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">info</span><span class="w">                </span><span class="c1"># debug | info | warning | error</span>
+<span class="w">  </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file</span><span class="w">          </span><span class="c1"># file | stdout</span>
+<span class="w">  </span><span class="nt">retention_days</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">  </span><span class="nt">include_request_body</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">include_response_body</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">metrics</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">collection_window_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<span class="w">  </span><span class="nt">retention_days</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
+
+<span class="nt">security</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">require_api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">null</span><span class="w">              </span><span class="c1"># X-TokenPak-Key for non-localhost clients</span>
+<span class="w">  </span><span class="nt">allowed_origins</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;*&quot;</span>
+<span class="w">  </span><span class="nt">rate_limit_per_minute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000</span>
+
+<span class="nt">advanced</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vault_index_path</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/.tokenpak/.index&quot;</span>
+<span class="w">  </span><span class="nt">enable_trace_logs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">proxy_timeout_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">  </span><span class="nt">max_request_size_bytes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10485760</span><span class="w">    </span><span class="c1"># 10 MB</span>
+</code></pre></div>
+<hr />
+<p><em>This reference covers TokenPak v0.5.0. For the full changelog, see <a href="https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 TokenPak Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/tokenpak/tokenpak" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

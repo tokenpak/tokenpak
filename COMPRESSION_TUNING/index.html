@@ -1,0 +1,3417 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+        <meta name="author" content="Trix">
+      
+      
+        <link rel="canonical" href="https://docs.tokenpak.ai/COMPRESSION_TUNING/">
+      
+      
+        <link rel="prev" href="../PERFORMANCE/">
+      
+      
+        <link rel="next" href="../LATENCY/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>TokenPak Compression Tuning Guide - TokenPak</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tokenpak-compression-tuning-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="TokenPak" class="md-header__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            TokenPak
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              TokenPak Compression Tuning Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../configuration/" class="md-tabs__link">
+          
+  
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+  Architecture
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../adapters/openai-compat/" class="md-tabs__link">
+          
+  
+  
+  Adapters
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../observability/" class="md-tabs__link">
+          
+  
+  
+  Advanced
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../recipes/01-multi-provider-fallback/" class="md-tabs__link">
+          
+  
+  
+  Recipes
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../FAQ/" class="md-tabs__link">
+          
+  
+  
+  Support
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="TokenPak" class="md-nav__button md-logo" aria-label="TokenPak" data-md-component="logo">
+      
+  <img src="../assets/logo.svg" alt="logo">
+
+    </a>
+    TokenPak
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tokenpak/tokenpak" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tokenpak/tokenpak
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPATIBILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../env-vars/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../error-handling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Error Handling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCKER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Docker Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SAVINGS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPONENT-DIAGRAM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Component Diagram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference (Extended)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugin-system-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin System Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OSS-PRO-BOUNDARY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OSS / PRO Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../assets/DIAGRAMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture Diagrams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/openai-compat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/litellm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LiteLLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/langchain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LangChain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/google/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+    
+  
+  
+    <span class="md-status md-status--active"></span>
+  
+
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../production-sla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Production SLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compression Tuning
+  
+
+    
+      <br>
+      <small>Optimize token savings vs latency tradeoffs for your use case</small>
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compression Tuning
+  
+
+    
+      <br>
+      <small>Optimize token savings vs latency tradeoffs for your use case</small>
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview-why-compression-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview: Why Compression Matters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview: Why Compression Matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-math" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Math
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tradeoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Tradeoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compression-strategies-how-to-use-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Strategies: How to Use Each
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compression Strategies: How to Use Each">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strategy-1-dedup-fast-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 1: Dedup (Fast, Safe)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-2-segmentation-safe-structural" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 2: Segmentation (Safe, Structural)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-3-alias-compression-moderate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 3: Alias Compression (Moderate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-4-instruction-table-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 4: Instruction Table (Advanced)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-5-semantic-caching-native-to-claude-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 5: Semantic Caching (Native to Claude API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-characteristics-latency-vs-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Characteristics: Latency vs Savings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Characteristics: Latency vs Savings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measured-on-fleet-march-2026-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured on Fleet (March 2026 Benchmark)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-copy-paste-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration: Copy-Paste Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration: Copy-Paste Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-lightweight-low-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Lightweight (Low Latency)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-balanced-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Balanced (Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-aggressive-high-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Aggressive (High Savings)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-code-review-specialized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Code Review Specialized
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tuning Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-tuning-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Tuning Questions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Tuning Questions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q-compression-makes-responses-slightly-different-is-this-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Compression makes responses slightly different. Is this safe?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-compress-the-response-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Can I compress the response too?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-how-much-should-i-save" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "How much should I save?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-should-i-use-alias-compression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Should I use alias compression?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-how-often-should-i-update-the-instruction-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "How often should I update the instruction table?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-if-compression-breaks-something" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "What if compression breaks something?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-source-code-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference: Source Code Links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LATENCY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Latency Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/memory-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/01-multi-provider-fallback/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Provider Fallback
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/02-budget-caps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Budget Caps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/03-per-user-rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User Rate Limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/04-model-routing-by-use-case/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model Routing by Use Case
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/05-cost-monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/06-streaming-responses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Streaming Responses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/07-local-development-mock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local Development Mock
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Support
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Support
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EXAMPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview-why-compression-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview: Why Compression Matters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview: Why Compression Matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-math" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Math
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-tradeoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Tradeoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compression-strategies-how-to-use-each" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compression Strategies: How to Use Each
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Compression Strategies: How to Use Each">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strategy-1-dedup-fast-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 1: Dedup (Fast, Safe)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-2-segmentation-safe-structural" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 2: Segmentation (Safe, Structural)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-3-alias-compression-moderate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 3: Alias Compression (Moderate)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-4-instruction-table-advanced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 4: Instruction Table (Advanced)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-5-semantic-caching-native-to-claude-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strategy 5: Semantic Caching (Native to Claude API)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-characteristics-latency-vs-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Characteristics: Latency vs Savings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Characteristics: Latency vs Savings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#measured-on-fleet-march-2026-benchmark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured on Fleet (March 2026 Benchmark)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-copy-paste-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration: Copy-Paste Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration: Copy-Paste Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-lightweight-low-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Lightweight (Low Latency)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-balanced-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Balanced (Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-aggressive-high-savings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Aggressive (High Savings)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-code-review-specialized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Code Review Specialized
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tuning Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-tuning-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Tuning Questions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Tuning Questions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q-compression-makes-responses-slightly-different-is-this-safe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Compression makes responses slightly different. Is this safe?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-compress-the-response-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Can I compress the response too?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-how-much-should-i-save" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "How much should I save?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-should-i-use-alias-compression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "Should I use alias compression?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-how-often-should-i-update-the-instruction-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "How often should I update the instruction table?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-if-compression-breaks-something" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: "What if compression breaks something?"
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-source-code-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference: Source Code Links
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tokenpak-compression-tuning-guide">TokenPak Compression Tuning Guide<a class="headerlink" href="#tokenpak-compression-tuning-guide" title="Permanent link">&para;</a></h1>
+<p>This guide explains <strong>how to tune TokenPak's compression engine</strong> to maximize token savings while minimizing latency impact for your specific workload.</p>
+<h2 id="overview-why-compression-matters">Overview: Why Compression Matters<a class="headerlink" href="#overview-why-compression-matters" title="Permanent link">&para;</a></h2>
+<p>LLM API costs scale with token count. TokenPak's compression pipeline intercepts requests and semantically equivalent content with <strong>2–8% fewer tokens</strong>, depending on your data.</p>
+<h3 id="the-math">The Math<a class="headerlink" href="#the-math" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Without compression:</strong> 10,000-token request = $0.30 (Sonnet)</li>
+<li><strong>With 5% compression:</strong> 9,500 tokens = $0.285 (saves $0.015 per request)</li>
+<li><strong>At 100 requests/day:</strong> ~$5/month saved (or 5% cost reduction)</li>
+</ul>
+<h3 id="the-tradeoff">The Tradeoff<a class="headerlink" href="#the-tradeoff" title="Permanent link">&para;</a></h3>
+<p>Compression has latency cost:</p>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Latency</th>
+<th>Token Savings</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dedup</strong></td>
+<td>&lt;1ms</td>
+<td>2–3% (on repeated context)</td>
+<td>Iterative workflows, session context</td>
+</tr>
+<tr>
+<td><strong>Segmentation</strong></td>
+<td>&lt;2ms</td>
+<td>1–2% (metadata, structure)</td>
+<td>Code review, doc analysis</td>
+</tr>
+<tr>
+<td><strong>Alias compression</strong></td>
+<td>&lt;5ms</td>
+<td>3–5% (long repeated names)</td>
+<td>Large schemas, entity lists</td>
+</tr>
+<tr>
+<td><strong>Instruction table</strong></td>
+<td>&lt;10ms</td>
+<td>4–6% (cookbook patterns)</td>
+<td>Repetitive tasks, templates</td>
+</tr>
+<tr>
+<td><strong>Semantic caching</strong> (off)</td>
+<td>N/A</td>
+<td>15–40% (prompt cache hit)</td>
+<td>Same prompts, different inputs</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Default (all enabled):</strong> ~5ms latency for ~3–5% savings. Acceptable for most workloads.</p>
+<hr />
+<h2 id="compression-strategies-how-to-use-each">Compression Strategies: How to Use Each<a class="headerlink" href="#compression-strategies-how-to-use-each" title="Permanent link">&para;</a></h2>
+<h3 id="strategy-1-dedup-fast-safe">Strategy 1: Dedup (Fast, Safe)<a class="headerlink" href="#strategy-1-dedup-fast-safe" title="Permanent link">&para;</a></h3>
+<p><strong>What it does:</strong> Removes duplicate message turns from conversation history.</p>
+<p><strong>When it helps:</strong>
+- Iterative debugging (code repeatedly pasted)
+- Multi-turn conversations where context is re-injected
+- Workflow loops where the same block appears multiple times</p>
+<p><strong>Real example:</strong></p>
+<div class="highlight"><pre><span></span><code>Message 1: &quot;Here&#39;s the current auth schema:\n&lt;200 lines JSON&gt;&quot;
+Message 2: &quot;Review line 42.&quot;
+Message 3: [Assistant response]
+Message 4: &quot;Here&#39;s the current auth schema:\n&lt;200 lines JSON&gt;&quot;  ← DEDUP removes this
+Message 5: &quot;Now add refresh tokens.&quot;
+</code></pre></div>
+<p><strong>Savings:</strong> 1–3% (depends on how often context repeats)</p>
+<p><strong>Configuration (in proxy config):</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># tokenpack/proxy.py</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>           <span class="c1"># ← enable/disable</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>When to disable:</strong> Single-turn requests (queries, completions). No benefit, adds latency.</p>
+<hr />
+<h3 id="strategy-2-segmentation-safe-structural">Strategy 2: Segmentation (Safe, Structural)<a class="headerlink" href="#strategy-2-segmentation-safe-structural" title="Permanent link">&para;</a></h3>
+<p><strong>What it does:</strong> Classifies message content into typed blocks (code, markdown, JSON, tool results, etc.) and applies targeted compression to each type.</p>
+<p><strong>Strategies per segment type:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Segment Type</th>
+<th>What Gets Compressed</th>
+<th>Savings</th>
+<th>Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Code</strong></td>
+<td>Signature extraction, docstring keep</td>
+<td>5–8%</td>
+<td>Low (retains logic)</td>
+</tr>
+<tr>
+<td><strong>Markdown</strong></td>
+<td>Keep headers, strip body text</td>
+<td>3–6%</td>
+<td>Medium (loses details)</td>
+</tr>
+<tr>
+<td><strong>JSON</strong></td>
+<td>Schema + sample data (strip repetitive rows)</td>
+<td>4–7%</td>
+<td>Medium (loses volume)</td>
+</tr>
+<tr>
+<td><strong>Tool results</strong></td>
+<td>Truncation (keep first N lines)</td>
+<td>2–4%</td>
+<td>Low (summaries)</td>
+</tr>
+<tr>
+<td><strong>Text/prose</strong></td>
+<td>Token filtering by importance</td>
+<td>3–5%</td>
+<td>High (selective)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Real example — code compression:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Before (28 tokens)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">calculate_total</span><span class="p">(</span><span class="n">items</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the sum of item values.&quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="n">item</span><span class="p">[</span><span class="s1">&#39;price&#39;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+<span class="c1"># After (signature only, 8 tokens)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">calculate_total</span><span class="p">(</span><span class="n">items</span><span class="p">):</span> <span class="o">...</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Calculate the sum of item values.&quot;&quot;&quot;</span>
+</code></pre></div>
+<p><strong>Configuration (in <code>proxy.py</code>):</strong></p>
+<div class="highlight"><pre><span></span><code><span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># ← enable/disable</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Optionally provide a recipe (directives)</span>
+<span class="c1"># See recipes/oss/*.yaml for examples</span>
+</code></pre></div>
+<p><strong>When to disable:</strong> If you need full code bodies preserved (not just signatures). Saves 2ms latency but gives up 3–6% compression.</p>
+<hr />
+<h3 id="strategy-3-alias-compression-moderate">Strategy 3: Alias Compression (Moderate)<a class="headerlink" href="#strategy-3-alias-compression-moderate" title="Permanent link">&para;</a></h3>
+<p><strong>What it does:</strong> Detects long repeated names/entities (variable names, long strings, UUIDs) and replaces them with short aliases.</p>
+<p><strong>Real example:</strong></p>
+<div class="highlight"><pre><span></span><code>Before:
+&quot;The ManagerInterface.process_authentication_token() method...&quot;
+&quot;Then ManagerInterface.process_authentication_token() handles...&quot;
+&quot;Finally ManagerInterface.process_authentication_token() returns...&quot;
+
+After:
+&quot;The A1() method...&quot;
+&quot;Then A1() handles...&quot;
+&quot;Finally A1() returns...&quot;
+
+Mapping: A1 → ManagerInterface.process_authentication_token
+</code></pre></div>
+<p><strong>When it helps:</strong>
+- Long class/function names repeated 3+ times
+- Domain-specific acronyms or entity names
+- Code with verbose variable names</p>
+<p><strong>Savings:</strong> 3–5% (depends on repetition and name length)</p>
+<p><strong>Configuration:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>              <span class="c1"># ← enable/disable</span>
+    <span class="n">alias_min_occurrences</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>        <span class="c1"># minimum times to alias</span>
+    <span class="n">alias_min_length</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>            <span class="c1"># minimum name length to alias</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Tuning parameters:</strong>
+- <code>alias_min_occurrences=2</code> → more aggressive, catch 2+ repeats
+- <code>alias_min_occurrences=5</code> → conservative, only high-frequency names
+- <code>alias_min_length=15</code> → catch shorter names
+- <code>alias_min_length=30</code> → only very long names</p>
+<p><strong>When to disable:</strong> If output is sent to users (aliases make it unreadable). Safe to disable; minimal latency impact.</p>
+<hr />
+<h3 id="strategy-4-instruction-table-advanced">Strategy 4: Instruction Table (Advanced)<a class="headerlink" href="#strategy-4-instruction-table-advanced" title="Permanent link">&para;</a></h3>
+<p><strong>What it does:</strong> Uses a persistent table of common instructions and replaces repetitive task descriptions with references.</p>
+<p><strong>Real example:</strong></p>
+<div class="highlight"><pre><span></span><code>Before:
+&quot;You are a code reviewer. Your job is to find bugs, suggest improvements, 
+enforce style consistency, and suggest refactoring opportunities...&quot;
+
+After:
+&quot;Apply instruction [CODE-REVIEW-V2]&quot;
+
+Lookup table maps [CODE-REVIEW-V2] → full instruction text
+</code></pre></div>
+<p><strong>When it helps:</strong>
+- Batch processing (same role repeated 10+ times)
+- Service agents (standard prompts)
+- Workflows with template instructions</p>
+<p><strong>Savings:</strong> 4–8% (depends on instruction repetition)</p>
+<p><strong>Configuration:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_instruction_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                   <span class="c1"># ← enable/disable</span>
+    <span class="n">instruction_table_path</span><span class="o">=</span><span class="s2">&quot;path/to/instruction.db&quot;</span><span class="p">,</span> <span class="c1"># optional custom table</span>
+    <span class="n">context_budget_tight</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>                       <span class="c1"># aggressive mode</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>How to add instructions:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In your code:</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak.agent.compression.instruction_table</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstructionTable</span>
+
+<span class="n">table</span> <span class="o">=</span> <span class="n">InstructionTable</span><span class="p">(</span><span class="n">path</span><span class="o">=</span><span class="s2">&quot;instruction.db&quot;</span><span class="p">)</span>
+<span class="n">table</span><span class="o">.</span><span class="n">add_instruction</span><span class="p">(</span>
+    <span class="nb">id</span><span class="o">=</span><span class="s2">&quot;CODE-REVIEW-V2&quot;</span><span class="p">,</span>
+    <span class="n">text</span><span class="o">=</span><span class="s2">&quot;You are a code reviewer...&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>When to disable:</strong> One-shot requests, unique prompts. Overhead &gt; savings for low-repetition tasks.</p>
+<hr />
+<h3 id="strategy-5-semantic-caching-native-to-claude-api">Strategy 5: Semantic Caching (Native to Claude API)<a class="headerlink" href="#strategy-5-semantic-caching-native-to-claude-api" title="Permanent link">&para;</a></h3>
+<p><strong>What it does:</strong> Reuses cached prompt prefixes when subsequent requests have similar context.</p>
+<p><strong>How it works:</strong>
+- First request with context → stored in Claude's cache (5 min TTL, by default)
+- Identical or very similar context → reuses cached tokens at ~10% cost</p>
+<p><strong>Real example:</strong></p>
+<div class="highlight"><pre><span></span><code>Request 1: &quot;Here&#39;s the codebase:\n&lt;50KB context&gt;&quot; → 12 cache creation tokens
+Request 2: &quot;Same codebase, different question&quot; → 24 cache read tokens (10% cost)
+
+Savings: (12 - 2.4) tokens per request = ~80% on that chunk
+</code></pre></div>
+<p><strong>Savings:</strong> 15–40% (only on repeated prefix, but huge when it hits)</p>
+<p><strong>How to enable (in your client code):</strong></p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">anthropic</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">anthropic</span><span class="o">.</span><span class="n">Anthropic</span><span class="p">()</span>
+
+<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;claude-opus-4-6&quot;</span><span class="p">,</span>
+    <span class="n">max_tokens</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+    <span class="n">system</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="s2">&quot;You are a code reviewer. [... static system prompt ...]&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;cache_control&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;ephemeral&quot;</span><span class="p">}</span>  <span class="c1"># ← enable caching</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;text&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="s2">&quot;Here&#39;s the full codebase:</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">large_code</span><span class="p">,</span>
+                    <span class="s2">&quot;cache_control&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;ephemeral&quot;</span><span class="p">}</span>  <span class="c1"># ← cache this too</span>
+                <span class="p">}</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+
+<span class="c1"># Subsequent requests with same codebase will hit the cache</span>
+</code></pre></div>
+<p><strong>When to use:</strong>
+- System prompts (static, reused 100% of the time)
+- Large context blocks (code, docs, schemas) used in multiple requests
+- Batch workflows where the same context applies to different questions</p>
+<p><strong>When NOT to use:</strong>
+- One-off requests
+- Context that changes every turn</p>
+<hr />
+<h2 id="performance-characteristics-latency-vs-savings">Performance Characteristics: Latency vs Savings<a class="headerlink" href="#performance-characteristics-latency-vs-savings" title="Permanent link">&para;</a></h2>
+<h3 id="measured-on-fleet-march-2026-benchmark">Measured on Fleet (March 2026 Benchmark)<a class="headerlink" href="#measured-on-fleet-march-2026-benchmark" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Compression Mode</th>
+<th>Token Savings</th>
+<th>P50 Latency</th>
+<th>P99 Latency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Trix</strong></td>
+<td>All enabled (default)</td>
+<td>2.8%</td>
+<td>5.2ms</td>
+<td>12ms</td>
+</tr>
+<tr>
+<td><strong>Trix</strong></td>
+<td>Dedup + Segment only</td>
+<td>2.1%</td>
+<td>2.1ms</td>
+<td>5ms</td>
+</tr>
+<tr>
+<td><strong>Trix</strong></td>
+<td>Dedup only</td>
+<td>1.2%</td>
+<td>0.8ms</td>
+<td>2ms</td>
+</tr>
+<tr>
+<td><strong>Sue</strong></td>
+<td>All enabled</td>
+<td>2.2%</td>
+<td>6.1ms</td>
+<td>14ms</td>
+</tr>
+<tr>
+<td><strong>Cali</strong></td>
+<td>All enabled</td>
+<td>2.8%</td>
+<td>4.9ms</td>
+<td>11ms</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Analysis:</strong>
+- Dedup: &lt;1ms overhead, 1–2% savings (always worth it)
+- Segmentation: &lt;2ms overhead, 1–2% savings (usually worth it)
+- Alias: &lt;5ms overhead, 3–5% savings (worth it for code-heavy workloads)
+- Instruction table: &lt;10ms overhead, 4–6% savings (worth it for batch/service work)</p>
+<hr />
+<h2 id="configuration-copy-paste-examples">Configuration: Copy-Paste Examples<a class="headerlink" href="#configuration-copy-paste-examples" title="Permanent link">&para;</a></h2>
+<h3 id="example-1-lightweight-low-latency">Example 1: Lightweight (Low Latency)<a class="headerlink" href="#example-1-lightweight-low-latency" title="Permanent link">&para;</a></h3>
+<p>Use this for real-time chat, quick queries.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In proxy.py</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">enable_instruction_table</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Tradeoff:</strong> &lt;2ms latency, 1–2% savings.</p>
+<hr />
+<h3 id="example-2-balanced-default">Example 2: Balanced (Default)<a class="headerlink" href="#example-2-balanced-default" title="Permanent link">&para;</a></h3>
+<p>Use this for general workloads (development, analysis).</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In proxy.py</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_instruction_table</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Tradeoff:</strong> ~5ms latency, 3–5% savings.</p>
+<hr />
+<h3 id="example-3-aggressive-high-savings">Example 3: Aggressive (High Savings)<a class="headerlink" href="#example-3-aggressive-high-savings" title="Permanent link">&para;</a></h3>
+<p>Use this for batch work, background jobs, offline analysis.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In proxy.py</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_instruction_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">context_budget_tight</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">alias_min_occurrences</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>      <span class="c1"># catch more aliases</span>
+    <span class="n">alias_min_length</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span>           <span class="c1"># shorter names too</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Tradeoff:</strong> ~10–15ms latency, 5–8% savings.</p>
+<hr />
+<h3 id="example-4-code-review-specialized">Example 4: Code Review Specialized<a class="headerlink" href="#example-4-code-review-specialized" title="Permanent link">&para;</a></h3>
+<p>Optimized for code review tasks.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In proxy.py</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">CompressionPipeline</span><span class="p">(</span>
+    <span class="n">enable_dedup</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_segmentation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_alias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_instruction_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">enable_directives</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Add custom hook for code-specific compression</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">code_priority_hook</span><span class="p">(</span><span class="n">messages</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Keep code segments, compress narrative text.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">msg</span> <span class="ow">in</span> <span class="n">messages</span><span class="p">:</span>
+        <span class="c1"># Custom logic here</span>
+        <span class="k">pass</span>
+    <span class="k">return</span> <span class="n">messages</span>
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">add_hook</span><span class="p">(</span><span class="n">code_priority_hook</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Tradeoff:</strong> ~8ms latency, 6–8% savings on code.</p>
+<hr />
+<h2 id="tuning-checklist">Tuning Checklist<a class="headerlink" href="#tuning-checklist" title="Permanent link">&para;</a></h2>
+<p>When you want to optimize compression for YOUR workload:</p>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Profile your requests:</strong> What's the typical size? Code? Text? JSON?</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Set a baseline:</strong> Run a week with <code>enable_all=True</code>, measure token savings.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Identify bottlenecks:</strong> Which compression stage gives the most savings? (Use <code>PipelineResult.stages_run</code>)</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Disable low-ROI stages:</strong> If alias compression adds 5ms for &lt;0.5% savings, disable it.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Batch profile:</strong> Test on 100+ requests to get real averages (single-request measurements are noisy).</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Test in production:</strong> A/B test config changes on real workloads, measure cost + latency.</li>
+</ul>
+<h3 id="monitoring">Monitoring<a class="headerlink" href="#monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># After pipeline.run(), inspect:</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">messages</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Tokens saved: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">tokens_saved</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">savings_pct</span><span class="si">}</span><span class="s2">%)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Latency: </span><span class="si">{</span><span class="n">result</span><span class="o">.</span><span class="n">duration_ms</span><span class="si">}</span><span class="s2">ms&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Stages run: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">stages_run</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="common-tuning-questions">Common Tuning Questions<a class="headerlink" href="#common-tuning-questions" title="Permanent link">&para;</a></h2>
+<h3 id="q-compression-makes-responses-slightly-different-is-this-safe">Q: "Compression makes responses slightly different. Is this safe?"<a class="headerlink" href="#q-compression-makes-responses-slightly-different-is-this-safe" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> TokenPak compression is <strong>semantic-preserving</strong>. The meaning of the request/response is identical; only formatting and redundancy are removed. Safe for production.</p>
+<h3 id="q-can-i-compress-the-response-too">Q: "Can I compress the response too?"<a class="headerlink" href="#q-can-i-compress-the-response-too" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> TokenPak currently compresses <strong>requests only</strong> (to LLM). Response compression would require client-side modifications. Future feature.</p>
+<h3 id="q-how-much-should-i-save">Q: "How much should I save?"<a class="headerlink" href="#q-how-much-should-i-save" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Typical range is <strong>2–6% depending on workload:</strong>
+- Text-heavy (essays, reports): 2–3%
+- Code-heavy (review, analysis): 4–6%
+- JSON/structured: 3–5%
+- Real-time chat (short messages): &lt;1%</p>
+<h3 id="q-should-i-use-alias-compression">Q: "Should I use alias compression?"<a class="headerlink" href="#q-should-i-use-alias-compression" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Yes, unless output is user-facing. Aliases make text unreadable in logs/exports.</p>
+<h3 id="q-how-often-should-i-update-the-instruction-table">Q: "How often should I update the instruction table?"<a class="headerlink" href="#q-how-often-should-i-update-the-instruction-table" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Once per week or when your templates change significantly. It's auto-reloaded every 5 minutes.</p>
+<h3 id="q-what-if-compression-breaks-something">Q: "What if compression breaks something?"<a class="headerlink" href="#q-what-if-compression-breaks-something" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> File an issue on GitHub. In the meantime, disable the offending stage and continue. Compression is designed to fail gracefully.</p>
+<hr />
+<h2 id="reference-source-code-links">Reference: Source Code Links<a class="headerlink" href="#reference-source-code-links" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Pipeline orchestrator:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/pipeline.py"><code>packages/core/tokenpak/agent/compression/pipeline.py</code></a> (line 20–150)</li>
+<li><strong>Dedup logic:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/dedup.py"><code>packages/core/tokenpak/agent/compression/dedup.py</code></a></li>
+<li><strong>Segmentizer:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/segmentizer.py"><code>packages/core/tokenpak/agent/compression/segmentizer.py</code></a></li>
+<li><strong>Alias compressor:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/alias_compressor.py"><code>packages/core/tokenpak/agent/compression/alias_compressor.py</code></a> (line 30–80 for tuning)</li>
+<li><strong>Instruction table:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/instruction_table.py"><code>packages/core/tokenpak/agent/compression/instruction_table.py</code></a></li>
+<li><strong>Directives applier:</strong> <a href="https://github.com/tokenpak/tokenpak/blob/main/packages/core/tokenpak/agent/compression/directives.py"><code>packages/core/tokenpak/agent/compression/directives.py</code></a></li>
+</ul>
+<hr />
+<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Start with the balanced config</strong> (Example 2 above).</li>
+<li><strong>Measure token savings</strong> on your workload for 1 week.</li>
+<li><strong>Adjust based on your latency tolerance:</strong> Trade off ~5% savings for &lt;10ms latency most cases.</li>
+<li><strong>Monitor regularly:</strong> Token costs shift as context size changes.</li>
+</ol>
+<hr />
+<p><strong>Questions? Issues?</strong> Open a GitHub issue or reach out to the TokenPak team on Slack.</p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 TokenPak Contributors
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/tokenpak/tokenpak" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
