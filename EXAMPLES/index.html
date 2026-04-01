@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://docs.tokenpak.ai/EXAMPLES/">
       
       
-        <link rel="prev" href="../FAQ/">
+        <link rel="prev" href="../faq/">
       
       
-        <link rel="next" href="../release-checklist/">
+        <link rel="next" href="../CONTRIBUTING/">
       
       
         
@@ -367,7 +367,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="../FAQ/" class="md-tabs__link">
+        <a href="../faq/" class="md-tabs__link">
           
   
   
@@ -764,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../adapters/" class="md-nav__link">
+      <a href="../cli-reference/" class="md-nav__link">
         
   
   
@@ -884,6 +884,34 @@
     
   
     Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY-GUARD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Guard
   
 
     
@@ -2026,7 +2054,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../FAQ/" class="md-nav__link">
+      <a href="../faq/" class="md-nav__link">
         
   
   
@@ -2290,6 +2318,62 @@
   
   
     <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release-checklist/" class="md-nav__link">
         
   
@@ -2538,10 +2622,10 @@
 pip<span class="w"> </span>install<span class="w"> </span>tokenpak
 
 <span class="c1"># Start the proxy (default port 8766, hybrid compression mode)</span>
-tokenpak<span class="w"> </span>serve
+tokenpak<span class="w"> </span>start
 
 <span class="c1"># Or with custom settings</span>
-<span class="nv">TOKENPAK_PORT</span><span class="o">=</span><span class="m">8766</span><span class="w"> </span><span class="nv">TOKENPAK_MODE</span><span class="o">=</span>hybrid<span class="w"> </span>tokenpak<span class="w"> </span>serve
+<span class="nv">TOKENPAK_PORT</span><span class="o">=</span><span class="m">8766</span><span class="w"> </span><span class="nv">TOKENPAK_MODE</span><span class="o">=</span>hybrid<span class="w"> </span>tokenpak<span class="w"> </span>start
 </code></pre></div>
 <h3 id="drop-in-replacement">Drop-in Replacement<a class="headerlink" href="#drop-in-replacement" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">anthropic</span>
@@ -2578,7 +2662,7 @@ Vault: 2,943 blocks
 <p><strong>Problem:</strong> You have a codebase heavy with system prompts and code blocks. Default <code>hybrid</code> mode doesn't compress code. You want maximum savings.</p>
 <p><strong>Solution:</strong> Switch to <code>aggressive</code> mode to compress everything (except PROTECTED content).</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Aggressive: compress narrative + code (keep system prompts intact)</span>
-<span class="nv">TOKENPAK_MODE</span><span class="o">=</span>aggressive<span class="w"> </span>tokenpak<span class="w"> </span>serve
+<span class="nv">TOKENPAK_MODE</span><span class="o">=</span>aggressive<span class="w"> </span>tokenpak<span class="w"> </span>start
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><span class="c1"># Or per-request override via header</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
@@ -2879,7 +2963,7 @@ curl<span class="w"> </span>http://localhost:8766/health<span class="w"> </span>
 <tbody>
 <tr>
 <td>Start proxy</td>
-<td><code>tokenpak serve</code></td>
+<td><code>tokenpak start</code></td>
 </tr>
 <tr>
 <td>Check health</td>
@@ -2899,19 +2983,19 @@ curl<span class="w"> </span>http://localhost:8766/health<span class="w"> </span>
 </tr>
 <tr>
 <td>Hybrid mode</td>
-<td><code>TOKENPAK_MODE=hybrid tokenpak serve</code></td>
+<td><code>TOKENPAK_MODE=hybrid tokenpak start</code></td>
 </tr>
 <tr>
 <td>Aggressive mode</td>
-<td><code>TOKENPAK_MODE=aggressive tokenpak serve</code></td>
+<td><code>TOKENPAK_MODE=aggressive tokenpak start</code></td>
 </tr>
 <tr>
 <td>WebSocket port</td>
-<td><code>TOKENPAK_WS_PORT=8767 tokenpak serve</code> (default: PROXY_PORT+1)</td>
+<td><code>TOKENPAK_WS_PORT=8767 tokenpak start</code> (default: PROXY_PORT+1)</td>
 </tr>
 <tr>
 <td>Disable compression</td>
-<td><code>TOKENPAK_MODE=strict tokenpak serve</code></td>
+<td><code>TOKENPAK_MODE=strict tokenpak start</code></td>
 </tr>
 </tbody>
 </table>

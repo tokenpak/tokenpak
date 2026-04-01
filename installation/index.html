@@ -367,7 +367,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../FAQ/" class="md-tabs__link">
+        <a href="../faq/" class="md-tabs__link">
           
   
   
@@ -741,10 +741,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#optional-with-dashboard" class="md-nav__link">
+  <a href="#optional-dashboard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        (Optional) With Dashboard
+        (Optional) Dashboard
       
     </span>
   </a>
@@ -847,10 +847,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#connection-refused-1270018000" class="md-nav__link">
+  <a href="#connection-refused-localhost8766" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "Connection refused (127.0.0.1:8000)"
+        "Connection refused (localhost:8766)"
       
     </span>
   </a>
@@ -869,10 +869,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#port-8000-already-in-use" class="md-nav__link">
+  <a href="#port-8766-already-in-use" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "Port 8000 already in use"
+        "Port 8766 already in use"
       
     </span>
   </a>
@@ -1160,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../adapters/" class="md-nav__link">
+      <a href="../cli-reference/" class="md-nav__link">
         
   
   
@@ -1280,6 +1280,34 @@
     
   
     Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY-GUARD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Guard
   
 
     
@@ -2417,7 +2445,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../FAQ/" class="md-nav__link">
+      <a href="../faq/" class="md-nav__link">
         
   
   
@@ -2453,6 +2481,62 @@
     
   
     Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
   
 
     
@@ -2695,10 +2779,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#optional-with-dashboard" class="md-nav__link">
+  <a href="#optional-dashboard" class="md-nav__link">
     <span class="md-ellipsis">
       
-        (Optional) With Dashboard
+        (Optional) Dashboard
       
     </span>
   </a>
@@ -2801,10 +2885,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#connection-refused-1270018000" class="md-nav__link">
+  <a href="#connection-refused-localhost8766" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "Connection refused (127.0.0.1:8000)"
+        "Connection refused (localhost:8766)"
       
     </span>
   </a>
@@ -2823,10 +2907,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#port-8000-already-in-use" class="md-nav__link">
+  <a href="#port-8766-already-in-use" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "Port 8000 already in use"
+        "Port 8766 already in use"
       
     </span>
   </a>
@@ -2896,7 +2980,7 @@
 <hr />
 <h2 id="system-requirements">System Requirements<a class="headerlink" href="#system-requirements" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Python:</strong> 3.8+ (3.10+ recommended)</li>
+<li><strong>Python:</strong> 3.10+</li>
 <li><strong>OS:</strong> Linux, macOS, Windows</li>
 <li><strong>Disk:</strong> ~50 MB for package + dependencies</li>
 <li><strong>RAM:</strong> 512 MB minimum (1+ GB recommended for monitoring dashboard)</li>
@@ -2909,7 +2993,7 @@
 </code></pre></div>
 <h3 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>--version
-<span class="c1"># Output: tokenpak 0.1.0</span>
+<span class="c1"># Output: tokenpak 1.0.3</span>
 </code></pre></div>
 <h3 id="optional-install-with-extras">(Optional) Install with Extras<a class="headerlink" href="#optional-install-with-extras" title="Permanent link">&para;</a></h3>
 <p>TokenPak can optionally integrate with popular frameworks. These are NOT required but make integration easier:</p>
@@ -2961,28 +3045,27 @@ pip<span class="w"> </span>install<span class="w"> </span>tokenpak<span class="o
 </code></pre></div>
 <hr />
 <h2 id="step-3-start-the-proxy-server">Step 3: Start the Proxy Server<a class="headerlink" href="#step-3-start-the-proxy-server" title="Permanent link">&para;</a></h2>
-<p>TokenPak runs as a local proxy server on port <code>8000</code> (configurable).</p>
+<p>TokenPak runs as a local proxy server on port <code>8766</code> (configurable).</p>
 <h3 id="start-the-server">Start the Server<a class="headerlink" href="#start-the-server" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>start
 </code></pre></div>
 <p><strong>Output:</strong>
-<div class="highlight"><pre><span></span><code>[2026-03-24 21:20:00] TokenPak Proxy v0.1.0 starting...
-[2026-03-24 21:20:00] Listening on http://127.0.0.1:8000
-[2026-03-24 21:20:00] Ready to proxy requests
+<div class="highlight"><pre><span></span><code>TokenPak proxy running on http://localhost:8766
+Compression mode: hybrid (threshold: 4500 tokens)
 </code></pre></div></p>
 <p>The server is now running and ready to accept requests.</p>
 <h3 id="optional-custom-port">(Optional) Custom Port<a class="headerlink" href="#optional-custom-port" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>start<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span>
 </code></pre></div>
 <h3 id="optional-background-mode">(Optional) Background Mode<a class="headerlink" href="#optional-background-mode" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>nohup<span class="w"> </span>tokenpak<span class="w"> </span>serve<span class="w"> </span><span class="p">&amp;</span>
-<span class="c1"># or</span>
-tokenpak<span class="w"> </span>serve<span class="w"> </span><span class="p">&amp;</span>
+<div class="highlight"><pre><span></span><code>nohup<span class="w"> </span>tokenpak<span class="w"> </span>start<span class="w"> </span>&gt;<span class="w"> </span>~/.tokenpak/proxy.log<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="nb">echo</span><span class="w"> </span><span class="nv">$!</span><span class="w"> </span>&gt;<span class="w"> </span>~/.tokenpak/proxy.pid
 </code></pre></div>
-<h3 id="optional-with-dashboard">(Optional) With Dashboard<a class="headerlink" href="#optional-with-dashboard" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve<span class="w"> </span>--dashboard
+<h3 id="optional-dashboard">(Optional) Dashboard<a class="headerlink" href="#optional-dashboard" title="Permanent link">&para;</a></h3>
+<p>In a separate terminal:</p>
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>dashboard
 </code></pre></div>
-<p>Opens a web dashboard at <code>http://127.0.0.1:8001</code> to view cost, token counts, and request history.</p>
+<p>Or view in your browser at <code>http://localhost:8766/dashboard</code>.</p>
 <hr />
 <h2 id="step-4-test-the-installation">Step 4: Test the Installation<a class="headerlink" href="#step-4-test-the-installation" title="Permanent link">&para;</a></h2>
 <h3 id="python-client">Python Client<a class="headerlink" href="#python-client" title="Permanent link">&para;</a></h3>
@@ -2991,7 +3074,7 @@ tokenpak<span class="w"> </span>serve<span class="w"> </span><span class="p">&am
 
 <span class="c1"># Initialize client pointing to the proxy</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span>
-    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://127.0.0.1:8000&quot;</span><span class="p">,</span>  <span class="c1"># Your proxy</span>
+    <span class="n">base_url</span><span class="o">=</span><span class="s2">&quot;http://localhost:8766&quot;</span><span class="p">,</span>  <span class="c1"># Your proxy</span>
     <span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span><span class="p">,</span>  <span class="c1"># Your API key</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">&quot;claude-opus-4-6&quot;</span>  <span class="c1"># Default model</span>
 <span class="p">)</span>
@@ -3016,7 +3099,7 @@ tokenpak<span class="w"> </span>serve<span class="w"> </span><span class="p">&am
 Response: TokenPak is working!
 </code></pre></div></p>
 <h3 id="using-curl">Using curl<a class="headerlink" href="#using-curl" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:8000/v1/messages<span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8766/v1/messages<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer sk-ant-...&quot;</span><span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
@@ -3035,7 +3118,7 @@ Response: TokenPak is working!
 
 <span class="c1"># Proxy settings</span>
 <span class="nt">proxy</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8000</span>
+<span class="w">  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8766</span>
 <span class="w">  </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">127.0.0.1</span>
 
 <span class="c1"># Default provider</span>
@@ -3063,8 +3146,13 @@ Response: TokenPak is working!
 <span class="w">  </span><span class="nt">root</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/my-vault&quot;</span>
 <span class="w">  </span><span class="nt">index_file</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;~/.tokenpak/vault-index.json&quot;</span>
 </code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Environment variables are canonical</p>
+<p>TokenPak reads all settings from environment variables by default (see <a href="../configuration/">Configuration</a>).
+A config file is optional — use it for convenience, but env vars always take precedence.</p>
+</div>
 <p>Then run:</p>
-<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>config.yaml
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>start<span class="w"> </span>--config<span class="w"> </span>config.yaml
 </code></pre></div>
 <p>See <a href="../features/">Feature Matrix</a> for full configuration options.</p>
 <hr />
@@ -3074,10 +3162,10 @@ Response: TokenPak is working!
 <strong>Fix:</strong>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>tokenpak
 </code></pre></div></p>
-<h3 id="connection-refused-1270018000">"Connection refused (127.0.0.1:8000)"<a class="headerlink" href="#connection-refused-1270018000" title="Permanent link">&para;</a></h3>
+<h3 id="connection-refused-localhost8766">"Connection refused (localhost:8766)"<a class="headerlink" href="#connection-refused-localhost8766" title="Permanent link">&para;</a></h3>
 <p><strong>Cause:</strong> Proxy server not running
 <strong>Fix:</strong>
-<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>serve
+<div class="highlight"><pre><span></span><code>tokenpak<span class="w"> </span>start
 <span class="c1"># (in another terminal)</span>
 </code></pre></div></p>
 <h3 id="anthropic_api_key-not-set">"ANTHROPIC_API_KEY not set"<a class="headerlink" href="#anthropic_api_key-not-set" title="Permanent link">&para;</a></h3>
@@ -3085,16 +3173,16 @@ Response: TokenPak is working!
 <strong>Fix:</strong>
 <div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span>
 <span class="c1"># Then start the proxy</span>
-tokenpak<span class="w"> </span>serve
+tokenpak<span class="w"> </span>start
 </code></pre></div></p>
-<h3 id="port-8000-already-in-use">"Port 8000 already in use"<a class="headerlink" href="#port-8000-already-in-use" title="Permanent link">&para;</a></h3>
-<p><strong>Cause:</strong> Another process using port 8000
+<h3 id="port-8766-already-in-use">"Port 8766 already in use"<a class="headerlink" href="#port-8766-already-in-use" title="Permanent link">&para;</a></h3>
+<p><strong>Cause:</strong> Another process using port 8766
 <strong>Fix:</strong>
 <div class="highlight"><pre><span></span><code><span class="c1"># Use a different port</span>
-tokenpak<span class="w"> </span>serve<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span>
+tokenpak<span class="w"> </span>start<span class="w"> </span>--port<span class="w"> </span><span class="m">9000</span>
 
-<span class="c1"># Or kill the process using 8000</span>
-lsof<span class="w"> </span>-i<span class="w"> </span>:8000
+<span class="c1"># Or kill the process using 8766</span>
+lsof<span class="w"> </span>-i<span class="w"> </span>:8766
 <span class="nb">kill</span><span class="w"> </span>&lt;pid&gt;
 </code></pre></div></p>
 <h3 id="yaml-parsing-error-in-configyaml">"YAML parsing error in config.yaml"<a class="headerlink" href="#yaml-parsing-error-in-configyaml" title="Permanent link">&para;</a></h3>

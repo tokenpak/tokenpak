@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://docs.tokenpak.ai/error-handling/">
       
       
-        <link rel="prev" href="../adapters/">
+        <link rel="prev" href="../cli-reference/">
       
       
         <link rel="next" href="../troubleshooting/">
@@ -367,7 +367,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../FAQ/" class="md-tabs__link">
+        <a href="../faq/" class="md-tabs__link">
           
   
   
@@ -769,7 +769,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../adapters/" class="md-nav__link">
+      <a href="../cli-reference/" class="md-nav__link">
         
   
   
@@ -1285,6 +1285,34 @@
     
   
     Savings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY-GUARD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Guard
   
 
     
@@ -2422,7 +2450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../FAQ/" class="md-nav__link">
+      <a href="../faq/" class="md-nav__link">
         
   
   
@@ -2458,6 +2486,62 @@
     
   
     Examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
   
 
     
@@ -2908,12 +2992,12 @@
 <h3 id="1-connection-refused-proxy-not-running">1. Connection Refused (Proxy Not Running)<a class="headerlink" href="#1-connection-refused-proxy-not-running" title="Permanent link">&para;</a></h3>
 <p><strong>Error Message:</strong>
 <div class="highlight"><pre><span></span><code>ConnectionRefusedError: [Errno 111] Connection refused
-Failed to connect to http://127.0.0.1:8000
+Failed to connect to http://localhost:8766
 </code></pre></div></p>
 <p><strong>Cause:</strong> The TokenPak proxy server is not running.</p>
 <p><strong>Solution:</strong>
 <div class="highlight"><pre><span></span><code><span class="c1"># Start the proxy</span>
-tokenpak<span class="w"> </span>serve
+tokenpak<span class="w"> </span>start
 
 <span class="c1"># (in another terminal)</span>
 python<span class="w"> </span>your_script.py
@@ -2934,7 +3018,7 @@ Check your ANTHROPIC_API_KEY environment variable
 <span class="nb">export</span><span class="w"> </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span><span class="s2">&quot;sk-ant-...&quot;</span>
 
 <span class="c1"># Restart the proxy</span>
-tokenpak<span class="w"> </span>serve
+tokenpak<span class="w"> </span>start
 </code></pre></div></p>
 <p><strong>Prevention:</strong>
 - Use a <code>.env</code> file (see <a href="../installation/">Installation</a>)
@@ -3144,14 +3228,14 @@ State: HALF_OPEN (testing recovery)
 <h2 id="monitoring-debugging">Monitoring &amp; Debugging<a class="headerlink" href="#monitoring-debugging" title="Permanent link">&para;</a></h2>
 <h3 id="enable-debug-logging">Enable Debug Logging<a class="headerlink" href="#enable-debug-logging" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Detailed logs</span>
-<span class="nv">TOKENPAK_LOG_LEVEL</span><span class="o">=</span>DEBUG<span class="w"> </span>tokenpak<span class="w"> </span>serve
+<span class="nv">TOKENPAK_LOG_LEVEL</span><span class="o">=</span>DEBUG<span class="w"> </span>tokenpak<span class="w"> </span>start
 
 <span class="c1"># Write to file</span>
-tokenpak<span class="w"> </span>serve<span class="w"> </span>--log-file<span class="w"> </span>/tmp/tokenpak.log
+tokenpak<span class="w"> </span>start<span class="w"> </span>--log-file<span class="w"> </span>/tmp/tokenpak.log
 </code></pre></div>
 <h3 id="check-proxy-status">Check Proxy Status<a class="headerlink" href="#check-proxy-status" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Health check endpoint</span>
-curl<span class="w"> </span>http://127.0.0.1:8000/health
+curl<span class="w"> </span>http://localhost:8766/health
 
 <span class="c1"># Response:</span>
 <span class="c1"># {</span>
@@ -3165,13 +3249,13 @@ curl<span class="w"> </span>http://127.0.0.1:8000/health
 </code></pre></div>
 <h3 id="view-request-log">View Request Log<a class="headerlink" href="#view-request-log" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="c1"># Last 100 requests</span>
-curl<span class="w"> </span>http://127.0.0.1:8000/logs?limit<span class="o">=</span><span class="m">100</span>
+curl<span class="w"> </span>http://localhost:8766/logs?limit<span class="o">=</span><span class="m">100</span>
 
 <span class="c1"># Requests to Anthropic only</span>
-curl<span class="w"> </span><span class="s1">&#39;http://127.0.0.1:8000/logs?provider=anthropic&#39;</span>
+curl<span class="w"> </span><span class="s1">&#39;http://localhost:8766/logs?provider=anthropic&#39;</span>
 
 <span class="c1"># Requests with errors</span>
-curl<span class="w"> </span><span class="s1">&#39;http://127.0.0.1:8000/logs?status=error&#39;</span>
+curl<span class="w"> </span><span class="s1">&#39;http://localhost:8766/logs?status=error&#39;</span>
 </code></pre></div>
 <h3 id="test-provider-connectivity">Test Provider Connectivity<a class="headerlink" href="#test-provider-connectivity" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">tokenpak</span><span class="w"> </span><span class="kn">import</span> <span class="n">Client</span>
@@ -3290,7 +3374,7 @@ curl<span class="w"> </span><span class="s1">&#39;http://127.0.0.1:8000/logs?sta
 <tr>
 <td><code>ConnectionRefusedError</code></td>
 <td>Proxy not running</td>
-<td>Start <code>tokenpak serve</code></td>
+<td>Start <code>tokenpak start</code></td>
 </tr>
 <tr>
 <td><code>ConnectionError</code></td>
@@ -3359,7 +3443,7 @@ curl<span class="w"> </span><span class="s1">&#39;http://127.0.0.1:8000/logs?sta
 <hr />
 <h2 id="getting-help">Getting Help<a class="headerlink" href="#getting-help" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Question?</strong> Check this guide or <a href="../FAQ/">FAQ</a></li>
+<li><strong>Question?</strong> Check this guide or <a href="../faq/">FAQ</a></li>
 <li><strong>Bug?</strong> Open an issue on GitHub</li>
 <li><strong>Stuck?</strong> Email support or check Discord</li>
 </ul>
