@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PlanningState",
+  "description": "State schema for plan intent — objectives, options, and constraints.",
+  "type": "object",
+  "properties": {
+    "objective": {
+      "type": "string",
+      "description": "The primary goal or outcome to achieve"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Hard constraints that cannot be violated (budget, timeline, tech stack)"
+    },
+    "options": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Candidate approaches or options under consideration"
+    },
+    "blockers": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Known blockers or unresolved dependencies"
+    },
+    "deadline": {
+      "type": "string",
+      "description": "Target completion date or milestone (ISO 8601 or human-readable)"
+    }
+  },
+  "required": ["objective"],
+  "additionalProperties": false
+}
