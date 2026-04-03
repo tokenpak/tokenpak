@@ -31,7 +31,7 @@ from tokenpak.agent.license.keys import (
     format_license_key,
     LicensePayload,
 )
-from tokenpak.agent.license.validator import (
+from tokenpak.infrastructure.license_validation import (
     LicenseValidator,
     LicenseTier,
     LicenseStatus,
@@ -39,7 +39,7 @@ from tokenpak.agent.license.validator import (
     TIER_FEATURES,
     GRACE_PERIOD_DAYS,
 )
-from tokenpak.agent.license.store import LicenseStore, CachedLicense
+from tokenpak.infrastructure.license_store import LicenseStore, CachedLicense
 
 
 # ─────────────────────────────────────────────

@@ -25,26 +25,26 @@ logger = logging.getLogger(__name__)
 
 # Promotion gate thresholds
 PROMOTION_RULES = {
-    "min_occurrences": 2,          # happened more than once
-    "min_success_rate": 0.7,       # validated by outcome
-    "not_contradicted_days": 7,    # not contradicted in last 7 days
-    "material_savings": 0.15,      # reduces future work by >15% (e.g., 15% token reduction)
-    "specificity_score": 0.5,      # specific enough to be actionable (0-1 scale)
+    "min_occurrences": 2,  # happened more than once
+    "min_success_rate": 0.7,  # validated by outcome
+    "not_contradicted_days": 7,  # not contradicted in last 7 days
+    "material_savings": 0.15,  # reduces future work by >15% (e.g., 15% token reduction)
+    "specificity_score": 0.5,  # specific enough to be actionable (0-1 scale)
 }
 
 # Memory tier definitions
 TIER_NAMES = {
-    1: "working",     # current session, auto-expires
-    2: "session",     # persists across turns, TTL: hours
-    3: "project",     # persists across sessions, TTL: days
-    4: "durable",     # permanent, highest quality gate
+    1: "working",  # current session, auto-expires
+    2: "session",  # persists across turns, TTL: hours
+    3: "project",  # persists across sessions, TTL: days
+    4: "durable",  # permanent, highest quality gate
 }
 
 DEFAULT_TTL = {
-    1: 300,              # Tier 1: 5 minutes
-    2: 3600 * 4,         # Tier 2: 4 hours
-    3: 86400 * 7,        # Tier 3: 7 days
-    4: None,             # Tier 4: permanent
+    1: 300,  # Tier 1: 5 minutes
+    2: 3600 * 4,  # Tier 2: 4 hours
+    3: 86400 * 7,  # Tier 3: 7 days
+    4: None,  # Tier 4: permanent
 }
 
 DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
@@ -55,18 +55,18 @@ class Lesson:
     """A learned lesson with promotion tracking."""
 
     lesson_id: str
-    content: str                    # The actual lesson text
-    tier: int                       # 1-4
-    occurrences: int                # How many times we've seen this
-    successes: int                  # How many times it succeeded
-    failures: int                   # How many times it failed
-    contradictions: int             # How many times it was contradicted
-    specificity_score: float         # 0-1: actionability
-    savings_pct: float              # 0-100: estimated % savings
-    created_at: float               # Unix timestamp
-    last_seen_at: float             # Unix timestamp
-    last_promoted_at: float         # Unix timestamp when promoted to current tier
-    promoted_from: Optional[int]    # Previous tier
+    content: str  # The actual lesson text
+    tier: int  # 1-4
+    occurrences: int  # How many times we've seen this
+    successes: int  # How many times it succeeded
+    failures: int  # How many times it failed
+    contradictions: int  # How many times it was contradicted
+    specificity_score: float  # 0-1: actionability
+    savings_pct: float  # 0-100: estimated % savings
+    created_at: float  # Unix timestamp
+    last_seen_at: float  # Unix timestamp
+    last_promoted_at: float  # Unix timestamp when promoted to current tier
+    promoted_from: Optional[int]  # Previous tier
 
     def success_rate(self) -> float:
         """Return success rate (0-1)."""
@@ -76,7 +76,7 @@ class Lesson:
     def days_since_contradicted(self) -> float:
         """Return days since last contradiction, or infinity if never contradicted."""
         if self.contradictions == 0:
-            return float('inf')
+            return float("inf")
         # Approximate: last contradiction was about (occurrences - successes - failures) / 2 occurrences ago
         # For simplicity, we'll track the actual timestamp separately in a real implementation
         return 0  # Placeholder—would need actual contradiction timestamp tracking
@@ -151,7 +151,7 @@ class MemoryPromoter:
         self._save()
         return lesson
 
-    def record_success(self, lesson_id: str) -> Optional[Lesson]:
+    def record_success(self, lesson_id: str, dry_run: bool = False) -> Optional[Lesson]:
         """Record a successful application of this lesson."""
         if lesson_id not in self.lessons:
             return None
@@ -159,8 +159,9 @@ class MemoryPromoter:
         lesson.occurrences += 1
         lesson.successes += 1
         lesson.last_seen_at = time.time()
-        self._maybe_promote(lesson)
-        self._save()
+        self._maybe_promote(lesson, dry_run=dry_run)
+        if not dry_run:
+            self._save()
         return lesson
 
     def record_failure(self, lesson_id: str) -> Optional[Lesson]:
@@ -185,7 +186,7 @@ class MemoryPromoter:
         self._save()
         return lesson
 
-    def _maybe_promote(self, lesson: Lesson) -> bool:
+    def _maybe_promote(self, lesson: Lesson, dry_run: bool = False) -> bool:
         """Check if lesson should be promoted to next tier."""
         if lesson.tier >= 4:
             return False  # Already at max tier
@@ -194,13 +195,13 @@ class MemoryPromoter:
         success_rate = lesson.success_rate()
 
         if lesson.tier == 1 and self._check_tier1_to_2(lesson):
-            self._promote(lesson, 2)
+            self._promote(lesson, 2, dry_run=dry_run)
             return True
         elif lesson.tier == 2 and self._check_tier2_to_3(lesson):
-            self._promote(lesson, 3)
+            self._promote(lesson, 3, dry_run=dry_run)
             return True
         elif lesson.tier == 3 and self._check_tier3_to_4(lesson):
-            self._promote(lesson, 4)
+            self._promote(lesson, 4, dry_run=dry_run)
             return True
 
         return False
@@ -247,13 +248,16 @@ class MemoryPromoter:
 
         return False
 
-    def _promote(self, lesson: Lesson, new_tier: int) -> None:
+    def _promote(self, lesson: Lesson, new_tier: int, dry_run: bool = False) -> None:
         """Promote lesson to a higher tier."""
         old_tier = lesson.tier
         lesson.promoted_from = old_tier
         lesson.tier = new_tier
         lesson.last_promoted_at = time.time()
-        logger.info(f"Promoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
+        if dry_run:
+            logger.info(f"[DRY-RUN] Would promote lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
+        else:
+            logger.info(f"Promoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {new_tier}")
 
     def _demote(self, lesson: Lesson) -> None:
         """Demote lesson to lower tier."""
@@ -264,9 +268,11 @@ class MemoryPromoter:
             old_tier = lesson.tier
             lesson.tier = max(1, lesson.tier - 1)
             lesson.last_promoted_at = time.time()
-            logger.info(f"Demoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {lesson.tier}")
+            logger.info(
+                f"Demoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {lesson.tier}"
+            )
 
-    def cleanup_expired(self) -> int:
+    def cleanup_expired(self, dry_run: bool = False) -> int:
         """Remove or demote expired lessons. Returns count of lessons affected."""
         affected = 0
         lesson_ids_to_check = list(self.lessons.keys())
@@ -274,7 +280,7 @@ class MemoryPromoter:
             lesson = self.lessons[lesson_id]
             if lesson.is_expired() and self._maybe_demote(lesson):
                 affected += 1
-        if affected > 0:
+        if affected > 0 and not dry_run:
             self._save()
         return affected
 

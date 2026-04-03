@@ -1,10 +1,14 @@
+---
+title: "MOTION-TESTING"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Dashboard — Motion Choreography Testing Guide
 
 ## Overview
 This document serves as a QA checklist for validating the motion choreography system. All animations should feel smooth, responsive, and intentional.
 
-**Environment**: Modern browser (Chrome, Firefox, Safari) on desktop & mobile  
-**Duration**: 5-10 minutes per test suite  
+**Environment**: Modern browser (Chrome, Firefox, Safari) on desktop & mobile
+**Duration**: 5-10 minutes per test suite
 **Success Criteria**: Smooth 60fps animations, <500ms perceived latency
 
 ---
@@ -43,7 +47,7 @@ This document serves as a QA checklist for validating the motion choreography sy
 
 ### Test 2.2: Hover on Chart Elements
 1. Hover over chart bars, lines, or points
-2. **Verify**: 
+2. **Verify**:
    - ✅ Element glows or brightens (glow effect visible)
    - ✅ Cursor changes to pointer
    - ✅ Animation is instant (<100ms)
@@ -356,8 +360,8 @@ Before marking complete, ensure:
 
 ## QA Sign-Off
 
-**Tested By**: [Sue or QA person]  
-**Date**: [YYYY-MM-DD]  
+**Tested By**: [Sue or QA person]
+**Date**: [YYYY-MM-DD]
 **Result**: ✅ PASS / ❌ FAIL
 
 **Notes**: (Any issues found, edge cases, observations)
@@ -383,4 +387,3 @@ Before marking complete, ensure:
 - Monitor `will-change` properties (should auto-cleanup)
 - Watch for animation class stacking
 - Verify HTMX hooks fire (`htmx:afterSwap`)
-

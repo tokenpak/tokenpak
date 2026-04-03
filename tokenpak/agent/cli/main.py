@@ -342,10 +342,15 @@ def _prune_argparse(argv: list) -> None:
 
     pp = argparse.ArgumentParser(prog="tokenpak prune", add_help=True)
     pp.add_argument("--auto", action="store_true", help="Auto-prune without confirmation")
-    pp.add_argument("--dry-run", dest="dry_run", action="store_true", help="Preview without changes")
     pp.add_argument(
-        "--threshold", type=float, default=0.4, metavar="SCORE",
-        help="Quality score below which blocks are pruned (default: 0.4)"
+        "--dry-run", dest="dry_run", action="store_true", help="Preview without changes"
+    )
+    pp.add_argument(
+        "--threshold",
+        type=float,
+        default=0.4,
+        metavar="SCORE",
+        help="Quality score below which blocks are pruned (default: 0.4)",
     )
     pp.add_argument("--json", dest="as_json", action="store_true", help="Output raw JSON")
     args = pp.parse_args(argv)
@@ -523,6 +528,7 @@ def _dispatch_learn(args) -> None:
     else:
         print("Usage: tokenpak learn <status|reset>")
 
+
 def main():
     # Delegate serve subcommand (Phase 5A: Ingest API)
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
@@ -695,6 +701,7 @@ def main():
         import argparse as _ap
 
         from tokenpak.agent.cli.commands.optimize import run_optimize
+
         op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
         op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
         op.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
@@ -726,16 +733,19 @@ def main():
     # Delegate Enterprise policy/sla/compliance commands
     if len(sys.argv) > 1 and sys.argv[1] == "policy":
         from tokenpak.agent.cli.commands.policy import run as _policy_run
+
         _policy_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "sla":
         from tokenpak.agent.cli.commands.sla import run as _sla_run
+
         _sla_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "compliance":
         from tokenpak.agent.cli.commands.compliance import run as _compliance_run
+
         _compliance_run(sys.argv[2:])
         return
 
@@ -852,8 +862,6 @@ def main():
             cmd_help(args)
     else:
         cmd_help(args)
-
-
 
 
 if __name__ == "__main__":

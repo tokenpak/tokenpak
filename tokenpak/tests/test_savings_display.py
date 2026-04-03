@@ -132,6 +132,7 @@ class TestStatusCommand:
         # Capture output
         import io
         import sys
+
         captured_output = io.StringIO()
         sys.stdout = captured_output
 
@@ -157,6 +158,7 @@ class TestStatusCommand:
 
         import io
         import sys
+
         captured_output = io.StringIO()
         sys.stdout = captured_output
         sys.stderr = io.StringIO()
@@ -224,17 +226,19 @@ class TestSavingsCommand:
 
         # Mock per-model rows
         mock_rows = [
-            MagicMock(**{
-                "__getitem__": lambda self, key: {
-                    "model": "claude-sonnet-4-6",
-                    "requests": 50,
-                    "avg_raw": 40_000,
-                    "avg_compressed": 38_000,
-                    "total_raw": 2_000_000,
-                    "total_compressed": 1_900_000,
-                    "total_cost": 5.70,
-                }[key]
-            })
+            MagicMock(
+                **{
+                    "__getitem__": lambda self, key: {
+                        "model": "claude-sonnet-4-6",
+                        "requests": 50,
+                        "avg_raw": 40_000,
+                        "avg_compressed": 38_000,
+                        "total_raw": 2_000_000,
+                        "total_compressed": 1_900_000,
+                        "total_cost": 5.70,
+                    }[key]
+                }
+            )
         ]
 
         mock_conn.execute.return_value.fetchall.return_value = mock_rows

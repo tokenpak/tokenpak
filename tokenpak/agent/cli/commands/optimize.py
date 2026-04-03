@@ -75,9 +75,9 @@ MODEL_ALTERNATIVES: Dict[str, List[Tuple[str, int, str]]] = {
 
 # Compression mode thresholds
 COMPRESSION_MODES = {
-    "none":       (0,  10),
-    "light":      (10, 25),
-    "balanced":   (25, 45),
+    "none": (0, 10),
+    "light": (10, 25),
+    "balanced": (25, 45),
     "aggressive": (45, 65),
 }
 
@@ -85,6 +85,7 @@ COMPRESSION_MODES = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _proxy_get(path: str, timeout: int = 5) -> Optional[Dict[str, Any]]:
     try:
@@ -109,9 +110,7 @@ def _fmt_cost(c: float) -> str:
     return f"${c:.2f}"
 
 
-def _model_cost_per_request(
-    model: str, avg_input: float, avg_output: float
-) -> float:
+def _model_cost_per_request(model: str, avg_input: float, avg_output: float) -> float:
     """Estimate average cost per request given token averages."""
     p = MODEL_COSTS.get(model, MODEL_COSTS["_fallback"])
     return (avg_input * p["input"] + avg_output * p["output"]) / 1_000_000
@@ -120,6 +119,7 @@ def _model_cost_per_request(
 # ---------------------------------------------------------------------------
 # Analysis functions
 # ---------------------------------------------------------------------------
+
 
 def _analyze_compression(session: Dict[str, Any]) -> Dict[str, Any]:
     """Derive compression metrics from session stats."""
@@ -302,15 +302,17 @@ def _build_recommendations(
 
     # 1. Compression upgrade
     if compression["additional_savings_pct"] > 0:
-        recs.append({
-            "n": n,
-            "label": f"Switch to {compression['optimal_mode']} compression",
-            "detail": (
-                f"+{compression['additional_savings_pct']:.0f}% token savings "
-                f"(current: {compression['current_pct']:.0f}% → target: {compression['optimal_pct']:.0f}%)"
-            ),
-            "apply_cmd": f"tokenpak config set compression {compression['optimal_mode']}",
-        })
+        recs.append(
+            {
+                "n": n,
+                "label": f"Switch to {compression['optimal_mode']} compression",
+                "detail": (
+                    f"+{compression['additional_savings_pct']:.0f}% token savings "
+                    f"(current: {compression['current_pct']:.0f}% → target: {compression['optimal_pct']:.0f}%)"
+                ),
+                "apply_cmd": f"tokenpak config set compression {compression['optimal_mode']}",
+            }
+        )
         n += 1
 
     # 2. Model switch
@@ -318,38 +320,44 @@ def _build_recommendations(
         alt_cost = model["alt_cost_per_request"]
         curr_cost = model["cost_per_request"]
         savings = curr_cost - alt_cost
-        recs.append({
-            "n": n,
-            "label": f"Use {model['best_alternative']} for simple queries",
-            "detail": (
-                f"-${savings:.3f}/req ({model['alt_savings_pct']}% cheaper) "
-                f"— {model['alt_reason']}"
-            ),
-            "apply_cmd": None,  # routing change, manual
-        })
+        recs.append(
+            {
+                "n": n,
+                "label": f"Use {model['best_alternative']} for simple queries",
+                "detail": (
+                    f"-${savings:.3f}/req ({model['alt_savings_pct']}% cheaper) "
+                    f"— {model['alt_reason']}"
+                ),
+                "apply_cmd": None,  # routing change, manual
+            }
+        )
         n += 1
 
     # 3. Prune redundant blocks
     if redundancy["total_redundant_blocks"] > 0:
-        recs.append({
-            "n": n,
-            "label": f"Prune {redundancy['total_redundant_blocks']} redundant block(s)",
-            "detail": (
-                f"Free ~{redundancy['redundant_tokens']:,} tokens "
-                f"({redundancy['duplicate_memory_blocks']} duplicate memory block(s), "
-                f"{redundancy['expired_telemetry_caches']} expired telemetry cache(s))"
-            ),
-            "apply_cmd": "tokenpak maintenance prune",
-        })
+        recs.append(
+            {
+                "n": n,
+                "label": f"Prune {redundancy['total_redundant_blocks']} redundant block(s)",
+                "detail": (
+                    f"Free ~{redundancy['redundant_tokens']:,} tokens "
+                    f"({redundancy['duplicate_memory_blocks']} duplicate memory block(s), "
+                    f"{redundancy['expired_telemetry_caches']} expired telemetry cache(s))"
+                ),
+                "apply_cmd": "tokenpak maintenance prune",
+            }
+        )
         n += 1
 
     if not recs:
-        recs.append({
-            "n": 1,
-            "label": "No significant optimizations found",
-            "detail": "Session is already well-optimized.",
-            "apply_cmd": None,
-        })
+        recs.append(
+            {
+                "n": 1,
+                "label": "No significant optimizations found",
+                "detail": "Session is already well-optimized.",
+                "apply_cmd": None,
+            }
+        )
 
     return recs
 
@@ -357,6 +365,7 @@ def _build_recommendations(
 # ---------------------------------------------------------------------------
 # Output renderers
 # ---------------------------------------------------------------------------
+
 
 def _render_text(
     compression: Dict[str, Any],
@@ -375,7 +384,9 @@ def _render_text(
     extra = compression["additional_savings_pct"]
     print(f"  {'Current Compression:':<28}{curr_pct:.0f}%")
     if extra > 0:
-        print(f"  {'Optimal Compression:':<28}~{opt_pct:.0f}% (switch to {compression['optimal_mode']})")
+        print(
+            f"  {'Optimal Compression:':<28}~{opt_pct:.0f}% (switch to {compression['optimal_mode']})"
+        )
     else:
         print(f"  {'Optimal Compression:':<28}{opt_pct:.0f}% (already optimal)")
     print()
@@ -386,7 +397,9 @@ def _render_text(
     if model.get("best_alternative"):
         alt_cost = model["alt_cost_per_request"]
         savings_pct = model["alt_savings_pct"]
-        print(f"  {'Cheaper Alternative:':<28}{model['best_alternative']} ({_fmt_cost(alt_cost)}/request)")
+        print(
+            f"  {'Cheaper Alternative:':<28}{model['best_alternative']} ({_fmt_cost(alt_cost)}/request)"
+        )
         print(f"  {'Estimated Savings:':<28}▼ {savings_pct}%")
     else:
         print(f"  {'Cheaper Alternative:':<28}None (model already optimal)")
@@ -478,13 +491,16 @@ def _apply_recommendations(recs: List[Dict[str, Any]]) -> None:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 def run_optimize(verbose: bool = False, as_json: bool = False, apply: bool = False) -> None:
     """Run the full optimization analysis."""
     # Pro+ gate
     try:
         from tokenpak.agent.license.activation import is_pro
+
         if not is_pro():
             print("⚠  /tokenpak optimize requires a Pro (or higher) license.")
+            print("   Get a license: https://tokenpak.io/pricing")
             print("   Run: tokenpak activate <key>")
             sys.exit(1)
     except ImportError:

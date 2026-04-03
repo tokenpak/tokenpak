@@ -30,6 +30,11 @@ class AttributionRecord:
     compression_pct: float = 0.0
 
     def to_dict(self) -> dict:
+        """Convert attribution record to dictionary for JSON serialization.
+        
+        Returns:
+            dict: Record with all metrics including tokens/cost saved and cache hit status
+        """
         return {
             "request_id": self.request_id,
             "timestamp": self.timestamp,
@@ -106,14 +111,24 @@ class AttributionTracker:
         self._max = max_records
 
     def record(self, rec: AttributionRecord) -> None:
+        """Add an attribution record to the tracker.
+        
+        Args:
+            rec: Attribution record to track. Auto-timestamps if not set.
+        """
         if rec.timestamp <= 0:
             rec.timestamp = time.time()
         self._records.append(rec)
         if len(self._records) > self._max:
-            self._records = self._records[-self._max:]
+            self._records = self._records[-self._max :]
 
     @property
     def records(self) -> List[AttributionRecord]:
+        """Get all tracked attribution records.
+        
+        Returns:
+            list: Copy of internal records list
+        """
         return list(self._records)
 
     def rollup_by_source(self, since: Optional[float] = None) -> Dict[str, dict]:
@@ -122,13 +137,15 @@ class AttributionTracker:
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(lambda: {
-            "requests": 0,
-            "tokens_saved": 0,
-            "cost_saved": 0.0,
-            "cache_hits": 0,
-            "models": defaultdict(int),
-        })
+        groups: Dict[str, dict] = defaultdict(
+            lambda: {
+                "requests": 0,
+                "tokens_saved": 0,
+                "cost_saved": 0.0,
+                "cache_hits": 0,
+                "models": defaultdict(int),
+            }
+        )
 
         for r in filtered:
             g = groups[r.source]
@@ -160,11 +177,13 @@ class AttributionTracker:
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(lambda: {
-            "requests": 0,
-            "tokens_saved": 0,
-            "cost_saved": 0.0,
-        })
+        groups: Dict[str, dict] = defaultdict(
+            lambda: {
+                "requests": 0,
+                "tokens_saved": 0,
+                "cost_saved": 0.0,
+            }
+        )
 
         for r in filtered:
             g = groups[r.model]
@@ -199,10 +218,15 @@ class AttributionTracker:
         try:
             data = json.loads(p.read_text())
             for d in data:
-                self._records.append(AttributionRecord(**{
-                    k: v for k, v in d.items()
-                    if k in AttributionRecord.__dataclass_fields__
-                }))
+                self._records.append(
+                    AttributionRecord(
+                        **{
+                            k: v
+                            for k, v in d.items()
+                            if k in AttributionRecord.__dataclass_fields__
+                        }
+                    )
+                )
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -224,7 +248,9 @@ def format_attribution(tracker: AttributionTracker, days: int = 7) -> str:
     by_model = tracker.rollup_by_model(since=since)
 
     if not by_source:
-        return "No attribution data found.\nRun TokenPak with requests to see attribution breakdown."
+        return (
+            "No attribution data found.\nRun TokenPak with requests to see attribution breakdown."
+        )
 
     total_saved = sum(v["cost_saved"] for v in by_source.values())
 
@@ -243,9 +269,7 @@ def format_attribution(tracker: AttributionTracker, days: int = 7) -> str:
             if key in src.lower():
                 emoji = em
                 break
-        lines.append(
-            f"  {emoji} {src:<22} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)"
-        )
+        lines.append(f"  {emoji} {src:<22} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)")
 
     lines.append("")
     lines.append("Top Models (by savings):")

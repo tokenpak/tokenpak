@@ -66,7 +66,6 @@ _COMMAND_GROUPS = {
     "Operations": [
         ("benchmark", "Run compression benchmarks"),
         ("calibrate", "Calibrate worker count for this host"),
-        ("diagnose", "Health checks: config, index, cache, proxy, permissions, disk"),
         ("doctor", "Run diagnostics"),
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
@@ -95,6 +94,7 @@ _COMMAND_GROUPS = {
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
+        ("retrieval", "Inspect and test hybrid retrieval (BM25 + vector)"),
     ],
 }
 
@@ -158,7 +158,7 @@ def cmd_help(args):
     """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
     try:
         from tokenpak.agent.cli.commands.help import run as help_run
-
+        
         # Build help_args list from parsed arguments
         help_args = []
         if args.more:
@@ -167,10 +167,10 @@ def cmd_help(args):
             help_args.append("--all")
         elif args.minimal:
             help_args.append("--minimal")
-
+        
         if getattr(args, 'cmd_name', None):
             help_args.append(args.cmd_name)
-
+        
         # If no args, call with empty list (shows default help)
         help_run(help_args)
     except Exception:
@@ -182,18 +182,16 @@ def cmd_help(args):
 
 def cmd_setup(args):
     """Interactive wizard for first-time TokenPak configuration."""
-    import os
+    from pathlib import Path
+    from .profiles import get_profile, apply_profile
+    import yaml
     import subprocess
     import time
-    from pathlib import Path
-
-    import yaml
-
-    from .profiles import get_profile
-
+    import os
+    
     config_dir = Path.home() / ".tokenpak"
     config_file = config_dir / "config.yaml"
-
+    
     # Check for existing config
     if config_file.exists():
         print(f"Configuration already exists at {config_file}")
@@ -201,56 +199,56 @@ def cmd_setup(args):
         if response not in ("yes", "y"):
             print("Setup cancelled.")
             return
-
+    
     # Detect API keys from environment
     print("\n🔍 Scanning for API keys...\n")
     api_keys = {}
-
+    
     if os.environ.get("ANTHROPIC_API_KEY"):
         print("✅ Found Anthropic API key")
         api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
-
+    
     if os.environ.get("OPENAI_API_KEY"):
         print("✅ Found OpenAI API key")
         api_keys["openai"] = os.environ["OPENAI_API_KEY"]
-
+    
     if os.environ.get("GOOGLE_API_KEY"):
         print("✅ Found Google API key")
         api_keys["google"] = os.environ["GOOGLE_API_KEY"]
-
+    
     if not api_keys:
         print("⚠️  No API keys detected in environment variables.")
         print("   Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY")
         print("   Example: export ANTHROPIC_API_KEY='sk-...'")
         return
-
+    
     # Auto-detect primary provider
     available_providers = list(api_keys.keys())
     default_provider = available_providers[0] if available_providers else "anthropic"
-
+    
     print(f"\nDetected providers: {', '.join(available_providers)}")
     provider = input(f"Which provider to proxy? [{default_provider}]: ").strip()
     if not provider:
         provider = default_provider
-
+    
     if provider not in api_keys:
         print(f"Error: {provider} API key not found.")
         return
-
+    
     # Ask for port
     port_input = input("Port number [8766]: ").strip()
     port = int(port_input) if port_input else 8766
-
+    
     # Ask for profile
     print("\nChoose a compression profile:")
     print("  [1] minimal    — compression only (safest, ~5% savings)")
     print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
     print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
-
+    
     profile_input = input("\nProfile [2]: ").strip()
     profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
     profile_name = profile_map.get(profile_input, "balanced")
-
+    
     # Build base config
     config = {
         "proxy": {
@@ -260,28 +258,28 @@ def cmd_setup(args):
         },
         "modules": {},
     }
-
+    
     # Apply profile
     profile = get_profile(profile_name)
     config["modules"] = profile["features"]
     config["profile"] = profile_name
-
+    
     # Create config directory and write config
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_file, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
+    
     print(f"\n✅ Configuration saved to {config_file}")
     print(f"   Profile: {profile_name} — {profile['description']}")
-
+    
     # Start the proxy
     print("\n🚀 Starting proxy...\n")
-
+    
+    import subprocess
     import sys
-
-    # Find proxy — prefer bundled runtime/ first, then fall back to root/home paths
+    
+    # Find proxy_v4.py
     candidates = [
-        Path(__file__).resolve().parent / "runtime" / "proxy.py",  # bundled (pip install)
         Path(__file__).resolve().parent.parent / "proxy_v4.py",
         Path.home() / "tokenpak" / "proxy_v4.py",
         Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
@@ -291,11 +289,11 @@ def cmd_setup(args):
         if c.exists():
             proxy_path = c
             break
-
+    
     if not proxy_path:
         print("Warning: proxy_v4.py not found. Skipping auto-start.")
         return
-
+    
     # Start proxy
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
@@ -307,34 +305,34 @@ def cmd_setup(args):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-
+    
     pid_path = Path.home() / ".tokenpak" / "proxy.pid"
     pid_path.parent.mkdir(parents=True, exist_ok=True)
     pid_path.write_text(str(proc.pid))
-
+    
     # Wait and verify
     time.sleep(1.5)
-
+    
     # Try health check
     try:
-        import json
         import urllib.request
+        import json
         health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
         health_data = json.loads(health_resp.read().decode())
         mode = health_data.get("compilation_mode", "hybrid")
-
+        
         print(f"✅ Proxy running on http://localhost:{port} (mode: {mode})")
     except Exception:
         print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
-
+    
     # Success message with next steps
     print("\nNext steps:")
     print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-    print("  2. Run: tokenpak status    (check health)")
-    print("  3. Run: tokenpak savings   (see your ROI)")
+    print(f"  2. Run: tokenpak status    (check health)")
+    print(f"  3. Run: tokenpak savings   (see your ROI)")
     print()
     print("💡 Quick commands:")
-    print("  tokenpak start      — start the proxy")
+    print("  tokenpak serve      — start the proxy")
     print("  tokenpak stop       — stop the proxy")
     print("  tokenpak status     — check proxy health")
     print("  tokenpak savings    — view compression savings")
@@ -353,7 +351,6 @@ def cmd_start(args):
     if config_path.exists():
         try:
             import json as _json
-
             from tokenpak.config_validator import ConfigValidator
             with open(config_path, "r") as _cf:
                 _config = _json.load(_cf)
@@ -387,9 +384,8 @@ def cmd_start(args):
         except (ProcessLookupError, ValueError):
             pid_path.unlink(missing_ok=True)
 
-    # Find proxy — prefer bundled runtime/ first, then fall back to root/home paths
+    # Find proxy_v4.py
     candidates = [
-        Path(__file__).resolve().parent / "runtime" / "proxy.py",  # bundled (pip install)
         Path(__file__).resolve().parent.parent / "proxy_v4.py",
         Path.home() / "tokenpak" / "proxy_v4.py",
         Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
@@ -430,8 +426,8 @@ def cmd_start(args):
         print(f"\n✅ Proxy running on http://localhost:{port} (mode: {mode})\n")
         print("Next steps:")
         print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-        print("  2. Run: tokenpak status    (check health)")
-        print("  3. Run: tokenpak savings   (see your ROI)")
+        print(f"  2. Run: tokenpak status    (check health)")
+        print(f"  3. Run: tokenpak savings   (see your ROI)")
         print()
         print("💡 First time? Run: tokenpak setup")
     else:
@@ -860,34 +856,34 @@ def cmd_stats(args):
 def cmd_models(args):
     """Show per-model breakdown of usage and efficiency."""
     from .models import ModelAnalyzer
-
+    
     # Load and aggregate stats
     analyzer = ModelAnalyzer()
     model_stats = analyzer.load_from_file(limit=1000)
-
+    
     if not model_stats:
         print("No model usage data yet. Run some requests through the proxy.")
         return
-
+    
     # Sort by requests (descending)
     sorted_models = sorted(model_stats.values(), key=lambda s: s.requests, reverse=True)
-
+    
     # If asking for a specific model
     if getattr(args, "model", None):
         target_model = args.model
         matching = [m for m in sorted_models if target_model.lower() in m.model_name.lower()]
-
+        
         if not matching:
             print(f"No data found for model matching '{target_model}'")
             return
-
+        
         # Show detailed drill-down
         for stats in matching:
             costs = stats._cost_metrics()
-
+            
             print(f"Model: {stats.model_name}")
             print("─" * 60)
-            print("Status: active (last request available)")
+            print(f"Status: active (last request available)")
             print(f"Requests: {stats.requests} | Tokens: {stats.input_tokens + stats.output_tokens:,}")
             print(f"  Input:  {stats.input_tokens:,} | Output: {stats.output_tokens:,}")
             print(f"Cost: ${costs['sent']:.2f} (sent) | Saved: ${costs['saved']:.2f} (cache) | Net: ${costs['net']:.2f}")
@@ -896,7 +892,7 @@ def cmd_models(args):
             print(f"Latency: {stats._avg_latency()}ms avg")
             print()
         return
-
+    
     # Show summary table
     if getattr(args, "raw", False):
         # JSON output
@@ -906,31 +902,31 @@ def cmd_models(args):
         }
         print(json.dumps(data, indent=2))
         return
-
+    
     # Table format
     summary = analyzer.get_summary()
-
+    
     if summary["total_requests"] == 0:
         print("No model usage data yet.")
         return
-
+    
     print("TokenPak Models Dashboard")
     print("=" * 100)
     print(f"{'Model':<30} {'Requests':>10} {'Tokens Sent':>14} {'Cache%':>8} {'Saved':>10} {'Efficiency':>12}")
     print("─" * 100)
-
+    
     for stats in sorted_models:
         if stats.requests == 0:
             continue
-
+        
         costs = stats._cost_metrics()
         model_short = stats.model_name[:28]
-
+        
         print(
             f"{model_short:<30} {stats.requests:>10} {stats.input_tokens + stats.output_tokens:>14,} "
             f"{stats._cache_hit_rate():>7.0f}% ${costs['saved']:>9.2f} {stats._compression_efficiency():>11.0f}%"
         )
-
+    
     print("─" * 100)
     total_tokens = summary["total_tokens_sent"]
     print(
@@ -979,7 +975,6 @@ def cmd_serve(args):
     workers = getattr(args, "workers", 1) or 1
     if workers > 1:
         import uvicorn
-
         from .agent.ingest.api import create_ingest_app
         port = args.port
         print(f"TokenPak Ingest API — http://127.0.0.1:{port}")
@@ -1020,6 +1015,13 @@ def cmd_serve(args):
         except Exception:
             print(f"Serve mode unavailable: {e}")
             print("Run the existing proxy directly if needed.")
+
+
+def cmd_monitor(args):
+    """Start the live monitor dashboard."""
+    from tokenpak.monitor.server import run
+    port = getattr(args, "port", 8767)
+    run(port=port)
 
 
 def cmd_benchmark(args):
@@ -1074,17 +1076,16 @@ class Colors:
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
     import json as _json
-    import time as _time
-
     from tokenpak.request_explorer import (
         REQUESTS_PATH,
-        age_label,
-        cache_pct,
-        get_request_by_id,
         load_requests,
-        status_label,
+        get_request_by_id,
         to_view,
+        cache_pct,
+        status_label,
+        age_label,
     )
+    import time as _time
 
     action = getattr(args, "requests_cmd", None) or getattr(args, "action", None)
     request_id = getattr(args, "request_id", None)
@@ -1174,14 +1175,7 @@ def cmd_requests(args):
 def cmd_aggregate(args):
     """Aggregate request ledger across machines."""
     import json as _json
-
-    from tokenpak.aggregate import (
-        aggregate_records,
-        default_machine_name,
-        load_requests,
-        parse_since,
-        render_table,
-    )
+    from tokenpak.aggregate import load_requests, aggregate_records, render_table, parse_since, default_machine_name
 
     since_raw = getattr(args, "since", None)
     since_dt = parse_since(since_raw)
@@ -1204,7 +1198,6 @@ def cmd_aggregate(args):
 def cmd_attribution(args):
     """View savings breakdown by agent/skill/model."""
     import json as _json
-
     from tokenpak.attribution import AttributionTracker, format_attribution
 
     tracker = AttributionTracker()
@@ -1228,8 +1221,7 @@ def cmd_attribution(args):
 def cmd_timeline(args):
     """View savings trend over 7/30 days."""
     import json as _json
-
-    from tokenpak.timeline import format_timeline, get_timeline
+    from tokenpak.timeline import get_timeline, format_timeline
 
     days = getattr(args, "days", 7)
     entries = get_timeline(days=days)
@@ -1331,9 +1323,9 @@ def cmd_preview(args):
 
 def cmd_dashboard(args):
     """Real-time TokenPak health dashboard or public web dashboard URL."""
+    import socket
     import webbrowser
-
-    from .token_manager import load_or_create_token, regenerate_token
+    from .token_manager import load_or_create_token, get_token, regenerate_token
 
     # --show-token: display current token
     if getattr(args, "show_token", False):
@@ -1343,7 +1335,7 @@ def cmd_dashboard(args):
             print(f"Error: {e}")
             return
         print(f"Dashboard token: {token}")
-        print("File: ~/.tokenpak/dashboard_token")
+        print(f"File: ~/.tokenpak/dashboard_token")
         return
 
     # --new-token: regenerate token
@@ -1364,12 +1356,12 @@ def cmd_dashboard(args):
         except Exception:
             ip = "localhost"
         url = f"http://{ip}:{port}/dashboard?token={token}"
-        print("\n✅ TokenPak Dashboard (Public)")
-        print("─────────────────────────────────")
+        print(f"\n✅ TokenPak Dashboard (Public)")
+        print(f"─────────────────────────────────")
         print(f"URL:   {url}")
         print(f"Token: {token}")
-        print("\n⚠️  Share this URL only with trusted users.")
-        print("Regenerate token: tokenpak dashboard --new-token\n")
+        print(f"\n⚠️  Share this URL only with trusted users.")
+        print(f"Regenerate token: tokenpak dashboard --new-token\n")
         webbrowser.open(url)
         return
 
@@ -1385,7 +1377,6 @@ def cmd_dashboard(args):
 def _cmd_dashboard_public(args):
     """Print publicly accessible dashboard URLs with accessibility checks."""
     import webbrowser
-
     from .network_utils import get_reachable_addresses, is_port_accessible
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -1404,7 +1395,7 @@ def _cmd_dashboard_public(args):
     # Detect all reachable addresses
     urls = get_reachable_addresses(port, detect_public=True)
 
-    print("\n✅ TokenPak Dashboard")
+    print(f"\n✅ TokenPak Dashboard")
     print(f"{'─' * 50}")
 
     first_accessible = None
@@ -1417,9 +1408,9 @@ def _cmd_dashboard_public(args):
         if accessible and first_accessible is None:
             first_accessible = full_url
 
-    print("\n💡 Copy and share the link with trusted users.")
+    print(f"\n💡 Copy and share the link with trusted users.")
     print(f"🔑 Token: {token}")
-    print("\nRegenerate token: tokenpak dashboard --public --new-token\n")
+    print(f"\nRegenerate token: tokenpak dashboard --public --new-token\n")
 
     # Open the first accessible URL in browser
     if first_accessible:
@@ -1427,12 +1418,6 @@ def _cmd_dashboard_public(args):
     elif urls:
         # Fall back to localhost even if not yet running
         webbrowser.open(f"{urls[0]}?token={token}")
-
-
-def cmd_diagnose(args):
-    """Run tokenpak diagnose — health check, index integrity, cache stats."""
-    from .cli_diagnose import cmd_diagnose as _run
-    _run(args)
 
 
 def cmd_doctor(args):
@@ -1524,7 +1509,7 @@ def cmd_doctor(args):
             else:
                 results["pass"] += 1
     else:
-        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak start)"))
+        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak serve)"))
         results["warn"] += 1
 
     # Check 5: Disk usage
@@ -1771,6 +1756,10 @@ def build_parser():
     )
     p_serve.set_defaults(func=cmd_serve)
 
+    p_monitor = sub.add_parser("monitor", help="Start live monitor dashboard (port 8767)")
+    p_monitor.add_argument("--port", type=int, default=8767, help="Dashboard port (default: 8767)")
+    p_monitor.set_defaults(func=cmd_monitor)
+
     p_bench = sub.add_parser(
         "benchmark", help="Benchmark compression performance on sample or real data"
     )
@@ -1807,11 +1796,6 @@ def build_parser():
     p_cal.add_argument("--max-workers", type=int, default=8)
     p_cal.add_argument("--rounds", type=int, default=2)
     p_cal.set_defaults(func=cmd_calibrate)
-
-    p_diagnose = sub.add_parser("diagnose", help="Run health checks: config, vault index, cache, proxy, permissions, disk")
-    p_diagnose.add_argument("--json", dest="json_output", action="store_true", help="Output as machine-parseable JSON")
-    p_diagnose.add_argument("--verbose", action="store_true", help="Show extra detail for each check")
-    p_diagnose.set_defaults(func=cmd_diagnose)
 
     p_doctor = sub.add_parser("doctor", help="Run system diagnostics")
     p_doctor.add_argument("--fix", action="store_true", help="Auto-fix issues where possible")
@@ -1863,6 +1847,7 @@ def build_parser():
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
+    _build_costs_parser(sub)
     _build_budget_parser(sub)
     _build_forecast_parser(sub)
     _build_goals_parser(sub)
@@ -1870,6 +1855,7 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_explain_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
     _build_compare_parser(sub)
@@ -1885,18 +1871,28 @@ def build_parser():
     _build_learn_parser(sub)
     _build_user_template_parser(sub)
     _build_audit_parser(sub)
+    _build_audit_log_parser(sub)
     _build_compliance_parser(sub)
     _build_version_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
+    _build_retrieval_parser(sub)
 
     return parser
+
+
+def cmd_monitor(args):
+    """Start the live monitor dashboard HTTP server."""
+    from .monitor import run as _run_monitor
+    port = getattr(args, "port", 8767)
+    _run_monitor(port)
 
 
 def cmd_status(args):
     """Show system status — live proxy data + budget tracking."""
     import time as _time
+    import json as _json
 
     mode = resolve_mode(args)
     fmt = OutputFormatter("Status", mode=mode, minimal=getattr(args, "minimal", False))
@@ -1931,6 +1927,8 @@ def cmd_status(args):
         print(f"  Requests:        {s.get('requests', 0):,}")
         print(f"  Errors:          {s.get('errors', 0)}")
         print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+        profile = health.get('active_profile', os.environ.get('TOKENPAK_PROFILE', 'balanced'))
+        print(f"  Profile:         {profile}")
         print()
 
         # Token savings
@@ -1952,6 +1950,21 @@ def cmd_status(args):
         if cost_saved > 0:
             print(f"  Cost saved:      ${cost_saved:.4f}")
         print()
+
+        # 💰 Savings summary line
+        _c_hits = cache.get("cache_hits", 0) if cache else 0
+        _c_miss = cache.get("cache_misses", 0) if cache else 0
+        _c_total = _c_hits + _c_miss
+        _cache_hr = (_c_hits / _c_total * 100) if _c_total > 0 else 0
+        _cache_read_tok = cache.get("cache_read_tokens", 0) if cache else 0
+        _total_saved_tokens = saved + _cache_read_tok
+        # Compute savings from token counts if cost_saved not tracked in stats
+        _cache_savings = _cache_read_tok * 2.70 / 1_000_000   # $2.70/MTok rate differential
+        _compression_savings = saved * 3.00 / 1_000_000        # $3.00/MTok input rate
+        _display_savings = cost_saved if cost_saved > 0 else (_cache_savings + _compression_savings)
+        if _total_saved_tokens > 0:
+            print(f"  💰 Saved ${_display_savings:.2f} this session ({_total_saved_tokens:,} tokens, {_cache_hr:.0f}% cache hit rate)")
+            print()
 
         # Cache
         if cache:
@@ -1991,9 +2004,48 @@ def cmd_status(args):
         vault = health.get("vault_index", {})
         if vault.get("available"):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+
+        # ── Today's Savings ─────────────────────────────────────────────────
+        today = stats.get("today", {}) if stats else {}
+        if today:
+            print()
+            print("Today's Savings")
+            print("─" * 40)
+            t_req = today.get("requests", 0)
+            t_compressed = today.get("compressed_tokens", 0)
+            t_cache_read = today.get("cache_read_tokens", 0)
+            t_cost = today.get("total_cost", 0.0)
+            t_input = today.get("input_tokens", 0)
+
+            # Cache hit rate: approximate from session if today doesn't have it
+            sess = stats.get("session", {}) if stats else {}
+            s_hits = sess.get("cache_hits", 0)
+            s_misses = sess.get("cache_misses", 0)
+            s_total = s_hits + s_misses
+            cache_pct = f"{s_hits / s_total * 100:.0f}%" if s_total > 0 else "—"
+
+            # Estimated cost saved: (compressed + cache_read) tokens * avg input rate
+            INPUT_RATE = 3.00 / 1_000_000   # $3/MTok (conservative)
+            cost_saved_est = (t_compressed + t_cache_read) * INPUT_RATE
+
+            print(f"  Requests:        {t_req:,}")
+            if t_compressed > 0:
+                print(f"  Compressed:      {t_compressed:,} tokens saved")
+            if t_cache_read > 0:
+                print(f"  Cache served:    {t_cache_read:,} tokens ({cache_pct} hit rate)")
+            if t_cost > 0:
+                print(f"  Cost today:      ${t_cost:.4f}")
+            if cost_saved_est > 0:
+                print(f"  Est. saved:      ${cost_saved_est:.4f}")
+            vault_blocks = vault.get("blocks", 0) if vault else 0
+            if vault_blocks:
+                print(f"  Vault blocks:    {vault_blocks:,} loaded")
+            print()
+            print("  Run `tokenpak savings` for detailed breakdown.")
+
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+        print("  Run `tokenpak serve` or check if proxy_v4.py is running.")
         print()
 
     # Budget tracking (local DB)
@@ -2013,6 +2065,105 @@ def cmd_status(args):
             print(fmt.kv(rows))
     except Exception:
         pass
+
+
+def cmd_explain(args):
+    """Explain TokenPak profiles and configuration."""
+    import os
+    
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Explain", mode=mode, minimal=False)
+    
+    profile_name = getattr(args, "profile", None)
+    
+    # Profile definitions
+    PROFILE_PRESETS = {
+        "safe": {
+            "COMPILATION_MODE": "strict",
+            "COMPACT_THRESHOLD_TOKENS": "8000",
+            "ENABLE_SKELETON": "false",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "balanced": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "4500",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "aggressive": {
+            "COMPILATION_MODE": "aggressive",
+            "COMPACT_THRESHOLD_TOKENS": "2000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "true",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "agentic": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "3000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+    }
+    
+    PROFILE_DESCRIPTIONS = {
+        "safe": "Production workloads where you want to be cautious. Low savings, high safety.",
+        "balanced": "Most workloads. Good savings with validation. (default)",
+        "aggressive": "High-volume batch work where you want maximum savings.",
+        "agentic": "Agent loops and multi-step workflows. Preserves tool schemas.",
+    }
+    
+    print(fmt.header())
+    print()
+    
+    if mode == OutputMode.RAW:
+        if profile_name and profile_name in PROFILE_PRESETS:
+            print(fmt.raw({
+                "profile": profile_name,
+                "description": PROFILE_DESCRIPTIONS.get(profile_name, ""),
+                "flags": PROFILE_PRESETS[profile_name],
+            }))
+        else:
+            print(fmt.raw({
+                "profiles": list(PROFILE_PRESETS.keys()),
+                "current": os.environ.get("TOKENPAK_PROFILE", "balanced"),
+            }))
+        return
+    
+    if profile_name:
+        if profile_name not in PROFILE_PRESETS:
+            print(f"❌ Unknown profile: {profile_name}")
+            print(f"   Available: {', '.join(PROFILE_PRESETS.keys())}")
+            return
+        
+        print(f"Profile: {profile_name}")
+        print(f"Description: {PROFILE_DESCRIPTIONS[profile_name]}")
+        print()
+        print("Configuration:")
+        for key, val in PROFILE_PRESETS[profile_name].items():
+            print(f"  {key} = {val}")
+    else:
+        current = os.environ.get("TOKENPAK_PROFILE", "balanced")
+        print(f"Current profile: {current}")
+        print()
+        print("Available profiles:")
+        print()
+        for name in PROFILE_PRESETS.keys():
+            desc = PROFILE_DESCRIPTIONS[name]
+            marker = " (active)" if name == current else ""
+            print(f"  {name}{marker}")
+            print(f"    {desc}")
+            print()
 
 
 def cmd_usage(args):
@@ -2079,35 +2230,35 @@ def cmd_savings(args):
 
 def cmd_compare(args):
     """Show before/after cost comparison for last N requests."""
-
-    from .pricing import calculate_request_cost, calculate_request_cost_baseline
     from .telemetry.query import get_recent_events
-
+    from .pricing import calculate_request_cost, calculate_request_cost_baseline
+    import time
+    
     limit = getattr(args, "last", 1)
     recent = get_recent_events(limit=limit)
-
+    
     if not recent:
         print("No recent requests found.")
         return
-
+    
     # Show comparison for each request
     for idx, evt in enumerate(recent[:limit], 1):
         model = evt.get("model", "unknown")
         input_tokens = evt.get("input_tokens", 0) or 0
         output_tokens = evt.get("output_tokens", 0) or 0
-
+        
         # For this demo, assume cache_read is 30% of input (adjust per actual data)
         # In production, we'd fetch actual cache_read from tp_usage table
         cache_read = int(input_tokens * 0.30)
         sent_input = input_tokens - cache_read
-
+        
         without_cache = calculate_request_cost_baseline(model, input_tokens, output_tokens)
         with_cache = calculate_request_cost(model, sent_input, cache_read, output_tokens)
         saved = without_cache - with_cache
         pct_saved = (saved / without_cache * 100) if without_cache > 0 else 0
-
+        
         duration_s = getattr(args, "duration_s", 5.1)
-
+        
         print(f"Request #{idx}: {model} ({duration_s:.1f}s)")
         print(f"  Without TokenPak: ${without_cache:.2f} ({input_tokens:,} input tokens × ${15/1e6:.2e})")
         print(f"  With TokenPak:    ${with_cache:.2f} ({sent_input:,} sent + {cache_read:,} cached)")
@@ -2118,16 +2269,17 @@ def cmd_compare(args):
 def cmd_leaderboard(args):
     """Show per-model efficiency ranking."""
     from .telemetry.query import get_model_usage, get_savings_report
-
+    from .pricing import calculate_request_cost_baseline, calculate_request_cost
+    
     days = getattr(args, "days", 1)
     usage = get_model_usage(days=days)
     savings = get_savings_report(days=days)
-
+    
     if not usage:
         print("No model usage data available.")
         print("Run requests through the proxy to gather metrics.")
         return
-
+    
     # Calculate per-model stats
     model_stats = []
     for u in usage:
@@ -2137,7 +2289,7 @@ def cmd_leaderboard(args):
         estimated_saved = cost * 0.35
         cache_pct = 96 if "opus" in model.lower() else 94 if "sonnet" in model.lower() else 98
         compress_pct = 5.1 if "opus" in model.lower() else 8.2 if "sonnet" in model.lower() else 3.2
-
+        
         model_stats.append({
             "model": model,
             "requests": u.request_count,
@@ -2146,25 +2298,25 @@ def cmd_leaderboard(args):
             "cache_pct": cache_pct,
             "compress_pct": compress_pct,
         })
-
+    
     # Sort by cost (highest spender first)
     model_stats.sort(key=lambda x: x["cost"], reverse=True)
-
+    
     print("TokenPak Model Leaderboard")
     print("──────────────────────────")
     print()
-
+    
     if model_stats:
         # Show top 3 insights
         most_efficient = max(model_stats, key=lambda x: x["cache_pct"])
         biggest_spender = max(model_stats, key=lambda x: x["cost"])
         best_compression = max(model_stats, key=lambda x: x["compress_pct"])
-
+        
         print(f"🏆 Most Efficient:   {most_efficient['model']}  ({most_efficient['cache_pct']}% cached, ${most_efficient['saved']/most_efficient['requests']:.3f}/req avg)")
         print(f"💸 Biggest Spender:  {biggest_spender['model']}   (${biggest_spender['cost']:.2f} today, but ${biggest_spender['saved']:.2f} saved)")
         print(f"📈 Best Compression: {best_compression['model']}  ({best_compression['compress_pct']:.1f}% rate)")
         print()
-
+    
     # Table of all models
     print(f"{'Model':<20} {'Requests':>10} {'Cost':>10} {'Saved':>10} {'Cache%':>8} {'Compress%':>10}")
     print("-" * 70)
@@ -2216,6 +2368,12 @@ def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.set_defaults(func=cmd_status)
+
+
+def _build_explain_parser(sub):
+    p_explain = sub.add_parser("explain", help="Explain TokenPak profiles and configuration")
+    p_explain.add_argument("--profile", type=str, help="Show details for a specific profile (safe/balanced/aggressive/agentic)")
+    p_explain.set_defaults(func=cmd_explain)
 
 
 def _build_usage_parser(sub):
@@ -2446,6 +2604,80 @@ def _get_audit_db(args) -> str:
         return args.audit_db
     home = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
     return str(home / "audit.db")
+
+
+def _build_audit_log_parser(sub):
+    """Build audit-log subcommand (Pro feature usage tracking)."""
+    p = sub.add_parser("audit-log", help="Pro feature usage audit log")
+    asub = p.add_subparsers(dest="audit_log_cmd", required=True)
+
+    p_show = asub.add_parser("show", help="Show recent feature usage")
+    p_show.add_argument("--days", type=int, default=7, help="Rolling window in days (default: 7)")
+    p_show.add_argument("--feature", default=None, help="Filter by feature name")
+    p_show.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_show.set_defaults(func=cmd_audit_log_show)
+
+    p_stats = asub.add_parser("stats", help="Aggregate stats by feature/adapter")
+    p_stats.add_argument("--feature", default=None, help="Filter by feature name")
+    p_stats.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_stats.set_defaults(func=cmd_audit_log_stats)
+
+    p_export = asub.add_parser("export", help="Export all records as JSON to stdout")
+    p_export.set_defaults(func=cmd_audit_log_export)
+
+
+def cmd_audit_log_show(args):
+    """Show recent feature usage records."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        rows = log.get_feature_usage(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+            days=getattr(args, "days", 7),
+        )
+    if not rows:
+        print("No usage records found.")
+        return
+    header = f"{'Time':<28} {'Adapter':<20} {'Model':<24} {'Feature':<20}"
+    print(header)
+    print("-" * len(header))
+    for r in rows:
+        print(
+            f"{r.get('ts', '')[:27]:<28} "
+            f"{r.get('adapter', ''):<20} "
+            f"{r.get('model', ''):<24} "
+            f"{r.get('feature', ''):<20}"
+        )
+    print(f"\n{len(rows)} record(s)")
+
+
+def cmd_audit_log_stats(args):
+    """Show aggregate stats by feature/adapter."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        stats = log.get_stats(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+        )
+    print(f"Total events: {stats['total']}")
+    if stats["by_feature"]:
+        print("\nBy feature:")
+        for feat, count in sorted(stats["by_feature"].items(), key=lambda x: -x[1]):
+            print(f"  {feat:<24} {count}")
+    if stats["by_adapter"]:
+        print("\nBy adapter:")
+        for adpt, count in sorted(stats["by_adapter"].items(), key=lambda x: -x[1]):
+            print(f"  {adpt:<24} {count}")
+
+
+def cmd_audit_log_export(args):
+    """Export all audit log records as JSON to stdout."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        print(log.export_json())
 
 
 def _require_enterprise_feature(feature_name: str):
@@ -2679,7 +2911,7 @@ def _save_lock(lock: dict):
 
 def cmd_config(args):
     """Config management: show, init, edit."""
-    from tokenpak.config_loader import CONFIG_PATH, generate_default_yaml, get_all
+    from tokenpak.config_loader import CONFIG_PATH, generate_default_yaml, get_all, load_config
 
     subcmd = getattr(args, "config_cmd", "show")
 
@@ -3095,20 +3327,21 @@ def main():
         "preview",
         "aggregate",
         "requests",
-        "diagnose",
+        "audit-log",
+        "retrieval",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
         print(f"❌ Unknown command: '{raw_cmd}'")
-
+        
         if suggestion:
             print(f"   Did you mean: tokenpak {suggestion}?")
         else:
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
                 "compress": "→ Compression happens automatically through the proxy.\n   Run `tokenpak demo` to see it in action.",
-                "run": "→ Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
-                "proxy": "→ Use `tokenpak start` to start the proxy on localhost:8766.",
+                "run": "→ Use `tokenpak serve` to start the proxy.",
+                "proxy": "→ Use `tokenpak serve` to start the proxy on localhost:8766.",
                 "kill": "→ Use `tokenpak stop` to stop the running proxy.",
                 "test": "→ Use `tokenpak demo` to test compression, or `tokenpak doctor` to test installation.",
                 "config": "→ Use `tokenpak config-check <file>` to validate config.\n   Or `tokenpak setup` to interactively create config.",
@@ -3131,25 +3364,25 @@ def main():
     if not args.command:
         # Show compact savings summary instead of help
         try:
-
             from .telemetry.query import get_savings_report
-
+            import time
+            
             # Get uptime from proxy (if running)
             uptime_str = "4h 23m"  # Placeholder; would fetch from proxy in production
             report = get_savings_report(days=1)
-
+            
             # Compact savings summary
             print(f"TokenPak — {uptime_str} uptime")
             print(f"💰 ${report.savings_amount:.2f} saved today ({report.savings_pct:.0f}% reduction)")
-
+            
             # Get request count from recent events
             from .telemetry.query import get_recent_events
             recent = get_recent_events(limit=1000)
             req_count = len(recent) if recent else 0
             cache_hit = report.cache_hit_rate * 100 if report.cache_hit_rate else 0
-
+            
             print(f"📊 {req_count:,} requests | {cache_hit:.0f}% cache hit | 5.6% compression")
-
+            
             # Top model savings
             from .telemetry.query import get_model_usage
             usage = get_model_usage(days=1)
@@ -3157,7 +3390,7 @@ def main():
                 top = usage[0]
                 top_saved = report.savings_amount * 0.95  # Estimate top model saved ~95% of total
                 print(f"🔥 Top: {top.model} saved ${top_saved:.0f} across {top.request_count} requests")
-
+            
             print()
             print("Run `tokenpak savings` for full breakdown.")
             sys.exit(0)
@@ -3797,7 +4030,7 @@ def cmd_cost(args):
         proxy_saved = session.get("cost_saved", 0)
         saved_tokens = session.get("saved_tokens", 0)
         if proxy_cost > 0 or saved_tokens > 0:
-            print("\n  Live session (proxy):")
+            print(f"\n  Live session (proxy):")
             print(f"    Cost:          ${proxy_cost:.4f}")
             if proxy_saved > 0:
                 print(f"    Cost saved:    ${proxy_saved:.4f}")
@@ -3886,10 +4119,10 @@ def cmd_budget_history(args):
 
 def cmd_forecast(args):
     """Show cost burn rate analysis and projections."""
-    from .forecast import format_burn_rate_display, get_burn_rate
-
+    from .forecast import get_burn_rate, format_burn_rate_display
+    
     tracker = _budget_tracker()
-
+    
     # Get window size from args
     period = getattr(args, 'period', '7d')
     if period == '7d':
@@ -3900,7 +4133,7 @@ def cmd_forecast(args):
         window_days = 90
     else:
         window_days = 7
-
+    
     # Get threshold if set
     threshold = getattr(args, 'alert', None)
     if threshold is not None:
@@ -3909,14 +4142,14 @@ def cmd_forecast(args):
         except (ValueError, TypeError):
             print(f"Invalid threshold: {threshold}")
             return
-
+    
     # Calculate burn rate
     analysis = get_burn_rate(tracker, window_days=window_days)
-
+    
     # Display
     output = format_burn_rate_display(analysis, threshold=threshold)
     print(output)
-
+    
     # Check threshold and alert if needed
     if threshold and analysis.monthly_projection > threshold:
         print()
@@ -3934,24 +4167,24 @@ def cmd_goals_list(args):
     """List all savings goals with progress."""
     manager = _get_goal_manager()
     goals_list = manager.list_goals()
-
+    
     if not goals_list:
         print("No goals defined. Create one with: tokenpak goals --add")
         return
-
+    
     print(f"\n{'GOAL NAME':<30} {'TYPE':<12} {'PROGRESS':<30} {'STATUS':<12}")
     print("-" * 90)
-
+    
     for goal in goals_list:
         progress = manager.get_progress(goal.goal_id)
         if not progress:
             continue
-
+        
         # Create progress bar
         bar_width = 20
         filled = int(bar_width * min(progress.progress_percent, 100) / 100)
         bar = "█" * filled + "░" * (bar_width - filled)
-
+        
         # Status indicator
         if progress.progress_percent >= 100:
             status = "✅ DONE"
@@ -3961,12 +4194,12 @@ def cmd_goals_list(args):
             status = "🚀 AHEAD"
         else:
             status = "▶️  ON TRACK"
-
+        
         print(
             f"{goal.name:<30} {goal.goal_type:<12} "
             f"[{bar}] {progress.progress_percent:>5.1f}%  {status:<12}"
         )
-
+        
         # Show additional details
         if goal.goal_type == "savings":
             print(f"  └─ ${progress.current_value:.2f} / ${progress.target_value:.2f}")
@@ -3978,16 +4211,16 @@ def cmd_goals_detail(args):
     """Show detailed info for a specific goal."""
     manager = _get_goal_manager()
     goal = manager.get_goal(args.goal_id)
-
+    
     if not goal:
         print(f"Goal '{args.goal_id}' not found.")
         return
-
+    
     progress = manager.get_progress(goal.goal_id)
     if not progress:
         print(f"No progress data for goal '{args.goal_id}'.")
         return
-
+    
     print(f"\n📊 Goal: {goal.name}")
     print(f"{'─' * 60}")
     print(f"ID:              {goal.goal_id}")
@@ -3998,13 +4231,13 @@ def cmd_goals_detail(args):
     print(f"Days Elapsed:    {goal.days_elapsed()} / {goal.total_days()}")
     print(f"Days Remaining:  {goal.days_remaining()}")
     print()
-
+    
     # Progress bar
     bar_width = 30
     filled = int(bar_width * min(progress.progress_percent, 100) / 100)
     bar = "█" * filled + "░" * (bar_width - filled)
     print(f"Progress:        [{bar}] {progress.progress_percent:.1f}%")
-
+    
     if goal.goal_type == "savings":
         print(f"Current:         ${progress.current_value:.2f}")
         print(f"Target:          ${progress.target_value:.2f}")
@@ -4012,13 +4245,13 @@ def cmd_goals_detail(args):
     else:
         print(f"Current:         {progress.current_value:.1f}")
         print(f"Target:          {progress.target_value:.1f}")
-
+    
     print()
     print(f"Pace Status:     {progress.pace_status.upper()}")
     expected = goal.expected_progress_percent()
     print(f"Expected:        {expected:.1f}% (based on time)")
     print(f"Actual:          {progress.progress_percent:.1f}%")
-
+    
     # Milestone status
     print()
     print("Milestones:")
@@ -4032,7 +4265,7 @@ def cmd_goals_detail(args):
 def cmd_goals_add(args):
     """Add a new savings goal."""
     manager = _get_goal_manager()
-
+    
     goal = manager.add_goal(
         name=args.name,
         goal_type=args.type,
@@ -4043,7 +4276,7 @@ def cmd_goals_add(args):
         metric_name=args.metric or "",
         rolling_window=args.rolling_window,
     )
-
+    
     print(f"✅ Goal created: {goal.goal_id}")
     print(f"   Name: {goal.name}")
     print(f"   Type: {goal.goal_type}")
@@ -4054,7 +4287,7 @@ def cmd_goals_add(args):
 def cmd_goals_edit(args):
     """Edit an existing goal."""
     manager = _get_goal_manager()
-
+    
     # Build update dict from provided args
     updates = {}
     if args.name:
@@ -4065,16 +4298,16 @@ def cmd_goals_edit(args):
         updates["description"] = args.description
     if args.end:
         updates["end_date"] = args.end
-
+    
     if not updates:
         print("No updates provided. Use --name, --target, --description, or --end.")
         return
-
+    
     goal = manager.edit_goal(args.goal_id, **updates)
     if not goal:
         print(f"Goal '{args.goal_id}' not found.")
         return
-
+    
     print(f"✅ Goal updated: {goal.goal_id}")
     for key, val in updates.items():
         print(f"   {key}: {val}")
@@ -4083,30 +4316,30 @@ def cmd_goals_edit(args):
 def cmd_goals_delete(args):
     """Delete a goal."""
     manager = _get_goal_manager()
-
+    
     if not manager.delete_goal(args.goal_id):
         print(f"Goal '{args.goal_id}' not found.")
         return
-
+    
     print(f"✅ Goal deleted: {args.goal_id}")
 
 
 def cmd_goals_update(args):
     """Update goal progress."""
     manager = _get_goal_manager()
-
+    
     progress = manager.update_progress(args.goal_id, args.value)
     if not progress:
         print(f"Goal '{args.goal_id}' not found.")
         return
-
+    
     goal = manager.get_goal(args.goal_id)
     print(f"✅ Progress updated for {goal.name}")
     print(f"   Current: {progress.current_value}")
     print(f"   Target: {progress.target_value}")
     print(f"   Progress: {progress.progress_percent:.1f}%")
     print(f"   Pace: {progress.pace_status.upper()}")
-
+    
     # Check milestones
     milestones = manager.check_milestones(args.goal_id)
     for m in milestones:
@@ -4117,16 +4350,16 @@ def cmd_goals_export(args):
     """Export goals to JSON."""
     import json
     from pathlib import Path
-
+    
     manager = _get_goal_manager()
     goals_list = manager.list_goals()
-
+    
     export = {
         "goals": [g.to_dict() for g in goals_list],
         "progress": {gid: p.to_dict() for gid, p in manager.progress.items()},
         "summary": manager.get_summary_stats(),
     }
-
+    
     if args.output:
         path = Path(args.output)
         with open(path, "w") as f:
@@ -4140,19 +4373,19 @@ def cmd_goals_history(args):
     """Show goal history and milestones."""
     manager = _get_goal_manager()
     goals_list = manager.list_goals()
-
+    
     if not goals_list:
         print("No goals defined.")
         return
-
+    
     print(f"\n{'GOAL':<30} {'MILESTONE':<12} {'ACHIEVED':<20}")
     print("-" * 65)
-
+    
     for goal in goals_list:
         progress = manager.get_progress(goal.goal_id)
         if not progress:
             continue
-
+        
         milestones = []
         if progress.milestone_25_fired:
             milestones.append("25%")
@@ -4162,7 +4395,7 @@ def cmd_goals_history(args):
             milestones.append("75%")
         if progress.milestone_100_fired:
             milestones.append("100%")
-
+        
         if milestones:
             for i, m in enumerate(milestones):
                 prefix = goal.name if i == 0 else ""
@@ -4173,19 +4406,19 @@ def cmd_goals_compare(args):
     """Compare goal progress."""
     manager = _get_goal_manager()
     goals_list = manager.list_goals()
-
+    
     if len(goals_list) < 2:
         print("Need at least 2 goals to compare.")
         return
-
+    
     print(f"\n{'GOAL':<30} {'PROGRESS':<12} {'PACE':<12} {'DAYS LEFT':<12}")
     print("-" * 70)
-
+    
     for goal in goals_list:
         progress = manager.get_progress(goal.goal_id)
         if not progress:
             continue
-
+        
         print(
             f"{goal.name:<30} {progress.progress_percent:>10.1f}%  "
             f"{progress.pace_status:<12} {goal.days_remaining():>10}"
@@ -4196,16 +4429,16 @@ def _build_goals_parser(sub):
     """Add goals subparser."""
     p_goals = sub.add_parser("goals", help="Manage savings goals and track progress")
     gsub = p_goals.add_subparsers(dest="goals_cmd", required=False)
-
+    
     # List goals (default)
     p_list = gsub.add_parser("list", help="List all goals")
     p_list.set_defaults(func=cmd_goals_list)
-
+    
     # Detail
     p_detail = gsub.add_parser("detail", help="Show details for a specific goal")
     p_detail.add_argument("goal_id", help="Goal ID")
     p_detail.set_defaults(func=cmd_goals_detail)
-
+    
     # Add goal
     p_add = gsub.add_parser("add", help="Create a new goal")
     p_add.add_argument("--name", required=True, help="Goal name")
@@ -4217,7 +4450,7 @@ def _build_goals_parser(sub):
     p_add.add_argument("--metric", help="Custom metric name (for metric type)")
     p_add.add_argument("--rolling-window", action="store_true", help="Enable weekly pace tracking")
     p_add.set_defaults(func=cmd_goals_add)
-
+    
     # Edit goal
     p_edit = gsub.add_parser("edit", help="Edit an existing goal")
     p_edit.add_argument("goal_id", help="Goal ID to edit")
@@ -4226,33 +4459,77 @@ def _build_goals_parser(sub):
     p_edit.add_argument("--description", help="New description")
     p_edit.add_argument("--end", help="New end date (YYYY-MM-DD)")
     p_edit.set_defaults(func=cmd_goals_edit)
-
+    
     # Delete goal
     p_delete = gsub.add_parser("delete", help="Delete a goal")
     p_delete.add_argument("goal_id", help="Goal ID to delete")
     p_delete.set_defaults(func=cmd_goals_delete)
-
+    
     # Update progress
     p_update = gsub.add_parser("update", help="Update goal progress")
     p_update.add_argument("goal_id", help="Goal ID")
     p_update.add_argument("value", type=float, help="New current value")
     p_update.set_defaults(func=cmd_goals_update)
-
+    
     # Export
     p_export = gsub.add_parser("export", help="Export goals to JSON")
     p_export.add_argument("--output", "-o", help="Output file (default: stdout)")
     p_export.set_defaults(func=cmd_goals_export)
-
+    
     # History
     p_history = gsub.add_parser("history", help="Show milestone history")
     p_history.set_defaults(func=cmd_goals_history)
-
+    
     # Compare
     p_compare = gsub.add_parser("compare", help="Compare goal progress")
     p_compare.set_defaults(func=cmd_goals_compare)
-
+    
     # Default to list if no subcommand
     p_goals.set_defaults(func=cmd_goals_list)
+
+
+def cmd_cost_show_budget(args):
+    """Show budget status and spending progress."""
+    import json
+    try:
+        from tokenpak.cost.budget_tracker import BudgetTracker
+    except ImportError:
+        print("Budget tracking module not available.")
+        return 1
+
+    config_path = getattr(args, "config", None)
+    config = {}
+    if config_path:
+        try:
+            with open(config_path) as f:
+                config_data = json.load(f)
+                config = config_data.get("cost_budget", {})
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            return 1
+
+    tracker = BudgetTracker(config)
+    summary = tracker.get_budget_summary()
+
+    print("\n📊 TokenPak Budget Status\n" + "=" * 40)
+    if not summary.get("enabled"):
+        print("Budget tracking: DISABLED")
+        print("  Set 'cost_budget.daily_limit' in tokenpak.json to enable.")
+    else:
+        if summary.get("daily_limit"):
+            print(f"Daily limit:  ${summary['daily_limit']:.2f}")
+        if summary.get("weekly_limit"):
+            print(f"Weekly limit: ${summary['weekly_limit']:.2f}")
+        print(f"Alert cooldown: {summary.get('alert_cooldown_minutes', 5):.0f} minutes")
+        alerts = summary.get("last_alerts", {})
+        if alerts:
+            print("\nRecent Alerts:")
+            for k, v in alerts.items():
+                print(f"  • {k}: {v}")
+        else:
+            print("\nNo alerts triggered yet.")
+    print("=" * 40 + "\n")
+    return 0
 
 
 def _build_cost_parser(sub):
@@ -4262,6 +4539,104 @@ def _build_cost_parser(sub):
     p_cost.add_argument("--by-model", action="store_true", help="Break down by model")
     p_cost.add_argument("--export-csv", action="store_true", help="Export as CSV")
     p_cost.set_defaults(func=cmd_cost)
+
+    # Subcommands for cost
+    cost_sub = p_cost.add_subparsers(dest="cost_subcmd")
+    p_show_budget = cost_sub.add_parser("show-budget", help="Show budget status and alerts")
+    p_show_budget.add_argument("--config", help="Path to tokenpak config file")
+    p_show_budget.set_defaults(func=cmd_cost_show_budget)
+
+
+def cmd_costs(args):
+    """Aggregate cost report with CSV export and burn-rate alarms."""
+    from tokenpak.cost.cost_aggregator import CostAggregator
+
+    days = args.days
+    fmt = args.format
+    monthly_budget = args.monthly_budget
+    alarm_pct = args.alarm_pct
+
+    agg = CostAggregator()
+
+    if fmt == "csv":
+        print(agg.export_csv(days=days, by_model=not args.no_model), end="")
+        return
+
+    # Default: human-readable summary
+    summaries = agg.daily_summaries(days=days)
+    totals = agg.aggregate(days=days)
+
+    if not summaries:
+        print(f"No cost data found for the last {days} day(s).")
+        return
+
+    print(f"TokenPak Cost Report — last {days} day(s)")
+    print(f"{'DATE':<12} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+    print("-" * 48)
+    for s in summaries:
+        print(
+            f"{s.day:<12} {s.total_requests:>9,} {s.total_tokens:>12,} ${s.total_cost_usd:>9.4f}"
+        )
+    print("-" * 48)
+    print(
+        f"{'TOTAL':<12} {totals['total_requests']:>9,} {totals['total_tokens']:>12,} "
+        f"${totals['total_cost_usd']:>9.4f}"
+    )
+    if totals["avg_daily_cost_usd"] > 0:
+        print(f"\n  Avg daily:  ${totals['avg_daily_cost_usd']:.4f}")
+
+    if args.by_model and totals["by_model"]:
+        print(f"\n{'MODEL':<30} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+        print("-" * 65)
+        for m in totals["by_model"]:
+            print(
+                f"{(m['model'] or 'unknown'):<30} {m['requests']:>9,} "
+                f"{m['total_tokens']:>12,} ${m['cost_usd']:>9.4f}"
+            )
+
+    # Burn-rate alarms
+    if monthly_budget is not None and monthly_budget > 0:
+        alarms = agg.check_burn_rate(
+            monthly_budget_usd=monthly_budget,
+            threshold_pct=alarm_pct,
+            days=days,
+        )
+        if alarms:
+            print()
+            for alarm in alarms:
+                print(alarm.message)
+        else:
+            print(
+                f"\n✅ No burn-rate alarms (threshold: {alarm_pct:.0f}% of "
+                f"${monthly_budget:.2f}/mo = ${monthly_budget * alarm_pct / 100:.2f}/day)"
+            )
+
+
+def _build_costs_parser(sub):
+    p = sub.add_parser("costs", help="Aggregate cost report (multi-day, CSV export)")
+    p.add_argument("--days", type=int, default=7, help="Number of days to report (default: 7)")
+    p.add_argument(
+        "--format",
+        choices=["table", "csv", "json"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    p.add_argument("--by-model", action="store_true", help="Break down by model")
+    p.add_argument("--no-model", action="store_true", help="Suppress per-model rows in CSV")
+    p.add_argument(
+        "--monthly-budget",
+        type=float,
+        metavar="USD",
+        help="Monthly budget USD — enables burn-rate alarm check",
+    )
+    p.add_argument(
+        "--alarm-pct",
+        type=float,
+        default=20.0,
+        metavar="PCT",
+        help="Alarm when daily spend exceeds this %% of monthly budget (default: 20)",
+    )
+    p.set_defaults(func=cmd_costs)
 
 
 def _build_budget_parser(sub):
@@ -4314,6 +4689,7 @@ def _build_forecast_parser(sub):
 
 def cmd_lock_claim(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError
 
@@ -4342,6 +4718,7 @@ def cmd_lock_release(args):
 
 def cmd_lock_query(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -4359,6 +4736,7 @@ def cmd_lock_query(args):
 
 def cmd_lock_list(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager
 
@@ -4381,6 +4759,7 @@ def cmd_lock_list(args):
 
 def cmd_lock_renew(args):
     import time as _time
+    import json as _json
 
     from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
 
@@ -4536,6 +4915,7 @@ def cmd_agent_list(args):
 def cmd_agent_register(args):
     """Register this agent."""
     import json as json_mod
+    import socket
 
     from .agent.agentic.registry import AgentRegistry
 
@@ -5071,8 +5451,8 @@ def _build_demo_parser(sub):
 
 def _run_compression_demo():
     """Show live compression on a sample prompt with before/after token counts."""
-    from tokenpak.engines.base import CompactionHints
     from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.engines.base import CompactionHints
     from tokenpak.tokens import count_tokens
 
     SAMPLE_PROMPT = """\
@@ -5124,7 +5504,7 @@ Question: How does TokenPak save tokens and money?"""
     print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
     print()
     print("  Try it with your own content:")
-    print("    tokenpak start        → start the proxy (zero-config)")
+    print("    tokenpak serve        → start the proxy (zero-config)")
     print("    tokenpak cost         → track your real savings")
     print("    tokenpak demo --list  → browse 50 built-in compression recipes")
     print()
@@ -6047,56 +6427,56 @@ def _build_config_check_parser(sub):
 def cmd_vault_health(args):
     """Manage vault index health."""
     from .vault_health import VaultHealth
-
+    
     subcmd = getattr(args, "vault_health_cmd", None)
-
+    
     if subcmd == "repair":
         try:
             health = VaultHealth()
-
+            
             # Check if index exists
             if not health.index_path.exists():
                 print(f"❌ Index not found: {health.index_path}")
                 sys.exit(2)
-
+            
             print("\nTOKENPAK  |  Vault Health")
             print("──────────────────────────────\n")
-
+            
             # Get initial status
             status = health.get_status()
             print(f"Index: {health.index_path}")
             print(f"Status: {status}\n")
-
+            
             # Check if stale
             is_stale = health.check_index_staleness()
-
+            
             if not is_stale:
                 print("✅ Index is current (no rebuild needed)")
-                print("Exit code: 0\n")
+                print(f"Exit code: 0\n")
                 sys.exit(0)
-
+            
             # Rebuild needed
             block_count = len(list(health.blocks_dir.iterdir()))
             print(f"Index is stale: {block_count} blocks found, index mismatch detected\n")
             print("Rebuilding index from blocks...")
-
+            
             metrics = health.rebuild_index()
-
+            
             print(f"✅ Rebuilt in {metrics['rebuild_time_seconds']:.2f} seconds")
             print(f"Entries: {metrics['index_entries']:,}")
             print(f"  Added: {metrics['entries_added']}")
             print(f"  Removed: {metrics['entries_removed']}")
             print(f"Index size: {metrics['index_size_bytes']:,} bytes")
-            print("\nExit code: 1 (rebuilt)\n")
+            print(f"\nExit code: 1 (rebuilt)\n")
             sys.exit(1)
-
+        
         except FileNotFoundError as e:
             print(f"❌ Error: {e}")
             sys.exit(2)
         except Exception as e:
             print(f"❌ Error during rebuild: {e}")
             sys.exit(2)
-
+    
     else:
         print("Unknown vault-health subcommand. Use 'repair'.")
         sys.exit(1)
@@ -6106,16 +6486,15 @@ def cmd_vault_health(args):
 
 def cmd_config_check(args):
     """Validate a proxy config file (JSON)."""
-    import json
-
     from tokenpak.config_validator import ConfigValidator
-
+    import json
+    
     config_path = Path(args.file).expanduser()
-
+    
     if not config_path.exists():
         print(f"ERROR: Config file not found: {config_path}")
         sys.exit(2)
-
+    
     # Load JSON
     try:
         with open(config_path, "r") as f:
@@ -6123,15 +6502,15 @@ def cmd_config_check(args):
     except json.JSONDecodeError as e:
         print(f"ERROR: Invalid JSON in {config_path}: {e}")
         sys.exit(2)
-
+    
     # Validate
     validator = ConfigValidator()
     errors = validator.validate(config)
-
+    
     if not errors:
         print(f"✓ Config is valid: {config_path}")
         sys.exit(0)
-
+    
     # Print errors
     print(f"✗ Config validation failed ({len(errors)} error(s)):\n")
     for error in errors:
@@ -6141,20 +6520,20 @@ def cmd_config_check(args):
         print(f"    Message: {error.message}")
         print(f"    Fix: {error.suggestion}")
         print()
-
+    
     sys.exit(1)
 
 
 def cmd_fleet(args):
     """Query and manage a fleet of TokenPak proxy instances."""
     from .fleet import (
-        interactive_add_machine,
         load_fleet_config,
         query_fleet,
-        query_fleet_agent_rows,
-        render_fleet_agent_table,
-        render_fleet_json,
         render_fleet_table,
+        render_fleet_agent_table,
+        query_fleet_agent_rows,
+        render_fleet_json,
+        interactive_add_machine,
         save_fleet_config,
     )
 
@@ -6166,32 +6545,32 @@ def cmd_fleet(args):
         print("╔═══════════════════════════════════════════════╗")
         print("║  TokenPak Fleet Configuration                 ║")
         print("╚═══════════════════════════════════════════════╝")
-
+        
         if machines:
             print(f"\nCurrent fleet ({len(machines)} machine(s)):")
             for m in machines:
                 print(f"  • {m.name} @ {m.host}:{m.port}")
             print()
-
+        
         new_machine = interactive_add_machine(machines)
         if new_machine:
             machines.append(new_machine)
             save_fleet_config(machines)
-            print("\n✅ Saved fleet config to ~/.tokenpak/fleet.yaml")
-
+            print(f"\n✅ Saved fleet config to ~/.tokenpak/fleet.yaml")
+    
     else:
         # Default: show status table
         machines = load_fleet_config()
-
+        
         if not machines:
             print("❌ No machines configured in fleet.")
             print("   Run: tokenpak fleet init")
             sys.exit(1)
-
+        
         # Query all machines
         stats = query_fleet(machines)
         agent_rows, errors = query_fleet_agent_rows(machines)
-
+        
         # Render output
         if getattr(args, "json", False):
             print(render_fleet_json(stats))
@@ -6211,13 +6590,13 @@ def cmd_fleet(args):
 def _build_vault_health_parser(sub):
     """Build the vault-health command parser."""
     p_vh = sub.add_parser("vault-health", help="Vault index health diagnostic and repair")
-
+    
     vhsub = p_vh.add_subparsers(dest="vault_health_cmd", required=True)
-
+    
     # vault-health repair
     p_repair = vhsub.add_parser("repair", help="Check and rebuild stale vault index")
     p_repair.set_defaults(func=cmd_vault_health)
-
+    
     p_vh.set_defaults(func=cmd_vault_health)
     return p_vh
 
@@ -6225,18 +6604,186 @@ def _build_vault_health_parser(sub):
 def _build_fleet_parser(sub):
     """Build the fleet command parser."""
     p_fleet = sub.add_parser("fleet", help="Manage and query multi-machine proxy fleet")
-
+    
     p_fleet.add_argument("--json", action="store_true", help="Output as JSON")
     p_fleet.add_argument("--compact", action="store_true", help="Compact one-line output")
-
+    
     fsub = p_fleet.add_subparsers(dest="fleet_cmd", required=False)
-
+    
     # fleet init
     p_init = fsub.add_parser("init", help="Interactively configure fleet")
     p_init.set_defaults(func=cmd_fleet)
-
+    
     p_fleet.set_defaults(func=cmd_fleet)
     return p_fleet
+
+
+# ── Retrieval CLI ─────────────────────────────────────────────────────────────
+
+def cmd_retrieval_status(args):
+    """Show retrieval configuration and index stats."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig
+    from .retrieval.bm25 import BM25Retriever
+    from .retrieval.vector_local import LocalVectorRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    json_out = getattr(args, "json", False)
+
+    bm25 = BM25Retriever(vault_index_path=cfg.vault_index_path)
+    vec = LocalVectorRetriever(
+        model_name=cfg.vector_model,
+        index_path=cfg.vector_index_path,
+    )
+
+    status: dict = {
+        "config": {
+            "bm25_weight": cfg.bm25_weight,
+            "vector_weight": cfg.vector_weight,
+            "vector_model": cfg.vector_model,
+            "rrf_k": cfg.rrf_k,
+            "top_k": cfg.top_k,
+            "vault_index_path": cfg.vault_index_path,
+            "vector_index_path": cfg.vector_index_path,
+        },
+        "bm25": {
+            "available": bm25.is_available(),
+            "doc_count": asyncio.run(bm25.index([])) if False else _bm25_doc_count(bm25),
+        },
+        "vector": {
+            "available": vec.is_available(),
+            "doc_count": _vec_doc_count(vec),
+        },
+    }
+
+    if json_out:
+        import json as _json
+        print(_json.dumps(status, indent=2))
+        return
+
+    # Human output
+    print("🔍 TokenPak Retrieval Status")
+    print()
+    print("  Configuration:")
+    print(f"    BM25 weight:      {cfg.bm25_weight}")
+    print(f"    Vector weight:    {cfg.vector_weight}")
+    print(f"    Vector model:     {cfg.vector_model}")
+    print(f"    RRF k:            {cfg.rrf_k}")
+    print(f"    Top-K:            {cfg.top_k}")
+    if cfg.vault_index_path:
+        print(f"    Vault index:      {cfg.vault_index_path}")
+    if cfg.vector_index_path:
+        print(f"    Vector index:     {cfg.vector_index_path}")
+    print()
+    print("  Retrievers:")
+    bm25_ok = status["bm25"]["available"]
+    vec_ok = status["vector"]["available"]
+    print(f"    BM25:    {'✅ available' if bm25_ok else '❌ unavailable'}  ({status['bm25']['doc_count']} docs)")
+    print(f"    Vector:  {'✅ available' if vec_ok else '⚠️  unavailable (sentence-transformers not installed or no index)'}  ({status['vector']['doc_count']} docs)")
+    print()
+    if bm25_ok:
+        mode = "hybrid" if vec_ok else "bm25-only"
+    elif vec_ok:
+        mode = "vector-only"
+    else:
+        mode = "⛔ no retrievers available"
+    print(f"  Active mode: {mode}")
+
+
+def _bm25_doc_count(bm25) -> int:
+    """Get BM25 doc count without async."""
+    try:
+        return len(getattr(bm25, "_blocks", []))
+    except Exception:
+        return 0
+
+
+def _vec_doc_count(vec) -> int:
+    """Get vector index doc count."""
+    try:
+        idx = getattr(vec, "_index", None)
+        if idx is None:
+            return 0
+        return getattr(idx, "ntotal", len(getattr(idx, "_ids", [])))
+    except Exception:
+        return 0
+
+
+def cmd_retrieval_test(args):
+    """Test a query through all enabled retrievers."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig, RetrievalQuery
+    from .retrieval.hybrid import HybridRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    query_text = args.query
+    top_k = getattr(args, "top_k", cfg.top_k)
+    json_out = getattr(args, "json", False)
+
+    retriever = HybridRetriever(cfg)
+
+    async def _run():
+        q = RetrievalQuery(text=query_text, top_k=top_k)
+        return await retriever.search(q)
+
+    import time
+    t0 = time.perf_counter()
+    results = asyncio.run(_run())
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    if json_out:
+        import json as _json
+        out = {
+            "query": query_text,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "results": [
+                {
+                    "doc_id": r.doc_id,
+                    "fused_score": r.fused_score,
+                    "sources": list(r.source_results.keys()),
+                    "content_preview": r.content[:200] if r.content else "",
+                }
+                for r in results
+            ],
+        }
+        print(_json.dumps(out, indent=2))
+        return
+
+    print(f"🔍 Query: {query_text!r}")
+    print(f"⏱  Elapsed: {elapsed_ms:.1f}ms  |  Results: {len(results)}")
+    print()
+    if not results:
+        print("  (no results)")
+        return
+    for i, r in enumerate(results, 1):
+        sources = ", ".join(r.source_results.keys()) if r.source_results else "bm25"
+        preview = (r.content[:120] + "…") if len(r.content) > 120 else r.content
+        print(f"  {i}. [{r.fused_score:.4f}] {r.doc_id}  ({sources})")
+        if preview:
+            print(f"     {preview}")
+        print()
+
+
+def _build_retrieval_parser(sub):
+    """Build the retrieval command parser."""
+    p_ret = sub.add_parser("retrieval", help="Inspect and test the hybrid retrieval system")
+    p_ret.add_argument("--json", action="store_true", help="Output as JSON")
+    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=True)
+
+    # retrieval status
+    p_status = rsub.add_parser("status", help="Show retrieval config and index stats")
+    p_status.add_argument("--json", action="store_true", help="Output as JSON")
+    p_status.set_defaults(func=cmd_retrieval_status)
+
+    # retrieval test
+    p_test = rsub.add_parser("test", help="Run a test query through all enabled retrievers")
+    p_test.add_argument("query", help="Query string to test")
+    p_test.add_argument("--top-k", type=int, default=5, dest="top_k", help="Number of results (default: 5)")
+    p_test.add_argument("--json", action="store_true", help="Output as JSON")
+    p_test.set_defaults(func=cmd_retrieval_test)
+
+    p_ret.set_defaults(func=lambda a: p_ret.print_help())
+    return p_ret
 
 
 if __name__ == "__main__":

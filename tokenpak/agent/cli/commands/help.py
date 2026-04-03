@@ -84,10 +84,12 @@ def _load_registry() -> list[dict]:
 # Tier detection
 # ─────────────────────────────────────────────
 
+
 def _current_tier() -> str:
     """Return current license tier string (oss/pro/team/enterprise). Never raises."""
     try:
         from tokenpak.agent.license.activation import get_plan
+
         result = get_plan()
         return result.tier.value
     except Exception:
@@ -109,6 +111,7 @@ def _is_visible(cmd_tier: str, user_tier: str) -> bool:
 # ─────────────────────────────────────────────
 # Help output functions
 # ─────────────────────────────────────────────
+
 
 def _group_commands(commands: list[dict]) -> dict[str, list[dict]]:
     """Group command list by category, preserving order."""
@@ -141,22 +144,27 @@ def print_intermediate_help() -> None:
     print()
 
     print("Monitoring:\n")
-    monitoring_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
-                       if k in ["watch", "logs", "stats"]}
+    monitoring_cmds = {
+        k: v for k, v in _INTERMEDIATE_COMMANDS.items() if k in ["watch", "logs", "stats"]
+    }
     for cmd, desc in monitoring_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
 
     print("Configuration:\n")
-    config_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
-                   if k in ["config", "integrate", "restart", "version"]}
+    config_cmds = {
+        k: v
+        for k, v in _INTERMEDIATE_COMMANDS.items()
+        if k in ["config", "integrate", "restart", "version"]
+    }
     for cmd, desc in config_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
 
     print("Content:\n")
-    content_cmds = {k: v for k, v in _INTERMEDIATE_COMMANDS.items()
-                    if k in ["index", "search", "demo"]}
+    content_cmds = {
+        k: v for k, v in _INTERMEDIATE_COMMANDS.items() if k in ["index", "search", "demo"]
+    }
     for cmd, desc in content_cmds.items():
         print(f"  {cmd:<14} {desc}")
     print()
@@ -246,13 +254,6 @@ def print_command_help(command_name: str) -> None:
         print(f"  {detail}")
         print()
 
-    examples = target.get("examples", [])
-    if examples:
-        print("  Examples:")
-        for ex in examples:
-            print(f"    $ {ex}")
-        print()
-
     aliases = target.get("aliases", [])
     if aliases:
         print(f"  Aliases  : {', '.join(aliases)}")
@@ -270,6 +271,7 @@ def print_command_help(command_name: str) -> None:
 # ─────────────────────────────────────────────
 # Main runner
 # ─────────────────────────────────────────────
+
 
 def run(args: Optional[list[str]] = None) -> None:
     """Entry point: parse args and dispatch to appropriate help function.

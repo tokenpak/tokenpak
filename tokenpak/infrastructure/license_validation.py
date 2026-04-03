@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from tokenpak.agent.license import keys as _license_keys  # direct submodule, bypasses __init__ lazy imports
+from tokenpak.agent.license.keys import verify_license  # noqa: E402 — keys.py has no infra deps
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +206,7 @@ class LicenseValidator:
             return self._oss_fallback("No public key configured — defaulting to OSS")
 
         try:
-            payload = _license_keys.verify_license(token, self._public_pem)
+            payload = verify_license(token, self._public_pem)
         except ValueError as exc:
             return ValidationResult(
                 status=LicenseStatus.INVALID,

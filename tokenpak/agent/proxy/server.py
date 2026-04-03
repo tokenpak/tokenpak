@@ -1,11 +1,11 @@
 """
 TokenPak Proxy Server (LEGACY)
 
-⚠️  DEPRECATED: This module is superseded by proxy_v4.py, which has full
+⚠️  DEPRECATED: This module is superseded by proxy.py, which has full
     compression pipeline, cache poison removal, vault injection, tool schema
     registry, circuit breakers, and Prometheus metrics.
 
-    Use `tokenpak start` (which now launches proxy_v4.py) or run proxy_v4.py
+    Use `tokenpak serve` (which now launches proxy.py) or run proxy.py
     directly. This module is kept for backward compatibility.
 
 Core HTTP proxy server / request-handling layer. Wraps Python's built-in
@@ -19,16 +19,21 @@ Env vars (all optional):
     TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
     TOKENPAK_DB            (default .ocp/monitor.db)
 """
+
 from __future__ import annotations
 
+# Deprecation warning intentionally suppressed for internal imports
+# External callers importing this module directly will still see the warning
+import sys as _sys
 import warnings as _warnings
 
-_warnings.warn(
-    "tokenpak.agent.proxy.server is deprecated — use proxy_v4.py instead. "
-    "Run `tokenpak start` to launch the current proxy.",
-    DeprecationWarning,
-    stacklevel=2,
-)
+if _sys.modules.get("tokenpak.agent.proxy") is None:
+    _warnings.warn(
+        "tokenpak.agent.proxy.server is deprecated — use proxy.py instead. "
+        "Run `tokenpak serve` to launch the current proxy.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
 import gzip
 import json
@@ -44,7 +49,6 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
@@ -76,9 +80,11 @@ from .streaming import extract_sse_tokens
 # Pipeline trace types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
+
     name: str
     enabled: bool = True
     input_tokens: int = 0
@@ -94,6 +100,7 @@ class StageTrace:
 @dataclass
 class PipelineTrace:
     """Complete trace for a single request through the pipeline."""
+
     request_id: str
     timestamp: str
     model: str = ""
@@ -144,6 +151,7 @@ class TraceStorage:
 # ---------------------------------------------------------------------------
 # Graceful shutdown manager
 # ---------------------------------------------------------------------------
+
 
 class GracefulShutdown:
     """
@@ -203,6 +211,7 @@ class GracefulShutdown:
 # Session state
 # ---------------------------------------------------------------------------
 
+
 def _new_session() -> Dict[str, Any]:
     return {
         "requests": 0,
@@ -224,6 +233,7 @@ def _new_session() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Threaded HTTP server
 # ---------------------------------------------------------------------------
+
 
 class _ThreadedHTTPServer(HTTPServer):
     """HTTP server that dispatches each request to a daemon thread."""
@@ -247,6 +257,7 @@ class _ThreadedHTTPServer(HTTPServer):
 # ---------------------------------------------------------------------------
 # Request handler
 # ---------------------------------------------------------------------------
+
 
 class _ProxyHandler(BaseHTTPRequestHandler):
     """
@@ -317,6 +328,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/health" or path.startswith("/health?"):
             from urllib.parse import parse_qs
             from urllib.parse import urlparse as _urlparse
+
             parsed_path = _urlparse(path)
             qs = parse_qs(parsed_path.query)
             deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
@@ -329,6 +341,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/metrics":
             from tokenpak.monitoring.metrics import ProxyMetricsCollector
+
             collector = ProxyMetricsCollector(proxy_server=ps)
             body = collector.collect().encode("utf-8")
             self.send_response(200)
@@ -348,7 +361,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # Extract dashboard path
             dashboard_path = path[10:]  # Remove '/dashboard' prefix
             if not dashboard_path:
-                dashboard_path = '/'
+                dashboard_path = "/"
 
             # Serve the file
             result = asyncio.run(serve_dashboard_file(dashboard_path))
@@ -367,14 +380,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/degradation":
             from .degradation import get_degradation_tracker
+
             self._send_json(get_degradation_tracker().summary())
             return
         if path == "/circuit-breakers":
             registry = get_circuit_breaker_registry()
-            self._send_json({
-                "enabled": registry.enabled,
-                "circuit_breakers": registry.all_statuses(),
-            })
+            self._send_json(
+                {
+                    "enabled": registry.enabled,
+                    "circuit_breakers": registry.all_statuses(),
+                }
+            )
             return
         if path == "/stats":
             self._send_json(ps.stats())
@@ -391,6 +407,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if path == "/api/goals":
             # Get all goals with progress
             from tokenpak.goals import GoalManager
+
             try:
                 manager = GoalManager()
                 goals = manager.list_goals()
@@ -483,6 +500,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         elif self.path == "/ingest":
             import json as _json
             import uuid as _uuid
+
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
             try:
@@ -525,15 +543,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def _send_503_shutdown(self) -> None:
         """Return 503 Service Unavailable during graceful shutdown drain."""
-        body = json.dumps({
-            "error": {
-                "type": "service_unavailable",
-                "message": (
-                    "TokenPak proxy is shutting down. "
-                    "Please retry your request against a new proxy instance."
-                ),
+        body = json.dumps(
+            {
+                "error": {
+                    "type": "service_unavailable",
+                    "message": (
+                        "TokenPak proxy is shutting down. "
+                        "Please retry your request against a new proxy instance."
+                    ),
+                }
             }
-        }).encode()
+        ).encode()
         self.send_response(503)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -582,6 +602,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
         if _adapters_enabled and should_log and is_messages:
             import logging as _logging
+
             _adapter = detect_platform(dict(self.headers), dict(os.environ))
             _logging.debug(
                 "tokenpak.proxy: detected platform=%s for request to %s",
@@ -613,10 +634,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Graceful degradation: compression failed — forward original request unchanged.
                     # The user still gets a response; we log and track the event.
                     import logging as _logging
+
                     _logging.getLogger(__name__).warning(
                         "tokenpak: compression failed (passthrough mode active): %s: %s — "
                         "original request will be forwarded unchanged",
-                        type(hook_err).__name__, hook_err,
+                        type(hook_err).__name__,
+                        hook_err,
                     )
                     print(
                         f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
@@ -637,22 +660,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_registry = get_circuit_breaker_registry()
             if not _cb_registry.allow_request(_cb_provider):
                 import logging as _logging
+
                 _logging.getLogger(__name__).warning(
                     "tokenpak: circuit breaker OPEN for %s — fast-failing request",
                     _cb_provider,
                 )
-                err = json.dumps({
-                    "error": {
-                        "type": "circuit_breaker_open",
-                        "message": (
-                            f"Provider '{_cb_provider}' is currently unavailable. "
-                            "The circuit breaker is open due to recent failures. "
-                            "Request will be retried automatically after a brief cooldown."
-                        ),
-                        "provider": _cb_provider,
-                        "hint": "Check GET /circuit-breakers for current state.",
+                err = json.dumps(
+                    {
+                        "error": {
+                            "type": "circuit_breaker_open",
+                            "message": (
+                                f"Provider '{_cb_provider}' is currently unavailable. "
+                                "The circuit breaker is open due to recent failures. "
+                                "Request will be retried automatically after a brief cooldown."
+                            ),
+                            "provider": _cb_provider,
+                            "hint": "Check GET /circuit-breakers for current state.",
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -671,12 +697,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
             if not auth_ok:
                 import json as _json
-                err_body = _json.dumps({
-                    "error": {
-                        "type": "authentication_error",
-                        "message": auth_err,
+
+                err_body = _json.dumps(
+                    {
+                        "error": {
+                            "type": "authentication_error",
+                            "message": auth_err,
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err_body)))
@@ -690,6 +719,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     from tokenpak.validation.request_validator import (
                         get_request_validator,
                     )
+
                     _rv = get_request_validator()
                     if _rv.mode != "off":
                         try:
@@ -725,23 +755,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_success = False  # track whether request succeeded for circuit breaker
 
             output_tokens = 0
-            # Per-request timeout: override pool default when TOKENPAK_REQUEST_TIMEOUT is set
-            _req_timeout = ps.request_timeout if ps.request_timeout > 0 else None
-
             if is_streaming:
                 # ── Streaming (SSE) path ──────────────────────────────────
                 # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
-                _stream_kwargs: Dict[str, Any] = dict(method=method, url=target_url, content=body, headers=fwd_headers)
-                if _req_timeout is not None:
-                    _stream_kwargs["timeout"] = _req_timeout
-                with pool.stream(**_stream_kwargs) as resp:
+                with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
                     has_content_type = False
                     has_cache_control = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
-                        if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                        if h_lower in (
+                            "connection",
+                            "keep-alive",
+                            "transfer-encoding",
+                            "content-length",
+                        ):
                             continue
                         if h_lower == "content-type":
                             has_content_type = True
@@ -777,15 +806,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
-                _req_kwargs: Dict[str, Any] = dict(method=method, url=target_url, content=body, headers=fwd_headers)
-                if _req_timeout is not None:
-                    _req_kwargs["timeout"] = _req_timeout
-                resp = pool.request(**_req_kwargs)
+                resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
-                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                    if h_lower in (
+                        "connection",
+                        "keep-alive",
+                        "transfer-encoding",
+                        "content-length",
+                    ):
                         continue
                     self.send_header(h_key, h_val)
                 # Debug header: stable prefix hash for cache determinism verification.
@@ -852,10 +883,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass  # logging must never break the proxy
 
             if should_log and is_messages and input_tokens > 0:
-                cost = estimate_cost(model, sent_input_tokens, output_tokens,
-                                     cache_read_tokens, cache_creation_tokens)
-                cost_without = estimate_cost(model, input_tokens, output_tokens,
-                                             cache_read_tokens, cache_creation_tokens)
+                cost = estimate_cost(
+                    model,
+                    sent_input_tokens,
+                    output_tokens,
+                    cache_read_tokens,
+                    cache_creation_tokens,
+                )
+                cost_without = estimate_cost(
+                    model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+                )
                 saved = max(0, input_tokens - sent_input_tokens)
                 cost_saved = max(0.0, cost_without - cost)
 
@@ -878,25 +915,32 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     if cache_read_tokens == 0:
                         # Heuristic miss-reason diagnosis (best-effort)
                         try:
-                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                            _body_text = (
+                                body.decode("utf-8", errors="ignore")
+                                if isinstance(body, (bytes, bytearray))
+                                else ""
+                            )
                         except Exception:
                             _body_text = ""
                         import re as _re
+
                         if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
                             _miss_reason = "timestamp"
                         elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
                             _miss_reason = "uuid"
-                    _get_cache_collector().record(CacheMetrics(
-                        request_id=trace.request_id if trace else str(uuid.uuid4()),
-                        stable_prefix_tokens=sent_input_tokens,
-                        stable_cached=(cache_read_tokens > 0),
-                        cache_miss_reason=_miss_reason,
-                        volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
-                        total_input_tokens=input_tokens,
-                        cache_read_tokens=cache_read_tokens,
-                        cache_creation_tokens=cache_creation_tokens,
-                        output_tokens=output_tokens,
-                    ))
+                    _get_cache_collector().record(
+                        CacheMetrics(
+                            request_id=trace.request_id if trace else str(uuid.uuid4()),
+                            stable_prefix_tokens=sent_input_tokens,
+                            stable_cached=(cache_read_tokens > 0),
+                            cache_miss_reason=_miss_reason,
+                            volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
+                            total_input_tokens=input_tokens,
+                            cache_read_tokens=cache_read_tokens,
+                            cache_creation_tokens=cache_creation_tokens,
+                            output_tokens=output_tokens,
+                        )
+                    )
                 except Exception:
                     pass  # telemetry must never break request handling
 
@@ -936,7 +980,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "output_tokens": output_tokens,
                         "tokens_saved": saved,
                         "cost_saved": round(cost_saved, 6),
-                        "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
+                        "percent_saved": round(saved / input_tokens * 100, 1)
+                        if input_tokens
+                        else 0.0,
                     }
 
                 # ── Stats footer ──────────────────────────────────────────
@@ -1023,14 +1069,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 f"    → {user_detail}"
             )
             try:
-                err = json.dumps({
-                    "error": {
-                        "type": "proxy_error",
-                        "message": user_detail,
-                        "detail": exc_msg,
-                        "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                err = json.dumps(
+                    {
+                        "error": {
+                            "type": "proxy_error",
+                            "message": user_detail,
+                            "detail": exc_msg,
+                            "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(502)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -1053,6 +1101,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 # Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
 
+
 def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
     """
     Compute a short SHA-256 hash of the stable system prefix.
@@ -1066,6 +1115,7 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
         return ""
     try:
         import hashlib
+
         data = json.loads(body)
         system = data.get("system")
         if not system:
@@ -1074,6 +1124,7 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
             stable_text = system.strip()
         elif isinstance(system, list):
             from .prompt_builder import classify_system_blocks
+
             stable_blocks, _ = classify_system_blocks(system)
             stable_text = "\n".join(
                 b.get("text", "")
@@ -1112,9 +1163,9 @@ def _extract_response_tokens(body: bytes) -> int:
         data = json.loads(body)
         usage = data.get("usage", {})
         return (
-            usage.get("output_tokens") or
-            usage.get("completion_tokens") or
-            usage.get("total_tokens", 0)
+            usage.get("output_tokens")
+            or usage.get("completion_tokens")
+            or usage.get("total_tokens", 0)
         )
     except Exception:
         return 0
@@ -1123,6 +1174,7 @@ def _extract_response_tokens(body: bytes) -> int:
 # ---------------------------------------------------------------------------
 # ProxyServer — public API
 # ---------------------------------------------------------------------------
+
 
 def auto_detect_upstream(request_headers: dict) -> str:
     """
@@ -1227,9 +1279,8 @@ class ProxyServer:
         # capsule stage so they still see the (potentially compressed) body.
         try:
             from .capsule_integration import get_capsule_request_hook
-            self.request_hook: Optional[Callable] = get_capsule_request_hook(
-                base_hook=request_hook
-            )
+
+            self.request_hook: Optional[Callable] = get_capsule_request_hook(base_hook=request_hook)
         except Exception:  # pragma: no cover — import failure falls back gracefully
             self.request_hook = request_hook
 
@@ -1239,6 +1290,7 @@ class ProxyServer:
         # prefix marker — enabling prompt cache reuse across requests.
         try:
             from .prompt_builder import apply_stable_cache_control
+
             _prior_hook = self.request_hook
 
             def _stable_cache_hook(
@@ -1261,11 +1313,6 @@ class ProxyServer:
         except Exception:  # pragma: no cover — import failure gracefully degrades
             pass
 
-        # Per-request timeout (seconds). 0 = disabled. Env: TOKENPAK_REQUEST_TIMEOUT
-        self.request_timeout: float = float(
-            os.environ.get("TOKENPAK_REQUEST_TIMEOUT", "0")
-        )
-
         self.router = ProviderRouter()
         self.trace_storage = TraceStorage(max_traces=50)
         self.session_filter = SessionFilter()
@@ -1285,8 +1332,37 @@ class ProxyServer:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def _wait_for_port(self, timeout: float = 5.0) -> bool:
+        """
+        Block until the port accepts connections.
+
+        Parameters
+        ----------
+        timeout : float
+            Maximum seconds to wait for port readiness (default 5.0).
+
+        Returns
+        -------
+        bool
+            True if port is accepting connections before timeout, False otherwise.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                with socket.create_connection((self.host, self.port), timeout=0.5) as sock:
+                    return True
+            except (ConnectionRefusedError, OSError, TimeoutError):
+                time.sleep(0.05)  # Poll every 50ms
+        return False
+
     def start(self, blocking: bool = True) -> None:
-        """Start the proxy server."""
+        """
+        Start the proxy server.
+
+        When blocking=False, this method GUARANTEES the port is accepting
+        connections before returning. Callers can immediately connect to
+        {self.host}:{self.port} without a separate readiness check.
+        """
         # --- Startup self-test ---
         _all_ok, _warnings = run_startup_checks(self.port)
         if _warnings:
@@ -1320,14 +1396,27 @@ class ProxyServer:
                 if self._server is not None:
                     self.stop()
         else:
+            # Start server in background thread
             self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
             self._server_thread.start()
+
+            # Block until port is accepting connections before returning to caller
+            # This ensures callers can immediately connect to the proxy
+            if not self._wait_for_port(timeout=5.0):
+                # If startup failed, raise an error instead of silently returning
+                raise TimeoutError(
+                    f"ProxyServer.start(blocking=False) failed to bind port {self.port} "
+                    f"within 5 seconds. Check for permission issues or port conflicts."
+                )
 
     def _handle_signal(self, signum: int, frame: Any) -> None:
         """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        print(f"\nTokenPak: {sig_name} received — starting graceful shutdown "
-              f"(drain timeout: {self.shutdown_timeout:.0f}s)...", flush=True)
+        print(
+            f"\nTokenPak: {sig_name} received — starting graceful shutdown "
+            f"(drain timeout: {self.shutdown_timeout:.0f}s)...",
+            flush=True,
+        )
         # Run stop() in a background thread so the signal handler returns quickly
         t = threading.Thread(target=self.stop, daemon=True)
         t.start()
@@ -1385,8 +1474,10 @@ class ProxyServer:
             self._flush_telemetry()
             print("TokenPak: shutdown step 3/5 — telemetry flushed ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
-                  flush=True)
+            print(
+                f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
+                flush=True,
+            )
 
         # ── Step 4: Close HTTP connection pool ────────────────────────────
         print("TokenPak: shutdown step 4/5 — closing connection pool...", flush=True)
@@ -1394,8 +1485,7 @@ class ProxyServer:
             self._connection_pool.close()
             print("TokenPak: shutdown step 4/5 — connection pool closed ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}",
-                  flush=True)
+            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}", flush=True)
 
         # ── Step 5: Stop HTTP server ───────────────────────────────────────
         print("TokenPak: shutdown step 5/5 — stopping HTTP server...", flush=True)
@@ -1405,8 +1495,7 @@ class ProxyServer:
             srv.shutdown()
             print("TokenPak: shutdown step 5/5 — HTTP server stopped ✓", flush=True)
         except Exception as exc:
-            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}",
-                  flush=True)
+            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}", flush=True)
 
         print("TokenPak: graceful shutdown complete.", flush=True)
 
@@ -1452,21 +1541,11 @@ class ProxyServer:
         # Circuit breaker summary
         cb_registry = get_circuit_breaker_registry()
         cb_statuses = cb_registry.all_statuses()
-        cb_any_open = any(
-            s.get("state") in ("open", "half_open")
-            for s in cb_statuses.values()
-        )
-        # Index freshness — read mtime of ~/.tokenpak/index.json
-        _index_path = Path.home() / ".tokenpak" / "index.json"
-        try:
-            _index_mtime = _index_path.stat().st_mtime
-            _index_age_s = round(time.time() - _index_mtime)
-            _index_fresh = _index_age_s < 600  # stale after 10 min
-            _index_info = {"age_seconds": _index_age_s, "fresh": _index_fresh, "path": str(_index_path)}
-        except OSError:
-            _index_info = {"age_seconds": None, "fresh": False, "path": str(_index_path)}
+        cb_any_open = any(s.get("state") in ("open", "half_open") for s in cb_statuses.values())
         result = {
-            "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
+            "status": "shutting_down"
+            if is_shutting_down
+            else ("degraded" if is_degraded else "ok"),
             "uptime_seconds": uptime,
             "version": _tokenpak_version,
             "requests_total": requests_total,
@@ -1486,13 +1565,12 @@ class ProxyServer:
                 "any_open": cb_any_open,
                 "providers": cb_statuses,
             },
-            "index_freshness": _index_info,
-            "request_timeout_seconds": self.request_timeout if self.request_timeout > 0 else None,
         }
         if deep:
             import shutil
 
             import psutil  # optional; fall back gracefully
+
             # providers: list active providers with their circuit-breaker status
             providers = [
                 {"name": name, "status": info.get("state", "unknown")}
@@ -1507,7 +1585,7 @@ class ProxyServer:
             # disk available in GB
             try:
                 disk = shutil.disk_usage("/")
-                disk_available_gb = round(disk.free / (1024 ** 3), 2)
+                disk_available_gb = round(disk.free / (1024**3), 2)
             except Exception:
                 disk_available_gb = None
             result["providers"] = providers
@@ -1536,7 +1614,8 @@ class ProxyServer:
             "errors": s["errors"],
             "avg_savings_pct": (
                 round(s["saved_tokens"] / s["input_tokens"] * 100, 1)
-                if s["input_tokens"] > 0 else 0.0
+                if s["input_tokens"] > 0
+                else 0.0
             ),
         }
 
@@ -1556,6 +1635,7 @@ class ProxyServer:
 # ---------------------------------------------------------------------------
 # Convenience entry point
 # ---------------------------------------------------------------------------
+
 
 def start_proxy(
     host: str = "0.0.0.0",

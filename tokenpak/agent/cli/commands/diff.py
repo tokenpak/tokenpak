@@ -254,9 +254,7 @@ def print_diff(diff: ContextDiff, verbose: bool = False, raw: bool = False) -> N
         for block in diff.compressed:
             if verbose:
                 if block.compression_pct is not None:
-                    tokens_str = (
-                        f" ({block.tokens_before} → {block.tokens_after}, {block.compression_pct:.0f}%)"
-                    )
+                    tokens_str = f" ({block.tokens_before} → {block.tokens_after}, {block.compression_pct:.0f}%)"
                 else:
                     tokens_str = f" ({block.tokens_before} → {block.tokens_after})"
                 print(f"  {block.symbol} {block.name}{tokens_str}")
@@ -289,8 +287,10 @@ def run_diff_cmd(args) -> None:
 
     if not is_pro():
         print("⚠ Context Diff required: Pro (or higher) license.")
+        print("  Get a license: https://tokenpak.io/pricing")
         print("  Run: tokenpak license activate <key>")
         import sys as _sys_diff
+
         _sys_diff.exit(1)
 
     verbose = getattr(args, "verbose", False)

@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 
 class Provider(str, Enum):
     """Supported providers."""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     GOOGLE = "google"
@@ -19,30 +20,26 @@ class ProviderDetector:
 
     # API key patterns for each provider
     KEY_PATTERNS = {
-        Provider.ANTHROPIC: r'^sk-ant-[A-Za-z0-9_-]+$',
-        Provider.OPENAI: r'^sk-[A-Za-z0-9_-]{20,}$',
-        Provider.GOOGLE: r'^AIzaSy[A-Za-z0-9_-]{30,}$',
-        Provider.BEDROCK: r'^[a-zA-Z0-9_-]+@bedrock$',
-        Provider.LITELLM: r'^litellm-[A-Za-z0-9_-]+$',
+        Provider.ANTHROPIC: r"^sk-ant-[A-Za-z0-9_-]+$",
+        Provider.OPENAI: r"^sk-[A-Za-z0-9_-]+$",
+        Provider.GOOGLE: r"^AIza[A-Za-z0-9_-]+$",
+        Provider.BEDROCK: r"^[a-zA-Z0-9_-]+@bedrock$",
+        Provider.LITELLM: r"^litellm-[A-Za-z0-9_-]+$",
     }
 
     # Model name patterns
     MODEL_PATTERNS = {
-        Provider.ANTHROPIC: r'^claude-[a-z0-9-]+',
-        Provider.OPENAI: r'^(gpt-|text-davinci|text-curie)',
-        Provider.GOOGLE: r'^(gemini-|palm-)',
-        Provider.BEDROCK: r'^(anthropic\.claude|amazon\.titan)',
-        Provider.LITELLM: r'^[a-z0-9_/-]+/[a-z0-9_-]+',
+        Provider.ANTHROPIC: r"^claude-[a-z0-9-]+",
+        Provider.OPENAI: r"^(gpt-|text-davinci|text-curie)",
+        Provider.GOOGLE: r"^(gemini-|palm-)",
+        Provider.BEDROCK: r"^(anthropic\.claude|amazon\.titan)",
+        Provider.LITELLM: r"^[a-z0-9_/-]+/[a-z0-9_-]+",
     }
 
     def __init__(self):
         """Initialize detector with compiled patterns."""
-        self.key_patterns = {
-            k: re.compile(v) for k, v in self.KEY_PATTERNS.items()
-        }
-        self.model_patterns = {
-            k: re.compile(v) for k, v in self.MODEL_PATTERNS.items()
-        }
+        self.key_patterns = {k: re.compile(v) for k, v in self.KEY_PATTERNS.items()}
+        self.model_patterns = {k: re.compile(v) for k, v in self.MODEL_PATTERNS.items()}
 
     def detect_from_key(self, api_key: str) -> Optional[Provider]:
         """
@@ -96,25 +93,27 @@ class ProviderDetector:
             return None
 
         # Check Authorization header
-        auth = headers.get('Authorization', '')
-        if 'Bearer' in auth:
+        auth = headers.get("Authorization", "")
+        if "Bearer" in auth:
             # Extract key after Bearer
             parts = auth.split()
             if len(parts) == 2:
                 key = parts[1]
                 return self.detect_from_key(key)
 
-        # Check X-API-Key header
-        api_key = headers.get('X-API-Key') or headers.get('x-api-key', '')
+        # Check X-API-Key header (case-insensitive)
+        api_key = (
+            headers.get("X-API-Key") or headers.get("X-Api-Key") or headers.get("x-api-key") or ""
+        )
         if api_key:
             return self.detect_from_key(api_key)
 
         # Check provider-specific headers
-        if headers.get('anthropic-version'):
+        if headers.get("anthropic-version"):
             return Provider.ANTHROPIC
-        if headers.get('openai-organization'):
+        if headers.get("openai-organization"):
             return Provider.OPENAI
-        if headers.get('google-cloud-project'):
+        if headers.get("google-cloud-project"):
             return Provider.GOOGLE
 
         return None

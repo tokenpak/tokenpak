@@ -26,7 +26,7 @@ class SalientResult:
     lines_in: int
     lines_out: int
     stats: Dict[str, Any] = field(default_factory=dict)
-    passthrough: bool = False   # True if type=UNKNOWN; raw text preserved
+    passthrough: bool = False  # True if type=UNKNOWN; raw text preserved
 
     @property
     def reduction_pct(self) -> float:

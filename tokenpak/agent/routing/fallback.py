@@ -1,164 +1,162 @@
 """
 tokenpak.agent.routing.fallback
-────────────────────────────────────────────────────────────────────────────────
+────────────────────────────────
 Proxy-layer fallback bridge.
 
-Bridges the proxy's provider routing with the agentic RetryEngine,
-providing unified retry + fallback behavior for HTTP proxy requests.
+Wraps :class:`~tokenpak.agent.agentic.retry.RetryEngine` with a
+simpler, context-oriented API for the proxy layer.  Consumers work
+with a single ``FallbackRouter`` instance (or the ``fallback_call``
+convenience function) and never touch the lower-level engine directly.
 
-This module is the "Hooks into proxy router" integration layer:
-  - Wraps any provider call with RetryEngine escalation
-  - Integrates FailoverManager for provider switching
-  - Provides FallbackRouter — a drop-in helper for proxy routing that
-    adds retry/fallback intelligence to any provider request
-
-Architecture
-────────────
-  proxy.py / proxy.server
-       │
-       ▼
-  FallbackRouter.call(request_fn, context)
-       │
-       ▼
-  RetryEngine (agentic/retry.py)
-   L0: backoff
-   L1: model downgrade
-   L2: provider switch  ←── FailoverManager (proxy/failover.py)
-   L3: agent handoff
-   L4: human alert
+Key additions over raw RetryEngine
+-----------------------------------
+- ``FallbackExhaustedError`` — raised instead of ``RetryExhaustedError``;
+  carries ``context`` and ``cause`` for upstream error reporting.
+- Handoff support — ``on_handoff`` returning ``True`` short-circuits the
+  exhaustion path and returns ``{"_handoff": True}``.
+- FailoverManager integration — when a ``FailoverManager`` is attached
+  and enabled, its ``iter_providers`` drives the provider-switch hook.
+- Functional API — ``fallback_call`` for one-shot use.
+- ``get_recent_fallback_events`` — thin wrapper around
+  ``load_recent_retry_events`` for external consumers.
 
 Usage
-─────
-  from tokenpak.agent.routing.fallback import FallbackRouter, fallback_call
+------
+    router = FallbackRouter(state_dir=Path("/tmp/state"))
+    result = router.call(fn=my_task, context={"task": "...", "model": "..."})
 
-  # Functional API (one-shot)
-  result = fallback_call(
-      fn=call_anthropic,
-      context={"task": "chat", "model": "claude-opus-4-5", "provider": "anthropic"},
-  )
-
-  # Class API (persistent configuration)
-  router = FallbackRouter(agent_id="proxy-worker")
-  result = router.call(fn=call_anthropic, context=ctx)
+    # or functional:
+    result = fallback_call(fn=my_task, context=..., state_dir=...)
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable, Iterator, List, Optional
+from typing import Any, Callable, Optional
+from unittest.mock import patch
 
 from tokenpak.agent.agentic.retry import (
+    ImmediateAlertError,
     RetryEngine,
     RetryExhaustedError,
     load_recent_retry_events,
 )
-from tokenpak.agent.proxy.failover import (
-    FailoverManager,
-    FailoverResult,
-)
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "FallbackRouter",
+    "FallbackExhaustedError",
+    "fallback_call",
+    "get_recent_fallback_events",
+]
 
-# ── Public exceptions ─────────────────────────────────────────────────────────
+
+# ---------------------------------------------------------------------------
+# Public exception
+# ---------------------------------------------------------------------------
 
 
 class FallbackExhaustedError(Exception):
-    """Raised when all fallback options (retry + provider chain) are exhausted."""
-
-    def __init__(self, context: dict, cause: RetryExhaustedError):
-        self.context = context
-        self.cause = cause
-        super().__init__(
-            f"All fallback options exhausted for task '{context.get('task', 'unknown')}': "
-            f"{cause}"
-        )
-
-
-# ── FallbackRouter ────────────────────────────────────────────────────────────
-
-
-class FallbackRouter:
     """
-    Proxy-layer fallback router.
+    All fallback levels exhausted.
 
-    Wraps any provider request function with:
-    - Exponential backoff (Level 0)
-    - Model downgrade within provider (Level 1)
-    - Provider switch via FailoverManager (Level 2)
-    - Agent handoff (Level 3, if on_handoff provided)
-    - Human alert (Level 4)
-
-    Parameters
-    ----------
-    agent_id : str
-        Identifier of the agent/proxy instance making calls.
-    state_dir : Path | None
-        Override state persistence directory.
-    on_handoff : callable | None
-        Hook: (context, partial_state) -> bool
-    on_human_alert : callable | None
-        Hook: (alert_dict) -> None
-    failover_manager : FailoverManager | None
-        Pre-configured failover manager (loads from config.yaml if None).
+    Attributes:
+        context:  The task context dict passed to the router.
+        cause:    The underlying :class:`RetryExhaustedError` (or
+                  :class:`ImmediateAlertError` for auth failures).
     """
 
     def __init__(
         self,
-        agent_id: str = "proxy-worker",
-        state_dir: Optional[Path] = None,
+        context: dict,
+        cause: Exception,
+    ) -> None:
+        self.context = context
+        self.cause = cause
+        task = context.get("task", "unknown")
+        super().__init__(
+            f"Fallback exhausted for task '{task}': {cause}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Router
+# ---------------------------------------------------------------------------
+
+
+class FallbackRouter:
+    """
+    High-level fallback router for the proxy layer.
+
+    Parameters
+    ----------
+    state_dir:
+        Directory for persisting partial state on failure.
+        Defaults to ``~/.tokenpak/retry_state``.
+    failover_manager:
+        Optional :class:`~tokenpak.agent.proxy.failover.FailoverManager`.
+        When attached and enabled, its ``iter_providers`` drives the
+        provider-switch hook.
+    on_handoff:
+        Called when Level 3 (handoff) is reached.
+        Signature: ``(context, partial_state) -> bool``.
+        Return ``True`` to accept the handoff (router returns
+        ``{"_handoff": True}``).  Return ``False`` to escalate further.
+    on_human_alert:
+        Called when Level 4 (human alert) is reached.
+        Signature: ``(alert_dict) -> None``.
+    """
+
+    def __init__(
+        self,
+        state_dir: Optional[Path | str] = None,
+        failover_manager: Any = None,
         on_handoff: Optional[Callable[[dict, dict], bool]] = None,
         on_human_alert: Optional[Callable[[dict], None]] = None,
-        failover_manager: Optional[FailoverManager] = None,
-    ):
-        self.agent_id = agent_id
-        self.state_dir = state_dir
+    ) -> None:
+        self._state_dir = Path(state_dir) if state_dir is not None else None
+        self._failover_manager = failover_manager
         self.on_handoff = on_handoff
         self.on_human_alert = on_human_alert
-        self._failover = failover_manager or FailoverManager()
 
-    def _build_provider_switch_hook(
-        self,
-        original_model: str,
-        original_provider: str,
+    # ------------------------------------------------------------------ #
+    # Internal helpers
+    # ------------------------------------------------------------------ #
+
+    def _make_provider_switch_hook(
+        self, context: dict
     ) -> Optional[Callable[[str], str]]:
-        """
-        Build an on_provider_switch hook backed by FailoverManager.
-
-        Returns None if failover is disabled (RetryEngine uses its own default).
-        """
-        if not self._failover.enabled:
+        """Build a provider-switch hook from the FailoverManager if available."""
+        mgr = self._failover_manager
+        if mgr is None or not getattr(mgr, "enabled", False):
             return None
 
-        # Snapshot the full provider iteration at call time
-        all_results: List[FailoverResult] = list(
-            self._failover.iter_providers(original_model, preferred=original_provider)
-        )
-        provider_iter: Iterator[FailoverResult] = iter(all_results)
-        # Advance past the first entry (the current/preferred provider)
+        model = context.get("model", "")
+        preferred = context.get("provider", "anthropic")
+
+        # Materialise the iterator once so the hook can step through it.
         try:
-            next(provider_iter)
-        except StopIteration:
+            providers = list(mgr.iter_providers(model, preferred=preferred))
+        except Exception:  # noqa: BLE001
             return None
 
-        def _switch(current_provider: str) -> str:
-            try:
-                result: FailoverResult = next(provider_iter)
-                logger.info(
-                    "FallbackRouter: switching provider %s → %s (model: %s → %s)",
-                    current_provider,
-                    result.provider,
-                    original_model,
-                    result.model,
-                )
-                return result.provider
-            except StopIteration:
-                # No more providers — return same provider to trigger
-                # RetryEngine's "no fallback available" detection
-                return current_provider
+        _iter = iter(providers)
+        # Advance past the first entry (already being used)
+        next(_iter, None)
+
+        def _switch(_current: str) -> str:
+            entry = next(_iter, None)
+            if entry is None:
+                return _current
+            return entry.provider
 
         return _switch
+
+    # ------------------------------------------------------------------ #
+    # Public API
+    # ------------------------------------------------------------------ #
 
     def call(
         self,
@@ -167,82 +165,134 @@ class FallbackRouter:
         partial_state: Optional[dict] = None,
     ) -> Any:
         """
-        Execute *fn* with full retry/fallback intelligence.
+        Execute *fn* with automatic fallback.
 
         Parameters
         ----------
-        fn : callable
-            Provider request function. Signature: fn(context, partial_state) -> result.
-        context : dict
-            Request context. Should include "task", "model", "provider", "task_id".
-        partial_state : dict | None
-            Mutable progress state (created fresh if None).
+        fn:
+            Task callable.  Signature: ``fn(context, partial_state) -> result``.
+        context:
+            Task metadata (``task``, ``model``, ``provider``, …).
+        partial_state:
+            Optional mutable state dict; created fresh if omitted.
 
         Returns
         -------
         Any
-            Result of fn on success.
+            The result from *fn* on success, or ``{"_handoff": True}`` if
+            a handoff was accepted.
 
         Raises
         ------
         FallbackExhaustedError
-            When all escalation levels fail.
+            When all fallback levels have been tried and failed.
         """
-        original_model = context.get("model", "unknown")
-        original_provider = context.get("provider", "anthropic")
+        on_provider_switch = self._make_provider_switch_hook(context)
 
-        provider_switch_hook = self._build_provider_switch_hook(original_model, original_provider)
+        handoff_result: list[Any] = []  # Mutable container for closure
+
+        def _on_handoff(ctx: dict, state: dict) -> bool:
+            if self.on_handoff is not None:
+                accepted = self.on_handoff(ctx, state)
+                if accepted:
+                    handoff_result.append({"_handoff": True})
+                    return True
+            return False
 
         engine = RetryEngine(
             fn=fn,
             context=context,
-            partial_state=partial_state,
-            state_dir=self.state_dir,
-            agent_id=self.agent_id,
-            on_provider_switch=provider_switch_hook,
-            on_handoff=self.on_handoff,
+            partial_state=partial_state or {},
+            state_dir=self._state_dir,
+            on_handoff=_on_handoff if self.on_handoff is not None else None,
             on_human_alert=self.on_human_alert,
+            on_provider_switch=on_provider_switch,
         )
 
         try:
-            return engine.run()
+            result = engine.run()
+            # If a handoff was accepted during run(), return its sentinel.
+            if handoff_result:
+                return handoff_result[0]
+            return result
         except RetryExhaustedError as exc:
+            # Check if a handoff was accepted mid-run
+            if handoff_result:
+                return handoff_result[0]
+            raise FallbackExhaustedError(context=context, cause=exc) from exc
+        except ImmediateAlertError as exc:
+            # Auth / fatal errors bypassed escalation → wrap and re-raise
+            if self.on_human_alert is not None:
+                self.on_human_alert(
+                    {
+                        "severity": "critical",
+                        "task": context.get("task"),
+                        "error": str(exc.original),
+                        "http_status": exc.status_code,
+                    }
+                )
             raise FallbackExhaustedError(context=context, cause=exc) from exc
 
 
-# ── Functional API ────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# Functional API
+# ---------------------------------------------------------------------------
 
 
 def fallback_call(
     fn: Callable[[dict, dict], Any],
     context: dict,
-    partial_state: Optional[dict] = None,
-    agent_id: str = "proxy-worker",
-    state_dir: Optional[Path] = None,
-    on_handoff: Optional[Callable[[dict, dict], bool]] = None,
+    state_dir: Optional[Path | str] = None,
     on_human_alert: Optional[Callable[[dict], None]] = None,
+    on_handoff: Optional[Callable[[dict, dict], bool]] = None,
+    failover_manager: Any = None,
 ) -> Any:
     """
-    One-shot fallback call — convenience wrapper for FallbackRouter.
+    One-shot fallback call.  Convenience wrapper around :class:`FallbackRouter`.
 
-    Suitable for single requests where you don't need to maintain
-    a persistent FallbackRouter instance.
+    Parameters
+    ----------
+    fn:
+        Task callable (same as ``FallbackRouter.call``).
+    context:
+        Task metadata dict.
+    state_dir:
+        Optional state persistence directory.
+    on_human_alert:
+        Optional human-alert callback.
+    on_handoff:
+        Optional handoff callback.
+    failover_manager:
+        Optional FailoverManager.
 
-    Raises FallbackExhaustedError if all levels fail.
+    Returns
+    -------
+    Any
+        Result from *fn*.
+
+    Raises
+    ------
+    FallbackExhaustedError
+        When all fallback levels have been tried and failed.
     """
     router = FallbackRouter(
-        agent_id=agent_id,
         state_dir=state_dir,
+        failover_manager=failover_manager,
         on_handoff=on_handoff,
         on_human_alert=on_human_alert,
     )
-    return router.call(fn=fn, context=context, partial_state=partial_state)
+    return router.call(fn=fn, context=context)
+
+
+# ---------------------------------------------------------------------------
+# Event log access
+# ---------------------------------------------------------------------------
 
 
 def get_recent_fallback_events(n: int = 20) -> list[dict]:
     """
-    Return the most recent retry/fallback events from the JSONL shadow log.
+    Return up to *n* most-recent retry/fallback events from the JSONL log.
 
-    Convenience re-export for the proxy to surface events in `tokenpak status`.
+    Delegates to :func:`tokenpak.agent.agentic.retry.load_recent_retry_events`.
     """
     return load_recent_retry_events(n)

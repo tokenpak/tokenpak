@@ -12,7 +12,7 @@ Thresholds:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from threading import Lock
 from typing import Dict, List, Optional
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class AlertLevel(Enum):
     """Request size alert tiers."""
+
     YELLOW = "yellow"
     ORANGE = "orange"
     RED = "red"
@@ -30,6 +31,7 @@ class AlertLevel(Enum):
 @dataclass
 class SizeAlert:
     """Single alert event."""
+
     timestamp: datetime
     level: AlertLevel
     size_bytes: int
@@ -40,10 +42,11 @@ class SizeAlert:
 @dataclass
 class RequestSizeConfig:
     """Configuration for request size monitoring."""
+
     enabled: bool = True
     yellow_threshold: int = 300_000  # 300 KB
     orange_threshold: int = 500_000  # 500 KB
-    red_threshold: int = 700_000     # 700 KB
+    red_threshold: int = 700_000  # 700 KB
     track_history: bool = True
     max_history_size: int = 1000
 
@@ -108,7 +111,7 @@ class RequestSizeMonitor:
                 self._alert_history.append(alert)
                 # Trim history if it gets too large
                 if len(self._alert_history) > self.config.max_history_size:
-                    self._alert_history = self._alert_history[-self.config.max_history_size:]
+                    self._alert_history = self._alert_history[-self.config.max_history_size :]
 
             return alert
 
@@ -138,7 +141,7 @@ class RequestSizeMonitor:
         }
 
         return SizeAlert(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             level=level,
             size_bytes=size_bytes,
             message=messages[level],
@@ -161,10 +164,7 @@ class RequestSizeMonitor:
                     "orange_bytes": self.config.orange_threshold,
                     "red_bytes": self.config.red_threshold,
                 },
-                "alert_counts": {
-                    level.value: count
-                    for level, count in self._alert_counts.items()
-                },
+                "alert_counts": {level.value: count for level, count in self._alert_counts.items()},
                 "active_sessions": len(self._last_level),
                 "history_size": len(self._alert_history),
             }

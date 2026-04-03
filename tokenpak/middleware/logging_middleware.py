@@ -26,6 +26,7 @@ class LoggingMiddleware:
         method: str = "POST",
     ) -> Callable:
         """Decorator to wrap a request handler with logging."""
+
         def decorator(handler: Callable) -> Callable:
             @wraps(handler)
             def wrapper(*args, **kwargs) -> Any:
@@ -118,6 +119,7 @@ class LoggingMiddleware:
                     self._request_contexts.pop(request_id, None)
 
             return wrapper
+
         return decorator
 
     def log_compile_audit(self, audit: CompileAudit):
@@ -146,7 +148,9 @@ class LoggingMiddleware:
                     "total_ms": audit.total_latency_ms,
                 },
                 "blocks_removed": len([b for b in audit.blocks_audited if b.action == "removed"]),
-                "blocks_compacted": len([b for b in audit.blocks_audited if b.action == "compacted"]),
+                "blocks_compacted": len(
+                    [b for b in audit.blocks_audited if b.action == "compacted"]
+                ),
                 "tokens_removed": audit.tokens_removed,
             },
             level="info",
@@ -174,7 +178,9 @@ class LoggingMiddleware:
 
     def log_metrics_audit(self, audit: MetricsAudit):
         """Log metrics audit trail."""
-        message = f"Metrics: {audit.aggregation_window} window, {audit.data_points_returned} data points"
+        message = (
+            f"Metrics: {audit.aggregation_window} window, {audit.data_points_returned} data points"
+        )
 
         self.logger.log_request(
             endpoint="/metrics",

@@ -47,7 +47,9 @@ class TeacherPackBuilder:
         recipes: list[dict[str, Any]] = []
         for intent in sorted(command_intents):
             matched_sources = [
-                item for item in markdown_files if intent in item["text"].lower() or intent in item["tags"]
+                item
+                for item in markdown_files
+                if intent in item["text"].lower() or intent in item["tags"]
             ]
             required = [m["path"] for m in matched_sources[:2]]
             optional = [m["path"] for m in matched_sources[2:5]]
@@ -78,9 +80,16 @@ class TeacherPackBuilder:
             "source_fingerprint": source_digest,
             "recipes": recipes,
         }
-        recipes_path.write_text(json.dumps(recipes_doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        recipes_path.write_text(
+            json.dumps(recipes_doc, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         validation_path.write_text(
-            json.dumps({"version": self.version, "source_fingerprint": source_digest, **validation}, indent=2, sort_keys=True) + "\n",
+            json.dumps(
+                {"version": self.version, "source_fingerprint": source_digest, **validation},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
@@ -144,7 +153,7 @@ class TeacherPackBuilder:
         if fm:
             tag_line = TAG_LINE_RE.search(fm.group(1))
             if tag_line:
-                tags.extend([t.strip().strip('"\'') for t in tag_line.group(1).split(",")])
+                tags.extend([t.strip().strip("\"'") for t in tag_line.group(1).split(",")])
         for line in text.splitlines():
             for token in line.split():
                 if token.startswith("#") and len(token) > 1 and token[1:].isalnum():
@@ -156,7 +165,9 @@ class TeacherPackBuilder:
         links.extend(m.group(1).strip() for m in WIKI_LINK_RE.finditer(text))
         return links
 
-    def _validate(self, recipes: list[dict[str, Any]], markdown_files: list[dict[str, Any]]) -> dict[str, Any]:
+    def _validate(
+        self, recipes: list[dict[str, Any]], markdown_files: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         known_paths = {m["path"] for m in markdown_files}
         missing_sources: list[str] = []
         stale_refs: list[dict[str, str]] = []
@@ -186,7 +197,9 @@ class TeacherPackBuilder:
                 base = Path(source["path"]).parent
                 target = (base / link).resolve()
                 if not target.exists():
-                    stale_refs.append({"intent": "source-link", "ref": f"{source['path']} -> {link}"})
+                    stale_refs.append(
+                        {"intent": "source-link", "ref": f"{source['path']} -> {link}"}
+                    )
 
         return {
             "summary": {

@@ -4,7 +4,7 @@ TokenPak Request Validator — validates incoming LLM API requests before forwar
 Validates Anthropic /v1/messages and OpenAI /v1/chat/completions requests against
 their respective schemas, returning structured 400-ready error payloads.
 
-Configuration (env var or config.json):
+Configuration (env var or config.yaml):
     TOKENPAK_REQUEST_VALIDATION=strict   # reject bad requests with HTTP 400
     TOKENPAK_REQUEST_VALIDATION=warn     # log but forward (default)
     TOKENPAK_REQUEST_VALIDATION=off      # skip validation entirely
@@ -562,27 +562,23 @@ class RequestValidator:
 
 
 def get_validation_mode() -> str:
-    """Read validation mode from env var or config.json.
+    """Read validation mode from env var or config.yaml.
 
     Priority:
       1. TOKENPAK_REQUEST_VALIDATION env var
-      2. ~/.tokenpak/config.json "request_validation" key
+      2. ~/.tokenpak/config.yaml "validation.mode" key
       3. Default: "warn"
     """
+    from tokenpak.config_loader import get as config_get
+    
     env_val = os.environ.get("TOKENPAK_REQUEST_VALIDATION", "").lower().strip()
     if env_val in VALIDATION_MODES:
         return env_val
 
     # Fall back to config file
-    try:
-        from tokenpak.agent.config import _load as _load_config
-
-        cfg = _load_config()
-        file_val = str(cfg.get("request_validation", "")).lower().strip()
-        if file_val in VALIDATION_MODES:
-            return file_val
-    except Exception:
-        pass
+    file_val = str(config_get("validation.mode", "warn", "TOKENPAK_REQUEST_VALIDATION", str)).lower().strip()
+    if file_val in VALIDATION_MODES:
+        return file_val
 
     return "warn"
 

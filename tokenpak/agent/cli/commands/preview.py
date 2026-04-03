@@ -86,7 +86,9 @@ def cmd_preview(args):
     elif args.raw:
         print(f"Input:     {result.get('input_tokens', 0):,} tokens")
         print(f"Output:    {result.get('output_tokens', 0):,} tokens")
-        print(f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0)*100:.1f}%)")
+        print(
+            f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0)*100:.1f}%)"
+        )
         print()
         print("Retained blocks:")
         for block in result.get("retained_blocks", []):

@@ -7,7 +7,7 @@ Automatic detection of spikes and anomalies in token/cost metrics.
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 
@@ -71,7 +71,7 @@ class AnomalyDetector:
         cursor = conn.cursor()
 
         # Get baseline (7-day average)
-        (datetime.utcnow() - timedelta(days=baseline_days)).isoformat()
+        (datetime.now(timezone.utc) - timedelta(days=baseline_days)).isoformat()
 
         cursor.execute(
             """
@@ -79,7 +79,12 @@ class AnomalyDetector:
             WHERE model = ? AND created_at < ?
             AND DATE(created_at) >= DATE(?, '-' || ? || ' days')
         """,
-            (model, datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), baseline_days),
+            (
+                model,
+                datetime.now(timezone.utc).isoformat(),
+                datetime.now(timezone.utc).isoformat(),
+                baseline_days,
+            ),
         )
 
         result = cursor.fetchone()
@@ -94,7 +99,7 @@ class AnomalyDetector:
                 anomaly_type="token_spike",
                 severity="warning" if current_tokens < threshold * 2 else "critical",
                 description=f"Token spike: {current_tokens} vs baseline {baseline:.0f}",
-                detected_at=datetime.utcnow().isoformat(),
+                detected_at=datetime.now(timezone.utc).isoformat(),
                 event_ids=[],
                 value=current_tokens,
                 baseline=baseline,
@@ -118,7 +123,7 @@ class AnomalyDetector:
         cursor = conn.cursor()
 
         # Get baseline (yesterday's average or last N days)
-        yesterday = (datetime.utcnow() - timedelta(days=1)).date().isoformat()
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
 
         cursor.execute(
             """
@@ -139,7 +144,7 @@ class AnomalyDetector:
                 anomaly_type="cost_spike",
                 severity="warning" if current_cost < threshold * 2 else "critical",
                 description=f"Cost spike: ${current_cost:.2f} vs baseline ${baseline:.2f}",
-                detected_at=datetime.utcnow().isoformat(),
+                detected_at=datetime.now(timezone.utc).isoformat(),
                 event_ids=[],
                 value=current_cost,
                 baseline=baseline,
@@ -164,7 +169,9 @@ class AnomalyDetector:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        start_time = (datetime.utcnow() - timedelta(minutes=time_window_minutes)).isoformat()
+        start_time = (
+            datetime.now(timezone.utc) - timedelta(minutes=time_window_minutes)
+        ).isoformat()
 
         cursor.execute(
             """
@@ -195,7 +202,7 @@ class AnomalyDetector:
                 anomaly_type="retry_surge",
                 severity="warning" if retry_rate < 30 else "critical",
                 description=f"Retry surge: {retry_rate:.1f}% ({retried}/{total} events)",
-                detected_at=datetime.utcnow().isoformat(),
+                detected_at=datetime.now(timezone.utc).isoformat(),
                 event_ids=[],
                 value=retry_rate,
                 baseline=0,
@@ -220,7 +227,9 @@ class AnomalyDetector:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        start_time = (datetime.utcnow() - timedelta(minutes=time_window_minutes)).isoformat()
+        start_time = (
+            datetime.now(timezone.utc) - timedelta(minutes=time_window_minutes)
+        ).isoformat()
 
         cursor.execute(
             """
@@ -251,7 +260,7 @@ class AnomalyDetector:
                 anomaly_type="error_surge",
                 severity="critical" if error_rate > 20 else "warning",
                 description=f"Error surge: {error_rate:.1f}% ({errors}/{total} events)",
-                detected_at=datetime.utcnow().isoformat(),
+                detected_at=datetime.now(timezone.utc).isoformat(),
                 event_ids=[],
                 value=error_rate,
                 baseline=0,

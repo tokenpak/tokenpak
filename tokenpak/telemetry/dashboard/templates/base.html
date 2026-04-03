@@ -144,15 +144,15 @@
           if (indicator) indicator.classList.add('active');
           fetch('/v1/telemetry/refresh', {method:'POST'})
             .then(r => r.json())
-            .then(() => { 
-              btn.textContent = '✅ Done!'; 
+            .then(() => {
+              btn.textContent = '✅ Done!';
               if (window.showToast) showToast('Data refreshed', 'success');
-              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; window.location.reload(); }, 1200); 
+              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; window.location.reload(); }, 1200);
             })
-            .catch(e => { 
-              btn.textContent = '❌ Failed'; 
+            .catch(e => {
+              btn.textContent = '❌ Failed';
               if (window.showToast) showToast('Refresh failed', 'error');
-              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; }, 2000); 
+              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; }, 2000);
             })
             .finally(() => { if (indicator) setTimeout(() => indicator.classList.remove('active'), 300); });
         }

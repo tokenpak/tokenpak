@@ -16,7 +16,7 @@ Env vars:
     TOKENPAK_COMPACT_MAX_CHARS      (default: 120) — max chars for compressed text
     TOKENPAK_COMPACT_THRESHOLD_TOKENS (default: 4500) — skip compaction below this
     TOKENPAK_COMPACT_CACHE_SIZE     (default: 2000)
-    TOKENPAK_DB               (default: .ocp/monitor.db)
+    TOKENPAK_DB               (default: .tokenpak/monitor.db)
     TOKENPAK_VAULT_INDEX      (default: ~/vault/.tokenpak) — path to shared vault index
     TOKENPAK_INJECT_BUDGET    (default: 4000) — max tokens to inject from vault
     TOKENPAK_INJECT_TOP_K     (default: 5) — max vault blocks to inject
@@ -59,17 +59,27 @@ import sys
 import threading
 import time
 import uuid
-from collections import OrderedDict, deque
+from collections import deque, OrderedDict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from queue import Queue, Empty
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import urlparse
 
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
+
+# Try to import migration system (for DB schema version tracking)
+try:
+    from db_migrations import migrate as db_migrate, get_current_schema_version
+    MIGRATION_AVAILABLE = True
+except ImportError:
+    MIGRATION_AVAILABLE = False
+    def db_migrate(conn): pass
+    def get_current_schema_version(conn): return 0
 
 # ---------------------------------------------------------------------------
 # Feature imports — CANON dedup
@@ -78,7 +88,7 @@ try:
     import os as _os_canon
     import sys as _sys_canon
 
-    _sys_canon.path.insert(0, _os_canon.path.expanduser("~/.openclaw/workspace/.ocp"))
+    _sys_canon.path.insert(0, _os_canon.path.expanduser("~/.openclaw/workspace/.tokenpak"))
     from canon_session import apply_canon_refs
     from canon_session import get_session as get_canon_session
 
@@ -143,11 +153,11 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Pipeline Trace — captures per-request pipeline execution details
 # ---------------------------------------------------------------------------
-@dataclass
 class _CompressionTimeout(Exception):
     """Raised internally when the compression pipeline exceeds MAX_COMPRESSION_TIME_MS."""
 
 
+@dataclass
 class StageTrace:
     """Trace for a single pipeline stage."""
 
@@ -243,10 +253,160 @@ except ImportError:
 
     print("📄 Config: env vars only (config_loader not available)")
 
+# ---------------------------------------------------------------------------
+# Named Workflow Profiles — TOKENPAK_PROFILE sets sensible flag bundles
+# Profile is a floor: explicit env vars always win (setdefault semantics)
+# ---------------------------------------------------------------------------
+_PROFILE_PRESETS: dict[str, dict[str, str]] = {
+    "safe": {
+        "TOKENPAK_MODE": "strict",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "8000",
+        "TOKENPAK_SKELETON_ENABLED": "false",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_SHADOW_ENABLED": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_TRACE": "true",
+    },
+    "balanced": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_SHADOW_ENABLED": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_TRACE": "true",
+    },
+    "aggressive": {
+        "TOKENPAK_MODE": "aggressive",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "2000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_SHADOW_ENABLED": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_TRACE": "true",
+    },
+    "agentic": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "3000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_SHADOW_ENABLED": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_TRACE": "true",
+    },
+}
+
+ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
+if ACTIVE_PROFILE in _PROFILE_PRESETS:
+    for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
+        os.environ.setdefault(_pk, _pv)
+    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic)")
+else:
+    print(f"⚠️  Unknown TOKENPAK_PROFILE={ACTIVE_PROFILE!r} — ignoring, using env vars as-is")
+    ACTIVE_PROFILE = "custom"
+
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
-LISTEN_ADDRESS = _cfg("listen_address", "0.0.0.0", "TOKENPAK_LISTEN_ADDRESS", str)
+LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
+PROXY_AUTH_KEY = os.environ.get("TOKENPAK_PROXY_KEY", "")
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOARD_AUTH", bool)
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
+BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
+BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
+# ── Swap Pressure Monitoring ──────────────────────────────────────────────────
+SWAP_PRESSURE_THRESHOLD_MB: int = int(os.environ.get("TOKENPAK_SWAP_WARN_MB", "600"))
+_SWAP_WARN_LAST_LOGGED: float = 0.0
+_SWAP_WARN_COOLDOWN_SEC: int = 300  # max once per 5 min
+# Telegram alert fires at higher threshold (system-wide swap, not just process)
+SWAP_TELEGRAM_ALERT_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_MB", "1024"))
+_SWAP_TELEGRAM_LAST_SENT: float = 0.0
+_SWAP_TELEGRAM_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_COOLDOWN_S", "1800"))
+_SWAP_TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "461720084")
+
+
+def get_swap_mb() -> int:
+    """Read current swap usage for this process from /proc/self/status."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmSwap:"):
+                    return int(line.split()[1]) // 1024
+    except Exception:
+        pass
+    return 0
+
+
+def _get_system_swap_mb() -> int:
+    """Read system-wide swap from /proc/meminfo (not just this process)."""
+    try:
+        info = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    info[parts[0].rstrip(":")] = int(parts[1])
+        total = info.get("SwapTotal", 0)
+        free = info.get("SwapFree", 0)
+        return (total - free) // 1024
+    except Exception:
+        return 0
+
+
+def _send_swap_telegram_alert(swap_mb: int) -> None:
+    """Fire a Telegram alert for high swap pressure (rate-limited)."""
+    global _SWAP_TELEGRAM_LAST_SENT
+    import time as _time
+    import json as _json
+    import urllib.request as _req
+    import urllib.error as _uerr
+    now = _time.time()
+    if now - _SWAP_TELEGRAM_LAST_SENT < _SWAP_TELEGRAM_COOLDOWN_S:
+        return
+    try:
+        cfg_path = os.path.expanduser("~/.openclaw/openclaw.json")
+        with open(cfg_path) as _f:
+            _cfg_data = _json.load(_f)
+        token = _cfg_data.get("channels", {}).get("telegram", {}).get("botToken")
+        if not token:
+            return
+        hostname = os.uname().nodename
+        msg = (
+            f"⚠️ <b>Swap alert — {hostname}</b>\n"
+            f"System swap: {swap_mb}MB "
+            f"(threshold: {SWAP_TELEGRAM_ALERT_MB}MB)\n"
+            "Investigate memory pressure"
+        )
+        payload = _json.dumps({"chat_id": _SWAP_TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}).encode()
+        _r = _req.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with _req.urlopen(_r, timeout=8) as _resp:
+            _resp.read()
+        _SWAP_TELEGRAM_LAST_SENT = now
+        logging.info("[swap_alert] Telegram alert sent (swap=%dMB)", swap_mb)
+    except Exception as _e:
+        logging.debug("[swap_alert] Telegram send failed: %s", _e)
+
+
+def check_swap_pressure() -> int:
+    """Check swap usage; log warning if above threshold. Returns swap_mb."""
+    global _SWAP_WARN_LAST_LOGGED
+    import time as _time
+    swap_mb = get_swap_mb()
+    if swap_mb > SWAP_PRESSURE_THRESHOLD_MB:
+        now = _time.time()
+        if now - _SWAP_WARN_LAST_LOGGED > _SWAP_WARN_COOLDOWN_SEC:
+            logging.warning(
+                "[WARN] High swap pressure: %dMB — compression may be slow "
+                "(threshold: %dMB)", swap_mb, SWAP_PRESSURE_THRESHOLD_MB
+            )
+            _SWAP_WARN_LAST_LOGGED = now
+    # Check system-wide swap for Telegram alert (separate threshold)
+    sys_swap_mb = _get_system_swap_mb()
+    if sys_swap_mb >= SWAP_TELEGRAM_ALERT_MB:
+        _send_swap_telegram_alert(sys_swap_mb)
+    return swap_mb
+
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
@@ -303,7 +463,7 @@ PREFIX_REGISTRY_ENABLED: bool = _cfg(
 COMPRESSION_DICT_ENABLED: bool = _cfg(
     "features.compression_dict", False, "TOKENPAK_COMPRESSION_DICT", bool
 )
-TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
+TRACE_ENABLED: bool = _cfg("features.trace", True, "TOKENPAK_TRACE", bool)
 
 # Tier 2 modules
 ERROR_NORMALIZER_ENABLED: bool = _cfg(
@@ -418,49 +578,6 @@ INJECT_MIN_PROMPT = _cfg("vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_P
 # If exceeded, compression is skipped and original body is forwarded uncompressed.
 # Default: 5000ms. Set to 0 to disable the cap.
 MAX_COMPRESSION_TIME_MS = _cfg("compression.max_time_ms", 5000, "MAX_COMPRESSION_TIME_MS", int)
-
-# Swap pressure monitoring — warn when proxy swap exceeds this threshold (MB)
-SWAP_PRESSURE_THRESHOLD_MB: int = _cfg("monitoring.swap_threshold_mb", 600, "TOKENPAK_SWAP_THRESHOLD_MB", int)
-_SWAP_WARN_INTERVAL = 60  # seconds between repeated swap warnings
-_last_swap_warn: float = 0.0
-
-
-def get_swap_mb(pid: Optional[int] = None) -> int:
-    """Read current swap usage (MB) for the given PID from /proc/{pid}/status.
-
-    Returns 0 if the value cannot be determined.
-    """
-    if pid is None:
-        pid = os.getpid()
-    try:
-        with open(f"/proc/{pid}/status", "r") as fh:
-            for line in fh:
-                if line.startswith("VmSwap:"):
-                    # Format: "VmSwap:   1234 kB"
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        kb = int(parts[1])
-                        return kb // 1024
-    except (OSError, ValueError):
-        pass
-    return 0
-
-
-def check_swap_pressure() -> int:
-    """Check swap usage and log a warning if above threshold. Returns swap_mb."""
-    global _last_swap_warn
-    swap_mb = get_swap_mb()
-    if swap_mb > SWAP_PRESSURE_THRESHOLD_MB:
-        now = time.monotonic()
-        if now - _last_swap_warn > _SWAP_WARN_INTERVAL:
-            _last_swap_warn = now
-            import logging as _logging
-            _logging.getLogger("tokenpak").warning(
-                "[WARN] High swap pressure: %dMB — compression may be slow", swap_mb
-            )
-    return swap_mb
-
-
 VAULT_INDEX_RELOAD_INTERVAL = 300
 # Tiered vault memory — LRU content cache config
 VAULT_CACHE_MAX_BYTES: int = _cfg(
@@ -895,6 +1012,7 @@ _BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
         "x-forwarded-for",
         "x-real-ip",
         "x-forwarded-host",  # prevent IP spoofing upstream
+        "x-tokenpak-bypass",  # internal header — never forward to upstream
     }
 )
 
@@ -1116,20 +1234,52 @@ def _ollama_health_loop():
         time.sleep(check_interval)
 
 
-# Start health checker thread
+# Start health checker thread (skip in test mode to avoid pytest capture conflicts)
 _ollama_health_thread = threading.Thread(target=_ollama_health_loop, daemon=True)
-_ollama_health_thread.start()
+if not os.environ.get("TOKENPAK_NO_THREADS"):
+    _ollama_health_thread.start()
 
 # ---------------------------------------------------------------------------
 # Token counting
 # ---------------------------------------------------------------------------
+# LRU cache so repeated count_tokens calls on the same text (e.g. injection text
+# counted before and after skeleton) are O(1) lookups instead of re-encoding.
+_TOKEN_COUNT_CACHE: Dict[int, int] = {}  # hash(text) -> token_count
+_TOKEN_COUNT_CACHE_MAX = 1024
+
+# Token cache counters — must be defined before _token_count_cached calls them
+_TOKEN_CACHE_HITS: int = 0
+_TOKEN_CACHE_MISSES: int = 0
+
+def _inc_token_cache_hit() -> None:
+    global _TOKEN_CACHE_HITS
+    _TOKEN_CACHE_HITS += 1
+
+def _inc_token_cache_miss() -> None:
+    global _TOKEN_CACHE_MISSES
+    _TOKEN_CACHE_MISSES += 1
+
+def _token_count_cached(text: str, encoder) -> int:
+    """Count tokens with hash-keyed FIFO cache. Avoids re-encoding repeated text."""
+    key = hash(text)
+    if key in _TOKEN_COUNT_CACHE:
+        _inc_token_cache_hit()
+        return _TOKEN_COUNT_CACHE[key]
+    _inc_token_cache_miss()
+    result = len(encoder.encode(text))
+    if len(_TOKEN_COUNT_CACHE) >= _TOKEN_COUNT_CACHE_MAX:
+        # Evict oldest key (dict insertion order preserved in Python 3.7+)
+        _TOKEN_COUNT_CACHE.pop(next(iter(_TOKEN_COUNT_CACHE)))
+    _TOKEN_COUNT_CACHE[key] = result
+    return result
+
 try:
     import tiktoken
 
     _ENC = tiktoken.get_encoding("cl100k_base")
 
     def count_tokens(text: str) -> int:
-        return len(_ENC.encode(text))
+        return _token_count_cached(text, _ENC)
 except ImportError:
 
     def count_tokens(text: str) -> int:
@@ -1154,8 +1304,10 @@ class VaultIndex:
         # BM25 precomputed
         self._df: Dict[str, int] = {}
         self._block_tfs: Dict[str, Dict[str, int]] = {}
+        self._block_dl: Dict[str, int] = {}  # precomputed doc lengths (sum of tf values)
         self._avg_dl: float = 0
         self._doc_count: int = 0
+        self._inverted: Dict[str, set] = {}  # term -> set(block_ids)
         # Tiered memory — LRU content cache (Tier 2)
         self._content_cache: OrderedDict = OrderedDict()  # block_id -> content str
         self._cache_bytes: int = 0
@@ -1235,6 +1387,7 @@ class VaultIndex:
         # Precompute BM25 from content (content discarded after this pass)
         df: Dict[str, int] = {}
         block_tfs: Dict[str, Dict[str, int]] = {}
+        block_dl: Dict[str, int] = {}  # precomputed doc lengths
         total_dl = 0
 
         for bid, content, _mtime in preload_candidates:
@@ -1242,13 +1395,23 @@ class VaultIndex:
             tf: Dict[str, int] = {}
             for t in terms:
                 tf[t] = tf.get(t, 0) + 1
+            dl = len(terms)
             block_tfs[bid] = tf
-            total_dl += len(terms)
+            block_dl[bid] = dl  # store precomputed length
+            total_dl += dl
             for t in set(terms):
                 df[t] = df.get(t, 0) + 1
 
         doc_count = len(new_blocks)
         avg_dl = total_dl / doc_count if doc_count > 0 else 0
+
+        # Build inverted index: term -> set(block_ids)
+        inverted: Dict[str, set] = {}
+        for bid, tf in block_tfs.items():
+            for term in tf:
+                if term not in inverted:
+                    inverted[term] = set()
+                inverted[term].add(bid)
 
         # Build new LRU cache — preload top-N recently-modified blocks
         new_cache: OrderedDict = OrderedDict()
@@ -1262,12 +1425,15 @@ class VaultIndex:
                     new_cache[bid] = content
                     new_cache_bytes += content_size
 
+        # Atomic swap — all heavy work done above, lock held briefly
         with self._lock:
             self.blocks = new_blocks
             self._df = df
             self._block_tfs = block_tfs
+            self._block_dl = block_dl
             self._avg_dl = avg_dl
             self._doc_count = doc_count
+            self._inverted = inverted
             self._last_mtime = mtime
             self._content_cache = new_cache
             self._cache_bytes = new_cache_bytes
@@ -1347,20 +1513,55 @@ class VaultIndex:
         if not query_terms or not self.blocks:
             return []
 
-        with self._lock:
-            df = self._df
-            block_tfs = self._block_tfs
-            avg_dl = self._avg_dl
-            doc_count = self._doc_count
-            blocks = self.blocks
+        # Snapshot refs atomically under GIL — no lock held during scoring
+        df = self._df
+        block_tfs = self._block_tfs
+        block_dl = self._block_dl  # precomputed doc lengths — avoids sum(tf.values()) per request
+        avg_dl = self._avg_dl
+        doc_count = self._doc_count
+        blocks = self.blocks
+        inverted = self._inverted
 
         k1 = 1.5
         b_param = 0.75
         scores: Dict[str, float] = {}
 
-        for bid in blocks:
+        # IDF-gated candidate expansion with MAX_CANDIDATES cap:
+        # 1. Skip terms appearing in >40% of docs (too common to discriminate).
+        # 2. Sort remaining terms by ascending frequency (most selective first).
+        # 3. Add their posting lists until we hit MAX_CANDIDATES (prevents exploding to 6k+).
+        # 4. Fall back to common terms only if no selective terms exist.
+        # At cap=500, top-5 results are identical to full scan; scoring time drops from 67ms→8ms.
+        _idf_gate = 0.40  # skip terms in >40% of corpus for candidate expansion
+        _max_candidates = 500
+        _selective: List[Tuple[str, int]] = []
+        _fallback: List[str] = []
+        for qt in query_terms:
+            if qt not in inverted:
+                continue
+            term_freq = df.get(qt, 0)
+            if doc_count > 0 and term_freq / doc_count > _idf_gate:
+                _fallback.append(qt)
+            else:
+                _selective.append((qt, term_freq))
+        _selective.sort(key=lambda x: x[1])  # most selective first
+
+        candidates: set = set()
+        if _selective:
+            for qt, _ in _selective:
+                candidates.update(inverted[qt])
+                if len(candidates) >= _max_candidates:
+                    break  # enough; less selective terms contribute diminishing returns
+        if not candidates:
+            # All terms are corpus-wide — fall back to common terms (fast path)
+            for qt in _fallback:
+                candidates.update(inverted[qt])
+        if not candidates:
+            return []
+
+        for bid in candidates:
             tf = block_tfs.get(bid, {})
-            dl = sum(tf.values())
+            dl = block_dl.get(bid, 0)  # O(1) lookup instead of O(terms) sum
             score = 0.0
             for qt in query_terms:
                 if qt not in df:
@@ -1453,6 +1654,19 @@ else:
     VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
     print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
 
+# HOTFIX 2026-03-27: Load vault index on startup (was previously only in bg timer)
+VAULT_INDEX.maybe_reload()
+print(f"  ✅ Vault index loaded: {len(VAULT_INDEX.blocks)} blocks")
+
+
+def _vault_index_reload_timer() -> None:
+    """Single background timer for periodic vault index reload — replaces per-request thread spawns."""
+    VAULT_INDEX.maybe_reload()
+    t = threading.Timer(VAULT_INDEX_RELOAD_INTERVAL, _vault_index_reload_timer)
+    t.daemon = True
+    t.start()
+
+
 # Global term resolver instance
 TERM_RESOLVER = None
 if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
@@ -1506,7 +1720,7 @@ def _skeletonize_block(content: str, file_ext: str) -> str:
         return content
     try:
         sys.path.insert(
-            0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi")
+            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
         from tokenpak.skeleton_extractor import extract_skeleton
 
@@ -1551,7 +1765,7 @@ def _shadow_validate(original: str, compressed: str) -> bool:
         return True
     try:
         sys.path.insert(
-            0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi")
+            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
         from tokenpak.shadow_reader import ShadowReader
 
@@ -1570,7 +1784,7 @@ def _apply_budget(components: dict, total_tokens: int = None) -> dict:
     total = total_tokens or BUDGET_TOTAL_TOKENS
     try:
         sys.path.insert(
-            0, str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi")
+            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
         from tokenpak.budgeter import Budgeter
 
@@ -1597,7 +1811,7 @@ def _get_router():
             try:
                 sys.path.insert(
                     0,
-                    str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi"),
+                    str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi"),
                 )
                 from tokenpak.agent.compression.pipeline import CompressionPipeline
                 from tokenpak.agent.compression.recipes import RecipeEngine
@@ -2145,6 +2359,57 @@ import sqlite3
 
 _DB_CONNECTION = None
 _DB_LOCK = threading.Lock()
+_DB_WRITE_QUEUE = None
+_DB_QUEUE_LOCK = threading.Lock()
+_DB_QUEUE_MAX_SIZE = 1000
+_DB_BACKGROUND_THREAD = None
+_DB_BACKGROUND_STOP = threading.Event()
+
+def _init_db_write_queue():
+    """Initialize the database write queue and background thread."""
+    global _DB_WRITE_QUEUE, _DB_BACKGROUND_THREAD
+    with _DB_QUEUE_LOCK:
+        if _DB_WRITE_QUEUE is None:
+            _DB_WRITE_QUEUE = Queue(maxsize=_DB_QUEUE_MAX_SIZE)
+            _DB_BACKGROUND_STOP.clear()
+            _DB_BACKGROUND_THREAD = threading.Thread(
+                target=_db_writer_worker,
+                daemon=True,
+                name="TokenPak-DB-Writer"
+            )
+            _DB_BACKGROUND_THREAD.start()
+
+def _db_writer_worker():
+    """Background worker thread that drains the DB write queue."""
+    while not _DB_BACKGROUND_STOP.is_set():
+        try:
+            # Block for up to 1 second waiting for items
+            work_item = _DB_WRITE_QUEUE.get(timeout=1.0)
+            if work_item is None:  # Poison pill to stop
+                break
+            
+            db_path, insert_params = work_item
+            try:
+                with _DB_LOCK:
+                    conn = _get_db_connection(db_path)
+                    conn.execute(
+                        """INSERT INTO requests
+                           (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
+                            latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
+                            compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
+                            would_have_saved)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        insert_params,
+                    )
+                    conn.commit()
+            except Exception as e:
+                print(f"[TokenPak] DB write error: {e}", file=sys.stderr)
+            finally:
+                _DB_WRITE_QUEUE.task_done()
+        except Empty:
+            continue
+        except Exception as e:
+            print(f"[TokenPak] DB worker error: {e}", file=sys.stderr)
 
 def _get_db_connection(db_path: str) -> sqlite3.Connection:
     """Get or create persistent SQLite connection with WAL mode enabled."""
@@ -2165,9 +2430,14 @@ class Monitor:
         self.db_path = db_path
         self._lock = threading.Lock()
         self._init_db()
+        # Start background worker on first Monitor creation
+        try:
+            _init_db_write_queue()
+        except NameError:
+            pass
 
     def _init_db(self):
-        conn = _get_db_connection(self.db_path)
+        conn = sqlite3.connect(str(self.db_path))
         conn.execute("""
             CREATE TABLE IF NOT EXISTS requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2186,7 +2456,8 @@ class Monitor:
                 injected_tokens INTEGER DEFAULT 0,
                 injected_sources TEXT DEFAULT '',
                 cache_read_tokens INTEGER DEFAULT 0,
-                cache_creation_tokens INTEGER DEFAULT 0
+                cache_creation_tokens INTEGER DEFAULT 0,
+                would_have_saved INTEGER DEFAULT 0
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
@@ -2207,8 +2478,38 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
-        # conn.close()  # FIXED: do not close global _DB_CONNECTION after init
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS budget_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                agent_id TEXT DEFAULT "",
+                period TEXT DEFAULT "daily",
+                budget_usd REAL,
+                spent_usd REAL,
+                pct_used REAL,
+                triggered INTEGER DEFAULT 1
+            )
+        """)
+        conn.commit()
+
+        # Run migrations to bring DB schema up to current version
+        try:
+            if MIGRATION_AVAILABLE:
+                try:
+                    db_migrate(conn)
+                    version = get_current_schema_version(conn)
+                    print(f"✅ DB schema version: {version}")
+                except Exception as e:
+                    print(f"⚠️  Migration error (non-fatal): {e}")
+        except NameError:
+            pass
+
+        conn.close()
         global _DB_CONNECTION
         _DB_CONNECTION = None  # reset so next call reopens fresh
 
@@ -2228,35 +2529,50 @@ class Monitor:
         injected_sources="",
         cache_read_tokens=0,
         cache_creation_tokens=0,
+        would_have_saved=0,
     ):
-        with _DB_LOCK:
-            conn = _get_db_connection(self.db_path)
-            conn.execute(
-                """INSERT INTO requests
-                   (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
-                    latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
-                    compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    datetime.now().isoformat(),
-                    model,
-                    "chat",
-                    input_tokens,
-                    output_tokens,
-                    cost,
-                    latency_ms,
-                    status_code,
-                    endpoint,
-                    compilation_mode,
-                    protected_tokens,
-                    compressed_tokens,
-                    injected_tokens,
-                    injected_sources,
-                    cache_read_tokens,
-                    cache_creation_tokens,
-                ),
+        # Enqueue write instead of writing directly (async, <0.1ms return)
+        insert_params = (
+            datetime.now().isoformat(),
+            model,
+            "chat",
+            input_tokens,
+            output_tokens,
+            cost,
+            latency_ms,
+            status_code,
+            endpoint,
+            compilation_mode,
+            protected_tokens,
+            compressed_tokens,
+            injected_tokens,
+            injected_sources,
+            cache_read_tokens,
+            cache_creation_tokens,
+            would_have_saved,
+        )
+        _queued = False
+        try:
+            _DB_WRITE_QUEUE.put_nowait((self.db_path, insert_params))
+            _queued = True
+        except (NameError, Exception):
+            _conn = sqlite3.connect(str(self.db_path))
+            _conn.execute(
+                "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
+                "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
+                "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
+                "would_have_saved) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                insert_params
             )
-            conn.commit()
+            _conn.commit()
+            _conn.close()
+        try:
+            # When queued async, cost not yet in DB — pass it as current_cost.
+            # When written synchronously (fallback), cost already in DB — pass 0.
+            self._check_budget_alert(current_cost=cost if (_queued and cost) else 0)
+        except Exception:
+            pass
 
     def get_stats(self, hours=24):
         conn = _get_db_connection(self.db_path)
@@ -2309,6 +2625,132 @@ class Monitor:
             }
         return result
 
+    def _check_budget_alert(self, current_cost=0, _daily_limit=None, _threshold_pct=None):
+        try:
+            daily_limit = _daily_limit if _daily_limit is not None else BUDGET_DAILY_LIMIT_USD
+        except NameError:
+            daily_limit = 0.0
+        try:
+            threshold_pct = _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+        except NameError:
+            threshold_pct = 80.0
+        if daily_limit <= 0:
+            return
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            spent = conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests WHERE date(timestamp) = date(\"now\")"
+            ).fetchone()[0] or 0.0
+            total_spent = float(spent) + float(current_cost)
+            if total_spent >= daily_limit * threshold_pct / 100:
+                existing = conn.execute(
+                    "SELECT COUNT(*) FROM budget_alerts WHERE date(timestamp) = date(\"now\") AND period=\"daily\""
+                ).fetchone()[0]
+                if existing == 0:
+                    import datetime as _dt
+                    conn.execute(
+                        "INSERT INTO budget_alerts (timestamp, period, budget_usd, spent_usd, pct_used, triggered) VALUES (?, ?, ?, ?, ?, ?)",
+                        (_dt.datetime.now().isoformat(), "daily", daily_limit, total_spent, round(total_spent / daily_limit * 100, 2), 1)
+                    )
+                    conn.commit()
+        finally:
+            conn.close()
+
+    def get_budget_alert_status(self, _daily_limit=None, _threshold_pct=None):
+        try:
+            daily_limit = _daily_limit if _daily_limit is not None else BUDGET_DAILY_LIMIT_USD
+        except NameError:
+            daily_limit = 0.0
+        try:
+            threshold_pct = _threshold_pct if _threshold_pct is not None else BUDGET_ALERT_THRESHOLD_PCT
+        except NameError:
+            threshold_pct = 80.0
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            spent = conn.execute(
+                "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests WHERE date(timestamp) = date(\"now\")"
+            ).fetchone()[0] or 0.0
+            spent = float(spent)
+            pct_used = round(spent / daily_limit * 100, 2) if daily_limit > 0 else 0.0
+            remaining = max(0.0, daily_limit - spent)
+            alert_triggered = (pct_used >= threshold_pct) if daily_limit > 0 else False
+            last_row = conn.execute(
+                "SELECT timestamp FROM budget_alerts ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            last_alert_at = last_row[0] if last_row else None
+        finally:
+            conn.close()
+        return {
+            "spent_usd": round(spent, 4),
+            "budget_usd": daily_limit,
+            "pct_used": pct_used,
+            "remaining_usd": round(remaining, 4),
+            "alert_triggered": alert_triggered,
+            "last_alert_at": last_alert_at,
+        }
+
+    def get_savings_report(self, since=None):
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            where = ""
+            params = []
+            if since:
+                where = "WHERE date(timestamp) >= ?"
+                params = [since]
+            row = conn.execute(
+                f"SELECT COUNT(*), COALESCE(SUM(compressed_tokens),0), COALESCE(SUM(cache_read_tokens),0) FROM requests {where}",
+                params
+            ).fetchone()
+            total_requests = row[0] or 0
+            total_compressed = row[1] or 0
+            total_cache_read = row[2] or 0
+            total_tokens_saved = int(total_compressed + total_cache_read)
+            total_cost_saved = round(total_compressed * 3.00 / 1_000_000 + total_cache_read * 2.70 / 1_000_000, 4)
+
+            # by model
+            model_rows = conn.execute(
+                f"SELECT model, COUNT(*), COALESCE(SUM(compressed_tokens),0), COALESCE(SUM(cache_read_tokens),0) FROM requests {where} GROUP BY model",
+                params
+            ).fetchall()
+            savings_by_model = {}
+            for r in model_rows:
+                comp = r[2] or 0
+                cr = r[3] or 0
+                savings_by_model[r[0]] = {
+                    "requests": r[1],
+                    "tokens_saved": int(comp + cr),
+                    "cost_saved_usd": round(comp * 3.00 / 1_000_000 + cr * 2.70 / 1_000_000, 4),
+                }
+
+            # by date (last 7 days)
+            date_where = "WHERE date(timestamp) >= date(\"now\", \"-7 days\")"
+            date_params = []
+            if since:
+                date_where = "WHERE date(timestamp) >= ? AND date(timestamp) >= date(\"now\", \"-7 days\")"
+                date_params = [since]
+            date_rows = conn.execute(
+                f"SELECT date(timestamp), COALESCE(SUM(compressed_tokens),0), COALESCE(SUM(cache_read_tokens),0) FROM requests {date_where} GROUP BY date(timestamp) ORDER BY date(timestamp)",
+                date_params
+            ).fetchall()
+            savings_by_date_7d = []
+            for r in date_rows:
+                comp = r[1] or 0
+                cr = r[2] or 0
+                savings_by_date_7d.append({
+                    "date": r[0],
+                    "tokens_saved": int(comp + cr),
+                    "cost_saved_usd": round(comp * 3.00 / 1_000_000 + cr * 2.70 / 1_000_000, 4),
+                })
+        finally:
+            conn.close()
+        return {
+            "total_requests": total_requests,
+            "total_tokens_saved": total_tokens_saved,
+            "total_cost_saved_usd": total_cost_saved,
+            "savings_by_model": savings_by_model,
+            "savings_by_date_7d": savings_by_date_7d,
+        }
+
     def recent(self, limit=20):
         conn = _get_db_connection(self.db_path)
         conn.row_factory = sqlite3.Row
@@ -2339,6 +2781,7 @@ SESSION = {
     "start_time": time.time(),
     "errors": 0,
     "compilation_mode": COMPILATION_MODE,
+    "active_profile": ACTIVE_PROFILE,
     "injected_tokens": 0,
     "injection_hits": 0,
     "injection_skips": 0,
@@ -2352,10 +2795,13 @@ SESSION = {
         "schema_tool_change": 0,
         "retrieval_order_drift_or_unknown": 0,
     },
+    "token_cache_hits": 0,
+    "token_cache_misses": 0,
     "canon_hits": 0,
     "canon_tokens_saved": 0,
     "ingest_entries": 0,
     "compression_timeouts": 0,
+    "vault_last_timing_ms": {},
 }
 
 # ---------------------------------------------------------------------------
@@ -2514,13 +2960,20 @@ def inject_vault_context(
         return body_bytes, 0, []
 
     active_adapter = adapter or _detect_adapter("", {}, body_bytes)
+
+    # --- Sub-step timing (surfaced in vault_stage.details via SESSION) ---
+    _t = time.perf_counter()
+
     query = extract_query_signal(body_bytes, adapter=active_adapter)
+    _t_query_ms = (time.perf_counter() - _t) * 1000
+
     if not query:
         return body_bytes, 0, []
 
     # Resolve glossary terms (optional, feature-flagged)
     glossary_injection = ""
     glossary_tokens = 0
+    _t2 = time.perf_counter()
     if TERM_RESOLVER is not None and TERM_RESOLVER_ENABLED:
         try:
             resolution = TERM_RESOLVER.resolve_terms(query)
@@ -2535,10 +2988,13 @@ def inject_vault_context(
             remaining_budget = INJECT_BUDGET
     else:
         remaining_budget = INJECT_BUDGET
+    _t_resolver_ms = (time.perf_counter() - _t2) * 1000
 
+    _t3 = time.perf_counter()
     injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
         query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
     )
+    _t_bm25_ms = (time.perf_counter() - _t3) * 1000
 
     # Combine glossary + vault injection if both present
     combined_injection = ""
@@ -2557,14 +3013,30 @@ def inject_vault_context(
         return body_bytes, 0, []
 
     # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
+    _t4 = time.perf_counter()
     if SKELETON_ENABLED:
         combined_injection = _inject_skeleton_into_blocks(combined_injection)
         combined_tokens = count_tokens(combined_injection)
+    _t_skeleton_ms = (time.perf_counter() - _t4) * 1000
 
+    _t5 = time.perf_counter()
     try:
         new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
     except Exception:
         return body_bytes, 0, []
+    _t_inject_ms = (time.perf_counter() - _t5) * 1000
+
+    _total_ms = (time.perf_counter() - _t) * 1000
+    # Store sub-step breakdown in SESSION for /stats and trace enrichment
+    SESSION["vault_last_timing_ms"] = {
+        "query_signal": round(_t_query_ms, 1),
+        "term_resolver": round(_t_resolver_ms, 1),
+        "bm25_search": round(_t_bm25_ms, 1),
+        "skeleton": round(_t_skeleton_ms, 1),
+        "inject_body": round(_t_inject_ms, 1),
+        "total": round(_total_ms, 1),
+    }
+
     return new_body, combined_tokens, source_refs
 
 
@@ -2689,6 +3161,12 @@ def _classify_cache_miss_reason(
 
 
 def _build_cache_stats_payload() -> Dict[str, Any]:
+    global _TOKEN_CACHE_HITS, _TOKEN_CACHE_MISSES
+    
+    # Sync module counters to SESSION
+    SESSION["token_cache_hits"] = _TOKEN_CACHE_HITS
+    SESSION["token_cache_misses"] = _TOKEN_CACHE_MISSES
+    
     hits = int(SESSION.get("cache_hits", 0) or 0)
     misses = int(SESSION.get("cache_misses", 0) or 0)
     total = hits + misses
@@ -2702,6 +3180,8 @@ def _build_cache_stats_payload() -> Dict[str, Any]:
         "cache_misses": misses,
         "total_cache_decisions": total,
         "miss_reasons": miss_reasons,
+        "token_cache_hits": SESSION["token_cache_hits"],
+        "token_cache_misses": SESSION["token_cache_misses"],
     }
 
 
@@ -2834,6 +3314,20 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def _check_auth(self):
+        """Check if request is authorized. Localhost always trusted; remote requires auth key if configured."""
+        client_ip = self.client_address[0]
+        # Localhost (IPv4 and IPv6) always trusted
+        if client_ip in ("127.0.0.1", "::1"):
+            return True
+        # No auth configured = allow (network access at user's risk)
+        if not PROXY_AUTH_KEY:
+            return True
+        # Remote client with auth key configured — check header
+        import hmac
+        client_key = self.headers.get("X-TokenPak-Key", "")
+        return hmac.compare_digest(client_key, PROXY_AUTH_KEY)
+
     def do_CONNECT(self):
         host, _, port = self.path.partition(":")
         port = int(port) if port else 443
@@ -2882,6 +3376,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         remote.close()
 
     def do_GET(self):
+        # Security check: verify auth for non-localhost clients
+        if not self._check_auth():
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}).encode())
+            return
+        
         if self.path == "/" or self.path == "":
             # Fix: Root path returns welcome JSON instead of 404
             try:
@@ -2929,6 +3431,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 return
             vault_info = {
                 "available": VAULT_INDEX.available,
+                "ready": VAULT_INDEX.available,  # always ready if blocks loaded
                 "blocks": len(VAULT_INDEX.blocks),
                 "path": str(VAULT_INDEX.tokenpak_dir),
             }
@@ -2993,13 +3496,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "vault_index": {
                         "available": VAULT_INDEX.available,
                         "blocks": len(VAULT_INDEX.blocks),
-                        **( VAULT_INDEX.cache_stats if hasattr(VAULT_INDEX, "cache_stats") else {} ),
+                        "last_timing_ms": SESSION.get("vault_last_timing_ms", {}),
                     },
                     "router": {"enabled": ROUTER_ENABLED},
                     "capsule_available": CAPSULE_BUILDER is not None,
                     "compression_timeouts": SESSION.get("compression_timeouts", 0),
                     "max_compression_time_ms": MAX_COMPRESSION_TIME_MS,
-                    "swap_mb": check_swap_pressure(),
                     "canon": {
                         "enabled": CANON_AVAILABLE,
                         "session_hits": SESSION.get("canon_hits", 0),
@@ -3008,6 +3510,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "skeleton": {"enabled": SKELETON_ENABLED},
                     "shadow_reader": {"enabled": SHADOW_ENABLED},
                     "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
+                    "swap_mb": check_swap_pressure(),
                     "today": MONITOR.get_stats(),
                     "by_model": MONITOR.get_by_model(),
                     "recent": MONITOR.recent(10),
@@ -3068,6 +3571,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     else 0.0,
                 }
             )
+            return
+        if self.path == "/savings" or self.path.startswith("/savings?"):
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            qparams = parse_qs(parsed.query)
+            since = qparams.get("since", [None])[0]
+            self._send_json(MONITOR.get_savings_report(since=since))
             return
         if self.path == "/vault":
             # Debug endpoint: show vault index state
@@ -3329,6 +3839,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        # Security check: verify auth for non-localhost clients
+        if not self._check_auth():
+            self._send_json({"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}, status=401)
+            return
+        
         # Fix #7: Per-IP rate limiting
         client_ip = self.client_address[0]
         if not _rate_limit_check(client_ip):
@@ -3532,13 +4047,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         if active_adapter is None:
             active_adapter = _detect_adapter(self.path, _header_mapping(self.headers), None)
 
+        # X-TokenPak-Bypass: skip compression pipeline for this request
+        _bypass_header_val = self.headers.get("x-tokenpak-bypass", "").strip().lower()
+        _bypass_request: bool = _bypass_header_val in ("true", "1", "yes")
+
         should_log = (
             force_intercept
             or active_adapter.source_format != "passthrough"
             or any(h in target_url for h in INTERCEPT_HOSTS)
         )
         is_messages = True
-        pipeline_enabled = active_adapter.source_format != "passthrough"
+        pipeline_enabled = active_adapter.source_format != "passthrough" and not _bypass_request
 
         model = "unknown"
         input_tokens = 0
@@ -3574,7 +4093,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        if should_log and is_messages and body:
+        if _bypass_request and body:
+            # Bypass mode: skip entire compression pipeline, pass through unmodified
+            print(f"  ⏩ X-TokenPak-Bypass: passthrough (bypass header set)")
+
+        if should_log and is_messages and body and not _bypass_request:
             # Fix #5: Strict validation mode — reject malformed requests early
             if STRICT_VALIDATION:
                 try:
@@ -3910,8 +4433,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 1: Vault context injection (BEFORE compaction)
                     t_inject = time.time()
-                    # Background reload to prevent blocking request thread
-                    threading.Thread(target=VAULT_INDEX.maybe_reload, daemon=True).start()
+                    # Vault index reload is handled by _vault_index_reload_timer (background timer)
+                    # No per-request thread spawn needed
                     vault_stage = StageTrace(
                         name="vault_injection",
                         enabled=VAULT_INDEX.available,
@@ -3955,6 +4478,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 vault_stage.details["blocks_matched"] = len(injected_sources)
                                 vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
                                 vault_stage.details["tokens_injected"] = injected_tokens
+                                # Enrich with sub-step timing from inject_vault_context
+                                vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                    "vault_last_timing_ms", {}
+                                )
                     vault_stage.output_tokens = input_tokens
                     vault_stage.duration_ms = (time.time() - t_inject) * 1000
                     if trace:
@@ -4302,7 +4829,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Fix Content-Length after cache_control cap may have changed body size
             if isinstance(body, str):
                 body = body.encode("utf-8")
-            fwd_headers["Content-Length"] = str(len(body))
+            if body is not None:
+                fwd_headers["Content-Length"] = str(len(body))
             # DEBUG: count cache_control blocks
             try:
                 _dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
@@ -4351,7 +4879,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             body = _cap_cache_control_blocks(body)
             if isinstance(body, str):
                 body = body.encode("utf-8")
-            fwd_headers["Content-Length"] = str(len(body))
+            if body is not None:
+                fwd_headers["Content-Length"] = str(len(body))
             # TEMP DEBUG: dump final body to file
             try:
                 import json as _j2
@@ -4885,6 +5414,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 )
                 cost_saved = max(0.0, cost_without_compression - cost)
                 sources_str = ",".join(injected_sources) if injected_sources else ""
+                _log_compilation_mode = "bypass" if _bypass_request else COMPILATION_MODE
                 try:
                     MONITOR.log(
                         model,
@@ -4894,7 +5424,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         latency_ms,
                         status,
                         target_url,
-                        COMPILATION_MODE,
+                        _log_compilation_mode,
                         protected_tokens,
                         saved,
                         injected_tokens,
@@ -5373,6 +5903,7 @@ def sync_to_vault():
         stats["by_model"] = MONITOR.get_by_model()
         stats["last_sync"] = datetime.now().isoformat()
         stats["compilation_mode"] = COMPILATION_MODE
+        stats["active_profile"] = ACTIVE_PROFILE
         stats["session"] = {
             "requests": SESSION["requests"],
             "protected_tokens": SESSION["protected_tokens"],
@@ -5605,7 +6136,7 @@ def _start_ws_server() -> threading.Thread:
 
     async def _serve() -> None:
         try:
-            async with ws_serve(_ws_handler, "0.0.0.0", WS_PORT, reuse_address=True):
+            async with ws_serve(_ws_handler, "127.0.0.1", WS_PORT, reuse_address=True):
                 print(f"[ws] TokenPak WebSocket server ready — port={WS_PORT}")
                 await asyncio.Future()  # run until cancelled
         except Exception as exc:
@@ -5624,6 +6155,77 @@ def _start_ws_server() -> threading.Thread:
     return t
 
 
+@dataclass
+class StartupPhase:
+    """Timing record for a single proxy startup phase."""
+    name: str
+    duration_ms: float
+    detail: str = ""
+
+
+@dataclass
+class StartupResult:
+    """Aggregated result from _run_startup()."""
+    phases: List[StartupPhase]
+    total_ms: float
+    vault_block_count: int
+    vault_available: bool
+
+
+def _run_startup() -> StartupResult:
+    """Run all proxy initialization phases and return structured timing result.
+
+    This function is extracted from main() so tests can call it directly
+    without spawning a subprocess or hitting serve_forever().
+    """
+    phases: List[StartupPhase] = []
+    _t0 = time.perf_counter()
+
+    # Phase 1: Config validation
+    _phase_start = time.perf_counter()
+    validate_tokenpak_config()
+    phases.append(StartupPhase(
+        name="Config loaded",
+        duration_ms=(time.perf_counter() - _phase_start) * 1000,
+    ))
+
+    # Phase 2: Vault index load
+    _phase_start = time.perf_counter()
+    VAULT_INDEX.maybe_reload()
+    _vault_index_reload_timer()
+    vault_block_count = len(VAULT_INDEX.blocks) if VAULT_INDEX.available else 0
+    phases.append(StartupPhase(
+        name="Vault index loaded",
+        duration_ms=(time.perf_counter() - _phase_start) * 1000,
+        detail=f"{vault_block_count} blocks" if VAULT_INDEX.available else "not found",
+    ))
+
+    # Phase 3: Proxy workflow check
+    _phase_start = time.perf_counter()
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tokenpak"))
+        from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
+        dangling = recover_proxy_workflows()
+        _wf_detail = f"{len(dangling)} dangling" if dangling else "clean"
+    except Exception as _e:
+        dangling = []
+        _wf_detail = f"skipped ({_e})"
+    phases.append(StartupPhase(
+        name="Workflow check",
+        duration_ms=(time.perf_counter() - _phase_start) * 1000,
+        detail=_wf_detail,
+    ))
+
+    total_ms = (time.perf_counter() - _t0) * 1000
+    return StartupResult(
+        phases=phases,
+        total_ms=total_ms,
+        vault_block_count=vault_block_count,
+        vault_available=VAULT_INDEX.available,
+    )
+
+
 def main():
     port = PROXY_PORT
     mode_desc = {
@@ -5632,25 +6234,25 @@ def main():
         "aggressive": "Everything except protected gets compressed",
     }
 
-    # Validate config at startup
-    validate_tokenpak_config()
+    # Run structured startup phases (config, vault, workflow check)
+    _startup = _run_startup()
+    vault_block_count = _startup.vault_block_count
+    vault_status = f"{vault_block_count} blocks" if _startup.vault_available else "not found"
 
-    # Load vault index on startup
-    VAULT_INDEX.maybe_reload()
-    vault_status = f"{len(VAULT_INDEX.blocks)} blocks" if VAULT_INDEX.available else "not found"
+    # Print startup timing tree
+    print("🚀 TokenPak proxy starting...", flush=True)
+    for i, phase in enumerate(_startup.phases):
+        connector = "└─" if i == len(_startup.phases) - 1 else "├─"
+        detail = f" ({phase.detail})" if phase.detail else ""
+        print(f"   {connector} {phase.name + ':' :<28} {phase.duration_ms:.0f}ms{detail}", flush=True)
+    print(f"✅ Ready on {LISTEN_ADDRESS}:{port} (total: {_startup.total_ms:.0f}ms)", flush=True)
 
-    # Proxy workflow tracking — startup dangling workflow check
+    # Handle dangling proxy workflows (already recovered in _run_startup, just print warnings)
     try:
-        import sys as _sys
-
-        _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tokenpak"))
         from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
-
         dangling = recover_proxy_workflows()
         if dangling:
-            print(
-                f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run:"
-            )
+            print(f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run:")
             for wf in dangling[:5]:
                 running_step = next(
                     (s["name"] for s in wf["steps"] if s["status"] == "running"), "—"
@@ -5665,7 +6267,8 @@ def main():
 ║             Two-Tier Context Injection                           ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                  ║
-║  Listening:    http://0.0.0.0:{port:<5}                              ║
+║  Listening:    http://{LISTEN_ADDRESS}:{port:<5}                              ║
+║  Profile:      {ACTIVE_PROFILE:<10}                                              ║
 ║  Mode:         {COMPILATION_MODE:<10} ({mode_desc.get(COMPILATION_MODE, '?')})
 ║  Compaction:   {'ON' if ENABLE_COMPACTION else 'OFF':<10}                                       ║
 ║  Threshold:    {COMPACT_THRESHOLD_TOKENS} tokens                               ║
@@ -5685,6 +6288,10 @@ def main():
 ║    ⚙️  CONFIG    — JSON/YAML/config (strict in hybrid)            ║
 ║                                                                  ║
 ║  Endpoints:  /health  /stats  /recent  /vault                    ║
+║                                                                  ║
+║  🔒 Security:                                                    ║
+║    Bind:       {LISTEN_ADDRESS:<50}║
+║    Auth:       {'ENABLED (X-TokenPak-Key required)' if PROXY_AUTH_KEY else 'disabled (no key set)':<50}║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
     """)
@@ -5798,6 +6405,7 @@ def main():
         print("[shutdown] ✅ No in-flight requests — clean exit")
 
     print("\n📊 Session Summary:")
+    print(f"   Profile:         {ACTIVE_PROFILE}")
     print(f"   Mode:            {COMPILATION_MODE}")
     print(f"   Requests:        {SESSION['requests']}")
     print(f"   Input:           {SESSION['input_tokens']:,} tokens")
@@ -5811,6 +6419,26 @@ def main():
     print(f"   Est. cost:       ${SESSION['cost']:.4f}")
     print(f"   Errors:          {SESSION['errors']}")
     sync_to_vault()
+    
+    # Drain background DB write queue before exit
+    if _DB_WRITE_QUEUE is not None:
+        print("[shutdown] Draining DB write queue…")
+        try:
+            # Wait for queue to drain (up to 5 seconds)
+            _DB_WRITE_QUEUE.join()
+            print("[shutdown] ✅ DB write queue drained")
+        except Exception as e:
+            print(f"[shutdown] ⚠️  DB queue drain error: {e}")
+        
+        # Stop background worker
+        _DB_BACKGROUND_STOP.set()
+        if _DB_BACKGROUND_THREAD and _DB_BACKGROUND_THREAD.is_alive():
+            _DB_BACKGROUND_THREAD.join(timeout=2)
+            if _DB_BACKGROUND_THREAD.is_alive():
+                print("[shutdown] ⚠️  DB writer thread did not exit cleanly")
+            else:
+                print("[shutdown] ✅ DB writer thread stopped")
+    
     print(
         "[shutdown] SQLite connections closed (per-request open/close pattern — no persistent handles)"
     )
@@ -5819,3 +6447,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# Backoff & Cache Counters (P0 TPK-RESTORE-BACKOFF-CACHE)
+# ---------------------------------------------------------------------------
+
+import random as _random_module
+
+_BACKOFF_BASE = float(os.environ.get("TOKENPAK_BACKOFF_BASE", "1.0"))
+_BACKOFF_CAP = float(os.environ.get("TOKENPAK_BACKOFF_CAP", "32.0"))
+_MAX_RETRIES = int(os.environ.get("TOKENPAK_MAX_RETRIES", "3"))
+
+def _backoff_wait(attempt: int, base: float = _BACKOFF_BASE, cap: float = _BACKOFF_CAP) -> None:
+    """Exponential backoff: base * 2^attempt with 25% jitter, capped at cap seconds."""
+    wait = min(base * (2 ** attempt), cap)
+    wait *= (1.0 + _random_module.uniform(0, 0.25))
+    logger.info("Rate limited — backoff %.1fs (attempt %d)", wait, attempt)
+    time.sleep(wait)
+
+
+# Token cache counters moved above _token_count_cached (was unreachable here after main())

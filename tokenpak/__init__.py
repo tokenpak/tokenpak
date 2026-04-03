@@ -16,44 +16,60 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 __author__ = "Kevin Yang"
-__license__ = "MIT"
+__license__ = "Apache-2.0"
 __description__ = "Deterministic compression for multi-agent AI workflows"
 
 # ---------------------------------------------------------------------------
-# Telemetry
+# Lazy public API — imports deferred to avoid 2-4s startup cost when only
+# sub-modules (e.g. tokenpak.proxy.token_cache) are needed directly.
+# All names remain importable via `from tokenpak import X` via __getattr__.
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Sub-packages (for advanced use)
-# ---------------------------------------------------------------------------
-from tokenpak import agent, connectors, proxy
 
-# CompletionTracker: tracks per-completion cost, model, and latency
-from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
-from tokenpak.budget import BudgetBlock
+def __getattr__(name: str):
+    """Lazy top-level attribute resolution — defers heavy imports until used."""
+    _lazy_map = {
+        "agent": lambda: __import__("tokenpak.agent", fromlist=["agent"]).agent if False else __import__("tokenpak").agent,
+        "connectors": lambda: __import__("tokenpak.connectors", fromlist=[""]),
+        "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
+        "Budgeter": lambda: __import__("tokenpak.budgeter", fromlist=["Budgeter"]).Budgeter,
+        "BudgetBlock": lambda: __import__("tokenpak.budget", fromlist=["BudgetBlock"]).BudgetBlock,
+        "TelemetryCollector": lambda: __import__("tokenpak.telemetry.collector", fromlist=["TelemetryCollector"]).TelemetryCollector,
+        "CacheManager": lambda: __import__("tokenpak.telemetry.cache", fromlist=["CacheStore"]).CacheStore,
+        "CompletionTracker": lambda: __import__("tokenpak.agent.telemetry.cost_tracker", fromlist=["CostTracker"]).CostTracker,
+        "count_tokens": lambda: __import__("tokenpak.tokens", fromlist=["count_tokens"]).count_tokens,
+        "pack_prompt": lambda: __import__("tokenpak.pack", fromlist=["pack_prompt"]).pack_prompt,
+        "ContextPack": lambda: __import__("tokenpak.pack", fromlist=["ContextPack"]).ContextPack,
+        "PackBlock": lambda: __import__("tokenpak.pack", fromlist=["PackBlock"]).PackBlock,
+        "CompiledResult": lambda: __import__("tokenpak.pack", fromlist=["CompiledResult"]).CompiledResult,
+        "Block": lambda: __import__("tokenpak.registry", fromlist=["Block"]).Block,
+        "BlockRegistry": lambda: __import__("tokenpak.registry", fromlist=["BlockRegistry"]).BlockRegistry,
+        "Action": lambda: __import__("tokenpak.report", fromlist=["Action"]).Action,
+        "CompileReport": lambda: __import__("tokenpak.report", fromlist=["CompileReport"]).CompileReport,
+        "Decision": lambda: __import__("tokenpak.report", fromlist=["Decision"]).Decision,
+        "main": lambda: __import__("tokenpak.cli", fromlist=["main"]).main,
+        "HandoffManager": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffManager"]).HandoffManager,
+        "HandoffBlock": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
+        "HandoffStatus": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
+        "HandoffWire": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "TokenPak": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["TokenPak"]).TokenPak,
+        "ContextRef": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["ContextRef"]).ContextRef,
+        "Handoff": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
+    }
+    if name in _lazy_map:
+        val = _lazy_map[name]()
+        globals()[name] = val  # cache for subsequent accesses
+        return val
+    raise AttributeError(f"module 'tokenpak' has no attribute {name!r}")
 
-# ---------------------------------------------------------------------------
-# Budgeting
-# ---------------------------------------------------------------------------
-from tokenpak.budgeter import Budgeter
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-from tokenpak.cli import main
-
-# ---------------------------------------------------------------------------
-# Compression / Compaction Engines
-# ---------------------------------------------------------------------------
-# CompressionEngine: abstract base for all compaction strategies
-# Graceful degradation if engines are not available (pro-only installs)
+# All public names are available lazily via __getattr__ above.
+# CompressionEngine / HeuristicEngine / get_engine need graceful degradation — handle here.
 try:
     from tokenpak.engines import get_engine
     from tokenpak.engines.base import CompactionEngine as CompressionEngine
     from tokenpak.engines.heuristic import HeuristicEngine
 except ImportError:
-    # Graceful degradation for OSS
     def get_engine(*args, **kwargs):
         raise NotImplementedError(
             "Compression engines require tokenpak-pro Enterprise license. "
@@ -61,57 +77,6 @@ except ImportError:
         )
     CompressionEngine = None
     HeuristicEngine = None
-
-# ---------------------------------------------------------------------------
-# Agent Handoff Protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    ContextRef,
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire,
-    TokenPak,
-)
-from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
-
-# ---------------------------------------------------------------------------
-# Content Blocks
-# ---------------------------------------------------------------------------
-from tokenpak.registry import Block, BlockRegistry
-
-# ---------------------------------------------------------------------------
-# Compile Reports
-# ---------------------------------------------------------------------------
-from tokenpak.report import Action, CompileReport, Decision
-
-# ---------------------------------------------------------------------------
-# Cache
-# ---------------------------------------------------------------------------
-# CacheManager: semantic cache store (get/set/hit-rate tracking)
-from tokenpak.telemetry.cache import CacheStore as CacheManager
-from tokenpak.telemetry.collector import TelemetryCollector
-
-# ---------------------------------------------------------------------------
-# Token Counting (Level 1 — single import, zero config)
-# ---------------------------------------------------------------------------
-from tokenpak.tokens import count_tokens
-from tokenpak.trace import (  # noqa: F401
-    TokenPakTrace,
-    TraceBuilder,
-    assert_no_leak,
-    attach_trace_envelope,
-    attach_trace_header,
-    read_trace_envelope,
-    read_trace_header,
-    strip_trace,
-    strip_trace_header,
-)
-
-# HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
-# The internal Handoff dataclass (file-based) is available via
-# tokenpak.agent.agentic.handoff.Handoff
-Handoff = HandoffWire  # type: ignore
 
 # ---------------------------------------------------------------------------
 # Public API declaration

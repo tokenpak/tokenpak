@@ -88,7 +88,7 @@ def _load_registry() -> list[dict]:
 def _current_tier() -> str:
     """Return current license tier string (oss/pro/team/enterprise). Never raises."""
     try:
-        from tokenpak.agent.license.activation import get_plan
+        from tokenpak.infrastructure.license_activation import get_plan
         result = get_plan()
         return result.tier.value
     except Exception:

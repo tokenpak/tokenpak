@@ -726,6 +726,7 @@ def create_dashboard_router(
         """Generate executive summary in paragraph or bullet format."""
         import asyncio
         import functools
+
         loop = asyncio.get_event_loop()
         summary = await loop.run_in_executor(
             _executor,
@@ -821,7 +822,11 @@ def create_dashboard_router(
 
 
 def _generate_executive_summary(
-    rollups: Any, days: int, provider: str | None = None, model: str | None = None, format: str = "paragraph"
+    rollups: Any,
+    days: int,
+    provider: str | None = None,
+    model: str | None = None,
+    format: str = "paragraph",
 ):
     """Generate executive summary in paragraph or bullet format."""
     import datetime
@@ -945,7 +950,7 @@ def _export_metadata(filters, record_count):
     import datetime
 
     return {
-        "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z",
         "filters": {k: v for k, v in filters.items() if v},
         "pricing_version": "2026.02",
         "record_count": record_count,
@@ -988,7 +993,9 @@ def _build_csv_export(traces, filters):
 
     # Metadata comment rows
     writer.writerow(["# TokenPak Export"])
-    writer.writerow(["# Generated:", datetime.datetime.utcnow().isoformat() + "Z"])
+    writer.writerow(
+        ["# Generated:", datetime.datetime.now(datetime.timezone.utc).isoformat() + "Z"]
+    )
     writer.writerow(["# Filters:", str({k: v for k, v in filters.items() if v})])
     writer.writerow(["# Pricing:", "2026.02"])
     writer.writerow([])

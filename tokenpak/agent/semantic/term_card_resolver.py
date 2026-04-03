@@ -6,6 +6,7 @@ This module is referenced in tasks but not yet fully implemented.
 DEFERRED: Implement actual term card resolution logic when needed.
 """
 
+
 class TermCardResolver:
     """Placeholder for term card resolution."""
 
@@ -17,4 +18,5 @@ class TermCardResolver:
         """Placeholder resolver — returns empty."""
         return {}
 
-__all__ = ['TermCardResolver']
+
+__all__ = ["TermCardResolver"]

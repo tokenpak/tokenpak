@@ -15,7 +15,7 @@
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { font-size: 2rem; margin-bottom: 0.5rem; }
         .subtitle { color: #666; margin-bottom: 2rem; font-size: 0.95rem; }
-        
+
         /* Summary Cards */
         .summary-cards {
             display: grid;
@@ -32,7 +32,7 @@
         .card-label { font-size: 0.875rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
         .card-value { font-size: 2rem; font-weight: bold; margin-top: 0.5rem; }
         .card-unit { font-size: 0.875rem; color: #999; }
-        
+
         /* Chart Section */
         .chart-section {
             background: white;
@@ -42,15 +42,15 @@
             margin-bottom: 2rem;
         }
         .chart-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
-        
+
         svg { max-width: 100%; height: auto; }
-        
+
         .cost-bar { opacity: 0.8; transition: opacity 0.2s; }
         .cost-bar:hover { opacity: 1; fill: #1d4ed8; }
-        
+
         .request-bar { opacity: 0.7; transition: opacity 0.2s; }
         .request-bar:hover { opacity: 1; fill: #059669; }
-        
+
         /* Legend */
         .legend {
             display: flex;
@@ -70,7 +70,7 @@
         }
         .legend-color.cost { background: #3b82f6; }
         .legend-color.requests { background: #10b981; }
-        
+
         /* Model Breakdown Table */
         .breakdown-table {
             background: white;
@@ -99,14 +99,14 @@
         .breakdown-table tr:last-child td {
             border-bottom: none;
         }
-        
+
         /* Responsive */
         @media (max-width: 768px) {
             .container { padding: 1rem; }
             .summary-cards { grid-template-columns: 1fr; }
             svg { width: 100%; height: auto; }
         }
-        
+
         .empty-state {
             text-align: center;
             padding: 3rem;
@@ -118,19 +118,19 @@
     <div class="container">
         <h1>📊 TokenPak Timeline Dashboard</h1>
         <div class="subtitle">Time-series visualization of costs and request volume</div>
-        
+
         <!-- Summary Cards -->
         <div class="summary-cards" id="summaryCards">
             <div class="empty-state">Loading...</div>
         </div>
-        
+
         <!-- Cost & Request Timeline Chart -->
         <div class="chart-section">
             <div class="chart-title">Hourly Cost & Request Volume</div>
             <svg id="timelineChart" viewBox="0 0 1000 300" style="border: 1px solid #e5e7eb; border-radius: 4px;">
                 <text x="40" y="30" font-size="12" text-anchor="end" fill="#666">Loading...</text>
             </svg>
-            
+
             <div class="legend">
                 <div class="legend-item">
                     <div class="legend-color cost"></div>
@@ -142,7 +142,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Model Breakdown -->
         <div class="breakdown-table">
             <table>
@@ -192,7 +192,7 @@
         function renderChart(buckets, summary) {
             const svg = document.getElementById('timelineChart');
             const svgNS = "http://www.w3.org/2000/svg";
-            
+
             // Clear
             while (svg.firstChild) {
                 svg.removeChild(svg.firstChild);
@@ -265,11 +265,11 @@
                     costRect.setAttribute('height', String(costHeight));
                     costRect.setAttribute('class', 'cost-bar');
                     costRect.setAttribute('fill', '#3b82f6');
-                    
+
                     const title = document.createElementNS(svgNS, 'title');
                     title.textContent = `Hour: ${bucket.hour_utc}\nCost: $${bucket.cost.toFixed(2)}\nRequests: ${bucket.requests}`;
                     costRect.appendChild(title);
-                    
+
                     svg.appendChild(costRect);
                 }
 
@@ -285,11 +285,11 @@
                     reqRect.setAttribute('height', String(requestHeight));
                     reqRect.setAttribute('class', 'request-bar');
                     reqRect.setAttribute('fill', '#10b981');
-                    
+
                     const title = document.createElementNS(svgNS, 'title');
                     title.textContent = `Hour: ${bucket.hour_utc}\nRequests: ${bucket.requests}`;
                     reqRect.appendChild(title);
-                    
+
                     svg.appendChild(reqRect);
                 }
             });

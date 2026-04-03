@@ -11,7 +11,7 @@ Background task (BackgroundCooldownClearer) integrates into the proxy startup
 and runs every 60 seconds automatically (configurable via auth.auto_clear_cooldowns).
 
 Usage:
-    from tokenpak.agent.auth.cooldown_manager import CooldownManager, BackgroundCooldownClearer
+    # NOTE: this module IS CooldownManager + BackgroundCooldownClearer
 
     # Standalone clear:
     mgr = CooldownManager()
@@ -23,6 +23,7 @@ Usage:
     # ...
     await clearer.stop()
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -147,7 +148,9 @@ class CooldownManager:
                 profile.pop("usageStats", None)
                 cleared.append(profile_name)
                 changed = True
-                logger.info("[tokenpak] Cleared expired cooldown for auth profile: %s", profile_name)
+                logger.info(
+                    "[tokenpak] Cleared expired cooldown for auth profile: %s", profile_name
+                )
 
         if changed:
             self._save_auth_profiles(profiles)
@@ -188,6 +191,7 @@ class CooldownManager:
 # Background task (async)
 # ---------------------------------------------------------------------------
 
+
 class BackgroundCooldownClearer:
     """Asyncio background task that auto-clears expired cooldowns every N seconds.
 
@@ -210,9 +214,7 @@ class BackgroundCooldownClearer:
         self._stop_event = asyncio.Event()
 
     async def _loop(self) -> None:
-        logger.info(
-            "[tokenpak] BackgroundCooldownClearer started (interval=%ds)", self.interval
-        )
+        logger.info("[tokenpak] BackgroundCooldownClearer started (interval=%ds)", self.interval)
         while not self._stop_event.is_set():
             try:
                 if self.enabled:

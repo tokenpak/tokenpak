@@ -61,10 +61,28 @@ class _JsonFormatter(logging.Formatter):
 # Keys that exist on every LogRecord (don't include in "extra" fields)
 _STDLIB_LOG_ATTRS = frozenset(
     {
-        "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-        "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-        "created", "msecs", "relativeCreated", "thread", "threadName",
-        "processName", "process", "message", "taskName",
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "message",
+        "taskName",
     }
 )
 
@@ -73,11 +91,11 @@ class _TextFormatter(logging.Formatter):
     """Human-readable formatter with optional colour on terminals."""
 
     _COLOURS = {
-        "DEBUG":    "\033[36m",   # cyan
-        "INFO":     "\033[32m",   # green
-        "WARNING":  "\033[33m",   # yellow
-        "ERROR":    "\033[31m",   # red
-        "CRITICAL": "\033[35m",   # magenta
+        "DEBUG": "\033[36m",  # cyan
+        "INFO": "\033[32m",  # green
+        "WARNING": "\033[33m",  # yellow
+        "ERROR": "\033[31m",  # red
+        "CRITICAL": "\033[35m",  # magenta
     }
     _RESET = "\033[0m"
 
@@ -121,9 +139,7 @@ def configure_logging(
     log_level = getattr(logging, level_str, logging.INFO)
 
     fmt_str = (fmt or os.environ.get("TPK_LOG_FORMAT", "text")).lower()
-    formatter: logging.Formatter = (
-        _JsonFormatter() if fmt_str == "json" else _TextFormatter()
-    )
+    formatter: logging.Formatter = _JsonFormatter() if fmt_str == "json" else _TextFormatter()
 
     logger = logging.getLogger(TPK_LOGGER_NAME)
     logger.setLevel(log_level)

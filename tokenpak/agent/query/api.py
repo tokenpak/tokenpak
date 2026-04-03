@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 # Storage helpers
 # ---------------------------------------------------------------------------
 
-VAULT_ENTRIES_DIR = Path(os.path.expanduser("~/vault/.tokenpak/entries"))
+VAULT_ENTRIES_DIR = Path(
+    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", "~/.tokenpak/entries"))
+)
 
 
 def _date_range(start_date: str, end_date: str) -> list[str]:

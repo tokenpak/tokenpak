@@ -13,14 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.auth.cooldown_manager import CooldownManager
+from tokenpak.infrastructure.cooldown import CooldownManager
 from tokenpak.agent.ingest.claim_indexer import extract_claims_from_text, extract_claims_from_document
 from tokenpak.agent.fingerprint.privacy import apply_privacy, PrivacyLevel
 from tokenpak.agent.macros.script_hooks import (
     get_hook_path, hook_exists, list_hooks, install_hook, fire_hook
 )
 from tokenpak.agent.proxy.stats_api import StatsAPI
-from tokenpak.agent.debug.logger import DebugLogger
+from tokenpak.infrastructure.debug import DebugLogger
 from tokenpak.agent.proxy.providers.stream_translator import (
     _AnthropicToOpenAIStream, _OpenAIToAnthropicStream, _parse_sse_line, _sse_line
 )

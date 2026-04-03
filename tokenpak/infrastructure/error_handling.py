@@ -1,71 +1,106 @@
-"""
-TokenPak error handling infrastructure.
+# SPDX-License-Identifier: Apache-2.0
+"""infrastructure.error_handling — Consolidated error/exception hierarchy.
 
-Provides a unified exception hierarchy for all TokenPak errors.
-All errors inherit from TokenPakError (base), which provides:
-  - .message attribute
-  - .error_type attribute (defaults to class name)
-  - .to_dict() -> {"error": {"type": ..., "message": ..., "detail": ...}}
-  - str(e) -> human-readable message
+Consolidates exceptions.py (clean hierarchy) and errors.py (structured error codes)
+into a single module.
+
+Primary hierarchy (from exceptions.py):
+    TokenPakError
+    ├── ProxyError          — HTTP proxy errors
+    │   ├── UpstreamError   — Provider/upstream API errors
+    │   └── CircuitOpenError — Circuit breaker is open
+    ├── CompressionError    — Compression failures
+    ├── ConfigError         — Config validation/loading errors
+    ├── AuthError           — Authentication / API key errors
+    ├── RateLimitError      — Rate limit exceeded
+    ├── CacheError          — Cache read/write failures
+    ├── ValidationError     — Input validation failures
+    └── LicenseError        — License validation errors
+
+Structured error codes (from errors.py):
+    TP-E0xx: Config errors
+    TP-E1xx: Connection/network errors
+    TP-E2xx: Authentication errors
+    TP-E3xx: Rate limiting errors
+    TP-E4xx: Cache errors
+    TP-E5xx: Provider (upstream) errors
+    TP-E6xx: Internal/system errors
 """
 
-from typing import Any, Dict, Optional
+from __future__ import annotations
+
+from typing import Optional
+
+
+# ---------------------------------------------------------------------------
+# Base exception (from exceptions.py — richer interface)
+# ---------------------------------------------------------------------------
 
 
 class TokenPakError(Exception):
-    """Base class for all TokenPak errors."""
+    """Base class for all TokenPak exceptions.
+
+    Attributes:
+        message: Human-readable error description.
+        detail: Optional machine-readable detail (dict or str).
+        error_type: Short identifier for the error type (defaults to class name).
+    """
 
     def __init__(
         self,
         message: str,
-        *,
-        detail: Optional[Dict[str, Any]] = None,
-        error_type: Optional[str] = None,
-    ):
+        detail: object = None,
+        error_type: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
-        self.detail = detail or {}
-        self.error_type = error_type or type(self).__name__
+        self.detail = detail
+        self.error_type = error_type or self.__class__.__name__
 
-    def __str__(self) -> str:
-        return self.message
-
-    def to_dict(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_dict(self) -> dict:
+        """Return structured error response dict for API responses."""
+        result: dict = {
             "error": {
                 "type": self.error_type,
                 "message": self.message,
             }
         }
-        if self.detail:
-            d["error"]["detail"] = self.detail
-        for k, v in self.__dict__.items():
-            if k not in ("message", "detail", "error_type", "args") and not k.startswith("_"):
-                d["error"][k] = v
-        return d
+        if self.detail is not None:
+            result["error"]["detail"] = self.detail
+        return result
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.message!r})"
+
+
+# Alias for backward compat with code/suggestion-style usage
+TokenPakWarning = TokenPakError
+
+
+# ---------------------------------------------------------------------------
+# Proxy errors
+# ---------------------------------------------------------------------------
 
 
 class ProxyError(TokenPakError):
-    """Errors originating from the proxy layer."""
-    pass
+    """HTTP proxy operation failed."""
 
 
 class UpstreamError(ProxyError):
-    """Error from upstream provider."""
+    """Upstream provider returned an error response."""
 
     def __init__(
         self,
         message: str,
-        *,
-        status_code: Optional[int] = None,
-        provider: Optional[str] = None,
-        **kwargs,
-    ):
-        super().__init__(message, **kwargs)
+        status_code: int | None = None,
+        provider: str | None = None,
+        detail: object = None,
+    ) -> None:
+        super().__init__(message, detail=detail)
         self.status_code = status_code
         self.provider = provider
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict:
         d = super().to_dict()
         if self.status_code is not None:
             d["error"]["status_code"] = self.status_code
@@ -75,95 +110,450 @@ class UpstreamError(ProxyError):
 
 
 class CircuitOpenError(ProxyError):
-    """Circuit breaker is open for a provider."""
+    """Circuit breaker is open — requests blocked until cooldown expires."""
 
     def __init__(
         self,
         provider: str,
-        *,
-        retry_after: Optional[float] = None,
-        **kwargs,
-    ):
-        msg = f"Circuit open for {provider}"
+        retry_after: float | None = None,
+        detail: object = None,
+    ) -> None:
+        msg = f"Circuit breaker open for provider '{provider}'"
         if retry_after is not None:
-            msg += f"; retry after {retry_after:.0f}s"
-        super().__init__(msg, **kwargs)
+            msg += f" (retry after {retry_after:.0f}s)"
+        super().__init__(msg, detail=detail)
         self.provider = provider
         self.retry_after = retry_after
+
+
+class ProxyStartupError(ProxyError):
+    """Error during proxy server startup. (TP-E100)"""
+
+    error_code = "TP-E100"
+
+    def __init__(
+        self,
+        message: str,
+        suggestion: Optional[str] = None,
+        context: Optional[str] = None,
+    ) -> None:
+        detail = {}
+        if suggestion:
+            detail["suggestion"] = suggestion
+        if context:
+            detail["context"] = context
+        super().__init__(message, detail=detail or None)
+
+
+class PortInUseError(ProxyStartupError):
+    """Proxy port is already in use. (TP-E100)"""
+
+    def __init__(self, port: int) -> None:
+        super().__init__(
+            message=f"Port {port} is already in use",
+            suggestion=f"Use a different port or stop the process using port {port}.",
+            context=f"port={port}",
+        )
+
+
+class PermissionDeniedError(ProxyStartupError):
+    """Insufficient permissions for proxy operation."""
+
+    def __init__(self, message: str = "Permission denied") -> None:
+        super().__init__(
+            message=message,
+            suggestion="Run with appropriate permissions or check file ownership.",
+        )
+
+
+class MissingDependencyError(ProxyStartupError):
+    """Required dependency not installed."""
+
+    def __init__(self, dependency: str) -> None:
+        super().__init__(
+            message=f"Missing required dependency: {dependency}",
+            suggestion=f"Install it: pip install {dependency}",
+            context=f"dependency={dependency}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Compression errors
+# ---------------------------------------------------------------------------
 
 
 class CompressionError(TokenPakError):
-    """Error during compression/decompression."""
-    pass
+    """Context compression or decompression failed."""
+
+
+# ---------------------------------------------------------------------------
+# Configuration errors
+# ---------------------------------------------------------------------------
 
 
 class ConfigError(TokenPakError):
-    """Configuration error."""
+    """Configuration is invalid or could not be loaded. (TP-E001)"""
 
-    def __init__(self, message: str, *, config_path: Optional[str] = None, **kwargs):
-        super().__init__(message, **kwargs)
-        self.config_path = config_path
-
-
-class AuthError(TokenPakError):
-    """Authentication/authorization error."""
-    pass
-
-
-# Alias used in some places
-AuthenticationError = AuthError
-
-
-class RateLimitError(TokenPakError):
-    """Rate limit exceeded."""
+    error_code = "TP-E001"
 
     def __init__(
         self,
         message: str,
-        *,
-        retry_after: Optional[float] = None,
-        provider: Optional[str] = None,
-        **kwargs,
-    ):
-        super().__init__(message, **kwargs)
+        config_path: str | None = None,
+        detail: object = None,
+        suggestion: Optional[str] = None,
+    ) -> None:
+        _detail = detail
+        if config_path or suggestion:
+            if isinstance(detail, dict):
+                _detail = dict(detail)
+            else:
+                _detail = {}
+            if config_path:
+                _detail["config_path"] = config_path
+            if suggestion:
+                _detail["suggestion"] = suggestion
+        super().__init__(message, detail=_detail)
+        self.config_path = config_path
+
+
+class ConfigValidationError(ConfigError):
+    """Config validation failed. (TP-E002)"""
+
+    error_code = "TP-E002"
+
+    def __init__(self, field: str, reason: str, suggestion: Optional[str] = None) -> None:
+        msg = f"Invalid config field '{field}': {reason}"
+        sug = suggestion or f"Check the value of '{field}' in your config file."
+        super().__init__(msg, suggestion=sug)
+        self.field = field
+
+
+class MissingConfigError(ConfigError):
+    """Required config field is missing. (TP-E003)"""
+
+    error_code = "TP-E003"
+
+    def __init__(self, field: str) -> None:
+        msg = f"Required config field missing: '{field}'"
+        sug = f'Add "{field}" to your TokenPak config file.'
+        super().__init__(msg, suggestion=sug)
+
+
+class InvalidConfigFileError(ConfigError):
+    """Config file is invalid JSON or doesn't exist. (TP-E004)"""
+
+    error_code = "TP-E004"
+
+    def __init__(self, filepath: str, reason: str) -> None:
+        msg = f"Invalid config file '{filepath}': {reason}"
+        sug = f"Check that {filepath} is valid JSON."
+        super().__init__(msg, config_path=filepath, suggestion=sug)
+
+
+# ---------------------------------------------------------------------------
+# Auth errors
+# ---------------------------------------------------------------------------
+
+
+class AuthError(TokenPakError):
+    """Authentication failed — missing or invalid API key / token. (TP-E201)"""
+
+    error_code = "TP-E201"
+
+
+class AuthenticationError(AuthError):
+    """Alias for AuthError (structured version)."""
+
+    pass
+
+
+class InvalidAPIKeyError(AuthError):
+    """API key is invalid or expired. (TP-E202)"""
+
+    error_code = "TP-E202"
+
+    def __init__(self, provider: str) -> None:
+        msg = f"Invalid or expired API key for {provider}"
+        super().__init__(msg, detail={"suggestion": f"Check your {provider} API key in the TokenPak config."})
+
+
+class MissingAPIKeyError(AuthError):
+    """API key is missing. (TP-E203)"""
+
+    error_code = "TP-E203"
+
+    def __init__(self, provider: str) -> None:
+        msg = f"Missing API key for {provider}"
+        sug = f'Add your {provider} API key to the "api_keys" section of TokenPak config.'
+        super().__init__(msg, detail={"suggestion": sug})
+
+
+# ---------------------------------------------------------------------------
+# Rate limit errors
+# ---------------------------------------------------------------------------
+
+
+class RateLimitError(TokenPakError):
+    """Rate limit exceeded. (TP-E301)"""
+
+    error_code = "TP-E301"
+
+    def __init__(
+        self,
+        message: str,
+        retry_after: float | None = None,
+        provider: str | None = None,
+        detail: object = None,
+    ) -> None:
+        super().__init__(message, detail=detail)
         self.retry_after = retry_after
         self.provider = provider
 
 
+# ---------------------------------------------------------------------------
+# Cache errors
+# ---------------------------------------------------------------------------
+
+
 class CacheError(TokenPakError):
-    """Cache operation error."""
-    pass
+    """Cache read or write operation failed. (TP-E401)"""
+
+    error_code = "TP-E401"
+
+
+class CacheCorruptedError(CacheError):
+    """Cache data is corrupted. (TP-E402)"""
+
+    error_code = "TP-E402"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Cache data is corrupted",
+            detail={"suggestion": "Clear your cache and retry: `tokenpak cache clear`"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Connection errors
+# ---------------------------------------------------------------------------
+
+
+class NetworkConnectionError(TokenPakError):
+    """Network connection failed. (TP-E101)"""
+
+    error_code = "TP-E101"
+
+
+class ProviderConnectionError(NetworkConnectionError):
+    """Failed to connect to provider. (TP-E102)"""
+
+    error_code = "TP-E102"
+
+    def __init__(self, provider: str, reason: str) -> None:
+        msg = f"Failed to connect to {provider}: {reason}"
+        sug = f"Check that {provider} is reachable and your config is correct."
+        super().__init__(msg, detail={"suggestion": sug, "provider": provider})
+
+
+class RequestTimeoutError(NetworkConnectionError):
+    """Request or connection timed out. (TP-E103)"""
+
+    error_code = "TP-E103"
+
+    def __init__(self, service: str, timeout_seconds: int) -> None:
+        msg = f"Request to {service} timed out after {timeout_seconds}s"
+        sug = f"Increase timeout or check {service} availability."
+        super().__init__(msg, detail={"suggestion": sug})
+
+
+# ---------------------------------------------------------------------------
+# Validation errors
+# ---------------------------------------------------------------------------
 
 
 class ValidationError(TokenPakError):
-    """Input validation error."""
+    """Input validation failed. (TP-E601)"""
 
-    def __init__(self, message: str, *, field: Optional[str] = None, **kwargs):
-        super().__init__(message, **kwargs)
-        self.field = field
-
-
-class LicenseError(TokenPakError):
-    """License validation error."""
+    error_code = "TP-E601"
 
     def __init__(
         self,
         message: str,
-        *,
-        required_tier: Optional[str] = None,
-        current_tier: Optional[str] = None,
-        **kwargs,
-    ):
-        super().__init__(message, **kwargs)
+        field: str | None = None,
+        detail: object = None,
+        suggestion: Optional[str] = None,
+    ) -> None:
+        _detail = detail
+        if field or suggestion:
+            if isinstance(detail, dict):
+                _detail = dict(detail)
+            else:
+                _detail = {}
+            if field:
+                _detail["field"] = field
+            if suggestion:
+                _detail["suggestion"] = suggestion
+        super().__init__(message, detail=_detail)
+        self.field = field
+
+
+# ---------------------------------------------------------------------------
+# Provider errors
+# ---------------------------------------------------------------------------
+
+
+class ProviderError(TokenPakError):
+    """Upstream provider error. (TP-E501)"""
+
+    error_code = "TP-E501"
+
+    def __init__(self, provider: str, status_code: int, reason: str) -> None:
+        msg = f"{provider} returned error {status_code}: {reason}"
+        super().__init__(msg, detail={"provider": provider, "status_code": status_code})
+
+
+# ---------------------------------------------------------------------------
+# License errors
+# ---------------------------------------------------------------------------
+
+
+class LicenseError(TokenPakError):
+    """License is invalid, expired, or insufficient. (TP-E700)"""
+
+    error_code = "TP-E700"
+
+    def __init__(
+        self,
+        message: str,
+        required_tier: str | None = None,
+        current_tier: str | None = None,
+        detail: object = None,
+    ) -> None:
+        super().__init__(message, detail=detail)
         self.required_tier = required_tier
         self.current_tier = current_tier
 
 
+# ---------------------------------------------------------------------------
+# Integration errors
+# ---------------------------------------------------------------------------
+
+
+class LiteLLMError(TokenPakError):
+    """Error from LiteLLM integration. (TP-E501)"""
+
+    error_code = "TP-E501"
+
+
+# ---------------------------------------------------------------------------
+# CLI errors
+# ---------------------------------------------------------------------------
+
+
+class CLIError(TokenPakError):
+    """CLI-specific error. (TP-E602)"""
+
+    error_code = "TP-E602"
+
+    def __init__(
+        self,
+        message: str,
+        suggestion: Optional[str] = None,
+        context: Optional[str] = None,
+    ) -> None:
+        detail: dict = {}
+        if suggestion:
+            detail["suggestion"] = suggestion
+        if context:
+            detail["context"] = context
+        super().__init__(message, detail=detail or None)
+
+
+class UnknownCommandError(CLIError):
+    """Unknown CLI command."""
+
+    def __init__(self, command: str, suggestion: Optional[str] = None) -> None:
+        super().__init__(
+            message=f"Unknown command: '{command}'",
+            suggestion=suggestion or "Run 'tokenpak help' for available commands.",
+            context=f"command={command}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Internal errors
+# ---------------------------------------------------------------------------
+
+
 class InternalError(TokenPakError):
-    """Internal/unexpected error."""
-    pass
+    """Internal TokenPak error. (TP-E601)"""
+
+    error_code = "TP-E601"
 
 
-def format_error(exc: TokenPakError) -> str:
-    """Format a TokenPakError as a human-readable string."""
-    return str(exc)
+# ---------------------------------------------------------------------------
+# Utility
+# ---------------------------------------------------------------------------
+
+
+def format_error(exc: Exception) -> str:
+    """Format an exception as a user-friendly error message (never raw traceback)."""
+    if isinstance(exc, TokenPakError):
+        return str(exc)
+    return str(InternalError(f"Unexpected error: {type(exc).__name__}"))
+
+
+# ---------------------------------------------------------------------------
+# Re-exports
+# ---------------------------------------------------------------------------
+
+__all__ = [
+    # Base
+    "TokenPakError",
+    "TokenPakWarning",
+    # Proxy
+    "ProxyError",
+    "UpstreamError",
+    "CircuitOpenError",
+    "ProxyStartupError",
+    "PortInUseError",
+    "PermissionDeniedError",
+    "MissingDependencyError",
+    # Compression
+    "CompressionError",
+    # Config
+    "ConfigError",
+    "ConfigValidationError",
+    "MissingConfigError",
+    "InvalidConfigFileError",
+    # Auth
+    "AuthError",
+    "AuthenticationError",
+    "InvalidAPIKeyError",
+    "MissingAPIKeyError",
+    # Rate limit
+    "RateLimitError",
+    # Cache
+    "CacheError",
+    "CacheCorruptedError",
+    # Network
+    "NetworkConnectionError",
+    "ProviderConnectionError",
+    "RequestTimeoutError",
+    # Validation
+    "ValidationError",
+    # Provider
+    "ProviderError",
+    # License
+    "LicenseError",
+    # Integration
+    "LiteLLMError",
+    # CLI
+    "CLIError",
+    "UnknownCommandError",
+    # Internal
+    "InternalError",
+    # Utility
+    "format_error",
+]

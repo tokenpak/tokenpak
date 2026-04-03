@@ -555,7 +555,7 @@ def _generate_suggestions(burn: dict, model_breakdown: list[dict]) -> list[str]:
 
 def print_budget_intelligence(raw: bool = False) -> None:
     """Show Pro-tier budget intelligence: burn rate, ETA, trend, suggestions."""
-    from tokenpak.agent.license.activation import is_pro
+    from tokenpak.infrastructure.license_activation import is_pro
 
     if not is_pro():
         print("⚠ Budget Intelligence requires a Pro (or higher) license.")

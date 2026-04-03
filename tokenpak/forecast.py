@@ -66,8 +66,7 @@ def get_burn_rate(
     records = tracker.list_spend(limit=10_000, period=None)
 
     window_records = [
-        r for r in records
-        if start_date.isoformat() <= r['timestamp'][:10] <= end_date.isoformat()
+        r for r in records if start_date.isoformat() <= r["timestamp"][:10] <= end_date.isoformat()
     ]
 
     if not window_records:
@@ -83,7 +82,7 @@ def get_burn_rate(
         )
 
     # Calculate totals
-    total_cost = sum(r['cost_usd'] for r in window_records)
+    total_cost = sum(r["cost_usd"] for r in window_records)
     daily_avg = total_cost / max(1, window_days)
     weekly_avg = daily_avg * 7
     monthly_projection = daily_avg * 30
@@ -91,24 +90,24 @@ def get_burn_rate(
     # Breakdown by model
     by_model = {}
     for r in window_records:
-        model = r['model'] or 'unknown'
-        by_model[model] = by_model.get(model, 0) + r['cost_usd']
+        model = r["model"] or "unknown"
+        by_model[model] = by_model.get(model, 0) + r["cost_usd"]
 
     # Breakdown by activity (using 'agent' field as proxy)
     by_activity = {}
     for r in window_records:
-        activity = r['agent'] or 'other'
-        if activity == '':
-            activity = 'other'
-        by_activity[activity] = by_activity.get(activity, 0) + r['cost_usd']
+        activity = r["agent"] or "other"
+        if activity == "":
+            activity = "other"
+        by_activity[activity] = by_activity.get(activity, 0) + r["cost_usd"]
 
     # If no activities recorded, infer from agent field or use defaults
     if not by_activity:
         by_activity = {
-            'OpenClaw agent tasks': total_cost * 0.62,
-            'TokenPak CLI': total_cost * 0.16,
-            'Cron jobs': total_cost * 0.09,
-            'Other': total_cost * 0.13,
+            "OpenClaw agent tasks": total_cost * 0.62,
+            "TokenPak CLI": total_cost * 0.16,
+            "Cron jobs": total_cost * 0.09,
+            "Other": total_cost * 0.13,
         }
 
     # Calculate week-over-week trend
@@ -146,16 +145,16 @@ def _calculate_wow_trend(tracker: BudgetTracker, current_window: int = 7) -> Opt
     records = tracker.list_spend(limit=10_000, period=None)
 
     current_records = [
-        r for r in records
-        if current_start.isoformat() <= r['timestamp'][:10] <= current_end.isoformat()
+        r
+        for r in records
+        if current_start.isoformat() <= r["timestamp"][:10] <= current_end.isoformat()
     ]
     prev_records = [
-        r for r in records
-        if prev_start.isoformat() <= r['timestamp'][:10] <= prev_end.isoformat()
+        r for r in records if prev_start.isoformat() <= r["timestamp"][:10] <= prev_end.isoformat()
     ]
 
-    current_total = sum(r['cost_usd'] for r in current_records)
-    prev_total = sum(r['cost_usd'] for r in prev_records)
+    current_total = sum(r["cost_usd"] for r in current_records)
+    prev_total = sum(r["cost_usd"] for r in prev_records)
 
     if prev_total == 0:
         return None
@@ -216,7 +215,9 @@ def format_burn_rate_display(analysis: BurnRateAnalysis, threshold: Optional[flo
         lines.append("")
         lines.append("Cost breakdown by activity:")
         total = sum(analysis.by_activity.values())
-        for activity, cost in sorted(analysis.by_activity.items(), key=lambda x: x[1], reverse=True):
+        for activity, cost in sorted(
+            analysis.by_activity.items(), key=lambda x: x[1], reverse=True
+        ):
             pct = (cost / total * 100) if total > 0 else 0
             lines.append(f"  {activity:<35} ${cost:>7.2f} ({pct:>5.1f}%)")
 

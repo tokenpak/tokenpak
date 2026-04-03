@@ -217,7 +217,9 @@ def extract_claims_from_document(document: dict) -> list[ClaimEvidence]:
     return claims
 
 
-def link_claims_by_proximity(claims: list[ClaimEvidence], distance: int = 1) -> dict[str, list[ClaimEvidence]]:
+def link_claims_by_proximity(
+    claims: list[ClaimEvidence], distance: int = 1
+) -> dict[str, list[ClaimEvidence]]:
     """Group related claims by proximity.
 
     Args:

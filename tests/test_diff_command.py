@@ -192,13 +192,16 @@ def test_print_diff_json_output(capsys):
 # ---------------------------------------------------------------------------
 
 def test_diff_gated_non_pro(capsys):
-    """Non-Pro license should print an upgrade prompt."""
+    """Non-Pro license should print an upgrade prompt and exit."""
+    import pytest
     with patch("tokenpak.agent.license.activation.is_pro", return_value=False):
         args = MagicMock()
         args.verbose = False
         args.raw = False
         args.since = None
-        run_diff_cmd(args)
+        with pytest.raises(SystemExit) as exc_info:
+            run_diff_cmd(args)
+        assert exc_info.value.code == 1
     captured = capsys.readouterr()
     assert "Pro" in captured.out or "license" in captured.out.lower()
 

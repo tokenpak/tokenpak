@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UsageRecord:
     """A single usage record."""
+
     model: str
     input_tokens: int
     output_tokens: int
@@ -62,11 +63,25 @@ class UsageMeter:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.Lock()
+        self._pending_threads: list = []
+        self._pending_lock = threading.Lock()
         self._init_schema()
+
+    def _connect(self) -> sqlite3.Connection:
+        """Open a SQLite connection with WAL mode and 30-second timeout.
+
+        WAL (Write-Ahead Logging) prevents read/write conflicts under
+        concurrent thread access.  NORMAL synchronous is safe with WAL
+        and avoids a full fsync on every commit.
+        """
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
 
     def _init_schema(self):
         """Create SQLite schema if not exists."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,28 +129,42 @@ class UsageMeter:
         timestamp = datetime.now(timezone.utc).isoformat()
 
         def _insert():
-            with sqlite3.connect(self.db_path) as conn:
-                conn.execute(
-                    """
-                    INSERT INTO usage
-                    (key_id, timestamp, model, input_tokens, output_tokens, saved_tokens, request_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        self.key_id,
-                        timestamp,
-                        model,
-                        input_tokens,
-                        output_tokens,
-                        saved_tokens,
-                        request_type,
-                    ),
-                )
-                conn.commit()
+            with self._lock:
+                with self._connect() as conn:
+                    conn.execute(
+                        """
+                        INSERT INTO usage
+                        (key_id, timestamp, model, input_tokens, output_tokens, saved_tokens, request_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            self.key_id,
+                            timestamp,
+                            model,
+                            input_tokens,
+                            output_tokens,
+                            saved_tokens,
+                            request_type,
+                        ),
+                    )
+                    conn.commit()
 
         # Insert asynchronously in background thread to avoid blocking
         thread = threading.Thread(target=_insert, daemon=True)
+        with self._pending_lock:
+            self._pending_threads.append(thread)
         thread.start()
+
+    def flush(self, timeout: float = 5.0) -> None:
+        """Wait for all pending background write threads to complete.
+
+        Useful in tests to ensure all records are committed before assertions.
+        """
+        with self._pending_lock:
+            threads = list(self._pending_threads)
+            self._pending_threads.clear()
+        for t in threads:
+            t.join(timeout=timeout)
 
     def get_daily_summary(self, date: str) -> Dict[str, Any]:
         """
@@ -173,7 +202,7 @@ class UsageMeter:
                 }
             }
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             conn.row_factory = sqlite3.Row
 
             # Get all records for the day
@@ -280,7 +309,7 @@ class UsageMeter:
             False if network error or server error
         """
         # Get all unreported rows, grouped by date
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 SELECT DISTINCT DATE(timestamp) as date FROM usage
@@ -318,7 +347,7 @@ class UsageMeter:
             response.raise_for_status()
 
             # Mark as reported
-            with sqlite3.connect(self.db_path) as conn:
+            with self._connect() as conn:
                 conn.execute(
                     """
                     UPDATE usage SET reported = 1
@@ -328,9 +357,7 @@ class UsageMeter:
                 )
                 conn.commit()
 
-            logger.info(
-                f"Reported usage for {self.key_id}: {len(unreported_dates)} dates"
-            )
+            logger.info(f"Reported usage for {self.key_id}: {len(unreported_dates)} dates")
             return True
 
         except requests.RequestException as e:
@@ -346,7 +373,7 @@ class UsageMeter:
 
         Returns: Number of rows deleted
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self._connect() as conn:
             cursor = conn.execute(
                 """
                 DELETE FROM usage

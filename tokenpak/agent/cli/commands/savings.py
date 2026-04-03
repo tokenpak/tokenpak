@@ -128,9 +128,15 @@ def _query_savings(period: str = "24h", model: Optional[str] = None) -> dict:
         est_cost_saved = 0.0
 
     # Calculate before/after costs
-    cost_without_tokenpak = total_raw * (total_cost / total_compressed) if total_compressed > 0 else 0.0
+    cost_without_tokenpak = (
+        total_raw * (total_cost / total_compressed) if total_compressed > 0 else 0.0
+    )
     cost_with_tokenpak = total_cost
-    cost_reduction_pct = ((cost_without_tokenpak - cost_with_tokenpak) / cost_without_tokenpak * 100.0) if cost_without_tokenpak > 0 else 0.0
+    cost_reduction_pct = (
+        ((cost_without_tokenpak - cost_with_tokenpak) / cost_without_tokenpak * 100.0)
+        if cost_without_tokenpak > 0
+        else 0.0
+    )
 
     return {
         "period": period,
@@ -193,20 +199,24 @@ def _query_by_model(period: str = "24h") -> list[dict]:
         if total_compressed > 0 and total_cost > 0:
             est_saved = tokens_saved * (total_cost / total_compressed)
             cost_without = total_raw * (total_cost / total_compressed)
-            cost_reduction_pct = ((cost_without - total_cost) / cost_without * 100.0) if cost_without > 0 else 0.0
+            cost_reduction_pct = (
+                ((cost_without - total_cost) / cost_without * 100.0) if cost_without > 0 else 0.0
+            )
         else:
             est_saved = 0.0
             cost_reduction_pct = 0.0
-        result.append({
-            "model": r["model"],
-            "requests": int(r["requests"]),
-            "avg_raw_tokens": int(r["avg_raw"]),
-            "avg_compressed_tokens": int(r["avg_compressed"]),
-            "reduction_pct": round(pct_saved, 2),
-            "tokens_saved_total": tokens_saved,
-            "est_cost_saved_usd": round(est_saved, 4),
-            "cost_reduction_pct": round(cost_reduction_pct, 1),
-        })
+        result.append(
+            {
+                "model": r["model"],
+                "requests": int(r["requests"]),
+                "avg_raw_tokens": int(r["avg_raw"]),
+                "avg_compressed_tokens": int(r["avg_compressed"]),
+                "reduction_pct": round(pct_saved, 2),
+                "tokens_saved_total": tokens_saved,
+                "est_cost_saved_usd": round(est_saved, 4),
+                "cost_reduction_pct": round(cost_reduction_pct, 1),
+            }
+        )
     return result
 
 
@@ -241,8 +251,10 @@ def _print_summary(data: dict, period: str) -> None:
     print(f"      Total requests:    {_fmt_n(requests)}")
     print()
     print("      Compression:")
-    print(f"        Tokens trimmed:  {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
-    print(f"        Est. saved:      {_fmt_cost(cost_saved)}")
+    print(f"        Raw Avg tokens:      {_fmt_n(avg_raw)}")
+    print(f"        Compressed Avg:      {_fmt_n(avg_comp)}")
+    print(f"        Tokens Saved:        {_fmt_n(tok_saved)} ({_fmt_pct(pct)})")
+    print(f"        Est. saved:          {_fmt_cost(cost_saved)}")
     print()
     if cost_without > 0:
         print(f"      💰 TOTAL SAVED:    {_fmt_cost(cost_saved)}")

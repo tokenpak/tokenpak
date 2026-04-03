@@ -35,7 +35,7 @@ pip install tokenpak
 ### From source
 
 ```bash
-git clone https://github.com/tokenpak/tokenpak
+git clone https://github.com/kaywhy331/tokenpak
 cd tokenpak
 pip install -e .
 ```

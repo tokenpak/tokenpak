@@ -26,13 +26,13 @@ _SCHEMA_PATH = Path(__file__).parent / "state_schema.json"
 
 class StateManager:
     """
-    Manages compact JSON session state for OCP protocol.
+    Manages compact JSON session state for TPK protocol.
 
-    Persists to: .ocp/state/session_<id>.state.json
+    Persists to: .tpk/state/session_<id>.state.json
     Wire format: compact JSON (no whitespace), prefixed with STATE_JSON:
     """
 
-    def __init__(self, session_id: str, base_dir: str = ".ocp"):
+    def __init__(self, session_id: str, base_dir: str = ".tpk"):
         self.session_id = session_id
         self.base_dir = Path(base_dir)
         state_dir = self.base_dir / "state"
@@ -90,28 +90,63 @@ class StateManager:
     # ── Mutation helpers ─────────────────────────────────────────────────────
 
     def set_goal(self, goal: str) -> None:
+        """Set the high-level goal for the session.
+        
+        Args:
+            goal: Goal description
+        """
         self.state["goal"] = goal
 
     def set_current_task(self, task: str) -> None:
+        """Set the currently-active task.
+        
+        Args:
+            task: Task description
+        """
         self.state["current_task"] = task
 
     def mark_done(self, item: str) -> None:
-        """Move item from open → done (if present), or just append to done."""
+        """Move item from open → done (if present), or just append to done.
+        
+        Args:
+            item: Item to mark as completed
+        """
         if item in self.state.get("open", []):
             self.state["open"].remove(item)
         if item not in self.state.get("done", []):
             self.state.setdefault("done", []).append(item)
 
     def add_open(self, item: str) -> None:
+        """Add a new open/in-progress item to the state.
+        
+        Args:
+            item: Item description
+        """
         self.state.setdefault("open", []).append(item)
 
     def add_next(self, item: str) -> None:
+        """Add a queued item for next action.
+        
+        Args:
+            item: Item description
+        """
         self.state.setdefault("next", []).append(item)
 
     def add_constraint(self, constraint: str) -> None:
+        """Add a constraint or limitation to the session state.
+        
+        Args:
+            constraint: Constraint description
+        """
         self.state.setdefault("constraints", []).append(constraint)
 
     def set_def(self, key: str, value: Any) -> None:
+        """Set a key-value definition or config in the state defs map.
+        
+        Args:
+            key: Definition key
+            value: Definition value
+        """
         self.state.setdefault("defs", {})[key] = value
 
     def apply_patch(self, patch: dict) -> None:
@@ -156,7 +191,7 @@ class StateManager:
     # ── Round-trip ───────────────────────────────────────────────────────────
 
     @classmethod
-    def from_wire(cls, wire_text: str, session_id: str, base_dir: str = ".ocp") -> "StateManager":
+    def from_wire(cls, wire_text: str, session_id: str, base_dir: str = ".tpk") -> "StateManager":
         """
         Parse a STATE_JSON wire section back into a StateManager.
 
@@ -174,6 +209,7 @@ import copy as _copy
 try:
     from jsonschema import ValidationError as _ValidationError  # noqa: F401, F811
     from jsonschema import validate as _validate
+
     _HAS_JSONSCHEMA_MS = True
 except ImportError:
     _HAS_JSONSCHEMA_MS = False
@@ -196,7 +232,7 @@ class IntentStateManager:
     Maintains a separate compact state blob per intent, injecting only
     the fields relevant to that intent into the LLM context.
 
-    Persists to: .ocp/state/session_<id>.<intent>.state.json
+    Persists to: .tpk/state/session_<id>.<intent>.state.json
     Wire format: compact JSON, prefixed with STATE_JSON[<intent>]:
     """
 
@@ -241,7 +277,7 @@ class IntentStateManager:
         },
     }
 
-    def __init__(self, session_id, intent, base_dir=".ocp"):
+    def __init__(self, session_id, intent, base_dir=".tpk"):
         self.session_id = session_id
         self.intent = intent
         self.base_dir = Path(base_dir)
@@ -258,6 +294,7 @@ class IntentStateManager:
         schemas_dir = _get_schemas_dir()
         try:
             from tokenpak.agent.state_schemas import INTENT_SCHEMA_MAP
+
             filename = INTENT_SCHEMA_MAP.get(self.intent)
             if filename:
                 schema_path = schemas_dir / filename
@@ -340,7 +377,7 @@ class MultiSchemaStateManager:
         wire = mgr.build_wire_section("debug")  # only injects debug fields
     """
 
-    def __init__(self, session_id, base_dir=".ocp"):
+    def __init__(self, session_id, base_dir=".tpk"):
         self.session_id = session_id
         self.base_dir = base_dir
         self._managers = {}
@@ -348,9 +385,7 @@ class MultiSchemaStateManager:
     def for_intent(self, intent):
         """Get or create the IntentStateManager for a given intent."""
         if intent not in self._managers:
-            self._managers[intent] = IntentStateManager(
-                self.session_id, intent, self.base_dir
-            )
+            self._managers[intent] = IntentStateManager(self.session_id, intent, self.base_dir)
         return self._managers[intent]
 
     def save_all(self):
@@ -377,7 +412,7 @@ class MultiSchemaStateManager:
         )
 
 
-def select_state_manager(session_id, intent, base_dir=".ocp"):
+def select_state_manager(session_id, intent, base_dir=".tpk"):
     """
     Factory: select and return the appropriate IntentStateManager for a classified intent.
 

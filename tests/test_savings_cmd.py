@@ -171,10 +171,10 @@ def test_human_output_shows_four_values(temp_db, capsys):
         run_savings_cmd(args)
 
     out = capsys.readouterr().out
-    assert "Raw Avg" in out or "raw" in out.lower()
-    assert "Compressed" in out or "compressed" in out.lower()
+    # Output format: "Tokens trimmed: X (▼ Y%)" or raw/compressed style
+    assert "Tokens" in out or "tokens" in out.lower()
     assert "%" in out
-    assert "Tokens Saved" in out or "tokens saved" in out.lower()
+    assert "Saved" in out or "saved" in out.lower() or "Trimmed" in out or "trimmed" in out.lower()
 
 
 # ---------------------------------------------------------------------------

@@ -32,9 +32,11 @@ from typing import Any, Dict, List, Tuple
 # Data types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ScoringSignals:
     """Multi-signal scoring inputs."""
+
     bm25_score: float
     semantic_score: float  # 0.0-1.0
     is_current_commit: bool = False
@@ -43,9 +45,11 @@ class ScoringSignals:
     is_boilerplate: bool = False
     unique_file_count: int = 1  # For concentration factor
 
+
 @dataclass
 class CoverageScoreResult:
     """Coverage score result."""
+
     score: float  # 0.0-1.0
     must_hit_found: bool
     concentration_factor: float
@@ -56,6 +60,7 @@ class CoverageScoreResult:
 # ---------------------------------------------------------------------------
 # Must-hit term extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_must_hit_terms(query: str) -> List[str]:
     """Extract identifiers from query for must-hit validation.
@@ -70,11 +75,11 @@ def extract_must_hit_terms(query: str) -> List[str]:
     """
     # Patterns for common identifiers
     patterns = [
-        r'\b[A-Z][a-zA-Z]+(?:Error|Exception)\b',  # ErrorType, ValidationError
-        r'\b[a-z_]+\s*\(',  # function_call()
-        r'\bclass\s+[A-Z][a-zA-Z]+\b',  # class ClassName
-        r'[A-Z_]{3,}',  # CONSTANT_VALUE (3+ chars all caps)
-        r'\b[a-z_]{3,}\b',  # identifier
+        r"\b[A-Z][a-zA-Z]+(?:Error|Exception)\b",  # ErrorType, ValidationError
+        r"\b[a-z_]+\s*\(",  # function_call()
+        r"\bclass\s+[A-Z][a-zA-Z]+\b",  # class ClassName
+        r"[A-Z_]{3,}",  # CONSTANT_VALUE (3+ chars all caps)
+        r"\b[a-z_]{3,}\b",  # identifier
     ]
 
     terms = set()
@@ -108,13 +113,18 @@ def check_must_hit_coverage(
     else:
         contents = " ".join(str(c.get("content", "")) for c in chunks)
 
-    found = [term for term in must_hit_terms if re.search(r'\b' + re.escape(term) + r'\b', contents, re.IGNORECASE)]
+    found = [
+        term
+        for term in must_hit_terms
+        if re.search(r"\b" + re.escape(term) + r"\b", contents, re.IGNORECASE)
+    ]
     return len(found) == len(must_hit_terms), must_hit_terms, found
 
 
 # ---------------------------------------------------------------------------
 # Multi-signal scoring
 # ---------------------------------------------------------------------------
+
 
 def compute_final_score(
     signals: ScoringSignals,
@@ -147,20 +157,16 @@ def compute_final_score(
     meta_norm = 0.5 if not signals.is_boilerplate else 0.1  # Simple metadata signal
 
     # Base weighted sum
-    score = (
-        0.45 * sem_norm +
-        0.45 * bm25_norm +
-        0.10 * meta_norm
-    )
+    score = 0.45 * sem_norm + 0.45 * bm25_norm + 0.10 * meta_norm
 
     # Boosts (only if query is substantial)
     if query and len(query) > 3:
         # Symbol boost: +0.15 if query contains class/function patterns
-        if re.search(r'[A-Z][a-zA-Z]+|[a-z_]+\(', query):
+        if re.search(r"[A-Z][a-zA-Z]+|[a-z_]+\(", query):
             score += 0.15
 
         # Path boost: +0.10 if query references file path patterns
-        if re.search(r'\.py|\.js|/src/|/lib/|\.tsx?', query, re.IGNORECASE):
+        if re.search(r"\.py|\.js|/src/|/lib/|\.tsx?", query, re.IGNORECASE):
             score += 0.10
 
     # Recency boost
@@ -180,6 +186,7 @@ def compute_final_score(
 # ---------------------------------------------------------------------------
 # Coverage score
 # ---------------------------------------------------------------------------
+
 
 def compute_coverage_score(
     query: str,
@@ -204,7 +211,7 @@ def compute_coverage_score(
             must_hit_found=False,
             concentration_factor=0.0,
             mass_factor=0.0,
-            interpretation="weak"
+            interpretation="weak",
         )
 
     # Factor 1: Must-hit terms (45% of max coverage)
@@ -247,7 +254,7 @@ def compute_coverage_score(
         must_hit_found=all_found,
         concentration_factor=concentration_factor,
         mass_factor=mass_factor,
-        interpretation=interpretation
+        interpretation=interpretation,
     )
 
 

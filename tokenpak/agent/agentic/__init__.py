@@ -1,5 +1,7 @@
 # tokenpak.agent.agentic — Agentic Layer
+from .case_memory import CaseMemoryDB, CaseRecord
 from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
+from .memory_promoter import MemoryPromoter
 from .handoff import (
     DEFAULT_HANDOFF_DIR,
     REGISTERED_AGENTS,
@@ -29,11 +31,14 @@ from .prefetcher import (
 from .retry import RetryEngine, RetryExhaustedError
 
 __all__ = [
+    "CaseMemoryDB",
+    "CaseRecord",
     "FileLockManager",
     "LockConflictError",
     "LockExpiredError",
     "RetryEngine",
     "RetryExhaustedError",
+    "MemoryPromoter",
     "learn",
     "load",
     "reset",

@@ -1,3 +1,7 @@
+---
+title: "MOTION-CHOREOGRAPHY"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Dashboard — Motion Choreography & Transitions
 
 ## Overview

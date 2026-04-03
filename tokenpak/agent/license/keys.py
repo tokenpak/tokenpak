@@ -132,6 +132,7 @@ def sign_license(payload: LicensePayload, private_pem: bytes) -> str:
     from typing import cast as _cast
 
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
     private_key = _cast(RSAPrivateKey, _raw_private_key)
     signature = private_key.sign(
         payload_bytes,
@@ -171,6 +172,7 @@ def verify_license(token: str, public_pem: bytes) -> LicensePayload:
     from typing import cast as _cast
 
     from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+
     public_key = _cast(RSAPublicKey, _raw_public_key)
     try:
         public_key.verify(

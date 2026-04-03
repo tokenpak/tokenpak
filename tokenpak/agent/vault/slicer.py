@@ -64,6 +64,7 @@ MIN_SLICE_CHARS = 40
 # SliceRecord
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SliceRecord:
     """A single semantic sub-block sliced from a parent document.
@@ -100,6 +101,7 @@ class SliceRecord:
 # ---------------------------------------------------------------------------
 # Split logic helpers
 # ---------------------------------------------------------------------------
+
 
 def _sha256_prefix(text: str, length: int = 8) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:length]
@@ -156,6 +158,7 @@ def _split_by_double_newline(content: str) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def should_slice(content: str, path: str) -> bool:
     """Return True if *content* should be split into sub-blocks.

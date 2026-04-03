@@ -46,6 +46,7 @@ def _get_license_key_id() -> Optional[str]:
     if license_file.exists():
         try:
             from .activation import get_license_key
+
             key = get_license_key()
             return key  # Already parsed as key_id
         except Exception as e:
@@ -72,12 +73,12 @@ def _check_pro_access(request: Request) -> Optional[str]:
                 "message": "Account dashboard requires TokenPak Pro or higher",
                 "upgrade_url": "https://tokenpak.io/pricing",
                 "upgrade_cta": "Upgrade to Pro to unlock personal analytics",
-            }
+            },
         )
 
-    # License tier check: currently any licensed user is treated as Pro+.
-    # Granular tier verification ("pro" | "team" | "enterprise") will be added
-    # when the license payload includes a tier field.
+    # Placeholder: Check tier from license payload
+    # For now, assume any licensed user is Pro+
+    # Future: verify tier == "pro" | "team" | "enterprise"
 
     return key_id
 
@@ -120,14 +121,16 @@ def _load_usage_data(key_id: str, start_date: str, end_date: str) -> list[dict]:
             date_str = current.strftime("%Y-%m-%d")
             summary = meter.get_daily_summary(date_str)
             if summary and summary.get("total_input", 0) > 0:
-                results.append({
-                    "date": date_str,
-                    "model": "all",  # per-model breakdown requires metering.db schema update
-                    "input_tokens": summary.get("total_input", 0),
-                    "output_tokens": summary.get("total_output", 0),
-                    "saved_tokens": summary.get("total_saved", 0),
-                    "request_count": summary.get("request_count", 0),
-                })
+                results.append(
+                    {
+                        "date": date_str,
+                        "model": "all",  # Placeholder: break down by model
+                        "input_tokens": summary.get("total_input", 0),
+                        "output_tokens": summary.get("total_output", 0),
+                        "saved_tokens": summary.get("total_saved", 0),
+                        "request_count": summary.get("request_count", 0),
+                    }
+                )
             current += timedelta(days=1)
 
         return results
@@ -160,9 +163,9 @@ def _calculate_roi(saved_tokens: int) -> dict:
     }
 
     # Average savings assuming 50% Sonnet, 40% Haiku, 10% Opus
-    avg_cost_per_token = (0.5 * (1_000_000 / 50000) +
-                          0.4 * (1_000_000 / 800000) +
-                          0.1 * (1_000_000 / 15000)) / 1_000_000
+    avg_cost_per_token = (
+        0.5 * (1_000_000 / 50000) + 0.4 * (1_000_000 / 800000) + 0.1 * (1_000_000 / 15000)
+    ) / 1_000_000
 
     estimated_savings = saved_tokens * avg_cost_per_token
 
@@ -186,9 +189,7 @@ templates.env.globals.update({"max": max, "min": min, "abs": abs, "round": round
 
 
 @router.get("/usage", response_class=HTMLResponse)
-def account_usage(request: Request,
-                  days: int = 7,
-                  model: Optional[str] = None):
+def account_usage(request: Request, days: int = 7, model: Optional[str] = None):
     """
     Personal token usage over time.
 
@@ -201,11 +202,7 @@ def account_usage(request: Request,
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(
-        key_id,
-        start_date.isoformat(),
-        end_date.isoformat()
-    )
+    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
 
     # Aggregate by day for chart
     daily_totals = {}
@@ -227,25 +224,27 @@ def account_usage(request: Request,
     total_output = sum(daily_totals[d]["output"] for d in daily_totals)
     total_saved = sum(daily_totals[d]["saved"] for d in daily_totals)
 
-    return templates.TemplateResponse(request, "usage.html", {
-        "key_id": key_id,
-        "days": days,
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "total_input": total_input,
-        "total_output": total_output,
-        "total_saved": total_saved,
-        "chart_labels": chart_labels,
-        "chart_input": chart_input,
-        "chart_output": chart_output,
-        "chart_saved": chart_saved,
-    })
+    return templates.TemplateResponse(
+        request,
+        "usage.html",
+        {
+            "key_id": key_id,
+            "days": days,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "total_input": total_input,
+            "total_output": total_output,
+            "total_saved": total_saved,
+            "chart_labels": chart_labels,
+            "chart_input": chart_input,
+            "chart_output": chart_output,
+            "chart_saved": chart_saved,
+        },
+    )
 
 
 @router.get("/savings", response_class=HTMLResponse)
-def account_savings(request: Request,
-                    days: int = 30,
-                    breakdown: str = "daily"):
+def account_savings(request: Request, days: int = 30, breakdown: str = "daily"):
     """
     Compression savings breakdown — tokens saved, compression ratio trends.
 
@@ -258,11 +257,7 @@ def account_savings(request: Request,
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(
-        key_id,
-        start_date.isoformat(),
-        end_date.isoformat()
-    )
+    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
 
     # Aggregate by breakdown period
     period_totals = {}
@@ -288,8 +283,7 @@ def account_savings(request: Request,
         period_totals[period_key]["input"] += row["input_tokens"]
         period_totals[period_key]["output"] += row["output_tokens"]
         period_totals[period_key]["saved"] += row["saved_tokens"]
-        period_totals[period_key]["total"] += (row["input_tokens"] +
-                                                row["output_tokens"])
+        period_totals[period_key]["total"] += row["input_tokens"] + row["output_tokens"]
         period_totals[period_key]["requests"] += row.get("request_count", 0)
 
     # Calculate compression ratios
@@ -305,30 +299,41 @@ def account_savings(request: Request,
         cumulative_saved += totals["saved"]
 
         period_label = (
-            f"{period_key}" if isinstance(period_key, str)
-            else f"W{period_key[1]}" if breakdown == "weekly"
+            f"{period_key}"
+            if isinstance(period_key, str)
+            else f"W{period_key[1]}"
+            if breakdown == "weekly"
             else f"{period_key[0]}-{period_key[1]:02d}"
         )
 
-        savings_data.append({
-            "period": period_label,
-            "tokens_saved": totals["saved"],
-            "compression_ratio": round(ratio * 100, 2),
-            "cumulative_saved": cumulative_saved,
-            "requests": totals["requests"],
-        })
+        savings_data.append(
+            {
+                "period": period_label,
+                "tokens_saved": totals["saved"],
+                "compression_ratio": round(ratio * 100, 2),
+                "cumulative_saved": cumulative_saved,
+                "requests": totals["requests"],
+            }
+        )
 
-    return templates.TemplateResponse(request, "savings.html", {
-        "key_id": key_id,
-        "days": days,
-        "breakdown": breakdown,
-        "savings_data": savings_data,
-        "total_saved": cumulative_saved,
-        "avg_compression": (
-            round(sum(s["compression_ratio"] for s in savings_data) /
-                  max(len(savings_data), 1), 2) if savings_data else 0
-        ),
-    })
+    return templates.TemplateResponse(
+        request,
+        "savings.html",
+        {
+            "key_id": key_id,
+            "days": days,
+            "breakdown": breakdown,
+            "savings_data": savings_data,
+            "total_saved": cumulative_saved,
+            "avg_compression": (
+                round(
+                    sum(s["compression_ratio"] for s in savings_data) / max(len(savings_data), 1), 2
+                )
+                if savings_data
+                else 0
+            ),
+        },
+    )
 
 
 @router.get("/roi", response_class=HTMLResponse)
@@ -347,12 +352,16 @@ def account_roi(request: Request):
 
     roi = _calculate_roi(total_saved)
 
-    return templates.TemplateResponse(request, "roi.html", {
-        "key_id": key_id,
-        "total_saved": total_saved,
-        "estimated_savings_usd": roi["estimated_savings_usd"],
-        "period": roi["period"],
-    })
+    return templates.TemplateResponse(
+        request,
+        "roi.html",
+        {
+            "key_id": key_id,
+            "total_saved": total_saved,
+            "estimated_savings_usd": roi["estimated_savings_usd"],
+            "period": roi["period"],
+        },
+    )
 
 
 # ─────────────────────────────────────────────
@@ -368,20 +377,18 @@ def api_usage(request: Request, days: int = 7) -> JSONResponse:
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(
-        key_id,
-        start_date.isoformat(),
-        end_date.isoformat()
-    )
+    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
 
-    return JSONResponse({
-        "key_id": key_id,
-        "period": {
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        },
-        "data": data,
-    })
+    return JSONResponse(
+        {
+            "key_id": key_id,
+            "period": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+            },
+            "data": data,
+        }
+    )
 
 
 @router.get("/api/savings.json")
@@ -392,21 +399,19 @@ def api_savings(request: Request, days: int = 30) -> JSONResponse:
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(
-        key_id,
-        start_date.isoformat(),
-        end_date.isoformat()
-    )
+    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
 
     total_saved = sum(row["saved_tokens"] for row in data)
     roi = _calculate_roi(total_saved)
 
-    return JSONResponse({
-        "key_id": key_id,
-        "period": {
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat(),
-        },
-        "total_saved_tokens": total_saved,
-        "estimated_savings_usd": roi["estimated_savings_usd"],
-    })
+    return JSONResponse(
+        {
+            "key_id": key_id,
+            "period": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+            },
+            "total_saved_tokens": total_saved,
+            "estimated_savings_usd": roi["estimated_savings_usd"],
+        }
+    )

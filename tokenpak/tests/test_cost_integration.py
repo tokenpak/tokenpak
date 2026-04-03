@@ -37,9 +37,7 @@ class TestCostEngineBasics:
         """tp_pricing table is created on initialization."""
         conn = sqlite3.connect(cost_engine.db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='tp_pricing'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tp_pricing'")
         result = cursor.fetchone()
         conn.close()
         assert result is not None, "tp_pricing table not created"

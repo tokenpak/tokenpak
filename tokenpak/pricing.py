@@ -86,14 +86,20 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
     tokens_from_cache = cache_read_tokens
     tokens_fresh = tokens_after_compression - tokens_from_cache
 
-    cost_with = (tokens_fresh / 1_000_000) * rates["input"] + (tokens_from_cache / 1_000_000) * rates["cached"]
+    cost_with = (tokens_fresh / 1_000_000) * rates["input"] + (
+        tokens_from_cache / 1_000_000
+    ) * rates["cached"]
 
     # Total savings
     total_cost_saved = cost_without - cost_with
     reduction_pct = (total_cost_saved / cost_without * 100.0) if cost_without > 0 else 0.0
 
     # Cache hit rate
-    cache_hit_rate = (cache_read_tokens / tokens_after_compression * 100.0) if tokens_after_compression > 0 else 0.0
+    cache_hit_rate = (
+        (cache_read_tokens / tokens_after_compression * 100.0)
+        if tokens_after_compression > 0
+        else 0.0
+    )
 
     return {
         "compression_tokens_saved": tokens_saved_compression,
@@ -109,7 +115,13 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
     }
 
 
-def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int = 0, cache_creation_tokens: int = 0, output_tokens: int = 0) -> float:
+def calculate_request_cost(
+    model: str,
+    input_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    output_tokens: int = 0,
+) -> float:
     """Calculate actual cost for a request routed through TokenPak."""
     rates = get_rates(model)
     input_rate = rates.get("input", 3.0)
@@ -123,7 +135,9 @@ def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int
     return round(cost, 6)
 
 
-def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_tokens: int = 0) -> float:
+def calculate_request_cost_baseline(
+    model: str, total_input_tokens: int, output_tokens: int = 0
+) -> float:
     """Calculate what a request would cost WITHOUT TokenPak (no cache, no compression)."""
     rates = get_rates(model)
     input_rate = rates.get("input", 3.0)

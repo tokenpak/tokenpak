@@ -34,7 +34,6 @@ from tokenpak.auth_guard import AuthGuard
 
 
 class TestAuthGuardCounters(unittest.TestCase):
-
     def _make_guard(self):
         """Create a fresh AuthGuard with a temp incident log."""
         guard = AuthGuard()
@@ -74,7 +73,6 @@ class TestAuthGuardCounters(unittest.TestCase):
 
 
 class TestAuthGuardEvents(unittest.TestCase):
-
     def _make_guard(self):
         return AuthGuard()
 
@@ -108,6 +106,7 @@ class TestAuthGuardEvents(unittest.TestCase):
         guard = self._make_guard()
         # Override cooldown to 10 seconds for this test
         import tokenpak.auth_guard as m
+
         orig = m.AUTH_ALERT_COOLDOWN_SEC
         m.AUTH_ALERT_COOLDOWN_SEC = 10
         try:
@@ -150,7 +149,6 @@ class TestAuthGuardEvents(unittest.TestCase):
 
 
 class TestAuthGuardIncidentLog(unittest.TestCase):
-
     def test_incident_logged_to_file(self):
         log_path = Path(_tmp) / "incidents_test.log"
         os.environ["TOKENPAK_INCIDENT_LOG"] = str(log_path)
@@ -176,14 +174,17 @@ class TestAuthGuardIncidentLog(unittest.TestCase):
 
 
 class TestAuthAlertMessage(unittest.TestCase):
-
     def test_message_contains_expected_text(self):
         from tokenpak.auth_alert import _build_alert_message
-        msg = _build_alert_message("anthropic", {
-            "consecutive_failures": 3,
-            "threshold": 3,
-            "timestamp": "2026-03-19T22:00:00Z",
-        })
+
+        msg = _build_alert_message(
+            "anthropic",
+            {
+                "consecutive_failures": 3,
+                "threshold": 3,
+                "timestamp": "2026-03-19T22:00:00Z",
+            },
+        )
         self.assertIn("Auth Failure", msg)
         self.assertIn("expired", msg)
         self.assertIn("OFFLINE", msg)

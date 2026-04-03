@@ -50,6 +50,7 @@ _RE_PHRASE = re.compile(r"(?<!\w)(?:\w+(?:[  \t]+\w+){4,19})(?!\w)")
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DictionaryResult:
     """Output of a single :meth:`CompressionDictionary.apply` call."""
@@ -82,6 +83,7 @@ class SuggestedEntry:
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
+
 
 class CompressionDictionary:
     """
@@ -186,9 +188,7 @@ class CompressionDictionary:
         applied: Dict[str, str] = {}
 
         # Build sorted list so longer phrases take priority
-        sorted_entries = sorted(
-            self._dictionary.items(), key=lambda kv: len(kv[0]), reverse=True
-        )
+        sorted_entries = sorted(self._dictionary.items(), key=lambda kv: len(kv[0]), reverse=True)
 
         for msg in messages:
             content = msg.get("content")

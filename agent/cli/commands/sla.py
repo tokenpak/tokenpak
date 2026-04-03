@@ -15,7 +15,7 @@ _SEP = "────────────────────────
 
 def _enterprise_check() -> bool:
     try:
-        from tokenpak.agent.license.activation import is_enterprise
+        from tokenpak.infrastructure.license_activation import is_enterprise
 
         return is_enterprise()
     except Exception:
@@ -24,7 +24,7 @@ def _enterprise_check() -> bool:
 
 def _tier_name() -> str:
     try:
-        from tokenpak.agent.license.activation import get_plan
+        from tokenpak.infrastructure.license_activation import get_plan
 
         return get_plan().tier.value.upper()
     except Exception:

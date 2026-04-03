@@ -10,7 +10,14 @@ SCHEMAS: Dict[str, List[str]] = {
     "contract": ["parties", "dates", "obligations", "payment_terms", "termination", "exceptions"],
     "research_paper": ["question", "method", "dataset", "findings", "limitations", "metrics"],
     "proposal": ["client", "objective", "scope", "timeline", "price", "exclusions"],
-    "design_doc": ["problem", "architecture", "components", "constraints", "open_issues", "decisions"],
+    "design_doc": [
+        "problem",
+        "architecture",
+        "components",
+        "constraints",
+        "open_issues",
+        "decisions",
+    ],
     "meeting_notes": ["attendees", "decisions", "action_items", "blockers", "next_meeting"],
     "bug_report": ["symptom", "repro_steps", "expected", "actual", "environment"],
     "changelog": ["version", "date", "added", "changed", "fixed", "removed"],
@@ -18,11 +25,21 @@ SCHEMAS: Dict[str, List[str]] = {
 
 _PATTERNS = {
     "contract": [r"\bparty\b", r"\btermination\b", r"\bwhereas\b", r"payment terms"],
-    "research_paper": [r"\babstract\b", r"\bmethod(?:ology)?\b", r"\bfindings\b", r"\blimitations\b"],
+    "research_paper": [
+        r"\babstract\b",
+        r"\bmethod(?:ology)?\b",
+        r"\bfindings\b",
+        r"\blimitations\b",
+    ],
     "proposal": [r"\bscope\b", r"\btimeline\b", r"\bprice\b", r"\bproposal\b"],
     "design_doc": [r"\barchitecture\b", r"\bcomponents\b", r"\bconstraints\b", r"\bdecision\b"],
     "meeting_notes": [r"\battendees\b", r"\baction items?\b", r"\bblockers?\b", r"meeting notes"],
-    "bug_report": [r"\brepro(?:duction)? steps\b", r"\bexpected\b", r"\bactual\b", r"\benvironment\b"],
+    "bug_report": [
+        r"\brepro(?:duction)? steps\b",
+        r"\bexpected\b",
+        r"\bactual\b",
+        r"\benvironment\b",
+    ],
     "changelog": [r"\bchangelog\b", r"\badded\b", r"\bchanged\b", r"\bfixed\b", r"\bremoved\b"],
 }
 
@@ -82,7 +99,10 @@ def extract_schema(content: str, doc_type: str) -> Optional[Dict[str, str]]:
 
         value = ""
         for i, lower in enumerate(lowered_lines):
-            matched = next((c for c in candidates if lower.startswith(c + ":") or lower.startswith(c + " -")), None)
+            matched = next(
+                (c for c in candidates if lower.startswith(c + ":") or lower.startswith(c + " -")),
+                None,
+            )
             if matched:
                 line = lines[i]
                 if ":" in line:

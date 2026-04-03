@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -55,9 +55,7 @@ class BaselineRegistry:
         if Path(self.registry_path).exists():
             with open(self.registry_path, "r") as f:
                 data = json.load(f)
-                self.baselines = {
-                    k: BaselineEntry.from_dict(v) for k, v in data.items()
-                }
+                self.baselines = {k: BaselineEntry.from_dict(v) for k, v in data.items()}
         else:
             self.baselines = {}
 
@@ -87,7 +85,7 @@ class BaselineRegistry:
         entry = self.get_baseline(workflow_id)
         if entry:
             entry.pass_count += increment
-            entry.updated_at = datetime.utcnow().isoformat()
+            entry.updated_at = datetime.now(timezone.utc).isoformat()
             self._save_registry()
 
     def list_baselines(self) -> Dict[str, BaselineEntry]:

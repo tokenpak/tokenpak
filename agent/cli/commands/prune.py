@@ -120,7 +120,7 @@ def run_prune(
     """Core prune logic — callable from tests or CLI."""
     # Tier gate
     try:
-        from tokenpak.agent.license.activation import is_pro
+        from tokenpak.infrastructure.license_activation import is_pro
         if not is_pro():
             print("⛔ /tokenpak prune requires a Pro or higher license.")
             print("   Upgrade at: https://tokenpak.dev/pro")

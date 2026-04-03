@@ -211,7 +211,9 @@ class PrometheusRegistry:
         token_rows = self._query_tokens_by_model()
         if token_rows:
             for model, input_tok, _, _ in token_rows:
-                lines.append(f'tokenpak_tokens_input_total{{model="{_escape_label_value(model)}"}} {input_tok}')
+                lines.append(
+                    f'tokenpak_tokens_input_total{{model="{_escape_label_value(model)}"}} {input_tok}'
+                )
         else:
             lines.append(f"tokenpak_tokens_input_total {s.get('input_tokens', 0)}")
         lines.append("")
@@ -223,7 +225,9 @@ class PrometheusRegistry:
         ]
         if token_rows:
             for model, _, output_tok, _ in token_rows:
-                lines.append(f'tokenpak_tokens_output_total{{model="{_escape_label_value(model)}"}} {output_tok}')
+                lines.append(
+                    f'tokenpak_tokens_output_total{{model="{_escape_label_value(model)}"}} {output_tok}'
+                )
         else:
             lines.append(f"tokenpak_tokens_output_total {s.get('output_tokens', 0)}")
         lines.append("")

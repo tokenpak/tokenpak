@@ -3,6 +3,7 @@
 Lightweight cost breakdown by model and feature for the "where did my money go?"
 question. No agent attribution (which agent triggered what), just aggregated costs.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,9 +35,7 @@ class AuditGenerator:
                 "total_requests": 68,
             }
         """
-        model_stats: dict[str, dict[str, Any]] = defaultdict(
-            lambda: {"cost": 0.0, "requests": 0}
-        )
+        model_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {"cost": 0.0, "requests": 0})
         total_cost = 0.0
         total_requests = 0
 
@@ -141,7 +140,9 @@ class AuditGenerator:
             feature_stats["compression"]["cost"] += compression_cost
             feature_stats["tools"]["cost"] += tool_cost
 
-            feature_stats["base"]["tokens"] += max(total_tokens - cache_tokens - compressed_tokens - tool_tokens, 0)
+            feature_stats["base"]["tokens"] += max(
+                total_tokens - cache_tokens - compressed_tokens - tool_tokens, 0
+            )
             feature_stats["caching"]["tokens"] += cache_tokens
             feature_stats["compression"]["tokens"] += compressed_tokens
             feature_stats["tools"]["tokens"] += tool_tokens
@@ -185,10 +186,12 @@ class AuditGenerator:
             "total_requests": models["total_requests"],
             "summary": {
                 "top_model": next(iter(models["models"].keys())) if models["models"] else None,
-                "top_feature": next(iter(features["features"].keys())) if features["features"] else None,
+                "top_feature": next(iter(features["features"].keys()))
+                if features["features"]
+                else None,
                 "model_count": len(models["models"]),
                 "feature_breakdown_available": True,
-            }
+            },
         }
 
     def session_audit(

@@ -1,7 +1,6 @@
 """
 TokenPak RBAC Core — Role definitions, permission matrix, and access control.
 
-Copied from vault/06_RUNTIME/SYSTEM/rbac/tokenpak-rbac-core.py
 """
 
 from dataclasses import dataclass, field
@@ -12,6 +11,7 @@ from typing import Optional, Set
 
 class Role(Enum):
     """Available roles in TokenPak."""
+
     ADMIN = "admin"
     FINOPS = "finops"
     ENGINEER = "engineer"
@@ -21,6 +21,7 @@ class Role(Enum):
 
 class Permission(Enum):
     """Permission identifiers."""
+
     # Dashboard
     VIEW_DASHBOARD = "view_dashboard"
     VIEW_COST = "view_cost"
@@ -101,6 +102,7 @@ PERMISSION_MATRIX: dict[Role, Set[Permission]] = {
 @dataclass
 class User:
     """User with role and settings."""
+
     id: str
     username: str
     role: Role

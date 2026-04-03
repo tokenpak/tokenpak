@@ -31,6 +31,7 @@ class AdapterRegistry:
 
         self._loaded_adapters: Dict[Provider, Any] = {}
         self._adapter_classes: Dict[Provider, Type] = {}
+        self._explicitly_registered: set = set()  # Track explicitly registered providers
 
     def register_adapter(self, provider: Provider, module_path: str) -> None:
         """
@@ -41,6 +42,24 @@ class AdapterRegistry:
             module_path: Full module path (e.g., "package.module.ClassName")
         """
         self.adapter_configs[provider] = module_path
+
+    def register(self, provider: str, adapter_class: Type) -> None:
+        """
+        Public API: register an adapter class directly.
+
+        Args:
+            provider: Provider name (string)
+            adapter_class: The adapter class to register
+        """
+        # Convert string provider to Provider enum
+        try:
+            prov_enum = Provider(provider)
+        except ValueError:
+            prov_enum = Provider[provider.upper()]
+
+        # Store the class for later instantiation
+        self._adapter_classes[prov_enum] = adapter_class
+        self._explicitly_registered.add(prov_enum)
 
     def load_adapter_class(self, provider: Provider) -> Type:
         """
@@ -81,9 +100,7 @@ class AdapterRegistry:
         except AttributeError as e:
             raise ValueError(f"Class not found in {module_path}: {e}")
 
-    def create_adapter(
-        self, provider: Provider, config: Optional[Dict[str, Any]] = None
-    ) -> Any:
+    def create_adapter(self, provider: Provider, config: Optional[Dict[str, Any]] = None) -> Any:
         """
         Create and cache an adapter instance.
 
@@ -128,6 +145,14 @@ class AdapterRegistry:
     def list_providers(self) -> list:
         """Get list of available providers."""
         return list(self.adapter_configs.keys())
+
+    def get_all_providers(self) -> list:
+        """
+        Public API: get list of explicitly registered providers.
+
+        Returns list of Provider enums (only those explicitly registered via register()).
+        """
+        return list(self._explicitly_registered)
 
     def clear_cache(self) -> None:
         """Clear cached adapter instances."""

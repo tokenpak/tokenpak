@@ -369,7 +369,7 @@ class TestRetrievalExpansion:
             gaps=self.gaps_path,
         )
 
-        with patch("tokenpak.cli.BlockRegistry") as MockReg:
+        with patch("tokenpak._cli_core.BlockRegistry") as MockReg:
             instance = MagicMock()
             instance.search.return_value = []
             MockReg.return_value = instance

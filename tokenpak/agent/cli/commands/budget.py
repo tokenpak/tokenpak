@@ -240,6 +240,67 @@ def print_budget_status(raw: bool = False) -> None:
         print()
 
 
+def _get_recent_budget_alerts(limit: int = 20) -> list[dict]:
+    """Fetch recent budget alerts from budget_alerts table."""
+    conn = _connect()
+    if not conn:
+        return []
+    rows = conn.execute(
+        """
+        SELECT id, timestamp, alert_level, budget_usd, spent_usd, pct_used, message
+        FROM budget_alerts
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0],
+            "timestamp": r[1],
+            "level": r[2],
+            "budget_usd": float(r[3]),
+            "spent_usd": float(r[4]),
+            "pct_used": float(r[5]),
+            "message": r[6],
+        }
+        for r in rows
+    ]
+
+
+def print_budget_alerts(limit: int = 10, raw: bool = False) -> None:
+    """Show recent budget threshold alerts."""
+    alerts = _get_recent_budget_alerts(limit=limit)
+    
+    if raw:
+        print(json.dumps(alerts, indent=2))
+        return
+    
+    print(f"TOKENPAK  |  Recent Budget Alerts")
+    print(SEP)
+    if not alerts:
+        print("  No budget alerts recorded.")
+        print()
+        return
+    
+    print(f"  {'Level':<10}{'Triggered':>20}{'% Used':>10}{'Budget/Spent':>25}{'Message':>30}")
+    print(f"  {'-'*10}{'-'*20}{'-'*10}{'-'*25}{'-'*30}")
+    for a in alerts:
+        level_emoji = {
+            "warning": "⚠ ",
+            "critical": "🔴",
+            "overage": "🔴🔴",
+        }.get(a["level"], "  ")
+        ts = a["timestamp"].split("T")[1][:5] if "T" in a["timestamp"] else a["timestamp"]
+        budget_str = f"${a['budget_usd']:.2f} / ${a['spent_usd']:.2f}"
+        msg = (a["message"] or "")[:28]
+        print(
+            f"  {level_emoji} {a['level']:<8}{ts:>20}{a['pct_used']:>9.1f}%  {budget_str:>24}  {msg}"
+        )
+    print()
+
+
 def print_budget_history(days: int = 30, raw: bool = False) -> None:
     """Show daily spend history vs budget."""
     cfg = _load_config()
@@ -387,6 +448,11 @@ def run_budget_cmd(args) -> None:
         print_budget_forecast(raw=raw)
         return
 
+    if budget_cmd == "alerts":
+        limit = getattr(args, "limit", 10) or 10
+        print_budget_alerts(limit=limit, raw=raw)
+        return
+
     if budget_cmd == "intelligence":
         print_budget_intelligence(raw=raw)
         return
@@ -480,9 +546,7 @@ def _calc_burn_rate() -> dict:
     # Prior 7 days = days 8-14 ago (pull from h30)
     prior7_start = (date.today() - timedelta(days=14)).isoformat()
     prior7_end = (date.today() - timedelta(days=8)).isoformat()
-    prior7 = sum(
-        r["cost_usd"] for r in h30 if prior7_start <= r["day"] <= prior7_end
-    )
+    prior7 = sum(r["cost_usd"] for r in h30 if prior7_start <= r["day"] <= prior7_end)
     if prior7 > 0:
         trend_pct = (last7 - prior7) / prior7 * 100
     else:
@@ -559,6 +623,7 @@ def print_budget_intelligence(raw: bool = False) -> None:
 
     if not is_pro():
         print("⚠ Budget Intelligence requires a Pro (or higher) license.")
+        print("  Get a license: https://tokenpak.io/pricing")
         print("  Run: tokenpak license activate <key>")
         return
 

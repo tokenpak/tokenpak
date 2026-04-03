@@ -1,12 +1,12 @@
 /**
  * TokenPak Dashboard — Motion Integration Layer (Enhanced)
- * 
+ *
  * Orchestrates motion design across the dashboard:
  * - Filter changes trigger visual feedback + content reload animation
  * - HTMX swaps trigger KPI counting animations
  * - Chart interactions show drilldown feedback
  * - Card hovers show elevation + glow effects
- * 
+ *
  * Works with: motion.js, motion-choreography.js
  */
 
@@ -86,7 +86,7 @@
         section.removeAttribute('data-filter-pending');
         section.classList.remove('filter-updating');
         section.classList.add('content-loaded');
-        
+
         // Fade in animation
         setTimeout(() => {
           section.classList.remove('content-loaded');
@@ -199,11 +199,11 @@
 
   function setupRefreshAnimation() {
     const refreshBtn = document.querySelector('[data-refresh-btn], #filter-refresh-btn, .refresh-btn');
-    
+
     if (refreshBtn) {
       refreshBtn.addEventListener('click', (e) => {
         refreshBtn.classList.add('refreshing');
-        
+
         // Trigger refresh pulse if available
         if (window.MotionChoreography && window.MotionChoreography.triggerRefresh) {
           window.MotionChoreography.triggerRefresh();
@@ -270,7 +270,7 @@
         if (window.MotionEngine && window.MotionEngine.openDrawer) {
           window.MotionEngine.openDrawer(drawerId);
         }
-        
+
         // Or dispatch custom event for MotionChoreography
         const drawer = document.getElementById(drawerId);
         if (drawer) {

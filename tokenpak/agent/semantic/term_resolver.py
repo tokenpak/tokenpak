@@ -8,7 +8,7 @@ Provides cache-stable term resolution by:
 - Enforcing strict runtime policy (top-K, short fields, zero injection by default)
 - Handling ambiguity deterministically (one question or fallback)
 
-This enables safe integration into proxy_v4 request handling without prompt
+This enables safe integration into proxy request handling without prompt
 stuffing or full glossary dumps.
 
 Usage::
@@ -37,9 +37,11 @@ from typing import Any, Dict, List, Optional, Tuple
 # Data Models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class TermCardSnippet:
     """Short-form glossary snippet for injection."""
+
     canonical_id: str
     meaning: str  # from 'what' field
     aliases: List[str]  # top aliases only
@@ -55,6 +57,7 @@ class TermCardSnippet:
 @dataclass
 class TermResolution:
     """Result of term resolution."""
+
     query: str
     canonical_ids: List[str]  # matched canonical term IDs
     card_snippets: List[TermCardSnippet]  # top-K short-form cards
@@ -67,6 +70,7 @@ class TermResolution:
 @dataclass
 class TermResolverConfig:
     """Configuration for term resolution behavior."""
+
     top_k: int = 3  # max cards to return (hard cap 5)
     max_bytes_per_card: int = 200  # max bytes per card snippet
     enabled: bool = True
@@ -197,7 +201,7 @@ class TermResolver:
                     matched_ids[term_id] = matched_ids.get(term_id, 0) + 1
                     break  # count match once per term
 
-        canonical_ids = list(matched_ids.keys())[:self.config.top_k]
+        canonical_ids = list(matched_ids.keys())[: self.config.top_k]
 
         # Check for ambiguity
         ambiguous, ambiguity_q = self._check_ambiguity(canonical_ids, cards)
@@ -228,7 +232,11 @@ class TermResolver:
         # Use word boundaries for single words, spaces for phrases
         if " " in term:
             # Phrase: must appear surrounded by whitespace/punctuation
-            return f" {term} " in f" {normalized_text} " or f" {term}." in f" {normalized_text}." or f" {term}," in f" {normalized_text},"
+            return (
+                f" {term} " in f" {normalized_text} "
+                or f" {term}." in f" {normalized_text}."
+                or f" {term}," in f" {normalized_text},"
+            )
         else:
             # Single word: use word boundary regex
             pattern = rf"\b{re.escape(term)}\b"
@@ -264,12 +272,12 @@ class TermResolver:
         """Build short-form card snippets for injection."""
         snippets = []
 
-        for cid in canonical_ids[:self.config.top_k]:
+        for cid in canonical_ids[: self.config.top_k]:
             card = cards.get(cid, {})
             if not card:
                 continue
 
-            meaning = card.get("what", "")[:self.config.max_bytes_per_card]
+            meaning = card.get("what", "")[: self.config.max_bytes_per_card]
             aliases = card.get("aliases", [])[:2]  # top 2 aliases only
             confidence = card.get("confidence", 0.5)
 
@@ -318,7 +326,7 @@ def resolve_terms(
     """
     Resolve terms in text using the global resolver instance.
 
-    This is the primary entry point for term resolution in proxy_v4.
+    This is the primary entry point for term resolution in proxy.
 
     Args:
         text: User input text to analyze.

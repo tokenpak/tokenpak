@@ -1,3 +1,7 @@
+---
+title: "DETERMINISTIC_PACK_INTEGRATION"
+created: 2026-03-24T19:05:55Z
+---
 # DeterministicPromptPack — Integration Guide
 
 ## Overview
@@ -150,7 +154,7 @@ def proxy_anthropic_request(body_bytes):
     data = json.loads(body_bytes)
     user_msg = data["messages"][-1]["content"]
     vault_results = vault_search(user_msg)
-    
+
     pack = DeterministicPromptPack(
         system=load_system_prompt(),
         tools=registry.get_tools(),
@@ -158,7 +162,7 @@ def proxy_anthropic_request(body_bytes):
         retrieved_context=vault_results,  # ← Injected dynamically
         user_input=user_msg,
     )
-    
+
     data["system"] = pack.to_system_block()
     return json.dumps(data).encode("utf-8")
 ```
@@ -172,7 +176,7 @@ def proxy_anthropic_request(body_bytes):
 ```python
 def test_byte_identity():
     """Two identical packs produce byte-identical output."""
-    
+
     pack1 = DeterministicPromptPack(
         system="You are helpful.",
         tools=[{"name": "search", "description": "Search"}],
@@ -180,7 +184,7 @@ def test_byte_identity():
         retrieved_context=["doc1", "doc2"],
         user_input="What is X?",
     )
-    
+
     pack2 = DeterministicPromptPack(
         system="You are helpful.",
         tools=[{"name": "search", "description": "Search"}],
@@ -188,10 +192,10 @@ def test_byte_identity():
         retrieved_context=["doc1", "doc2"],
         user_input="What is X?",
     )
-    
+
     body1 = json.dumps(pack1.to_request_body(), sort_keys=True).encode("utf-8")
     body2 = json.dumps(pack2.to_request_body(), sort_keys=True).encode("utf-8")
-    
+
     assert body1 == body2  # ← PASS: byte-identical
 ```
 

@@ -50,10 +50,7 @@ def cmd_config_check(args):
 
 def register_config_check_parser(sub):
     """Register 'tokenpak config-check' command."""
-    p = sub.add_parser(
-        "config-check",
-        help="Validate a proxy config file (JSON)"
-    )
+    p = sub.add_parser("config-check", help="Validate a proxy config file (JSON)")
     p.add_argument("file", help="Path to config file (JSON)")
     p.set_defaults(func=cmd_config_check)
     return p

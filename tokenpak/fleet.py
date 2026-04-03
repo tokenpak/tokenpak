@@ -15,9 +15,11 @@ import yaml
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class FleetMachine:
     """Single machine in the fleet."""
+
     name: str
     host: str
     port: int
@@ -29,6 +31,7 @@ class FleetMachine:
 @dataclass
 class FleetStats:
     """Stats from a single machine."""
+
     name: str
     requests: int = 0
     saved: int = 0
@@ -44,6 +47,7 @@ class FleetStats:
 @dataclass
 class FleetAgentRow:
     """Per-agent breakdown row."""
+
     machine: str
     agent: str
     model: str
@@ -54,6 +58,7 @@ class FleetAgentRow:
 
 
 # ── Fleet configuration ───────────────────────────────────────────────────────
+
 
 def _get_fleet_config_path() -> Path:
     """Get the fleet.yaml config path."""
@@ -94,9 +99,7 @@ def save_fleet_config(machines: List[FleetMachine]):
     config_path = _get_fleet_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {
-        "fleet": [m.to_dict() for m in machines]
-    }
+    data = {"fleet": [m.to_dict() for m in machines]}
 
     with open(config_path, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -104,7 +107,10 @@ def save_fleet_config(machines: List[FleetMachine]):
 
 # ── Health & stats queries ────────────────────────────────────────────────────
 
-def _query_machine_aggregate(machine: FleetMachine, timeout: float = 3.0, since: Optional[str] = None) -> tuple[list[dict], Optional[str]]:
+
+def _query_machine_aggregate(
+    machine: FleetMachine, timeout: float = 3.0, since: Optional[str] = None
+) -> tuple[list[dict], Optional[str]]:
     """Query per-agent breakdown from /stats/aggregate/local."""
     try:
         url = f"http://{machine.host}:{machine.port}/stats/aggregate/local"
@@ -119,7 +125,9 @@ def _query_machine_aggregate(machine: FleetMachine, timeout: float = 3.0, since:
         return [], str(e)
 
 
-def query_fleet_agent_rows(machines: List[FleetMachine], since: Optional[str] = None) -> tuple[list[FleetAgentRow], list[str]]:
+def query_fleet_agent_rows(
+    machines: List[FleetMachine], since: Optional[str] = None
+) -> tuple[list[FleetAgentRow], list[str]]:
     """Query all machines for per-agent rows."""
     rows: list[FleetAgentRow] = []
     errors: list[str] = []
@@ -129,15 +137,17 @@ def query_fleet_agent_rows(machines: List[FleetMachine], since: Optional[str] = 
             errors.append(f"{machine.name}: {err}")
             continue
         for row in data:
-            rows.append(FleetAgentRow(
-                machine=row.get("machine", machine.name),
-                agent=row.get("agent", "unknown"),
-                model=row.get("model", "unknown"),
-                requests=int(row.get("requests", 0) or 0),
-                tokens=int(row.get("tokens", 0) or 0),
-                cost=float(row.get("cost", 0.0) or 0.0),
-                saved=float(row.get("saved", 0.0) or 0.0),
-            ))
+            rows.append(
+                FleetAgentRow(
+                    machine=row.get("machine", machine.name),
+                    agent=row.get("agent", "unknown"),
+                    model=row.get("model", "unknown"),
+                    requests=int(row.get("requests", 0) or 0),
+                    tokens=int(row.get("tokens", 0) or 0),
+                    cost=float(row.get("cost", 0.0) or 0.0),
+                    saved=float(row.get("saved", 0.0) or 0.0),
+                )
+            )
     return rows, errors
 
 
@@ -173,7 +183,7 @@ def _query_machine(machine: FleetMachine, timeout: float = 3.0) -> FleetStats:
         total_out = session_stats.get("output_tokens", 0)
         if total_out > 0:
             sent_out = session_stats.get("sent_output_tokens", 0)
-            stats.compression = ((total_out - sent_out) / total_out * 100)
+            stats.compression = (total_out - sent_out) / total_out * 100
 
         # Determine health status
         health_status = health_data.get("status", "unknown")
@@ -204,6 +214,7 @@ def query_fleet(machines: List[FleetMachine]) -> List[FleetStats]:
 
 
 # ── Rendering ────────────────────────────────────────────────────────────────
+
 
 def _fmt_cost(amount: float) -> str:
     """Format a dollar amount compactly."""
@@ -262,7 +273,9 @@ def render_fleet_table(stats_list: List[FleetStats], compact: bool = False) -> s
 
     grand_saved = total_comp + total_cache
     lines.append("")
-    lines.append(f"Fleet: {total_requests} reqs | spent {_fmt_cost(total_cost)} | 💰 saved {_fmt_cost(grand_saved)} (compression {_fmt_cost(total_comp)}, cache {_fmt_cost(total_cache)})")
+    lines.append(
+        f"Fleet: {total_requests} reqs | spent {_fmt_cost(total_cost)} | 💰 saved {_fmt_cost(grand_saved)} (compression {_fmt_cost(total_comp)}, cache {_fmt_cost(total_cache)})"
+    )
 
     return "\n".join(lines)
 
@@ -315,6 +328,7 @@ def render_fleet_json(stats_list: List[FleetStats]) -> str:
 
 
 # ── Interactive setup ────────────────────────────────────────────────────────
+
 
 def interactive_add_machine(machines: List[FleetMachine]) -> Optional[FleetMachine]:
     """Prompt user to add a new machine to the fleet."""

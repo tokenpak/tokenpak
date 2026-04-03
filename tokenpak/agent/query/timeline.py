@@ -3,6 +3,7 @@
 This module provides hourly bucketing of telemetry data for timeline visualization.
 Supports cost breakdown by model and time-based aggregation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -108,7 +109,11 @@ class TimelineGenerator:
                 continue
 
             # Convert to UTC and bucket to the hour
-            ts_utc = ts_dt.astimezone(timezone.utc) if ts_dt.tzinfo else ts_dt.replace(tzinfo=timezone.utc)
+            ts_utc = (
+                ts_dt.astimezone(timezone.utc)
+                if ts_dt.tzinfo
+                else ts_dt.replace(tzinfo=timezone.utc)
+            )
             hour_dt = ts_utc.replace(minute=0, second=0, microsecond=0)
             hour_key = hour_dt.isoformat()
 
@@ -138,12 +143,15 @@ class TimelineGenerator:
         current = start_dt
         for _ in range(num_hours):
             hour_key = current.isoformat()
-            bucket = buckets.get(hour_key, {
-                "hour": hour_key,
-                "cost": 0.0,
-                "requests": 0,
-                "models": {},
-            })
+            bucket = buckets.get(
+                hour_key,
+                {
+                    "hour": hour_key,
+                    "cost": 0.0,
+                    "requests": 0,
+                    "models": {},
+                },
+            )
             result.append(bucket)
             current += timedelta(hours=1)
 

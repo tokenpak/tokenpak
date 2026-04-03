@@ -154,7 +154,11 @@ class TestFormatterErrors:
             assert isinstance(result, (list, dict))
         except (ValueError, TypeError) as e:
             error_msg = str(e)
-            assert "budget" in error_msg.lower() or "negative" in error_msg.lower() or "positive" in error_msg.lower()
+            assert (
+                "budget" in error_msg.lower()
+                or "negative" in error_msg.lower()
+                or "positive" in error_msg.lower()
+            )
 
     def test_empty_blocks_compileable(self):
         """Empty blocks list should compile (not error)."""

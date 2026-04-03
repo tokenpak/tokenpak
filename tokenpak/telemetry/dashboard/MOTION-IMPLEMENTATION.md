@@ -1,3 +1,7 @@
+---
+title: "MOTION-IMPLEMENTATION"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Dashboard — Motion Choreography Implementation Guide
 
 ## Overview
@@ -76,7 +80,7 @@ In JavaScript (after HTMX swap):
 document.querySelectorAll('[data-animate-number="true"]').forEach(elem => {
   const oldValue = parseFloat(elem.textContent.replace(/[^0-9.]/g, ''));
   const newValue = parseFloat(elem.dataset.newValue || elem.textContent.replace(/[^0-9.]/g, ''));
-  
+
   const counter = new CountUp(elem, oldValue, newValue, 2, 300);
   counter.options.prefix = '$';
   counter.start();
@@ -249,11 +253,11 @@ JavaScript to open:
 function openDrawer(content) {
   const drawer = document.getElementById('trace-drawer');
   const overlay = document.getElementById('drawer-overlay');
-  
+
   drawer.innerHTML = content;
   drawer.style.display = 'block';
   overlay.style.display = 'block';
-  
+
   // Triggers tp-drawer-slide-in animation automatically
 }
 ```
@@ -263,10 +267,10 @@ JavaScript to close:
 function closeDrawer() {
   const drawer = document.getElementById('trace-drawer');
   const overlay = document.getElementById('drawer-overlay');
-  
+
   drawer.classList.add('closing');
   overlay.classList.add('closing');
-  
+
   setTimeout(() => {
     drawer.style.display = 'none';
     overlay.style.display = 'none';
@@ -438,7 +442,7 @@ MotionChoreography.triggerRefreshAnimation();
   --tp-ease-out: cubic-bezier(.16, 1, .3, 1);    /* Primary easing */
   --tp-ease-smooth: cubic-bezier(.4, 0, .2, 1);  /* Micro-interactions */
   --tp-ease-in: cubic-bezier(.8, 0, .2, 1);      /* Entrance */
-  
+
   --tp-duration-instant: 150ms;   /* Micro-interactions */
   --tp-duration-quick: 200ms;     /* Quick feedback */
   --tp-duration-normal: 300ms;    /* Standard transition */
@@ -520,4 +524,4 @@ MotionChoreography.triggerRefreshAnimation();
 
 **Status:** Core motion system complete. Integration with templates and Chart.js pending.
 
-See `~/vault/Projects/ocp-protocol/packages/pypi/tokenpak/telemetry/dashboard/` for implementation files.
+See `~/vault/Projects/tokenpak/packages/pypi/tokenpak/telemetry/dashboard/` for implementation files.

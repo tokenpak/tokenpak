@@ -24,9 +24,9 @@ WATCHDOG_LOG = Path.home() / ".tokenpak" / "watchdog.log"
 COOLDOWNS_FILE = Path.home() / ".tokenpak" / "cooldowns.json"
 AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
 HEALTH_CHECK_INTERVAL = 30  # seconds
-STATS_INTERVAL = 3600        # 1 hour
+STATS_INTERVAL = 3600  # 1 hour
 MAX_RESTART_ATTEMPTS = 5
-RESTART_BACKOFF_BASE = 2     # exponential: 2s, 4s, 8s, 16s, 32s
+RESTART_BACKOFF_BASE = 2  # exponential: 2s, 4s, 8s, 16s, 32s
 
 
 # Setup logging
@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Cooldown Manager
 # ---------------------------------------------------------------------------
+
 
 class CooldownManager:
     """Manage and auto-clear expired auth cooldowns.
@@ -141,6 +142,7 @@ class CooldownManager:
 # Proxy Watchdog
 # ---------------------------------------------------------------------------
 
+
 class ProxyWatchdog:
     """Monitor and auto-heal proxy process."""
 
@@ -186,10 +188,8 @@ class ProxyWatchdog:
             )
             return False
 
-        backoff = RESTART_BACKOFF_BASE ** self.restart_count
-        logger.info(
-            f"Restarting proxy... (attempt {self.restart_count + 1}, backoff {backoff}s)"
-        )
+        backoff = RESTART_BACKOFF_BASE**self.restart_count
+        logger.info(f"Restarting proxy... (attempt {self.restart_count + 1}, backoff {backoff}s)")
 
         try:
             # Kill any existing proxy process
@@ -227,14 +227,18 @@ class ProxyWatchdog:
         try:
             result = subprocess.run(
                 ["pgrep", "-f", "tokenpak.proxy"],
-                capture_output=True, text=True, timeout=2,
+                capture_output=True,
+                text=True,
+                timeout=2,
             )
             pids = result.stdout.strip().split()
             for pid in pids:
                 if pid:
                     result2 = subprocess.run(
                         ["ps", "-p", pid, "-o", "rss="],
-                        capture_output=True, text=True, timeout=2,
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
                     )
                     rss_kb = int(result2.stdout.strip() or 0)
                     rss_mb = rss_kb / 1024
@@ -248,7 +252,9 @@ class ProxyWatchdog:
         try:
             result = subprocess.run(
                 ["curl", "-s", "--max-time", "2", f"http://localhost:{PROXY_PORT}/stats/session"],
-                capture_output=True, text=True, timeout=3,
+                capture_output=True,
+                text=True,
+                timeout=3,
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
@@ -271,8 +277,16 @@ class ProxyWatchdog:
         if now - self.last_stats_log > STATS_INTERVAL:
             try:
                 result = subprocess.run(
-                    ["curl", "-s", "--max-time", "2", f"http://localhost:{PROXY_PORT}/stats/session"],
-                    capture_output=True, text=True, timeout=3,
+                    [
+                        "curl",
+                        "-s",
+                        "--max-time",
+                        "2",
+                        f"http://localhost:{PROXY_PORT}/stats/session",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
                 )
                 if result.returncode == 0:
                     stats = json.loads(result.stdout)

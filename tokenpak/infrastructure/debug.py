@@ -1,21 +1,14 @@
-"""debug — consolidated debug logger and state management.
+"""infrastructure.debug — DebugLogger (JSONL per-request) + DebugState (on/off toggle).
 
-Merged from:
-  - agent/debug/logger.py  (DebugLogger, _DebugRecord)
-  - agent/debug/state.py   (DebugState)
+Consolidated from agent/debug/logger.py and agent/debug/state.py.
 """
 
-from __future__ import annotations
 
 import json
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
-
-# ---------------------------------------------------------------------------
-# DebugLogger
-# ---------------------------------------------------------------------------
 
 _DEFAULT_LOG = Path.home() / ".tokenpak" / "debug.log"
 
@@ -70,11 +63,12 @@ class DebugLogger:
                 fh.write(json.dumps(rec.to_dict()) + "\n")
 
 
-# ---------------------------------------------------------------------------
-# DebugState
-# ---------------------------------------------------------------------------
 
-_DEFAULT_STATE_PATH = Path.home() / ".tokenpak" / "debug.json"
+import json
+from pathlib import Path
+from typing import Optional
+
+_DEFAULT_PATH = Path.home() / ".tokenpak" / "debug.json"
 
 
 class DebugState:
@@ -88,8 +82,12 @@ class DebugState:
     """
 
     def __init__(self, path: Optional[Path] = None) -> None:
-        self._path = Path(path) if path else _DEFAULT_STATE_PATH
+        self._path = Path(path) if path else _DEFAULT_PATH
         self._path.parent.mkdir(parents=True, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
     def _load(self) -> dict:
         if self._path.exists():
@@ -101,6 +99,10 @@ class DebugState:
 
     def _save(self, data: dict) -> None:
         self._path.write_text(json.dumps(data, indent=2))
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def enable(self, requests: Optional[int] = None) -> None:
         """Enable debug mode. If *requests* is given, auto-disable after N requests."""
@@ -127,7 +129,7 @@ class DebugState:
             return
         remaining = data.get("requests_remaining")
         if remaining is None:
-            return
+            return  # unlimited — nothing to decrement
         remaining -= 1
         if remaining <= 0:
             data["enabled"] = False

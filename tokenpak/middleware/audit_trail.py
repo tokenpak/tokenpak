@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Literal, Optional
 
 class CompressionMethod(str, Enum):
     """Compression strategies."""
+
     EXTRACTIVE = "extractive"
     LLM = "llm"
     TRUNCATION = "truncation"
@@ -22,6 +23,7 @@ class CompressionMethod(str, Enum):
 
 class BlockType(str, Enum):
     """Block types in context."""
+
     INSTRUCTION = "instruction"
     KNOWLEDGE = "knowledge"
     EVIDENCE = "evidence"
@@ -32,6 +34,7 @@ class BlockType(str, Enum):
 @dataclass
 class BlockAudit:
     """Audit record for a single block decision."""
+
     block_id: str
     block_type: BlockType
     original_size: int
@@ -45,6 +48,7 @@ class BlockAudit:
 @dataclass
 class CompileAudit:
     """Audit trail for a /compile request."""
+
     request_id: str
     timestamp: str  # ISO 8601
 
@@ -82,13 +86,13 @@ class CompileAudit:
                 **asdict(block),
                 "block_type": block.block_type.value,
                 "action": block.action,
-                "compression_method": block.compression_method.value if block.compression_method else None
+                "compression_method": block.compression_method.value
+                if block.compression_method
+                else None,
             }
             for block in self.blocks_audited
         ]
-        data["input_blocks_by_type"] = {
-            k.value: v for k, v in data["input_blocks_by_type"].items()
-        }
+        data["input_blocks_by_type"] = {k.value: v for k, v in data["input_blocks_by_type"].items()}
         data["output_blocks_by_type"] = {
             k.value: v for k, v in data["output_blocks_by_type"].items()
         }
@@ -105,6 +109,7 @@ class CompileAudit:
 @dataclass
 class CacheAudit:
     """Audit trail for /cache/* requests."""
+
     request_id: str
     timestamp: str  # ISO 8601
     operation: Literal["get", "set", "invalidate", "clear"]
@@ -118,6 +123,7 @@ class CacheAudit:
 @dataclass
 class MetricsAudit:
     """Audit trail for /metrics requests."""
+
     request_id: str
     timestamp: str  # ISO 8601
     aggregation_window: str  # e.g., "1h", "24h"

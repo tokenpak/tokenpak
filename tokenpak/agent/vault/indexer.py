@@ -15,7 +15,7 @@ from tokenpak.walker import detect_file_type, walk_directory
 
 from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
 from .slicer import SliceRecord, should_slice, slice_content
-from .symbols import SymbolTable
+from .symbol_extraction import SymbolTable
 
 
 class VaultIndexer:
