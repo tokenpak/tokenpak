@@ -71,6 +71,24 @@ from urllib.parse import urlparse
 
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
+from tokenpak.runtime.providers import Provider, detect_provider
+
+# Query expansion — stop words, stemming, synonym aliases for better BM25 recall
+try:
+    from tokenpak.agent.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
+    _QUERY_EXPANSION_AVAILABLE = True
+except ImportError:
+    _QUERY_EXPANSION_AVAILABLE = False
+
+# Backend protocol — pluggable retrieval backends and semantic scorers
+try:
+    from tokenpak.agent.vault.backend_protocol import (
+        load_custom_backend as _load_custom_backend,
+        load_custom_scorer as _load_custom_scorer,
+    )
+    _BACKEND_PROTOCOL_AVAILABLE = True
+except ImportError:
+    _BACKEND_PROTOCOL_AVAILABLE = False
 
 # Try to import migration system (for DB schema version tracking)
 try:
@@ -589,6 +607,9 @@ VAULT_CACHE_PRELOAD: int = _cfg(
 RETRIEVAL_BACKEND = _cfg(
     "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
 ).lower()
+SEMANTIC_BACKEND = _cfg(
+    "vault.semantic_backend", "", "TOKENPAK_SEMANTIC_BACKEND", str
+)
 
 # Term-Card Resolver
 TERM_RESOLVER_ENABLED: bool = _cfg(
@@ -935,13 +956,19 @@ _provider_circuit_lock = threading.Lock()
 
 
 def _provider_for_url(url: str) -> str:
-    if "anthropic.com" in url:
-        return "anthropic"
-    if "openai.com" in url:
-        return "openai"
-    if "googleapis.com" in url:
+    """Map *url* to a circuit-breaker key via ``detect_provider``.
+
+    Returns a plain string (the Provider enum value) for backward
+    compatibility with the ``_provider_circuits`` dict keys.  The special
+    mapping ``GEMINI -> "google"`` preserves the existing circuit key.
+    """
+    prov = detect_provider(url)
+    if prov is Provider.UNKNOWN:
+        return ""
+    # The circuit-breaker dict uses "google" for Gemini endpoints.
+    if prov is Provider.GEMINI:
         return "google"
-    return ""
+    return prov.value
 
 
 def _circuit_check(provider: str) -> bool:
@@ -1508,8 +1535,21 @@ class VaultIndex:
     def search(
         self, query: str, top_k: int = 5, min_score: float = 2.0
     ) -> List[Tuple[dict, float]]:
-        """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
-        query_terms = _bm25_tokenize(query)
+        """BM25 search across vault blocks with query expansion.
+
+        When query expansion is available, search terms are expanded with
+        synonyms/aliases (weight 0.5) and stemmed forms (weight 0.8).
+        Each expanded term's BM25 contribution is multiplied by its weight,
+        improving recall on vocabulary-mismatch queries while preserving
+        precision on exact matches.
+
+        Returns [(block_dict, score), ...] sorted by score descending.
+        """
+        # Use weighted query expansion when available
+        weighted_terms = _bm25_tokenize_query(query)
+        query_terms = [t for t, _ in weighted_terms]
+        term_weights = {t: w for t, w in weighted_terms}
+
         if not query_terms or not self.blocks:
             return []
 
@@ -1572,7 +1612,11 @@ class VaultIndex:
                     continue
                 numerator = term_freq * (k1 + 1)
                 denominator = term_freq + k1 * (1 - b_param + b_param * dl / avg_dl)
-                score += idf * numerator / denominator
+                # Weight the BM25 contribution by term weight (1.0 for original,
+                # 0.5 for aliases, 0.8 for stems) — expansion terms contribute
+                # proportionally less than exact matches
+                weight = term_weights.get(qt, 1.0)
+                score += weight * idf * numerator / denominator
             if score >= min_score:
                 scores[bid] = score
 
@@ -1633,9 +1677,27 @@ class VaultIndex:
 
 
 # BM25 tokenizer — lru_cache gives 50x speedup on repeated queries (search terms repeat often)
+# Enhanced with query expansion (stop words, stemming, aliases) when available.
 @lru_cache(maxsize=512)
 def _bm25_tokenize(text: str) -> List[str]:
+    """Tokenize text for BM25 indexing (includes stemmed forms, removes stop words)."""
+    if _QUERY_EXPANSION_AVAILABLE:
+        return list(_qe_tokenize(text, mode="index"))
     return re.findall(r"[a-z0-9_]+", text.lower())
+
+
+def _bm25_tokenize_query(query: str) -> List[Tuple[str, float]]:
+    """Tokenize a search query with expansion (aliases + stems + weights).
+
+    Returns list of (term, weight) tuples. Original terms get weight 1.0,
+    aliases get 0.5, stems get 0.8.
+    """
+    if _QUERY_EXPANSION_AVAILABLE:
+        tokens = list(_qe_tokenize(query, mode="query"))
+        return _qe_expand(tokens)
+    # Fallback: all terms weighted equally at 1.0
+    terms = re.findall(r"[a-z0-9_]+", query.lower())
+    return [(t, 1.0) for t in terms]
 
 
 # Global vault index instance — backend-aware
@@ -1654,9 +1716,77 @@ else:
     VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
     print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
 
+# Custom backend override (Replace mode): TOKENPAK_RETRIEVAL_BACKEND=custom:module.ClassName
+if RETRIEVAL_BACKEND.startswith("custom:") and _BACKEND_PROTOCOL_AVAILABLE:
+    try:
+        VAULT_INDEX = _load_custom_backend(RETRIEVAL_BACKEND, VAULT_INDEX_PATH)
+        print(f"  📦 Vault retrieval backend: custom ({RETRIEVAL_BACKEND})")
+    except (ValueError, ImportError, AttributeError, TypeError) as _custom_err:
+        print(f"  ⚠️  Custom backend failed ({_custom_err}), falling back to json_blocks")
+        VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+
 # HOTFIX 2026-03-27: Load vault index on startup (was previously only in bg timer)
 VAULT_INDEX.maybe_reload()
 print(f"  ✅ Vault index loaded: {len(VAULT_INDEX.blocks)} blocks")
+
+# Semantic scorer (Augment mode): TOKENPAK_SEMANTIC_BACKEND=custom:module.ClassName
+SEMANTIC_SCORER = None
+if SEMANTIC_BACKEND and SEMANTIC_BACKEND.startswith("custom:") and _BACKEND_PROTOCOL_AVAILABLE:
+    try:
+        SEMANTIC_SCORER = _load_custom_scorer(SEMANTIC_BACKEND)
+        print(f"  🧠 Semantic scorer loaded: {SEMANTIC_BACKEND}")
+    except (ValueError, ImportError, AttributeError, TypeError) as _scorer_err:
+        print(f"  ⚠️  Semantic scorer failed ({_scorer_err}), running without Augment mode")
+
+# Log query expansion status
+if _QUERY_EXPANSION_AVAILABLE:
+    print("  🔍 Query expansion: enabled (stop words, stemming, aliases)")
+else:
+    print("  🔍 Query expansion: disabled (module not available)")
+
+
+def _compile_from_results(
+    results: List[Tuple[dict, float]], budget: int
+) -> Tuple[str, int, List[str]]:
+    """Build injection text from pre-scored results within a token budget.
+
+    Used by Augment mode after multi-signal rescoring to format injection
+    from score_and_sort() output without re-searching.
+    """
+    if not results:
+        return "", 0, []
+
+    injection_parts: List[str] = []
+    tokens_used = 0
+    source_refs: List[str] = []
+
+    for block, score in results:
+        content = VAULT_INDEX._get_content(block["block_id"])
+        block_tokens = block.get("raw_tokens", 0) or count_tokens(content)
+
+        remaining = budget - tokens_used
+        if remaining <= 100:
+            break
+
+        if block_tokens > remaining:
+            char_limit = remaining * 4
+            content = content[:char_limit].rsplit("\n", 1)[0]
+            block_tokens = count_tokens(content)
+            if block_tokens > remaining:
+                break
+
+        source_path = block.get("source_path", block.get("block_id", "unknown"))
+        injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
+        tokens_used += block_tokens
+        source_refs.append(source_path)
+
+    if not injection_parts:
+        return "", 0, []
+
+    header = "\n\n## Retrieved Context\n"
+    injection_text = header + "\n\n".join(injection_parts)
+    tokens_used = count_tokens(injection_text)
+    return injection_text, tokens_used, source_refs
 
 
 def _vault_index_reload_timer() -> None:
@@ -2392,13 +2522,14 @@ def _db_writer_worker():
             try:
                 with _DB_LOCK:
                     conn = _get_db_connection(db_path)
+                    # CACHE-P4-002: Extended schema with cache telemetry columns
                     conn.execute(
                         """INSERT INTO requests
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_provider,cache_hit_inference,cache_estimated_savings)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -2482,6 +2613,19 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        # CACHE-P4-002: Add cache telemetry columns
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_provider TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_hit_inference INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_estimated_savings REAL DEFAULT 0.0")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -2530,7 +2674,12 @@ class Monitor:
         cache_read_tokens=0,
         cache_creation_tokens=0,
         would_have_saved=0,
+        cache_provider="",
+        cache_estimated_savings=0.0,
     ):
+        # CACHE-P4-002: Infer cache hit from cache_read_tokens
+        cache_hit_inference = 1 if cache_read_tokens > 0 else 0
+        
         # Enqueue write instead of writing directly (async, <0.1ms return)
         insert_params = (
             datetime.now().isoformat(),
@@ -2550,6 +2699,9 @@ class Monitor:
             cache_read_tokens,
             cache_creation_tokens,
             would_have_saved,
+            cache_provider,
+            cache_hit_inference,
+            cache_estimated_savings,
         )
         _queued = False
         try:
@@ -2561,8 +2713,8 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params
             )
             _conn.commit()
@@ -2795,6 +2947,8 @@ SESSION = {
         "schema_tool_change": 0,
         "retrieval_order_drift_or_unknown": 0,
     },
+    # Per-provider cache telemetry (CACHE-P4-002)
+    "cache_by_provider": {},  # provider_name -> {hits, misses, read_tokens, creation_tokens, savings_usd}
     "token_cache_hits": 0,
     "token_cache_misses": 0,
     "canon_hits": 0,
@@ -2873,6 +3027,54 @@ MODEL_COSTS = {
     "gemini-3-pro-preview": {"input": 1.25, "output": 5.0},
     "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
 }
+
+
+# ---------------------------------------------------------------------------
+# Cache Cost Multipliers — per-provider cache read/creation pricing
+# Source: Provider pricing docs (see CACHE-P4-002 task)
+# read = fraction of input cost for cached tokens
+# creation = multiplier on input cost for cache write (Anthropic only has surcharge)
+# ---------------------------------------------------------------------------
+CACHE_COST_MULTIPLIERS: Dict[Provider, Dict[str, float]] = {
+    Provider.ANTHROPIC: {"read": 0.10, "creation": 1.25},  # reads=10%, creation=125%
+    Provider.OPENAI: {"read": 0.50, "creation": 1.0},       # reads=50%, no creation surcharge
+    Provider.AZURE_OPENAI: {"read": 0.50, "creation": 1.0},
+    Provider.XAI: {"read": 0.50, "creation": 1.0},
+    Provider.GROQ: {"read": 0.0, "creation": 1.0},          # Free (volatile cache)
+    Provider.FIREWORKS: {"read": 0.0, "creation": 1.0},     # No cache pricing surcharge
+    Provider.TOGETHER: {"read": 0.0, "creation": 1.0},      # No cache pricing surcharge
+    Provider.GEMINI: {"read": 0.25, "creation": 1.0},       # 25% of input cost
+    Provider.BEDROCK: {"read": 0.10, "creation": 1.0},      # 10% of input cost
+    Provider.CODEX: {"read": 0.50, "creation": 1.0},        # Follows OpenAI pricing
+    Provider.UNKNOWN: {"read": 0.10, "creation": 1.25},     # Conservative default
+}
+
+
+def estimate_cache_savings(
+    provider: Provider, cache_read_tokens: int, model: str = ""
+) -> float:
+    """Estimate USD saved from cache hits for a given provider.
+    
+    Formula: cache_read_tokens * input_cost * (1.0 - read_multiplier)
+    Example: 1000 Anthropic cache reads at $3/MTok input → 1000 * 0.000003 * 0.90 = $0.0027 saved
+    """
+    if cache_read_tokens <= 0:
+        return 0.0
+    
+    # Get input cost per token
+    input_cost_per_mtok = 3.0  # default
+    for key, costs in MODEL_COSTS.items():
+        if key in model.lower():
+            input_cost_per_mtok = costs["input"]
+            break
+    input_cost_per_tok = input_cost_per_mtok / 1_000_000
+    
+    # Get cache read multiplier
+    multipliers = CACHE_COST_MULTIPLIERS.get(provider, CACHE_COST_MULTIPLIERS[Provider.UNKNOWN])
+    read_mult = multipliers["read"]
+    
+    # Savings = tokens * cost * (1 - discount)
+    return cache_read_tokens * input_cost_per_tok * (1.0 - read_mult)
 
 
 def estimate_cost(model, input_tokens, output_tokens, cache_read=0, cache_creation=0):
@@ -2991,9 +3193,35 @@ def inject_vault_context(
     _t_resolver_ms = (time.perf_counter() - _t2) * 1000
 
     _t3 = time.perf_counter()
-    injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
-        query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
-    )
+    # Augment mode: if a semantic scorer is configured, fuse BM25 + semantic scores
+    if SEMANTIC_SCORER is not None:
+        try:
+            bm25_results = VAULT_INDEX.search(
+                query, top_k=INJECT_TOP_K * 2, min_score=INJECT_MIN_SCORE
+            )
+            if bm25_results:
+                block_ids = [b["block_id"] for b, _ in bm25_results]
+                semantic_scores = SEMANTIC_SCORER.score(query, block_ids)
+                # Import score_and_sort for multi-signal fusion
+                from tokenpak.agent.vault.search import score_and_sort
+                rescored = score_and_sort(
+                    bm25_results, query=query, semantic_scores=semantic_scores
+                )[:INJECT_TOP_K]
+                # Build injection from rescored results
+                injection_text, tokens_used, source_refs = _compile_from_results(
+                    rescored, remaining_budget
+                )
+            else:
+                injection_text, tokens_used, source_refs = "", 0, []
+        except Exception as _sem_err:
+            logging.warning("Semantic scorer failed, falling back to BM25: %s", _sem_err)
+            injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+                query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+            )
+    else:
+        injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+            query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        )
     _t_bm25_ms = (time.perf_counter() - _t3) * 1000
 
     # Combine glossary + vault injection if both present
@@ -3160,7 +3388,97 @@ def _classify_cache_miss_reason(
     return "retrieval_order_drift_or_unknown"
 
 
+def _get_cache_stats_by_window(hours: int = 24) -> Dict[str, Any]:
+    """Query DB for cache stats within a time window.
+    
+    Returns per-provider stats and overall totals for the given time window.
+    """
+    try:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+        
+        conn = sqlite3.connect(str(MONITOR.db_path))
+        cur = conn.cursor()
+        
+        # Get overall stats
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total_requests,
+                SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as cache_hits,
+                COALESCE(SUM(cache_read_tokens), 0) as total_cache_read,
+                COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation,
+                COALESCE(SUM(CASE WHEN cache_provider IS NOT NULL THEN cache_estimated_savings ELSE 0 END), 0) as total_savings
+            FROM requests 
+            WHERE timestamp >= ?
+        """, (cutoff,))
+        overall = cur.fetchone()
+        
+        # Get per-provider stats
+        cur.execute("""
+            SELECT 
+                cache_provider,
+                COUNT(*) as requests,
+                SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as hits,
+                COALESCE(SUM(cache_read_tokens), 0) as read_tokens,
+                COALESCE(SUM(cache_creation_tokens), 0) as creation_tokens,
+                COALESCE(SUM(cache_estimated_savings), 0) as savings
+            FROM requests 
+            WHERE timestamp >= ? AND cache_provider IS NOT NULL AND cache_provider != ''
+            GROUP BY cache_provider
+        """, (cutoff,))
+        per_provider = cur.fetchall()
+        
+        conn.close()
+        
+        total_requests = overall[0] or 0
+        cache_hits = overall[1] or 0
+        hit_rate = (cache_hits / total_requests) if total_requests > 0 else 0.0
+        
+        provider_stats = {}
+        for row in per_provider:
+            provider_name = row[0] or "unknown"
+            provider_requests = row[1] or 0
+            provider_hits = row[2] or 0
+            provider_stats[provider_name] = {
+                "requests": provider_requests,
+                "cache_hits": provider_hits,
+                "hit_rate": round((provider_hits / provider_requests) if provider_requests > 0 else 0.0, 4),
+                "cache_read_tokens": row[3] or 0,
+                "cache_creation_tokens": row[4] or 0,
+                "estimated_savings_usd": round(row[5] or 0.0, 6),
+            }
+        
+        return {
+            "total_requests": total_requests,
+            "cache_hits": cache_hits,
+            "hit_rate": round(hit_rate, 4),
+            "cache_read_tokens": overall[2] or 0,
+            "cache_creation_tokens": overall[3] or 0,
+            "estimated_savings_usd": round(overall[4] or 0.0, 6),
+            "per_provider": provider_stats,
+        }
+    except Exception as e:
+        # Fail gracefully — return session stats if DB query fails
+        return {
+            "total_requests": 0,
+            "cache_hits": 0,
+            "hit_rate": 0.0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "estimated_savings_usd": 0.0,
+            "per_provider": {},
+            "error": str(e),
+        }
+
+
 def _build_cache_stats_payload() -> Dict[str, Any]:
+    """Build comprehensive cache stats including per-provider breakdowns.
+    
+    Returns:
+        - Session-level stats (since proxy start)
+        - Per-provider session stats
+        - DB-backed time-windowed stats (1h, 24h, 7d)
+    """
     global _TOKEN_CACHE_HITS, _TOKEN_CACHE_MISSES
     
     # Sync module counters to SESSION
@@ -3172,7 +3490,29 @@ def _build_cache_stats_payload() -> Dict[str, Any]:
     total = hits + misses
     hit_rate = (hits / total) if total > 0 else 0.0
     miss_reasons = dict(SESSION.get("cache_miss_reasons", {}))
+    
+    # Session per-provider stats
+    session_by_provider = {}
+    cache_by_provider = SESSION.get("cache_by_provider", {})
+    for provider_name, stats in cache_by_provider.items():
+        provider_hits = stats.get("hits", 0)
+        provider_total = provider_hits + stats.get("misses", 0)
+        session_by_provider[provider_name] = {
+            "cache_hits": provider_hits,
+            "cache_misses": stats.get("misses", 0),
+            "hit_rate": round((provider_hits / provider_total) if provider_total > 0 else 0.0, 4),
+            "cache_read_tokens": stats.get("read_tokens", 0),
+            "cache_creation_tokens": stats.get("creation_tokens", 0),
+            "estimated_savings_usd": round(stats.get("savings_usd", 0.0), 6),
+        }
+    
+    # Time-windowed stats from DB
+    stats_1h = _get_cache_stats_by_window(hours=1)
+    stats_24h = _get_cache_stats_by_window(hours=24)
+    stats_7d = _get_cache_stats_by_window(hours=168)
+    
     return {
+        # Session stats (backward compatible)
         "hit_rate": round(hit_rate, 4),
         "cache_read_tokens": int(SESSION.get("cache_read_tokens", 0) or 0),
         "cache_creation_tokens": int(SESSION.get("cache_creation_tokens", 0) or 0),
@@ -3182,6 +3522,20 @@ def _build_cache_stats_payload() -> Dict[str, Any]:
         "miss_reasons": miss_reasons,
         "token_cache_hits": SESSION["token_cache_hits"],
         "token_cache_misses": SESSION["token_cache_misses"],
+        
+        # Per-provider session stats
+        "session_by_provider": session_by_provider,
+        
+        # Time-windowed stats
+        "last_1h": stats_1h,
+        "last_24h": stats_24h,
+        "last_7d": stats_7d,
+        
+        # Active providers (for quick reference)
+        "active_providers": list(cache_by_provider.keys()) if cache_by_provider else [],
+        
+        # Timestamp
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -3273,9 +3627,108 @@ def compact_request_body(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
 
 
 # ---------------------------------------------------------------------------
+# Gemini cachedContent Support (CACHE-P3-002)
+# ---------------------------------------------------------------------------
+# GEMINI CACHED CONTENT LIFECYCLE:
+# 1. CREATE: Client calls Gemini's cachedContents.create() directly
+#    - Provides system instructions, tools, and/or content to cache
+#    - Gets back a resource name (e.g., "cachedContents/abc123")
+#    - Cache has a TTL (default 1 hour, can be extended up to 7 days)
+# 2. USE: Client passes resource name to TokenPak
+#    - Via header: x-tokenpak-cache-ref
+#    - Via body: tokenpak_cache_object_ref
+#    - TokenPak injects as cachedContent field in generateContent request
+# 3. RESPONSE: Gemini returns cachedContentTokenCount in usageMetadata
+#    - TokenPak maps this to cache_read_tokens in DB
+# 4. MANAGE: Client handles TTL extension, deletion, listing directly with Gemini
+#    - TokenPak does not manage cache object lifecycle
+
+
+def _inject_gemini_cache_ref(provider: Provider, headers: dict, body: bytes) -> bytes:
+    """Inject cachedContent reference for Gemini requests.
+    
+    Accepts cache ref from:
+    - Header: x-tokenpak-cache-ref
+    - Body field: tokenpak_cache_object_ref (stripped before forwarding)
+    
+    Header takes precedence over body field.
+    Only injects for Provider.GEMINI; returns body unchanged for other providers.
+    
+    Args:
+        provider: The detected LLM provider
+        headers: Request headers dict (case-sensitive keys)
+        body: Request body bytes
+        
+    Returns:
+        Modified body bytes with cachedContent injected (if applicable)
+    """
+    if provider != Provider.GEMINI:
+        return body
+    
+    if not body:
+        return body
+    
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+    
+    # Get cache ref: header takes precedence over body field
+    cache_ref = headers.get("x-tokenpak-cache-ref") or headers.get("X-TokenPak-Cache-Ref")
+    body_ref = None
+    
+    if "tokenpak_cache_object_ref" in data:
+        body_ref = data.pop("tokenpak_cache_object_ref")  # Strip from forwarded body
+    
+    final_ref = cache_ref or body_ref
+    
+    if not final_ref:
+        # No cache ref provided — return body (possibly modified to strip field)
+        if body_ref is not None:
+            return json.dumps(data).encode()
+        return body
+    
+    # Inject as Gemini's cachedContent field
+    data["cachedContent"] = final_ref
+    
+    return json.dumps(data).encode()
+
+
+def _parse_gemini_cached_tokens(response_data: dict) -> int:
+    """Parse cachedContentTokenCount from Gemini responses.
+    
+    Gemini returns cache usage in usageMetadata:
+    {
+        "usageMetadata": {
+            "promptTokenCount": 1000,
+            "candidatesTokenCount": 50,
+            "cachedContentTokenCount": 800  // tokens served from cache
+        }
+    }
+    
+    Args:
+        response_data: Parsed JSON response from Gemini
+        
+    Returns:
+        Number of tokens served from cache (0 if not present)
+    """
+    usage = response_data.get("usageMetadata", {})
+    if not isinstance(usage, dict):
+        return 0
+    return usage.get("cachedContentTokenCount", 0)
+
+
+# ---------------------------------------------------------------------------
 # SSE stream parsing
 # ---------------------------------------------------------------------------
 def _extract_sse_tokens(sse_bytes):
+    """Extract token usage from SSE stream responses.
+    
+    Supports Anthropic, OpenAI, and Gemini formats:
+    - Anthropic: cache_read_input_tokens, cache_creation_input_tokens in message_start/message_delta
+    - OpenAI: usage.prompt_tokens_details.cached_tokens in final chunk (with stream_options.include_usage)
+    - Gemini: usageMetadata.cachedContentTokenCount in response chunks
+    """
     result = {"output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     try:
         text = sse_bytes.decode("utf-8", errors="replace")
@@ -3290,18 +3743,52 @@ def _extract_sse_tokens(sse_bytes):
                 event = json.loads(data_str)
             except Exception:
                 continue
+            
+            # Anthropic format: message_start contains cache info in message.usage
             if event.get("type") == "message_start":
                 usage = event.get("message", {}).get("usage", {})
                 if "cache_read_input_tokens" in usage:
                     result["cache_read_input_tokens"] = usage["cache_read_input_tokens"]
                 if "cache_creation_input_tokens" in usage:
                     result["cache_creation_input_tokens"] = usage["cache_creation_input_tokens"]
+            
+            # Anthropic format: message_delta contains output_tokens
             if event.get("type") == "message_delta":
                 usage = event.get("usage", {})
                 if "output_tokens" in usage:
                     result["output_tokens"] = usage["output_tokens"]
+            
+            # OpenAI format: completion_tokens in usage object
             if "usage" in event and "completion_tokens" in event.get("usage", {}):
                 result["output_tokens"] = event["usage"]["completion_tokens"]
+            
+            # OpenAI format: prompt_tokens_details.cached_tokens for cache hits
+            # This appears in the final chunk when stream_options.include_usage is true
+            if "usage" in event:
+                usage = event["usage"]
+                prompt_details = usage.get("prompt_tokens_details", {})
+                if prompt_details:
+                    cached_tokens = prompt_details.get("cached_tokens", 0)
+                    if cached_tokens and cached_tokens > 0:
+                        # Map OpenAI cached_tokens to cache_read_input_tokens
+                        result["cache_read_input_tokens"] = cached_tokens
+                    # Store audio_tokens for future use (OpenAI audio model support)
+                    audio_tokens = prompt_details.get("audio_tokens", 0)
+                    if audio_tokens and audio_tokens > 0:
+                        result["audio_tokens"] = audio_tokens
+            
+            # Gemini format: usageMetadata.cachedContentTokenCount for cache hits
+            # Gemini streaming can include usageMetadata in response chunks
+            if "usageMetadata" in event:
+                usage_meta = event["usageMetadata"]
+                if isinstance(usage_meta, dict):
+                    cached_tokens = usage_meta.get("cachedContentTokenCount", 0)
+                    if cached_tokens and cached_tokens > 0:
+                        result["cache_read_input_tokens"] = cached_tokens
+                    # Also extract output tokens from Gemini format
+                    candidates_tokens = usage_meta.get("candidatesTokenCount", 0)
+                    if candidates_tokens and candidates_tokens > 0:
+                        result["output_tokens"] = candidates_tokens
     except Exception as e:
         print(f"  ⚠️ SSE parse error: {e}")
     return result
@@ -3400,7 +3887,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "docs": "/docs",
                     "proxy": "/v1/messages (POST), /v1/chat/completions (POST)",
                 },
-                "docs": "https://github.com/kaywhy331/tokenpak",
+                "docs": "https://github.com/tokenpak/tokenpak",
             }
             self._send_json(welcome)
             return
@@ -3489,6 +3976,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json(health_data)
             return
         if self.path == "/stats":
+            # CACHE-P4-002: Build cache summary for /stats
+            _cache_hits = SESSION.get("cache_hits", 0)
+            _cache_misses = SESSION.get("cache_misses", 0)
+            _cache_total = _cache_hits + _cache_misses
+            _cache_hit_rate = (_cache_hits / _cache_total) if _cache_total > 0 else 0.0
+            _cache_by_provider = SESSION.get("cache_by_provider", {})
+            _total_savings = sum(p.get("savings_usd", 0.0) for p in _cache_by_provider.values())
+            _active_providers = [p for p in _cache_by_provider.keys() if _cache_by_provider[p].get("hits", 0) > 0]
+            
             self._send_json(
                 {
                     "session": SESSION,
@@ -3506,6 +4002,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         "enabled": CANON_AVAILABLE,
                         "session_hits": SESSION.get("canon_hits", 0),
                         "tokens_saved": SESSION.get("canon_tokens_saved", 0),
+                    },
+                    # CACHE-P4-002: Cache summary in /stats response
+                    "cache": {
+                        "enabled": True,
+                        "hit_rate_session": round(_cache_hit_rate, 4),
+                        "hits": _cache_hits,
+                        "misses": _cache_misses,
+                        "read_tokens": SESSION.get("cache_read_tokens", 0),
+                        "creation_tokens": SESSION.get("cache_creation_tokens", 0),
+                        "savings_usd_session": round(_total_savings, 6),
+                        "providers_active": _active_providers,
                     },
                     "skeleton": {"enabled": SKELETON_ENABLED},
                     "shadow_reader": {"enabled": SHADOW_ENABLED},
@@ -4463,7 +4970,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 else "prompt_too_short"
                             )
                             # Even when skipping vault injection, apply cache_control to stable prefix
-                            if PROMPT_BUILDER_AVAILABLE:
+                            # Guard: only Anthropic supports cache_control markers
+                            if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
                                 body = _apply_stable_cache_control(body)
                         else:
                             body, injected_tokens, injected_sources = inject_vault_context(
@@ -4780,7 +5288,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             or _req_headers_lower.get("authorization", "").strip()
         )
         _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        if not _client_has_auth and _ANTHROPIC_KEY_POOL and "anthropic.com" in target_url:
+        if not _client_has_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
             _pool_key, _current_key_idx = _get_next_key()
             if _pool_key:
                 fwd_headers["x-api-key"] = _pool_key
@@ -4825,7 +5333,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  🔍 debug error: {_e}")
             body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
+            # Guard: cache_control block cap is Anthropic-specific
+            if detect_provider(target_url) is Provider.ANTHROPIC:
+                body = _cap_cache_control_blocks(body)
             # Fix Content-Length after cache_control cap may have changed body size
             if isinstance(body, str):
                 body = body.encode("utf-8")
@@ -4876,7 +5386,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
             body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
+            # Guard: cache_control block cap is Anthropic-specific
+            if detect_provider(target_url) is Provider.ANTHROPIC:
+                body = _cap_cache_control_blocks(body)
+            # Guard: Gemini cachedContent injection is Gemini-specific
+            _gemini_provider = detect_provider(target_url)
+            if _gemini_provider is Provider.GEMINI:
+                body = _inject_gemini_cache_ref(_gemini_provider, dict(self.headers), body)
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -5297,9 +5813,32 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         resp_for_metrics, adapter=active_adapter
                     )
                     try:
-                        usage = json.loads(resp_for_metrics).get("usage", {})
+                        _resp_json = json.loads(resp_for_metrics)
+                        usage = _resp_json.get("usage", {})
+                        # Anthropic format: direct fields in usage object
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                        
+                        # OpenAI format: prompt_tokens_details.cached_tokens
+                        # Only apply if Anthropic fields not present (avoid double-counting)
+                        if cache_read_tokens == 0:
+                            prompt_details = usage.get("prompt_tokens_details", {})
+                            if prompt_details:
+                                openai_cached = prompt_details.get("cached_tokens", 0)
+                                if openai_cached and openai_cached > 0:
+                                    cache_read_tokens = openai_cached
+                                # Log audio_tokens for future use (OpenAI audio model support)
+                                audio_tokens = prompt_details.get("audio_tokens", 0)
+                                if audio_tokens and audio_tokens > 0:
+                                    # Future: store in dedicated column once schema supports it
+                                    pass  # Logged for awareness; schema migration needed for storage
+                        
+                        # Gemini format: usageMetadata.cachedContentTokenCount
+                        # Only apply if no cache tokens found from Anthropic/OpenAI formats
+                        if cache_read_tokens == 0:
+                            gemini_cached = _parse_gemini_cached_tokens(_resp_json)
+                            if gemini_cached > 0:
+                                cache_read_tokens = gemini_cached
                     except Exception:
                         pass
 
@@ -5415,6 +5954,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 cost_saved = max(0.0, cost_without_compression - cost)
                 sources_str = ",".join(injected_sources) if injected_sources else ""
                 _log_compilation_mode = "bypass" if _bypass_request else COMPILATION_MODE
+                
+                # CACHE-P4-002: Detect provider and calculate cache savings
+                _request_provider = detect_provider(target_url)
+                _provider_name = _request_provider.value if _request_provider else "unknown"
+                _cache_savings = estimate_cache_savings(_request_provider, cache_read_tokens, model)
+                
                 try:
                     MONITOR.log(
                         model,
@@ -5431,6 +5976,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         sources_str,
                         cache_read_tokens,
                         cache_creation_tokens,
+                        cache_provider=_provider_name,
+                        cache_estimated_savings=_cache_savings,
                     )
                 except Exception as _monitor_err:
                     print(
@@ -5476,6 +6023,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
                     miss_map = SESSION.setdefault("cache_miss_reasons", {})
                     miss_map[miss_reason] = int(miss_map.get(miss_reason, 0) or 0) + 1
+                
+                # CACHE-P4-002: Per-provider cache tracking
+                _provider_stats = SESSION["cache_by_provider"].setdefault(_provider_name, {
+                    "hits": 0,
+                    "misses": 0,
+                    "read_tokens": 0,
+                    "creation_tokens": 0,
+                    "savings_usd": 0.0,
+                })
+                _provider_stats["read_tokens"] += cache_read_tokens
+                _provider_stats["creation_tokens"] += cache_creation_tokens
+                _provider_stats["savings_usd"] += _cache_savings
+                if cache_read_tokens > 0:
+                    _provider_stats["hits"] += 1
+                else:
+                    _provider_stats["misses"] += 1
+                
                 if injected_tokens > 0:
                     SESSION["injection_hits"] += 1
 
