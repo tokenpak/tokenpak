@@ -319,9 +319,9 @@ FLEET_CONFIG_FILE = Path.home() / ".tokenpak" / "fleet.yaml"
 
 DEFAULT_FLEET_CONFIG = {
     "agents": [
-        {"name": "trix",  "host": "trixbot",  "user": "trix"},
-        {"name": "cali",  "host": "calibot",  "user": "cali"},
-        {"name": "sue",   "host": "suewu",    "user": "sue"},
+        {"name": "agent-1", "host": "host-1", "user": "agent1"},
+        {"name": "agent-2", "host": "host-2", "user": "agent2"},
+        {"name": "agent-3", "host": "host-3", "user": "agent3"},
     ]
 }
 

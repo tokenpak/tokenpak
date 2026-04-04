@@ -13,12 +13,13 @@ build/
 
 # Virtual environments
 .venv/
-<<<<<<< HEAD
-sdk/node_modules/
-=======
 venv/
 env/
 ENV/
+
+# Node
+sdk/node_modules/
+node_modules/
 
 # Testing & coverage
 .pytest_cache/
@@ -30,6 +31,10 @@ htmlcov/
 # SQLite databases (local telemetry)
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+telemetry.db*
+monitor.db
 
 # Environment / secrets
 .env
@@ -43,8 +48,9 @@ htmlcov/
 *.swp
 *.swo
 
-# macOS
+# macOS / OS
 .DS_Store
+*.icloud
 
 # Docs build
 site/
@@ -52,46 +58,19 @@ docs/_build/
 
 # Local state
 .tokenpak/
-monitor.db
-telemetry.db
 *.state.json
 elo_ratings.json
 
-# Node (dashboard build artifacts)
-node_modules/
-dist/
->>>>>>> 2a1287e92675787cd8cb17653be8891a1d32243b
-
-# Database files
-telemetry.db*
-*.db-shm
-*.db-wal
-
-# Python artifacts
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.pytest_cache/
-.coverage
+# Build caches
 .ruff_cache/
 .mypy_cache/
-
-# Build output
-dist/
-build/
-*.egg
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-*.icloud
 
 # Temporary
 .tmp/
 *.tmp
+
+# Internal audit and process files (never track in public repo)
+*AUDIT*.md
+*COVERAGE_GAPS*.md
+*LAUNCH_CHECKLIST*.md
+build/

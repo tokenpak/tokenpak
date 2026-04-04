@@ -38,21 +38,21 @@ def temp_registry():
 @pytest.fixture
 def populated_registry(temp_registry):
     """Registry with 3 pre-registered agents."""
-    temp_registry.register("trix", "trixbot", {
+    temp_registry.register("agent-1", "host-1", {
         "gpu": False,
         "memory_gb": 4,
         "specialties": ["code", "execution"],
         "provider_access": ["anthropic", "openai"],
         "max_concurrent": 1,
     })
-    temp_registry.register("sue", "suewu", {
+    temp_registry.register("agent-2", "host-2", {
         "gpu": False,
         "memory_gb": 8,
         "specialties": ["orchestration", "qa"],
         "provider_access": ["anthropic"],
         "max_concurrent": 2,
     })
-    temp_registry.register("cali", "calibot", {
+    temp_registry.register("agent-3", "host-3", {
         "gpu": True,
         "memory_gb": 16,
         "specialties": ["data", "analysis", "code"],
@@ -71,20 +71,20 @@ class TestAgentInfo:
         info = AgentInfo(
             agent_id="abc123",
             name="trix",
-            hostname="trixbot",
+            hostname="host-1",
             capabilities={"gpu": True},
         )
         d = info.to_dict()
         assert d["agent_id"] == "abc123"
         assert d["name"] == "trix"
-        assert d["hostname"] == "trixbot"
+        assert d["hostname"] == "host-1"
         assert d["capabilities"]["gpu"] is True
 
     def test_from_dict(self):
         d = {
             "agent_id": "xyz",
             "name": "sue",
-            "hostname": "suewu",
+            "hostname": "host-2",
             "capabilities": {},
             "registered_at": 1000.0,
             "last_heartbeat": 1000.0,
@@ -124,26 +124,26 @@ class TestAgentInfo:
 
 class TestAgentRegistry:
     def test_register_new_agent(self, temp_registry):
-        agent_id = temp_registry.register("trix", "trixbot", {"gpu": False})
+        agent_id = temp_registry.register("agent-1", "host-1", {"gpu": False})
         assert agent_id is not None
         assert len(agent_id) == 8
 
     def test_register_returns_same_id_for_same_name_host(self, temp_registry):
-        id1 = temp_registry.register("trix", "trixbot")
-        id2 = temp_registry.register("trix", "trixbot")
+        id1 = temp_registry.register("agent-1", "host-1")
+        id2 = temp_registry.register("agent-1", "host-1")
         assert id1 == id2
 
     def test_register_different_id_for_different_host(self, temp_registry):
-        id1 = temp_registry.register("trix", "trixbot")
-        id2 = temp_registry.register("trix", "otherhost")
+        id1 = temp_registry.register("agent-1", "host-1")
+        id2 = temp_registry.register("agent-1", "otherhost")
         assert id1 != id2
 
     def test_get_agent(self, temp_registry):
-        agent_id = temp_registry.register("sue", "suewu", {"memory_gb": 8})
+        agent_id = temp_registry.register("agent-2", "host-2", {"memory_gb": 8})
         agent = temp_registry.get(agent_id)
         assert agent is not None
         assert agent.name == "sue"
-        assert agent.hostname == "suewu"
+        assert agent.hostname == "host-2"
         assert agent.capabilities["memory_gb"] == 8
 
     def test_get_nonexistent(self, temp_registry):
@@ -212,10 +212,10 @@ class TestAgentRegistry:
     def test_find_by_name(self, populated_registry):
         found = populated_registry.find_by_name("trix")
         assert len(found) == 1
-        assert found[0].hostname == "trixbot"
+        assert found[0].hostname == "host-1"
 
     def test_find_by_hostname(self, populated_registry):
-        found = populated_registry.find_by_hostname("calibot")
+        found = populated_registry.find_by_hostname("host-3")
         assert len(found) == 1
         assert found[0].name == "cali"
 

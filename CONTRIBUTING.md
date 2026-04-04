@@ -164,7 +164,7 @@ Before setting task status to `review`, ensure your code is accessible to Sue's 
 4. In the task file: add commit hash from `git log --oneline -1`
 5. Set `status: review` in the vault task file and push vault
 
-**Why this matters:** The `shared` remote (`sue@suewu:~/tokenpak-origin.git`) is the QA verification path. Commits that only exist locally on TrixBot are invisible during QA review and will cause rejection.
+**Why this matters:** The `shared` remote (internal bare repo) is the QA verification path. Commits that only exist locally are invisible during QA review and will cause rejection.
 
 ---
 
@@ -210,6 +210,30 @@ We aim to:
 - Open a [GitHub Discussion](https://github.com/kaywhy331/tokenpak/discussions)
 - Tag @kaywhy331 for blocking issues
 - Read the docs under `/docs`
+
+---
+
+## Document Classification
+
+All content in this repository must be **PUBLIC**. Use this table to determine where a file belongs:
+
+| Classification | Where It Lives | Examples |
+|----------------|---------------|----------|
+| **PUBLIC** | This GitHub repo | README, API docs, CONTRIBUTING, CHANGELOG, source code, tests |
+| **INTERNAL** | Private vault / internal repos only | Security audits, coverage gap analysis, launch checklists, team processes, internal architecture docs |
+| **SENSITIVE** | Encrypted / `.secrets/` / env vars only | API keys, tokens, credentials, private keys |
+
+### What NOT to commit here
+
+- Files with `AUDIT`, `SECURITY_AUDIT`, `COVERAGE_GAPS`, or `LAUNCH_CHECKLIST` in the name
+- Hardcoded internal IP addresses (e.g., `192.168.x.x`, Tailscale IPs)
+- Internal hostnames or SSH connection strings
+- Security assessment results or vulnerability reports
+- Team structure, agent names, or operational details
+
+**Rule of thumb:** If you're not sure whether something is PUBLIC, treat it as INTERNAL.
+
+A CI workflow (`repo-hygiene.yml`) automatically checks for these patterns on every push and PR. An optional pre-commit hook is available at `.github/hooks/pre-commit` — see [Pre-commit Hooks](#pre-commit-hooks) for installation.
 
 ---
 

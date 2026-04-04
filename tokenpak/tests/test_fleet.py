@@ -108,8 +108,8 @@ class TestFleetMachine:
 
     def test_fleet_machine_multiple_ports(self):
         """Test FleetMachine with different ports."""
-        machine1 = FleetMachine(name="trix", host="trixbot", port=8766)
-        machine2 = FleetMachine(name="sue", host="suewu", port=9000)
+        machine1 = FleetMachine(name="worker-1", host="host-1", port=8766)
+        machine2 = FleetMachine(name="worker-2", host="host-2", port=9000)
         assert machine1.port == 8766
         assert machine2.port == 9000
 
