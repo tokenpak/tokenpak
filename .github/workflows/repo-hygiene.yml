@@ -51,11 +51,14 @@ jobs:
       - name: Check for internal hostnames
         run: |
           echo "Scanning for internal hostnames..."
-          HOSTS=$(grep -rn 'suewu\|trixbot\|calibot' \
-            --include='*.md' --include='*.py' --include='*.yaml' --include='*.yml' \
-            --include='*.json' --include='*.toml' --include='*.cfg' --include='*.ini' \
-            --include='*.txt' --include='*.rst' --include='*.sh' \
-            . | grep -v '\.gitignore' || true)
+          # Use git ls-files to scan only tracked files (avoids false positives from
+          # build/ artifacts, .github/ workflow source patterns, and other untracked dirs)
+          HOSTS=$(git ls-files \
+            --exclude-standard \
+            | grep -E '\.(md|py|yaml|yml|json|toml|cfg|ini|txt|rst|sh)$' \
+            | grep -v '^\.github/' \
+            | xargs grep -n 'suewu\|trixbot\|calibot' 2>/dev/null \
+            | grep -v '\.gitignore' || true)
           if [ -n "$HOSTS" ]; then
             echo "::error::Internal hostnames detected:"
             echo "$HOSTS"
