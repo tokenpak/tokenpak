@@ -1,0 +1,12 @@
+{
+  "name": "tokenpak-claude-code",
+  "version": "0.1.0",
+  "description": "Extends Claude Code with token-aware context packing, semantic search, and file-path intelligence backed by the tokenpak open-source library.",
+  "author": {
+    "name": "tokenpak",
+    "url": "https://github.com/tokenpak"
+  },
+  "homepage": "https://github.com/tokenpak/tokenpak",
+  "repository": "https://github.com/tokenpak/tokenpak",
+  "license": "MIT"
+}
