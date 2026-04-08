@@ -9,6 +9,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags
 - **CLI surface consistency test** — `tests/cli/test_help_surface_consistency.py` asserts every command in `tokenpak --help` exits 0 on `<cmd> --help`
+- **CrewAI adapter** (`tokenpak/adapters/crewai/`) — `TokenPakContext`, `TokenPakCrewAIHook`, `TokenPakCrew`, `TokenPakHandoff`; install with `pip install tokenpak[crewai]` (CALI-MTC-02)
+- **AutoGen adapter** (`tokenpak/adapters/autogen/`) — `TokenPakConversationHook`, `TokenPakAssistant`, `TokenPakGroupChat`, `compress_messages`; install with `pip install tokenpak[autogen]` (CALI-MTC-02)
+- **LlamaIndex adapter** (`tokenpak/adapters/llamaindex/`) — `TokenPakSynthesizer`, `TokenPakQueryEngine`, `TokenPakIndex`, `MultiIndexFusion`; install with `pip install tokenpak[llamaindex]` (CALI-MTC-02)
+- `pyproject.toml` extras: `[crewai]`, `[autogen]`, `[llamaindex]` (CALI-MTC-02)
 
 ### Removed (with replacement)
 <!-- CALI-MTC-01: CLI surface cleanup — 8 phantom commands resolved -->
