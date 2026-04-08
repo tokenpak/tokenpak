@@ -25,6 +25,13 @@ import json
 import sys
 from pathlib import Path
 
+from tokenpak.license.gates import requires_tier
+from tokenpak.license.tier import LicenseTier
+
+_REPLAY_CTA = (
+    "Replay is a Pro feature — start a free trial: https://portal.tokenpak.io/trial"
+)
+
 # ---------------------------------------------------------------------------
 # Store helpers
 # ---------------------------------------------------------------------------
@@ -46,6 +53,7 @@ def _get_replay_store():
 # ---------------------------------------------------------------------------
 
 
+@requires_tier(LicenseTier.PRO, message=_REPLAY_CTA)
 def cmd_replay_list(args):
     """List recent replay entries.
 
@@ -87,6 +95,7 @@ def cmd_replay_list(args):
     )
 
 
+@requires_tier(LicenseTier.PRO, message=_REPLAY_CTA)
 def cmd_replay_show(args):
     """Show details of a single replay entry.
 
@@ -130,6 +139,7 @@ def cmd_replay_show(args):
         print(f"\n  Content captured: {len(e.messages)} message(s).  Use --messages to print.")
 
 
+@requires_tier(LicenseTier.PRO, message=_REPLAY_CTA)
 def cmd_replay_run(args):
     """Replay a captured session, optionally with a different model.
 
@@ -191,6 +201,7 @@ def cmd_replay_run(args):
     print("\n  ✓ Replay metadata prepared.  Connect to proxy to execute.")
 
 
+@requires_tier(LicenseTier.PRO, message=_REPLAY_CTA)
 def cmd_replay_clear(args):
     """Clear all entries from the replay store.
 

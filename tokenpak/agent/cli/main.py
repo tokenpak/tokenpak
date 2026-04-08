@@ -739,6 +739,17 @@ def main():
         _retain_argparse(sys.argv[2:])
         return
 
+    # Delegate alerts subcommand
+    if len(sys.argv) > 1 and sys.argv[1] == "alerts":
+        try:
+            from tokenpak.agent.cli.commands.alerts import run_alerts_cmd
+
+            run_alerts_cmd(sys.argv[2:])
+        except ImportError as e:
+            print(f"alerts command not available: {e}")
+            sys.exit(1)
+        return
+
     # Delegate Enterprise policy/sla/compliance commands
     if len(sys.argv) > 1 and sys.argv[1] == "policy":
         from tokenpak.agent.cli.commands.policy import run as _policy_run

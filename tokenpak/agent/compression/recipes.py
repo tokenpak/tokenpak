@@ -217,6 +217,7 @@ class CompressionRecipe:
     description: str
     pattern: dict
     action: dict
+    tier: str = "oss"  # "oss" or "pro" — gated via @requires_tier in CompressionRecipeEngine
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str) -> "CompressionRecipe":
@@ -237,6 +238,7 @@ class CompressionRecipe:
             description=str(data["description"]).strip(),
             pattern=dict(data["pattern"]),
             action=dict(data["action"]),
+            tier=str(data.get("tier", "oss")).lower(),
         )
 
     @property
@@ -355,6 +357,36 @@ class CompressionRecipeEngine:
             "total": len(self._recipes),
             "categories": {cat: len(self.by_category(cat)) for cat in cats},
         }
+
+    def advanced_recipes_for_file(
+        self, filename: str, content_sample: str = ""
+    ) -> list["CompressionRecipe"]:
+        """Return Pro-tier recipes applicable to a given file.
+
+        Raises TierRequiredError if the active license is below PRO.
+        Cali marks recipes as pro-tier via ``tier: pro`` in their YAML frontmatter.
+        """
+        from tokenpak.license.tier import LicenseTier
+        from tokenpak.license.gates import requires_tier
+
+        @requires_tier(
+            LicenseTier.PRO,
+            message=(
+                "Advanced compression recipes are a Pro feature — "
+                "start a free trial: https://portal.tokenpak.io/trial"
+            ),
+        )
+        def _inner() -> list["CompressionRecipe"]:
+            self._ensure_loaded()
+            applicable = [
+                r
+                for r in self._recipes.values()
+                if r.tier == "pro"
+                and r.matches(filename=filename, content_sample=content_sample)
+            ]
+            return sorted(applicable, key=lambda r: r.compression_hint, reverse=True)
+
+        return _inner()
 
 
 # Module-level singleton (lazy-loaded)

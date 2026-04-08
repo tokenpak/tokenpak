@@ -204,6 +204,22 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
         self.end_headers()
 
     def do_POST(self):
+        try:
+            self._do_post_inner()
+        except Exception as _post_exc:
+            try:
+                from tokenpak.license.gates import TierRequiredError as _TRE
+                if isinstance(_post_exc, _TRE):
+                    self._send_json(
+                        {"error": {"type": "payment_required", "message": _post_exc.cta}},
+                        status=402,
+                    )
+                    return
+            except ImportError:
+                pass
+            raise
+
+    def _do_post_inner(self):
         # Security check: verify auth for non-localhost clients
         if not self._check_auth():
             self._send_json({"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}, status=401)
