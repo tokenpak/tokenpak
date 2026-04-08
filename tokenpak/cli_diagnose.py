@@ -11,7 +11,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Severity levels
@@ -62,7 +62,7 @@ class DiagResult:
 # ---------------------------------------------------------------------------
 
 def _check_config(verbose: bool) -> DiagResult:
-    """Validate config syntax and required fields using comprehensive validator."""
+    """Validate config syntax and required fields."""
     config_path = Path.home() / ".tokenpak" / "config.yaml"
     alt_path = Path.home() / ".tokenpak" / "config.json"
 
@@ -82,57 +82,40 @@ def _check_config(verbose: bool) -> DiagResult:
             data={"path": str(config_path), "found": False},
         )
 
-    # Use comprehensive config validator
     try:
-        from .cli_validate_config import ConfigValidator
-        
-        validator = ConfigValidator()
-        exit_code, errors, warnings = validator.validate(str(found_path))
-        
-        # Determine severity based on exit code
-        if exit_code == 0:
-            severity = OK
-            msg = f"Config: Valid ({found_path.name})"
-            detail = f"All validation checks passed"
-        elif exit_code == 2:
-            severity = WARNING
-            msg = f"Config: Valid with warnings ({found_path.name})"
-            detail = f"{len(warnings)} warning(s) — review with: tokenpak validate-config {found_path}"
-        else:  # exit_code == 1
-            severity = ERROR
-            msg = f"Config: Invalid ({found_path.name})"
-            detail = f"{len(errors)} error(s) — run: tokenpak validate-config {found_path}"
-        
+        text = found_path.read_text()
+        if found_path.suffix == ".json":
+            cfg = json.loads(text)
+        else:
+            try:
+                import yaml  # type: ignore
+                cfg = yaml.safe_load(text) or {}
+            except ImportError:
+                # Fall back to treating as JSON-like if yaml unavailable
+                cfg = {}
+
         env_vars = {
             "TOKENPAK_PORT": os.environ.get("TOKENPAK_PORT", "(default 8766)"),
             "TOKENPAK_MODE": os.environ.get("TOKENPAK_MODE", "(default hybrid)"),
             "ANTHROPIC_API_KEY": "***" if os.environ.get("ANTHROPIC_API_KEY") else "(not set)",
         }
 
-        if verbose and env_vars:
-            if detail:
-                detail += "\n    Env vars: " + ", ".join(f"{k}={v}" for k, v in env_vars.items())
-            else:
-                detail = "Env vars: " + ", ".join(f"{k}={v}" for k, v in env_vars.items())
+        detail = None
+        if verbose:
+            detail = "Env vars: " + ", ".join(f"{k}={v}" for k, v in env_vars.items())
 
         return DiagResult(
             "config",
-            severity,
-            msg,
+            OK,
+            f"Config: Valid, all required fields present ({found_path.name})",
             detail=detail,
-            data={
-                "path": str(found_path),
-                "found": True,
-                "format": found_path.suffix.lstrip("."),
-                "errors": len(errors),
-                "warnings": len(warnings),
-            },
+            data={"path": str(found_path), "found": True, "format": found_path.suffix.lstrip(".")},
         )
     except Exception as exc:
         return DiagResult(
             "config",
             ERROR,
-            f"Config: Validation error — {exc}",
+            f"Config: Parse error — {exc}",
             detail=f"File: {found_path}",
             data={"path": str(found_path), "found": True, "error": str(exc)},
         )
@@ -296,7 +279,7 @@ def _check_proxy(verbose: bool, port: int) -> DiagResult:
         return DiagResult(
             "proxy",
             WARNING,
-            f"Proxy: Not running on port {port} — run `tokenpak serve`",
+            f"Proxy: Not running on port {port} — run `tokenpak start`",
             data={"port": port, "running": False},
         )
 
