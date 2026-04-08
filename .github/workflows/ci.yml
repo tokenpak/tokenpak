@@ -17,6 +17,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  docs-audit:
+    name: Doc Audit (soft warning)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run doc audit script
+        continue-on-error: true
+        run: bash scripts/audit-docs.sh
+
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest

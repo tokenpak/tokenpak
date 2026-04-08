@@ -66,7 +66,8 @@ nav:
     - Telemetry & Dashboard: guides/telemetry.md
     - Team Server: guides/team-server.md
   - CLI Reference: cli-reference.md
-  - API Reference: api-reference.md
+  - Python SDK Reference: API_REFERENCE.md
+  - REST API Reference: REST_API.md
   - FAQ: faq.md
   - Deep Dives:
     - Compression: compression.md
