@@ -76,14 +76,19 @@ def _get_spent(period: str) -> float:
         return 0.0
     today = date.today()
     if period == "daily":
-        where, params = "date(timestamp) = ?", [today.isoformat()]
+        row = conn.execute(
+            "SELECT COALESCE(SUM(estimated_cost), 0.0) FROM requests"
+            " WHERE date(timestamp) = ?",
+            (today.isoformat(),),
+        ).fetchone()
     elif period == "monthly":
-        where, params = "strftime('%Y-%m', timestamp) = ?", [today.strftime("%Y-%m")]
+        row = conn.execute(
+            "SELECT COALESCE(SUM(estimated_cost), 0.0) FROM requests"
+            " WHERE strftime('%Y-%m', timestamp) = ?",
+            (today.strftime("%Y-%m"),),
+        ).fetchone()
     else:
         return 0.0
-    row = conn.execute(
-        f"SELECT COALESCE(SUM(estimated_cost), 0.0) FROM requests WHERE {where}", params
-    ).fetchone()
     conn.close()
     return float(row[0])
 

@@ -48,6 +48,214 @@ def _period_clause(period: str) -> tuple[str, list]:
     return "1=1", []
 
 
+def _period_params(period: str) -> list:
+    """Return bound parameters for the given period (no WHERE fragment)."""
+    today = date.today()
+    if period == "today":
+        return [today.isoformat()]
+    if period == "yesterday":
+        return [(today - timedelta(days=1)).isoformat()]
+    if period == "week":
+        return [(today - timedelta(days=6)).isoformat()]
+    if period == "month":
+        return [today.strftime("%Y-%m")]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Pre-built parameterized SQL — indexed by period.
+# Using a dict lookup (not f-strings) keeps bandit B608 clean while
+# keeping all user-supplied values bound via ? placeholders.
+# ---------------------------------------------------------------------------
+
+_SUMMARY_SQL: dict[str, str] = {
+    "today": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) = ?"
+    ),
+    "yesterday": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) = ?"
+    ),
+    "week": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) >= ?"
+    ),
+    "month": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE strftime('%Y-%m', timestamp) = ?"
+    ),
+}
+_SUMMARY_SQL_DEFAULT = (
+    "SELECT COUNT(*) AS requests,"
+    " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+    " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+    " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+    " FROM requests"
+)
+_SUMMARY_SQL_MODEL: dict[str, str] = {
+    "today": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) = ? AND model = ?"
+    ),
+    "yesterday": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) = ? AND model = ?"
+    ),
+    "week": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE date(timestamp) >= ? AND model = ?"
+    ),
+    "month": (
+        "SELECT COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+        " FROM requests WHERE strftime('%Y-%m', timestamp) = ? AND model = ?"
+    ),
+}
+_SUMMARY_SQL_MODEL_DEFAULT = (
+    "SELECT COUNT(*) AS requests,"
+    " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+    " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+    " COALESCE(SUM(estimated_cost), 0.0) AS total_cost"
+    " FROM requests WHERE model = ?"
+)
+
+_BY_MODEL_SQL: dict[str, str] = {
+    "today": (
+        "SELECT model, COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) = ?"
+        " GROUP BY model ORDER BY cost_usd DESC"
+    ),
+    "yesterday": (
+        "SELECT model, COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) = ?"
+        " GROUP BY model ORDER BY cost_usd DESC"
+    ),
+    "week": (
+        "SELECT model, COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) >= ?"
+        " GROUP BY model ORDER BY cost_usd DESC"
+    ),
+    "month": (
+        "SELECT model, COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE strftime('%Y-%m', timestamp) = ?"
+        " GROUP BY model ORDER BY cost_usd DESC"
+    ),
+}
+_BY_MODEL_SQL_DEFAULT = (
+    "SELECT model, COUNT(*) AS requests,"
+    " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+    " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+    " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+    " FROM requests GROUP BY model ORDER BY cost_usd DESC"
+)
+
+_BY_AGENT_SQL: dict[str, str] = {
+    "today": (
+        "SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,"
+        " COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) = ?"
+        " GROUP BY agent ORDER BY cost_usd DESC"
+    ),
+    "yesterday": (
+        "SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,"
+        " COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) = ?"
+        " GROUP BY agent ORDER BY cost_usd DESC"
+    ),
+    "week": (
+        "SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,"
+        " COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE date(timestamp) >= ?"
+        " GROUP BY agent ORDER BY cost_usd DESC"
+    ),
+    "month": (
+        "SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,"
+        " COUNT(*) AS requests,"
+        " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+        " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+        " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+        " FROM requests WHERE strftime('%Y-%m', timestamp) = ?"
+        " GROUP BY agent ORDER BY cost_usd DESC"
+    ),
+}
+_BY_AGENT_SQL_DEFAULT = (
+    "SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,"
+    " COUNT(*) AS requests,"
+    " COALESCE(SUM(input_tokens), 0) AS input_tokens,"
+    " COALESCE(SUM(output_tokens), 0) AS output_tokens,"
+    " COALESCE(SUM(estimated_cost), 0.0) AS cost_usd"
+    " FROM requests GROUP BY agent ORDER BY cost_usd DESC"
+)
+
+_EXPORT_SQL: dict[str, str] = {
+    "today": (
+        "SELECT timestamp, model, input_tokens, output_tokens, estimated_cost"
+        " FROM requests WHERE date(timestamp) = ? ORDER BY timestamp"
+    ),
+    "yesterday": (
+        "SELECT timestamp, model, input_tokens, output_tokens, estimated_cost"
+        " FROM requests WHERE date(timestamp) = ? ORDER BY timestamp"
+    ),
+    "week": (
+        "SELECT timestamp, model, input_tokens, output_tokens, estimated_cost"
+        " FROM requests WHERE date(timestamp) >= ? ORDER BY timestamp"
+    ),
+    "month": (
+        "SELECT timestamp, model, input_tokens, output_tokens, estimated_cost"
+        " FROM requests WHERE strftime('%Y-%m', timestamp) = ? ORDER BY timestamp"
+    ),
+}
+_EXPORT_SQL_DEFAULT = (
+    "SELECT timestamp, model, input_tokens, output_tokens, estimated_cost"
+    " FROM requests ORDER BY timestamp"
+)
+
+
 def _fmt_cost(c: float) -> str:
     if c < 0.01:
         return f"${c:.4f}"
@@ -73,22 +281,13 @@ def query_summary(period: str = "today", model: Optional[str] = None) -> dict:
     conn = _connect()
     if not conn:
         return {"error": "DB not found", "db": _MONITOR_DB}
-    where, params = _period_clause(period)
     if model:
-        where += " AND model = ?"
-        params.append(model)
-    row = conn.execute(
-        f"""
-        SELECT
-            COUNT(*) AS requests,
-            COALESCE(SUM(input_tokens), 0) AS input_tokens,
-            COALESCE(SUM(output_tokens), 0) AS output_tokens,
-            COALESCE(SUM(estimated_cost), 0.0) AS total_cost
-        FROM requests
-        WHERE {where}
-        """,
-        params,
-    ).fetchone()
+        sql = _SUMMARY_SQL_MODEL.get(period, _SUMMARY_SQL_MODEL_DEFAULT)
+        params = _period_params(period) + [model]
+    else:
+        sql = _SUMMARY_SQL.get(period, _SUMMARY_SQL_DEFAULT)
+        params = _period_params(period)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     return {
         "period": period,
@@ -106,22 +305,9 @@ def query_by_model(period: str = "today") -> list[dict]:
     conn = _connect()
     if not conn:
         return []
-    where, params = _period_clause(period)
-    rows = conn.execute(
-        f"""
-        SELECT
-            model,
-            COUNT(*) AS requests,
-            COALESCE(SUM(input_tokens), 0) AS input_tokens,
-            COALESCE(SUM(output_tokens), 0) AS output_tokens,
-            COALESCE(SUM(estimated_cost), 0.0) AS cost_usd
-        FROM requests
-        WHERE {where}
-        GROUP BY model
-        ORDER BY cost_usd DESC
-        """,
-        params,
-    ).fetchall()
+    sql = _BY_MODEL_SQL.get(period, _BY_MODEL_SQL_DEFAULT)
+    params = _period_params(period)
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [
         {
@@ -143,23 +329,9 @@ def query_by_agent(period: str = "today") -> list[dict]:
     conn = _connect()
     if not conn:
         return []
-    where, params = _period_clause(period)
-    # Try to get distinct endpoints as a proxy for agent/session separation
-    rows = conn.execute(
-        f"""
-        SELECT
-            COALESCE(NULLIF(endpoint, ''), 'unknown') AS agent,
-            COUNT(*) AS requests,
-            COALESCE(SUM(input_tokens), 0) AS input_tokens,
-            COALESCE(SUM(output_tokens), 0) AS output_tokens,
-            COALESCE(SUM(estimated_cost), 0.0) AS cost_usd
-        FROM requests
-        WHERE {where}
-        GROUP BY agent
-        ORDER BY cost_usd DESC
-        """,
-        params,
-    ).fetchall()
+    sql = _BY_AGENT_SQL.get(period, _BY_AGENT_SQL_DEFAULT)
+    params = _period_params(period)
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return [
         {
@@ -179,16 +351,9 @@ def export_csv_data(period: str = "today") -> str:
     conn = _connect()
     if not conn:
         return "timestamp,model,input_tokens,output_tokens,estimated_cost\n"
-    where, params = _period_clause(period)
-    rows = conn.execute(
-        f"""
-        SELECT timestamp, model, input_tokens, output_tokens, estimated_cost
-        FROM requests
-        WHERE {where}
-        ORDER BY timestamp
-        """,
-        params,
-    ).fetchall()
+    sql = _EXPORT_SQL.get(period, _EXPORT_SQL_DEFAULT)
+    params = _period_params(period)
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     buf = io.StringIO()
     w = csv.writer(buf)

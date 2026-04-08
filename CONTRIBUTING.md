@@ -152,6 +152,23 @@ black --check .
 
 ---
 
+## Security Gate (Bandit)
+
+[Bandit](https://bandit.readthedocs.io/) runs in CI as a hard gate. New findings at medium severity / medium confidence block merge.
+
+```bash
+# Run locally (mirrors the CI check exactly)
+pip install bandit
+bandit -r tokenpak/ -ll -ii --baseline bandit-baseline.json
+# Expected: exit 0, "No issues identified."
+```
+
+`bandit-baseline.json` captures pre-existing findings that predate this gate. **Do not add new entries to the baseline** — fix the finding instead.
+
+All SQL queries must use `?` placeholders (parameterized queries). String-formatted SQL (f-strings, `%`, `.format()`) triggers B608 and blocks CI.
+
+---
+
 ## Submitting Work for QA (Agent Workflow)
 
 > **Internal agent protocol.** External contributors skip this section.
