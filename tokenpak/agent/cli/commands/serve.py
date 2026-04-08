@@ -25,8 +25,42 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Safe-mode constants — legacy defaults (pre-TRIX-01 flip)
+# ---------------------------------------------------------------------------
+_SAFE_MODE_OVERRIDES = {
+    "TOKENPAK_COMPACT": "false",
+    "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+    "TOKENPAK_BUDGET_CONTROLLER": "false",
+    "TOKENPAK_VALIDATION_GATE": "false",
+}
+
+_FIRST_RUN_MARKER = Path.home() / ".tokenpak" / ".compression-default-notice-shown"
+
+
+def _apply_safe_mode() -> None:
+    """Inject legacy defaults into os.environ (atomically). Called before any proxy import."""
+    for key, val in _SAFE_MODE_OVERRIDES.items():
+        os.environ[key] = val
+
+
+def _maybe_show_first_run_notice() -> None:
+    """Print compression-default notice to stderr once per install."""
+    if _FIRST_RUN_MARKER.exists():
+        return
+    print(
+        "tokenpak now compresses by default — disable with 'tokenpak serve --safe'",
+        file=sys.stderr,
+    )
+    try:
+        _FIRST_RUN_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        _FIRST_RUN_MARKER.touch()
+    except OSError:
+        pass  # non-fatal
 
 # Import string used by uvicorn when workers > 1.
 # Uvicorn calls create_ingest_app() in each worker process.
@@ -41,6 +75,12 @@ def _default_workers() -> int:
 
 def run_serve_cmd(args) -> None:
     """Start the TokenPak ingest API server."""
+    # --safe: restore pre-TRIX-01 legacy defaults BEFORE any proxy/config import
+    if getattr(args, "safe", False):
+        _apply_safe_mode()
+
+    _maybe_show_first_run_notice()
+
     try:
         import uvicorn
     except ImportError:

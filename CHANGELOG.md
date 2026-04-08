@@ -4,6 +4,13 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Compression now enabled by default. To restore legacy passthrough behavior, use `tokenpak serve --safe`.
+- `COMPACT_THRESHOLD_TOKENS` lowered from 4500 to 1500 tokens (compression activates sooner).
+- `BUDGET_CONTROLLER_ENABLED` now defaults to `True`.
+
 ## [1.0.2] - 2026-03-25
 
 ### 🚀 OSS Launch

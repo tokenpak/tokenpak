@@ -549,6 +549,15 @@ def main():
                 "Workers restart on crash; graceful shutdown drains all workers."
             ),
         )
+        sp.add_argument(
+            "--safe",
+            action="store_true",
+            default=False,
+            help=(
+                "Restore legacy passthrough defaults (compression off, threshold 4500 tokens). "
+                "Overrides the TRIX-01 compression-on-by-default flip."
+            ),
+        )
         sargs = sp.parse_args(sys.argv[2:])
         from tokenpak.agent.cli.commands.serve import run_serve_cmd
 
