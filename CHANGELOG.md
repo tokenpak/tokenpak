@@ -4,6 +4,28 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags
+- **CLI surface consistency test** — `tests/cli/test_help_surface_consistency.py` asserts every command in `tokenpak --help` exits 0 on `<cmd> --help`
+
+### Removed (with replacement)
+<!-- CALI-MTC-01: CLI surface cleanup — 8 phantom commands resolved -->
+
+| Removed phantom | Resolution | Canonical replacement |
+|---|---|---|
+| `tokenpak prune` | Implemented as top-level alias | `tokenpak audit prune` (same `--days`, `--db` flags) |
+| `tokenpak list-models` | Removed from docs (was never in `--help`) | `tokenpak models` |
+| `tokenpak provider-status` | Removed from docs (was never in `--help`) | `tokenpak status` or `tokenpak doctor` |
+| `tokenpak provider-force-health` | Removed from docs (was never in `--help`) | `tokenpak doctor --fix` |
+| `tokenpak rebuild-vault-index` | Removed from docs (was never in `--help`) | `tokenpak vault repair` |
+| `tokenpak cache-stats` | Removed from docs (was never in `--help`) | `tokenpak stats` |
+| `tokenpak list-keys` | Removed from docs (was never in `--help`) | No direct replacement — use provider dashboard |
+| `tokenpak proxy --config` | Removed from docs (was never in `--help`) | `tokenpak start` with config at `~/.tokenpak/config.yaml` |
+
+---
+
 ## [1.0.2] - 2026-03-25
 
 ### 🚀 OSS Launch
