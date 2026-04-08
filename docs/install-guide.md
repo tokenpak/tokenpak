@@ -2,7 +2,7 @@
 
 ## System Requirements
 
-- **Python version:** 3.8 or later
+- **Python version:** 3.10 or later
 - **OS:** Linux, macOS, or Windows
 - **pip:** Version 20.0 or later (usually included with Python)
 
@@ -119,9 +119,9 @@ pip install --user tokenpak  # Install to user directory
 # OR use a venv (recommended)
 ```
 
-### Issue: Python version error (3.7 or earlier)
+### Issue: Python version error (3.9 or earlier)
 
-**Solution:** TokenPak requires Python 3.8+. Upgrade Python or use a package manager:
+**Solution:** TokenPak requires Python 3.10+. Upgrade Python or use a package manager:
 ```bash
 # macOS (homebrew)
 brew install python@3.11

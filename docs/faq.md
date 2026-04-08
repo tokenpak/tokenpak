@@ -26,13 +26,13 @@ Minimal. Compression adds 10–50ms to requests that benefit from it (typically 
 
 ### `pip install tokenpak` fails with Python version error
 
-TokenPak requires Python 3.11+. Check your version:
+TokenPak requires Python 3.10+. Check your version:
 
 ```bash
 python --version
-# If < 3.11:
-pip install "tokenpak>=0.1.0" --python-version 3.11
-# Or use pyenv to install Python 3.11
+# If < 3.10:
+pip install "tokenpak>=0.1.0" --python-version 3.10
+# Or use pyenv to install Python 3.10
 ```
 
 ### Permission errors on install

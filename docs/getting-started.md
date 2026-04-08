@@ -6,7 +6,7 @@ Get TokenPak running in under 5 minutes.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.10+
 - An existing LLM client (Claude Code, OpenAI client, etc.)
 - Your provider API key (Anthropic, OpenAI, etc.)
 
