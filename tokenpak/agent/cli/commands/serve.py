@@ -63,8 +63,8 @@ def _maybe_show_first_run_notice() -> None:
         pass  # non-fatal
 
 # Import string used by uvicorn when workers > 1.
-# Uvicorn calls create_ingest_app() in each worker process.
-_APP_FACTORY_IMPORT = "tokenpak.agent.ingest.api:create_ingest_app"
+# Uvicorn calls create_combined_app() in each worker process.
+_APP_FACTORY_IMPORT = "tokenpak.agent.dashboard.app:create_combined_app"
 
 
 def _default_workers() -> int:
@@ -74,7 +74,7 @@ def _default_workers() -> int:
 
 
 def run_serve_cmd(args) -> None:
-    """Start the TokenPak ingest API server."""
+    """Start the TokenPak combined API + Dashboard server."""
     # --safe: restore pre-TRIX-01 legacy defaults BEFORE any proxy/config import
     if getattr(args, "safe", False):
         _apply_safe_mode()
@@ -98,22 +98,23 @@ def run_serve_cmd(args) -> None:
         print("✖ --workers must be >= 1", file=sys.stderr)
         sys.exit(1)
 
-    print(f"TokenPak Ingest API — http://{host}:{port}")
+    print(f"TokenPak API + Dashboard — http://{host}:{port}")
     print(f"  Workers:             {workers} (CPU cores: {os.cpu_count() or '?'})")
     print("  POST /ingest         single entry")
     print("  POST /ingest/batch   batch entries")
     print("  GET  /health         health check")
+    print(f"  GET  /dashboard      dashboard UI")
     print()
 
     if workers == 1:
         # Single-worker: use in-process app object (compatible with tests/hot-reload)
         try:
-            from tokenpak.agent.ingest.api import create_ingest_app
+            from tokenpak.agent.dashboard.app import create_combined_app
         except ImportError as e:
-            print(f"✖ Failed to load ingest API: {e}", file=sys.stderr)
+            print(f"✖ Failed to load combined API: {e}", file=sys.stderr)
             sys.exit(1)
 
-        app = create_ingest_app()
+        app = create_combined_app()
         uvicorn.run(app, host=host, port=port)
 
     else:
