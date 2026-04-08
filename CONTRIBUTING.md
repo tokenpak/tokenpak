@@ -6,9 +6,9 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 
 ## Ways to Contribute
 
-- 🐛 **Report a bug** — [Open a bug report](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
-- 💡 **Request a feature** — [Open a feature request](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
-- 💬 **Ask a question** — Use [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions), not issues
+- 🐛 **Report a bug** — [Open a bug report](https://github.com/tokenpak/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Request a feature** — [Open a feature request](https://github.com/tokenpak/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Ask a question** — Use [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions), not issues
 - 📝 **Improve docs** — PRs for typos, outdated examples, and clarifications always welcome
 - 🔧 **Submit code** — See PR workflow below
 
@@ -17,7 +17,7 @@ Thank you for your interest in contributing! TokenPak is a small, focused projec
 ## Quick Start
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak.git
+git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
 make dev      # create .venv + install tokenpak[dev] in editable mode
 make check    # lint + format check + full test suite
@@ -41,7 +41,7 @@ That's it. See `make help` for all available targets.
 make dev
 
 # Or manually:
-git clone https://github.com/kaywhy331/tokenpak.git
+git clone https://github.com/tokenpak/tokenpak.git
 cd tokenpak
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
@@ -94,9 +94,6 @@ tokenpak/
 ## Running Tests
 
 ```bash
-# Quick CI/audit subset — <30 seconds, no live proxy or network required
-pytest -m quick
-
 # Fast (local package tests)
 pytest packages/tokenpak-local/tests/ -q
 
@@ -115,16 +112,6 @@ pytest -k "test_cache"
 # Type check
 python3 -m mypy tokenpak/ --ignore-missing-imports
 ```
-
-### Test Marker Split
-
-| Marker | Purpose | When to use |
-|---|---|---|
-| *(none)* | Full suite | PRs, release gates |
-| `quick` | Fast audit checks (<30s) | Pre-commit, CI fast gate, automated audits |
-| `slow` | Long-running or network-dependent | Nightly CI only |
-| `integration` | Requires live proxy or external services | Integration testing |
-| `chaos` | Fault injection | Stability testing |
 
 All tests must pass before submitting a PR.
 
@@ -152,29 +139,13 @@ black --check .
 
 ---
 
-## Submitting Work for QA (Agent Workflow)
-
-> **Internal agent protocol.** External contributors skip this section.
-
-Before setting task status to `review`, ensure your code is accessible to Sue's QA machine:
-
-1. `cd ~/Projects/tokenpak`
-2. `git push shared main` ← **REQUIRED** — Sue's QA cannot see local-only commits
-3. `git push origin main` ← push to GitHub too
-4. In the task file: add commit hash from `git log --oneline -1`
-5. Set `status: review` in the vault task file and push vault
-
-**Why this matters:** The `shared` remote (internal bare repo) is the QA verification path. Commits that only exist locally are invisible during QA review and will cause rejection.
-
----
-
 ## Submitting Changes
 
 1. **Branch from `master`**: `git checkout -b fix/your-fix`
 2. **Make focused changes** — one PR per concern
 3. **Write tests** for new behavior when practical
 4. **Run the full test suite** and confirm it passes
-5. **Update [CHANGELOG.md](CHANGELOG.md)** — add your change under `## [Unreleased]` in the correct section (Added / Changed / Fixed / Security). Link to your PR: `[#123](https://github.com/kaywhy331/tokenpak/pull/123)`
+5. **Update [CHANGELOG.md](CHANGELOG.md)** — add your change under `## [Unreleased]` in the correct section (Added / Changed / Fixed / Security). Link to your PR: `[#123](https://github.com/tokenpak/tokenpak/pull/123)`
 6. **Open a PR** with a clear description of what and why
 7. **Include** `git log --oneline -1` in your PR description
 
@@ -207,33 +178,9 @@ We aim to:
 
 ## Getting Help
 
-- Open a [GitHub Discussion](https://github.com/kaywhy331/tokenpak/discussions)
+- Open a [GitHub Discussion](https://github.com/tokenpak/tokenpak/discussions)
 - Tag @kaywhy331 for blocking issues
 - Read the docs under `/docs`
-
----
-
-## Document Classification
-
-All content in this repository must be **PUBLIC**. Use this table to determine where a file belongs:
-
-| Classification | Where It Lives | Examples |
-|----------------|---------------|----------|
-| **PUBLIC** | This GitHub repo | README, API docs, CONTRIBUTING, CHANGELOG, source code, tests |
-| **INTERNAL** | Private vault / internal repos only | Security audits, coverage gap analysis, launch checklists, team processes, internal architecture docs |
-| **SENSITIVE** | Encrypted / `.secrets/` / env vars only | API keys, tokens, credentials, private keys |
-
-### What NOT to commit here
-
-- Files with `AUDIT`, `SECURITY_AUDIT`, `COVERAGE_GAPS`, or `LAUNCH_CHECKLIST` in the name
-- Hardcoded internal IP addresses (e.g., `192.168.x.x`, Tailscale IPs)
-- Internal hostnames or SSH connection strings
-- Security assessment results or vulnerability reports
-- Team structure, agent names, or operational details
-
-**Rule of thumb:** If you're not sure whether something is PUBLIC, treat it as INTERNAL.
-
-A CI workflow (`repo-hygiene.yml`) automatically checks for these patterns on every push and PR. An optional pre-commit hook is available at `.github/hooks/pre-commit` — see [Pre-commit Hooks](#pre-commit-hooks) for installation.
 
 ---
 
