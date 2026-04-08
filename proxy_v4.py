@@ -55,6 +55,7 @@ import gzip
 import io
 import math
 import hashlib
+import hmac
 import asyncio
 import http.client
 from functools import lru_cache
@@ -221,6 +222,9 @@ except ImportError:
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "0.0.0.0", "TOKENPAK_LISTEN_ADDRESS", str)
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOARD_AUTH", bool)
+# Proxy-level auth — AC-2.2 (TRIX-07). When set, non-localhost clients must send
+# "Authorization: Bearer <token>". Value is never logged.
+PROXY_AUTH_TOKEN: str = os.environ.get("TOKENPAK_PROXY_AUTH_TOKEN", "")
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
@@ -2031,7 +2035,54 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def _check_proxy_auth(self) -> bool:
+        """Enforce TOKENPAK_PROXY_AUTH_TOKEN for non-localhost clients.
+
+        Decision tree (AC-2.2, TRIX-07):
+          localhost                         → allow (return True)
+          non-localhost, env var unset      → 403, return False
+          non-localhost, env var set, no/wrong header → 401, return False
+          non-localhost, env var set, correct header  → allow (return True)
+
+        Token is compared with hmac.compare_digest() and never logged.
+        """
+        client_ip = self.client_address[0]
+        # Localhost (IPv4 and IPv6 loopback) always trusted — preserves OpenClaw path.
+        if client_ip in ("127.0.0.1", "::1"):
+            return True
+
+        # Non-localhost path.
+        if not PROXY_AUTH_TOKEN:
+            # Env var not configured — operator must set it before exposing to network.
+            self._send_json(
+                {"error": {"type": "forbidden",
+                           "message": "TOKENPAK_PROXY_AUTH_TOKEN not configured; "
+                                      "cannot accept non-localhost requests"}},
+                status=403,
+            )
+            return False
+
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            self._send_json(
+                {"error": {"type": "unauthorized", "message": "Missing Authorization header"}},
+                status=401,
+            )
+            return False
+
+        provided_token = auth_header[len("Bearer "):]
+        if not hmac.compare_digest(provided_token, PROXY_AUTH_TOKEN):
+            self._send_json(
+                {"error": {"type": "unauthorized", "message": "Invalid token"}},
+                status=401,
+            )
+            return False
+
+        return True
+
     def do_CONNECT(self):
+        if not self._check_proxy_auth():
+            return
         host, _, port = self.path.partition(":")
         port = int(port) if port else 443
         self._tunnel_connect(host, port)
@@ -2079,6 +2130,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         remote.close()
 
     def do_GET(self):
+        if not self._check_proxy_auth():
+            return
         if self.path == "/health":
             # Use 1-second response cache to reduce per-request overhead
             now = _time_module.monotonic()
@@ -2422,6 +2475,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_POST(self):
+        if not self._check_proxy_auth():
+            return
         # Fix #7: Per-IP rate limiting
         client_ip = self.client_address[0]
         if not _rate_limit_check(client_ip):
@@ -2442,12 +2497,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_PUT(self):
+        if not self._check_proxy_auth():
+            return
         if self.path.startswith("http"):
             self._forward_request("PUT")
         else:
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_DELETE(self):
+        if not self._check_proxy_auth():
+            return
         if self.path.startswith("http"):
             self._forward_request("DELETE")
         else:
