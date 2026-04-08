@@ -325,16 +325,185 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_TRACE": "true",
     },
+    # --- Claude Code consumption-mode profiles (CCI-04) ---
+    # Each maps to a specific Claude Code usage pattern detected at request time.
+    # Features within each profile are gated in their respective CCI task packets.
+    "claude-code-cli": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-tui": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "3000",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_SESSION_CAPSULES": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_CHAT_FOOTER": "true",
+        "TOKENPAK_INLINE_SAVINGS": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-tmux": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "2000",
+        "TOKENPAK_INJECT_TOP_K": "3",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_PER_SESSION_BUDGET": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
+        "TOKENPAK_STABILITY_SCORER": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-sdk": {
+        "TOKENPAK_MODE": "transparent",
+        "TOKENPAK_VAULT_INJECT": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_REQUEST_LOGGER": "true",
+        "TOKENPAK_OTLP_EXPORT": "true",
+        "TOKENPAK_MUTATION_AUDIT": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-ide": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "3000",
+        "TOKENPAK_INJECT_WORKSPACE_SCOPED": "true",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_INLINE_SAVINGS_HEADER": "true",
+        "TOKENPAK_UPSTREAM_TIMEOUT": "30",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-cron": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_BUDGET_HARD_FAIL": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
+        "TOKENPAK_INLINE_SAVINGS": "false",
+        "TOKENPAK_REQUEST_LOGGER": "true",
+        "TOKENPAK_TELEGRAM_ALERTS": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
 }
 
 ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
 if ACTIVE_PROFILE in _PROFILE_PRESETS:
     for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
         os.environ.setdefault(_pk, _pv)
-    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic)")
+    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic|claude-code-cli|claude-code-tui|claude-code-tmux|claude-code-sdk|claude-code-ide|claude-code-cron)")
 else:
     print(f"⚠️  Unknown TOKENPAK_PROFILE={ACTIVE_PROFILE!r} — ignoring, using env vars as-is")
     ACTIVE_PROFILE = "custom"
+
+# ---------------------------------------------------------------------------
+# Claude Code profile auto-detection (CCI-04)
+# ---------------------------------------------------------------------------
+# In-memory ring buffer: (session_id: str, timestamp: float) tuples.
+# Used by _recent_distinct_session_count() for tmux detection without a DB.
+_RECENT_SESSIONS: deque = deque(maxlen=500)
+_RECENT_SESSIONS_LOCK = threading.Lock()
+
+
+def _record_session_id(session_id: str) -> None:
+    """Record a session ID observation for tmux detection."""
+    with _RECENT_SESSIONS_LOCK:
+        _RECENT_SESSIONS.append((session_id, time.time()))
+
+
+def _recent_distinct_session_count(window_seconds: int = 60) -> int:
+    """Count distinct X-Claude-Code-Session-Id values seen in the last window_seconds."""
+    cutoff = time.time() - window_seconds
+    with _RECENT_SESSIONS_LOCK:
+        seen = {sid for sid, ts in _RECENT_SESSIONS if ts >= cutoff}
+    return len(seen)
+
+
+def _detect_claude_code_profile(headers: dict, body: Optional[dict] = None) -> Optional[str]:
+    """
+    Detect the appropriate Claude Code consumption-mode profile for a request.
+
+    Detection precedence:
+      1. TOKENPAK_PROFILE env var (if it starts with 'claude-code-') — explicit override
+      2. IDE host User-Agent  → claude-code-ide
+      3. Anthropic SDK (non-Claude-Code) User-Agent  → claude-code-sdk
+      4. X-Claude-Code-NonInteractive header  → claude-code-cron
+      5. X-Claude-Code-Interactive header  → claude-code-tui
+      6. Multiple distinct session IDs in last 60s  → claude-code-tmux
+      7. Any Claude Code User-Agent (fallback)  → claude-code-cli
+      8. Non-Claude-Code traffic  → None (no profile change)
+
+    Profiles defined in _PROFILE_PRESETS; features gated in individual CCI tasks.
+    """
+    # Explicit env var override always wins (existing TOKENPAK_PROFILE pattern)
+    env_profile = os.environ.get("TOKENPAK_PROFILE", "")
+    if env_profile.startswith("claude-code-"):
+        return env_profile
+
+    # Normalise header keys to lowercase for case-insensitive lookup
+    h = {k.lower(): v for k, v in headers.items()}
+    ua = (h.get("user-agent") or "").lower()
+
+    is_claude_code = "claude-code/" in ua
+    is_anthropic_sdk = (
+        "anthropic-python/" in ua
+        or "anthropic-sdk-typescript/" in ua
+        or "claude-agent-sdk/" in ua
+    )
+    is_ide_host = any(
+        host in ua for host in ["vscode/", "cursor/", "windsurf/", "jetbrains/"]
+    )
+
+    has_session_id = bool(h.get("x-claude-code-session-id"))
+    is_interactive = bool(h.get("x-claude-code-interactive"))
+    is_noninteractive = bool(h.get("x-claude-code-noninteractive"))
+
+    if not (is_claude_code or is_anthropic_sdk or is_ide_host):
+        return None  # non-Claude-Code traffic — no profile change
+
+    if is_ide_host:
+        return "claude-code-ide"
+    if is_anthropic_sdk and not is_claude_code:
+        return "claude-code-sdk"
+    if is_noninteractive:
+        return "claude-code-cron"
+    if is_interactive:
+        return "claude-code-tui"
+
+    # tmux: multiple Claude Code workers share the same proxy → multiple distinct
+    # session IDs appear within the recent window. Cheap in-memory deque, no DB.
+    if has_session_id:
+        session_id = h["x-claude-code-session-id"]
+        _record_session_id(session_id)
+        if _recent_distinct_session_count(60) >= 2:
+            return "claude-code-tmux"
+
+    return "claude-code-cli"  # default Claude Code fallback
+
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
@@ -4738,6 +4907,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 return
 
         headers = _header_mapping(self.headers)
+
+        # CCI-04: detect Claude Code consumption-mode profile early in request lifecycle
+        _detected_profile = _detect_claude_code_profile(headers)
+        if _detected_profile is not None:
+            SESSION["active_profile"] = _detected_profile
+            print(f"[tokenpak] active_profile: {_detected_profile}", flush=True)
+
         adapter = _detect_adapter(path=self.path, headers=headers, body_bytes=None)
         try:
             base = _resolve_upstream(adapter)
@@ -4925,55 +5101,33 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
-                    # CCG-14: Bypass cache for streaming or Claude Code (agent) requests.
-                    # Serving a JSON-dict cache hit to an SSE parser causes:
-                    #   Cannot read properties of undefined (reading 'input_tokens')
-                    # NEVER call _send_json for a streaming client.
                     if SEMANTIC_CACHE_ENABLED and body:
-                        _ccg14_is_streaming = False
-                        _ccg14_is_agent = False
                         try:
-                            _ccg14_peek = json.loads(body) if isinstance(body, (bytes, str)) else body
-                            _ccg14_is_streaming = bool(_ccg14_peek.get("stream"))
-                        except Exception:
-                            _ccg14_is_streaming = True  # conservative: treat unparseable as streaming
-                        try:
-                            _ccg14_hdrs = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
-                            _ccg14_is_agent = bool(_ccg14_hdrs.get("x-claude-code-session-id"))
-                            if not _ccg14_is_agent:
-                                _ccg14_ua = (_ccg14_hdrs.get("user-agent") or "").lower()
-                                _ccg14_is_agent = "claude-code" in _ccg14_ua
-                        except Exception:
-                            _ccg14_is_agent = True  # conservative
-                        if _ccg14_is_streaming or _ccg14_is_agent:
-                            SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
-                        else:
-                            try:
-                                _sem_cache = _get_sem_cache()
-                                if _sem_cache is None:
-                                    raise ImportError("SemanticCache unavailable")
-                                _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                                _cache_result = _sem_cache.lookup(_sem_query)
-                                if (
-                                    _cache_result is not None
-                                    and _cache_result.hit
-                                    and _cache_result.entry
-                                ):
-                                    SESSION["semantic_cache_hit"] = True
-                                    SESSION["phase_semantic_cache"] = "hit"
-                                    # Return cached response — skip all processing
-                                    _cached_resp = _cache_result.entry.response
-                                    if isinstance(_cached_resp, dict):
-                                        self._send_json(_cached_resp)
-                                    elif isinstance(_cached_resp, bytes):
-                                        self.wfile.write(_cached_resp)
-                                    else:
-                                        self._send_json(json.loads(_cached_resp))
-                                    return
-                                SESSION["phase_semantic_cache"] = "miss"
-                            except Exception as _sc_err:
-                                SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                                pass  # fail-open: never break a request over semantic cache
+                            _sem_cache = _get_sem_cache()
+                            if _sem_cache is None:
+                                raise ImportError("SemanticCache unavailable")
+                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
+                            _cache_result = _sem_cache.lookup(_sem_query)
+                            if (
+                                _cache_result is not None
+                                and _cache_result.hit
+                                and _cache_result.entry
+                            ):
+                                SESSION["semantic_cache_hit"] = True
+                                SESSION["phase_semantic_cache"] = "hit"
+                                # Return cached response — skip all processing
+                                _cached_resp = _cache_result.entry.response
+                                if isinstance(_cached_resp, dict):
+                                    self._send_json(_cached_resp)
+                                elif isinstance(_cached_resp, bytes):
+                                    self.wfile.write(_cached_resp)
+                                else:
+                                    self._send_json(json.loads(_cached_resp))
+                                return
+                            SESSION["phase_semantic_cache"] = "miss"
+                        except Exception as _sc_err:
+                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
+                            pass  # fail-open: never break a request over semantic cache
 
                     # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
                     # Enables Anthropic cache hits on repeated tool schemas
@@ -5229,48 +5383,115 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         input_tokens=input_tokens,
                     )
                     if VAULT_INDEX.available:
-                        skip_injection = False
-                        if INJECT_SKIP_MODELS.strip():
-                            if any(
-                                skip.strip() and skip.strip().lower() in model.lower()
-                                for skip in INJECT_SKIP_MODELS.split(",")
-                            ):
-                                skip_injection = True
-                        if input_tokens < INJECT_MIN_PROMPT:
-                            skip_injection = True
-                        if skip_injection:
-                            SESSION["injection_skips"] += 1
-                            vault_stage.details["skipped"] = True
-                            vault_stage.details["reason"] = (
-                                "model_skip"
-                                if INJECT_SKIP_MODELS.strip()
+                        # CCI-01: Claude Code cache-boundary-safe vault injection
+                        # Active when: claude-code-* profile (not sdk) + TOKENPAK_VAULT_INJECT != 0
+                        # Uses inject_with_cache_boundary to preserve Anthropic prompt cache prefix.
+                        _cci01_profile = SESSION.get("active_profile", "")
+                        _cci01_eligible = (
+                            _cci01_profile.startswith("claude-code-")
+                            and _cci01_profile != "claude-code-sdk"
+                            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower()
+                            not in ("0", "false", "no")
+                            and PROMPT_BUILDER_AVAILABLE
+                        )
+
+                        if _cci01_eligible:
+                            # Verify body has a system prompt — no injection target otherwise
+                            try:
+                                _cci01_req = json.loads(body)
+                                _cci01_has_system = bool(_cci01_req.get("system"))
+                            except Exception:
+                                _cci01_has_system = False
+
+                            _cci01_model_skip = bool(
+                                INJECT_SKIP_MODELS.strip()
                                 and any(
-                                    s.lower() in model.lower()
+                                    s.strip() and s.strip().lower() in model.lower()
                                     for s in INJECT_SKIP_MODELS.split(",")
                                 )
-                                else "prompt_too_short"
                             )
-                            # Even when skipping vault injection, apply cache_control to stable prefix
-                            # Guard: only Anthropic supports cache_control markers
-                            if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
-                                body = _apply_stable_cache_control(body)
+
+                            if _cci01_has_system and not _cci01_model_skip:
+                                _cci01_query = extract_query_signal(body, adapter=active_adapter)
+                                if _cci01_query:
+                                    _cci01_text, _cci01_tok, _cci01_srcs = VAULT_INDEX.compile_injection(
+                                        _cci01_query,
+                                        budget=INJECT_BUDGET,
+                                        top_k=INJECT_TOP_K,
+                                        min_score=INJECT_MIN_SCORE,
+                                    )
+                                    if _cci01_text and _cci01_tok > 0:
+                                        body = _inject_with_cache_boundary(body, _cci01_text)
+                                        injected_tokens = _cci01_tok
+                                        injected_sources = _cci01_srcs
+                                        # CCI-01 telemetry
+                                        SESSION["vault_blocks_injected"] = len(_cci01_srcs)
+                                        SESSION["vault_tokens_injected"] = _cci01_tok
+                                        vault_stage.tokens_delta = _cci01_tok
+                                        vault_stage.details["blocks_matched"] = len(_cci01_srcs)
+                                        vault_stage.details["block_names"] = _cci01_srcs[:5]
+                                        vault_stage.details["tokens_injected"] = _cci01_tok
+                                        vault_stage.details["cc_vault_injection"] = True
+                                        _, input_tokens = extract_request_tokens(
+                                            body, adapter=active_adapter
+                                        )
+                                    else:
+                                        vault_stage.details["skipped"] = True
+                                        vault_stage.details["reason"] = "zero_blocks_above_min_score"
+                                else:
+                                    vault_stage.details["skipped"] = True
+                                    vault_stage.details["reason"] = "no_query_signal"
+                            elif _cci01_model_skip:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "model_skip"
+                            else:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "no_system_prompt"
+
                         else:
-                            body, injected_tokens, injected_sources = inject_vault_context(
-                                body, adapter=active_adapter
-                            )
-                            if injected_tokens > 0:
-                                # Recount tokens after injection
-                                _, input_tokens = extract_request_tokens(
+                            # Generic (non-Claude-Code) vault injection path
+                            skip_injection = False
+                            if INJECT_SKIP_MODELS.strip():
+                                if any(
+                                    skip.strip() and skip.strip().lower() in model.lower()
+                                    for skip in INJECT_SKIP_MODELS.split(",")
+                                ):
+                                    skip_injection = True
+                            if input_tokens < INJECT_MIN_PROMPT:
+                                skip_injection = True
+                            if skip_injection:
+                                SESSION["injection_skips"] += 1
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = (
+                                    "model_skip"
+                                    if INJECT_SKIP_MODELS.strip()
+                                    and any(
+                                        s.lower() in model.lower()
+                                        for s in INJECT_SKIP_MODELS.split(",")
+                                    )
+                                    else "prompt_too_short"
+                                )
+                                # Even when skipping vault injection, apply cache_control to stable prefix
+                                # Guard: only Anthropic supports cache_control markers
+                                if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
+                                    body = _apply_stable_cache_control(body)
+                            else:
+                                body, injected_tokens, injected_sources = inject_vault_context(
                                     body, adapter=active_adapter
                                 )
-                                vault_stage.tokens_delta = injected_tokens
-                                vault_stage.details["blocks_matched"] = len(injected_sources)
-                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
-                                vault_stage.details["tokens_injected"] = injected_tokens
-                                # Enrich with sub-step timing from inject_vault_context
-                                vault_stage.details["sub_timing_ms"] = SESSION.get(
-                                    "vault_last_timing_ms", {}
-                                )
+                                if injected_tokens > 0:
+                                    # Recount tokens after injection
+                                    _, input_tokens = extract_request_tokens(
+                                        body, adapter=active_adapter
+                                    )
+                                    vault_stage.tokens_delta = injected_tokens
+                                    vault_stage.details["blocks_matched"] = len(injected_sources)
+                                    vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
+                                    vault_stage.details["tokens_injected"] = injected_tokens
+                                    # Enrich with sub-step timing from inject_vault_context
+                                    vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                        "vault_last_timing_ms", {}
+                                    )
                     vault_stage.output_tokens = input_tokens
                     vault_stage.duration_ms = (time.time() - t_inject) * 1000
                     if trace:
@@ -5699,6 +5920,46 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Guard: cache_control block cap is Anthropic-specific
             if detect_provider(target_url) is Provider.ANTHROPIC:
                 body = _cap_cache_control_blocks(body)
+                # TTL ordering hotfix v3 (2026-04-08 PM, re-applied after refactor):
+                # Anthropic rejects requests where any default-ttl (5m) cache_control
+                # appears BEFORE any explicit-ttl (e.g. 1h) block in document order.
+                # Claude Code 2.1.96 sends interleaved 1h→95m→1h shapes that trigger
+                # this. Strip default-ttl blocks before the LAST explicit-ttl block.
+                # Original incident: 2026-04-08 07:00 PDT Cali cycle failure.
+                # See feedback_cache_control_ttl_ordering.md memory entry.
+                try:
+                    _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                    _hf_locs = []
+                    for _hs in (_hf_dbody.get("system") or []):
+                        if isinstance(_hs, dict):
+                            _hf_locs.append(_hs)
+                    for _ht in (_hf_dbody.get("tools") or []):
+                        if isinstance(_ht, dict):
+                            _hf_locs.append(_ht)
+                    for _hm in (_hf_dbody.get("messages") or []):
+                        _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
+                        if isinstance(_hcontent, list):
+                            for _hc in _hcontent:
+                                if isinstance(_hc, dict):
+                                    _hf_locs.append(_hc)
+                    _last_ext_ttl = None
+                    for _hi, _hb in enumerate(_hf_locs):
+                        _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                        if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
+                            _last_ext_ttl = _hi
+                    if _last_ext_ttl is not None:
+                        _hf_stripped = 0
+                        for _hi in range(_last_ext_ttl):
+                            _hb = _hf_locs[_hi]
+                            _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                            if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
+                                _hb.pop("cache_control", None)
+                                _hf_stripped += 1
+                        if _hf_stripped > 0:
+                            print(f"  🧹 TTL ordering hotfix v3: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
+                            body = json.dumps(_hf_dbody).encode()
+                except Exception as _e_hf:
+                    print(f"  ⚠️ ttl ordering hotfix v3 error: {_e_hf}", flush=True)
             # Fix Content-Length after cache_control cap may have changed body size
             if isinstance(body, str):
                 body = body.encode("utf-8")
@@ -5748,47 +6009,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
-            # Hotfix 2026-04-07 Sue: enforce Anthropic cache_control TTL ordering
-            # rule (longer TTL must precede shorter TTL). Strip default-ttl blocks
-            # that appear before the first explicit-ttl (e.g. 1h) block.
-            try:
-                _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
-                _hf_locs = []
-                for _hs in (_hf_dbody.get("system") or []):
-                    if isinstance(_hs, dict):
-                        _hf_locs.append(_hs)
-                for _ht in (_hf_dbody.get("tools") or []):
-                    if isinstance(_ht, dict):
-                        _hf_locs.append(_ht)
-                for _hm in (_hf_dbody.get("messages") or []):
-                    _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
-                    if isinstance(_hcontent, list):
-                        for _hc in _hcontent:
-                            if isinstance(_hc, dict):
-                                _hf_locs.append(_hc)
-                # TTL ordering hotfix v2 (2026-04-08): Anthropic rejects requests where
-                # any default-ttl (5m) cache_control appears BEFORE any explicit-ttl (1h)
-                # block in document order. With interleaved 1h→95m→1h shapes (Claude
-                # Code's actual output) the v1 logic missed the middle 5m. Fix: find the
-                # LAST explicit-ttl position and strip every default-ttl block before it.
-                _last_ext_ttl = None
-                for _hi, _hb in enumerate(_hf_locs):
-                    _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                    if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
-                        _last_ext_ttl = _hi
-                if _last_ext_ttl is not None:
-                    _hf_stripped = 0
-                    for _hi in range(_last_ext_ttl):
-                        _hb = _hf_locs[_hi]
-                        _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                        if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
-                            _hb.pop("cache_control", None)
-                            _hf_stripped += 1
-                    if _hf_stripped > 0:
-                        print(f"  🧹 TTL ordering hotfix v2: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
-                        body = json.dumps(_hf_dbody).encode()
-            except Exception as _e_hf:
-                print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
             body = _strip_empty_text_blocks(body)
             # Guard: cache_control block cap is Anthropic-specific
             if detect_provider(target_url) is Provider.ANTHROPIC:
@@ -5854,8 +6074,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _conn_ms = int((time.monotonic() - _t0_conn) * 1000)
             print(f"  🔌 upstream connect+send: {_conn_ms}ms (pool reuse enabled)", flush=True)
             status = resp.status
-            # DIAG_UPSTREAM_STATUS_v1 (2026-04-08)
-            print(f"  📬 upstream returned status={status} content-type={resp.headers.get('Content-Type','?')}", flush=True)
 
             # Key pool failover: cooldown key on 401/429 and try next key
             if (
@@ -6286,37 +6504,31 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # conn.close()  # REMOVED: urllib3 pool manager, no conn object here
 
             # Post-request: Store successful response in semantic cache
-            # CCG-14: Same streaming/agent bypass as the lookup path.
-            # Streaming responses are SSE bytes — json.loads on them is always wrong
-            # and would silently pollute the error metric. Skip store entirely.
             if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
-                if SESSION.get("phase_semantic_cache") == "skipped:streaming-or-agent":
-                    pass  # CCG-14: bypass store for streaming / Claude Code requests
-                else:
-                    try:
-                        _sem_cache = _get_sem_cache()
-                        if _sem_cache is None:
-                            raise ImportError("SemanticCache unavailable")
-                        _store_query = (
-                            _original_body.decode("utf-8")
-                            if isinstance(_original_body, bytes)
-                            else _original_body
-                        )
-                        _store_resp_raw = (
-                            resp_body
-                            if "resp_body" in locals()
-                            else json.dumps({"status": status}).encode()
-                        )
-                        _store_resp_dict = (
-                            json.loads(_store_resp_raw)
-                            if isinstance(_store_resp_raw, (bytes, str))
-                            else _store_resp_raw
-                        )
-                        _sem_cache.store(_store_query, _store_resp_dict)
-                        SESSION["semantic_cache_stored"] = True
-                    except Exception as _sc_store_err:
-                        SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                        pass  # fail-open
+                try:
+                    _sem_cache = _get_sem_cache()
+                    if _sem_cache is None:
+                        raise ImportError("SemanticCache unavailable")
+                    _store_query = (
+                        _original_body.decode("utf-8")
+                        if isinstance(_original_body, bytes)
+                        else _original_body
+                    )
+                    _store_resp_raw = (
+                        resp_body
+                        if "resp_body" in locals()
+                        else json.dumps({"status": status}).encode()
+                    )
+                    _store_resp_dict = (
+                        json.loads(_store_resp_raw)
+                        if isinstance(_store_resp_raw, (bytes, str))
+                        else _store_resp_raw
+                    )
+                    _sem_cache.store(_store_query, _store_resp_dict)
+                    SESSION["semantic_cache_stored"] = True
+                except Exception as _sc_store_err:
+                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
+                    pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
 
