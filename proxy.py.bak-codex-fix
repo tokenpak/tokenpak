@@ -286,6 +286,7 @@ ROUTER_ENABLED: bool = _cfg("features.router", True, "TOKENPAK_ROUTER_ENABLED", 
 SKELETON_ENABLED: bool = _cfg("features.skeleton", True, "TOKENPAK_SKELETON_ENABLED", bool)
 SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENABLED", bool)
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
+BUDGET_MONTHLY_USD: Optional[float] = _cfg("budget.monthly_usd", None, "TOKENPAK_BUDGET_MONTHLY_USD", float)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
 # Tier 1 modules
@@ -1414,6 +1415,28 @@ def _get_budget_controller():
                     pass
     return _BUDGET_CTRL_INSTANCE
 
+
+# ---------------------------------------------------------------------------
+# Monthly USD spend cache — avoids DB hit on every request (TTL: 60 s)
+# ---------------------------------------------------------------------------
+_MONTHLY_SPEND_CACHE: dict = {"usd": 0.0, "ts": 0.0}
+_MONTHLY_SPEND_CACHE_TTL: float = 60.0
+
+
+def _get_cached_monthly_spend_usd() -> float:
+    """Return current-month spend in USD, refreshing from DB at most once per 60 s."""
+    now = time.time()
+    if now - _MONTHLY_SPEND_CACHE["ts"] < _MONTHLY_SPEND_CACHE_TTL:
+        return _MONTHLY_SPEND_CACHE["usd"]
+    try:
+        spent = MONITOR.get_monthly_cost()
+    except Exception:
+        spent = _MONTHLY_SPEND_CACHE["usd"]  # use stale value on error
+    _MONTHLY_SPEND_CACHE["usd"] = spent
+    _MONTHLY_SPEND_CACHE["ts"] = now
+    return spent
+
+
 # ---------------------------------------------------------------------------
 # Style Contract: Protected content detection
 # ---------------------------------------------------------------------------
@@ -1562,6 +1585,17 @@ class Monitor:
             "cache_creation_tokens": row[9],
         }
 
+    def get_monthly_cost(self) -> float:
+        """Return total estimated_cost for the current calendar month (UTC)."""
+        conn = sqlite3.connect(self.db_path)
+        row = conn.execute("""
+            SELECT COALESCE(SUM(estimated_cost), 0)
+            FROM requests
+            WHERE timestamp >= strftime('%Y-%m-01', 'now')
+        """).fetchone()
+        conn.close()
+        return float(row[0])
+
     def get_by_model(self):
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute("""
@@ -1614,6 +1648,7 @@ SESSION = {
     "canon_hits": 0,
     "canon_tokens_saved": 0,
     "ingest_entries": 0,
+    "budget_blocked_total": 0,
 }
 
 # ---------------------------------------------------------------------------
@@ -2786,6 +2821,33 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         except Exception as _bc_err:
                             SESSION["budget_controller_error"] = str(_bc_err)
                             pass  # fail-open
+
+                    # Phase 0.2.B: Monthly USD budget enforcement
+                    # Reads budget.monthly_usd from config; default=None (unlimited).
+                    # Uses a 60-second TTL cache so the DB is not hit on every request.
+                    if BUDGET_MONTHLY_USD is not None:
+                        try:
+                            _bc_monthly = _get_budget_controller()
+                            if _bc_monthly is not None:
+                                _monthly_spent = _get_cached_monthly_spend_usd()
+                                _bc_result = _bc_monthly.check(BUDGET_MONTHLY_USD, _monthly_spent)
+                                if _bc_result.exceeded:
+                                    SESSION["budget_blocked_total"] += 1
+                                    self._send_json({
+                                        "error": {
+                                            "type": "budget_exceeded",
+                                            "message": (
+                                                f"Monthly budget of ${BUDGET_MONTHLY_USD:.2f} exceeded. "
+                                                f"Spent: ${_monthly_spent:.4f}"
+                                            ),
+                                            "limit_usd": _bc_result.limit_usd,
+                                            "spent_usd": _bc_result.spent_usd,
+                                            "reset_at": _bc_result.reset_at,
+                                        }
+                                    }, status=429)
+                                    return
+                        except Exception as _bc_monthly_err:
+                            pass  # fail-open: never block requests due to budget check error
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
                     _intent_for_contract: str = "query"
