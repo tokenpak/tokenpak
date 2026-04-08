@@ -6,6 +6,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **CCI-01**: Vault context injection wired into Claude Code safe mode (post-cache-boundary). For claude-code-cli/tui/tmux/ide/cron profiles, vault BM25 search results are injected into the system prompt via inject_with_cache_boundary(), preserving the Anthropic prompt cache stable prefix. Telemetry: vault_blocks_injected + vault_tokens_injected per request. Skip conditions: claude-code-sdk profile, haiku models, no system prompt, zero blocks above min_score.
+
+## [Unreleased]
+
 ### Fixed
 - **CCG-14**: Bypass semantic cache (lookup + store) for streaming and Claude Code requests. Serving a JSON-dict cache hit to an SSE parser caused  crash in the Claude CLI. Detection:  request body,  header, or  User-Agent substring. Detection failures are conservative (bypass cache). Non-streaming SDK clients are unaffected.
 

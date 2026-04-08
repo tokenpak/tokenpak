@@ -4563,47 +4563,114 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         input_tokens=input_tokens,
                     )
                     if VAULT_INDEX.available:
-                        skip_injection = False
-                        if INJECT_SKIP_MODELS.strip():
-                            if any(
-                                skip.strip() and skip.strip().lower() in model.lower()
-                                for skip in INJECT_SKIP_MODELS.split(",")
-                            ):
-                                skip_injection = True
-                        if input_tokens < INJECT_MIN_PROMPT:
-                            skip_injection = True
-                        if skip_injection:
-                            SESSION["injection_skips"] += 1
-                            vault_stage.details["skipped"] = True
-                            vault_stage.details["reason"] = (
-                                "model_skip"
-                                if INJECT_SKIP_MODELS.strip()
+                        # CCI-01: Claude Code cache-boundary-safe vault injection
+                        # Active when: claude-code-* profile (not sdk) + TOKENPAK_VAULT_INJECT != 0
+                        # Uses inject_with_cache_boundary to preserve Anthropic prompt cache prefix.
+                        _cci01_profile = SESSION.get("active_profile", "")
+                        _cci01_eligible = (
+                            _cci01_profile.startswith("claude-code-")
+                            and _cci01_profile != "claude-code-sdk"
+                            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower()
+                            not in ("0", "false", "no")
+                            and PROMPT_BUILDER_AVAILABLE
+                        )
+
+                        if _cci01_eligible:
+                            # Verify body has a system prompt — no injection target otherwise
+                            try:
+                                _cci01_req = json.loads(body)
+                                _cci01_has_system = bool(_cci01_req.get("system"))
+                            except Exception:
+                                _cci01_has_system = False
+
+                            _cci01_model_skip = bool(
+                                INJECT_SKIP_MODELS.strip()
                                 and any(
-                                    s.lower() in model.lower()
+                                    s.strip() and s.strip().lower() in model.lower()
                                     for s in INJECT_SKIP_MODELS.split(",")
                                 )
-                                else "prompt_too_short"
                             )
-                            # Even when skipping vault injection, apply cache_control to stable prefix
-                            if PROMPT_BUILDER_AVAILABLE:
-                                body = _apply_stable_cache_control(body)
+
+                            if _cci01_has_system and not _cci01_model_skip:
+                                _cci01_query = extract_query_signal(body, adapter=active_adapter)
+                                if _cci01_query:
+                                    _cci01_text, _cci01_tok, _cci01_srcs = VAULT_INDEX.compile_injection(
+                                        _cci01_query,
+                                        budget=INJECT_BUDGET,
+                                        top_k=INJECT_TOP_K,
+                                        min_score=INJECT_MIN_SCORE,
+                                    )
+                                    if _cci01_text and _cci01_tok > 0:
+                                        body = _inject_with_cache_boundary(body, _cci01_text)
+                                        injected_tokens = _cci01_tok
+                                        injected_sources = _cci01_srcs
+                                        # CCI-01 telemetry
+                                        SESSION["vault_blocks_injected"] = len(_cci01_srcs)
+                                        SESSION["vault_tokens_injected"] = _cci01_tok
+                                        vault_stage.tokens_delta = _cci01_tok
+                                        vault_stage.details["blocks_matched"] = len(_cci01_srcs)
+                                        vault_stage.details["block_names"] = _cci01_srcs[:5]
+                                        vault_stage.details["tokens_injected"] = _cci01_tok
+                                        vault_stage.details["cc_vault_injection"] = True
+                                        _, input_tokens = extract_request_tokens(
+                                            body, adapter=active_adapter
+                                        )
+                                    else:
+                                        vault_stage.details["skipped"] = True
+                                        vault_stage.details["reason"] = "zero_blocks_above_min_score"
+                                else:
+                                    vault_stage.details["skipped"] = True
+                                    vault_stage.details["reason"] = "no_query_signal"
+                            elif _cci01_model_skip:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "model_skip"
+                            else:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "no_system_prompt"
+
                         else:
-                            body, injected_tokens, injected_sources = inject_vault_context(
-                                body, adapter=active_adapter
-                            )
-                            if injected_tokens > 0:
-                                # Recount tokens after injection
-                                _, input_tokens = extract_request_tokens(
+                            # Generic (non-Claude-Code) vault injection path
+                            skip_injection = False
+                            if INJECT_SKIP_MODELS.strip():
+                                if any(
+                                    skip.strip() and skip.strip().lower() in model.lower()
+                                    for skip in INJECT_SKIP_MODELS.split(",")
+                                ):
+                                    skip_injection = True
+                            if input_tokens < INJECT_MIN_PROMPT:
+                                skip_injection = True
+                            if skip_injection:
+                                SESSION["injection_skips"] += 1
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = (
+                                    "model_skip"
+                                    if INJECT_SKIP_MODELS.strip()
+                                    and any(
+                                        s.lower() in model.lower()
+                                        for s in INJECT_SKIP_MODELS.split(",")
+                                    )
+                                    else "prompt_too_short"
+                                )
+                                # Even when skipping vault injection, apply cache_control to stable prefix
+                                if PROMPT_BUILDER_AVAILABLE:
+                                    body = _apply_stable_cache_control(body)
+                            else:
+                                body, injected_tokens, injected_sources = inject_vault_context(
                                     body, adapter=active_adapter
                                 )
-                                vault_stage.tokens_delta = injected_tokens
-                                vault_stage.details["blocks_matched"] = len(injected_sources)
-                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
-                                vault_stage.details["tokens_injected"] = injected_tokens
-                                # Enrich with sub-step timing from inject_vault_context
-                                vault_stage.details["sub_timing_ms"] = SESSION.get(
-                                    "vault_last_timing_ms", {}
-                                )
+                                if injected_tokens > 0:
+                                    # Recount tokens after injection
+                                    _, input_tokens = extract_request_tokens(
+                                        body, adapter=active_adapter
+                                    )
+                                    vault_stage.tokens_delta = injected_tokens
+                                    vault_stage.details["blocks_matched"] = len(injected_sources)
+                                    vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
+                                    vault_stage.details["tokens_injected"] = injected_tokens
+                                    # Enrich with sub-step timing from inject_vault_context
+                                    vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                        "vault_last_timing_ms", {}
+                                    )
                     vault_stage.output_tokens = input_tokens
                     vault_stage.duration_ms = (time.time() - t_inject) * 1000
                     if trace:
