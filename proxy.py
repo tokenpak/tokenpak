@@ -52,6 +52,19 @@ import urllib3
 import math
 import os
 import re
+
+# Ensure the correct tokenpak package is importable even when proxy.py lives
+# inside a directory containing a local 'tokenpak/' folder that shadows the
+# vault-installed package. The vault editable install path takes priority.
+import sys as _sys
+_VAULT_TOKENPAK = os.path.expanduser("~/vault/01_PROJECTS/tokenpak/tokenpak")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if os.path.isdir(_VAULT_TOKENPAK):
+    # Remove script directory from sys.path if it contains a shadowing tokenpak/
+    if _SCRIPT_DIR in _sys.path and os.path.isdir(os.path.join(_SCRIPT_DIR, "tokenpak")):
+        _sys.path.remove(_SCRIPT_DIR)
+    if _VAULT_TOKENPAK not in _sys.path:
+        _sys.path.insert(0, _VAULT_TOKENPAK)
 import signal
 import socket
 import ssl
@@ -733,16 +746,34 @@ _KEY_ROTATION_MODE: str = os.environ.get("TOKENPAK_KEY_ROTATION", "failover")
 _KEY_COOLDOWN_429: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_429", "60"))
 _KEY_COOLDOWN_401: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_401", "300"))
 
-# Build pool from all ANTHROPIC_* vars at startup
+# Build pool from all ANTHROPIC_* vars at startup, plus Claude CLI credentials
 def _build_key_pool() -> list:
     candidates = [
         os.environ.get("ANTHROPIC_API_KEY", "").strip(),
         os.environ.get("ANTHROPIC_OAUTH_TOKEN", "").strip(),
         os.environ.get("ANTHROPIC_OAUTH_TOKEN2", "").strip(),
+        os.environ.get("ANTHROPIC_OAUTH_TOKEN3", "").strip(),
     ]
+    # Also try to read the fresh token from Claude CLI credentials.
+    # Claude CLI refreshes its token automatically, so this is the most
+    # reliable source for a valid OAuth access token.
+    _creds_path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        if _creds_path.exists():
+            import json as _json_mod
+            _creds = _json_mod.loads(_creds_path.read_text())
+            _cli_token = _creds.get("claudeAiOauth", {}).get("accessToken", "").strip()
+            if _cli_token and _cli_token not in candidates:
+                candidates.insert(0, _cli_token)  # prefer fresh token
+                print(f"[key-pool] Loaded fresh token from Claude CLI credentials", flush=True)
+    except Exception as _creds_err:
+        print(f"[key-pool] Could not read Claude CLI credentials: {_creds_err}", flush=True)
     pool = [k for k in candidates if k]
+    # Deduplicate while preserving order
+    _seen = set()
+    pool = [k for k in pool if not (k in _seen or _seen.add(k))]
     # Log count but never the keys themselves
-    print(f"[key-pool] Found {len(pool)} Anthropic API key(s)", flush=True)
+    print(f"[key-pool] Found {len(pool)} Anthropic credential(s)", flush=True)
     return pool
 
 _ANTHROPIC_KEY_POOL: list = _build_key_pool()
@@ -1051,6 +1082,8 @@ def _sanitize_headers(raw_headers) -> dict:
         if key.lower() in _BLOCKED_FORWARD_HEADERS:
             continue
         result[key] = raw_headers[key]
+    # Anthropic OAuth tokens (sk-ant-oat*) work as x-api-key — no conversion needed.
+    # Anthropic's Messages API accepts them via x-api-key but NOT via Bearer.
     return result
 
 
@@ -3719,6 +3752,160 @@ def _parse_gemini_cached_tokens(response_data: dict) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Bedrock Cache Checkpoint Support (CACHE-P3-003)
+# ---------------------------------------------------------------------------
+# BEDROCK CACHE CHECKPOINT LIFECYCLE:
+# 1. CLIENT specifies checkpoint positions via tokenpak_checkpoints field
+# 2. PROXY inserts cachePoint blocks at those positions for Bedrock requests
+# 3. RESPONSE includes CacheReadInputTokens/CacheWriteInputTokens in usage
+# 4. Checkpoints mark boundaries — everything before a checkpoint is cached
+#
+# Key constraints:
+# - Max 4 checkpoints per request (Bedrock limit)
+# - Minimum tokens per checkpoint varies by model (1024-4096)
+# - TTL: 5 minutes default, 1 hour optional for some models
+# - Checkpoint indices are 0-based, insertion happens AFTER the index
+
+
+def _extract_bedrock_checkpoints(body: dict) -> list:
+    """Extract and validate checkpoint positions from TokenPak hints.
+    
+    Accepts tokenpak_checkpoints field containing array of insertion indices.
+    Indices are 0-based and refer to positions in the messages array.
+    A checkpoint at index N means: insert cachePoint AFTER message[N].
+    
+    Args:
+        body: Request body dict (will be modified to strip tokenpak_checkpoints)
+        
+    Returns:
+        List of valid checkpoint indices, sorted in reverse order (for safe insertion)
+    """
+    checkpoints = body.pop("tokenpak_checkpoints", [])
+    if not isinstance(checkpoints, list):
+        return []
+    
+    messages = body.get("messages", [])
+    max_idx = len(messages) - 1
+    
+    if max_idx < 0:
+        return []
+    
+    # Validate: must be integers, in range [0, max_idx], deduplicate
+    valid = []
+    for cp in checkpoints:
+        if isinstance(cp, int) and 0 <= cp <= max_idx:
+            valid.append(cp)
+    
+    # Sort in reverse order for safe insertion (higher indices first)
+    # Deduplicate by converting to set
+    return sorted(set(valid), reverse=True)
+
+
+def _inject_bedrock_checkpoints(provider: Provider, body: bytes) -> bytes:
+    """Insert cachePoint blocks at specified positions for Bedrock requests.
+    
+    Bedrock uses checkpoint blocks to mark cache boundaries. A cachePoint block
+    inserted after message[N] means everything up to and including message[N]
+    is eligible for caching.
+    
+    Format: {"cachePoint": {"type": "default"}}
+    Optional TTL: {"cachePoint": {"type": "default", "ttl": "1h"}}
+    
+    Args:
+        provider: Detected LLM provider
+        body: Request body bytes
+        
+    Returns:
+        Modified body bytes with cachePoint blocks inserted (if Bedrock)
+    """
+    if provider != Provider.BEDROCK:
+        return body
+    
+    if not body:
+        return body
+    
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+    
+    # Extract checkpoints (also strips tokenpak_checkpoints from body)
+    checkpoints = _extract_bedrock_checkpoints(data)
+    
+    if not checkpoints:
+        # No checkpoints specified, but still need to return body without tokenpak_checkpoints
+        return json.dumps(data).encode()
+    
+    messages = data.get("messages", [])
+    if not messages:
+        return json.dumps(data).encode()
+    
+    # Insert cachePoint blocks in reverse index order (preserves lower indices)
+    for idx in checkpoints:
+        # Insert AFTER the message at idx (so at position idx + 1)
+        cache_point = {"cachePoint": {"type": "default"}}
+        messages.insert(idx + 1, cache_point)
+    
+    data["messages"] = messages
+    return json.dumps(data).encode()
+
+
+def _parse_bedrock_cached_tokens(response_data: dict) -> int:
+    """Parse cached token count from Bedrock responses.
+    
+    Bedrock returns cache metrics in the usage object:
+    {
+        "usage": {
+            "inputTokens": 1000,
+            "outputTokens": 50,
+            "cacheReadInputTokens": 800,    // tokens read from cache
+            "cacheWriteInputTokens": 200    // tokens written to cache
+        }
+    }
+    
+    Note: Bedrock also uses CacheReadInputTokens (camelCase) in some response formats.
+    We check both snake_case and camelCase variants.
+    
+    Args:
+        response_data: Parsed JSON response from Bedrock
+        
+    Returns:
+        Number of tokens read from cache (0 if not present)
+    """
+    usage = response_data.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0
+    
+    # Check both potential field names (Bedrock uses camelCase in Converse API)
+    cache_read = usage.get("cacheReadInputTokens", 0)
+    if not cache_read:
+        # Some responses might use this format
+        cache_read = usage.get("cacheReadInputTokenCount", 0)
+    
+    return cache_read if isinstance(cache_read, int) else 0
+
+
+def _parse_bedrock_cache_creation_tokens(response_data: dict) -> int:
+    """Parse cache creation token count from Bedrock responses.
+    
+    Args:
+        response_data: Parsed JSON response from Bedrock
+        
+    Returns:
+        Number of tokens written to cache (0 if not present)
+    """
+    usage = response_data.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0
+    
+    cache_write = usage.get("cacheWriteInputTokens", 0)
+    if not cache_write:
+        cache_write = usage.get("cacheWriteInputTokenCount", 0)
+    
+    return cache_write if isinstance(cache_write, int) else 0
+
+
+# ---------------------------------------------------------------------------
 # SSE stream parsing
 # ---------------------------------------------------------------------------
 def _extract_sse_tokens(sse_bytes):
@@ -4292,6 +4479,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             self._send_json(dashboard_data)
             return
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("GET")
         elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith(
@@ -4304,6 +4499,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._serve_openapi_yaml()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("GET")
         else:
             # Fix #2: JSON 404 instead of HTML
             self._send_json(
@@ -4364,6 +4561,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 status=429,
             )
             return
+        # Normalize bare API paths → /v1/ prefix.
+        # OpenAI SDKs split base_url from path — if the user sets base_url to
+        # http://localhost:8766 (no /v1 suffix), the SDK sends e.g. POST /responses
+        # instead of POST /v1/responses.  Normalize so adapter detection works.
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path == "/config/reload":
             # Localhost-only hot config reload (same effect as SIGHUP)
             if client_ip not in ("127.0.0.1", "::1"):
@@ -4391,8 +4599,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
 
     def do_PUT(self):
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("PUT")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("PUT")
         else:
             self._send_json(
                 {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
@@ -4400,8 +4618,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
 
     def do_DELETE(self):
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("DELETE")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("DELETE")
         else:
             self._send_json(
                 {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
@@ -4490,10 +4718,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         if not _has_client_auth:
             _env_key = (
                 os.environ.get("ANTHROPIC_API_KEY", "").strip()
+                or os.environ.get("ANTHROPIC_OAUTH_TOKEN", "").strip()
                 or os.environ.get("OPENAI_API_KEY", "").strip()
                 or os.environ.get("GOOGLE_API_KEY", "").strip()
                 or os.environ.get("GEMINI_API_KEY", "").strip()
             )
+            # Also check the key pool (includes all ANTHROPIC_OAUTH_TOKEN* vars)
+            _env_key = _env_key or bool(_ANTHROPIC_KEY_POOL)
             if not _env_key:
                 self._send_json(
                     _make_structured_error(
@@ -4521,7 +4752,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 status=502,
             )
             return
-        self._proxy_to(base + self.path, method, adapter=adapter)
+        # Use adapter-specific upstream path when available (e.g. Codex
+        # rewrites /v1/responses → /codex/responses for chatgpt.com backend).
+        upstream_path = self.path
+        if hasattr(adapter, "get_upstream_path"):
+            try:
+                upstream_path = adapter.get_upstream_path(self.path)
+            except TypeError:
+                upstream_path = adapter.get_upstream_path()
+        self._proxy_to(base + upstream_path, method, adapter=adapter)
 
     def _proxy_to(
         self, target_url, method, force_intercept=False, adapter: Optional[FormatAdapter] = None
@@ -4686,33 +4925,55 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
+                    # CCG-14: Bypass cache for streaming or Claude Code (agent) requests.
+                    # Serving a JSON-dict cache hit to an SSE parser causes:
+                    #   Cannot read properties of undefined (reading 'input_tokens')
+                    # NEVER call _send_json for a streaming client.
                     if SEMANTIC_CACHE_ENABLED and body:
+                        _ccg14_is_streaming = False
+                        _ccg14_is_agent = False
                         try:
-                            _sem_cache = _get_sem_cache()
-                            if _sem_cache is None:
-                                raise ImportError("SemanticCache unavailable")
-                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
-                        except Exception as _sc_err:
-                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                            pass  # fail-open: never break a request over semantic cache
+                            _ccg14_peek = json.loads(body) if isinstance(body, (bytes, str)) else body
+                            _ccg14_is_streaming = bool(_ccg14_peek.get("stream"))
+                        except Exception:
+                            _ccg14_is_streaming = True  # conservative: treat unparseable as streaming
+                        try:
+                            _ccg14_hdrs = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
+                            _ccg14_is_agent = bool(_ccg14_hdrs.get("x-claude-code-session-id"))
+                            if not _ccg14_is_agent:
+                                _ccg14_ua = (_ccg14_hdrs.get("user-agent") or "").lower()
+                                _ccg14_is_agent = "claude-code" in _ccg14_ua
+                        except Exception:
+                            _ccg14_is_agent = True  # conservative
+                        if _ccg14_is_streaming or _ccg14_is_agent:
+                            SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                        else:
+                            try:
+                                _sem_cache = _get_sem_cache()
+                                if _sem_cache is None:
+                                    raise ImportError("SemanticCache unavailable")
+                                _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
+                                _cache_result = _sem_cache.lookup(_sem_query)
+                                if (
+                                    _cache_result is not None
+                                    and _cache_result.hit
+                                    and _cache_result.entry
+                                ):
+                                    SESSION["semantic_cache_hit"] = True
+                                    SESSION["phase_semantic_cache"] = "hit"
+                                    # Return cached response — skip all processing
+                                    _cached_resp = _cache_result.entry.response
+                                    if isinstance(_cached_resp, dict):
+                                        self._send_json(_cached_resp)
+                                    elif isinstance(_cached_resp, bytes):
+                                        self.wfile.write(_cached_resp)
+                                    else:
+                                        self._send_json(json.loads(_cached_resp))
+                                    return
+                                SESSION["phase_semantic_cache"] = "miss"
+                            except Exception as _sc_err:
+                                SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
+                                pass  # fail-open: never break a request over semantic cache
 
                     # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
                     # Enables Anthropic cache hits on repeated tool schemas
@@ -4921,6 +5182,26 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             SESSION["prefix_registry_error"] = str(_pr_err)
                             pass  # fail-open
 
+                    # CANONICAL PROMPT ORDER (do not reorder — prefix caching depends on stability):
+                    # 1. System policy blocks   (stable — never changes between requests)
+                    # 2. Tool/function schemas  (stable — normalized to byte-identical JSON by Phase -1)
+                    # 3. Injected vault context (stable during session; appended AFTER stable prefix)
+                    # 4. Conversation summary   (if trimming applied; chronological)
+                    # 5. Conversation history   (user/assistant turns, chronological insertion order)
+                    # 6. Current user turn      (most recent user message)
+                    # 7. Volatile metadata      (timestamps, session IDs — stripped below by Phase 0.9)
+                    #
+                    # All pipeline stages that modify content preserve insertion order (verified):
+                    #   Phase -1  : Tool Schema Registry — normalizes tool JSON, no message reorder
+                    #   Phase 0.5 : CapsuleBuilder — in-place content mod, iterates by index
+                    #   Phase 0.9 : Cache Poison Removal — scrubs dynamic tokens in-place (below)
+                    #   Phase 1   : Vault injection — appends AFTER existing stable system blocks
+                    #   Phase 1.5 : CANON dedup — block dedup preserves list insertion order
+                    #   Phase 1.7 : QueryRewriter — rewrites user content in-place, same list order
+                    #   Phase 1.8 : Salience Router — modifies content in-place, same list order
+                    #   Phase 2   : Compaction — compact_request_body iterates by index, in-place
+                    #   Phase 2.1 : Compression Dictionary — apply() returns new list in original order
+                    #
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
                     if body:
@@ -5275,6 +5556,63 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _gate_err:
                     print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
+        # Codex payload fixups — always applied regardless of compression pipeline.
+        # The chatgpt.com/backend-api/codex/responses endpoint requires:
+        #   - instructions: present (even empty string)
+        #   - input: always a list (not string)
+        #   - stream: true
+        #   - store: false
+        #   - max_output_tokens: removed
+        # Additionally applies prefix_auto caching per the TokenPak caching spec:
+        #   - prompt_cache_key: deterministic hash of stable prefix
+        #   - prompt_cache_retention: "24h" for substantial instructions
+        # These constraints must be enforced post-pipeline because the compression
+        # pipeline may skip denormalize for below-threshold requests.
+        if (
+            body
+            and active_adapter is not None
+            and active_adapter.source_format == "openai-codex-responses"
+        ):
+            try:
+                _codex_payload = json.loads(body)
+                _codex_payload["stream"] = True
+                _codex_payload["store"] = False  # required by chatgpt.com backend
+                if "instructions" not in _codex_payload:
+                    _codex_payload["instructions"] = ""
+                _codex_payload.pop("max_output_tokens", None)
+                if isinstance(_codex_payload.get("input"), str):
+                    _text = _codex_payload["input"]
+                    if _text:
+                        _codex_payload["input"] = [
+                            {"role": "user", "content": [{"type": "input_text", "text": _text}]}
+                        ]
+                    else:
+                        _codex_payload["input"] = []
+                # Strip item_reference entries from input — with store=false
+                # (required by Codex backend), referenced items don't exist.
+                if isinstance(_codex_payload.get("input"), list):
+                    _codex_payload["input"] = [
+                        item for item in _codex_payload["input"]
+                        if not (isinstance(item, dict) and item.get("type") == "item_reference")
+                    ]
+                # Prompt prefix caching (prefix_auto) — generate deterministic
+                # cache key from stable prefix if client didn't provide one.
+                if "prompt_cache_key" not in _codex_payload:
+                    try:
+                        from tokenpak.proxy.adapters.openai_codex_responses_adapter import build_codex_cache_key
+                        _codex_payload["prompt_cache_key"] = build_codex_cache_key(
+                            model=_codex_payload.get("model", "codex"),
+                            instructions=_codex_payload.get("instructions", ""),
+                            tools=_codex_payload.get("tools"),
+                        )
+                    except Exception:
+                        pass  # fail-open
+                # chatgpt.com backend does not support prompt_cache_retention — strip it
+                _codex_payload.pop("prompt_cache_retention", None)
+                body = json.dumps(_codex_payload, ensure_ascii=False).encode("utf-8")
+            except (json.JSONDecodeError, TypeError):
+                pass  # fail-open: send original body
+
         fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
         if sent_input_tokens == 0:
@@ -5283,15 +5621,40 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Content-Length"] = str(len(body))
 
         _req_headers_lower = {k.lower(): v for k, v in self.headers.items()}
-        _client_has_auth = bool(
-            _req_headers_lower.get("x-api-key", "").strip()
-            or _req_headers_lower.get("authorization", "").strip()
+        _client_xapi = _req_headers_lower.get("x-api-key", "").strip()
+        _client_auth = _req_headers_lower.get("authorization", "").strip()
+        # A client key is "real" only if it looks like a provider credential.
+        # Placeholder values (e.g. "custom-local") are treated as no-auth so
+        # the proxy injects from the key pool instead.
+        _client_has_real_auth = bool(
+            (_client_xapi and (_client_xapi.startswith("sk-") or len(_client_xapi) > 40))
+            or (_client_auth and _client_auth.lower().startswith("bearer "))
         )
         _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        if not _client_has_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
+        if not _client_has_real_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
             _pool_key, _current_key_idx = _get_next_key()
             if _pool_key:
                 fwd_headers["x-api-key"] = _pool_key
+            elif _ANTHROPIC_KEY_POOL:
+                # All keys on cooldown — return 429 immediately instead of
+                # forwarding with a placeholder key (which just amplifies the storm).
+                with _KEY_COOLDOWN_LOCK:
+                    _cd_remaining = max(0, _KEY_COOLDOWN_STATE.get(0, 0) - time.time())
+                _retry_after = max(1, int(_cd_remaining))
+                print(f"[key-pool] All keys cooling — returning 429 (retry in {_retry_after}s)", flush=True)
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Retry-After", str(_retry_after))
+                _body_429 = json.dumps({
+                    "error": {
+                        "type": "rate_limit_error",
+                        "message": f"All API keys are on cooldown. Retry in {_retry_after}s.",
+                    }
+                }).encode()
+                self.send_header("Content-Length", len(_body_429))
+                self.end_headers()
+                self.wfile.write(_body_429)
+                return
 
         # Fix #5: Check per-provider circuit breaker before attempting upstream
         _cb_provider = _provider_for_url(target_url)
@@ -5385,14 +5748,58 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
+            # Hotfix 2026-04-07 Sue: enforce Anthropic cache_control TTL ordering
+            # rule (longer TTL must precede shorter TTL). Strip default-ttl blocks
+            # that appear before the first explicit-ttl (e.g. 1h) block.
+            try:
+                _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                _hf_locs = []
+                for _hs in (_hf_dbody.get("system") or []):
+                    if isinstance(_hs, dict):
+                        _hf_locs.append(_hs)
+                for _ht in (_hf_dbody.get("tools") or []):
+                    if isinstance(_ht, dict):
+                        _hf_locs.append(_ht)
+                for _hm in (_hf_dbody.get("messages") or []):
+                    _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
+                    if isinstance(_hcontent, list):
+                        for _hc in _hcontent:
+                            if isinstance(_hc, dict):
+                                _hf_locs.append(_hc)
+                # TTL ordering hotfix v2 (2026-04-08): Anthropic rejects requests where
+                # any default-ttl (5m) cache_control appears BEFORE any explicit-ttl (1h)
+                # block in document order. With interleaved 1h→95m→1h shapes (Claude
+                # Code's actual output) the v1 logic missed the middle 5m. Fix: find the
+                # LAST explicit-ttl position and strip every default-ttl block before it.
+                _last_ext_ttl = None
+                for _hi, _hb in enumerate(_hf_locs):
+                    _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                    if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
+                        _last_ext_ttl = _hi
+                if _last_ext_ttl is not None:
+                    _hf_stripped = 0
+                    for _hi in range(_last_ext_ttl):
+                        _hb = _hf_locs[_hi]
+                        _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                        if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
+                            _hb.pop("cache_control", None)
+                            _hf_stripped += 1
+                    if _hf_stripped > 0:
+                        print(f"  🧹 TTL ordering hotfix v2: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
+                        body = json.dumps(_hf_dbody).encode()
+            except Exception as _e_hf:
+                print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
             body = _strip_empty_text_blocks(body)
             # Guard: cache_control block cap is Anthropic-specific
             if detect_provider(target_url) is Provider.ANTHROPIC:
                 body = _cap_cache_control_blocks(body)
             # Guard: Gemini cachedContent injection is Gemini-specific
-            _gemini_provider = detect_provider(target_url)
-            if _gemini_provider is Provider.GEMINI:
-                body = _inject_gemini_cache_ref(_gemini_provider, dict(self.headers), body)
+            _detected_provider = detect_provider(target_url)
+            if _detected_provider is Provider.GEMINI:
+                body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
+            # Guard: Bedrock cachePoint injection is Bedrock-specific (CACHE-P3-003)
+            if _detected_provider is Provider.BEDROCK:
+                body = _inject_bedrock_checkpoints(_detected_provider, body)
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -5447,13 +5854,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _conn_ms = int((time.monotonic() - _t0_conn) * 1000)
             print(f"  🔌 upstream connect+send: {_conn_ms}ms (pool reuse enabled)", flush=True)
             status = resp.status
+            # DIAG_UPSTREAM_STATUS_v1 (2026-04-08)
+            print(f"  📬 upstream returned status={status} content-type={resp.headers.get('Content-Type','?')}", flush=True)
 
-            # Key pool failover: retry with next key on 401/429 (only when we injected)
+            # Key pool failover: cooldown key on 401/429 and try next key
             if (
                 status in (401, 429)
                 and _current_key_idx >= 0
-                and not _client_has_auth
-                and len(_ANTHROPIC_KEY_POOL) > 1
+                and not _client_has_real_auth
             ):
                 _cooldown_dur = _KEY_COOLDOWN_401 if status == 401 else _KEY_COOLDOWN_429
                 _cool_down_key(_current_key_idx, _cooldown_dur, f"HTTP {status}")
@@ -5493,6 +5901,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _circuit_record_success(_cb_provider)
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
+            # chatgpt.com/backend-api returns SSE without Content-Type header.
+            # Codex adapter always sets stream=true, so treat its responses as SSE.
+            if (
+                not is_sse
+                and active_adapter is not None
+                and active_adapter.source_format == "openai-codex-responses"
+                and status == 200
+            ):
+                is_sse = True
 
             # If upstream errored but we already sent 200+SSE headers, emit SSE error event
             if _early_sse_sent and status >= 400:
@@ -5609,13 +6026,20 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_response(status)
                 # urllib3 HTTPResponse uses .headers (HTTPHeaderDict) instead of .getheaders()
                 _resp_headers = resp.headers.items() if hasattr(resp, "headers") else resp.getheaders()
+                _has_content_type = False
                 for h_key, h_val in _resp_headers:
                     h_lower = h_key.lower()
                     if h_lower in ("connection", "keep-alive", "transfer-encoding"):
                         continue
                     if h_lower == "content-length":
                         continue
+                    if h_lower == "content-type":
+                        _has_content_type = True
                     self.send_header(h_key, h_val)
+                # Ensure Content-Type is set for SSE responses — some upstreams
+                # (chatgpt.com/backend-api) omit it, breaking SSE-aware clients.
+                if is_sse and not _has_content_type:
+                    self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
 
             if is_sse:
@@ -5652,7 +6076,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         continue
 
                     # Chat footer injection — buffer chunks to find message_stop
-                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages:
+                    # Skip for non-Anthropic adapters (e.g. Codex) whose SSE format
+                    # has no message_stop event, causing all data to be buffered.
+                    _is_anthropic_sse = (
+                        active_adapter is not None
+                        and active_adapter.source_format.startswith("anthropic")
+                    )
+                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages and _is_anthropic_sse:
                         combined = _pending_chunk + chunk
                         _pending_chunk = b""
                         if (
@@ -5839,37 +6269,54 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             gemini_cached = _parse_gemini_cached_tokens(_resp_json)
                             if gemini_cached > 0:
                                 cache_read_tokens = gemini_cached
+                        
+                        # Bedrock format: usage.cacheReadInputTokens (CACHE-P3-003)
+                        # Only apply if no cache tokens found from other providers
+                        if cache_read_tokens == 0:
+                            bedrock_cached = _parse_bedrock_cached_tokens(_resp_json)
+                            if bedrock_cached > 0:
+                                cache_read_tokens = bedrock_cached
+                            # Also check for Bedrock cache creation tokens
+                            bedrock_creation = _parse_bedrock_cache_creation_tokens(_resp_json)
+                            if bedrock_creation > 0:
+                                cache_creation_tokens = bedrock_creation
                     except Exception:
                         pass
 
             # conn.close()  # REMOVED: urllib3 pool manager, no conn object here
 
             # Post-request: Store successful response in semantic cache
+            # CCG-14: Same streaming/agent bypass as the lookup path.
+            # Streaming responses are SSE bytes — json.loads on them is always wrong
+            # and would silently pollute the error metric. Skip store entirely.
             if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
-                try:
-                    _sem_cache = _get_sem_cache()
-                    if _sem_cache is None:
-                        raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
-                        else _original_body
-                    )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
-                except Exception as _sc_store_err:
-                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                    pass  # fail-open
+                if SESSION.get("phase_semantic_cache") == "skipped:streaming-or-agent":
+                    pass  # CCG-14: bypass store for streaming / Claude Code requests
+                else:
+                    try:
+                        _sem_cache = _get_sem_cache()
+                        if _sem_cache is None:
+                            raise ImportError("SemanticCache unavailable")
+                        _store_query = (
+                            _original_body.decode("utf-8")
+                            if isinstance(_original_body, bytes)
+                            else _original_body
+                        )
+                        _store_resp_raw = (
+                            resp_body
+                            if "resp_body" in locals()
+                            else json.dumps({"status": status}).encode()
+                        )
+                        _store_resp_dict = (
+                            json.loads(_store_resp_raw)
+                            if isinstance(_store_resp_raw, (bytes, str))
+                            else _store_resp_raw
+                        )
+                        _sem_cache.store(_store_query, _store_resp_dict)
+                        SESSION["semantic_cache_stored"] = True
+                    except Exception as _sc_store_err:
+                        SESSION["semantic_cache_store_error"] = str(_sc_store_err)
+                        pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
 
@@ -6640,6 +7087,7 @@ async def _ws_handler(websocket) -> None:
                 hl = hname.lower()
                 if hl in ("x-api-key", "authorization", "anthropic-version", "anthropic-beta"):
                     fwd_headers[hl] = hval
+            # Anthropic OAuth tokens (sk-ant-oat*) are accepted as x-api-key — no conversion.
         except Exception:
             pass
 

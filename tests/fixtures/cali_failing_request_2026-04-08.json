@@ -1,0 +1,25 @@
+{
+  "model": "claude-sonnet-4-6",
+  "stream": true,
+  "max_tokens": 8096,
+  "system": "You are a helpful AI agent. Complete the assigned task carefully.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Please help me with the assigned task from the queue."
+    }
+  ],
+  "tools": [
+    {
+      "name": "bash",
+      "description": "Run a bash command",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "The bash command to run"}
+        },
+        "required": ["command"]
+      }
+    }
+  ]
+}
