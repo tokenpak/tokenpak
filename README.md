@@ -29,12 +29,18 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 ## 3 Commands to Savings
 
 ```bash
-pip install "tokenpak[serve]"  # install (with proxy server)
-tokenpak serve --port 8766 --workers 4   # start proxy (4 CPU cores)
-tokenpak cost --week          # watch savings grow
+pip install "tokenpak[serve]"            # 1. install (with proxy server)
+tokenpak setup                           # 2. configure your LLM client (one-time wizard)
+tokenpak serve --port 8766 --workers 4  # 3. start proxy (4 CPU cores)
 ```
 
-Point your LLM client's base URL at `http://localhost:8766`. That's it — **zero config required.**
+`tokenpak setup` detects your installed LLM client (Claude Code, OpenAI SDK, Google AI) and
+writes the proxy URL into the right config file automatically — no manual URL editing needed.
+Then just start the proxy and your client routes through tokenpak.
+
+```bash
+tokenpak cost --week    # watch savings grow
+```
 
 > **Note:** The `[serve]` extra includes FastAPI (required for the proxy). If you're only using the compression SDK, install with plain `pip install tokenpak`.
 
