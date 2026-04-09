@@ -18,7 +18,15 @@ Find your problem fast. Every section follows **Problem → Cause → Fix** with
 10. [Logs Not Showing / Wrong Level](#10-logs-not-showing--wrong-level)
 11. [Cache Not Working](#11-cache-not-working)
 12. [Compression Not Reducing Tokens](#12-compression-not-reducing-tokens)
-13. [Getting More Help](#getting-more-help)
+13. [Missing Python Dependencies](#13-missing-python-dependencies)
+14. [Permission Errors at Startup](#14-permission-errors-at-startup)
+15. [Memory Leaks](#15-memory-leaks)
+16. [CPU Spikes](#16-cpu-spikes)
+17. [Performance Profiling](#17-performance-profiling)
+18. [Cloud Deployments](#18-cloud-deployments)
+19. [Quick Triage Runbook](#19-quick-triage-runbook)
+20. [OpenClaw Integration Issues](#20-openclaw-integration-issues)
+21. [Getting More Help](#getting-more-help)
 
 ---
 
@@ -811,6 +819,329 @@ Some prompts (short, unique, no repetition) don't compress well. This is expecte
 
 ---
 
+## 13. Missing Python Dependencies
+
+### Problem
+
+Container starts then exits repeatedly, or the proxy crashes on import.
+
+### Diagnose
+
+```bash
+# In container/shell
+python -V
+pip freeze | grep -E 'brotli|zstandard|uvicorn|fastapi'
+
+# Validate image build layers
+docker image inspect tokenpak:latest --format '{{.Id}}'
+```
+
+### Cause A: Missing optional library (brotli, zstd)
+
+**Fix:**
+```bash
+# Rebuild image with clean cache
+docker build --no-cache -t tokenpak:latest .
+
+# Install missing package/version pin in requirements.txt and retry
+```
+
+### Cause B: Stale compiled bytecode
+
+If source files changed but `__pycache__` wasn't invalidated:
+
+**Fix:**
+```bash
+find ~/tokenpak -type d -name __pycache__ -exec rm -rf {} +
+find ~/tokenpak -name "*.pyc" -delete
+python3 -c "import tokenpak; print('recompiled')"
+```
+
+---
+
+## 14. Permission Errors at Startup
+
+### Problem
+
+TokenPak works locally but fails in a container or cloud environment with permission denied errors.
+
+### Diagnose
+
+```bash
+id
+ls -lah /app /app/cache /var/log
+```
+
+### Example errors
+
+```text
+PermissionError: [Errno 13] Permission denied: '/var/log/tokenpak.log'
+EACCES: permission denied, mkdir '/app/cache'
+```
+
+### Fix
+
+1. Ensure the runtime user owns writable directories.
+2. In Dockerfile, create and `chown` write paths during build.
+3. In orchestrators (K8s/ECS), set the security context or attach a writable volume.
+
+---
+
+## 15. Memory Leaks
+
+### Problem
+
+Process RSS climbs continuously; container gets OOMKilled and restarts.
+
+### Diagnose
+
+```bash
+# Process memory over time
+ps -o pid,ppid,%mem,rss,vsz,cmd -p $(pgrep -f 'proxy.py|tokenpak')
+
+# Container memory stats
+docker stats --no-stream
+```
+
+### Fix
+
+1. Confirm object/cache eviction policy is active.
+2. Limit max in-memory cache size via env/config:
+   ```bash
+   export TOKENPAK_COMPACT_CACHE_SIZE=2000
+   ```
+3. Capture a heap profile in staging to identify retained objects.
+4. Roll instances with a shorter lifetime until root cause is fixed.
+
+---
+
+## 16. CPU Spikes
+
+### Problem
+
+Requests queue up; autoscaler churns on high CPU usage.
+
+### Diagnose
+
+```bash
+top -H -p $(pgrep -f 'proxy.py|tokenpak' | head -1)
+
+# If pidstat is available
+pidstat -u -p $(pgrep -f 'proxy.py|tokenpak' | tr '\n' ',') 1 5
+```
+
+### Fix
+
+1. Reduce compression level for hot paths:
+   ```bash
+   export TOKENPAK_MODE=strict
+   tokenpak serve
+   ```
+2. Tune worker count for available vCPU.
+3. Offload expensive preprocessing to an async/background stage.
+
+---
+
+## 17. Performance Profiling
+
+### Problem
+
+You need to identify which functions are causing slowness.
+
+### How to capture a profile
+
+```bash
+# Python profile snapshot
+python -m cProfile -o /tmp/tokenpak.prof proxy.py
+
+# Inspect hottest functions
+python - <<'PY'
+import pstats
+p = pstats.Stats('/tmp/tokenpak.prof')
+p.sort_stats('cumtime').print_stats(30)
+PY
+```
+
+### Key fields to trace per request
+
+- `request_id`
+- `route` / `model`
+- `original_bytes`
+- `compressed_bytes`
+- `ratio`
+- `cache_hit`
+- `compression_reason` (e.g., `"below_threshold"`, `"already_compressed"`)
+
+---
+
+## 18. Cloud Deployments
+
+### 18.1 GCP Cloud Run
+
+**Common issues:** Container not listening on `$PORT`; startup timeout due to slow init.
+
+**Diagnose:**
+```bash
+gcloud run services logs read tokenpak --region us-central1 --limit 200
+```
+
+**Fix:**
+1. Ensure the app binds to `0.0.0.0:$PORT`.
+2. Increase CPU allocation for startup-heavy workloads.
+3. Set `min-instances > 0` to reduce cold starts.
+
+---
+
+### 18.2 AWS ECS
+
+**Common issues:** Task exits due to bad env/secret; health check path mismatch.
+
+**Diagnose:**
+```bash
+aws ecs describe-tasks --cluster <cluster> --tasks <task-arn>
+aws logs tail /ecs/tokenpak --follow
+```
+
+**Fix:**
+1. Validate task-definition env vars and secret ARNs.
+2. Match container health check path/port to service config.
+3. Increase task memory if OOM events are observed.
+
+---
+
+### 18.3 Azure Container Instances
+
+**Common issues:** Image pull/auth errors; DNS/network resolution failures.
+
+**Diagnose:**
+```bash
+az container logs --resource-group <rg> --name tokenpak
+az container show --resource-group <rg> --name tokenpak --query "instanceView.events"
+```
+
+**Fix:**
+1. Verify ACR credentials / managed identity access.
+2. Confirm VNet/subnet and outbound egress rules.
+3. Recreate the instance after correcting env and secrets.
+
+---
+
+## 19. Quick Triage Runbook
+
+10-minute flow for any TokenPak issue:
+
+1. **Is it up?** `curl http://127.0.0.1:8766/health`
+2. **If down:** check startup logs + port / config / dependency / permission issues (sections 1, 5, 13, 14).
+3. **If slow:** inspect latency + CPU/memory + upstream timings (sections 8, 15, 16).
+4. **If compression poor:** verify flags, thresholds, ratios, cache hit rate (sections 11, 12).
+5. **If cloud-only:** use provider logs/events and fix runtime env/network mismatches (section 18).
+6. **After fix:** validate health, run smoke test, and capture root cause + prevention note.
+
+---
+
+## 20. OpenClaw Integration Issues
+
+### 20.1 Primary model reverting after restart
+
+**Symptoms:** Gateway shows TokenPak routing but after restart reverts to direct provider.
+
+**Root cause:** `tokenpak-inject.sh` (runs as `ExecStartPre`) overwrites manually-set TokenPak primaries during startup.
+
+**Diagnose:**
+```bash
+python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(cfg['agents']['defaults']['model']['primary'])"
+systemctl --user restart openclaw-gateway.service
+sleep 5
+python3 -c "import json; cfg=json.load(open('$HOME/.openclaw/openclaw.json')); print(cfg['agents']['defaults']['model']['primary'])"
+```
+
+**Fix (permanent):** In `~/.local/bin/tokenpak-inject.sh`, add early exit in `interleave()`:
+```python
+if primary and is_tp(primary.split("/", 1)[0]):
+    return model_cfg, False  # already on tokenpak — don't change
+```
+
+---
+
+### 20.2 Missing TokenPak source files (bytecode only)
+
+**Symptoms:** `ImportError: cannot import name 'server'`; only `.pyc` files exist.
+
+**Fix:**
+```bash
+# Backup broken package and restore from main repo
+mv ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak.broken
+cp -r ~/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak
+python3 -c "from tokenpak.agent.proxy import server; print('✅ Import works')"
+```
+
+---
+
+### 20.3 Agent missing module updates
+
+**Symptoms:** One machine has import errors for a module that exists on another.
+
+**Fix:**
+```bash
+cd ~/tokenpak && git pull origin master
+python3 -c "from tokenpak.agent.semantic.term_card_resolver import TermCardResolver; print('✅ Updated')"
+```
+
+---
+
+### 20.4 Case sensitivity collision in queue directories
+
+**Symptoms:** Tasks in lowercase queue dirs (`~/vault/Agents/trix/queue/`) never execute; active tasks are in uppercase dirs.
+
+**Fix:**
+```bash
+# Identify orphaned tasks first
+find ~/vault/Agents/{trix,cali}/queue -name "*.md" 2>/dev/null
+# Then remove orphaned lowercase dirs
+rm -rf ~/vault/Agents/trix/queue ~/vault/Agents/cali/queue
+```
+
+---
+
+### 20.5 Stale compiled bytecode in __pycache__
+
+**Symptoms:** Old `.pyc` still loads after source is updated; growing `__pycache__` dirs.
+
+**Fix:**
+```bash
+find ~/tokenpak -type d -name __pycache__ -exec rm -rf {} +
+find ~/tokenpak -name "*.pyc" -delete
+python3 -c "import tokenpak; print('recompiled')"
+```
+
+---
+
+### 20.6 Duplicate model aliases causing routing conflicts
+
+**Symptoms:** Multiple aliases point to the same model; fallback routing is unpredictable.
+
+**Diagnose:**
+```bash
+python3 << 'EOF'
+import json
+from pathlib import Path
+cfg = json.load(open(Path.home() / '.openclaw/openclaw.json'))
+models = cfg['agents']['defaults']['models']
+aliases = {}
+for model, spec in models.items():
+    alias = spec.get('alias')
+    if alias:
+        if alias in aliases:
+            print(f"Duplicate: {alias} → {aliases[alias]} AND {model}")
+        else:
+            aliases[alias] = model
+EOF
+```
+
+**Fix:** Remove aliases from direct provider entries; keep aliases only on `tokenpak-*` versions.
+
+---
+
 ## Getting More Help
 
 ### 1. Search existing issues
@@ -852,7 +1183,24 @@ File at: https://github.com/kaywhy331/tokenpak/issues/new
 
 For detailed error code descriptions and fixes, see [Error Codes Reference](errors.md).
 
-### 4. Community
+### 4. Standard health commands
+
+```bash
+# Health check
+curl -fsS http://127.0.0.1:8766/health
+
+# Stats (if enabled)
+curl -fsS http://127.0.0.1:8766/stats | python3 -m json.tool
+
+# Container logs
+docker logs --tail 200 <container_name>
+
+# Process + sockets
+ps aux | grep -E 'proxy.py|tokenpak' | grep -v grep
+ss -ltnp | grep 8766
+```
+
+### 5. Community
 
 - **GitHub Discussions:** https://github.com/kaywhy331/tokenpak/discussions
-- **Documentation:** See [docs/INDEX.md](INDEX.md) for the full documentation index
+- **Documentation:** See [Documentation Index](index.md) for the full documentation reference

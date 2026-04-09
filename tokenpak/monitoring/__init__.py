@@ -11,7 +11,6 @@ __all__ = [
 
 from .audit_trail import AuditTrail
 from .request_logger import RequestLogger, RequestLogRecord, log_request, new_request_id
-from .monitor import Monitor
 
 __all__ += [
     "RequestLogger",
@@ -19,5 +18,4 @@ __all__ += [
     "log_request",
     "new_request_id",
     "AuditTrail",
-    "Monitor",
 ]

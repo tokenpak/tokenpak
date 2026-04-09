@@ -1,6 +1,6 @@
-"""tokenpak.agentic public API."""
+"""tokenpak.agentic — free agentic utilities (error normalization, retry)."""
 
-from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
-from tokenpak.agent.agentic.retry import RetryEngine
+from .error_normalizer import ErrorNormalizer
+from .retry import RetryEngine
 
 __all__ = ["ErrorNormalizer", "RetryEngine"]

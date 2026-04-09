@@ -38,7 +38,7 @@ import re
 import socket
 import sys
 import threading
-from contextlib import ExitStack, redirect_stdout
+from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -63,17 +63,7 @@ os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
 import proxy as _proxy  # noqa: E402
 
-# Provider import — present on calibot (tokenpak.runtime.providers) but absent on SueWu.
-# Fall back to a minimal stub so the test file imports cleanly on both hosts.
-try:
-    from tokenpak.runtime.providers import Provider  # noqa: E402
-except ImportError:
-    # SueWu: tokenpak.runtime.providers does not exist; the v2 hotfix fires
-    # unconditionally and does not need Provider/detect_provider at all.
-    class _ProviderStub:  # type: ignore[no-redef]
-        """Minimal sentinel used only as a patch return-value on hosts that lack the module."""
-        ANTHROPIC = "anthropic"
-    Provider = _ProviderStub  # type: ignore[assignment]
+from tokenpak.runtime.providers import Provider  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -190,15 +180,8 @@ def recording_proxy():
     stub_thread = threading.Thread(target=stub.serve_forever, daemon=True)
     stub_thread.start()
 
-    # On calibot, detect_provider gates the TTL hotfix (must return ANTHROPIC for
-    # the stub URL or the hotfix won't fire).  On SueWu, the v2 hotfix fires
-    # unconditionally — detect_provider does not exist in that proxy.py.
-    with ExitStack() as stack:
-        stack.enter_context(patch.object(_proxy, "SEMANTIC_CACHE_ENABLED", False))
-        if hasattr(_proxy, "detect_provider"):
-            stack.enter_context(
-                patch.object(_proxy, "detect_provider", return_value=Provider.ANTHROPIC)
-            )
+    with patch.object(_proxy, "SEMANTIC_CACHE_ENABLED", False), \
+         patch("proxy.detect_provider", return_value=Provider.ANTHROPIC):
 
         proxy_server = _proxy.ThreadedHTTPServer(
             ("127.0.0.1", proxy_port), _proxy.ForwardProxyHandler

@@ -25,12 +25,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-try:
-    from tokenpak.tokens import count_tokens
-except ImportError:
-    def count_tokens(text: str) -> int:  # type: ignore[misc]
-        return max(1, len(text) // 4)
-
 # Constants (mirror proxy.py defaults; override via env vars)
 VAULT_INDEX_RELOAD_INTERVAL: int = int(os.environ.get("TOKENPAK_VAULT_INDEX_RELOAD_INTERVAL", 300))
 VAULT_CACHE_MAX_BYTES: int = int(os.environ.get("TOKENPAK_VAULT_MEMORY_MAX", 256 * 1024 * 1024))
@@ -159,11 +153,11 @@ class VaultIndex:
                 self._cache_hits = 0
                 self._cache_misses = 0
                 self._cache_evictions = 0
-            self._ready = True
             print(
                 f"  📚 Vault index loaded from BM25 cache: {self._doc_count} blocks"
                 f" | cache preloaded: {len(new_cache)} blocks ({new_cache_bytes // 1024 // 1024}MB)"
             )
+            self._ready = True
             return True
         except Exception as e:
             print(f"  ⚠️ BM25 cache load failed ({e}), rebuilding...")

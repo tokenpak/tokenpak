@@ -48,28 +48,25 @@ except ImportError:
 
 class GoalType(Enum):
     """Goal type classification."""
-
-    SAVINGS = "savings"  # Dollar savings goal
-    COMPRESSION = "compression"  # Compression ratio goal (%)
-    CACHE = "cache"  # Cache hit rate goal (%)
-    METRIC = "metric"  # Custom metric goal (user-defined)
+    SAVINGS = "savings"          # Dollar savings goal
+    COMPRESSION = "compression"   # Compression ratio goal (%)
+    CACHE = "cache"              # Cache hit rate goal (%)
+    METRIC = "metric"            # Custom metric goal (user-defined)
 
 
 class GoalStatus(Enum):
     """Goal status classification."""
-
     ACTIVE = "active"
     COMPLETED = "completed"
     PAUSED = "paused"
-    BEHIND = "behind"  # Behind schedule
-    ON_TRACK = "on_track"  # On track
-    AHEAD = "ahead"  # Ahead of schedule
+    BEHIND = "behind"            # Behind schedule
+    ON_TRACK = "on_track"        # On track
+    AHEAD = "ahead"              # Ahead of schedule
 
 
 @dataclass
 class GoalProgress:
     """Tracks progress for a single goal."""
-
     goal_id: str
     current_value: float = 0.0
     target_value: float = 100.0
@@ -93,7 +90,6 @@ class GoalProgress:
 @dataclass
 class Goal:
     """Single savings/metric goal definition."""
-
     goal_id: str
     name: str
     goal_type: str  # savings, compression, cache, metric
@@ -186,9 +182,7 @@ class GoalManager:
         # Initialize progress for any goals without state
         for goal_id, goal in self.goals.items():
             if goal_id not in self.progress:
-                self.progress[goal_id] = GoalProgress(
-                    goal_id=goal_id, target_value=goal.target_value
-                )
+                self.progress[goal_id] = GoalProgress(goal_id=goal_id, target_value=goal.target_value)
 
     def _save(self):
         """Persist goals and state to disk."""
@@ -399,51 +393,43 @@ class GoalManager:
         # Check milestones
         if percent >= 25 and not progress.milestone_25_fired:
             progress.milestone_25_fired = True
-            events.append(
-                {
-                    "type": "milestone",
-                    "goal_id": goal_id,
-                    "goal_name": goal.name,
-                    "milestone": 25,
-                    "message": f"🎉 {goal.name}: 25% complete!",
-                }
-            )
+            events.append({
+                "type": "milestone",
+                "goal_id": goal_id,
+                "goal_name": goal.name,
+                "milestone": 25,
+                "message": f"🎉 {goal.name}: 25% complete!",
+            })
 
         if percent >= 50 and not progress.milestone_50_fired:
             progress.milestone_50_fired = True
-            events.append(
-                {
-                    "type": "milestone",
-                    "goal_id": goal_id,
-                    "goal_name": goal.name,
-                    "milestone": 50,
-                    "message": f"🎯 {goal.name}: 50% complete!",
-                }
-            )
+            events.append({
+                "type": "milestone",
+                "goal_id": goal_id,
+                "goal_name": goal.name,
+                "milestone": 50,
+                "message": f"🎯 {goal.name}: 50% complete!",
+            })
 
         if percent >= 75 and not progress.milestone_75_fired:
             progress.milestone_75_fired = True
-            events.append(
-                {
-                    "type": "milestone",
-                    "goal_id": goal_id,
-                    "goal_name": goal.name,
-                    "milestone": 75,
-                    "message": f"💪 {goal.name}: 75% complete!",
-                }
-            )
+            events.append({
+                "type": "milestone",
+                "goal_id": goal_id,
+                "goal_name": goal.name,
+                "milestone": 75,
+                "message": f"💪 {goal.name}: 75% complete!",
+            })
 
         if percent >= 100 and not progress.milestone_100_fired:
             progress.milestone_100_fired = True
-            events.append(
-                {
-                    "type": "milestone",
-                    "goal_id": goal_id,
-                    "goal_name": goal.name,
-                    "milestone": 100,
-                    "message": f"✅ {goal.name}: GOAL ACHIEVED!",
-                }
-            )
+            events.append({
+                "type": "milestone",
+                "goal_id": goal_id,
+                "goal_name": goal.name,
+                "milestone": 100,
+                "message": f"✅ {goal.name}: GOAL ACHIEVED!",
+            })
 
         if events:
             self._save()
@@ -502,7 +488,5 @@ class GoalManager:
             "total_goals": len(goals_list),
             "active_goals": len(goals_list) - completed,
             "completed_goals": completed,
-            "avg_progress": sum(p.progress_percent for p in progresses if p) / len(progresses)
-            if progresses
-            else 0.0,
+            "avg_progress": sum(p.progress_percent for p in progresses if p) / len(progresses) if progresses else 0.0,
         }

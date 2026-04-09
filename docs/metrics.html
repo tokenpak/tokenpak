@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenPak — Live Usage Metrics</title>
+  <meta name="description" content="Real-time anonymous usage metrics for TokenPak, the Claude Code token compression plugin." />
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3e;
+      --accent: #6366f1;
+      --accent-dim: #4f52d4;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header h1 span { color: var(--accent); }
+
+    header p {
+      color: var(--text-dim);
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .card .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 0.6rem;
+    }
+
+    .card .value {
+      font-size: 2.25rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    .card .value.loading { opacity: 0.3; }
+    .card .sub { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.35rem; }
+
+    /* Mode breakdown */
+    .breakdown {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 800px;
+      margin-bottom: 2rem;
+    }
+
+    .breakdown h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 1.2rem;
+    }
+
+    .mode-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+
+    .mode-bar .name {
+      font-size: 0.85rem;
+      width: 60px;
+      flex-shrink: 0;
+      font-family: monospace;
+      color: var(--text-dim);
+    }
+
+    .mode-bar .track {
+      flex: 1;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .mode-bar .fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+      transition: width 0.6s ease;
+    }
+
+    .mode-bar .count {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      width: 50px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      margin-top: 1rem;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 0.4rem;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .error-banner {
+      display: none;
+      background: #2d1b1b;
+      border: 1px solid #5c2525;
+      border-radius: 8px;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.85rem;
+      color: #f87171;
+      margin-bottom: 1.5rem;
+      width: 100%;
+      max-width: 800px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Token<span>Pak</span> — Live Metrics</h1>
+    <p>
+      <span class="dot" id="live-dot"></span>
+      Anonymous opt-in usage. No prompts, no content, no PII.
+    </p>
+  </header>
+
+  <div class="error-banner" id="error-banner">
+    Metrics endpoint unreachable — showing cached data or placeholder values.
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">Active installs (24h)</div>
+      <div class="value loading" id="active-installs">—</div>
+      <div class="sub">unique install IDs</div>
+    </div>
+    <div class="card">
+      <div class="label">Total installs (lifetime)</div>
+      <div class="value loading" id="total-installs">—</div>
+      <div class="sub">since launch</div>
+    </div>
+    <div class="card">
+      <div class="label">Tokens saved (24h)</div>
+      <div class="value loading" id="tokens-saved">—</div>
+      <div class="sub">across all users</div>
+    </div>
+  </div>
+
+  <!-- Mode breakdown panel (CCI-21) -->
+  <div class="breakdown">
+    <h2>Consumption Mode Breakdown (24h)</h2>
+    <div id="mode-bars">
+      <!-- populated by JS -->
+      <div style="color:var(--text-dim);font-size:0.85rem;">Loading…</div>
+    </div>
+  </div>
+
+  <footer>
+    Data refreshes every 60 seconds &nbsp;·&nbsp;
+    <a href="https://github.com/tokenpak/tokenpak" target="_blank">GitHub</a> &nbsp;·&nbsp;
+    <a href="/docs/telemetry" target="_blank">Privacy &amp; schema</a>
+  </footer>
+
+  <script>
+    const API = '/metrics/public';
+    const MODES = ['cli', 'tui', 'tmux', 'sdk', 'ide', 'cron'];
+
+    function fmt(n) {
+      if (n == null) return '—';
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
+      return String(n);
+    }
+
+    function renderModeBreakdown(breakdown) {
+      const container = document.getElementById('mode-bars');
+      if (!breakdown || Object.keys(breakdown).length === 0) {
+        container.innerHTML = '<div style="color:var(--text-dim);font-size:0.85rem;">No mode data yet.</div>';
+        return;
+      }
+      const total = Object.values(breakdown).reduce((a, b) => a + b, 0) || 1;
+      const sorted = Object.entries(breakdown).sort(([, a], [, b]) => b - a);
+      container.innerHTML = sorted.map(([mode, count]) => {
+        const pct = Math.round((count / total) * 100);
+        return `
+          <div class="mode-bar">
+            <span class="name">${mode}</span>
+            <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+            <span class="count">${fmt(count)}</span>
+          </div>`;
+      }).join('');
+    }
+
+    function setVal(id, val) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = val;
+      el.classList.remove('loading');
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch(API, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        setVal('active-installs', fmt(data.active_installs_24h));
+        setVal('total-installs', fmt(data.total_installs_lifetime));
+        setVal('tokens-saved', fmt(data.tokens_saved_24h));
+
+        renderModeBreakdown(data.mode_breakdown || {});
+        document.getElementById('error-banner').style.display = 'none';
+        document.getElementById('live-dot').style.background = 'var(--green)';
+      } catch (e) {
+        console.warn('metrics fetch failed:', e);
+        document.getElementById('error-banner').style.display = 'block';
+        document.getElementById('live-dot').style.background = 'var(--amber)';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 60_000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "messages": [
+    {"role": "user", "content": "Translate this greeting into multiple languages"},
+    {"role": "assistant", "content": "English: Hello, how are you today?\n\nSpanish: Hola, ¿cómo estás hoy? / Hola, ¿cómo está usted hoy?\n\nFrench: Bonjour, comment allez-vous aujourd'hui? / Bonjour, comment vas-tu aujourd'hui?\n\nGerman: Hallo, wie geht es dir heute? / Hallo, wie geht es Ihnen heute?\n\nMandarin Chinese: 你好，你今天怎么样？(Nǐ hǎo, nǐ jīntiān zěnyàng?) / 您好，您今天怎么样？(Nín hǎo, nín jīntiān zěnyàng?)\n\nJapanese: こんにちは、今日はどうですか？(Konnichiha, kyō wa dō desu ka?) / おはようございます (Ohayō gozaimasu) - formal morning greeting\n\nPortuguese (Brazilian): Olá, como você está hoje? / Oi, tudo bem?\n\nRussian: Привет, как дела? (Privet, kak dela?) / Здравствуйте, как Вы поживаете? (Zdravstvuyte, kak Vy pozhivaete?) - formal\n\nKorean: 안녕하세요, 오늘 어떠세요? (Annyeonghaseyo, oneul eotteoseyo?) / 안녕, 오늘 어때? (Annyeong, oneul eottae?) - informal\n\nArabic: مرحبا، كيف حالك اليوم؟ (Marhaba, kayf halak alyawm?) / السلام عليكم ورحمة الله وبركاته (Assalamu alaikum wa rahmatullahi wa barakatuh) - formal Islamic greeting"}
+  ]
+}

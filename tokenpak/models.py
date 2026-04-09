@@ -83,12 +83,6 @@ class ModelStats:
     total_latency_ms: int = 0
 
     def to_dict(self) -> dict:
-        """Convert model stats to dictionary for serialization or reporting.
-        
-        Returns:
-            dict: Keys include model name, request counts, token metrics, cache hit rate,
-                  compression efficiency, and cost analysis.
-        """
         return {
             "model": self.model_name,
             "requests": self.requests,
@@ -205,12 +199,14 @@ class ModelAnalyzer:
 
         # Overall metrics
         cache_hit_rate = (
-            round((total_cache_hits / total_requests * 100), 1) if total_requests > 0 else 0.0
+            round((total_cache_hits / total_requests * 100), 1)
+            if total_requests > 0 else 0.0
         )
 
         total_tokens = total_input + total_cache_reads
         compression_eff = (
-            round((total_cache_reads / total_tokens * 100), 1) if total_tokens > 0 else 0.0
+            round((total_cache_reads / total_tokens * 100), 1)
+            if total_tokens > 0 else 0.0
         )
 
         return {

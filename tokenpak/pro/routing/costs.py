@@ -1,18 +1,17 @@
 """Cost tracking per provider and request."""
 
+from typing import Dict, Optional
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 import json
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class CostModel(str, Enum):
     """Cost models for different providers."""
-
     TOKEN_BASED = "token_based"  # Cost per input/output tokens
     REQUEST_BASED = "request_based"  # Fixed cost per request
     HYBRID = "hybrid"  # Both
@@ -21,7 +20,6 @@ class CostModel(str, Enum):
 @dataclass
 class CostEntry:
     """A single cost tracking entry."""
-
     provider: str
     timestamp: datetime
     input_tokens: int = 0
@@ -58,7 +56,6 @@ class CostEntry:
 @dataclass
 class ProviderCostSummary:
     """Summary of costs for a provider."""
-
     provider: str
     total_cost: float = 0.0
     request_count: int = 0
@@ -72,7 +69,6 @@ class ProviderCostSummary:
         return {
             "provider": self.provider,
             "total_cost": self.total_cost,
-            "total_cost_usd": self.total_cost,  # alias for API compatibility
             "request_count": self.request_count,
             "token_count": self.token_count,
             "error_count": self.error_count,
@@ -102,28 +98,26 @@ class CostTracker:
     def track_request(
         self,
         provider: str,
-        model: Optional[str] = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
         input_cost: float = 0.0,
         output_cost: float = 0.0,
         request_cost: float = 0.0,
+        model: Optional[str] = None,
         status: str = "success",
         metadata: Optional[dict] = None,
     ) -> CostEntry:
         """
         Track a request's cost.
 
-        Signature: track_request(provider, model, input_tokens, output_tokens, input_cost, ...)
-
         Args:
             provider: Provider name
-            model: Model name
             input_tokens: Number of input tokens
             output_tokens: Number of output tokens
             input_cost: Cost for input tokens
             output_cost: Cost for output tokens
             request_cost: Fixed request cost
+            model: Model name
             status: Request status (success, error, timeout)
             metadata: Additional metadata
 
@@ -132,7 +126,7 @@ class CostTracker:
         """
         entry = CostEntry(
             provider=provider,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.utcnow(),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             input_cost=input_cost,
@@ -163,7 +157,7 @@ class CostTracker:
         summary.token_count += entry.input_tokens + entry.output_tokens
         if entry.status == "error":
             summary.error_count += 1
-        summary.last_updated = datetime.now(timezone.utc)
+        summary.last_updated = datetime.utcnow()
         summary.avg_cost_per_request = summary.total_cost / summary.request_count
 
     def get_provider_summary(self, provider: str) -> Optional[ProviderCostSummary]:
@@ -177,10 +171,6 @@ class CostTracker:
     def get_total_cost(self) -> float:
         """Get total cost across all providers."""
         return sum(entry.total_cost for entry in self.entries)
-
-    def total_cost_usd(self) -> float:
-        """Public API: get total cost in USD across all providers."""
-        return self.get_total_cost()
 
     def get_entries_by_provider(self, provider: str) -> list:
         """Get all entries for a provider."""
@@ -210,7 +200,9 @@ class CostTracker:
             indent=2,
         )
 
-    def get_cost_by_period(self, start_time: datetime, end_time: datetime) -> Dict[str, float]:
+    def get_cost_by_period(
+        self, start_time: datetime, end_time: datetime
+    ) -> Dict[str, float]:
         """
         Get costs by provider for a time period.
 

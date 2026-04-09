@@ -17,6 +17,7 @@ MODEL_RATES = {
     "claude-sonnet-4-5": {"input": 3.0, "cached": 0.30, "output": 15.0},
     "claude-sonnet-4-6": {"input": 3.0, "cached": 0.30, "output": 15.0},
     "claude-haiku-4-5": {"input": 0.80, "cached": 0.08, "output": 4.0},
+    "claude-haiku-4-6": {"input": 0.80, "cached": 0.08, "output": 4.0},
     "gpt-4o": {"input": 2.50, "cached": 1.25, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "cached": 0.075, "output": 0.60},
     "gpt-4-turbo": {"input": 10.0, "cached": 5.0, "output": 30.0},
@@ -156,3 +157,178 @@ def get_price(model: str, direction: str = "input") -> float:
     elif direction == "cached":
         return rates.get("cached", 0.30)
     return rates.get("input", 3.0)
+
+
+def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
+    """Calculate real dollar savings from the monitor DB using per-model rates.
+
+    Args:
+        db_path: Path to monitor.db SQLite file.
+        period: Time window — "1h", "24h", "7d", "30d", or None (all-time).
+
+    Returns:
+        Dict with total_requests, cost_without_tokenpak, cost_with_tokenpak,
+        total_saved, reduction_percent, per_model list, and velocity sub-dict.
+    """
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+
+    # Build period filter
+    period_map = {"1h": timedelta(hours=1), "24h": timedelta(hours=24),
+                  "7d": timedelta(days=7), "30d": timedelta(days=30)}
+    where_clause = ""
+    if period and period in period_map:
+        cutoff = (datetime.now(timezone.utc) - period_map[period]).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
+        where_clause = f"WHERE timestamp >= '{cutoff}'"
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+
+        rows = cur.execute(
+            f"""
+            SELECT model,
+                   COUNT(*) AS requests,
+                   COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                   COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                   COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+                   COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
+                   COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens
+            FROM requests
+            {where_clause}
+            GROUP BY model
+            ORDER BY requests DESC
+            """
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    per_model = []
+    total_cost_without = 0.0
+    total_cost_with = 0.0
+    total_requests = 0
+
+    for row in rows:
+        rates = get_rates(row["model"])
+        inp = row["input_tokens"]
+        out = row["output_tokens"]
+        cache_r = row["cache_read_tokens"]
+        cache_c = row["cache_creation_tokens"]
+
+        # "Without" cost: all tokens (input + cache_read) at full input rate + output
+        cost_without = (
+            (inp + cache_r) / 1_000_000 * rates["input"]
+            + out / 1_000_000 * rates["output"]
+            + cache_c / 1_000_000 * rates["input"] * 1.25
+        )
+
+        # "With" cost: input at input rate + cache_read at cached rate + output + cache_creation
+        cost_with = (
+            inp / 1_000_000 * rates["input"]
+            + cache_r / 1_000_000 * rates["cached"]
+            + out / 1_000_000 * rates["output"]
+            + cache_c / 1_000_000 * rates["input"] * 1.25
+        )
+
+        saved = cost_without - cost_with
+        total_input_plus_cache = inp + cache_r
+        cache_hit_pct = (
+            cache_r / total_input_plus_cache * 100.0 if total_input_plus_cache > 0 else 0.0
+        )
+        reduction_pct = saved / cost_without * 100.0 if cost_without > 0 else 0.0
+
+        per_model.append({
+            "model": row["model"],
+            "requests": row["requests"],
+            "cost": round(cost_with, 4),
+            "cost_without": round(cost_without, 4),
+            "saved": round(saved, 4),
+            "cache_hit_percent": round(cache_hit_pct, 1),
+            "reduction_percent": round(reduction_pct, 1),
+        })
+
+        total_cost_without += cost_without
+        total_cost_with += cost_with
+        total_requests += row["requests"]
+
+    total_saved = total_cost_without - total_cost_with
+    reduction_pct = total_saved / total_cost_without * 100.0 if total_cost_without > 0 else 0.0
+
+    # Velocity: compute last_hour, last_24h, all_time regardless of period filter
+    def _saved_for_window(window_clause: str) -> float:
+        try:
+            conn2 = sqlite3.connect(db_path)
+            conn2.row_factory = sqlite3.Row
+            wrows = conn2.execute(
+                f"""
+                SELECT model,
+                       COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                       COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                       COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+                       COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
+                FROM requests
+                {window_clause}
+                GROUP BY model
+                """
+            ).fetchall()
+            conn2.close()
+        except Exception:
+            return 0.0
+        total = 0.0
+        for r in wrows:
+            rt = get_rates(r["model"])
+            cw = (r["cache_read_tokens"] / 1_000_000) * (rt["input"] - rt["cached"])
+            total += cw
+        return round(total, 4)
+
+    now = datetime.now(timezone.utc)
+    cutoff_1h = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    cutoff_24h = (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
+
+    velocity = {
+        "last_hour_saved": _saved_for_window(f"WHERE timestamp >= '{cutoff_1h}'"),
+        "last_24h_saved": _saved_for_window(f"WHERE timestamp >= '{cutoff_24h}'"),
+        "all_time_saved": _saved_for_window(""),
+    }
+
+    return {
+        "period": period or "all-time",
+        "total_requests": total_requests,
+        "cost_without_tokenpak": round(total_cost_without, 4),
+        "cost_with_tokenpak": round(total_cost_with, 4),
+        "total_saved": round(total_saved, 4),
+        "reduction_percent": round(reduction_pct, 1),
+        "per_model": per_model,
+        "velocity": velocity,
+    }
+
+
+def calculate_savings_breakdown(per_model_data: list) -> dict:
+    """Break down savings by type: cache optimization vs token compression.
+
+    Args:
+        per_model_data: The per_model list from calculate_fleet_savings().
+
+    Returns:
+        Dict with cache_optimization, token_compression, and total savings in $.
+    """
+    # All savings in per_model are from cache hits (cache_read at cached vs input rate).
+    # Compression savings are not separately tracked in the current DB schema
+    # (compressed_tokens column is present but represents tokens after compression).
+    # We attribute all measurable savings to cache_optimization.
+    cache_savings = sum(entry.get("saved", 0.0) for entry in per_model_data)
+    compression_savings = 0.0  # would need pre/post compression token counts per request
+
+    return {
+        "cache_optimization": round(cache_savings, 4),
+        "token_compression": round(compression_savings, 4),
+        "total": round(cache_savings + compression_savings, 4),
+    }

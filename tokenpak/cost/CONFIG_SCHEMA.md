@@ -126,7 +126,7 @@ tracker = BudgetTracker(budget_config)
 # On each request:
 async def handle_request(request):
     current_spend = get_current_spend()  # From telemetry
-
+    
     # Check daily budget
     alert = tracker.should_alert(
         current_spend["daily"],
@@ -135,7 +135,7 @@ async def handle_request(request):
     )
     if alert:
         log_budget_alert(alert)
-
+    
     # Continue request processing...
 ```
 

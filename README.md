@@ -10,6 +10,8 @@
 
 TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
+**Evaluating alternatives?** See [how TokenPak compares to Helicone, LangSmith, LiteLLM, Portkey, Langfuse, and OpenRouter](docs/comparison.md).
+
 **Protocol spec (v1.0):**
 - 📜 Spec: [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 - ✅ Schema: [`schemas/tokenpak-v1.0.json`](schemas/tokenpak-v1.0.json)
@@ -29,12 +31,20 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 ## 3 Commands to Savings
 
 ```bash
-pip install tokenpak          # install
-tokenpak serve --port 8766 --workers 4   # start proxy (4 CPU cores)
-tokenpak cost --week          # watch savings grow
+pip install "tokenpak[serve]"            # 1. install (with proxy server)
+tokenpak setup                           # 2. configure your LLM client (one-time wizard)
+tokenpak serve --port 8766 --workers 4  # 3. start proxy (4 CPU cores)
 ```
 
-Point your LLM client's base URL at `http://localhost:8766`. That's it — **zero config required.**
+`tokenpak setup` detects your installed LLM client (Claude Code, OpenAI SDK, Google AI) and
+writes the proxy URL into the right config file automatically — no manual URL editing needed.
+Then just start the proxy and your client routes through tokenpak.
+
+```bash
+tokenpak cost --week    # watch savings grow
+```
+
+> **Note:** The `[serve]` extra includes FastAPI (required for the proxy). If you're only using the compression SDK, install with plain `pip install tokenpak`.
 
 ---
 
@@ -354,7 +364,7 @@ tokenpak/
 │       ├── text.py         # Markdown/HTML compression
 │       └── data.py         # JSON/YAML/CSV handling
 ├── portal/                 # self-service web portal
-├── tokenpak/recipes_oss/   # built-in compression recipes (YAML)
+├── recipes/oss/            # built-in compression recipes (YAML)
 ├── tests/
 └── pyproject.toml
 ```
@@ -367,10 +377,6 @@ Default config: `~/.tokenpak/config.json`
 
 ```json
 {
-  "api_keys": {
-    "anthropic": "sk-ant-...",
-    "openai": "sk-..."
-  },
   "proxy": {
     "port": 8766,
     "passthrough_url": "https://api.openai.com"
@@ -390,8 +396,6 @@ Default config: `~/.tokenpak/config.json`
 }
 ```
 
-> **Tip:** The fastest way to generate a valid config is `tokenpak setup` — it scans your environment variables and writes the file automatically.
-
 ---
 
 ## Requirements
@@ -407,16 +411,16 @@ Default config: `~/.tokenpak/config.json`
 
 We welcome issues, pull requests, and feedback of all kinds!
 
-- 🐛 **Bug reports** → [Open an issue](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
-- 💡 **Feature requests** → [Request a feature](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
-- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
+- 🐛 **Bug reports** → [Open an issue](https://github.com/tokenpak/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Feature requests** → [Request a feature](https://github.com/tokenpak/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions)
 - 📖 **Full guide** → [CONTRIBUTING.md](CONTRIBUTING.md)
 - 📋 **Version history** → [CHANGELOG.md](CHANGELOG.md)
 
 ### Quick setup
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 pip install -e ".[dev]"
 pytest tests/ -q
@@ -463,7 +467,7 @@ Point your LLM client at `http://localhost:8766` — same as the local install.
 ### Build from Source
 
 ```bash
-git clone https://github.com/kaywhy331/tokenpak
+git clone https://github.com/tokenpak/tokenpak
 cd tokenpak
 docker build -t tokenpak:latest .
 docker run -d --name tokenpak -p 8766:8766 tokenpak:latest
@@ -501,39 +505,3 @@ docker compose down
 ## License
 
 MIT — see [LICENSE](LICENSE)
-
----
-
-## Shell Completions
-
-TokenPak ships with shell completions for bash, zsh, and fish.
-
-### Install
-
-```bash
-bash scripts/install-completions.sh
-```
-
-Then reload your shell:
-
-```bash
-# bash
-source ~/.bashrc
-
-# zsh
-exec zsh
-
-# fish (loads automatically)
-```
-
-### What completes
-
-- All `tokenpak <command>` names (e.g. `tokenpak st<TAB>` → `start stats status stop`)
-- Per-command flags (e.g. `tokenpak cost --<TAB>` → `--period --json --help`)
-- Sub-commands (e.g. `tokenpak config <TAB>` → `sync pull validate`)
-
-### Dry-run preview
-
-```bash
-bash scripts/install-completions.sh --dry-run
-```

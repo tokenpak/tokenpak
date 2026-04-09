@@ -73,7 +73,6 @@ class TokenPakIndex:
         if index_class is None:
             try:
                 from llama_index.core import VectorStoreIndex
-
                 index_class = VectorStoreIndex
             except ImportError:
                 raise ImportError(
@@ -105,9 +104,7 @@ class TokenPakIndex:
     def as_retriever(self, **kwargs) -> Any:
         """Get underlying retriever (no compression — use as_query_engine for that)."""
         if self.index is None:
-            raise RuntimeError(
-                "No index available. Use from_documents() or wrap an existing index."
-            )
+            raise RuntimeError("No index available. Use from_documents() or wrap an existing index.")
         return self.index.as_retriever(**kwargs)
 
     def compress_nodes(self, nodes: List[Any]) -> List[Dict[str, Any]]:

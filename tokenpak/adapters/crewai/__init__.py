@@ -1,8 +1,17 @@
-"""crewai-tokenpak: TokenPak integration for CrewAI."""
+"""Public API for the CrewAI TokenPak adapter."""
 
-from .context import TokenPakContext
+from .context import AgentContextConfig, CompressionResult, TokenPakContext
+from .crew import CompletionHook, TokenPakCompressionReport, TokenPakCrew, TokenPakCrewAIHook
 from .handoff import TokenPakHandoff
-from .crew import TokenPakCrew
 
-__all__ = ["TokenPakContext", "TokenPakHandoff", "TokenPakCrew"]
 __version__ = "0.1.0"
+__all__ = [
+    "AgentContextConfig",
+    "CompletionHook",
+    "CompressionResult",
+    "TokenPakContext",
+    "TokenPakCompressionReport",
+    "TokenPakCrewAIHook",
+    "TokenPakHandoff",
+    "TokenPakCrew",
+]

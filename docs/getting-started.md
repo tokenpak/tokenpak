@@ -6,7 +6,7 @@ Get TokenPak running in under 5 minutes.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.10+
 - An existing LLM client (Claude Code, OpenAI client, etc.)
 - Your provider API key (Anthropic, OpenAI, etc.)
 
@@ -37,6 +37,30 @@ Get TokenPak running in under 5 minutes.
 
 ---
 
+## Configure Your LLM Client (one-time wizard)
+
+Run the setup wizard once after installing:
+
+```bash
+tokenpak setup
+```
+
+The wizard detects your installed LLM client and writes the proxy URL into the correct
+config file automatically — no manual editing required.
+
+- **Claude Code**: writes `ANTHROPIC_BASE_URL=http://localhost:8766` into `~/.claude/settings.json`
+- **OpenAI SDK**: prints the one-line export command
+- **Google AI SDK**: prints the one-line export command
+
+!!! tip "Non-interactive / CI"
+    ```bash
+    tokenpak setup --yes   # skip all confirmation prompts
+    ```
+
+The wizard never reads or writes API keys — only proxy URLs.
+
+---
+
 ## Start the Proxy
 
 ```bash
@@ -54,22 +78,22 @@ The proxy starts on `http://localhost:8766` and is ready to accept requests imme
 
 ---
 
-## Connect Your LLM Client
+## Connect Your LLM Client (manual alternative)
 
-Point your existing tool at the TokenPak proxy instead of the provider directly.
+If you prefer to configure your client manually instead of using `tokenpak setup`:
 
 === "Claude Code"
-    ```bash
-    # Set the API base URL (in your shell config or .env)
-    export ANTHROPIC_BASE_URL=http://localhost:8766
-    ```
-    Or configure in `~/.claude/settings.json`:
+    Configure in `~/.claude/settings.json`:
     ```json
     {
       "env": {
         "ANTHROPIC_BASE_URL": "http://localhost:8766"
       }
     }
+    ```
+    Or set in your shell config:
+    ```bash
+    export ANTHROPIC_BASE_URL=http://localhost:8766
     ```
 
 === "OpenAI Python"
@@ -88,7 +112,7 @@ Point your existing tool at the TokenPak proxy instead of the provider directly.
     ```
 
 === "Any HTTP client"
-    Replace your provider base URL with `http://localhost:8766`. 
+    Replace your provider base URL with `http://localhost:8766`.
     TokenPak auto-detects the provider from the `Authorization` header and routes accordingly.
 
 Your credentials pass through unchanged. TokenPak never stores them.

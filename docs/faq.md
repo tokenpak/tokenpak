@@ -4,6 +4,43 @@
 
 ## General
 
+### How much will TokenPak save me?
+
+It depends on your usage pattern:
+
+| Use case | Typical savings |
+|---|---|
+| Short Q&A / chat | 5–15% |
+| Code review with large context | 30–50% |
+| Long document analysis | 40–60% |
+| Codebase search + compressed context | Up to 84% (with vault indexing) |
+
+Compression only activates above the threshold (default: 4,500 tokens). Small requests pass through unchanged.
+
+Check your actual savings:
+
+```bash
+tokenpak cost --week
+tokenpak savings --lifetime
+```
+
+### Does TokenPak change my responses?
+
+No. TokenPak compresses the *input* (your prompts and context), not the output. The response from the LLM is forwarded to your client unchanged.
+
+Optionally, TokenPak can append a one-line stats footer to responses:
+
+```bash
+TOKENPAK_STATS_FOOTER=1 tokenpak serve
+# ⚡ TokenPak: -1,847 tokens (38%) | $0.014 saved
+```
+
+Disable by unsetting or setting `TOKENPAK_STATS_FOOTER=0`.
+
+### Will TokenPak break if a provider changes their API?
+
+The proxy is a transparent passthrough — it only reads/modifies the request body for compression, then forwards everything else as-is (headers, auth, paths). Provider API changes in response format won't break it. If a new request format is introduced, the worst case is that compression is skipped and the request passes through unmodified.
+
 ### Does TokenPak send my data anywhere?
 
 No. TokenPak runs entirely locally. Your prompts, responses, API keys, and metadata never leave your machine. The proxy intercepts requests between your client and the provider, compresses them locally, and forwards them. There's no TokenPak cloud service involved.
@@ -26,14 +63,28 @@ Minimal. Compression adds 10–50ms to requests that benefit from it (typically 
 
 ### `pip install tokenpak` fails with Python version error
 
-TokenPak requires Python 3.11+. Check your version:
+TokenPak requires Python 3.10+. Check your version:
 
 ```bash
 python --version
-# If < 3.11:
-pip install "tokenpak>=0.1.0" --python-version 3.11
-# Or use pyenv to install Python 3.11
+# If < 3.10:
+pip install "tokenpak>=0.1.0" --python-version 3.10
+# Or use pyenv to install Python 3.10
 ```
+
+### `tokenpak: command not found` after install
+
+Your pip scripts directory isn't in `PATH`. Find it:
+
+```bash
+python -m site --user-base
+# e.g. /home/user/.local
+
+# Add to PATH:
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Add to `~/.bashrc` or `~/.zshrc` to persist.
 
 ### Permission errors on install
 
@@ -101,6 +152,17 @@ tokenpak debug on --requests 1
 tokenpak debug off
 tokenpak trace --last
 # Check that Authorization header is present and unchanged
+```
+
+### Stats footer shows wrong costs
+
+The cost calculation is based on a built-in pricing catalog (`tokenpak/telemetry/data/pricing_catalog.json`). If you're using a model not in the catalog, TokenPak uses a default rate.
+
+Check which model is being detected:
+
+```bash
+tokenpak trace --last
+# Look for "model" field in the output
 ```
 
 ---
@@ -225,6 +287,71 @@ tokenpak index ~/vault --force
 ```bash
 tokenpak vault blocks --stale
 tokenpak prune --older-than 30d
+```
+
+### Registry DB is corrupt or missing
+
+```bash
+# Rebuild from scratch
+rm -f ~/.tokenpak/registry.db
+tokenpak index ~/vault
+```
+
+---
+
+## Budget & Cost Alerts
+
+### How do I set a monthly budget?
+
+```bash
+tokenpak budget set --monthly 50
+tokenpak budget alert --at 80    # alert at 80% of budget
+```
+
+### Budget alert isn't triggering
+
+```bash
+tokenpak budget status
+# Verify amount and percentage are set correctly
+tokenpak budget set --monthly 50
+tokenpak budget alert --at 80
+```
+
+---
+
+## Reading Logs
+
+### Proxy startup (expected output)
+
+```
+[INFO] TokenPak proxy starting on :8766
+[INFO] Compression: enabled (hybrid mode, threshold=4500 tokens)
+[INFO] Telemetry: active → ~/.tokenpak/telemetry.db
+[INFO] Ready.
+```
+
+### Per-request trace (debug mode)
+
+```
+[DEBUG] POST /v1/messages  →  anthropic  (claude-opus-4-6)
+[DEBUG] Input tokens raw: 8,240 | after compression: 4,891 | saved: 3,349 (40.6%)
+[DEBUG] Forwarding request to api.anthropic.com
+[DEBUG] Response: 200 OK in 1,234ms
+```
+
+### Failover event
+
+```
+[WARN]  Primary provider failed: anthropic (timeout)
+[INFO]  Failover: anthropic → openai (gpt-4o)
+```
+
+### Systemd log commands
+
+```bash
+journalctl --user -u tokenpak -f          # live logs
+journalctl --user -u tokenpak -n 100      # last 100 lines
+journalctl --user -u tokenpak -p err      # errors only
 ```
 
 ---

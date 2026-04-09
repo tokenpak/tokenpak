@@ -97,40 +97,18 @@ class ConfigValidator:
         return self.errors
 
     def _validate_required_fields(self, config: Dict[str, Any]) -> None:
-        """Check that all required fields are present or set via environment variables."""
+        """Check that all required fields are present."""
         for field in self.REQUIRED_FIELDS:
             if field not in config:
-                if field == "api_keys":
-                    self.errors.append(
-                        ConfigValidationError(
-                            field=field,
-                            expected="present in config",
-                            actual="missing",
-                            message="Required field 'api_keys' is missing",
-                            suggestion='Add api_keys to config (e.g., {"anthropic": "sk-..."}) or set ANTHROPIC_API_KEY env var',
-                        )
+                self.errors.append(
+                    ConfigValidationError(
+                        field=field,
+                        expected="present",
+                        actual="missing",
+                        message="Required field missing",
+                        suggestion=f'Add "{field}" to config (required for proxy operation)',
                     )
-                else:
-                    self.errors.append(
-                        ConfigValidationError(
-                            field=field,
-                            expected="present",
-                            actual="missing",
-                            message="Required field missing",
-                            suggestion=f'Add "{field}" to config (required for proxy operation)',
-                        )
-                    )
-
-    @staticmethod
-    def _has_env_api_key() -> bool:
-        """Check if any API key is set in environment variables."""
-        env_vars = [
-            "ANTHROPIC_API_KEY",
-            "OPENAI_API_KEY",
-            "GOOGLE_API_KEY",
-            "GEMINI_API_KEY",
-        ]
-        return any(os.environ.get(var) for var in env_vars)
+                )
 
     def _validate_types(self, config: Dict[str, Any]) -> None:
         """Validate field types."""

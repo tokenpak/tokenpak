@@ -40,7 +40,7 @@ SAMPLES = {
 
     The `config.yaml` file controls all system behavior. Key settings:
 
-    - `model`: The LLM model identifier (e.g., `gpt-4o`, `claude-3-5-sonnet`)
+    - `model`: The LLM model identifier (e.g., `gpt-4o`, `claude-sonnet-4-6`)
     - `max_tokens`: Maximum tokens per request (default: 4096)
     - `temperature`: Sampling temperature, 0.0-2.0 (default: 0.7)
     - `timeout`: Request timeout in seconds (default: 30)
@@ -85,7 +85,7 @@ SAMPLES = {
 # Cost per 1M tokens (approximate)
 MODEL_COSTS = {
     "gpt-4o": {"input": 2.50, "output": 10.00},
-    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
 }
 

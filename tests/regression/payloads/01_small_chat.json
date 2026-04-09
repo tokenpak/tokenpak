@@ -1,0 +1,8 @@
+{
+  "messages": [
+    {"role": "user", "content": "What's the weather today?"},
+    {"role": "assistant", "content": "I don't have access to current weather data. You can check weather.gov or your local weather app for real-time information."},
+    {"role": "user", "content": "How about tomorrow?"},
+    {"role": "assistant", "content": "Same limitation applies to forecasts. Please use a dedicated weather service."}
+  ]
+}

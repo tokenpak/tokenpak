@@ -67,7 +67,7 @@ _FALLBACKS: dict[str, str] = {
 def _resolve_base(adapter: str) -> str | None:
     """Return the base adapter name for a tokenpak-* variant, or None."""
     if adapter.startswith("tokenpak-"):
-        base = adapter[len("tokenpak-") :]
+        base = adapter[len("tokenpak-"):]
         return base if base in _BASE_MATRIX else None
     return None
 

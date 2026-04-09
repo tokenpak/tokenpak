@@ -12,7 +12,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from .converters import (
+    LlamaBlock,
     llamaindex_nodes_to_blocks,
+    _estimate_tokens,
 )
 from .synthesizer import TokenPakSynthesizer
 
@@ -127,14 +129,12 @@ class TokenPakQueryEngine:
         # If no nodes from response, create a synthetic node from response text
         if not nodes:
             response_text = str(raw_response)
-            nodes = [
-                {
-                    "id": "response_0",
-                    "text": response_text,
-                    "metadata": {"source": "query_engine_response"},
-                    "score": 1.0,
-                }
-            ]
+            nodes = [{
+                "id": "response_0",
+                "text": response_text,
+                "metadata": {"source": "query_engine_response"},
+                "score": 1.0,
+            }]
 
         # Convert + compress
         blocks = llamaindex_nodes_to_blocks(nodes)
@@ -178,14 +178,12 @@ class TokenPakQueryEngine:
 
         if not nodes:
             response_text = str(raw_response)
-            nodes = [
-                {
-                    "id": "response_0",
-                    "text": response_text,
-                    "metadata": {"source": "query_engine_response"},
-                    "score": 1.0,
-                }
-            ]
+            nodes = [{
+                "id": "response_0",
+                "text": response_text,
+                "metadata": {"source": "query_engine_response"},
+                "score": 1.0,
+            }]
 
         blocks = llamaindex_nodes_to_blocks(nodes)
         compressed_blocks = self._synthesizer._compress_blocks(blocks)

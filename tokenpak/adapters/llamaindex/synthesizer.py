@@ -7,12 +7,14 @@ preserving the most relevant content and highest-scored evidence.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from .converters import (
     LlamaBlock,
     llamaindex_nodes_to_blocks,
     blocks_to_llamaindex_nodes,
+    _estimate_tokens,
 )
 
 
@@ -177,18 +179,16 @@ class TokenPakSynthesizer:
                     keep_headers=self.keep_headers,
                     keep_code=self.keep_code,
                 )
-                compressed.append(
-                    LlamaBlock(
-                        id=block.id,
-                        content=new_content,
-                        block_type=block.block_type,
-                        quality=block.quality,
-                        metadata=block.metadata,
-                        provenance=block.provenance,
-                        compressed=True,
-                        _original_tokens=block.tokens,
-                    )
-                )
+                compressed.append(LlamaBlock(
+                    id=block.id,
+                    content=new_content,
+                    block_type=block.block_type,
+                    quality=block.quality,
+                    metadata=block.metadata,
+                    provenance=block.provenance,
+                    compressed=True,
+                    _original_tokens=block.tokens,
+                ))
             else:
                 compressed.append(block)
 

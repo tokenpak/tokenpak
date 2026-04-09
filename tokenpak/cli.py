@@ -39,6 +39,7 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
+        ("setup", "Configure your LLM client to use tokenpak (wizard)"),
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
@@ -94,7 +95,6 @@ _COMMAND_GROUPS = {
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
-        ("retrieval", "Inspect and test hybrid retrieval (BM25 + vector)"),
     ],
 }
 
@@ -181,162 +181,10 @@ def cmd_help(args):
 
 
 def cmd_setup(args):
-    """Interactive wizard for first-time TokenPak configuration."""
-    from pathlib import Path
-    from .profiles import get_profile, apply_profile
-    import yaml
-    import subprocess
-    import time
-    import os
-    
-    config_dir = Path.home() / ".tokenpak"
-    config_file = config_dir / "config.yaml"
-    
-    # Check for existing config
-    if config_file.exists():
-        print(f"Configuration already exists at {config_file}")
-        response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
-        if response not in ("yes", "y"):
-            print("Setup cancelled.")
-            return
-    
-    # Detect API keys from environment
-    print("\n🔍 Scanning for API keys...\n")
-    api_keys = {}
-    
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        print("✅ Found Anthropic API key")
-        api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
-    
-    if os.environ.get("OPENAI_API_KEY"):
-        print("✅ Found OpenAI API key")
-        api_keys["openai"] = os.environ["OPENAI_API_KEY"]
-    
-    if os.environ.get("GOOGLE_API_KEY"):
-        print("✅ Found Google API key")
-        api_keys["google"] = os.environ["GOOGLE_API_KEY"]
-    
-    if not api_keys:
-        print("⚠️  No API keys detected in environment variables.")
-        print("   Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY")
-        print("   Example: export ANTHROPIC_API_KEY='sk-...'")
-        return
-    
-    # Auto-detect primary provider
-    available_providers = list(api_keys.keys())
-    default_provider = available_providers[0] if available_providers else "anthropic"
-    
-    print(f"\nDetected providers: {', '.join(available_providers)}")
-    provider = input(f"Which provider to proxy? [{default_provider}]: ").strip()
-    if not provider:
-        provider = default_provider
-    
-    if provider not in api_keys:
-        print(f"Error: {provider} API key not found.")
-        return
-    
-    # Ask for port
-    port_input = input("Port number [8766]: ").strip()
-    port = int(port_input) if port_input else 8766
-    
-    # Ask for profile
-    print("\nChoose a compression profile:")
-    print("  [1] minimal    — compression only (safest, ~5% savings)")
-    print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
-    print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
-    
-    profile_input = input("\nProfile [2]: ").strip()
-    profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
-    profile_name = profile_map.get(profile_input, "balanced")
-    
-    # Build base config
-    config = {
-        "proxy": {
-            "port": port,
-            "host": "localhost",
-            "provider": provider,
-        },
-        "modules": {},
-    }
-    
-    # Apply profile
-    profile = get_profile(profile_name)
-    config["modules"] = profile["features"]
-    config["profile"] = profile_name
-    
-    # Create config directory and write config
-    config_dir.mkdir(parents=True, exist_ok=True)
-    with open(config_file, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-    
-    print(f"\n✅ Configuration saved to {config_file}")
-    print(f"   Profile: {profile_name} — {profile['description']}")
-    
-    # Start the proxy
-    print("\n🚀 Starting proxy...\n")
-    
-    import subprocess
-    import sys
-    
-    # Find proxy_v4.py
-    candidates = [
-        Path(__file__).resolve().parent.parent / "proxy_v4.py",
-        Path.home() / "tokenpak" / "proxy_v4.py",
-        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
-    ]
-    proxy_path = None
-    for c in candidates:
-        if c.exists():
-            proxy_path = c
-            break
-    
-    if not proxy_path:
-        print("Warning: proxy_v4.py not found. Skipping auto-start.")
-        return
-    
-    # Start proxy
-    env = os.environ.copy()
-    env["TOKENPAK_PORT"] = str(port)
-    proc = subprocess.Popen(
-        [sys.executable, str(proxy_path)],
-        env=env,
-        cwd=str(proxy_path.parent),
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    
-    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
-    pid_path.parent.mkdir(parents=True, exist_ok=True)
-    pid_path.write_text(str(proc.pid))
-    
-    # Wait and verify
-    time.sleep(1.5)
-    
-    # Try health check
-    try:
-        import urllib.request
-        import json
-        health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
-        health_data = json.loads(health_resp.read().decode())
-        mode = health_data.get("compilation_mode", "hybrid")
-        
-        print(f"✅ Proxy running on http://localhost:{port} (mode: {mode})")
-    except Exception:
-        print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
-    
-    # Success message with next steps
-    print("\nNext steps:")
-    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-    print(f"  2. Run: tokenpak status    (check health)")
-    print(f"  3. Run: tokenpak savings   (see your ROI)")
-    print()
-    print("💡 Quick commands:")
-    print("  tokenpak serve      — start the proxy")
-    print("  tokenpak stop       — stop the proxy")
-    print("  tokenpak status     — check proxy health")
-    print("  tokenpak savings    — view compression savings")
-    print()
+    """Configure LLM clients to use the TokenPak proxy (wizard)."""
+    from .agent.cli.commands.setup import run_setup_cmd
+
+    run_setup_cmd(args)
 
 
 def cmd_start(args):
@@ -1646,7 +1494,15 @@ def build_parser():
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
-    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
+    p_setup = sub.add_parser(
+        "setup",
+        help="Configure your LLM client to use tokenpak (wizard)",
+    )
+    p_setup.add_argument(
+        "--yes", "-y",
+        action="store_true",
+        help="Skip confirmation prompts (non-interactive / CI mode)",
+    )
     p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
@@ -1855,7 +1711,6 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
-    _build_explain_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
     _build_compare_parser(sub)
@@ -1877,7 +1732,6 @@ def build_parser():
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
-    _build_retrieval_parser(sub)
 
     return parser
 
@@ -1927,8 +1781,6 @@ def cmd_status(args):
         print(f"  Requests:        {s.get('requests', 0):,}")
         print(f"  Errors:          {s.get('errors', 0)}")
         print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
-        profile = health.get('active_profile', os.environ.get('TOKENPAK_PROFILE', 'balanced'))
-        print(f"  Profile:         {profile}")
         print()
 
         # Token savings
@@ -1950,21 +1802,6 @@ def cmd_status(args):
         if cost_saved > 0:
             print(f"  Cost saved:      ${cost_saved:.4f}")
         print()
-
-        # 💰 Savings summary line
-        _c_hits = cache.get("cache_hits", 0) if cache else 0
-        _c_miss = cache.get("cache_misses", 0) if cache else 0
-        _c_total = _c_hits + _c_miss
-        _cache_hr = (_c_hits / _c_total * 100) if _c_total > 0 else 0
-        _cache_read_tok = cache.get("cache_read_tokens", 0) if cache else 0
-        _total_saved_tokens = saved + _cache_read_tok
-        # Compute savings from token counts if cost_saved not tracked in stats
-        _cache_savings = _cache_read_tok * 2.70 / 1_000_000   # $2.70/MTok rate differential
-        _compression_savings = saved * 3.00 / 1_000_000        # $3.00/MTok input rate
-        _display_savings = cost_saved if cost_saved > 0 else (_cache_savings + _compression_savings)
-        if _total_saved_tokens > 0:
-            print(f"  💰 Saved ${_display_savings:.2f} this session ({_total_saved_tokens:,} tokens, {_cache_hr:.0f}% cache hit rate)")
-            print()
 
         # Cache
         if cache:
@@ -2004,45 +1841,6 @@ def cmd_status(args):
         vault = health.get("vault_index", {})
         if vault.get("available"):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
-
-        # ── Today's Savings ─────────────────────────────────────────────────
-        today = stats.get("today", {}) if stats else {}
-        if today:
-            print()
-            print("Today's Savings")
-            print("─" * 40)
-            t_req = today.get("requests", 0)
-            t_compressed = today.get("compressed_tokens", 0)
-            t_cache_read = today.get("cache_read_tokens", 0)
-            t_cost = today.get("total_cost", 0.0)
-            t_input = today.get("input_tokens", 0)
-
-            # Cache hit rate: approximate from session if today doesn't have it
-            sess = stats.get("session", {}) if stats else {}
-            s_hits = sess.get("cache_hits", 0)
-            s_misses = sess.get("cache_misses", 0)
-            s_total = s_hits + s_misses
-            cache_pct = f"{s_hits / s_total * 100:.0f}%" if s_total > 0 else "—"
-
-            # Estimated cost saved: (compressed + cache_read) tokens * avg input rate
-            INPUT_RATE = 3.00 / 1_000_000   # $3/MTok (conservative)
-            cost_saved_est = (t_compressed + t_cache_read) * INPUT_RATE
-
-            print(f"  Requests:        {t_req:,}")
-            if t_compressed > 0:
-                print(f"  Compressed:      {t_compressed:,} tokens saved")
-            if t_cache_read > 0:
-                print(f"  Cache served:    {t_cache_read:,} tokens ({cache_pct} hit rate)")
-            if t_cost > 0:
-                print(f"  Cost today:      ${t_cost:.4f}")
-            if cost_saved_est > 0:
-                print(f"  Est. saved:      ${cost_saved_est:.4f}")
-            vault_blocks = vault.get("blocks", 0) if vault else 0
-            if vault_blocks:
-                print(f"  Vault blocks:    {vault_blocks:,} loaded")
-            print()
-            print("  Run `tokenpak savings` for detailed breakdown.")
-
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
         print("  Run `tokenpak serve` or check if proxy_v4.py is running.")
@@ -2065,105 +1863,6 @@ def cmd_status(args):
             print(fmt.kv(rows))
     except Exception:
         pass
-
-
-def cmd_explain(args):
-    """Explain TokenPak profiles and configuration."""
-    import os
-    
-    mode = resolve_mode(args)
-    fmt = OutputFormatter("Explain", mode=mode, minimal=False)
-    
-    profile_name = getattr(args, "profile", None)
-    
-    # Profile definitions
-    PROFILE_PRESETS = {
-        "safe": {
-            "COMPILATION_MODE": "strict",
-            "COMPACT_THRESHOLD_TOKENS": "8000",
-            "ENABLE_SKELETON": "false",
-            "ENABLE_CAPSULE_BUILDER": "false",
-            "ENABLE_SHADOW_READER": "true",
-            "BUDGET_CONTROLLER_ENABLED": "true",
-            "TRACE_ENABLED": "true",
-        },
-        "balanced": {
-            "COMPILATION_MODE": "hybrid",
-            "COMPACT_THRESHOLD_TOKENS": "4500",
-            "ENABLE_SKELETON": "true",
-            "ENABLE_CAPSULE_BUILDER": "false",
-            "ENABLE_SHADOW_READER": "true",
-            "BUDGET_CONTROLLER_ENABLED": "true",
-            "TRACE_ENABLED": "true",
-        },
-        "aggressive": {
-            "COMPILATION_MODE": "aggressive",
-            "COMPACT_THRESHOLD_TOKENS": "2000",
-            "ENABLE_SKELETON": "true",
-            "ENABLE_CAPSULE_BUILDER": "true",
-            "ENABLE_SHADOW_READER": "true",
-            "BUDGET_CONTROLLER_ENABLED": "true",
-            "TRACE_ENABLED": "true",
-        },
-        "agentic": {
-            "COMPILATION_MODE": "hybrid",
-            "COMPACT_THRESHOLD_TOKENS": "3000",
-            "ENABLE_SKELETON": "true",
-            "ENABLE_CAPSULE_BUILDER": "false",
-            "ENABLE_SHADOW_READER": "true",
-            "BUDGET_CONTROLLER_ENABLED": "true",
-            "TRACE_ENABLED": "true",
-        },
-    }
-    
-    PROFILE_DESCRIPTIONS = {
-        "safe": "Production workloads where you want to be cautious. Low savings, high safety.",
-        "balanced": "Most workloads. Good savings with validation. (default)",
-        "aggressive": "High-volume batch work where you want maximum savings.",
-        "agentic": "Agent loops and multi-step workflows. Preserves tool schemas.",
-    }
-    
-    print(fmt.header())
-    print()
-    
-    if mode == OutputMode.RAW:
-        if profile_name and profile_name in PROFILE_PRESETS:
-            print(fmt.raw({
-                "profile": profile_name,
-                "description": PROFILE_DESCRIPTIONS.get(profile_name, ""),
-                "flags": PROFILE_PRESETS[profile_name],
-            }))
-        else:
-            print(fmt.raw({
-                "profiles": list(PROFILE_PRESETS.keys()),
-                "current": os.environ.get("TOKENPAK_PROFILE", "balanced"),
-            }))
-        return
-    
-    if profile_name:
-        if profile_name not in PROFILE_PRESETS:
-            print(f"❌ Unknown profile: {profile_name}")
-            print(f"   Available: {', '.join(PROFILE_PRESETS.keys())}")
-            return
-        
-        print(f"Profile: {profile_name}")
-        print(f"Description: {PROFILE_DESCRIPTIONS[profile_name]}")
-        print()
-        print("Configuration:")
-        for key, val in PROFILE_PRESETS[profile_name].items():
-            print(f"  {key} = {val}")
-    else:
-        current = os.environ.get("TOKENPAK_PROFILE", "balanced")
-        print(f"Current profile: {current}")
-        print()
-        print("Available profiles:")
-        print()
-        for name in PROFILE_PRESETS.keys():
-            desc = PROFILE_DESCRIPTIONS[name]
-            marker = " (active)" if name == current else ""
-            print(f"  {name}{marker}")
-            print(f"    {desc}")
-            print()
 
 
 def cmd_usage(args):
@@ -2368,12 +2067,6 @@ def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.set_defaults(func=cmd_status)
-
-
-def _build_explain_parser(sub):
-    p_explain = sub.add_parser("explain", help="Explain TokenPak profiles and configuration")
-    p_explain.add_argument("--profile", type=str, help="Show details for a specific profile (safe/balanced/aggressive/agentic)")
-    p_explain.set_defaults(func=cmd_explain)
 
 
 def _build_usage_parser(sub):
@@ -3328,7 +3021,6 @@ def main():
         "aggregate",
         "requests",
         "audit-log",
-        "retrieval",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
@@ -6616,174 +6308,6 @@ def _build_fleet_parser(sub):
     
     p_fleet.set_defaults(func=cmd_fleet)
     return p_fleet
-
-
-# ── Retrieval CLI ─────────────────────────────────────────────────────────────
-
-def cmd_retrieval_status(args):
-    """Show retrieval configuration and index stats."""
-    import asyncio
-    from .retrieval.base import HybridSearchConfig
-    from .retrieval.bm25 import BM25Retriever
-    from .retrieval.vector_local import LocalVectorRetriever
-
-    cfg = HybridSearchConfig.from_env()
-    json_out = getattr(args, "json", False)
-
-    bm25 = BM25Retriever(vault_index_path=cfg.vault_index_path)
-    vec = LocalVectorRetriever(
-        model_name=cfg.vector_model,
-        index_path=cfg.vector_index_path,
-    )
-
-    status: dict = {
-        "config": {
-            "bm25_weight": cfg.bm25_weight,
-            "vector_weight": cfg.vector_weight,
-            "vector_model": cfg.vector_model,
-            "rrf_k": cfg.rrf_k,
-            "top_k": cfg.top_k,
-            "vault_index_path": cfg.vault_index_path,
-            "vector_index_path": cfg.vector_index_path,
-        },
-        "bm25": {
-            "available": bm25.is_available(),
-            "doc_count": asyncio.run(bm25.index([])) if False else _bm25_doc_count(bm25),
-        },
-        "vector": {
-            "available": vec.is_available(),
-            "doc_count": _vec_doc_count(vec),
-        },
-    }
-
-    if json_out:
-        import json as _json
-        print(_json.dumps(status, indent=2))
-        return
-
-    # Human output
-    print("🔍 TokenPak Retrieval Status")
-    print()
-    print("  Configuration:")
-    print(f"    BM25 weight:      {cfg.bm25_weight}")
-    print(f"    Vector weight:    {cfg.vector_weight}")
-    print(f"    Vector model:     {cfg.vector_model}")
-    print(f"    RRF k:            {cfg.rrf_k}")
-    print(f"    Top-K:            {cfg.top_k}")
-    if cfg.vault_index_path:
-        print(f"    Vault index:      {cfg.vault_index_path}")
-    if cfg.vector_index_path:
-        print(f"    Vector index:     {cfg.vector_index_path}")
-    print()
-    print("  Retrievers:")
-    bm25_ok = status["bm25"]["available"]
-    vec_ok = status["vector"]["available"]
-    print(f"    BM25:    {'✅ available' if bm25_ok else '❌ unavailable'}  ({status['bm25']['doc_count']} docs)")
-    print(f"    Vector:  {'✅ available' if vec_ok else '⚠️  unavailable (sentence-transformers not installed or no index)'}  ({status['vector']['doc_count']} docs)")
-    print()
-    if bm25_ok:
-        mode = "hybrid" if vec_ok else "bm25-only"
-    elif vec_ok:
-        mode = "vector-only"
-    else:
-        mode = "⛔ no retrievers available"
-    print(f"  Active mode: {mode}")
-
-
-def _bm25_doc_count(bm25) -> int:
-    """Get BM25 doc count without async."""
-    try:
-        return len(getattr(bm25, "_blocks", []))
-    except Exception:
-        return 0
-
-
-def _vec_doc_count(vec) -> int:
-    """Get vector index doc count."""
-    try:
-        idx = getattr(vec, "_index", None)
-        if idx is None:
-            return 0
-        return getattr(idx, "ntotal", len(getattr(idx, "_ids", [])))
-    except Exception:
-        return 0
-
-
-def cmd_retrieval_test(args):
-    """Test a query through all enabled retrievers."""
-    import asyncio
-    from .retrieval.base import HybridSearchConfig, RetrievalQuery
-    from .retrieval.hybrid import HybridRetriever
-
-    cfg = HybridSearchConfig.from_env()
-    query_text = args.query
-    top_k = getattr(args, "top_k", cfg.top_k)
-    json_out = getattr(args, "json", False)
-
-    retriever = HybridRetriever(cfg)
-
-    async def _run():
-        q = RetrievalQuery(text=query_text, top_k=top_k)
-        return await retriever.search(q)
-
-    import time
-    t0 = time.perf_counter()
-    results = asyncio.run(_run())
-    elapsed_ms = (time.perf_counter() - t0) * 1000
-
-    if json_out:
-        import json as _json
-        out = {
-            "query": query_text,
-            "elapsed_ms": round(elapsed_ms, 2),
-            "results": [
-                {
-                    "doc_id": r.doc_id,
-                    "fused_score": r.fused_score,
-                    "sources": list(r.source_results.keys()),
-                    "content_preview": r.content[:200] if r.content else "",
-                }
-                for r in results
-            ],
-        }
-        print(_json.dumps(out, indent=2))
-        return
-
-    print(f"🔍 Query: {query_text!r}")
-    print(f"⏱  Elapsed: {elapsed_ms:.1f}ms  |  Results: {len(results)}")
-    print()
-    if not results:
-        print("  (no results)")
-        return
-    for i, r in enumerate(results, 1):
-        sources = ", ".join(r.source_results.keys()) if r.source_results else "bm25"
-        preview = (r.content[:120] + "…") if len(r.content) > 120 else r.content
-        print(f"  {i}. [{r.fused_score:.4f}] {r.doc_id}  ({sources})")
-        if preview:
-            print(f"     {preview}")
-        print()
-
-
-def _build_retrieval_parser(sub):
-    """Build the retrieval command parser."""
-    p_ret = sub.add_parser("retrieval", help="Inspect and test the hybrid retrieval system")
-    p_ret.add_argument("--json", action="store_true", help="Output as JSON")
-    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=True)
-
-    # retrieval status
-    p_status = rsub.add_parser("status", help="Show retrieval config and index stats")
-    p_status.add_argument("--json", action="store_true", help="Output as JSON")
-    p_status.set_defaults(func=cmd_retrieval_status)
-
-    # retrieval test
-    p_test = rsub.add_parser("test", help="Run a test query through all enabled retrievers")
-    p_test.add_argument("query", help="Query string to test")
-    p_test.add_argument("--top-k", type=int, default=5, dest="top_k", help="Number of results (default: 5)")
-    p_test.add_argument("--json", action="store_true", help="Output as JSON")
-    p_test.set_defaults(func=cmd_retrieval_test)
-
-    p_ret.set_defaults(func=lambda a: p_ret.print_help())
-    return p_ret
 
 
 if __name__ == "__main__":

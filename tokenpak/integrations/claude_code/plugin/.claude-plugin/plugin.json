@@ -1,0 +1,49 @@
+{
+  "name": "tokenpak-claude-code",
+  "version": "0.1.0",
+  "description": "Extends Claude Code with token-aware context packing, semantic search, and file-path intelligence backed by the tokenpak open-source library.",
+  "author": {
+    "name": "tokenpak",
+    "url": "https://github.com/tokenpak"
+  },
+  "homepage": "https://github.com/tokenpak/tokenpak",
+  "repository": "https://github.com/tokenpak/tokenpak",
+  "license": "MIT",
+  "userConfig": {
+    "tokenpak_proxy_url": {
+      "title": "Proxy URL",
+      "type": "string",
+      "description": "URL of the tokenpak proxy server. Leave default if running the proxy locally.",
+      "sensitive": false,
+      "default": "http://localhost:8766"
+    },
+    "vault_root": {
+      "title": "Vault Root",
+      "type": "directory",
+      "description": "Absolute path to your vault root directory. Leave empty to skip vault-aware features.",
+      "sensitive": false,
+      "default": ""
+    },
+    "enable_telemetry_hook": {
+      "title": "Enable Telemetry Hook",
+      "type": "boolean",
+      "description": "Enable the telemetry hook to log tool usage locally. If proxy URL is set, events are also POSTed there. Opt-out at any time.",
+      "sensitive": false,
+      "default": true
+    },
+    "enable_validation_hook": {
+      "title": "Enable Validation Hook",
+      "type": "boolean",
+      "description": "Enable the post-edit validation hook. Opt-in feature that validates edits against schema constraints. Adds latency.",
+      "sensitive": false,
+      "default": false
+    },
+    "license_key": {
+      "title": "License Key",
+      "type": "string",
+      "description": "tokenpak Pro license key. Required for Pro-tier features. Contact tokenpak for a key.",
+      "sensitive": true,
+      "default": ""
+    }
+  }
+}

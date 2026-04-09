@@ -8,17 +8,16 @@ Provides a thread-safe in-memory cache with:
 """
 
 import sys
-import threading
 import time
+import threading
 from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from dataclasses import dataclass, field
+from typing import Any, Optional, Dict
 
 
 @dataclass
 class CacheEntry:
     """Single cache entry with metadata."""
-
     key: str
     value: Any
     created_at: float
@@ -29,16 +28,12 @@ class CacheEntry:
     def is_expired(self) -> bool:
         if self.ttl_seconds is None:
             return False
-        elapsed = time.monotonic() - self.created_at
-        import sys
-        print(f"DEBUG is_expired: ttl={self.ttl_seconds}, elapsed={elapsed:.4f}, result={elapsed > self.ttl_seconds}", file=sys.stderr)
-        return elapsed > self.ttl_seconds
+        return (time.monotonic() - self.created_at) > self.ttl_seconds
 
 
 @dataclass
 class CacheMetrics:
     """Cache performance metrics."""
-
     hits: int = 0
     misses: int = 0
     evictions_lru: int = 0
@@ -124,7 +119,10 @@ class LRUCache:
                 self._metrics.current_entries -= 1
 
             # Evict until there's room
-            while self._metrics.current_size_bytes + size > self._max_size_bytes and self._store:
+            while (
+                self._metrics.current_size_bytes + size > self._max_size_bytes
+                and self._store
+            ):
                 self._evict_lru()
 
             entry = CacheEntry(
@@ -159,7 +157,9 @@ class LRUCache:
         """Scan and evict all expired entries. Returns count evicted."""
         count = 0
         with self._lock:
-            expired_keys = [k for k, v in self._store.items() if v.is_expired()]
+            expired_keys = [
+                k for k, v in self._store.items() if v.is_expired()
+            ]
             for key in expired_keys:
                 self._evict_entry(key, reason="ttl")
                 count += 1

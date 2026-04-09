@@ -13,6 +13,9 @@ from tokenpak.telemetry.storage_base import _now, _row_to_dict
 # We declare them here to satisfy mypy when mixins are composed
 
 
+
+
+
 class EventsMixin:
     """Mixin providing TelemetryEvent insert, insert_trace, and query methods."""
 

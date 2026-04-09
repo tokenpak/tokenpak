@@ -7,17 +7,28 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- **CCI-01**: Vault context injection wired into Claude Code safe mode (post-cache-boundary). For claude-code-cli/tui/tmux/ide/cron profiles, vault BM25 search results are injected into the system prompt via inject_with_cache_boundary(), preserving the Anthropic prompt cache stable prefix. Telemetry: vault_blocks_injected + vault_tokens_injected per request. Skip conditions: claude-code-sdk profile, haiku models, no system prompt, zero blocks above min_score.
+- **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags
+- **CLI surface consistency test** — `tests/cli/test_help_surface_consistency.py` asserts every command in `tokenpak --help` exits 0 on `<cmd> --help`
+- **CrewAI adapter** (`tokenpak/adapters/crewai/`) — `TokenPakContext`, `TokenPakCrewAIHook`, `TokenPakCrew`, `TokenPakHandoff`; install with `pip install tokenpak[crewai]` (CALI-MTC-02)
+- **AutoGen adapter** (`tokenpak/adapters/autogen/`) — `TokenPakConversationHook`, `TokenPakAssistant`, `TokenPakGroupChat`, `compress_messages`; install with `pip install tokenpak[autogen]` (CALI-MTC-02)
+- **LlamaIndex adapter** (`tokenpak/adapters/llamaindex/`) — `TokenPakSynthesizer`, `TokenPakQueryEngine`, `TokenPakIndex`, `MultiIndexFusion`; install with `pip install tokenpak[llamaindex]` (CALI-MTC-02)
+- `pyproject.toml` extras: `[crewai]`, `[autogen]`, `[llamaindex]` (CALI-MTC-02)
 
-## [Unreleased]
+### Removed (with replacement)
+<!-- CALI-MTC-01: CLI surface cleanup — 8 phantom commands resolved -->
 
-### Fixed
-- **CCG-14**: Bypass semantic cache (lookup + store) for streaming and Claude Code requests. Serving a JSON-dict cache hit to an SSE parser caused  crash in the Claude CLI. Detection:  request body,  header, or  User-Agent substring. Detection failures are conservative (bypass cache). Non-streaming SDK clients are unaffected.
+| Removed phantom | Resolution | Canonical replacement |
+|---|---|---|
+| `tokenpak prune` | Implemented as top-level alias | `tokenpak audit prune` (same `--days`, `--db` flags) |
+| `tokenpak list-models` | Removed from docs (was never in `--help`) | `tokenpak models` |
+| `tokenpak provider-status` | Removed from docs (was never in `--help`) | `tokenpak status` or `tokenpak doctor` |
+| `tokenpak provider-force-health` | Removed from docs (was never in `--help`) | `tokenpak doctor --fix` |
+| `tokenpak rebuild-vault-index` | Removed from docs (was never in `--help`) | `tokenpak vault repair` |
+| `tokenpak cache-stats` | Removed from docs (was never in `--help`) | `tokenpak stats` |
+| `tokenpak list-keys` | Removed from docs (was never in `--help`) | No direct replacement — use provider dashboard |
+| `tokenpak proxy --config` | Removed from docs (was never in `--help`) | `tokenpak start` with config at `~/.tokenpak/config.yaml` |
 
-## [Unreleased]
-
-### Fixed
-- **CCG-14**: Bypass semantic cache (lookup + store) for streaming and Claude Code requests. Serving a JSON-dict cache hit to an SSE parser caused `Cannot read properties of undefined (reading 'input_tokens')` crash in the Claude CLI. Detection: `stream:true` request body, `X-Claude-Code-Session-Id` header, or `claude-code` User-Agent substring. Detection failures are conservative (bypass cache). Non-streaming SDK clients are unaffected.
+---
 
 ## [1.0.2] - 2026-03-25
 
@@ -97,51 +108,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.9.0] - 2026-02-20
-
-### Added
-- Provider-agnostic routing foundation with Anthropic and OpenAI adapter support.
-- Vault index: semantic retrieval of compressed context blocks from local markdown vaults.
-- Compression pipeline: salience-based extraction, dedup, and token budgeting.
-- Telemetry server with SQLite-backed usage tracking.
-- Docker image with multi-stage build and non-root runtime.
-
-### Changed
-- Migrated from single-file proxy to modular `tokenpak/` package structure.
-
-### Fixed
-- Streaming SSE passthrough race condition under concurrent requests.
-
----
-
-## [0.5.0] - 2026-01-28
-
-### Added
-- Initial compression pipeline: document and code salience extractors.
-- Vault block indexing with FAISS-backed retrieval (replaced with SQLite in v0.9).
-- Basic CLI: `tokenpak serve`, `tokenpak status`, `tokenpak doctor`.
-- WebSocket proxy endpoint (`/ws`) for real-time streaming clients.
-- Benchmark suite for proxy passthrough, vault lookup, and routing decisions.
-
-### Changed
-- Moved from monolithic `proxy.py` to layered architecture (router → adapter → backend).
-
----
-
-## [0.3.0] - 2026-01-10
-
-### Added
-- Core HTTPS proxy with pass-through to Anthropic Messages API.
-- Token counting and budget enforcement hooks.
-- Request/response logging with configurable verbosity.
-- Initial recipe system for reusable compression configurations.
-
----
-
-## [0.1.0] - 2025-12-20
-
-### Added
-- Initial prototype: HTTPS proxy rewriting requests to Anthropic Claude API.
-- Proof-of-concept context compression reducing prompt tokens by ~30%.
-- Basic configuration via YAML file.
-- Single-file `proxy.py` implementation.
+## [0.x] - Legacy
+- Pre-1.0 development and experimental iterations.
+- No stability guarantees.
+- Historical changes retained in git history and prior release artifacts.

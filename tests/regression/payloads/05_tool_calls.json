@@ -1,0 +1,26 @@
+{
+  "messages": [
+    {"role": "user", "content": "What's the current weather in San Francisco and New York?"},
+    {"role": "assistant", "content": "I'll check the weather for both cities.", "tool_calls": [
+      {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "arguments": "{\"location\": \"San Francisco, CA\", \"units\": \"fahrenheit\", \"include_forecast\": true}"
+        }
+      },
+      {
+        "id": "call_2",
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "arguments": "{\"location\": \"New York, NY\", \"units\": \"fahrenheit\", \"include_forecast\": true}"
+        }
+      }
+    ]},
+    {"role": "tool", "tool_call_id": "call_1", "content": "{\"location\": \"San Francisco, CA\", \"temperature\": 62, \"condition\": \"Cloudy\", \"humidity\": 65, \"wind_speed\": 12, \"forecast\": [{\"day\": \"Tomorrow\", \"high\": 64, \"low\": 58, \"condition\": \"Sunny\"}]}"},
+    {"role": "tool", "tool_call_id": "call_2", "content": "{\"location\": \"New York, NY\", \"temperature\": 45, \"condition\": \"Rainy\", \"humidity\": 78, \"wind_speed\": 18, \"forecast\": [{\"day\": \"Tomorrow\", \"high\": 48, \"low\": 42, \"condition\": \"Cloudy\"}]}"},
+    {"role": "assistant", "content": "San Francisco: 62°F, Cloudy with 65% humidity. Tomorrow: Sunny, 64°F high. New York: 45°F, Rainy with 78% humidity. Tomorrow: Cloudy, 48°F high."}
+  ]
+}

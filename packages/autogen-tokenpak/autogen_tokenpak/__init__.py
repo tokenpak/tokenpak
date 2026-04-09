@@ -29,3 +29,9 @@ __all__ = [
     "TokenPakCompressionReport",
     "AgentContextConfig",
 ]
+try:
+    from tokenpak_agents.autogen.assistant import TokenPakAssistant
+    __all__.append("TokenPakAssistant")
+except ImportError:
+    pass
+

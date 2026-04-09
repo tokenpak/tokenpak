@@ -226,7 +226,7 @@ def run_demo():
     response = client.create(
         messages=messages,
         system=system,
-        model="claude-haiku-3-5",
+        model="claude-haiku-4-5",
         max_tokens=512,
     )
 

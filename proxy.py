@@ -67,14 +67,12 @@ if os.path.isdir(_VAULT_TOKENPAK):
         _sys.path.insert(0, _VAULT_TOKENPAK)
 import signal
 import socket
-import subprocess
 import ssl
 import sys
 import threading
 import time
 import uuid
 from collections import deque, OrderedDict
-from enum import Enum
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -87,34 +85,6 @@ from urllib.parse import urlparse
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
 from tokenpak.runtime.providers import Provider, detect_provider
-
-# CACHE-P4-001: CacheSpec normalized config schema
-try:
-    from tokenpak.runtime.cache_spec import (
-        CacheMode as _CacheSpecMode,
-        CacheSpec as _CacheSpec,
-        PROVIDER_CACHE_MODES as _PROVIDER_CACHE_MODES,
-        resolve_cache_mode as _resolve_cache_mode,
-        load_cache_spec_from_config as _load_cache_spec_from_config,
-    )
-    _CACHE_SPEC_AVAILABLE = True
-except ImportError as _cse:
-    _CACHE_SPEC_AVAILABLE = False
-    _CacheSpecMode = None
-    _CacheSpec = None
-    _PROVIDER_CACHE_MODES = None
-    _resolve_cache_mode = None
-    _load_cache_spec_from_config = None
-    print(f"  ⚠️ CacheSpec not available (cache_spec.py missing): {_cse}")
-
-# CACHE-P4-002: CacheTelemetry — per-provider hit/miss/mode tracking
-try:
-    from tokenpak.runtime.cache_telemetry import CacheTelemetry as _CacheTelemetry
-    _CACHE_TELEMETRY_AVAILABLE = True
-except ImportError as _cte:
-    _CACHE_TELEMETRY_AVAILABLE = False
-    _CacheTelemetry = None
-    print(f"  ⚠️ CacheTelemetry not available: {_cte}")
 
 # Query expansion — stop words, stemming, synonym aliases for better BM25 recall
 try:
@@ -355,26 +325,89 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_TRACE": "true",
     },
-    # CCG-06: Claude Code / transparent mode — zero body mutations; telemetry still captured
-    "claude-code": {
-        "TOKENPAK_MODE": "transparent",
-        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "99999999",
-        "TOKENPAK_SKELETON_ENABLED": "false",
+    # --- Claude Code consumption-mode profiles (CCI-04) ---
+    # Each maps to a specific Claude Code usage pattern detected at request time.
+    # Features within each profile are gated in their respective CCI task packets.
+    "claude-code-cli": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
         "TOKENPAK_CAPSULE_BUILDER": "false",
-        "TOKENPAK_SHADOW_ENABLED": "false",
-        "TOKENPAK_BUDGET_CONTROLLER": "false",
-        "TOKENPAK_ROUTER_ENABLED": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
         "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
     },
-    "transparent": {  # alias for claude-code
-        "TOKENPAK_MODE": "transparent",
-        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "99999999",
-        "TOKENPAK_SKELETON_ENABLED": "false",
-        "TOKENPAK_CAPSULE_BUILDER": "false",
-        "TOKENPAK_SHADOW_ENABLED": "false",
-        "TOKENPAK_BUDGET_CONTROLLER": "false",
-        "TOKENPAK_ROUTER_ENABLED": "false",
+    "claude-code-tui": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "3000",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_SESSION_CAPSULES": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_CHAT_FOOTER": "true",
+        "TOKENPAK_INLINE_SAVINGS": "true",
         "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-tmux": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "2000",
+        "TOKENPAK_INJECT_TOP_K": "3",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_PER_SESSION_BUDGET": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
+        "TOKENPAK_STABILITY_SCORER": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-sdk": {
+        "TOKENPAK_MODE": "transparent",
+        "TOKENPAK_VAULT_INJECT": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_REQUEST_LOGGER": "true",
+        "TOKENPAK_OTLP_EXPORT": "true",
+        "TOKENPAK_MUTATION_AUDIT": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-ide": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "3000",
+        "TOKENPAK_INJECT_WORKSPACE_SCOPED": "true",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "true",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_INLINE_SAVINGS_HEADER": "true",
+        "TOKENPAK_UPSTREAM_TIMEOUT": "30",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
+    },
+    "claude-code-cron": {
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
+        "TOKENPAK_VAULT_INJECT": "true",
+        "TOKENPAK_INJECT_BUDGET": "4000",
+        "TOKENPAK_SKELETON_ENABLED": "true",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "true",
+        "TOKENPAK_BUDGET_HARD_FAIL": "true",
+        "TOKENPAK_CHAT_FOOTER": "false",
+        "TOKENPAK_INLINE_SAVINGS": "false",
+        "TOKENPAK_REQUEST_LOGGER": "true",
+        "TOKENPAK_TELEGRAM_ALERTS": "true",
+        "TOKENPAK_TRACE": "true",
+        "TOKENPAK_SEMANTIC_CACHE": "false",
     },
 }
 
@@ -382,10 +415,95 @@ ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
 if ACTIVE_PROFILE in _PROFILE_PRESETS:
     for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
         os.environ.setdefault(_pk, _pv)
-    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic|claude-code|transparent)")
+    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic|claude-code-cli|claude-code-tui|claude-code-tmux|claude-code-sdk|claude-code-ide|claude-code-cron)")
 else:
     print(f"⚠️  Unknown TOKENPAK_PROFILE={ACTIVE_PROFILE!r} — ignoring, using env vars as-is")
     ACTIVE_PROFILE = "custom"
+
+# ---------------------------------------------------------------------------
+# Claude Code profile auto-detection (CCI-04)
+# ---------------------------------------------------------------------------
+# In-memory ring buffer: (session_id: str, timestamp: float) tuples.
+# Used by _recent_distinct_session_count() for tmux detection without a DB.
+_RECENT_SESSIONS: deque = deque(maxlen=500)
+_RECENT_SESSIONS_LOCK = threading.Lock()
+
+
+def _record_session_id(session_id: str) -> None:
+    """Record a session ID observation for tmux detection."""
+    with _RECENT_SESSIONS_LOCK:
+        _RECENT_SESSIONS.append((session_id, time.time()))
+
+
+def _recent_distinct_session_count(window_seconds: int = 60) -> int:
+    """Count distinct X-Claude-Code-Session-Id values seen in the last window_seconds."""
+    cutoff = time.time() - window_seconds
+    with _RECENT_SESSIONS_LOCK:
+        seen = {sid for sid, ts in _RECENT_SESSIONS if ts >= cutoff}
+    return len(seen)
+
+
+def _detect_claude_code_profile(headers: dict, body: Optional[dict] = None) -> Optional[str]:
+    """
+    Detect the appropriate Claude Code consumption-mode profile for a request.
+
+    Detection precedence:
+      1. TOKENPAK_PROFILE env var (if it starts with 'claude-code-') — explicit override
+      2. IDE host User-Agent  → claude-code-ide
+      3. Anthropic SDK (non-Claude-Code) User-Agent  → claude-code-sdk
+      4. X-Claude-Code-NonInteractive header  → claude-code-cron
+      5. X-Claude-Code-Interactive header  → claude-code-tui
+      6. Multiple distinct session IDs in last 60s  → claude-code-tmux
+      7. Any Claude Code User-Agent (fallback)  → claude-code-cli
+      8. Non-Claude-Code traffic  → None (no profile change)
+
+    Profiles defined in _PROFILE_PRESETS; features gated in individual CCI tasks.
+    """
+    # Explicit env var override always wins (existing TOKENPAK_PROFILE pattern)
+    env_profile = os.environ.get("TOKENPAK_PROFILE", "")
+    if env_profile.startswith("claude-code-"):
+        return env_profile
+
+    # Normalise header keys to lowercase for case-insensitive lookup
+    h = {k.lower(): v for k, v in headers.items()}
+    ua = (h.get("user-agent") or "").lower()
+
+    is_claude_code = "claude-code/" in ua
+    is_anthropic_sdk = (
+        "anthropic-python/" in ua
+        or "anthropic-sdk-typescript/" in ua
+        or "claude-agent-sdk/" in ua
+    )
+    is_ide_host = any(
+        host in ua for host in ["vscode/", "cursor/", "windsurf/", "jetbrains/"]
+    )
+
+    has_session_id = bool(h.get("x-claude-code-session-id"))
+    is_interactive = bool(h.get("x-claude-code-interactive"))
+    is_noninteractive = bool(h.get("x-claude-code-noninteractive"))
+
+    if not (is_claude_code or is_anthropic_sdk or is_ide_host):
+        return None  # non-Claude-Code traffic — no profile change
+
+    if is_ide_host:
+        return "claude-code-ide"
+    if is_anthropic_sdk and not is_claude_code:
+        return "claude-code-sdk"
+    if is_noninteractive:
+        return "claude-code-cron"
+    if is_interactive:
+        return "claude-code-tui"
+
+    # tmux: multiple Claude Code workers share the same proxy → multiple distinct
+    # session IDs appear within the recent window. Cheap in-memory deque, no DB.
+    if has_session_id:
+        session_id = h["x-claude-code-session-id"]
+        _record_session_id(session_id)
+        if _recent_distinct_session_count(60) >= 2:
+            return "claude-code-tmux"
+
+    return "claude-code-cli"  # default Claude Code fallback
+
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
@@ -394,8 +512,6 @@ DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOA
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
-# CCG-02: mutation_audit TTL — prune rows older than this many days
-MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 # ── Swap Pressure Monitoring ──────────────────────────────────────────────────
 SWAP_PRESSURE_THRESHOLD_MB: int = int(os.environ.get("TOKENPAK_SWAP_WARN_MB", "600"))
 _SWAP_WARN_LAST_LOGGED: float = 0.0
@@ -405,9 +521,6 @@ SWAP_TELEGRAM_ALERT_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_MB", "1024
 _SWAP_TELEGRAM_LAST_SENT: float = 0.0
 _SWAP_TELEGRAM_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_COOLDOWN_S", "1800"))
 _SWAP_TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "461720084")
-SWAP_SELF_HEAL_SCRIPT: str = os.environ.get("TOKENPAK_SWAP_SELF_HEAL_SCRIPT", os.path.expanduser("~/vault/06_RUNTIME/scripts/self-heal-memory.sh"))
-_SWAP_SELF_HEAL_LAST_RUN: float = 0.0
-_SWAP_SELF_HEAL_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_SELF_HEAL_COOLDOWN_S", "1800"))
 
 
 def get_swap_mb() -> int:
@@ -436,36 +549,6 @@ def _get_system_swap_mb() -> int:
         return (total - free) // 1024
     except Exception:
         return 0
-
-
-def _run_swap_self_heal(swap_mb: int) -> bool:
-    """Run the external self-heal script (rate-limited)."""
-    global _SWAP_SELF_HEAL_LAST_RUN
-    import time as _time
-    now = _time.time()
-    if now - _SWAP_SELF_HEAL_LAST_RUN < _SWAP_SELF_HEAL_COOLDOWN_S:
-        return False
-    try:
-        if not os.path.exists(SWAP_SELF_HEAL_SCRIPT):
-            logging.warning("[swap_alert] self-heal script missing: %s", SWAP_SELF_HEAL_SCRIPT)
-            return False
-        proc = subprocess.run(
-            [SWAP_SELF_HEAL_SCRIPT, str(SWAP_TELEGRAM_ALERT_MB)],
-            capture_output=True,
-            text=True,
-            timeout=90,
-            check=False,
-        )
-        _SWAP_SELF_HEAL_LAST_RUN = now
-        if proc.stdout:
-            logging.info("[swap_alert] self-heal stdout: %s", proc.stdout.strip().replace("\n", " | "))
-        if proc.stderr:
-            logging.warning("[swap_alert] self-heal stderr: %s", proc.stderr.strip().replace("\n", " | "))
-        logging.info("[swap_alert] self-heal exit=%s for swap=%dMB", proc.returncode, swap_mb)
-        return proc.returncode == 0
-    except Exception as _e:
-        logging.warning("[swap_alert] self-heal failed: %s", _e)
-        return False
 
 
 def _send_swap_telegram_alert(swap_mb: int) -> None:
@@ -518,15 +601,10 @@ def check_swap_pressure() -> int:
                 "(threshold: %dMB)", swap_mb, SWAP_PRESSURE_THRESHOLD_MB
             )
             _SWAP_WARN_LAST_LOGGED = now
-    # Check system-wide swap for self-heal + alert escalation (separate threshold)
+    # Check system-wide swap for Telegram alert (separate threshold)
     sys_swap_mb = _get_system_swap_mb()
     if sys_swap_mb >= SWAP_TELEGRAM_ALERT_MB:
-        healed = _run_swap_self_heal(sys_swap_mb)
-        post_heal_swap_mb = _get_system_swap_mb() if healed else sys_swap_mb
-        if post_heal_swap_mb >= SWAP_TELEGRAM_ALERT_MB:
-            _send_swap_telegram_alert(post_heal_swap_mb)
-        else:
-            logging.info("[swap_alert] self-heal resolved swap pressure: %dMB -> %dMB", sys_swap_mb, post_heal_swap_mb)
+        _send_swap_telegram_alert(sys_swap_mb)
     return swap_mb
 
 VAULT_SYNC_INTERVAL = 60
@@ -661,27 +739,6 @@ if CACHE_REGISTRY_ENABLED:
     except Exception as _cr_init_err:
         print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
         CACHE_REGISTRY_ENABLED = False
-
-# CACHE-P4-001: CacheSpec singleton — loaded once at module startup from config
-CACHE_SPEC: Optional["_CacheSpec"] = None
-if _CACHE_SPEC_AVAILABLE:
-    try:
-        CACHE_SPEC = _load_cache_spec_from_config(_cfg)
-        print(
-            f"  🗂️  CacheSpec initialized: enabled={CACHE_SPEC.enabled}, "
-            f"fallback={CACHE_SPEC.fallback_policy.value}"
-        )
-    except Exception as _cs_init_err:
-        print(f"  ⚠️ CacheSpec init failed (cache disabled): {_cs_init_err}")
-
-# CACHE-P4-002: CacheTelemetry singleton — per-provider hit/miss/mode tracking
-CACHE_TELEMETRY: Optional["_CacheTelemetry"] = None
-if _CACHE_TELEMETRY_AVAILABLE:
-    try:
-        CACHE_TELEMETRY = _CacheTelemetry()
-        print("  📊 CacheTelemetry initialized: per-provider tracking enabled")
-    except Exception as _ct_init_err:
-        print(f"  ⚠️ CacheTelemetry init failed: {_ct_init_err}")
 
 # Upstream
 UPSTREAM_TIMEOUT: int = _cfg("upstream.timeout", 90, "TOKENPAK_UPSTREAM_TIMEOUT", int)
@@ -858,16 +915,34 @@ _KEY_ROTATION_MODE: str = os.environ.get("TOKENPAK_KEY_ROTATION", "failover")
 _KEY_COOLDOWN_429: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_429", "60"))
 _KEY_COOLDOWN_401: float = float(os.environ.get("TOKENPAK_KEY_COOLDOWN_401", "300"))
 
-# Build pool from all ANTHROPIC_* vars at startup
+# Build pool from all ANTHROPIC_* vars at startup, plus Claude CLI credentials
 def _build_key_pool() -> list:
     candidates = [
         os.environ.get("ANTHROPIC_API_KEY", "").strip(),
         os.environ.get("ANTHROPIC_OAUTH_TOKEN", "").strip(),
         os.environ.get("ANTHROPIC_OAUTH_TOKEN2", "").strip(),
+        os.environ.get("ANTHROPIC_OAUTH_TOKEN3", "").strip(),
     ]
+    # Also try to read the fresh token from Claude CLI credentials.
+    # Claude CLI refreshes its token automatically, so this is the most
+    # reliable source for a valid OAuth access token.
+    _creds_path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        if _creds_path.exists():
+            import json as _json_mod
+            _creds = _json_mod.loads(_creds_path.read_text())
+            _cli_token = _creds.get("claudeAiOauth", {}).get("accessToken", "").strip()
+            if _cli_token and _cli_token not in candidates:
+                candidates.insert(0, _cli_token)  # prefer fresh token
+                print(f"[key-pool] Loaded fresh token from Claude CLI credentials", flush=True)
+    except Exception as _creds_err:
+        print(f"[key-pool] Could not read Claude CLI credentials: {_creds_err}", flush=True)
     pool = [k for k in candidates if k]
+    # Deduplicate while preserving order
+    _seen = set()
+    pool = [k for k in pool if not (k in _seen or _seen.add(k))]
     # Log count but never the keys themselves
-    print(f"[key-pool] Found {len(pool)} Anthropic API key(s)", flush=True)
+    print(f"[key-pool] Found {len(pool)} Anthropic credential(s)", flush=True)
     return pool
 
 _ANTHROPIC_KEY_POOL: list = _build_key_pool()
@@ -1021,60 +1096,6 @@ def _cap_cache_control_blocks(body_bytes, max_blocks=4):
     return json.dumps(body).encode()
 
 
-# ---------------------------------------------------------------------------
-# CACHE-P3-001: Anthropic top-level auto cache mode
-# ---------------------------------------------------------------------------
-
-class CacheMode(Enum):
-    AUTO = "auto"       # Top-level request-level cache_control (Anthropic auto mode)
-    EXPLICIT = "explicit"  # Per-block cache_control markers (existing behavior)
-
-
-def _select_anthropic_cache_mode(headers: dict, body_dict: dict) -> CacheMode:
-    """Select auto vs explicit cache mode for an Anthropic request.
-
-    Pops 'tokenpak_cache_mode' from body_dict if present — it must not be
-    forwarded upstream.  Header takes precedence over body field; both take
-    precedence over the conversation-length heuristic.
-    """
-    mode_hint = headers.get("x-tokenpak-cache-mode") or body_dict.pop("tokenpak_cache_mode", None)
-    if mode_hint == "explicit":
-        return CacheMode.EXPLICIT
-    if mode_hint == "auto":
-        return CacheMode.AUTO
-    # Default: auto for multi-turn (>2 messages), explicit for short/single-turn
-    if len(body_dict.get("messages", [])) > 2:
-        return CacheMode.AUTO
-    return CacheMode.EXPLICIT
-
-
-def _apply_anthropic_auto_cache(body_dict: dict) -> None:
-    """Apply Anthropic top-level auto cache mode (in-place).
-
-    Strips per-block cache_control markers injected by earlier pipeline stages
-    and sets a single top-level cache_control field.  Anthropic automatically
-    moves the cache breakpoint to the last cacheable block as the conversation
-    grows, making this the preferred mode for multi-turn sessions.
-
-    API reference: top-level ``cache_control: {"type": "ephemeral"}`` on the
-    messages endpoint (same response fields as explicit mode —
-    cache_creation_input_tokens and cache_read_input_tokens in usage).
-    """
-    for block in body_dict.get("system", []):
-        if isinstance(block, dict):
-            block.pop("cache_control", None)
-    for tool in body_dict.get("tools", []):
-        if isinstance(tool, dict):
-            tool.pop("cache_control", None)
-    for msg in body_dict.get("messages", []):
-        content = msg.get("content", [])
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict):
-                    block.pop("cache_control", None)
-    body_dict["cache_control"] = {"type": "ephemeral"}  # noqa: anthropic-only — caller guards Provider.ANTHROPIC
-
-
 def _resolve_upstream(adapter: FormatAdapter) -> str:
     mapped = UPSTREAM_ROUTES.get(adapter.source_format)
     if mapped:
@@ -1192,224 +1213,6 @@ def _circuit_record_success(provider: str):
             cb["open"] = False
 
 
-# ---------------------------------------------------------------------------
-# CCI-05: Provider Failover Chain (Anthropic 5xx/timeout → Bedrock → Vertex → queue)
-# ---------------------------------------------------------------------------
-# TOKENPAK_FALLBACK_CHAIN: comma-separated ordered provider list.
-# Default is "anthropic" only — failover is opt-in.
-# Example: TOKENPAK_FALLBACK_CHAIN=anthropic,bedrock,vertex,queue
-_FALLBACK_CHAIN_RAW: str = os.environ.get("TOKENPAK_FALLBACK_CHAIN", "anthropic")
-_FALLBACK_CHAIN: List[str] = [p.strip().lower() for p in _FALLBACK_CHAIN_RAW.split(",") if p.strip()]
-
-# Bedrock base URL — can be overridden via TOKENPAK_BEDROCK_BASE_URL
-_BEDROCK_BASE_URL: str = os.environ.get(
-    "TOKENPAK_BEDROCK_BASE_URL",
-    "https://bedrock-runtime.us-east-1.amazonaws.com",
-)
-# Vertex AI base URL — can be overridden via TOKENPAK_VERTEX_BASE_URL
-_VERTEX_BASE_URL: str = os.environ.get(
-    "TOKENPAK_VERTEX_BASE_URL",
-    "https://us-east5-aiplatform.googleapis.com",
-)
-# Vertex project ID — required if vertex is in the chain
-_VERTEX_PROJECT: str = os.environ.get("TOKENPAK_VERTEX_PROJECT", "")
-
-# SQLite queue for the "queue" fallback provider
-_FAILOVER_QUEUE_DB: str = os.environ.get(
-    "TOKENPAK_FAILOVER_QUEUE_DB",
-    str(Path(__file__).parent / "failover_queue.db"),
-)
-
-# In-memory failover event log (thread-safe, capped at 500 events)
-_FAILOVER_EVENTS: deque = deque(maxlen=500)
-_FAILOVER_EVENTS_LOCK = threading.Lock()
-
-
-def _log_failover_event(
-    from_provider: str,
-    to_provider: str,
-    reason: str,
-    model: str,
-    status_code: int = 0,
-    profile: str = "",
-) -> None:
-    """Append a failover event to the in-memory log."""
-    event = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "from_provider": from_provider,
-        "to_provider": to_provider,
-        "reason": reason,
-        "model": model,
-        "status_code": status_code,
-        "profile": profile,
-    }
-    with _FAILOVER_EVENTS_LOCK:
-        _FAILOVER_EVENTS.append(event)
-    print(
-        f"[failover] {from_provider} → {to_provider} | reason={reason} | model={model} | profile={profile}",
-        flush=True,
-    )
-
-
-# Model name translation table: Anthropic model id → provider-specific id.
-# Same model, different API surface name.  No model substitution.
-_MODEL_TRANSLATION: Dict[str, Dict[str, str]] = {
-    # Claude 3.5 Sonnet
-    "claude-3-5-sonnet-20241022": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    "claude-3-5-sonnet-latest": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    # Claude 3.5 Haiku
-    "claude-3-5-haiku-20241022": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    "claude-3-5-haiku-latest": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    # Claude 3 Opus
-    "claude-3-opus-20240229": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-    "claude-3-opus-latest": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-    # Claude 3 Sonnet
-    "claude-3-sonnet-20240229": {
-        "bedrock": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "vertex": "claude-3-sonnet@20240229",
-    },
-    # Claude 3 Haiku
-    "claude-3-haiku-20240307": {
-        "bedrock": "anthropic.claude-3-haiku-20240307-v1:0",
-        "vertex": "claude-3-haiku@20240307",
-    },
-    # Claude 4 Sonnet (claude-sonnet-4-5 / claude-sonnet-4-6 shorthand)
-    "claude-sonnet-4-5": {
-        "bedrock": "anthropic.claude-sonnet-4-5-20251101-v1:0",
-        "vertex": "claude-sonnet-4-5@20251101",
-    },
-    "claude-sonnet-4-6": {
-        "bedrock": "anthropic.claude-sonnet-4-6-20260101-v1:0",
-        "vertex": "claude-sonnet-4-6@20260101",
-    },
-    "claude-opus-4-6": {
-        "bedrock": "anthropic.claude-opus-4-6-20260101-v1:0",
-        "vertex": "claude-opus-4-6@20260101",
-    },
-    # Aliases / shorthand used by Claude Code CLI
-    "sonnet": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    "haiku": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    "opus": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-}
-
-
-def _translate_model(model_id: str, provider: str) -> str:
-    """
-    Translate an Anthropic model id to the provider-specific model id.
-    Returns the original model_id if no mapping exists (pass-through).
-    Never substitutes a different model family — only maps same model to provider API name.
-    """
-    entry = _MODEL_TRANSLATION.get(model_id, {})
-    return entry.get(provider, model_id)
-
-
-def _build_failover_url(provider: str, original_url: str, model: str) -> str:
-    """
-    Build the target URL for a fallback provider.
-    Returns "" if provider is not supported / credentials missing.
-    """
-    if provider == "bedrock":
-        bedrock_model = _translate_model(model, "bedrock")
-        return f"{_BEDROCK_BASE_URL}/model/{bedrock_model}/invoke"
-    if provider == "vertex":
-        if not _VERTEX_PROJECT:
-            print("[failover] vertex: TOKENPAK_VERTEX_PROJECT not set — skipping vertex", flush=True)
-            return ""
-        vertex_model = _translate_model(model, "vertex")
-        return (
-            f"{_VERTEX_BASE_URL}/v1/projects/{_VERTEX_PROJECT}"
-            f"/locations/us-east5/publishers/anthropic/models/{vertex_model}:streamRawPredict"
-        )
-    return ""
-
-
-def _build_failover_headers(provider: str, original_headers: dict) -> dict:
-    """
-    Build provider-specific headers for the fallback request.
-    Bedrock uses AWS SigV4 (injected by boto3 or env-level signing if available).
-    Vertex uses Google OAuth Bearer.
-    """
-    headers = {k: v for k, v in original_headers.items()}
-    # Strip Anthropic auth headers
-    for key in list(headers.keys()):
-        if key.lower() in ("x-api-key", "authorization"):
-            del headers[key]
-
-    if provider == "bedrock":
-        # Bedrock uses AWS SigV4 — boto3 session signing is out of scope for proxy-layer.
-        # We pass AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from env and let boto3 sign.
-        # If boto3 not available, attempt unsigned (will 403 but caller can skip).
-        headers["Content-Type"] = "application/json"
-        headers["Accept"] = "application/json"
-        # Note: actual signing handled by boto3 session if available; otherwise unsigned stub
-    elif provider == "vertex":
-        gcp_token = os.environ.get("TOKENPAK_VERTEX_TOKEN", "")
-        if gcp_token:
-            headers["Authorization"] = f"Bearer {gcp_token}"
-        headers["Content-Type"] = "application/json"
-    return headers
-
-
-def _write_failover_queue(body: Optional[bytes], model: str, profile: str) -> str:
-    """
-    Write a failed request to the local SQLite failover queue.
-    Returns the row id as a string for the Retry-After header.
-    Table is created on first write.
-    """
-    import sqlite3 as _sqlite3
-
-    try:
-        conn = _sqlite3.connect(_FAILOVER_QUEUE_DB, timeout=5)
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS failover_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                queued_at TEXT NOT NULL,
-                model TEXT NOT NULL,
-                profile TEXT NOT NULL,
-                body BLOB,
-                status TEXT NOT NULL DEFAULT 'pending'
-            )"""
-        )
-        cur = conn.execute(
-            "INSERT INTO failover_queue (queued_at, model, profile, body) VALUES (?, ?, ?, ?)",
-            (datetime.now(timezone.utc).isoformat(), model, profile, body),
-        )
-        conn.commit()
-        row_id = str(cur.lastrowid)
-        conn.close()
-        return row_id
-    except Exception as _qe:
-        print(f"[failover] queue write failed: {_qe}", flush=True)
-        return "0"
-
-
 # Per-IP rate limiting — token bucket, 60 req/min per IP by default
 _RATE_LIMIT_RPM = _cfg("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
 _rate_buckets: dict = {}
@@ -1437,30 +1240,7 @@ _BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
         "x-real-ip",
         "x-forwarded-host",  # prevent IP spoofing upstream
         "x-tokenpak-bypass",  # internal header — never forward to upstream
-        "x-tokenpak-cache-key",  # CACHE-P2-001: extracted and translated, not forwarded raw
-        "x-tokenpak-cache-retention",  # CACHE-P2-001: extracted and translated, not forwarded raw
     }
-)
-
-# CCG-04: Per-route HTTP header forwarding allowlists.
-# Mirrors the WS-path tuple (proxy.py line ~7303) onto the HTTP path.
-# OPENCLAW_HEADER_ALLOWLIST must never gain new entries — OpenClaw traffic
-# must produce exactly the same forwarded headers as before (bit-for-bit).
-# CLAUDE_CODE_HEADER_ALLOWLIST extends it with Claude Code-specific headers.
-OPENCLAW_HEADER_ALLOWLIST: tuple = (
-    "x-api-key",
-    "authorization",
-    "anthropic-version",
-    "anthropic-beta",
-)
-CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
-    "x-api-key",
-    "authorization",
-    "anthropic-version",
-    "anthropic-beta",
-    "anthropic-dangerous-direct-browser-access",
-    "x-claude-code-session-id",
-    "user-agent",
 )
 
 
@@ -1471,55 +1251,9 @@ def _sanitize_headers(raw_headers) -> dict:
         if key.lower() in _BLOCKED_FORWARD_HEADERS:
             continue
         result[key] = raw_headers[key]
+    # Anthropic OAuth tokens (sk-ant-oat*) work as x-api-key — no conversion needed.
+    # Anthropic's Messages API accepts them via x-api-key but NOT via Bearer.
     return result
-
-
-def _classify_route(path: str, headers) -> str:
-    """Classify an incoming HTTP request as 'claude-code' or 'openclaw'.
-
-    Inspects headers only — no DB access, no network round-trips.
-    Claude Code wins when both X-Claude-Code-Session-Id and X-OpenClaw-Session
-    are present (matching CCG-03's resolver priority order).
-
-    Returns:
-        "claude-code"  if X-Claude-Code-Session-Id is present (case-insensitive)
-        "openclaw"     otherwise
-    """
-    if hasattr(headers, "items"):
-        for k, _ in headers.items():
-            if k.lower() == "x-claude-code-session-id":
-                return "claude-code"
-    elif hasattr(headers, "get"):
-        for variant in ("X-Claude-Code-Session-Id", "x-claude-code-session-id"):
-            if headers.get(variant):
-                return "claude-code"
-    return "openclaw"
-
-
-def _resolve_session_id(headers, model: str) -> str:
-    """Resolve session id with Claude Code priority.
-
-    Order: X-Claude-Code-Session-Id (Claude Code) -> X-OpenClaw-Session
-    (OpenClaw) -> model name (last-resort fallback).
-    """
-    # Case-insensitive header lookup
-    def _h(name):
-        if hasattr(headers, "get"):
-            # Try common cases first; many header collections are
-            # case-insensitive but some test contexts use plain dicts.
-            for variant in (name, name.lower(), name.title()):
-                v = headers.get(variant)
-                if v:
-                    return v
-        return None
-
-    cc_id = _h("X-Claude-Code-Session-Id")
-    if cc_id:
-        return cc_id
-    oc_id = _h("X-OpenClaw-Session")
-    if oc_id:
-        return oc_id
-    return model
 
 
 def _suggest_model(requested: str) -> Optional[str]:
@@ -2941,7 +2675,7 @@ def classify_message_risk(msg: dict) -> str:
 
 
 def can_compress(risk_class: str, mode: str) -> bool:
-    if mode in ("strict", "transparent"):
+    if mode == "strict":
         return False
     if risk_class == "protected":
         return False
@@ -2996,9 +2730,8 @@ def _db_writer_worker():
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved,cache_provider,cache_hit_inference,cache_estimated_savings,
-                            session_id)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_provider,cache_hit_inference,cache_estimated_savings)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -3023,69 +2756,6 @@ def _get_db_connection(db_path: str) -> sqlite3.Connection:
         _DB_CONNECTION.execute("PRAGMA synchronous=NORMAL")
         _DB_CONNECTION.execute("PRAGMA busy_timeout=5000")
     return _DB_CONNECTION
-
-
-def _prune_mutation_audit(conn: sqlite3.Connection, ttl_days: int) -> int:
-    """Delete mutation_audit rows older than ttl_days. Returns number of rows deleted.
-
-    CCG-02: No existing housekeeping cron path was found in proxy.py. CCG-06 should
-    call this function from its request-handling path or wire it into the DB worker
-    loop (_db_write_worker) on a periodic basis (e.g. once per N requests or on
-    Monitor startup alongside _init_db).
-    """
-    cur = conn.execute(
-        "DELETE FROM mutation_audit WHERE timestamp < datetime('now', '-' || ? || ' days')",
-        (ttl_days,),
-    )
-    conn.commit()
-    return cur.rowcount
-
-
-def _write_mutation_audit(
-    db_path: str,
-    request_id,
-    session_id: str,
-    body_pre: bytes,
-    body_post: bytes,
-    rules_applied: list,
-    cache_risk: str,
-    mode: str,
-) -> None:
-    """CCG-06: Write one mutation_audit row per request.
-
-    Hashes body_pre and body_post with SHA-256. In transparent mode,
-    rules_applied must be [] and pre_hash must equal post_hash — the harness
-    asserts this contract.  Writes are synchronous (direct sqlite3, no queue)
-    so the row is durable even if the background DB worker is busy.
-    """
-    import hashlib as _hashlib
-    import json as _json
-
-    pre_hash = _hashlib.sha256(body_pre).hexdigest()
-    post_hash = _hashlib.sha256(body_post).hexdigest()
-    rollback_possible = 1  # always 1 in v1; may diverge in Phase 2
-    try:
-        _conn = sqlite3.connect(str(db_path))
-        _conn.execute(
-            "INSERT INTO mutation_audit "
-            "(request_id, session_id, timestamp, pre_hash, post_hash, "
-            "rules_applied, cache_risk, rollback_possible, mode) "
-            "VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)",
-            (
-                request_id,
-                session_id,
-                pre_hash,
-                post_hash,
-                _json.dumps(rules_applied),
-                cache_risk,
-                rollback_possible,
-                mode,
-            ),
-        )
-        _conn.commit()
-        _conn.close()
-    except Exception:
-        pass  # fail-open: never break a request over audit write
 
 
 class Monitor:
@@ -3158,12 +2828,6 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN cache_estimated_savings REAL DEFAULT 0.0")
         except sqlite3.OperationalError:
             pass
-        # CCG-02: Add session_id column for Claude Code session tracking
-        try:
-            conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -3177,25 +2841,6 @@ class Monitor:
                 triggered INTEGER DEFAULT 1
             )
         """)
-        conn.commit()
-
-        # CCG-02: mutation_audit table — per-request mutation telemetry
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS mutation_audit (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id INTEGER,
-                session_id TEXT,
-                timestamp TEXT NOT NULL,
-                pre_hash TEXT,
-                post_hash TEXT,
-                rules_applied TEXT,
-                cache_risk TEXT,
-                rollback_possible INTEGER,
-                mode TEXT
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)")
         conn.commit()
 
         # Run migrations to bring DB schema up to current version
@@ -3233,7 +2878,6 @@ class Monitor:
         would_have_saved=0,
         cache_provider="",
         cache_estimated_savings=0.0,
-        session_id="",
     ):
         # CACHE-P4-002: Infer cache hit from cache_read_tokens
         cache_hit_inference = 1 if cache_read_tokens > 0 else 0
@@ -3260,7 +2904,6 @@ class Monitor:
             cache_provider,
             cache_hit_inference,
             cache_estimated_savings,
-            session_id,
         )
         _queued = False
         try:
@@ -3272,8 +2915,8 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings, session_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params
             )
             _conn.commit()
@@ -4376,101 +4019,6 @@ def _inject_bedrock_checkpoints(provider: Provider, body: bytes) -> bytes:
     return json.dumps(data).encode()
 
 
-# ---------------------------------------------------------------------------
-# OpenAI / Azure / Codex / xAI prompt_cache_key Passthrough (CACHE-P2-001)
-# ---------------------------------------------------------------------------
-
-
-def _extract_cache_hints(
-    headers: dict, body: dict
-) -> "tuple[str | None, str | None]":
-    """Extract cache key and retention hints from request headers and body.
-
-    Header takes precedence over body field when both are present.
-    ``tokenpak_cache_hint`` and ``tokenpak_cache_retention`` are *popped* from
-    *body* so they are never forwarded to the upstream provider.
-
-    Args:
-        headers: Request headers dict (case-sensitive).
-        body: Parsed request body dict — modified in-place to strip fields.
-
-    Returns:
-        ``(cache_key, cache_retention)`` — either may be ``None``.
-    """
-    # Always pop body fields to ensure they are stripped from the forwarded body,
-    # regardless of whether a header hint is also present.
-    body_key = body.pop("tokenpak_cache_hint", None)
-    body_retention = body.pop("tokenpak_cache_retention", None)
-    cache_key = headers.get("x-tokenpak-cache-key") or body_key
-    cache_retention = headers.get("x-tokenpak-cache-retention") or body_retention
-    return cache_key, cache_retention
-
-
-def _inject_prompt_cache_key(provider: Provider, headers: dict, body: bytes) -> bytes:
-    """Inject ``prompt_cache_key`` for OpenAI / Azure OpenAI / Codex / xAI requests.
-
-    Accepts cache hints from:
-    - Header ``x-tokenpak-cache-key`` (takes precedence over body field)
-    - Body field ``tokenpak_cache_hint`` (stripped before forwarding)
-
-    Accepts retention hint from:
-    - Header ``x-tokenpak-cache-retention``
-    - Body field ``tokenpak_cache_retention`` (stripped before forwarding)
-
-    The ``x-grok-conv-id`` header is forwarded naturally by ``_sanitize_headers``
-    (it is not in ``_BLOCKED_FORWARD_HEADERS``) — no special handling required here.
-
-    For providers that don't support ``prompt_cache_key``, ``tokenpak_*`` body
-    fields are still stripped so they never reach the upstream provider.
-
-    Args:
-        provider: Detected LLM provider.
-        headers: Request headers dict.
-        body: Request body bytes.
-
-    Returns:
-        Modified body bytes with cache fields injected and ``tokenpak_*`` stripped.
-    """
-    if not body:
-        return body
-
-    # Fast path: skip JSON parse when no cache hints are present
-    _has_header_hint = bool(
-        headers.get("x-tokenpak-cache-key") or headers.get("x-tokenpak-cache-retention")
-    )
-    _has_body_hint = b"tokenpak_cache" in body
-    if not _has_header_hint and not _has_body_hint:
-        return body
-
-    try:
-        data = json.loads(body)
-    except (json.JSONDecodeError, TypeError):
-        return body
-
-    if not isinstance(data, dict):
-        return body
-
-    # Extract hints (pops tokenpak_* fields from data)
-    cache_key, cache_retention = _extract_cache_hints(headers, data)
-
-    if not cache_key:
-        # tokenpak_* fields may have been stripped; re-encode to apply removal
-        return json.dumps(data).encode()
-
-    _CACHE_KEY_PROVIDERS = (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX, Provider.XAI)
-    if provider in (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX):
-        # Codex uses same Responses API as OpenAI — identical cache key fields
-        data["prompt_cache_key"] = cache_key
-        if cache_retention:
-            data["prompt_cache_retention"] = cache_retention
-    elif provider == Provider.XAI:
-        data["prompt_cache_key"] = cache_key
-        # x-grok-conv-id forwarding: handled by _sanitize_headers (not in blocked list)
-    # All other providers: silently ignore — tokenpak_* already stripped above
-
-    return json.dumps(data).encode()
-
-
 def _parse_bedrock_cached_tokens(response_data: dict) -> int:
     """Parse cached token count from Bedrock responses.
     
@@ -4692,16 +4240,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "endpoints": {
                     "health": "/health",
                     "stats": "/stats",
-                    "session_stats": "/stats/session/<session_id>",
                     "docs": "/docs",
-                    "proxy": "/v1/messages (POST), /v1/messages/count_tokens (POST), /v1/messages/* (POST passthrough), /v1/chat/completions (POST)",
+                    "proxy": "/v1/messages (POST), /v1/chat/completions (POST)",
                 },
                 "docs": "https://github.com/tokenpak/tokenpak",
             }
             self._send_json(welcome)
             return
         # Fix: POST-only paths return 405 instead of 404 on wrong method
-        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/ingest"}
+        _POST_ONLY_PATHS = {"/v1/messages", "/v1/chat/completions", "/ingest"}
         if self.path.split("?")[0] in _POST_ONLY_PATHS:
             self.send_response(405)
             self.send_header("Allow", "POST, OPTIONS")
@@ -4823,12 +4370,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         "savings_usd_session": round(_total_savings, 6),
                         "providers_active": _active_providers,
                     },
-                    # CACHE-P4-002: Structured per-provider telemetry from CacheTelemetry
-                    "cache_telemetry": (
-                        CACHE_TELEMETRY.to_dict()
-                        if CACHE_TELEMETRY is not None
-                        else {"enabled": False}
-                    ),
                     "skeleton": {"enabled": SKELETON_ENABLED},
                     "shadow_reader": {"enabled": SHADOW_ENABLED},
                     "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
@@ -4894,68 +4435,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.path.startswith("/stats/session/"):
-            # CCG-07: Per-session aggregate stats endpoint
-            # Returns zeros (not 404) for unknown sessions so dashboards don't break.
-            session_id = self.path[len("/stats/session/"):]
-            db_path = MONITOR.db_path
-            try:
-                _conn = sqlite3.connect(str(db_path))
-                _conn.row_factory = sqlite3.Row
-                # Main token/cost/count aggregates
-                agg_row = _conn.execute(
-                    """
-                    SELECT
-                        COALESCE(SUM(input_tokens), 0)          AS input_tokens,
-                        COALESCE(SUM(output_tokens), 0)         AS output_tokens,
-                        COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_input_tokens,
-                        COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_input_tokens,
-                        COALESCE(SUM(estimated_cost), 0.0)      AS cost,
-                        COUNT(*)                                 AS request_count
-                    FROM requests WHERE session_id = ?
-                    """,
-                    (session_id,),
-                ).fetchone()
-                # mutation_count: rows where rules_applied != '[]'
-                try:
-                    mut_row = _conn.execute(
-                        "SELECT COUNT(*) FROM mutation_audit WHERE session_id = ? AND rules_applied != '[]'",
-                        (session_id,),
-                    ).fetchone()
-                    mutation_count = mut_row[0] if mut_row else 0
-                except sqlite3.OperationalError:
-                    # mutation_audit table not yet present (pre-CCG-02)
-                    mutation_count = 0
-                # latency percentiles — fetch all latency_ms values for this session, compute in Python
-                lat_rows = _conn.execute(
-                    "SELECT latency_ms FROM requests WHERE session_id = ? AND latency_ms IS NOT NULL ORDER BY latency_ms",
-                    (session_id,),
-                ).fetchall()
-                latencies = [r[0] for r in lat_rows]
-                if latencies:
-                    p50_idx = int(len(latencies) * 0.50)
-                    p99_idx = min(int(len(latencies) * 0.99), len(latencies) - 1)
-                    latency_p50 = latencies[p50_idx]
-                    latency_p99 = latencies[p99_idx]
-                else:
-                    latency_p50 = 0
-                    latency_p99 = 0
-                _conn.close()
-                self._send_json({
-                    "session_id": session_id,
-                    "input_tokens": agg_row["input_tokens"],
-                    "output_tokens": agg_row["output_tokens"],
-                    "cache_read_input_tokens": agg_row["cache_read_input_tokens"],
-                    "cache_creation_input_tokens": agg_row["cache_creation_input_tokens"],
-                    "cost": round(float(agg_row["cost"]), 6),
-                    "request_count": agg_row["request_count"],
-                    "mutation_count": mutation_count,
-                    "latency_p50": latency_p50,
-                    "latency_p99": latency_p99,
-                })
-            except Exception as _e:
-                self._send_json({"error": str(_e)}, status=500)
-            return
         if self.path == "/savings" or self.path.startswith("/savings?"):
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(self.path)
@@ -4984,17 +4463,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "block_list": blocks_info,
                 }
             )
-            return
-        if self.path == "/dashboard/failovers":
-            # CCI-05: Failover event log panel
-            with _FAILOVER_EVENTS_LOCK:
-                events = list(_FAILOVER_EVENTS)
-            self._send_json({
-                "failovers": list(reversed(events)),  # newest first
-                "total": len(events),
-                "chain": _FALLBACK_CHAIN,
-                "chain_enabled": len(_FALLBACK_CHAIN) > 1,
-            })
             return
         if self.path == "/trace/last":
             trace = TRACE_STORAGE.get_last()
@@ -5180,53 +4648,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             self._send_json(dashboard_data)
             return
-        if self.path == "/metrics/dashboard/tools":
-            # CCI-02: Tool schema registry telemetry panel
-            # Exposes: tools_normalized_count, bytes_saved_total,
-            #          cache_hit_rate_for_tools_block, schema_changes
-            tool_reg_data = {
-                "enabled": TOOL_REGISTRY_AVAILABLE,
-                "tools_normalized_count": 0,
-                "bytes_saved_total": 0,
-                "frozen_tools": 0,
-                "frozen_bytes": 0,
-                "frozen_tokens_approx": 0,
-                "cache_hit_rate_for_tools_block": 0.0,
-                "schema_changes": 0,
-                "frozen_hash": None,
-                "session_bytes_saved": SESSION.get("tool_schema_bytes_saved", 0),
-                "session_frozen_tools": SESSION.get("tool_schema_frozen_tools", 0),
-            }
-            if TOOL_REGISTRY_AVAILABLE:
-                try:
-                    _treg = _get_tool_registry()
-                    if _treg:
-                        _ts = _treg.stats()
-                        _total_req = _ts.get("total_requests", 0)
-                        _schema_changes = _ts.get("schema_changes", 0)
-                        _cache_hit_rate = (
-                            round((_total_req - _schema_changes) / max(1, _total_req), 3)
-                            if _total_req > 0
-                            else 0.0
-                        )
-                        tool_reg_data.update({
-                            "tools_normalized_count": _total_req,
-                            "bytes_saved_total": _ts.get("bytes_saved", 0),
-                            "frozen_tools": _ts.get("frozen_tools", 0),
-                            "frozen_bytes": _ts.get("frozen_bytes", 0),
-                            "frozen_tokens_approx": _ts.get("frozen_tokens_approx", 0),
-                            "cache_hit_rate_for_tools_block": _cache_hit_rate,
-                            "schema_changes": _schema_changes,
-                            "frozen_hash": _ts.get("frozen_hash"),
-                        })
-                except Exception:
-                    pass
-            self._send_json(tool_reg_data)
-            return
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("GET")
-        elif self.path.split("?")[0] in ("/dashboard/tools", "/dashboard/tools/"):
-            self._serve_tools_panel()
         elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith(
             "/dashboard/"
         ):
@@ -5237,6 +4668,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._serve_openapi_yaml()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("GET")
         else:
             # Fix #2: JSON 404 instead of HTML
             self._send_json(
@@ -5297,6 +4730,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 status=429,
             )
             return
+        # Normalize bare API paths → /v1/ prefix.
+        # OpenAI SDKs split base_url from path — if the user sets base_url to
+        # http://localhost:8766 (no /v1 suffix), the SDK sends e.g. POST /responses
+        # instead of POST /v1/responses.  Normalize so adapter detection works.
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path == "/config/reload":
             # Localhost-only hot config reload (same effect as SIGHUP)
             if client_ip not in ("127.0.0.1", "::1"):
@@ -5312,12 +4756,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._forward_request("POST")
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("POST")
-        elif self.path.split("?")[0] == "/v1/messages/count_tokens":
-            self._handle_count_tokens()
-        elif self.path.startswith("/v1/messages/"):
-            # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
-            # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
-            self._reverse_proxy("POST")
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
         elif self.path == "/ingest" or self.path == "/ingest/batch":
@@ -5330,8 +4768,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
 
     def do_PUT(self):
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("PUT")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("PUT")
         else:
             self._send_json(
                 {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
@@ -5339,8 +4787,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
 
     def do_DELETE(self):
+        # Normalize bare API paths → /v1/ prefix (same as do_POST)
+        _BARE_API_PREFIXES = ("/responses", "/codex/responses", "/chat/completions", "/messages", "/models", "/embeddings")
+        if not self.path.startswith("/v1/") and not self.path.startswith("http"):
+            for _bare in _BARE_API_PREFIXES:
+                if self.path == _bare or self.path.startswith(_bare + "/") or self.path.startswith(_bare + "?"):
+                    self.path = "/v1" + self.path
+                    break
+
         if self.path.startswith("http"):
             self._forward_request("DELETE")
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+            self._reverse_proxy("DELETE")
         else:
             self._send_json(
                 {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
@@ -5416,75 +4874,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         target = OLLAMA_UPSTREAM + real_path
         self._proxy_to(target, method, force_intercept=True)
 
-    def _handle_count_tokens(self):
-        """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
-
-        Parses the Anthropic Messages body, sums token counts across system/messages/tools
-        via the local count_tokens() helper, and returns {"input_tokens": N}.
-        No upstream round-trip. Honors anthropic-version and anthropic-beta headers
-        (they do not affect local computation).
-        """
-        content_length = int(self.headers.get("Content-Length", 0))
-        try:
-            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
-            payload = json.loads(body_bytes.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-            self._send_json(
-                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}},
-                status=400,
-            )
-            return
-
-        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
-            self._send_json(
-                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}},
-                status=400,
-            )
-            return
-
-        total = 0
-
-        # system — string or list of content blocks
-        system = payload.get("system", "")
-        if isinstance(system, str):
-            total += count_tokens(system)
-        elif isinstance(system, list):
-            for block in system:
-                if isinstance(block, dict):
-                    text = block.get("text", "")
-                    if isinstance(text, str):
-                        total += count_tokens(text)
-                elif isinstance(block, str):
-                    total += count_tokens(block)
-
-        # messages[].content — string or list of content blocks
-        for msg in payload["messages"]:
-            if not isinstance(msg, dict):
-                continue
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                total += count_tokens(content)
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        text = block.get("text", "")
-                        if isinstance(text, str):
-                            total += count_tokens(text)
-                    elif isinstance(block, str):
-                        total += count_tokens(block)
-
-        # tools[] — name, description, and input_schema
-        for tool in payload.get("tools", []):
-            if not isinstance(tool, dict):
-                continue
-            total += count_tokens(tool.get("name", ""))
-            total += count_tokens(tool.get("description", ""))
-            schema = tool.get("input_schema", {})
-            if isinstance(schema, dict):
-                total += count_tokens(json.dumps(schema, separators=(",", ":")))
-
-        self._send_json({"input_tokens": total})
-
     def _reverse_proxy(self, method):
         # Pre-flight: check for missing API credentials before touching upstream.
         # If the client sent no auth header AND the environment has no key set,
@@ -5498,10 +4887,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         if not _has_client_auth:
             _env_key = (
                 os.environ.get("ANTHROPIC_API_KEY", "").strip()
+                or os.environ.get("ANTHROPIC_OAUTH_TOKEN", "").strip()
                 or os.environ.get("OPENAI_API_KEY", "").strip()
                 or os.environ.get("GOOGLE_API_KEY", "").strip()
                 or os.environ.get("GEMINI_API_KEY", "").strip()
             )
+            # Also check the key pool (includes all ANTHROPIC_OAUTH_TOKEN* vars)
+            _env_key = _env_key or bool(_ANTHROPIC_KEY_POOL)
             if not _env_key:
                 self._send_json(
                     _make_structured_error(
@@ -5515,6 +4907,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 return
 
         headers = _header_mapping(self.headers)
+
+        # CCI-04: detect Claude Code consumption-mode profile early in request lifecycle
+        _detected_profile = _detect_claude_code_profile(headers)
+        if _detected_profile is not None:
+            SESSION["active_profile"] = _detected_profile
+            print(f"[tokenpak] active_profile: {_detected_profile}", flush=True)
+
         adapter = _detect_adapter(path=self.path, headers=headers, body_bytes=None)
         try:
             base = _resolve_upstream(adapter)
@@ -5529,7 +4928,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 status=502,
             )
             return
-        self._proxy_to(base + self.path, method, adapter=adapter)
+        # Use adapter-specific upstream path when available (e.g. Codex
+        # rewrites /v1/responses → /codex/responses for chatgpt.com backend).
+        upstream_path = self.path
+        if hasattr(adapter, "get_upstream_path"):
+            try:
+                upstream_path = adapter.get_upstream_path(self.path)
+            except TypeError:
+                upstream_path = adapter.get_upstream_path()
+        self._proxy_to(base + upstream_path, method, adapter=adapter)
 
     def _proxy_to(
         self, target_url, method, force_intercept=False, adapter: Optional[FormatAdapter] = None
@@ -5588,13 +4995,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         raw_request_body_for_cache_reason = body
         final_request_body_for_cache_reason = body
         router_meta: Optional[dict] = None
-
-        # CCG-06: Mutation audit tracking — transparent mode byte-equality contract
-        _transparent_mode: bool = COMPILATION_MODE == "transparent"
-        _body_pre_audit: bytes = body if isinstance(body, bytes) else b""
-        _body_post_audit: bytes = _body_pre_audit  # updated after pipeline
-        _audit_rules: list = []
-        _audit_cache_risk: str = "none"
 
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
@@ -5666,8 +5066,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     return
 
             _original_body = body  # save for fallback
-            # CCG-06: capture raw bytes before any mutation stage
-            _body_pre_audit = body if isinstance(body, bytes) else (body.encode() if isinstance(body, str) else b"")
             _t0_compression = time.monotonic()  # compression pipeline start time
 
             def _compression_budget_exceeded() -> bool:
@@ -5704,36 +5102,57 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
                     if SEMANTIC_CACHE_ENABLED and body:
+                        # CCG-14: Bypass lookup for streaming / Claude Code requests.
+                        # Invariant: _send_json MUST NOT be called on a streaming client — SSE parser crash.
+                        _sc_is_streaming = True  # conservative: bypass if detection fails
+                        _sc_is_agent = True
                         try:
-                            _sem_cache = _get_sem_cache()
-                            if _sem_cache is None:
-                                raise ImportError("SemanticCache unavailable")
-                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
-                        except Exception as _sc_err:
-                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                            pass  # fail-open: never break a request over semantic cache
+                            _sc_peek = json.loads(body) if isinstance(body, (bytes, str)) else body
+                            _sc_is_streaming = bool(_sc_peek.get("stream"))
+                        except Exception:
+                            _sc_is_streaming = True  # conservative
+                        try:
+                            _sc_hdrs = {k.lower(): v for k, v in self.headers.items()}
+                            _sc_is_agent = bool(_sc_hdrs.get("x-claude-code-session-id"))
+                            if not _sc_is_agent:
+                                _sc_ua = (_sc_hdrs.get("user-agent") or "").lower()
+                                _sc_is_agent = "claude-code" in _sc_ua
+                        except Exception:
+                            _sc_is_agent = True  # conservative
+                        if _sc_is_streaming or _sc_is_agent:
+                            SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                        else:
+                            try:
+                                _sem_cache = _get_sem_cache()
+                                if _sem_cache is None:
+                                    raise ImportError("SemanticCache unavailable")
+                                _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
+                                _cache_result = _sem_cache.lookup(_sem_query)
+                                if (
+                                    _cache_result is not None
+                                    and _cache_result.hit
+                                    and _cache_result.entry
+                                ):
+                                    SESSION["semantic_cache_hit"] = True
+                                    SESSION["phase_semantic_cache"] = "hit"
+                                    # Return cached response — skip all processing
+                                    # NOTE: _send_json MUST NOT be called on streaming clients — SSE parser crash.
+                                    _cached_resp = _cache_result.entry.response
+                                    if isinstance(_cached_resp, dict):
+                                        self._send_json(_cached_resp)
+                                    elif isinstance(_cached_resp, bytes):
+                                        self.wfile.write(_cached_resp)
+                                    else:
+                                        self._send_json(json.loads(_cached_resp))
+                                    return
+                                SESSION["phase_semantic_cache"] = "miss"
+                            except Exception as _sc_err:
+                                SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
+                                pass  # fail-open: never break a request over semantic cache
 
                     # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
                     # Enables Anthropic cache hits on repeated tool schemas
-                    if TOOL_REGISTRY_AVAILABLE and body and not _transparent_mode:
+                    if TOOL_REGISTRY_AVAILABLE and body:
                         try:
                             _tool_reg = _get_tool_registry()
                             if _tool_reg:
@@ -5742,49 +5161,45 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _tstats = _tool_reg.stats()
                                 SESSION["tool_schema_frozen_tools"] = _tstats.get("frozen_tools", 0)
                                 SESSION["tool_schema_bytes_saved"] = _tool_reg.bytes_saved
-                                if _tools_changed:
-                                    _audit_rules.append("tool_schema_normalize")
                         except Exception as _treg_err:
                             pass  # fail-open: never break a request over tool registry
 
                     # Phase 0: Manual routing rules — rewrite model before any processing
                     # PERF OPT: use singleton RouteEngine + cached rules + reuse req_data
-                    if not _transparent_mode:
-                        try:
-                            from tokenpak.routing.rules import (
-                                _count_tokens_approx,
-                                _extract_prompt_text,
-                            )
+                    try:
+                        from tokenpak.routing.rules import (
+                            _count_tokens_approx,
+                            _extract_prompt_text,
+                        )
 
-                            _route_engine = _get_route_engine()
-                            if _route_engine is not None:
-                                # Reuse already-parsed req_data if available, else fallback
-                                _route_payload = (
-                                    req_data
-                                    if req_data is not None
-                                    else (json.loads(body) if body else {})
+                        _route_engine = _get_route_engine()
+                        if _route_engine is not None:
+                            # Reuse already-parsed req_data if available, else fallback
+                            _route_payload = (
+                                req_data
+                                if req_data is not None
+                                else (json.loads(body) if body else {})
+                            )
+                            _route_prompt = _extract_prompt_text(_route_payload)
+                            _route_tokens = _count_tokens_approx(_route_prompt)
+                            _cached_rules = _get_cached_route_rules()
+                            _matched_rule = _route_engine.match(
+                                model=model,
+                                prompt=_route_prompt,
+                                token_count=_route_tokens,
+                                rules=_cached_rules,
+                            )
+                            if _matched_rule:
+                                _route_payload = dict(_route_payload)  # copy before mutate
+                                _route_payload["model"] = _matched_rule.target
+                                body = json.dumps(_route_payload).encode()
+                                req_data = _route_payload  # keep req_data in sync
+                                model = _matched_rule.target
+                                print(
+                                    f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}"
                                 )
-                                _route_prompt = _extract_prompt_text(_route_payload)
-                                _route_tokens = _count_tokens_approx(_route_prompt)
-                                _cached_rules = _get_cached_route_rules()
-                                _matched_rule = _route_engine.match(
-                                    model=model,
-                                    prompt=_route_prompt,
-                                    token_count=_route_tokens,
-                                    rules=_cached_rules,
-                                )
-                                if _matched_rule:
-                                    _route_payload = dict(_route_payload)  # copy before mutate
-                                    _route_payload["model"] = _matched_rule.target
-                                    body = json.dumps(_route_payload).encode()
-                                    req_data = _route_payload  # keep req_data in sync
-                                    model = _matched_rule.target
-                                    _audit_rules.append("model_route_rewrite")
-                                    print(
-                                        f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}"
-                                    )
-                        except Exception as _route_err:
-                            print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
+                    except Exception as _route_err:
+                        print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
 
                     # Phase 0.1: Precondition Gates — reject requests likely to fail
                     # PERF OPT: use singleton PreconditionGates (avoids per-request import + init)
@@ -5846,14 +5261,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
                     _intent_for_contract: str = "query"
-                    if ROUTER_ENABLED and not _transparent_mode:
+                    if ROUTER_ENABLED:
                         try:
-                            _session_id_router = _resolve_session_id(self.headers, model)
+                            _session_id_router = self.headers.get("X-OpenClaw-Session", model)
                             body, _router_meta = _run_router(body, session_id=_session_id_router)
                             router_meta = _router_meta
                             if _router_meta and not _router_meta.get("fallback"):
                                 _intent_for_contract = _router_meta.get("intent", "query")
-                                _audit_rules.append("router")
                                 print(
                                     f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)"
                                 )
@@ -5879,7 +5293,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         pass  # fail-open: contract enforcement is advisory
 
                     # Phase 0.5: Capsule builder — compress historical context blocks
-                    if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER and not _transparent_mode:
+                    if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
                         t_capsule = time.time()
                         capsule_stage = StageTrace(
                             name="capsule",
@@ -5902,8 +5316,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _, input_tokens = extract_request_tokens(
                                     body, adapter=active_adapter
                                 )
-                                _audit_rules.append("capsule_compress")
-                                _audit_cache_risk = "high"
                                 print(
                                     f"  💊 Capsule: {_cap_blocks} block(s) compressed "
                                     f"({_cap_chars_in}→{_cap_chars_out} chars, ratio={_cap_ratio})"
@@ -5967,12 +5379,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     #
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
-                    if body and not _transparent_mode:
+                    if body:
                         _pre_poison_body = body
                         body = _strip_cache_poisons(body)
                         cache_poison_scrubbed = body != _pre_poison_body
-                        if cache_poison_scrubbed:
-                            _audit_rules.append("cache_poison_scrub")
 
                     # Compression budget check — if capsule took too long, skip remaining pipeline
                     if _compression_budget_exceeded():
@@ -5993,55 +5403,116 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=VAULT_INDEX.available,
                         input_tokens=input_tokens,
                     )
-                    if VAULT_INDEX.available and not _transparent_mode:
-                        skip_injection = False
-                        if INJECT_SKIP_MODELS.strip():
-                            if any(
-                                skip.strip() and skip.strip().lower() in model.lower()
-                                for skip in INJECT_SKIP_MODELS.split(",")
-                            ):
-                                skip_injection = True
-                        if input_tokens < INJECT_MIN_PROMPT:
-                            skip_injection = True
-                        if skip_injection:
-                            SESSION["injection_skips"] += 1
-                            vault_stage.details["skipped"] = True
-                            vault_stage.details["reason"] = (
-                                "model_skip"
-                                if INJECT_SKIP_MODELS.strip()
+                    if VAULT_INDEX.available:
+                        # CCI-01: Claude Code cache-boundary-safe vault injection
+                        # Active when: claude-code-* profile (not sdk) + TOKENPAK_VAULT_INJECT != 0
+                        # Uses inject_with_cache_boundary to preserve Anthropic prompt cache prefix.
+                        _cci01_profile = SESSION.get("active_profile", "")
+                        _cci01_eligible = (
+                            _cci01_profile.startswith("claude-code-")
+                            and _cci01_profile != "claude-code-sdk"
+                            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower()
+                            not in ("0", "false", "no")
+                            and PROMPT_BUILDER_AVAILABLE
+                        )
+
+                        if _cci01_eligible:
+                            # Verify body has a system prompt — no injection target otherwise
+                            try:
+                                _cci01_req = json.loads(body)
+                                _cci01_has_system = bool(_cci01_req.get("system"))
+                            except Exception:
+                                _cci01_has_system = False
+
+                            _cci01_model_skip = bool(
+                                INJECT_SKIP_MODELS.strip()
                                 and any(
-                                    s.lower() in model.lower()
+                                    s.strip() and s.strip().lower() in model.lower()
                                     for s in INJECT_SKIP_MODELS.split(",")
                                 )
-                                else "prompt_too_short"
                             )
-                            # Even when skipping vault injection, apply cache_control to stable prefix
-                            # Guard: only Anthropic supports cache_control markers
-                            if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
-                                body = _apply_stable_cache_control(body)
-                                _audit_rules.append("cache_control_stamp")
-                                if _audit_cache_risk == "none":
-                                    _audit_cache_risk = "low"
+
+                            if _cci01_has_system and not _cci01_model_skip:
+                                _cci01_query = extract_query_signal(body, adapter=active_adapter)
+                                if _cci01_query:
+                                    _cci01_text, _cci01_tok, _cci01_srcs = VAULT_INDEX.compile_injection(
+                                        _cci01_query,
+                                        budget=INJECT_BUDGET,
+                                        top_k=INJECT_TOP_K,
+                                        min_score=INJECT_MIN_SCORE,
+                                    )
+                                    if _cci01_text and _cci01_tok > 0:
+                                        body = _inject_with_cache_boundary(body, _cci01_text)
+                                        injected_tokens = _cci01_tok
+                                        injected_sources = _cci01_srcs
+                                        # CCI-01 telemetry
+                                        SESSION["vault_blocks_injected"] = len(_cci01_srcs)
+                                        SESSION["vault_tokens_injected"] = _cci01_tok
+                                        vault_stage.tokens_delta = _cci01_tok
+                                        vault_stage.details["blocks_matched"] = len(_cci01_srcs)
+                                        vault_stage.details["block_names"] = _cci01_srcs[:5]
+                                        vault_stage.details["tokens_injected"] = _cci01_tok
+                                        vault_stage.details["cc_vault_injection"] = True
+                                        _, input_tokens = extract_request_tokens(
+                                            body, adapter=active_adapter
+                                        )
+                                    else:
+                                        vault_stage.details["skipped"] = True
+                                        vault_stage.details["reason"] = "zero_blocks_above_min_score"
+                                else:
+                                    vault_stage.details["skipped"] = True
+                                    vault_stage.details["reason"] = "no_query_signal"
+                            elif _cci01_model_skip:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "model_skip"
+                            else:
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = "no_system_prompt"
+
                         else:
-                            body, injected_tokens, injected_sources = inject_vault_context(
-                                body, adapter=active_adapter
-                            )
-                            if injected_tokens > 0:
-                                # Recount tokens after injection
-                                _, input_tokens = extract_request_tokens(
+                            # Generic (non-Claude-Code) vault injection path
+                            skip_injection = False
+                            if INJECT_SKIP_MODELS.strip():
+                                if any(
+                                    skip.strip() and skip.strip().lower() in model.lower()
+                                    for skip in INJECT_SKIP_MODELS.split(",")
+                                ):
+                                    skip_injection = True
+                            if input_tokens < INJECT_MIN_PROMPT:
+                                skip_injection = True
+                            if skip_injection:
+                                SESSION["injection_skips"] += 1
+                                vault_stage.details["skipped"] = True
+                                vault_stage.details["reason"] = (
+                                    "model_skip"
+                                    if INJECT_SKIP_MODELS.strip()
+                                    and any(
+                                        s.lower() in model.lower()
+                                        for s in INJECT_SKIP_MODELS.split(",")
+                                    )
+                                    else "prompt_too_short"
+                                )
+                                # Even when skipping vault injection, apply cache_control to stable prefix
+                                # Guard: only Anthropic supports cache_control markers
+                                if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
+                                    body = _apply_stable_cache_control(body)
+                            else:
+                                body, injected_tokens, injected_sources = inject_vault_context(
                                     body, adapter=active_adapter
                                 )
-                                _audit_rules.append("vault_inject")
-                                if _audit_cache_risk in ("none", "low"):
-                                    _audit_cache_risk = "medium"
-                                vault_stage.tokens_delta = injected_tokens
-                                vault_stage.details["blocks_matched"] = len(injected_sources)
-                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
-                                vault_stage.details["tokens_injected"] = injected_tokens
-                                # Enrich with sub-step timing from inject_vault_context
-                                vault_stage.details["sub_timing_ms"] = SESSION.get(
-                                    "vault_last_timing_ms", {}
-                                )
+                                if injected_tokens > 0:
+                                    # Recount tokens after injection
+                                    _, input_tokens = extract_request_tokens(
+                                        body, adapter=active_adapter
+                                    )
+                                    vault_stage.tokens_delta = injected_tokens
+                                    vault_stage.details["blocks_matched"] = len(injected_sources)
+                                    vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
+                                    vault_stage.details["tokens_injected"] = injected_tokens
+                                    # Enrich with sub-step timing from inject_vault_context
+                                    vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                        "vault_last_timing_ms", {}
+                                    )
                     vault_stage.output_tokens = input_tokens
                     vault_stage.duration_ms = (time.time() - t_inject) * 1000
                     if trace:
@@ -6088,7 +5559,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             input_tokens=input_tokens,
                         )
                         try:
-                            session_id = _resolve_session_id(self.headers, model)
+                            session_id = self.headers.get("X-OpenClaw-Session", model)
                             body, canon_refs, canon_saved = apply_canon_refs(body, session_id)
                             if canon_refs > 0:
                                 SESSION["canon_hits"] += canon_refs
@@ -6107,7 +5578,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             trace.stages.append(canon_stage)
 
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
-                    if SALIENCE_ROUTER_ENABLED and body and not _transparent_mode:
+                    if SALIENCE_ROUTER_ENABLED and body:
                         try:
                             from tokenpak.agent.compression.salience.router import (
                                 detect_content_type,
@@ -6132,13 +5603,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             if _salience_applied > 0:
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["salience_router_applied"] = _salience_applied
-                                _audit_rules.append("salience_route")
                         except Exception as _sr_err:
                             SESSION["salience_router_error"] = str(_sr_err)
                             pass  # fail-open
 
                     # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
-                    if QUERY_REWRITER_ENABLED and body and not _transparent_mode:
+                    if QUERY_REWRITER_ENABLED and body:
                         try:
                             from tokenpak.agent.compression.query_rewriter import QueryRewriter
 
@@ -6149,7 +5619,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _req_data["messages"] = _rewritten
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["query_rewriter_applied"] = len(_rewritten)
-                                _audit_rules.append("query_rewrite")
                         except Exception as _qr_err:
                             SESSION["query_rewriter_error"] = str(_qr_err)
                             pass  # fail-open
@@ -6177,7 +5646,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             pass  # fail-open
 
                     # Plugin system — run custom compressors first
-                    if _plugin_registry is not None and body and not _transparent_mode:
+                    if _plugin_registry is not None and body:
                         _plugin_context = {
                             "mode": COMPILATION_MODE,
                             "input_tokens": input_tokens,
@@ -6192,7 +5661,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                         _plugin_result = _plugin.compress(_content, _plugin_context)
                                         _msg["content"] = _plugin_result["text"]
                                 body = json.dumps(_req_data, separators=(",", ":"))
-                                _audit_rules.append("plugin_compress")
                             except Exception as _plugin_run_err:
                                 import logging as _logging
 
@@ -6218,7 +5686,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=ENABLE_COMPACTION,
                         input_tokens=input_tokens,
                     )
-                    if ENABLE_COMPACTION and not _transparent_mode:
+                    if ENABLE_COMPACTION:
                         body, sent_input_tokens, original_tokens, protected_tokens = (
                             compact_request_body(
                                 body,
@@ -6227,9 +5695,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         )
                         if original_tokens > 0:
                             input_tokens = original_tokens
-                        if original_tokens > sent_input_tokens:
-                            _audit_rules.append("compact")
-                            _audit_cache_risk = "high"
                         compaction_stage.output_tokens = sent_input_tokens
                         compaction_stage.tokens_delta = (
                             -(original_tokens - sent_input_tokens) if original_tokens else 0
@@ -6246,7 +5711,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(compaction_stage)
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode:
+                    if COMPRESSION_DICT_ENABLED and body:
                         try:
                             from tokenpak.agent.compression.dictionary import CompressionDictionary
 
@@ -6257,7 +5722,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _req_data["messages"] = _dict_result.messages
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["compression_dict_applied"] = True
-                                _audit_rules.append("dict_compress")
                         except Exception as _cd_err:
                             SESSION["compression_dict_error"] = str(_cd_err)
                             pass  # fail-open
@@ -6284,8 +5748,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 sent_input_tokens = input_tokens
 
         final_request_body_for_cache_reason = body
-        # CCG-06: capture body bytes after all mutation stages are complete
-        _body_post_audit = body if isinstance(body, bytes) else (body.encode() if isinstance(body, str) else b"")
 
         # Final validation gate (pre-forward): budget, deterministic context, fingerprint, dry-run
         if should_log and is_messages and body and active_adapter.source_format != "passthrough":
@@ -6336,23 +5798,64 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _gate_err:
                     print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
-        # CCG-04: Per-route header allowlist on the HTTP path.
-        # Anthropic routes use an explicit allowlist (mirroring the WS-path at
-        # proxy.py:~7345).  All other providers keep the existing blocklist path
-        # (_sanitize_headers) — their forwarding behavior is unchanged.
-        if detect_provider(target_url) is Provider.ANTHROPIC:
-            _route = _classify_route(self.path, self.headers)
-            _allowlist = (
-                CLAUDE_CODE_HEADER_ALLOWLIST
-                if _route == "claude-code"
-                else OPENCLAW_HEADER_ALLOWLIST
-            )
-            fwd_headers = {}
-            for _hk, _hv in self.headers.items():
-                if _hk.lower() in _allowlist:
-                    fwd_headers[_hk.lower()] = _hv
-        else:
-            fwd_headers = _sanitize_headers(self.headers)
+        # Codex payload fixups — always applied regardless of compression pipeline.
+        # The chatgpt.com/backend-api/codex/responses endpoint requires:
+        #   - instructions: present (even empty string)
+        #   - input: always a list (not string)
+        #   - stream: true
+        #   - store: false
+        #   - max_output_tokens: removed
+        # Additionally applies prefix_auto caching per the TokenPak caching spec:
+        #   - prompt_cache_key: deterministic hash of stable prefix
+        #   - prompt_cache_retention: "24h" for substantial instructions
+        # These constraints must be enforced post-pipeline because the compression
+        # pipeline may skip denormalize for below-threshold requests.
+        if (
+            body
+            and active_adapter is not None
+            and active_adapter.source_format == "openai-codex-responses"
+        ):
+            try:
+                _codex_payload = json.loads(body)
+                _codex_payload["stream"] = True
+                _codex_payload["store"] = False  # required by chatgpt.com backend
+                if "instructions" not in _codex_payload:
+                    _codex_payload["instructions"] = ""
+                _codex_payload.pop("max_output_tokens", None)
+                if isinstance(_codex_payload.get("input"), str):
+                    _text = _codex_payload["input"]
+                    if _text:
+                        _codex_payload["input"] = [
+                            {"role": "user", "content": [{"type": "input_text", "text": _text}]}
+                        ]
+                    else:
+                        _codex_payload["input"] = []
+                # Strip item_reference entries from input — with store=false
+                # (required by Codex backend), referenced items don't exist.
+                if isinstance(_codex_payload.get("input"), list):
+                    _codex_payload["input"] = [
+                        item for item in _codex_payload["input"]
+                        if not (isinstance(item, dict) and item.get("type") == "item_reference")
+                    ]
+                # Prompt prefix caching (prefix_auto) — generate deterministic
+                # cache key from stable prefix if client didn't provide one.
+                if "prompt_cache_key" not in _codex_payload:
+                    try:
+                        from tokenpak.proxy.adapters.openai_codex_responses_adapter import build_codex_cache_key
+                        _codex_payload["prompt_cache_key"] = build_codex_cache_key(
+                            model=_codex_payload.get("model", "codex"),
+                            instructions=_codex_payload.get("instructions", ""),
+                            tools=_codex_payload.get("tools"),
+                        )
+                    except Exception:
+                        pass  # fail-open
+                # chatgpt.com backend does not support prompt_cache_retention — strip it
+                _codex_payload.pop("prompt_cache_retention", None)
+                body = json.dumps(_codex_payload, ensure_ascii=False).encode("utf-8")
+            except (json.JSONDecodeError, TypeError):
+                pass  # fail-open: send original body
+
+        fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
@@ -6360,15 +5863,40 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Content-Length"] = str(len(body))
 
         _req_headers_lower = {k.lower(): v for k, v in self.headers.items()}
-        _client_has_auth = bool(
-            _req_headers_lower.get("x-api-key", "").strip()
-            or _req_headers_lower.get("authorization", "").strip()
+        _client_xapi = _req_headers_lower.get("x-api-key", "").strip()
+        _client_auth = _req_headers_lower.get("authorization", "").strip()
+        # A client key is "real" only if it looks like a provider credential.
+        # Placeholder values (e.g. "custom-local") are treated as no-auth so
+        # the proxy injects from the key pool instead.
+        _client_has_real_auth = bool(
+            (_client_xapi and (_client_xapi.startswith("sk-") or len(_client_xapi) > 40))
+            or (_client_auth and _client_auth.lower().startswith("bearer "))
         )
         _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        if not _client_has_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
+        if not _client_has_real_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
             _pool_key, _current_key_idx = _get_next_key()
             if _pool_key:
                 fwd_headers["x-api-key"] = _pool_key
+            elif _ANTHROPIC_KEY_POOL:
+                # All keys on cooldown — return 429 immediately instead of
+                # forwarding with a placeholder key (which just amplifies the storm).
+                with _KEY_COOLDOWN_LOCK:
+                    _cd_remaining = max(0, _KEY_COOLDOWN_STATE.get(0, 0) - time.time())
+                _retry_after = max(1, int(_cd_remaining))
+                print(f"[key-pool] All keys cooling — returning 429 (retry in {_retry_after}s)", flush=True)
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Retry-After", str(_retry_after))
+                _body_429 = json.dumps({
+                    "error": {
+                        "type": "rate_limit_error",
+                        "message": f"All API keys are on cooldown. Retry in {_retry_after}s.",
+                    }
+                }).encode()
+                self.send_header("Content-Length", len(_body_429))
+                self.end_headers()
+                self.wfile.write(_body_429)
+                return
 
         # Fix #5: Check per-provider circuit breaker before attempting upstream
         _cb_provider = _provider_for_url(target_url)
@@ -6410,82 +5938,50 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  🔍 debug error: {_e}")
             body = _strip_empty_text_blocks(body)
-            # CACHE-P4-001: CacheSpec unified mode resolution (replaces ad-hoc provider guards)
-            _detected_provider = detect_provider(target_url)
-            _cache_hint: Optional[str] = None
-
-            # Extract Anthropic-specific request hint and translate to CacheSpec mode names.
-            # _select_anthropic_cache_mode pops tokenpak_cache_mode from body (side-effect).
-            if _detected_provider is Provider.ANTHROPIC:
+            # Guard: cache_control block cap is Anthropic-specific
+            if detect_provider(target_url) is Provider.ANTHROPIC:
+                body = _cap_cache_control_blocks(body)
+                # TTL ordering hotfix v3 (2026-04-08 PM, re-applied after refactor):
+                # Anthropic rejects requests where any default-ttl (5m) cache_control
+                # appears BEFORE any explicit-ttl (e.g. 1h) block in document order.
+                # Claude Code 2.1.96 sends interleaved 1h→95m→1h shapes that trigger
+                # this. Strip default-ttl blocks before the LAST explicit-ttl block.
+                # Original incident: 2026-04-08 07:00 PDT Cali cycle failure.
+                # See feedback_cache_control_ttl_ordering.md memory entry.
                 try:
-                    _ac_body = json.loads(body)
-                    _ac_headers = {k.lower(): v for k, v in self.headers.items()}
-                    _raw_ac_mode = _select_anthropic_cache_mode(_ac_headers, _ac_body)
-                    _cache_hint = (
-                        "prefix_auto" if _raw_ac_mode is CacheMode.AUTO else "block_explicit"
-                    )
-                    body = json.dumps(_ac_body).encode()
-                except Exception as _hint_err:
-                    print(f"  ⚠️ Cache hint extraction error: {_hint_err}", flush=True)
-                    _cache_hint = "block_explicit"
-
-            # Resolve effective mode via CacheSpec (request hint > config override > provider default)
-            _effective_mode = (
-                _resolve_cache_mode(CACHE_SPEC, _detected_provider, _cache_hint)
-                if _CACHE_SPEC_AVAILABLE and CACHE_SPEC is not None
-                else None
-            )
-
-            # Dispatch based on resolved mode
-            if _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT:
-                if _detected_provider is Provider.ANTHROPIC:
-                    try:
-                        _ac_body = json.loads(body)
-                        body = json.dumps(_ac_body).encode()
-                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
-                        print("  📦 Anthropic cache mode: EXPLICIT (per-block, capped)", flush=True)
-                    except Exception as _ac_err:
-                        print(f"  ⚠️ Cache mode error (falling back to cap): {_ac_err}", flush=True)
-                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
-            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.PREFIX_AUTO:
-                if _detected_provider is Provider.ANTHROPIC:
-                    try:
-                        _ac_body = json.loads(body)
-                        _apply_anthropic_auto_cache(_ac_body)
-                        body = json.dumps(_ac_body).encode()
-                        print("  🔄 Anthropic cache mode: AUTO (top-level ephemeral)", flush=True)
-                    except Exception as _ac_err:
-                        print(f"  ⚠️ Auto cache mode error: {_ac_err}", flush=True)
-            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.CACHE_OBJECT:
-                body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
-            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.CHECKPOINT:
-                body = _inject_bedrock_checkpoints(_detected_provider, body)
-            else:
-                # None: disabled, provider-default, or CacheSpec unavailable.
-                # Preserve original per-provider behavior for backward compatibility.
-                if _detected_provider is Provider.ANTHROPIC:
-                    try:
-                        _ac_body = json.loads(body)
-                        _ac_headers = {k.lower(): v for k, v in self.headers.items()}
-                        _fb_mode = _select_anthropic_cache_mode(_ac_headers, _ac_body)
-                        if _fb_mode is CacheMode.AUTO:
-                            _apply_anthropic_auto_cache(_ac_body)
-                            body = json.dumps(_ac_body).encode()
-                        else:
-                            body = json.dumps(_ac_body).encode()
-                            body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
-                    except Exception as _fb_err:
-                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
-                elif _detected_provider is Provider.GEMINI:
-                    body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
-                elif _detected_provider is Provider.BEDROCK:
-                    body = _inject_bedrock_checkpoints(_detected_provider, body)
-
-            # Always run prompt_cache_key: injects for OpenAI/Azure/Codex/xAI,
-            # strips tokenpak_* fields from all providers (CACHE-P2-001).
-            body = _inject_prompt_cache_key(_detected_provider, dict(self.headers), body)
-
-            # Fix Content-Length after cache processing may have changed body size
+                    _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                    _hf_locs = []
+                    for _hs in (_hf_dbody.get("system") or []):
+                        if isinstance(_hs, dict):
+                            _hf_locs.append(_hs)
+                    for _ht in (_hf_dbody.get("tools") or []):
+                        if isinstance(_ht, dict):
+                            _hf_locs.append(_ht)
+                    for _hm in (_hf_dbody.get("messages") or []):
+                        _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
+                        if isinstance(_hcontent, list):
+                            for _hc in _hcontent:
+                                if isinstance(_hc, dict):
+                                    _hf_locs.append(_hc)
+                    _last_ext_ttl = None
+                    for _hi, _hb in enumerate(_hf_locs):
+                        _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                        if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
+                            _last_ext_ttl = _hi
+                    if _last_ext_ttl is not None:
+                        _hf_stripped = 0
+                        for _hi in range(_last_ext_ttl):
+                            _hb = _hf_locs[_hi]
+                            _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                            if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
+                                _hb.pop("cache_control", None)
+                                _hf_stripped += 1
+                        if _hf_stripped > 0:
+                            print(f"  🧹 TTL ordering hotfix v3: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
+                            body = json.dumps(_hf_dbody).encode()
+                except Exception as _e_hf:
+                    print(f"  ⚠️ ttl ordering hotfix v3 error: {_e_hf}", flush=True)
+            # Fix Content-Length after cache_control cap may have changed body size
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -6535,12 +6031,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
             body = _strip_empty_text_blocks(body)
-            # Safety net: second cap for EXPLICIT mode in case injection re-added blocks
-            if _detected_provider is Provider.ANTHROPIC and (
-                not _CACHE_SPEC_AVAILABLE
-                or _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT
-            ):
-                body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
+            # Guard: cache_control block cap is Anthropic-specific
+            if detect_provider(target_url) is Provider.ANTHROPIC:
+                body = _cap_cache_control_blocks(body)
+            # Guard: Gemini cachedContent injection is Gemini-specific
+            _detected_provider = detect_provider(target_url)
+            if _detected_provider is Provider.GEMINI:
+                body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
+            # Guard: Bedrock cachePoint injection is Bedrock-specific (CACHE-P3-003)
+            if _detected_provider is Provider.BEDROCK:
+                body = _inject_bedrock_checkpoints(_detected_provider, body)
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -6596,12 +6096,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             print(f"  🔌 upstream connect+send: {_conn_ms}ms (pool reuse enabled)", flush=True)
             status = resp.status
 
-            # Key pool failover: retry with next key on 401/429 (only when we injected)
+            # Key pool failover: cooldown key on 401/429 and try next key
             if (
                 status in (401, 429)
                 and _current_key_idx >= 0
-                and not _client_has_auth
-                and len(_ANTHROPIC_KEY_POOL) > 1
+                and not _client_has_real_auth
             ):
                 _cooldown_dur = _KEY_COOLDOWN_401 if status == 401 else _KEY_COOLDOWN_429
                 _cool_down_key(_current_key_idx, _cooldown_dur, f"HTTP {status}")
@@ -6634,102 +6133,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         flush=True,
                     )
 
-            # CCI-05: Provider failover — only for claude-code-* profiles, only on 5xx or timeout.
-            # The fallback chain is opt-in via TOKENPAK_FALLBACK_CHAIN (default: "anthropic" only).
-            # Timeout is represented by status == 0 (set in the except block above this try).
-            _cc05_profile = SESSION.get("active_profile", "")
-            _cc05_is_cc_profile = _cc05_profile.startswith("claude-code-")
-            _cc05_triggered = False
-            if (
-                _cc05_is_cc_profile
-                and len(_FALLBACK_CHAIN) > 1
-                and (500 <= status <= 599 or status == 0)
-            ):
-                # Determine which provider originally handled this request
-                _cc05_current_provider = "anthropic" if "anthropic.com" in target_url else "other"
-                # Walk the chain starting from the provider AFTER the current one
-                try:
-                    _cc05_chain_start = _FALLBACK_CHAIN.index(_cc05_current_provider) + 1
-                except ValueError:
-                    _cc05_chain_start = 1  # start from second if current not in chain
-                _cc05_reason = "timeout" if status == 0 else f"http_{status}"
-                _cc05_model_str = model  # captured earlier in _proxy_to
-                for _cc05_next in _FALLBACK_CHAIN[_cc05_chain_start:]:
-                    if _cc05_next == "queue":
-                        # Last-resort: queue the request and return 202
-                        _cc05_row_id = _write_failover_queue(body, _cc05_model_str, _cc05_profile)
-                        _log_failover_event(
-                            _cc05_current_provider, "queue", _cc05_reason,
-                            _cc05_model_str, status, _cc05_profile,
-                        )
-                        try:
-                            resp.drain_conn()
-                        except Exception:
-                            pass
-                        _queue_resp = json.dumps({
-                            "type": "queued",
-                            "message": "Request queued for retry — provider temporarily unavailable.",
-                            "queue_id": _cc05_row_id,
-                        }).encode()
-                        self.send_response(202)
-                        self.send_header("Content-Type", "application/json")
-                        self.send_header("Content-Length", str(len(_queue_resp)))
-                        self.send_header("Retry-After", "60")
-                        self.send_header("X-TokenPak-Failover", f"queued:{_cc05_row_id}")
-                        self.end_headers()
-                        self.wfile.write(_queue_resp)
-                        _cc05_triggered = True
-                        break
-                    # Build URL + headers for next provider
-                    _cc05_fb_url = _build_failover_url(_cc05_next, target_url, _cc05_model_str)
-                    if not _cc05_fb_url:
-                        print(f"[failover] {_cc05_next}: no URL — skipping", flush=True)
-                        continue
-                    _cc05_fb_headers = _build_failover_headers(_cc05_next, fwd_headers)
-                    # Translate model name in request body
-                    _cc05_fb_body = body
-                    try:
-                        if body:
-                            _cc05_parsed_body = json.loads(body)
-                            _cc05_translated_model = _translate_model(_cc05_model_str, _cc05_next)
-                            if _cc05_translated_model != _cc05_parsed_body.get("model", ""):
-                                _cc05_parsed_body["model"] = _cc05_translated_model
-                                _cc05_fb_body = json.dumps(_cc05_parsed_body).encode()
-                                _cc05_fb_headers["Content-Length"] = str(len(_cc05_fb_body))
-                    except Exception as _cc05_body_err:
-                        print(f"[failover] body translation error: {_cc05_body_err}", flush=True)
-                    _log_failover_event(
-                        _cc05_current_provider, _cc05_next, _cc05_reason,
-                        _cc05_model_str, status, _cc05_profile,
-                    )
-                    try:
-                        resp.drain_conn()
-                    except Exception:
-                        pass
-                    _t0_fb = time.monotonic()
-                    resp = _POOL_MANAGER.request(
-                        method,
-                        _cc05_fb_url,
-                        headers=_cc05_fb_headers,
-                        body=_cc05_fb_body,
-                        timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
-                        preload_content=False,
-                    )
-                    status = resp.status
-                    print(
-                        f"[failover] {_cc05_next} → HTTP {status} "
-                        f"({int((time.monotonic() - _t0_fb) * 1000)}ms)",
-                        flush=True,
-                    )
-                    if status < 500:
-                        # Succeeded — add failover header so user can see it happened
-                        _cc05_triggered = True
-                        break
-                    # Still failing — try next in chain
-                    _cc05_current_provider = _cc05_next
-            if _cc05_triggered and status == 202:
-                return  # 202 queue response already sent
-
             # Fix #5: Record success/failure for circuit breaker
             if status >= 500:
                 _circuit_record_failure(_cb_provider)
@@ -6737,6 +6140,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _circuit_record_success(_cb_provider)
             content_type = resp.getheader("Content-Type", "")
             is_sse = "text/event-stream" in content_type
+            # chatgpt.com/backend-api returns SSE without Content-Type header.
+            # Codex adapter always sets stream=true, so treat its responses as SSE.
+            if (
+                not is_sse
+                and active_adapter is not None
+                and active_adapter.source_format == "openai-codex-responses"
+                and status == 200
+            ):
+                is_sse = True
 
             # If upstream errored but we already sent 200+SSE headers, emit SSE error event
             if _early_sse_sent and status >= 400:
@@ -6853,13 +6265,20 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.send_response(status)
                 # urllib3 HTTPResponse uses .headers (HTTPHeaderDict) instead of .getheaders()
                 _resp_headers = resp.headers.items() if hasattr(resp, "headers") else resp.getheaders()
+                _has_content_type = False
                 for h_key, h_val in _resp_headers:
                     h_lower = h_key.lower()
                     if h_lower in ("connection", "keep-alive", "transfer-encoding"):
                         continue
                     if h_lower == "content-length":
                         continue
+                    if h_lower == "content-type":
+                        _has_content_type = True
                     self.send_header(h_key, h_val)
+                # Ensure Content-Type is set for SSE responses — some upstreams
+                # (chatgpt.com/backend-api) omit it, breaking SSE-aware clients.
+                if is_sse and not _has_content_type:
+                    self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
 
             if is_sse:
@@ -6896,7 +6315,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         continue
 
                     # Chat footer injection — buffer chunks to find message_stop
-                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages:
+                    # Skip for non-Anthropic adapters (e.g. Codex) whose SSE format
+                    # has no message_stop event, causing all data to be buffered.
+                    _is_anthropic_sse = (
+                        active_adapter is not None
+                        and active_adapter.source_format.startswith("anthropic")
+                    )
+                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages and _is_anthropic_sse:
                         combined = _pending_chunk + chunk
                         _pending_chunk = b""
                         if (
@@ -7034,7 +6459,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             serialize_capsule,
                         )
 
-                        _session_id = _resolve_session_id(self.headers, model)
+                        _session_id = self.headers.get("X-OpenClaw-Session", model)
                         _capsule_text = body.decode("utf-8") if isinstance(body, bytes) else body
                         _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
                         _capsule_str = serialize_capsule(_capsule)
@@ -7101,30 +6526,55 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             # Post-request: Store successful response in semantic cache
             if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
+                # CCG-14: Bypass store for streaming / Claude Code requests (same guard as lookup).
+                _sc_store_skip = True  # conservative: skip if detection fails
                 try:
-                    _sem_cache = _get_sem_cache()
-                    if _sem_cache is None:
-                        raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
+                    _sc_store_peek = (
+                        json.loads(_original_body)
+                        if isinstance(_original_body, (bytes, str))
                         else _original_body
                     )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
-                except Exception as _sc_store_err:
-                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                    pass  # fail-open
+                    _sc_store_skip = bool(_sc_store_peek.get("stream"))
+                except Exception:
+                    _sc_store_skip = True  # conservative
+                if not _sc_store_skip:
+                    try:
+                        _sc_hdrs_store = {k.lower(): v for k, v in self.headers.items()}
+                        _sc_is_agent_store = bool(_sc_hdrs_store.get("x-claude-code-session-id"))
+                        if not _sc_is_agent_store:
+                            _sc_ua_store = (_sc_hdrs_store.get("user-agent") or "").lower()
+                            _sc_is_agent_store = "claude-code" in _sc_ua_store
+                    except Exception:
+                        _sc_is_agent_store = True  # conservative
+                    _sc_store_skip = _sc_is_agent_store
+                if _sc_store_skip:
+                    if not SESSION.get("phase_semantic_cache"):
+                        SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                else:
+                    try:
+                        _sem_cache = _get_sem_cache()
+                        if _sem_cache is None:
+                            raise ImportError("SemanticCache unavailable")
+                        _store_query = (
+                            _original_body.decode("utf-8")
+                            if isinstance(_original_body, bytes)
+                            else _original_body
+                        )
+                        _store_resp_raw = (
+                            resp_body
+                            if "resp_body" in locals()
+                            else json.dumps({"status": status}).encode()
+                        )
+                        _store_resp_dict = (
+                            json.loads(_store_resp_raw)
+                            if isinstance(_store_resp_raw, (bytes, str))
+                            else _store_resp_raw
+                        )
+                        _sem_cache.store(_store_query, _store_resp_dict)
+                        SESSION["semantic_cache_stored"] = True
+                    except Exception as _sc_store_err:
+                        SESSION["semantic_cache_store_error"] = str(_sc_store_err)
+                        pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
 
@@ -7137,7 +6587,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
 
                     _ss = StabilityScorer()
-                    _workflow_id = _resolve_session_id(self.headers, model)
+                    _workflow_id = self.headers.get("X-OpenClaw-Session", model)
                     _resp_text = ""
                     try:
                         _resp_text = (
@@ -7233,27 +6683,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         cache_creation_tokens,
                         cache_provider=_provider_name,
                         cache_estimated_savings=_cache_savings,
-                        session_id=_resolve_session_id(self.headers, model),
                     )
                 except Exception as _monitor_err:
                     print(
                         f"  ⚠️ Monitor.log() failed (SQLite error, request unaffected): {_monitor_err}"
                     )
-                # CCG-06: Write mutation audit row — every request in every mode
-                try:
-                    _audit_mode = "bypass" if _bypass_request else COMPILATION_MODE
-                    _write_mutation_audit(
-                        MONITOR_DB,
-                        None,  # request_id FK is advisory; not available synchronously
-                        _resolve_session_id(self.headers, model),
-                        _body_pre_audit,
-                        _body_post_audit,
-                        _audit_rules,
-                        _audit_cache_risk,
-                        _audit_mode,
-                    )
-                except Exception:
-                    pass  # fail-open: never break a request over audit write
                 try:
                     from tokenpak.telemetry.anon_metrics import record_request
 
@@ -7295,7 +6729,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     miss_map = SESSION.setdefault("cache_miss_reasons", {})
                     miss_map[miss_reason] = int(miss_map.get(miss_reason, 0) or 0) + 1
                 
-                # CACHE-P4-002: Per-provider cache tracking (SESSION dict — backward compat)
+                # CACHE-P4-002: Per-provider cache tracking
                 _provider_stats = SESSION["cache_by_provider"].setdefault(_provider_name, {
                     "hits": 0,
                     "misses": 0,
@@ -7310,24 +6744,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     _provider_stats["hits"] += 1
                 else:
                     _provider_stats["misses"] += 1
-
-                # CACHE-P4-002: CacheTelemetry — structured per-provider telemetry
-                if CACHE_TELEMETRY is not None:
-                    _mode_str = (
-                        _effective_mode.value
-                        if _effective_mode is not None and hasattr(_effective_mode, "value")
-                        else None
-                    )
-                    try:
-                        CACHE_TELEMETRY.record(
-                            provider=_provider_name,
-                            mode=_mode_str,
-                            cache_read_tokens=cache_read_tokens,
-                            cache_creation_tokens=cache_creation_tokens,
-                            savings_usd=_cache_savings,
-                        )
-                    except Exception:
-                        pass  # never break the proxy
                 
                 if injected_tokens > 0:
                     SESSION["injection_hits"] += 1
@@ -7622,136 +7038,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self._send_json(
             {"error": {"type": "not_found", "message": "openapi.yaml not found"}}, status=404
         )
-
-    def _serve_tools_panel(self):
-        """CCI-02: Serve /dashboard/tools — inline HTML panel for tool schema registry.
-
-        Shows 4 metrics: tools_normalized_count, bytes_saved_total,
-        cache_hit_rate_for_tools_block, and schema_changes (recent normalizations proxy).
-        Fetches live data from /metrics/dashboard/tools every 30 s.
-        """
-        html = b"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TokenPak \xe2\x80\x94 Tool Registry</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-         background:#0a0a0a;color:#e4e4e7;padding:2rem;min-height:100vh}
-    .container{max-width:1100px;margin:0 auto}
-    h1{font-size:1.75rem;margin-bottom:.25rem;color:#fafafa}
-    .subtitle{font-size:.875rem;color:#71717a;margin-bottom:2rem}
-    .nav{font-size:.8rem;margin-bottom:1.5rem}
-    .nav a{color:#10b981;text-decoration:none}
-    .nav a:hover{text-decoration:underline}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-bottom:2rem}
-    .card{background:#18181b;border:1px solid #27272a;border-radius:.5rem;padding:1.5rem;transition:border-color .2s}
-    .card:hover{border-color:#3f3f46}
-    .card-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#a1a1a6;margin-bottom:.75rem}
-    .card-value{font-size:2rem;font-weight:600;color:#10b981;font-variant-numeric:tabular-nums}
-    .card-sub{font-size:.75rem;color:#71717a;margin-top:.5rem}
-    .card.warn .card-value{color:#f59e0b}
-    .footer{font-size:.75rem;color:#52525b;margin-top:1rem}
-    .status-ok{color:#10b981}.status-warn{color:#f59e0b}.status-err{color:#ef4444}
-    #last-update{font-style:italic}
-  </style>
-</head>
-<body>
-<div class="container">
-  <div class="nav"><a href="/dashboard">\xe2\x86\x90 Dashboard</a></div>
-  <h1>Tool Schema Registry</h1>
-  <p class="subtitle">Prompt-cache stability via deterministic tool normalization</p>
-  <div class="grid">
-    <div class="card" id="card-normalized">
-      <div class="card-title">Tools Normalized</div>
-      <div class="card-value" id="normalized-count">\xe2\x80\xa6</div>
-      <div class="card-sub" id="normalized-sub">requests processed by registry</div>
-    </div>
-    <div class="card" id="card-bytes">
-      <div class="card-title">Bytes Saved (Session)</div>
-      <div class="card-value" id="bytes-saved">\xe2\x80\xa6</div>
-      <div class="card-sub" id="bytes-sub">vs un-normalized request bodies</div>
-    </div>
-    <div class="card" id="card-hitrate">
-      <div class="card-title">Cache-Hit Rate (Tools Block)</div>
-      <div class="card-value" id="hit-rate">\xe2\x80\xa6</div>
-      <div class="card-sub" id="hitrate-sub">requests where frozen schema matched</div>
-    </div>
-    <div class="card" id="card-changes">
-      <div class="card-title">Schema Changes</div>
-      <div class="card-value" id="schema-changes">\xe2\x80\xa6</div>
-      <div class="card-sub" id="changes-sub">tool set updates since session start</div>
-    </div>
-  </div>
-  <div class="footer">
-    Auto-refreshing every 30 s \xc2\xb7 <span id="last-update">Never</span>
-    \xc2\xb7 Data from <code>/metrics/dashboard/tools</code>
-  </div>
-</div>
-<script>
-const API = '/metrics/dashboard/tools';
-const REFRESH = 30000;
-
-function fmt(n) {
-  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
-  return String(Math.round(n));
-}
-function fmtBytes(b) {
-  if (b >= 1048576) return (b/1048576).toFixed(2)+' MB';
-  if (b >= 1024) return (b/1024).toFixed(1)+' KB';
-  return b+' B';
-}
-function fmtPct(r) { return (r*100).toFixed(1)+'%'; }
-
-async function refresh() {
-  try {
-    const r = await fetch(API);
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json();
-
-    document.getElementById('normalized-count').textContent = fmt(d.tools_normalized_count||0);
-    document.getElementById('normalized-sub').textContent =
-      'frozen tools: '+(d.frozen_tools||0)+' (\xe2\x89\x88'+(d.frozen_tokens_approx||0)+' tokens)';
-
-    document.getElementById('bytes-saved').textContent = fmtBytes(d.bytes_saved_total||0);
-    const fb = d.frozen_bytes||0;
-    document.getElementById('bytes-sub').textContent =
-      fb ? 'frozen schema: '+fmtBytes(fb) : 'vs un-normalized request bodies';
-
-    const hr = d.cache_hit_rate_for_tools_block||0;
-    const hitEl = document.getElementById('hit-rate');
-    hitEl.textContent = fmtPct(hr);
-    const card = document.getElementById('card-hitrate');
-    card.className = 'card'+(hr < 0.5 ? ' warn' : '');
-
-    const sc = d.schema_changes||0;
-    document.getElementById('schema-changes').textContent = fmt(sc);
-    const fh = d.frozen_hash;
-    document.getElementById('changes-sub').textContent =
-      fh ? 'current hash: '+fh : (sc===0 ? 'stable since session start' : sc+' invalidation(s)');
-
-    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-  } catch(e) {
-    console.error('tools panel fetch failed:', e);
-  }
-}
-
-refresh();
-setInterval(refresh, REFRESH);
-</script>
-</body>
-</html>
-"""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", len(html))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-cache, must-revalidate")
-        self.end_headers()
-        self.wfile.write(html)
 
     def _serve_dashboard(self):
         """Serve static dashboard files (HTML/CSS/JS)."""
@@ -8059,6 +7345,7 @@ async def _ws_handler(websocket) -> None:
                 hl = hname.lower()
                 if hl in ("x-api-key", "authorization", "anthropic-version", "anthropic-beta"):
                     fwd_headers[hl] = hval
+            # Anthropic OAuth tokens (sk-ant-oat*) are accepted as x-api-key — no conversion.
         except Exception:
             pass
 

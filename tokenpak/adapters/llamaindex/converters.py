@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional
 # Lightweight Block representation (no hard dep on tokenpak-sdk)
 # ---------------------------------------------------------------------------
 
-
 @dataclass
 class LlamaBlock:
     """
@@ -32,7 +31,6 @@ class LlamaBlock:
       - metadata    → node metadata
       - provenance  → source info (document, page, etc.)
     """
-
     id: str
     content: str
     block_type: str = "evidence"
@@ -85,7 +83,6 @@ Node = LlamaBlock
 # Token estimation
 # ---------------------------------------------------------------------------
 
-
 def _estimate_tokens(text: str) -> int:
     """Estimate token count (1 token ≈ 4 chars). Fast, no imports."""
     return max(1, len(text) // 4)
@@ -101,7 +98,6 @@ def _make_node_id(text: str, metadata: Dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # LlamaIndex Node → LlamaBlock
 # ---------------------------------------------------------------------------
-
 
 def llamaindex_node_to_block(
     node: Any,
@@ -131,9 +127,7 @@ def llamaindex_node_to_block(
         # Real llama_index objects
         text = getattr(node, "text", None) or getattr(node, "get_content", lambda: "")()
         metadata = dict(getattr(node, "metadata", {}) or {})
-        node_id = (
-            block_id or getattr(node, "node_id", None) or _make_node_id(text, metadata)
-        )
+        node_id = block_id or getattr(node, "node_id", None) or _make_node_id(text, metadata)
 
     # --- Build provenance ---
     provenance: Dict[str, Any] = {

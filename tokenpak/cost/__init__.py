@@ -7,6 +7,6 @@ Provides:
   - Proxy integration: real-time budget checks on request path
 """
 
-from .budget_tracker import AlertLevel, BudgetAlert, BudgetTracker
+from .budget_tracker import BudgetTracker, BudgetAlert, AlertLevel
 
 __all__ = ["BudgetTracker", "BudgetAlert", "AlertLevel"]

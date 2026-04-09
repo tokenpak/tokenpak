@@ -61,17 +61,15 @@ def auth_login():
         ip=request.remote_addr,
         user_agent=request.headers.get("User-Agent"),
     )
-    return jsonify(
-        {
-            "token": token,
-            "expires_in_hours": 24,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "role": user.role.value,
-            },
-        }
-    ), 200
+    return jsonify({
+        "token": token,
+        "expires_in_hours": 24,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role.value,
+        },
+    }), 200
 
 
 @rbac_bp.route("/v1/auth/logout", methods=["POST"])
@@ -93,20 +91,17 @@ def auth_me():
     permissions = [p.value for p in user.role.__class__]
     try:
         from .rbac_core import PERMISSION_MATRIX
-
         permissions = [p.value for p in PERMISSION_MATRIX.get(user.role, set())]
     except Exception:
         pass
 
-    return jsonify(
-        {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role.value,
-            "permissions": sorted(permissions),
-            "last_login": user.last_login.isoformat() if user.last_login else None,
-        }
-    ), 200
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "permissions": sorted(permissions),
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+    }), 200
 
 
 # ---------------------------------------------------------------------------
@@ -131,9 +126,7 @@ def create_user():
     try:
         role = Role(role_str)
     except ValueError:
-        return jsonify(
-            {"error": f"Invalid role '{role_str}'", "valid_roles": [r.value for r in Role]}
-        ), 400
+        return jsonify({"error": f"Invalid role '{role_str}'", "valid_roles": [r.value for r in Role]}), 400
 
     try:
         user = _store().create_user(
@@ -148,14 +141,12 @@ def create_user():
             return jsonify({"error": "Username or email already exists"}), 409
         raise
 
-    return jsonify(
-        {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role.value,
-            "created_at": user.created_at.isoformat(),
-        }
-    ), 201
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "created_at": user.created_at.isoformat(),
+    }), 201
 
 
 @rbac_bp.route("/v1/users", methods=["GET"])
@@ -170,14 +161,12 @@ def list_users():
         return jsonify({"error": "limit and offset must be integers"}), 400
 
     users, total = _store().list_users(limit=limit, offset=offset)
-    return jsonify(
-        {
-            "users": users,
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-        }
-    ), 200
+    return jsonify({
+        "users": users,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }), 200
 
 
 @rbac_bp.route("/v1/users/<user_id>", methods=["GET"])
@@ -192,16 +181,14 @@ def get_user(user_id):
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
-    return jsonify(
-        {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role.value,
-            "is_active": user.is_active,
-            "created_at": user.created_at.isoformat(),
-            "last_login": user.last_login.isoformat() if user.last_login else None,
-        }
-    ), 200
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat(),
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+    }), 200
 
 
 @rbac_bp.route("/v1/users/<user_id>", methods=["PATCH"])
@@ -219,9 +206,7 @@ def update_user(user_id):
         try:
             Role(role)
         except ValueError:
-            return jsonify(
-                {"error": f"Invalid role '{role}'", "valid_roles": [r.value for r in Role]}
-            ), 400
+            return jsonify({"error": f"Invalid role '{role}'", "valid_roles": [r.value for r in Role]}), 400
 
     user = _store().update_user(
         user_id,
@@ -233,14 +218,12 @@ def update_user(user_id):
     if user is None:
         return jsonify({"error": "User not found"}), 404
 
-    return jsonify(
-        {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role.value,
-            "is_active": user.is_active,
-        }
-    ), 200
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role.value,
+        "is_active": user.is_active,
+    }), 200
 
 
 @rbac_bp.route("/v1/users/<user_id>", methods=["DELETE"])
@@ -274,13 +257,11 @@ def create_api_key():
         name=name,
         expires_in_days=expires_in_days,
     )
-    return jsonify(
-        {
-            "key": raw_key,
-            "note": "Store this key securely — it will not be shown again.",
-            **record,
-        }
-    ), 201
+    return jsonify({
+        "key": raw_key,
+        "note": "Store this key securely — it will not be shown again.",
+        **record,
+    }), 201
 
 
 @rbac_bp.route("/v1/api-keys", methods=["GET"])

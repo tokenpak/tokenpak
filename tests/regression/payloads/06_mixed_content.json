@@ -1,0 +1,6 @@
+{
+  "messages": [
+    {"role": "user", "content": "Build a REST API for a blog platform"},
+    {"role": "assistant", "content": "# Blog Platform REST API\n\n## Endpoints\n\n### Posts\n- `GET /api/posts` - List all posts (paginated)\n- `GET /api/posts/{id}` - Get single post\n- `POST /api/posts` - Create post (admin only)\n- `PUT /api/posts/{id}` - Update post\n- `DELETE /api/posts/{id}` - Delete post\n\n### Comments\n- `GET /api/posts/{id}/comments` - List comments\n- `POST /api/posts/{id}/comments` - Add comment\n\n## Data Model\n\n```json\n{\n  \"post\": {\n    \"id\": \"uuid\",\n    \"title\": \"string\",\n    \"content\": \"string\",\n    \"author_id\": \"uuid\",\n    \"created_at\": \"ISO8601\",\n    \"updated_at\": \"ISO8601\",\n    \"tags\": [\"string\"],\n    \"published\": \"boolean\"\n  }\n}\n```\n\n## Authentication\n\nUse JWT tokens in Authorization header:\n```\nAuthorization: Bearer <token>\n```\n\nToken expires in 24 hours. Refresh endpoint: `POST /auth/refresh`.\n\n## Rate Limiting\n\n- 100 requests/min for anonymous users\n- 1000 requests/min for authenticated users\n- Return 429 when exceeded"}
+  ]
+}

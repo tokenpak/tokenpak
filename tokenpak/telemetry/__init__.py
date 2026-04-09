@@ -7,7 +7,10 @@ This module (4B) owns canonical.py and the adapters/ sub-package.
 
 from __future__ import annotations
 
-from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+try:
+    from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+except ImportError:
+    CompletionTracker = None  # type: ignore[assignment,misc]
 from tokenpak.telemetry.adapters.registry import AdapterRegistry
 from tokenpak.telemetry.cache import CacheStore as CacheManager
 from tokenpak.telemetry.canonical import (

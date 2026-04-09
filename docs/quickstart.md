@@ -76,8 +76,24 @@ Test that everything is working:
 python3 -c "from tokenpak import HeuristicEngine; print('TokenPak installed successfully!')"
 ```
 
+## Using the Proxy Instead of the SDK
+
+If you'd rather route an existing LLM client through TokenPak without changing application code,
+use the proxy path:
+
+```bash
+pip install "tokenpak[serve]"            # install with proxy support
+tokenpak setup                           # auto-configure your LLM client (one-time wizard)
+tokenpak serve --port 8766 --workers 4  # start the proxy
+```
+
+`tokenpak setup` detects Claude Code, OpenAI SDK, or Google AI SDK and writes the proxy URL
+into the right config file automatically. See the [Getting Started guide](./getting-started.md)
+for full proxy setup instructions.
+
 ## Next Steps
 
+- **[Getting Started](./getting-started.md)** — Proxy setup with `tokenpak setup` and `tokenpak serve`
 - **[Installation Guide](./install-guide.md)** — Detailed setup, Python versions, virtual environments
 - **[API Reference](./api-reference.md)** — Full API documentation and all available options
 - **[Compression Options](./compression.md)** — Advanced configuration and custom engines

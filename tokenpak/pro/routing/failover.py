@@ -1,9 +1,8 @@
 """Failover handler for multi-adapter request retrying."""
 
+from typing import Callable, Any, Optional, List
 import asyncio
 import logging
-from typing import Any, Callable, List
-
 from .detector import Provider
 
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ class FailoverHandler:
     def get_backoff_delay(self, provider: Provider) -> float:
         """Calculate backoff delay for provider."""
         retry_count = self.get_retry_count(provider)
-        return (self.backoff_factor**retry_count) if self.backoff_factor > 1.0 else 0.0
+        return (self.backoff_factor ** retry_count) if self.backoff_factor > 1.0 else 0.0
 
     async def execute_with_failover(
         self,
@@ -116,7 +115,9 @@ class FailoverHandler:
 
             logger.error(f"Provider {provider} exhausted retries")
 
-        raise RuntimeError(f"All adapters failed. Last error: {last_error}")
+        raise RuntimeError(
+            f"All adapters failed. Last error: {last_error}"
+        )
 
     def execute_with_failover_sync(
         self,
@@ -167,9 +168,10 @@ class FailoverHandler:
                     delay = self.get_backoff_delay(provider)
                     if delay > 0:
                         import time
-
                         time.sleep(delay)
 
             logger.error(f"Provider {provider} exhausted retries")
 
-        raise RuntimeError(f"All adapters failed. Last error: {last_error}")
+        raise RuntimeError(
+            f"All adapters failed. Last error: {last_error}"
+        )

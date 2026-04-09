@@ -324,3 +324,58 @@ pip uninstall tokenpak
 # Remove data (optional — this deletes all telemetry and vault indexes)
 rm -rf ~/.tokenpak
 ```
+
+---
+
+## OpenTelemetry Export
+
+TokenPak can export request spans and metrics to any OTLP-compatible backend (Prometheus via OTel Collector, Grafana, Datadog, Jaeger, etc.).
+
+### Install OTel dependencies
+
+```bash
+pip install "tokenpak[otel]"
+```
+
+### Enable export
+
+Set the `TOKENPAK_OTEL_ENDPOINT` environment variable before starting the proxy:
+
+```bash
+# HTTP/JSON endpoint (OTel Collector default)
+export TOKENPAK_OTEL_ENDPOINT=http://localhost:4318
+
+# gRPC endpoint (port 4317)
+export TOKENPAK_OTEL_ENDPOINT=http://localhost:4317
+```
+
+When `TOKENPAK_OTEL_ENDPOINT` is **not set**, OTel is completely disabled — zero imports, zero overhead.
+
+### Spans exported
+
+Each proxied request generates one span (`tokenpak.proxy_request`) with attributes:
+
+| Attribute | Type | Description |
+|---|---|---|
+| `tokenpak.model` | string | Model name (e.g. `claude-3-haiku`) |
+| `tokenpak.input_tokens` | int | Raw input tokens (before compression) |
+| `tokenpak.output_tokens` | int | Output tokens |
+| `tokenpak.compression_ratio` | float | Sent ÷ raw (1.0 = no compression) |
+| `tokenpak.cache_hit` | bool | True if prompt cache was used |
+| `http.status_code` | int | Upstream HTTP status |
+| `tokenpak.duration_ms` | float | End-to-end latency in ms |
+
+### Metrics exported
+
+| Metric | Type | Description |
+|---|---|---|
+| `tokenpak.requests.total` | counter | Total requests (label: `model`) |
+| `tokenpak.tokens.input` | counter | Raw input tokens (label: `model`) |
+| `tokenpak.tokens.output` | counter | Output tokens (label: `model`) |
+| `tokenpak.compression.ratio` | histogram | Per-request compression ratio |
+| `tokenpak.cache.hit_rate` | counter | Cache hits/misses (label: `result=hit\|miss`) |
+
+### Error handling
+
+- If the OTel endpoint is unreachable, requests continue normally — OTel errors are suppressed
+- If `opentelemetry` packages are not installed but the env var is set, a warning is logged and OTel is disabled
