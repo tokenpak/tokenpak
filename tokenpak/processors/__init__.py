@@ -17,10 +17,19 @@ except ImportError:
 _code_processor = TreeSitterProcessor() if _HAS_TREESITTER else CodeProcessor()
 _code_processor_no_ts = CodeProcessor()
 
+# Image processor (optional — graceful fallback if Pillow not installed)
+try:
+    from .image import ImageProcessor
+
+    _image_processor: "ImageProcessor | None" = ImageProcessor()
+except ImportError:  # pragma: no cover
+    _image_processor = None
+
 PROCESSORS = {
     "text": TextProcessor(),
     "code": _code_processor,
     "data": DataProcessor(),
+    "image": _image_processor,
 }
 
 

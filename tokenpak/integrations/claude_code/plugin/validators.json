@@ -1,0 +1,27 @@
+{
+  "_comment": "Map file extensions (without leading dot) to validator commands. The file path is appended as the final argument. Timeout is in seconds; 5s is the upper bound — validators that routinely exceed 2s should be removed (see README warning list). Requires: jq, python3+pyyaml, bash, markdownlint-cli.",
+  "py": {
+    "command": "python3 -m py_compile",
+    "timeout": 5
+  },
+  "json": {
+    "command": "jq . --",
+    "timeout": 5
+  },
+  "yaml": {
+    "command": "python3 -c 'import yaml,sys;yaml.safe_load(open(sys.argv[1]))'",
+    "timeout": 5
+  },
+  "yml": {
+    "command": "python3 -c 'import yaml,sys;yaml.safe_load(open(sys.argv[1]))'",
+    "timeout": 5
+  },
+  "sh": {
+    "command": "bash -n",
+    "timeout": 5
+  },
+  "md": {
+    "command": "markdownlint",
+    "timeout": 5
+  }
+}

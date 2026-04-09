@@ -26,3 +26,32 @@ __all__ = [
     "SemanticResolver",
     "ResolveResult",
 ]
+
+
+# Term card features (from agent/semantic/)
+try:
+    from .term_card_builder import load_cards, save_cards, validate_card, enforce_caps
+    from .term_card_resolver import TermCardResolver
+    from .term_resolver import TermResolver, TermResolution
+    __all__ = [
+        "SemanticMapLoader", "SemanticMapError", "SemanticResolver", "ResolveResult",
+        "load_cards", "save_cards", "validate_card", "enforce_caps",
+        "TermCardResolver", "TermResolver", "TermResolution",
+    ]
+except ImportError:
+    pass
+
+# Additional exports for TermResolver-based API
+from .term_resolver import (
+    TermResolution,
+    TermResolver,
+    TermResolverConfig,
+    resolve_terms,
+)
+
+__all__ += [
+    "TermResolution",
+    "TermResolver", 
+    "TermResolverConfig",
+    "resolve_terms",
+]

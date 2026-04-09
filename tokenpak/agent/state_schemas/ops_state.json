@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpsState",
+  "description": "State schema for ops/execute intent — service health and operational context.",
+  "type": "object",
+  "properties": {
+    "service_status": {
+      "type": "object",
+      "description": "Map of service name → status string (e.g. {'api': 'degraded', 'db': 'healthy'})",
+      "additionalProperties": {"type": "string"}
+    },
+    "recent_changes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Recent deploys, config changes, or migrations"
+    },
+    "health_checks": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Health check results or probe summaries"
+    },
+    "env_drift": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Environment variable or config drift detected between envs"
+    }
+  },
+  "required": ["service_status"],
+  "additionalProperties": false
+}
