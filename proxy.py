@@ -4989,6 +4989,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "top_k": TERM_RESOLVER_TOP_K,
                     "max_bytes_per_card": TERM_RESOLVER_MAX_BYTES,
                 },
+                "query_expansion": {"enabled": _QUERY_EXPANSION_AVAILABLE},
                 "cache_poison_removal": {"enabled": True},
                 "strict_validation": {"enabled": STRICT_VALIDATION},
                 "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
