@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Pattern, Set
 
+
 def _default_pattern_path() -> Path:
     return Path.home() / ".tokenpak" / "error_patterns.json"
 
@@ -119,7 +120,9 @@ class FailureSignatureDB:
         normalized = self.normalizer.normalize(raw_signature)
         return self.records.get(normalized)
 
-    def record_failure(self, raw_signature: str, repair_recipe: Optional[str] = None) -> FailureRecord:
+    def record_failure(
+        self, raw_signature: str, repair_recipe: Optional[str] = None
+    ) -> FailureRecord:
         normalized = self.normalizer.normalize(raw_signature)
         record = self.records.setdefault(normalized, FailureRecord(signature=normalized))
         record.count += 1

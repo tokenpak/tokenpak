@@ -40,7 +40,7 @@ def _print_upgrade() -> None:
     print("This feature requires an Enterprise license.")
     print(f"Current tier: {_tier_name()}")
     print()
-    print("Learn more: https://tokenpak.dev/enterprise")
+    print("Learn more: https://tokenpak.io/pricing")
     print()
 
 

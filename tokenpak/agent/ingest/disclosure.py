@@ -9,10 +9,9 @@ Level strategy (cheapest -> most expensive):
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 LEVEL_SUMMARY_MAP = 1
 LEVEL_SECTION_SUMMARIES = 2
@@ -65,7 +64,9 @@ def choose_disclosure_level(
         return LEVEL_FULL_SECTIONS
 
     complexity = _query_complexity_score(query)
-    if complexity >= 5 or _contains_any(merged, ("compare", "difference", "tradeoff", "why", "how")):
+    if complexity >= 5 or _contains_any(
+        merged, ("compare", "difference", "tradeoff", "why", "how")
+    ):
         return LEVEL_SECTION_SUMMARIES
 
     return LEVEL_SUMMARY_MAP
@@ -178,6 +179,8 @@ def _query_complexity_score(query: str) -> int:
         score += 1
     if len(query) > 140:
         score += 1
-    if _contains_any(query.lower(), ("compare", "versus", "tradeoff", "pros", "cons", "because", "why", "how")):
+    if _contains_any(
+        query.lower(), ("compare", "versus", "tradeoff", "pros", "cons", "because", "why", "how")
+    ):
         score += 2
     return score

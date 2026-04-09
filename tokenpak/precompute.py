@@ -28,7 +28,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -40,8 +39,10 @@ DEFAULT_ARTIFACTS_DIR = Path.home() / ".tokenpak" / "artifacts"
 # Document type detection
 # ---------------------------------------------------------------------------
 
+
 class DocType(str, Enum):
     """Broad document category used for artifact routing."""
+
     CODE = "code"
     CONFIG = "config"
     NARRATIVE = "narrative"
@@ -126,18 +127,18 @@ def detect_doc_type(
 # Artifact schemas
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PrecomputedArtifact:
     """An intent-ready precomputed artifact."""
+
     block_id: str
-    artifact_type: str          # fact_card | feature_table | error_signature | project_snapshot
-    intent: str                 # Matching intent (query | explain | debug | plan)
-    content: str                # Rendered artifact text (compact, context-ready)
+    artifact_type: str  # fact_card | feature_table | error_signature | project_snapshot
+    intent: str  # Matching intent (query | explain | debug | plan)
+    content: str  # Rendered artifact text (compact, context-ready)
     doc_type: str
     source_path: str = ""
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     token_estimate: int = 0
     metadata: Dict = field(default_factory=dict)
 
@@ -172,6 +173,7 @@ class PrecomputedArtifact:
 # ---------------------------------------------------------------------------
 # Artifact generators
 # ---------------------------------------------------------------------------
+
 
 def _estimate_tokens(text: str) -> int:
     """Quick token estimate: chars / 4."""
@@ -335,10 +337,7 @@ def generate_error_signature(
     if not signatures:
         signatures.append("(no distinct error signatures detected in this document)")
 
-    rendered = (
-        f"[ERROR SIGNATURES: {source_path or block_id}]\n\n"
-        + "\n\n".join(signatures)
-    )
+    rendered = f"[ERROR SIGNATURES: {source_path or block_id}]\n\n" + "\n\n".join(signatures)
     return PrecomputedArtifact(
         block_id=block_id,
         artifact_type="error_signature",
@@ -399,9 +398,21 @@ def generate_project_snapshot(
             status_lines = [paras[0].replace("\n", " ")[:300]]
 
     parts = [f"[PROJECT SNAPSHOT: {source_path or block_id}]"]
-    parts.append("\n## Status\n" + "\n".join(status_lines[:5]) if status_lines else "\n## Status\n(not found)")
-    parts.append("\n## Blockers\n" + "\n".join(blockers[:5]) if blockers else "\n## Blockers\nNone identified")
-    parts.append("\n## Next Steps\n" + "\n".join(next_steps[:8]) if next_steps else "\n## Next Steps\n(not found)")
+    parts.append(
+        "\n## Status\n" + "\n".join(status_lines[:5])
+        if status_lines
+        else "\n## Status\n(not found)"
+    )
+    parts.append(
+        "\n## Blockers\n" + "\n".join(blockers[:5])
+        if blockers
+        else "\n## Blockers\nNone identified"
+    )
+    parts.append(
+        "\n## Next Steps\n" + "\n".join(next_steps[:8])
+        if next_steps
+        else "\n## Next Steps\n(not found)"
+    )
 
     rendered = "\n".join(parts)
     return PrecomputedArtifact(
@@ -436,14 +447,14 @@ _INTENT_TO_ARTIFACT: Dict[str, str] = {
 }
 
 _DOC_TYPE_TO_ARTIFACTS: Dict[DocType, List[str]] = {
-    DocType.CODE:         ["fact_card", "error_signature"],
-    DocType.CONFIG:       ["fact_card", "feature_table"],
-    DocType.NARRATIVE:    ["fact_card", "project_snapshot"],
-    DocType.CHANGELOG:    ["fact_card"],
-    DocType.ERROR_LOG:    ["error_signature", "fact_card"],
-    DocType.COMPARISON:   ["feature_table", "fact_card"],
+    DocType.CODE: ["fact_card", "error_signature"],
+    DocType.CONFIG: ["fact_card", "feature_table"],
+    DocType.NARRATIVE: ["fact_card", "project_snapshot"],
+    DocType.CHANGELOG: ["fact_card"],
+    DocType.ERROR_LOG: ["error_signature", "fact_card"],
+    DocType.COMPARISON: ["feature_table", "fact_card"],
     DocType.PROJECT_PLAN: ["project_snapshot", "fact_card"],
-    DocType.UNKNOWN:      ["fact_card"],
+    DocType.UNKNOWN: ["fact_card"],
 }
 
 _GENERATORS = {
@@ -457,6 +468,7 @@ _GENERATORS = {
 # ---------------------------------------------------------------------------
 # Storage layer
 # ---------------------------------------------------------------------------
+
 
 class PrecomputeStore:
     """Persist and retrieve precomputed artifacts on disk.
@@ -512,6 +524,7 @@ class PrecomputeStore:
 # ---------------------------------------------------------------------------
 # Precomputation pipeline
 # ---------------------------------------------------------------------------
+
 
 def precompute_for_block(
     block_id: str,
@@ -586,6 +599,7 @@ def get_precomputed_artifact(
 # ---------------------------------------------------------------------------
 # Bulk recompute helper (for CLI / rebuild scripts)
 # ---------------------------------------------------------------------------
+
 
 def recompute_all(
     blocks: Dict,

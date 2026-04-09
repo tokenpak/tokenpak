@@ -1,3 +1,7 @@
+---
+title: "README"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Semantic Layer — Term-Card Resolver
 
 Deterministic term-card resolver for glossary integration in proxy_v4 request handling.
@@ -163,7 +167,7 @@ Multi-match scenario → deterministic disambiguation:
 ```python
 result = resolver.resolve_terms("baseline vs actual")
 # result.ambiguous == True
-# result.ambiguity_question == "Did you mean 'baseline_cost' (Cost without...) 
+# result.ambiguity_question == "Did you mean 'baseline_cost' (Cost without...)
 #                               or 'actual_cost' (Cost after...)?"
 ```
 

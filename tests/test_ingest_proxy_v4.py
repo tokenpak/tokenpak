@@ -17,10 +17,18 @@ from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
 # Add the proxy module to path
+import importlib.util
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Load proxy_v4 as isolated module (lives at repo root, not a package)
+_PROXY_V4_PATH = Path(__file__).parent.parent / "proxy_v4.py"
+_spec = importlib.util.spec_from_file_location("_test_pv4_ingest", _PROXY_V4_PATH)
+_pv4 = importlib.util.module_from_spec(_spec)
+sys.modules["_test_pv4_ingest"] = _pv4
+_spec.loader.exec_module(_pv4)
+
 # Import the ingest write function
-from proxy_v4 import _ingest_write_entry, INGEST_ENTRIES_DIR
+from _test_pv4_ingest import _ingest_write_entry, INGEST_ENTRIES_DIR
 
 
 class TestIngestSingleEntry:
@@ -29,7 +37,7 @@ class TestIngestSingleEntry:
     def test_write_entry_creates_jsonl_file(self, tmp_path):
         """Test that _ingest_write_entry creates a dated JSONL file."""
         # Patch the INGEST_ENTRIES_DIR for this test
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             entry = {
                 "model": "claude-3-opus",
                 "tokens": 100,
@@ -60,7 +68,7 @@ class TestIngestSingleEntry:
 
     def test_write_entry_with_custom_id(self, tmp_path):
         """Test that custom entry IDs are preserved."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             custom_id = "custom-uuid-123"
             entry = {
                 "id": custom_id,
@@ -74,7 +82,7 @@ class TestIngestSingleEntry:
 
     def test_write_entry_uses_timestamp_date(self, tmp_path):
         """Test that entries are stored under the timestamp's date."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             entry = {
                 "model": "claude",
                 "tokens": 10,
@@ -94,7 +102,7 @@ class TestIngestBatch:
 
     def test_batch_multiple_entries(self, tmp_path):
         """Test batch writing multiple entries."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             entries = [
                 {"model": "claude-3-opus", "tokens": 100, "cost": 0.5},
                 {"model": "gpt-4", "tokens": 50, "cost": 0.2},
@@ -108,7 +116,7 @@ class TestIngestBatch:
 
     def test_batch_appends_to_same_file(self, tmp_path):
         """Test that multiple entries on same date go to same file."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             entry1 = {"model": "a", "tokens": 1, "cost": 0.01}
             entry2 = {"model": "b", "tokens": 2, "cost": 0.02}
             
@@ -188,7 +196,7 @@ class TestEntryPersistence:
 
     def test_entry_survives_reload(self, tmp_path):
         """Test that written entries can be read back."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             original = {
                 "model": "claude-3-opus",
                 "tokens": 100,
@@ -216,7 +224,7 @@ class TestEntryPersistence:
 
     def test_jsonl_format_correct(self, tmp_path):
         """Test that output is valid JSONL (one JSON per line)."""
-        with patch("proxy_v4.INGEST_ENTRIES_DIR", tmp_path / "entries"):
+        with patch("_test_pv4_ingest.INGEST_ENTRIES_DIR", tmp_path / "entries"):
             entries = [
                 {"model": "a", "tokens": 1, "cost": 0.01},
                 {"model": "b", "tokens": 2, "cost": 0.02},

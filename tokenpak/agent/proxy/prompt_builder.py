@@ -169,7 +169,9 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
 
     if isinstance(content, str):
         if content.strip():
-            msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+            msg["content"] = [
+                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+            ]
             marked = True
         return msg, marked
 
@@ -194,11 +196,68 @@ def apply_stable_cache_control(body_bytes: bytes) -> bytes:
     return apply_deterministic_cache_breakpoints(body_bytes)
 
 
+def _request_has_extended_ttl_cache_control(data: Any) -> bool:
+    """Return True if the request body already contains any cache_control with an explicit `ttl` (e.g. "1h").
+
+    When the upstream client (e.g. Claude Code) is already managing extended-TTL cache breakpoints, we
+    must NOT add new default-TTL (5m) breakpoints in earlier positions — Anthropic rejects requests
+    where a longer-TTL block appears after a shorter-TTL block in document order. Returning True from
+    this guard makes `apply_deterministic_cache_breakpoints` a no-op, preserving the client's intent.
+
+    Hotfix added 2026-04-07 in response to a 400 error on Cali's cycle:
+        messages.0.content.2.cache_control.ttl: A ttl=1h cache_control block must not come after a
+        ttl=5m cache_control block.
+    """
+    def _block_has_ttl(block: Any) -> bool:
+        if not isinstance(block, dict):
+            return False
+        cc = block.get("cache_control")
+        return isinstance(cc, dict) and cc.get("ttl") is not None
+
+    # system blocks
+    sys_field = data.get("system")
+    if isinstance(sys_field, list):
+        for blk in sys_field:
+            if _block_has_ttl(blk):
+                return True
+
+    # tool definitions
+    tools_field = data.get("tools")
+    if isinstance(tools_field, list):
+        for tool in tools_field:
+            if _block_has_ttl(tool):
+                return True
+
+    # message content blocks
+    msgs_field = data.get("messages")
+    if isinstance(msgs_field, list):
+        for msg in msgs_field:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if isinstance(content, list):
+                for blk in content:
+                    if _block_has_ttl(blk):
+                        return True
+    return False
+
+
 def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     """Apply deterministic multi-breakpoint cache markers to Anthropic requests."""
     try:
         data = json.loads(body_bytes)
     except (json.JSONDecodeError, UnicodeDecodeError):
+        return body_bytes
+
+    # Hotfix 2026-04-07: if the upstream client (Claude Code etc) is already managing
+    # extended-TTL cache breakpoints (e.g. ttl=1h), do not mutate. Adding default-TTL
+    # (5m) breakpoints in earlier positions would create the document-order violation
+    # "ttl=1h block must not come after ttl=5m block" and Anthropic returns 400.
+    if _request_has_extended_ttl_cache_control(data):
+        _stats.record_breakpoint("system_last", False)
+        _stats.record_breakpoint("tools_last", False)
+        _stats.record_breakpoint("conversation_midpoint", False)
+        _stats.record_breakpoint("assistant_second_last", False)
         return body_bytes
 
     changed = False
@@ -207,7 +266,9 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     system = data.get("system")
     if isinstance(system, str):
         if system.strip():
-            data["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+            data["system"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
             changed = True
             _stats.record_breakpoint("system_last", True)
         else:
@@ -248,8 +309,9 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
         _stats.record_breakpoint("tools_last", False)
 
     # Breakpoints 3 & 4: conversation midpoint and second-to-last assistant
+    # Only apply message breakpoints if a system prompt is present (no point caching messages without system)
     messages = data.get("messages")
-    if isinstance(messages, list) and messages:
+    if isinstance(messages, list) and messages and data.get("system"):
         messages_out = [dict(m) if isinstance(m, dict) else m for m in messages]
 
         midpoint_idx = len(messages_out) // 2
@@ -263,7 +325,8 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
             _stats.record_breakpoint("conversation_midpoint", False)
 
         assistant_indices = [
-            i for i, m in enumerate(messages_out)
+            i
+            for i, m in enumerate(messages_out)
             if isinstance(m, dict) and m.get("role") == "assistant"
         ]
         if len(assistant_indices) >= 2:
@@ -284,7 +347,6 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
 
     if not changed:
         return body_bytes
-
 
     # --- Cap total cache_control blocks to Anthropic max (4) ---
     _all_cc = []
@@ -701,6 +763,7 @@ def build_volatile_tail(
 # DeterministicPromptPack — Fixed Section Ordering & Byte-Identical Output
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DeterministicPromptPack:
     """
@@ -983,18 +1046,22 @@ class DeterministicPromptPack:
 
         stable_text = self._build_stable_block()
         if stable_text:
-            blocks.append({
-                "type": "text",
-                "text": stable_text,
-                "cache_control": {"type": "ephemeral"},
-            })
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": stable_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            )
 
         volatile_text = self._build_volatile_block()
         if volatile_text:
-            blocks.append({
-                "type": "text",
-                "text": volatile_text,
-            })
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": volatile_text,
+                }
+            )
 
         return blocks
 

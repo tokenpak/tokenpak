@@ -17,7 +17,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 AUTH_FAILURE_THRESHOLD = int(os.environ.get("TOKENPAK_AUTH_FAILURE_THRESHOLD", "3"))
 AUTH_ALERT_COOLDOWN_SEC = int(os.environ.get("TOKENPAK_AUTH_ALERT_COOLDOWN", "300"))  # 5 min
-INCIDENT_LOG_PATH = Path(os.environ.get(
-    "TOKENPAK_INCIDENT_LOG",
-    os.path.expanduser("~/.tokenpak/incidents.log")
-))
+INCIDENT_LOG_PATH = Path(
+    os.environ.get("TOKENPAK_INCIDENT_LOG", os.path.expanduser("~/.tokenpak/incidents.log"))
+)
 
 
 class AuthGuard:
@@ -81,7 +80,9 @@ class AuthGuard:
             else:
                 # Reset on success
                 if self._counters.get(provider, 0) > 0:
-                    logger.debug("auth_guard: reset counter for %s (status %s)", provider, status_code)
+                    logger.debug(
+                        "auth_guard: reset counter for %s (status %s)", provider, status_code
+                    )
                 self._counters[provider] = 0
 
     def _maybe_emit(self, provider: str, count: int) -> None:
@@ -92,7 +93,8 @@ class AuthGuard:
             remaining = int(AUTH_ALERT_COOLDOWN_SEC - (now - last))
             logger.debug(
                 "auth_guard: alert suppressed for %s (cooldown %ds remaining)",
-                provider, remaining,
+                provider,
+                remaining,
             )
             return
 

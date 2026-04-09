@@ -45,7 +45,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -92,8 +92,8 @@ class RunbookEntry:
 
     runbook_id: str
     title: str
-    error_class: str            # e.g. "port_bind_failure", "auth_error"
-    task_type: str              # e.g. "proxy_restart", "token_refresh"
+    error_class: str  # e.g. "port_bind_failure", "auth_error"
+    task_type: str  # e.g. "proxy_restart", "token_refresh"
     trigger_symptoms: List[str] = field(default_factory=list)
     steps: List[str] = field(default_factory=list)
     validation: str = ""
@@ -126,8 +126,16 @@ class RunbookEntry:
 
 def render_markdown(rb: RunbookEntry) -> str:
     """Render a RunbookEntry to the standard runbook markdown template."""
-    symptoms = "\n".join(f"- {s}" for s in rb.trigger_symptoms) if rb.trigger_symptoms else "- (not specified)"
-    steps = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(rb.steps)) if rb.steps else "1. (not specified)"
+    symptoms = (
+        "\n".join(f"- {s}" for s in rb.trigger_symptoms)
+        if rb.trigger_symptoms
+        else "- (not specified)"
+    )
+    steps = (
+        "\n".join(f"{i + 1}. {s}" for i, s in enumerate(rb.steps))
+        if rb.steps
+        else "1. (not specified)"
+    )
     validation = rb.validation or "(not specified)"
     avg_cost = f"{rb.avg_cost_tokens:.0f}" if rb.avg_cost_tokens else "unknown"
 
@@ -305,7 +313,9 @@ class RunbookDB:
     # Learning loop
     # ------------------------------------------------------------------
 
-    def record_outcome(self, runbook_id: str, *, success: bool, tokens_used: float = 0.0) -> Optional[RunbookEntry]:
+    def record_outcome(
+        self, runbook_id: str, *, success: bool, tokens_used: float = 0.0
+    ) -> Optional[RunbookEntry]:
         """Update success/failure counts and rolling avg cost."""
         rb = self._index.get(runbook_id)
         if rb is None:
@@ -404,7 +414,9 @@ def maybe_generate(
     )
     if existing is not None:
         # Update learning loop instead of creating a duplicate
-        db.record_outcome(existing.runbook_id, success=episode.success, tokens_used=episode.tokens_used)
+        db.record_outcome(
+            existing.runbook_id, success=episode.success, tokens_used=episode.tokens_used
+        )
         return existing
 
     rb = RunbookEntry(

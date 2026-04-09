@@ -205,6 +205,62 @@ class TestThreadSafety:
 # 6. Internal helpers (smoke tests)
 # ---------------------------------------------------------------------------
 
+class TestSchemaFingerprintStability:
+    """
+    TPK-LATENCY-002 — Acceptance criterion:
+    Same tools in different order → same fingerprint (no spurious cache invalidation).
+    """
+
+    def test_schema_fingerprint_stability(self):
+        """Same tools in different order must produce the same hash (order-insensitive)."""
+        tools_order1 = [TOOL_B, TOOL_A]          # search_web, get_weather
+        tools_order2 = [TOOL_A, TOOL_B]          # get_weather, search_web
+
+        norm1 = _normalize_tools(tools_order1)
+        norm2 = _normalize_tools(tools_order2)
+
+        hash1 = _sha256(_serialize(norm1))
+        hash2 = _sha256(_serialize(norm2))
+
+        assert hash1 == hash2, (
+            f"Same tools in different order should produce identical fingerprint. "
+            f"Got {hash1[:12]} vs {hash2[:12]}"
+        )
+
+    def test_schema_fingerprint_changes_when_tools_differ(self):
+        """Legitimately different tool sets must still produce different fingerprints."""
+        norm_a = _normalize_tools([TOOL_A])
+        norm_b = _normalize_tools([TOOL_B])
+
+        hash_a = _sha256(_serialize(norm_a))
+        hash_b = _sha256(_serialize(norm_b))
+
+        assert hash_a != hash_b, "Different tool sets must produce different fingerprints"
+
+    def test_two_agent_alternate_no_cache_invalidation(self):
+        """
+        Simulate two agents alternating with reversed tool order.
+        The registry must not count these as schema changes (changed_flag stays False).
+        """
+        reg = ToolSchemaRegistry()
+
+        body_agent1 = make_body([TOOL_B, TOOL_A])  # Agent 1 sends B, A
+        body_agent2 = make_body([TOOL_A, TOOL_B])  # Agent 2 sends A, B
+
+        _, changed1 = reg.normalize_request(body_agent1)  # Freeze on first call
+        _, changed2 = reg.normalize_request(body_agent2)  # Should NOT invalidate
+        _, changed3 = reg.normalize_request(body_agent1)  # Back to agent 1 — still stable
+        _, changed4 = reg.normalize_request(body_agent2)  # Back to agent 2 — still stable
+
+        assert changed1 is False, "First request should not be marked as changed"
+        assert changed2 is False, "Same tools (different order) must not invalidate cache"
+        assert changed3 is False, "Alternating agents must not cause cache thrashing"
+        assert changed4 is False, "Alternating agents must not cause cache thrashing"
+        assert reg.schema_changes == 0, (
+            f"Expected 0 schema changes for order-only differences, got {reg.schema_changes}"
+        )
+
+
 class TestHelpers:
     def test_normalize_tools_sorts_by_name(self):
         tools = [TOOL_B, TOOL_A]

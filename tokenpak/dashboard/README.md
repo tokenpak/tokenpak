@@ -1,3 +1,7 @@
+---
+title: "README"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Metrics Dashboard
 
 Web-based UI for monitoring TokenPak proxy observability metrics in real-time.

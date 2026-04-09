@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Set, Tuple
-
+from typing import List, Set
 
 # ── constants ─────────────────────────────────────────────────────────────
 
-ANNOTATION_CONTEXT_LINES: int = 2   # lines after each TODO/FIXME/etc.
+ANNOTATION_CONTEXT_LINES: int = 2  # lines after each TODO/FIXME/etc.
 
 # ── patterns ──────────────────────────────────────────────────────────────
 

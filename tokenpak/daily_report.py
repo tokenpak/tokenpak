@@ -9,13 +9,21 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal
 
-from .formatting import OutputFormatter, OutputMode
+
+@dataclass
+class ModelCompressionRow:
+    """Per-model compression row for the daily report."""
+
+    model: str
+    request_count: int
+    avg_compression_ratio: float  # final/raw; lower = more compression
+    tokens_saved: int
+    savings_amount: float
 
 
 @dataclass
@@ -34,6 +42,11 @@ class DailySavingsData:
     uptime_minutes: int
     errors: int
     estimated_monthly_rate: float
+    model_compression: list = None  # list[ModelCompressionRow]
+
+    def __post_init__(self):
+        if self.model_compression is None:
+            self.model_compression = []
 
 
 def _proxy_get(path: str, port: int = None) -> dict | None:
@@ -48,10 +61,31 @@ def _proxy_get(path: str, port: int = None) -> dict | None:
         return None
 
 
+def _get_model_compression_breakdown() -> list:
+    """Fetch per-model compression breakdown from telemetry. Returns [] on error."""
+    try:
+        from .telemetry.query import get_model_compression_breakdown
+
+        rows = get_model_compression_breakdown(days=1)
+        return [
+            ModelCompressionRow(
+                model=r.model,
+                request_count=r.request_count,
+                avg_compression_ratio=r.avg_compression_ratio,
+                tokens_saved=r.tokens_saved,
+                savings_amount=r.savings_amount,
+            )
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+
 def _get_savings_report() -> dict:
     """Get historical savings data from telemetry."""
     try:
         from .telemetry.query import get_savings_report
+
         report = get_savings_report(days=1)
         return {
             "total_cost": report.total_cost,
@@ -90,9 +124,7 @@ def _calculate_data() -> DailySavingsData:
     # Tokens
     input_tokens = stats.get("input_tokens", 0)
     saved_tokens = stats.get("saved_tokens", 0)
-    compression_pct = (
-        (saved_tokens / input_tokens * 100) if input_tokens > 0 else 0
-    )
+    compression_pct = (saved_tokens / input_tokens * 100) if input_tokens > 0 else 0
 
     # Cache
     cache_hits = cache.get("cache_hits", 0)
@@ -109,6 +141,7 @@ def _calculate_data() -> DailySavingsData:
     top_model_savings = 0.0
     try:
         from .telemetry.query import get_model_usage
+
         usage = get_model_usage(days=1)
         if usage:
             # Find model with highest cost
@@ -131,6 +164,9 @@ def _calculate_data() -> DailySavingsData:
     else:
         estimated_monthly = 0.0
 
+    # Per-model compression breakdown
+    model_compression = _get_model_compression_breakdown()
+
     return DailySavingsData(
         timestamp=datetime.now().isoformat(),
         requests=requests,
@@ -144,7 +180,26 @@ def _calculate_data() -> DailySavingsData:
         uptime_minutes=uptime_m,
         errors=errors,
         estimated_monthly_rate=estimated_monthly,
+        model_compression=model_compression,
     )
+
+
+def _format_compression_table_terminal(rows: list) -> list[str]:
+    """Format per-model compression breakdown as terminal lines."""
+    if not rows:
+        return ["  (no per-model compression data)"]
+    lines = [
+        "",
+        "  Per-Model Compression Breakdown:",
+        f"  {'Model':<30} {'Reqs':>6} {'Ratio':>6} {'Saved Tok':>10} {'Saved $':>9}",
+        "  " + "─" * 65,
+    ]
+    for r in rows:
+        ratio_pct = f"{(1 - r.avg_compression_ratio) * 100:.1f}%" if r.avg_compression_ratio < 1.0 else "0.0%"
+        lines.append(
+            f"  {r.model:<30} {r.request_count:>6,} {ratio_pct:>6} {r.tokens_saved:>10,} {r.savings_amount:>9.4f}"
+        )
+    return lines
 
 
 def _format_terminal(data: DailySavingsData) -> str:
@@ -162,6 +217,7 @@ def _format_terminal(data: DailySavingsData) -> str:
         f"  Errors:     {data.errors}",
         f"  Monthly Rate: ${data.estimated_monthly_rate:.0f}/mo",
     ]
+    lines.extend(_format_compression_table_terminal(data.model_compression or []))
     return "\n".join(lines)
 
 
@@ -183,12 +239,30 @@ def _format_markdown(data: DailySavingsData) -> str:
         f"| Errors | {data.errors} |",
         f"| Est. Monthly | ${data.estimated_monthly_rate:.0f}/mo |",
     ]
+    rows = data.model_compression or []
+    if rows:
+        lines += [
+            "",
+            "### Per-Model Compression Breakdown",
+            "",
+            "| Model | Reqs | Compression | Tokens Saved | Saved $ |",
+            "| ----- | ---: | ----------: | -----------: | ------: |",
+        ]
+        for r in rows:
+            ratio_pct = f"{(1 - r.avg_compression_ratio) * 100:.1f}%" if r.avg_compression_ratio < 1.0 else "0.0%"
+            lines.append(
+                f"| {r.model} | {r.request_count:,} | {ratio_pct} | {r.tokens_saved:,} | ${r.savings_amount:.4f} |"
+            )
+    else:
+        lines += ["", "_No per-model compression data available._"]
     return "\n".join(lines)
 
 
 def _format_json(data: DailySavingsData) -> dict:
     """Format as JSON dict."""
-    return asdict(data)
+    result = asdict(data)
+    # model_compression is a list of ModelCompressionRow dataclasses; asdict handles them
+    return result
 
 
 def generate_report(

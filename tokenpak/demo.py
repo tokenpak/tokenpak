@@ -17,9 +17,7 @@ import random
 import sqlite3
 import time
 import uuid
-from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 from .telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from .telemetry.storage import TelemetryDB
@@ -82,7 +80,13 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
 
         # Pick a random day in the period
         day_offset = random.randint(0, max(0, hours // 24))
-        request_ts = start_time + (day_offset * 86400) + (hour_offset * 3600) + (minute_offset * 60) + second_offset
+        request_ts = (
+            start_time
+            + (day_offset * 86400)
+            + (hour_offset * 3600)
+            + (minute_offset * 60)
+            + second_offset
+        )
 
         trace_id = f"demo-trace-{uuid.uuid4()}"
         request_id = f"req-{uuid.uuid4()}"
@@ -189,7 +193,13 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
         second_offset = random.randint(0, 59)
 
         day_offset = random.randint(0, max(0, hours // 24))
-        request_ts = start_time + (day_offset * 86400) + (hour_offset * 3600) + (minute_offset * 60) + second_offset
+        request_ts = (
+            start_time
+            + (day_offset * 86400)
+            + (hour_offset * 3600)
+            + (minute_offset * 60)
+            + second_offset
+        )
 
         trace_id = f"demo-trace-{uuid.uuid4()}"
         request_id = f"req-{uuid.uuid4()}"

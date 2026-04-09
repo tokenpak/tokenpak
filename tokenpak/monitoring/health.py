@@ -12,7 +12,6 @@ Provides:
 
 from __future__ import annotations
 
-import sys
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -20,7 +19,6 @@ from typing import Any, Dict, Optional
 import httpx
 
 from tokenpak import __version__ as _proxy_version
-
 
 # ---------------------------------------------------------------------------
 # Provider connectivity check
@@ -75,10 +73,12 @@ def check_providers() -> Dict[str, Dict[str, Any]]:
 # Cache metrics
 # ---------------------------------------------------------------------------
 
+
 def _estimate_dict_memory_mb(d: dict) -> float:
     """Best-effort estimate of in-memory dict size in MB via sys.getsizeof."""
     try:
         import sys as _sys
+
         # Rough estimate: walk the dict keys + values one level deep
         total = _sys.getsizeof(d)
         for k, v in d.items():
@@ -99,6 +99,7 @@ def get_cache_metrics() -> Dict[str, Any]:
     """
     try:
         from tokenpak.cache.registry import CacheRegistry
+
         summary = CacheRegistry.summary()
         total_entries = sum(v.get("size", 0) for v in summary.values())
         # Estimate memory by summing internal dicts for each registered cache
@@ -128,6 +129,7 @@ def _get_latest_compression_ratio() -> float:
     """
     try:
         from tokenpak.agent.proxy.stats import CompressionStats
+
         stats = CompressionStats.get_global()  # type: ignore[attr-defined]
         ratio = stats.avg_ratio() if stats else 0.0
         return round(ratio, 3)
@@ -138,6 +140,7 @@ def _get_latest_compression_ratio() -> float:
 # ---------------------------------------------------------------------------
 # Status aggregation
 # ---------------------------------------------------------------------------
+
 
 def aggregate_status(
     provider_results: Dict[str, Dict[str, Any]],
@@ -171,6 +174,7 @@ def aggregate_status(
 # ---------------------------------------------------------------------------
 # HealthChecker — main entry point
 # ---------------------------------------------------------------------------
+
 
 class HealthChecker:
     """

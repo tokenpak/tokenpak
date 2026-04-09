@@ -1,0 +1,26 @@
+name: gen-markdown-formatting-normalization
+category: general
+description: 'Normalize Markdown: collapse redundant bold/italic markers, standardize header spacing.'
+pattern:
+  match: extension
+  extensions:
+  - .md
+  - .markdown
+  - .mdx
+action:
+  operations:
+  - type: regex_replace
+    pattern: \*{3,}
+    replacement: '**'
+  - type: regex_replace
+    pattern: '#{1,6}(?!\s)'
+    replacement_fn: add_space_after_hash
+  - type: regex_replace
+    pattern: \n(#{1,6} .+)\n(?!\n)
+    replacement: '
+
+      \1
+
+
+      '
+  compression_hint: 0.04

@@ -71,14 +71,14 @@ function formatGoalValue(value, goalType) {
 function createGoalCard(goal, progress) {
     const progressPercent = Math.min(progress.progress_percent, 100);
     const status = getStatusBadge(progress);
-    
+
     const html = `
         <div class="goal-card">
             <div class="goal-card-header">
                 <div class="goal-name">${escapeHtml(goal.name)}</div>
                 <div class="goal-status ${status.class}">${status.text}</div>
             </div>
-            
+
             <div class="goal-progress">
                 <div class="goal-progress-label">
                     <span>Progress</span>
@@ -88,7 +88,7 @@ function createGoalCard(goal, progress) {
                     <div class="goal-progress-fill" style="width: ${progressPercent}%"></div>
                 </div>
             </div>
-            
+
             <div class="goal-stats">
                 <div>
                     <span class="goal-stats-label">Current:</span>
@@ -103,7 +103,7 @@ function createGoalCard(goal, progress) {
                     <span class="goal-stats-value">${formatGoalValue(Math.max(0, goal.target_value - progress.current_value), goal.goal_type)}</span>
                 </div>
             </div>
-            
+
             <div class="goal-pace">
                 <span>Pace:</span>
                 <span class="pace-indicator pace-${progress.pace_status}">
@@ -112,7 +112,7 @@ function createGoalCard(goal, progress) {
             </div>
         </div>
     `;
-    
+
     return html;
 }
 
@@ -136,19 +136,19 @@ function escapeHtml(text) {
 async function updateGoalsWidget() {
     const goalsGrid = document.getElementById('goalsGrid');
     if (!goalsGrid) return;
-    
+
     const data = await fetchGoalsData();
-    
+
     if (!data || !data.goals || data.goals.length === 0) {
         goalsGrid.innerHTML = '<p class="no-goals">No goals configured. Use `tokenpak goals --add` to create one.</p>';
         return;
     }
-    
+
     const goalsMap = {};
     data.goals.forEach(goal => {
         goalsMap[goal.goal_id] = goal;
     });
-    
+
     let goalsHtml = '';
     for (const goal of data.goals) {
         const progress = data.progress[goal.goal_id];
@@ -156,7 +156,7 @@ async function updateGoalsWidget() {
             goalsHtml += createGoalCard(goal, progress);
         }
     }
-    
+
     goalsGrid.innerHTML = goalsHtml;
 }
 
@@ -166,7 +166,7 @@ async function updateGoalsWidget() {
 function initGoalsWidget() {
     // Initial load
     updateGoalsWidget();
-    
+
     // Refresh every 10 seconds (less frequent than other metrics)
     setInterval(() => {
         updateGoalsWidget();

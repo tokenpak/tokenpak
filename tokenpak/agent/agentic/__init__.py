@@ -1,4 +1,7 @@
 # tokenpak.agent.agentic — Agentic Layer
+from .case_memory import CaseMemoryDB, CaseRecord
+from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
+from .memory_promoter import MemoryPromoter
 from .handoff import (
     DEFAULT_HANDOFF_DIR,
     REGISTERED_AGENTS,
@@ -20,20 +23,22 @@ from .learning import (
     reset,
 )
 from .locks import FileLockManager, LockConflictError, LockExpiredError
-from .retry import RetryEngine, RetryExhaustedError
 from .prefetcher import (
     DEFAULT_DIAGNOSTIC_ARTIFACTS,
-    PrefetchStore,
     PredictivePrefetcher,
+    PrefetchStore,
 )
-from .error_normalizer import ErrorNormalizer, FailureSignatureDB, MergeSuggestion
+from .retry import RetryEngine, RetryExhaustedError
 
 __all__ = [
+    "CaseMemoryDB",
+    "CaseRecord",
     "FileLockManager",
     "LockConflictError",
     "LockExpiredError",
     "RetryEngine",
     "RetryExhaustedError",
+    "MemoryPromoter",
     "learn",
     "load",
     "reset",
@@ -133,8 +138,8 @@ __all__ += [
 ]
 from .skill_compiler import (
     DEFAULT_SKILLS_DIR,
-    PROMOTION_MIN_SUCCESSFUL_EPISODES,
     PROMOTION_MIN_SUCCESS_RATE,
+    PROMOTION_MIN_SUCCESSFUL_EPISODES,
     PROMOTION_MIN_TOKEN_SAVINGS,
     ExtractedSkill,
     SkillCompiler,

@@ -1,6 +1,6 @@
 """Tests for tokenpak.agent.debug.logger module."""
 import pytest
-from tokenpak.agent.debug.logger import DebugLogger
+from tokenpak.infrastructure.debug import DebugLogger
 
 class TestDebugLogger:
     def test_debug_logger_init(self):

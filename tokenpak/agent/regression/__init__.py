@@ -9,12 +9,6 @@ from .artifact_reuse import (
     split_artifact_components,
     validate_merged_artifact,
 )
-from .feature_detector import (
-    FeatureDetectionReport,
-    FeatureResult,
-    build_targeted_repair_prompt,
-    detect_feature_regressions,
-)
 from .classifier import (
     DEFAULT_SIGNATURE_TYPE_MAP,
     FIX_PATHS,
@@ -23,6 +17,12 @@ from .classifier import (
     build_fix_plan,
     classify_regression_signatures,
     detect_regression_types,
+)
+from .feature_detector import (
+    FeatureDetectionReport,
+    FeatureResult,
+    build_targeted_repair_prompt,
+    detect_feature_regressions,
 )
 
 __all__ = [

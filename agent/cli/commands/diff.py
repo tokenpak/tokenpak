@@ -288,7 +288,7 @@ def print_diff_json(diff: ContextDiff) -> None:
 
 def run_diff_cmd(args) -> None:
     """Main dispatcher for 'tokenpak diff' subcommand."""
-    from tokenpak.agent.license.activation import is_pro
+    from tokenpak.infrastructure.license_activation import is_pro
 
     if not is_pro():
         print("⚠ Context Diff requires a Pro (or higher) license.")

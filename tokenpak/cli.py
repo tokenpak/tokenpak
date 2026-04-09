@@ -18,7 +18,7 @@ from .formatting import symbols as FS
 
 # ── Live Proxy Access ─────────────────────────────────────────────────────────
 
-def _proxy_get(path: str, port: int = None) -> "dict | None":
+def _proxy_get(path: str, port: Optional[int] = None) -> "dict | None":
     """Fetch JSON from running proxy. Returns None if unreachable."""
     import urllib.request as _urlreq
     port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -94,6 +94,7 @@ _COMMAND_GROUPS = {
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
+        ("retrieval", "Inspect and test hybrid retrieval (BM25 + vector)"),
     ],
 }
 
@@ -331,7 +332,7 @@ def cmd_setup(args):
     print(f"  3. Run: tokenpak savings   (see your ROI)")
     print()
     print("💡 Quick commands:")
-    print("  tokenpak start      — start the proxy")
+    print("  tokenpak serve      — start the proxy")
     print("  tokenpak stop       — stop the proxy")
     print("  tokenpak status     — check proxy health")
     print("  tokenpak savings    — view compression savings")
@@ -1016,6 +1017,13 @@ def cmd_serve(args):
             print("Run the existing proxy directly if needed.")
 
 
+def cmd_monitor(args):
+    """Start the live monitor dashboard."""
+    from tokenpak.monitor.server import run
+    port = getattr(args, "port", 8767)
+    run(port=port)
+
+
 def cmd_benchmark(args):
     """Run compression benchmark (default) or latency benchmark (--latency)."""
     file_arg = getattr(args, "file", None)
@@ -1501,7 +1509,7 @@ def cmd_doctor(args):
             else:
                 results["pass"] += 1
     else:
-        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak start)"))
+        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak serve)"))
         results["warn"] += 1
 
     # Check 5: Disk usage
@@ -1748,6 +1756,10 @@ def build_parser():
     )
     p_serve.set_defaults(func=cmd_serve)
 
+    p_monitor = sub.add_parser("monitor", help="Start live monitor dashboard (port 8767)")
+    p_monitor.add_argument("--port", type=int, default=8767, help="Dashboard port (default: 8767)")
+    p_monitor.set_defaults(func=cmd_monitor)
+
     p_bench = sub.add_parser(
         "benchmark", help="Benchmark compression performance on sample or real data"
     )
@@ -1835,6 +1847,7 @@ def build_parser():
 
     _build_trigger_parser(sub)
     _build_cost_parser(sub)
+    _build_costs_parser(sub)
     _build_budget_parser(sub)
     _build_forecast_parser(sub)
     _build_goals_parser(sub)
@@ -1842,6 +1855,7 @@ def build_parser():
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_explain_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
     _build_compare_parser(sub)
@@ -1857,13 +1871,22 @@ def build_parser():
     _build_learn_parser(sub)
     _build_user_template_parser(sub)
     _build_audit_parser(sub)
+    _build_audit_log_parser(sub)
     _build_compliance_parser(sub)
     _build_version_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
+    _build_retrieval_parser(sub)
 
     return parser
+
+
+def cmd_monitor(args):
+    """Start the live monitor dashboard HTTP server."""
+    from .monitor import run as _run_monitor
+    port = getattr(args, "port", 8767)
+    _run_monitor(port)
 
 
 def cmd_status(args):
@@ -1904,6 +1927,8 @@ def cmd_status(args):
         print(f"  Requests:        {s.get('requests', 0):,}")
         print(f"  Errors:          {s.get('errors', 0)}")
         print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+        profile = health.get('active_profile', os.environ.get('TOKENPAK_PROFILE', 'balanced'))
+        print(f"  Profile:         {profile}")
         print()
 
         # Token savings
@@ -1925,6 +1950,21 @@ def cmd_status(args):
         if cost_saved > 0:
             print(f"  Cost saved:      ${cost_saved:.4f}")
         print()
+
+        # 💰 Savings summary line
+        _c_hits = cache.get("cache_hits", 0) if cache else 0
+        _c_miss = cache.get("cache_misses", 0) if cache else 0
+        _c_total = _c_hits + _c_miss
+        _cache_hr = (_c_hits / _c_total * 100) if _c_total > 0 else 0
+        _cache_read_tok = cache.get("cache_read_tokens", 0) if cache else 0
+        _total_saved_tokens = saved + _cache_read_tok
+        # Compute savings from token counts if cost_saved not tracked in stats
+        _cache_savings = _cache_read_tok * 2.70 / 1_000_000   # $2.70/MTok rate differential
+        _compression_savings = saved * 3.00 / 1_000_000        # $3.00/MTok input rate
+        _display_savings = cost_saved if cost_saved > 0 else (_cache_savings + _compression_savings)
+        if _total_saved_tokens > 0:
+            print(f"  💰 Saved ${_display_savings:.2f} this session ({_total_saved_tokens:,} tokens, {_cache_hr:.0f}% cache hit rate)")
+            print()
 
         # Cache
         if cache:
@@ -1964,9 +2004,48 @@ def cmd_status(args):
         vault = health.get("vault_index", {})
         if vault.get("available"):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+
+        # ── Today's Savings ─────────────────────────────────────────────────
+        today = stats.get("today", {}) if stats else {}
+        if today:
+            print()
+            print("Today's Savings")
+            print("─" * 40)
+            t_req = today.get("requests", 0)
+            t_compressed = today.get("compressed_tokens", 0)
+            t_cache_read = today.get("cache_read_tokens", 0)
+            t_cost = today.get("total_cost", 0.0)
+            t_input = today.get("input_tokens", 0)
+
+            # Cache hit rate: approximate from session if today doesn't have it
+            sess = stats.get("session", {}) if stats else {}
+            s_hits = sess.get("cache_hits", 0)
+            s_misses = sess.get("cache_misses", 0)
+            s_total = s_hits + s_misses
+            cache_pct = f"{s_hits / s_total * 100:.0f}%" if s_total > 0 else "—"
+
+            # Estimated cost saved: (compressed + cache_read) tokens * avg input rate
+            INPUT_RATE = 3.00 / 1_000_000   # $3/MTok (conservative)
+            cost_saved_est = (t_compressed + t_cache_read) * INPUT_RATE
+
+            print(f"  Requests:        {t_req:,}")
+            if t_compressed > 0:
+                print(f"  Compressed:      {t_compressed:,} tokens saved")
+            if t_cache_read > 0:
+                print(f"  Cache served:    {t_cache_read:,} tokens ({cache_pct} hit rate)")
+            if t_cost > 0:
+                print(f"  Cost today:      ${t_cost:.4f}")
+            if cost_saved_est > 0:
+                print(f"  Est. saved:      ${cost_saved_est:.4f}")
+            vault_blocks = vault.get("blocks", 0) if vault else 0
+            if vault_blocks:
+                print(f"  Vault blocks:    {vault_blocks:,} loaded")
+            print()
+            print("  Run `tokenpak savings` for detailed breakdown.")
+
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+        print("  Run `tokenpak serve` or check if proxy_v4.py is running.")
         print()
 
     # Budget tracking (local DB)
@@ -1986,6 +2065,105 @@ def cmd_status(args):
             print(fmt.kv(rows))
     except Exception:
         pass
+
+
+def cmd_explain(args):
+    """Explain TokenPak profiles and configuration."""
+    import os
+    
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Explain", mode=mode, minimal=False)
+    
+    profile_name = getattr(args, "profile", None)
+    
+    # Profile definitions
+    PROFILE_PRESETS = {
+        "safe": {
+            "COMPILATION_MODE": "strict",
+            "COMPACT_THRESHOLD_TOKENS": "8000",
+            "ENABLE_SKELETON": "false",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "balanced": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "4500",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "aggressive": {
+            "COMPILATION_MODE": "aggressive",
+            "COMPACT_THRESHOLD_TOKENS": "2000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "true",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "agentic": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "3000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+    }
+    
+    PROFILE_DESCRIPTIONS = {
+        "safe": "Production workloads where you want to be cautious. Low savings, high safety.",
+        "balanced": "Most workloads. Good savings with validation. (default)",
+        "aggressive": "High-volume batch work where you want maximum savings.",
+        "agentic": "Agent loops and multi-step workflows. Preserves tool schemas.",
+    }
+    
+    print(fmt.header())
+    print()
+    
+    if mode == OutputMode.RAW:
+        if profile_name and profile_name in PROFILE_PRESETS:
+            print(fmt.raw({
+                "profile": profile_name,
+                "description": PROFILE_DESCRIPTIONS.get(profile_name, ""),
+                "flags": PROFILE_PRESETS[profile_name],
+            }))
+        else:
+            print(fmt.raw({
+                "profiles": list(PROFILE_PRESETS.keys()),
+                "current": os.environ.get("TOKENPAK_PROFILE", "balanced"),
+            }))
+        return
+    
+    if profile_name:
+        if profile_name not in PROFILE_PRESETS:
+            print(f"❌ Unknown profile: {profile_name}")
+            print(f"   Available: {', '.join(PROFILE_PRESETS.keys())}")
+            return
+        
+        print(f"Profile: {profile_name}")
+        print(f"Description: {PROFILE_DESCRIPTIONS[profile_name]}")
+        print()
+        print("Configuration:")
+        for key, val in PROFILE_PRESETS[profile_name].items():
+            print(f"  {key} = {val}")
+    else:
+        current = os.environ.get("TOKENPAK_PROFILE", "balanced")
+        print(f"Current profile: {current}")
+        print()
+        print("Available profiles:")
+        print()
+        for name in PROFILE_PRESETS.keys():
+            desc = PROFILE_DESCRIPTIONS[name]
+            marker = " (active)" if name == current else ""
+            print(f"  {name}{marker}")
+            print(f"    {desc}")
+            print()
 
 
 def cmd_usage(args):
@@ -2190,6 +2368,12 @@ def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show system status and recent retry events")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
     p_status.set_defaults(func=cmd_status)
+
+
+def _build_explain_parser(sub):
+    p_explain = sub.add_parser("explain", help="Explain TokenPak profiles and configuration")
+    p_explain.add_argument("--profile", type=str, help="Show details for a specific profile (safe/balanced/aggressive/agentic)")
+    p_explain.set_defaults(func=cmd_explain)
 
 
 def _build_usage_parser(sub):
@@ -2422,10 +2606,103 @@ def _get_audit_db(args) -> str:
     return str(home / "audit.db")
 
 
+def _build_audit_log_parser(sub):
+    """Build audit-log subcommand (Pro feature usage tracking)."""
+    p = sub.add_parser("audit-log", help="Pro feature usage audit log")
+    asub = p.add_subparsers(dest="audit_log_cmd", required=True)
+
+    p_show = asub.add_parser("show", help="Show recent feature usage")
+    p_show.add_argument("--days", type=int, default=7, help="Rolling window in days (default: 7)")
+    p_show.add_argument("--feature", default=None, help="Filter by feature name")
+    p_show.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_show.set_defaults(func=cmd_audit_log_show)
+
+    p_stats = asub.add_parser("stats", help="Aggregate stats by feature/adapter")
+    p_stats.add_argument("--feature", default=None, help="Filter by feature name")
+    p_stats.add_argument("--adapter", default=None, help="Filter by adapter name")
+    p_stats.set_defaults(func=cmd_audit_log_stats)
+
+    p_export = asub.add_parser("export", help="Export all records as JSON to stdout")
+    p_export.set_defaults(func=cmd_audit_log_export)
+
+
+def cmd_audit_log_show(args):
+    """Show recent feature usage records."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        rows = log.get_feature_usage(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+            days=getattr(args, "days", 7),
+        )
+    if not rows:
+        print("No usage records found.")
+        return
+    header = f"{'Time':<28} {'Adapter':<20} {'Model':<24} {'Feature':<20}"
+    print(header)
+    print("-" * len(header))
+    for r in rows:
+        print(
+            f"{r.get('ts', '')[:27]:<28} "
+            f"{r.get('adapter', ''):<20} "
+            f"{r.get('model', ''):<24} "
+            f"{r.get('feature', ''):<20}"
+        )
+    print(f"\n{len(rows)} record(s)")
+
+
+def cmd_audit_log_stats(args):
+    """Show aggregate stats by feature/adapter."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        stats = log.get_stats(
+            feature=getattr(args, "feature", None),
+            adapter=getattr(args, "adapter", None),
+        )
+    print(f"Total events: {stats['total']}")
+    if stats["by_feature"]:
+        print("\nBy feature:")
+        for feat, count in sorted(stats["by_feature"].items(), key=lambda x: -x[1]):
+            print(f"  {feat:<24} {count}")
+    if stats["by_adapter"]:
+        print("\nBy adapter:")
+        for adpt, count in sorted(stats["by_adapter"].items(), key=lambda x: -x[1]):
+            print(f"  {adpt:<24} {count}")
+
+
+def cmd_audit_log_export(args):
+    """Export all audit log records as JSON to stdout."""
+    from .pro.audit_log import AuditLog
+
+    with AuditLog() as log:
+        print(log.export_json())
+
+
+def _require_enterprise_feature(feature_name: str):
+    """Require enterprise feature availability (from tokenpak-pro)."""
+    print(f"TOKENPAK  |  Enterprise Feature: {feature_name}")
+    print("────────────────────────────────────────")
+    print()
+    print("This feature requires an Enterprise license (tokenpak-pro).")
+    print("The module has been moved to tokenpak-pro for licensed users.")
+    print()
+    print("To use this feature:")
+    print("1. Install tokenpak-pro: pip install tokenpak-pro")
+    print("2. Activate your Enterprise license")
+    print()
+    print("Learn more: https://tokenpak.dev/enterprise")
+    sys.exit(2)
+
+
 def cmd_audit_list(args):
     import json as _json
 
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Log")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2460,7 +2737,10 @@ def cmd_audit_list(args):
 
 
 def cmd_audit_export(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Export")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2475,7 +2755,10 @@ def cmd_audit_export(args):
 
 
 def cmd_audit_verify(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Verification")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2490,7 +2773,10 @@ def cmd_audit_verify(args):
 
 
 def cmd_audit_prune(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Pruning")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2499,7 +2785,10 @@ def cmd_audit_prune(args):
 
 
 def cmd_audit_summary(args):
-    from tokenpak.enterprise.audit import AuditLog
+    try:
+        from tokenpak.enterprise.audit import AuditLog
+    except ImportError:
+        _require_enterprise_feature("Audit Summary")
 
     db_path = _get_audit_db(args)
     with AuditLog(db_path) as log:
@@ -2556,7 +2845,10 @@ def _build_compliance_parser(sub):
 def cmd_compliance_report(args):
     import os
 
-    from tokenpak.enterprise.compliance import ComplianceReporter
+    try:
+        from tokenpak.enterprise.compliance import ComplianceReporter
+    except ImportError:
+        _require_enterprise_feature("Compliance Reporting")
 
     org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
     db_path = _get_audit_db(args)
@@ -3035,25 +3327,35 @@ def main():
         "preview",
         "aggregate",
         "requests",
+        "audit-log",
+        "retrieval",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
-        print(f"Unknown command '{raw_cmd}'.")
+        print(f"❌ Unknown command: '{raw_cmd}'")
+        
         if suggestion:
-            print(f"Did you mean: tokenpak {suggestion}?")
+            print(f"   Did you mean: tokenpak {suggestion}?")
         else:
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
-                "compress": "Compression happens automatically through the proxy.\nRun `tokenpak demo` to see it in action.",
-                "run": "Use `tokenpak serve` to start the proxy, or `tokenpak start` for a quick alias.",
-                "proxy": "Use `tokenpak start` to start the proxy on localhost:8766.",
-                "kill": "Use `tokenpak stop` to stop the running proxy.",
+                "compress": "→ Compression happens automatically through the proxy.\n   Run `tokenpak demo` to see it in action.",
+                "run": "→ Use `tokenpak serve` to start the proxy.",
+                "proxy": "→ Use `tokenpak serve` to start the proxy on localhost:8766.",
+                "kill": "→ Use `tokenpak stop` to stop the running proxy.",
+                "test": "→ Use `tokenpak demo` to test compression, or `tokenpak doctor` to test installation.",
+                "config": "→ Use `tokenpak config-check <file>` to validate config.\n   Or `tokenpak setup` to interactively create config.",
             }
             hint = _COMMAND_HINTS.get(raw_cmd)
             if hint:
                 print(hint)
             else:
-                print("Run `tokenpak help` to see all available commands.")
+                print("\n📖 Available commands (by category):")
+                for group, cmds in list(_COMMAND_GROUPS.items())[:3]:  # Show first 3 groups
+                    print(f"\n   {group}:")
+                    for cmd, desc in cmds[:3]:  # Show first 3 in each
+                        print(f"     • {cmd:<15} {desc}")
+                print("\n   (Use `tokenpak help` to see all commands)")
         sys.exit(1)
 
     args = parser.parse_args()
@@ -4186,6 +4488,50 @@ def _build_goals_parser(sub):
     p_goals.set_defaults(func=cmd_goals_list)
 
 
+def cmd_cost_show_budget(args):
+    """Show budget status and spending progress."""
+    import json
+    try:
+        from tokenpak.cost.budget_tracker import BudgetTracker
+    except ImportError:
+        print("Budget tracking module not available.")
+        return 1
+
+    config_path = getattr(args, "config", None)
+    config = {}
+    if config_path:
+        try:
+            with open(config_path) as f:
+                config_data = json.load(f)
+                config = config_data.get("cost_budget", {})
+        except Exception as e:
+            print(f"Error loading config: {e}")
+            return 1
+
+    tracker = BudgetTracker(config)
+    summary = tracker.get_budget_summary()
+
+    print("\n📊 TokenPak Budget Status\n" + "=" * 40)
+    if not summary.get("enabled"):
+        print("Budget tracking: DISABLED")
+        print("  Set 'cost_budget.daily_limit' in tokenpak.json to enable.")
+    else:
+        if summary.get("daily_limit"):
+            print(f"Daily limit:  ${summary['daily_limit']:.2f}")
+        if summary.get("weekly_limit"):
+            print(f"Weekly limit: ${summary['weekly_limit']:.2f}")
+        print(f"Alert cooldown: {summary.get('alert_cooldown_minutes', 5):.0f} minutes")
+        alerts = summary.get("last_alerts", {})
+        if alerts:
+            print("\nRecent Alerts:")
+            for k, v in alerts.items():
+                print(f"  • {k}: {v}")
+        else:
+            print("\nNo alerts triggered yet.")
+    print("=" * 40 + "\n")
+    return 0
+
+
 def _build_cost_parser(sub):
     p_cost = sub.add_parser("cost", help="Show API cost summary")
     p_cost.add_argument("--week", action="store_true", help="Show weekly totals")
@@ -4193,6 +4539,104 @@ def _build_cost_parser(sub):
     p_cost.add_argument("--by-model", action="store_true", help="Break down by model")
     p_cost.add_argument("--export-csv", action="store_true", help="Export as CSV")
     p_cost.set_defaults(func=cmd_cost)
+
+    # Subcommands for cost
+    cost_sub = p_cost.add_subparsers(dest="cost_subcmd")
+    p_show_budget = cost_sub.add_parser("show-budget", help="Show budget status and alerts")
+    p_show_budget.add_argument("--config", help="Path to tokenpak config file")
+    p_show_budget.set_defaults(func=cmd_cost_show_budget)
+
+
+def cmd_costs(args):
+    """Aggregate cost report with CSV export and burn-rate alarms."""
+    from tokenpak.cost.cost_aggregator import CostAggregator
+
+    days = args.days
+    fmt = args.format
+    monthly_budget = args.monthly_budget
+    alarm_pct = args.alarm_pct
+
+    agg = CostAggregator()
+
+    if fmt == "csv":
+        print(agg.export_csv(days=days, by_model=not args.no_model), end="")
+        return
+
+    # Default: human-readable summary
+    summaries = agg.daily_summaries(days=days)
+    totals = agg.aggregate(days=days)
+
+    if not summaries:
+        print(f"No cost data found for the last {days} day(s).")
+        return
+
+    print(f"TokenPak Cost Report — last {days} day(s)")
+    print(f"{'DATE':<12} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+    print("-" * 48)
+    for s in summaries:
+        print(
+            f"{s.day:<12} {s.total_requests:>9,} {s.total_tokens:>12,} ${s.total_cost_usd:>9.4f}"
+        )
+    print("-" * 48)
+    print(
+        f"{'TOTAL':<12} {totals['total_requests']:>9,} {totals['total_tokens']:>12,} "
+        f"${totals['total_cost_usd']:>9.4f}"
+    )
+    if totals["avg_daily_cost_usd"] > 0:
+        print(f"\n  Avg daily:  ${totals['avg_daily_cost_usd']:.4f}")
+
+    if args.by_model and totals["by_model"]:
+        print(f"\n{'MODEL':<30} {'REQUESTS':>9} {'TOKENS':>12} {'COST':>10}")
+        print("-" * 65)
+        for m in totals["by_model"]:
+            print(
+                f"{(m['model'] or 'unknown'):<30} {m['requests']:>9,} "
+                f"{m['total_tokens']:>12,} ${m['cost_usd']:>9.4f}"
+            )
+
+    # Burn-rate alarms
+    if monthly_budget is not None and monthly_budget > 0:
+        alarms = agg.check_burn_rate(
+            monthly_budget_usd=monthly_budget,
+            threshold_pct=alarm_pct,
+            days=days,
+        )
+        if alarms:
+            print()
+            for alarm in alarms:
+                print(alarm.message)
+        else:
+            print(
+                f"\n✅ No burn-rate alarms (threshold: {alarm_pct:.0f}% of "
+                f"${monthly_budget:.2f}/mo = ${monthly_budget * alarm_pct / 100:.2f}/day)"
+            )
+
+
+def _build_costs_parser(sub):
+    p = sub.add_parser("costs", help="Aggregate cost report (multi-day, CSV export)")
+    p.add_argument("--days", type=int, default=7, help="Number of days to report (default: 7)")
+    p.add_argument(
+        "--format",
+        choices=["table", "csv", "json"],
+        default="table",
+        help="Output format (default: table)",
+    )
+    p.add_argument("--by-model", action="store_true", help="Break down by model")
+    p.add_argument("--no-model", action="store_true", help="Suppress per-model rows in CSV")
+    p.add_argument(
+        "--monthly-budget",
+        type=float,
+        metavar="USD",
+        help="Monthly budget USD — enables burn-rate alarm check",
+    )
+    p.add_argument(
+        "--alarm-pct",
+        type=float,
+        default=20.0,
+        metavar="PCT",
+        help="Alarm when daily spend exceeds this %% of monthly budget (default: 20)",
+    )
+    p.set_defaults(func=cmd_costs)
 
 
 def _build_budget_parser(sub):
@@ -4998,43 +5442,106 @@ def _build_demo_parser(sub):
     )
     p_demo.add_argument("--recipe", default=None, help="Show details for a specific recipe by name")
     p_demo.add_argument("--file", default=None, help="Show which recipes match a given file path")
-    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 24h of demo telemetry data (500+ requests)")
-    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from the dashboard")
+    p_demo.add_argument("--seed", action="store_true", help="Populate dashboard with 500 realistic demo events (24h window)")
+    p_demo.add_argument("--seed-count", type=int, default=500, metavar="N", help="Number of demo events to generate (default: 500)")
+    p_demo.add_argument("--seed-hours", type=int, default=24, metavar="H", help="Time window in hours (default: 24)")
+    p_demo.add_argument("--clear", action="store_true", help="Remove all demo data from telemetry storage")
     p_demo.set_defaults(func=cmd_demo)
+
+
+def _run_compression_demo():
+    """Show live compression on a sample prompt with before/after token counts."""
+    from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.engines.base import CompactionHints
+    from tokenpak.tokens import count_tokens
+
+    SAMPLE_PROMPT = """\
+You are a helpful assistant. Please help me understand the following documentation.
+
+The TokenPak library provides a comprehensive, all-inclusive solution for managing
+token budgets in large language model applications. It includes multiple compression
+strategies, various caching mechanisms, and detailed telemetry tools for monitoring
+usage and costs across all your API calls. The library has been carefully designed
+to be extremely easy to use out of the box while also providing powerful, advanced
+functionality for more sophisticated users who need fine-grained control.
+
+By compressing content intelligently before it reaches the model, you can fit more
+relevant information into fewer tokens, which reduces API costs significantly and
+can improve response quality in many cases. The heuristic engine utilizes rule-based
+text processing techniques to remove redundant, repetitive, and low-signal content
+while carefully preserving the most important, critical information that the model
+actually needs in order to produce high-quality, accurate results every time.
+
+This approach is fully deterministic, meaning that for any given input you will
+always receive the same compressed output each and every single time you run it,
+regardless of when or how many times the compression is applied.
+
+Question: How does TokenPak save tokens and money?"""
+
+    engine = HeuristicEngine()
+    hints = CompactionHints(target_tokens=120)
+    compressed = engine.compact(SAMPLE_PROMPT, hints)
+
+    tokens_in = count_tokens(SAMPLE_PROMPT)
+    tokens_out = count_tokens(compressed)
+    savings_pct = (1 - tokens_out / tokens_in) * 100 if tokens_in > 0 else 0
+
+    # Estimate cost savings at gpt-4o rates ($2.50 / 1M input tokens)
+    cost_per_token = 2.50 / 1_000_000
+    cost_saved = (tokens_in - tokens_out) * cost_per_token
+
+    print()
+    print("  TokenPak Compression Demo")
+    print("  " + "─" * 46)
+    print()
+    print(f"  Original prompt:    {tokens_in:,} tokens")
+    print(f"  Compressed:         {tokens_out:,} tokens")
+    print(f"  Savings:            {savings_pct:.0f}% fewer tokens")
+    print(f"  Cost saved (est.):  ${cost_saved:.4f} per call @ gpt-4o rates")
+    print()
+    print("  ── Compressed output (first 300 chars) ──────────────────────")
+    preview = compressed[:300].strip().replace("\n", "\n  ")
+    print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
+    print()
+    print("  Try it with your own content:")
+    print("    tokenpak serve        → start the proxy (zero-config)")
+    print("    tokenpak cost         → track your real savings")
+    print("    tokenpak demo --list  → browse 50 built-in compression recipes")
+    print()
 
 
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
-    # ── Demo data seeding
-    if args.seed:
-        from .demo import seed_demo_data
-        result = seed_demo_data()
-        print("✅ Demo data seeded successfully")
-        print(f"   • Events: {result['events']}")
-        print(f"   • Usage records: {result['usage']}")
-        print(f"   • Cost records: {result['costs']}")
-        print(f"   • Segments: {result['segments']}")
-        print(f"   • Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
-        print()
-        print("View the dashboard to see demo data populated.")
-        return
-
-    # ── Demo data cleanup
-    if args.clear:
-        from .demo import clear_demo_data
-        result = clear_demo_data()
-        print("✅ Demo data cleared successfully")
-        print(f"   • Deleted events: {result['deleted_events']}")
-        print(f"   • Deleted usage records: {result['deleted_usage']}")
-        print(f"   • Deleted cost records: {result['deleted_costs']}")
-        print(f"   • Deleted segments: {result['deleted_segments']}")
-        print()
-        print("Dashboard now shows empty/zero state.")
-        return
-
     from .agent.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
+
+    # ── Demo data seeding
+    if args.seed:
+        from .agent.telemetry.demo import seed_demo_data
+        result = seed_demo_data(count=args.seed_count, hours=args.seed_hours)
+        print(f"✅ Seeded {result['events']} demo events")
+        print(f"   Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
+        print(f"   Total events now: {result['total_events']}")
+        print(f"   Total cache-read: {result['cache_read_total']:,}")
+        print()
+        print("Dashboard should now show demo data with realistic patterns.")
+        return
+
+    if args.clear:
+        """Clear all demo data from telemetry storage."""
+        from .agent.telemetry.demo import clear_demo_data
+        result = clear_demo_data()
+        print(f"✅ Cleared {result['deleted_events']} demo events")
+        print(f"   Remaining events: {result['remaining_events']}")
+        if result['remaining_events'] == 0:
+            print("   Dashboard is now empty (ready for real traffic)")
+        return
+
+    # ── Default: live compression demo on sample prompt
+    if not getattr(args, 'list', False) and not getattr(args, 'category', None) and not getattr(args, 'recipe', None) and not getattr(args, 'file', None):
+        _run_compression_demo()
+        return
 
     # ── Single recipe detail
     if args.recipe:
@@ -6109,6 +6616,174 @@ def _build_fleet_parser(sub):
     
     p_fleet.set_defaults(func=cmd_fleet)
     return p_fleet
+
+
+# ── Retrieval CLI ─────────────────────────────────────────────────────────────
+
+def cmd_retrieval_status(args):
+    """Show retrieval configuration and index stats."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig
+    from .retrieval.bm25 import BM25Retriever
+    from .retrieval.vector_local import LocalVectorRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    json_out = getattr(args, "json", False)
+
+    bm25 = BM25Retriever(vault_index_path=cfg.vault_index_path)
+    vec = LocalVectorRetriever(
+        model_name=cfg.vector_model,
+        index_path=cfg.vector_index_path,
+    )
+
+    status: dict = {
+        "config": {
+            "bm25_weight": cfg.bm25_weight,
+            "vector_weight": cfg.vector_weight,
+            "vector_model": cfg.vector_model,
+            "rrf_k": cfg.rrf_k,
+            "top_k": cfg.top_k,
+            "vault_index_path": cfg.vault_index_path,
+            "vector_index_path": cfg.vector_index_path,
+        },
+        "bm25": {
+            "available": bm25.is_available(),
+            "doc_count": asyncio.run(bm25.index([])) if False else _bm25_doc_count(bm25),
+        },
+        "vector": {
+            "available": vec.is_available(),
+            "doc_count": _vec_doc_count(vec),
+        },
+    }
+
+    if json_out:
+        import json as _json
+        print(_json.dumps(status, indent=2))
+        return
+
+    # Human output
+    print("🔍 TokenPak Retrieval Status")
+    print()
+    print("  Configuration:")
+    print(f"    BM25 weight:      {cfg.bm25_weight}")
+    print(f"    Vector weight:    {cfg.vector_weight}")
+    print(f"    Vector model:     {cfg.vector_model}")
+    print(f"    RRF k:            {cfg.rrf_k}")
+    print(f"    Top-K:            {cfg.top_k}")
+    if cfg.vault_index_path:
+        print(f"    Vault index:      {cfg.vault_index_path}")
+    if cfg.vector_index_path:
+        print(f"    Vector index:     {cfg.vector_index_path}")
+    print()
+    print("  Retrievers:")
+    bm25_ok = status["bm25"]["available"]
+    vec_ok = status["vector"]["available"]
+    print(f"    BM25:    {'✅ available' if bm25_ok else '❌ unavailable'}  ({status['bm25']['doc_count']} docs)")
+    print(f"    Vector:  {'✅ available' if vec_ok else '⚠️  unavailable (sentence-transformers not installed or no index)'}  ({status['vector']['doc_count']} docs)")
+    print()
+    if bm25_ok:
+        mode = "hybrid" if vec_ok else "bm25-only"
+    elif vec_ok:
+        mode = "vector-only"
+    else:
+        mode = "⛔ no retrievers available"
+    print(f"  Active mode: {mode}")
+
+
+def _bm25_doc_count(bm25) -> int:
+    """Get BM25 doc count without async."""
+    try:
+        return len(getattr(bm25, "_blocks", []))
+    except Exception:
+        return 0
+
+
+def _vec_doc_count(vec) -> int:
+    """Get vector index doc count."""
+    try:
+        idx = getattr(vec, "_index", None)
+        if idx is None:
+            return 0
+        return getattr(idx, "ntotal", len(getattr(idx, "_ids", [])))
+    except Exception:
+        return 0
+
+
+def cmd_retrieval_test(args):
+    """Test a query through all enabled retrievers."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig, RetrievalQuery
+    from .retrieval.hybrid import HybridRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    query_text = args.query
+    top_k = getattr(args, "top_k", cfg.top_k)
+    json_out = getattr(args, "json", False)
+
+    retriever = HybridRetriever(cfg)
+
+    async def _run():
+        q = RetrievalQuery(text=query_text, top_k=top_k)
+        return await retriever.search(q)
+
+    import time
+    t0 = time.perf_counter()
+    results = asyncio.run(_run())
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    if json_out:
+        import json as _json
+        out = {
+            "query": query_text,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "results": [
+                {
+                    "doc_id": r.doc_id,
+                    "fused_score": r.fused_score,
+                    "sources": list(r.source_results.keys()),
+                    "content_preview": r.content[:200] if r.content else "",
+                }
+                for r in results
+            ],
+        }
+        print(_json.dumps(out, indent=2))
+        return
+
+    print(f"🔍 Query: {query_text!r}")
+    print(f"⏱  Elapsed: {elapsed_ms:.1f}ms  |  Results: {len(results)}")
+    print()
+    if not results:
+        print("  (no results)")
+        return
+    for i, r in enumerate(results, 1):
+        sources = ", ".join(r.source_results.keys()) if r.source_results else "bm25"
+        preview = (r.content[:120] + "…") if len(r.content) > 120 else r.content
+        print(f"  {i}. [{r.fused_score:.4f}] {r.doc_id}  ({sources})")
+        if preview:
+            print(f"     {preview}")
+        print()
+
+
+def _build_retrieval_parser(sub):
+    """Build the retrieval command parser."""
+    p_ret = sub.add_parser("retrieval", help="Inspect and test the hybrid retrieval system")
+    p_ret.add_argument("--json", action="store_true", help="Output as JSON")
+    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=True)
+
+    # retrieval status
+    p_status = rsub.add_parser("status", help="Show retrieval config and index stats")
+    p_status.add_argument("--json", action="store_true", help="Output as JSON")
+    p_status.set_defaults(func=cmd_retrieval_status)
+
+    # retrieval test
+    p_test = rsub.add_parser("test", help="Run a test query through all enabled retrievers")
+    p_test.add_argument("query", help="Query string to test")
+    p_test.add_argument("--top-k", type=int, default=5, dest="top_k", help="Number of results (default: 5)")
+    p_test.add_argument("--json", action="store_true", help="Output as JSON")
+    p_test.set_defaults(func=cmd_retrieval_test)
+
+    p_ret.set_defaults(func=lambda a: p_ret.print_help())
+    return p_ret
 
 
 if __name__ == "__main__":

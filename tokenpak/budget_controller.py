@@ -62,6 +62,15 @@ class BudgetDecision:
     max_auto_tier: str
 
 
+@dataclass(frozen=True)
+class BudgetThresholdAlert:
+    """Alert when budget spending reaches a threshold."""
+
+    level: str  # "warning" (80%), "critical" (100%), "overage" (110%)
+    pct_used: float
+    message: str
+
+
 class BudgetController:
     """Choose budget tier and escalation policy for a single turn."""
 
@@ -97,6 +106,49 @@ class BudgetController:
             allow_escalation=True,
             max_auto_tier=self.max_auto_tier,
         )
+
+    def check_spending_threshold(
+        self,
+        spent_usd: float,
+        budget_usd: float,
+    ) -> list[BudgetThresholdAlert]:
+        """
+        Check if spending has reached alert thresholds.
+
+        Returns list of BudgetThresholdAlert for each threshold crossed.
+        """
+        if not budget_usd or budget_usd <= 0:
+            return []
+
+        pct_used = (spent_usd / budget_usd) * 100
+        alerts: list[BudgetThresholdAlert] = []
+
+        if pct_used >= 110:
+            alerts.append(
+                BudgetThresholdAlert(
+                    level="overage",
+                    pct_used=pct_used,
+                    message=f"Budget overage: {pct_used:.1f}% of ${budget_usd:.2f} limit",
+                )
+            )
+        elif pct_used >= 100:
+            alerts.append(
+                BudgetThresholdAlert(
+                    level="critical",
+                    pct_used=pct_used,
+                    message=f"Budget critical: {pct_used:.1f}% of ${budget_usd:.2f} limit",
+                )
+            )
+        elif pct_used >= 80:
+            alerts.append(
+                BudgetThresholdAlert(
+                    level="warning",
+                    pct_used=pct_used,
+                    message=f"Budget warning: {pct_used:.1f}% of ${budget_usd:.2f} limit",
+                )
+            )
+
+        return alerts
 
     def maybe_escalate(
         self,

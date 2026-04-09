@@ -1,7 +1,7 @@
 /**
  * CountUp.js — Lightweight number animation library
  * For animating KPI values in the TokenPak Dashboard
- * 
+ *
  * Usage:
  *   const counter = new CountUp('stat-value', startValue, endValue, decimals, duration);
  *   counter.start();
@@ -47,13 +47,13 @@
 
   CountUp.prototype.start = function(callback) {
     if (!this.target) { console.warn('CountUp target not found'); return false; }
-    
+
     this.callback = typeof callback === 'function' ? callback : function(){};
     this.determineDirectionAndSmartEasing();
-    
+
     this.target.classList.add('animating');
     this.animate(new Date().getTime());
-    
+
     return true;
   };
 
@@ -61,7 +61,7 @@
     if(!this.startTime) { this.startTime = timestamp; }
     this.timestamp = timestamp;
     var progress = (timestamp - this.startTime) / (this.duration * 1000);
-    
+
     if (progress >= 1) {
       progress = 1;
     } else {
@@ -116,6 +116,6 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = CountUp;
   }
-  
+
   root.CountUp = CountUp;
 })(typeof window !== 'undefined' ? window : global);

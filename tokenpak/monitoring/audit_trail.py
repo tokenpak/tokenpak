@@ -32,13 +32,13 @@ Usage::
     )
     trail.flush()   # enqueues all recorded events to the logger
 """
+
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .request_logger import RequestLogger, RequestLogRecord, LEVEL_DEBUG
+from .request_logger import LEVEL_DEBUG, RequestLogger, RequestLogRecord
 
 
 class AuditTrail:
@@ -122,11 +122,13 @@ class AuditTrail:
         data_points_returned: int = 0,
     ) -> None:
         """Record a /metrics aggregation event."""
-        self._events.append({
-            "event": "metrics",
-            "aggregation_window": aggregation_window,
-            "data_points_returned": data_points_returned,
-        })
+        self._events.append(
+            {
+                "event": "metrics",
+                "aggregation_window": aggregation_window,
+                "data_points_returned": data_points_returned,
+            }
+        )
 
     def record_error(self, *, error_type: str, message: str, **extra) -> None:
         """Record an error that occurred during request processing."""

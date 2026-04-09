@@ -231,6 +231,11 @@ def test_crewai_unknown_agents_no_crash(tmp_path):
 # AutoGen TokenPakAssistant
 # ---------------------------------------------------------------------------
 
+
+@pytest.mark.skipif(
+    not __import__('importlib').util.find_spec('autogen_tokenpak'),
+    reason='autogen_tokenpak package not installed'
+)
 def test_autogen_assistant_creation():
     from autogen_tokenpak import TokenPakAssistant
     a = TokenPakAssistant(name="alice", budget=2000)
@@ -238,6 +243,11 @@ def test_autogen_assistant_creation():
     assert a.budget == 2000
 
 
+
+@pytest.mark.skipif(
+    not __import__('importlib').util.find_spec('autogen_tokenpak'),
+    reason='autogen_tokenpak package not installed'
+)
 def test_autogen_receive_and_compress():
     from autogen_tokenpak import TokenPakAssistant
     a = TokenPakAssistant(name="alice", budget=2000)
@@ -247,6 +257,11 @@ def test_autogen_receive_and_compress():
     assert len(msgs) >= 1
 
 
+
+@pytest.mark.skipif(
+    not __import__('importlib').util.find_spec('autogen_tokenpak'),
+    reason='autogen_tokenpak package not installed'
+)
 def test_autogen_prepare_apply_handoff(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak.agent.agentic.handoff import HandoffManager
@@ -269,6 +284,11 @@ def test_autogen_prepare_apply_handoff(tmp_path):
     assert any("quantum" in m.get("content", "") for m in msgs)
 
 
+
+@pytest.mark.skipif(
+    not __import__('importlib').util.find_spec('autogen_tokenpak'),
+    reason='autogen_tokenpak package not installed'
+)
 def test_autogen_handoff_wire_round_trip(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak import HandoffBlock, Handoff

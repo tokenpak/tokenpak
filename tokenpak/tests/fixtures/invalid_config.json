@@ -1,0 +1,20 @@
+{
+  "port": 70000,
+  "mode": "turbo",
+  "compression": {
+    "threshold_tokens": -100,
+    "cache_size": 5
+  },
+  "budget": {
+    "total_tokens": "12000"
+  },
+  "vault": {
+    "inject_min_score": 15.0,
+    "retrieval_backend": "postgresql"
+  },
+  "rate_limit_rpm": 0,
+  "unknown_field": "should_cause_error",
+  "features": {
+    "nonexistent_feature": true
+  }
+}

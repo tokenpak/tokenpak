@@ -65,9 +65,8 @@ def detect_regression_types(observation: RegressionObservation) -> set[Regressio
     if not observation.schema_valid or observation.missing_fields > 0:
         detected.add(RegressionType.FORMAT)
 
-    if (
-        observation.baseline_response_length > 0
-        and observation.response_length > int(observation.baseline_response_length * 1.5)
+    if observation.baseline_response_length > 0 and observation.response_length > int(
+        observation.baseline_response_length * 1.5
     ):
         detected.add(RegressionType.VERBOSITY)
 
@@ -86,15 +85,13 @@ def detect_regression_types(observation: RegressionObservation) -> set[Regressio
     if observation.retrieval_overlap < observation.retrieval_threshold:
         detected.add(RegressionType.RETRIEVAL)
 
-    if (
-        observation.baseline_tokens_avg > 0
-        and observation.tokens_used > int(observation.baseline_tokens_avg * 1.2)
+    if observation.baseline_tokens_avg > 0 and observation.tokens_used > int(
+        observation.baseline_tokens_avg * 1.2
     ):
         detected.add(RegressionType.COST)
 
-    if (
-        observation.baseline_latency_ms > 0
-        and observation.latency_ms > int(observation.baseline_latency_ms * 1.2)
+    if observation.baseline_latency_ms > 0 and observation.latency_ms > int(
+        observation.baseline_latency_ms * 1.2
     ):
         detected.add(RegressionType.LATENCY)
 
@@ -116,4 +113,7 @@ def classify_regression_signatures(
 
 
 def build_fix_plan(regression_types: set[RegressionType]) -> dict[RegressionType, str]:
-    return {regression_type: FIX_PATHS[regression_type] for regression_type in sorted(regression_types, key=lambda t: t.value)}
+    return {
+        regression_type: FIX_PATHS[regression_type]
+        for regression_type in sorted(regression_types, key=lambda t: t.value)
+    }

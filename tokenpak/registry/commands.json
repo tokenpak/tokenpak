@@ -7,7 +7,7 @@
       "category": "Control",
       "description": "Start the proxy (localhost:8766)",
       "aliases": [],
-      "usage": "/tokenpak start [--port PORT]",
+      "usage": "/tokenpak serve [--port PORT]",
       "detail": "Starts the TokenPak proxy server. Listens on localhost:8766 by default. All LLM requests routed through this port will be compressed and cached.",
       "related": ["stop", "restart", "status"]
     },

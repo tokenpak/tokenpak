@@ -1,9 +1,11 @@
 """test_savings_display.py — Tests for enhanced savings display in status and savings commands."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from tokenpak.pricing import estimate_savings, get_rates, MODEL_RATES
-from tokenpak.agent.cli.commands import status, savings
+
+from tokenpak.agent.cli.commands import savings, status
+from tokenpak.pricing import estimate_savings, get_rates
 
 
 class TestPricingModule:
@@ -130,6 +132,7 @@ class TestStatusCommand:
         # Capture output
         import io
         import sys
+
         captured_output = io.StringIO()
         sys.stdout = captured_output
 
@@ -155,6 +158,7 @@ class TestStatusCommand:
 
         import io
         import sys
+
         captured_output = io.StringIO()
         sys.stdout = captured_output
         sys.stderr = io.StringIO()
@@ -222,17 +226,19 @@ class TestSavingsCommand:
 
         # Mock per-model rows
         mock_rows = [
-            MagicMock(**{
-                "__getitem__": lambda self, key: {
-                    "model": "claude-sonnet-4-6",
-                    "requests": 50,
-                    "avg_raw": 40_000,
-                    "avg_compressed": 38_000,
-                    "total_raw": 2_000_000,
-                    "total_compressed": 1_900_000,
-                    "total_cost": 5.70,
-                }[key]
-            })
+            MagicMock(
+                **{
+                    "__getitem__": lambda self, key: {
+                        "model": "claude-sonnet-4-6",
+                        "requests": 50,
+                        "avg_raw": 40_000,
+                        "avg_compressed": 38_000,
+                        "total_raw": 2_000_000,
+                        "total_compressed": 1_900_000,
+                        "total_cost": 5.70,
+                    }[key]
+                }
+            )
         ]
 
         mock_conn.execute.return_value.fetchall.return_value = mock_rows

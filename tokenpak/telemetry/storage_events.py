@@ -9,12 +9,8 @@ from typing import Any, Optional
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 from tokenpak.telemetry.storage_base import _now, _row_to_dict
 
-
 # Type stub: these methods are provided by other mixins
 # We declare them here to satisfy mypy when mixins are composed
-    
-    
-    
 
 
 class EventsMixin:

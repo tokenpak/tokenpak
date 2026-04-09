@@ -1,0 +1,54 @@
+{
+  "model": "claude-sonnet-4-6",
+  "stream": true,
+  "max_tokens": 8096,
+  "system": [
+    {
+      "type": "text",
+      "text": "<TEST: system block 0 — no cache_control>"
+    },
+    {
+      "type": "text",
+      "text": "<TEST: system block 1 — 1h explicit-ttl cache breakpoint>",
+      "cache_control": {"type": "ephemeral", "ttl": "1h"}
+    },
+    {
+      "type": "text",
+      "text": "<TEST: system block 2 — default-ttl cache breakpoint (no explicit ttl)>",
+      "cache_control": {"type": "ephemeral"}
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<TEST: message content 0>"
+        },
+        {
+          "type": "text",
+          "text": "<TEST: message content 1>"
+        },
+        {
+          "type": "text",
+          "text": "<TEST: message content 2 — 1h explicit-ttl cache breakpoint>",
+          "cache_control": {"type": "ephemeral", "ttl": "1h"}
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "bash",
+      "description": "Run a bash command",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string", "description": "The bash command to run"}
+        },
+        "required": ["command"]
+      }
+    }
+  ]
+}

@@ -52,14 +52,29 @@ import urllib3
 import math
 import os
 import re
+
+# Ensure the correct tokenpak package is importable even when proxy.py lives
+# inside a directory containing a local 'tokenpak/' folder that shadows the
+# vault-installed package. The vault editable install path takes priority.
+import sys as _sys
+_VAULT_TOKENPAK = os.path.expanduser("~/vault/01_PROJECTS/tokenpak/tokenpak")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if os.path.isdir(_VAULT_TOKENPAK):
+    # Remove script directory from sys.path if it contains a shadowing tokenpak/
+    if _SCRIPT_DIR in _sys.path and os.path.isdir(os.path.join(_SCRIPT_DIR, "tokenpak")):
+        _sys.path.remove(_SCRIPT_DIR)
+    if _VAULT_TOKENPAK not in _sys.path:
+        _sys.path.insert(0, _VAULT_TOKENPAK)
 import signal
 import socket
+import subprocess
 import ssl
 import sys
 import threading
 import time
 import uuid
 from collections import deque, OrderedDict
+from enum import Enum
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -71,6 +86,52 @@ from urllib.parse import urlparse
 
 from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
+from tokenpak.runtime.providers import Provider, detect_provider
+
+# CACHE-P4-001: CacheSpec normalized config schema
+try:
+    from tokenpak.runtime.cache_spec import (
+        CacheMode as _CacheSpecMode,
+        CacheSpec as _CacheSpec,
+        PROVIDER_CACHE_MODES as _PROVIDER_CACHE_MODES,
+        resolve_cache_mode as _resolve_cache_mode,
+        load_cache_spec_from_config as _load_cache_spec_from_config,
+    )
+    _CACHE_SPEC_AVAILABLE = True
+except ImportError as _cse:
+    _CACHE_SPEC_AVAILABLE = False
+    _CacheSpecMode = None
+    _CacheSpec = None
+    _PROVIDER_CACHE_MODES = None
+    _resolve_cache_mode = None
+    _load_cache_spec_from_config = None
+    print(f"  ⚠️ CacheSpec not available (cache_spec.py missing): {_cse}")
+
+# CACHE-P4-002: CacheTelemetry — per-provider hit/miss/mode tracking
+try:
+    from tokenpak.runtime.cache_telemetry import CacheTelemetry as _CacheTelemetry
+    _CACHE_TELEMETRY_AVAILABLE = True
+except ImportError as _cte:
+    _CACHE_TELEMETRY_AVAILABLE = False
+    _CacheTelemetry = None
+    print(f"  ⚠️ CacheTelemetry not available: {_cte}")
+
+# Query expansion — stop words, stemming, synonym aliases for better BM25 recall
+try:
+    from tokenpak.agent.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
+    _QUERY_EXPANSION_AVAILABLE = True
+except ImportError:
+    _QUERY_EXPANSION_AVAILABLE = False
+
+# Backend protocol — pluggable retrieval backends and semantic scorers
+try:
+    from tokenpak.agent.vault.backend_protocol import (
+        load_custom_backend as _load_custom_backend,
+        load_custom_scorer as _load_custom_scorer,
+    )
+    _BACKEND_PROTOCOL_AVAILABLE = True
+except ImportError:
+    _BACKEND_PROTOCOL_AVAILABLE = False
 
 # Try to import migration system (for DB schema version tracking)
 try:
@@ -294,13 +355,34 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_TRACE": "true",
     },
+    # CCG-06: Claude Code / transparent mode — zero body mutations; telemetry still captured
+    "claude-code": {
+        "TOKENPAK_MODE": "transparent",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "99999999",
+        "TOKENPAK_SKELETON_ENABLED": "false",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_SHADOW_ENABLED": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "false",
+        "TOKENPAK_ROUTER_ENABLED": "false",
+        "TOKENPAK_TRACE": "true",
+    },
+    "transparent": {  # alias for claude-code
+        "TOKENPAK_MODE": "transparent",
+        "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "99999999",
+        "TOKENPAK_SKELETON_ENABLED": "false",
+        "TOKENPAK_CAPSULE_BUILDER": "false",
+        "TOKENPAK_SHADOW_ENABLED": "false",
+        "TOKENPAK_BUDGET_CONTROLLER": "false",
+        "TOKENPAK_ROUTER_ENABLED": "false",
+        "TOKENPAK_TRACE": "true",
+    },
 }
 
 ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
 if ACTIVE_PROFILE in _PROFILE_PRESETS:
     for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
         os.environ.setdefault(_pk, _pv)
-    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic)")
+    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic|claude-code|transparent)")
 else:
     print(f"⚠️  Unknown TOKENPAK_PROFILE={ACTIVE_PROFILE!r} — ignoring, using env vars as-is")
     ACTIVE_PROFILE = "custom"
@@ -312,6 +394,8 @@ DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOA
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
+# CCG-02: mutation_audit TTL — prune rows older than this many days
+MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 # ── Swap Pressure Monitoring ──────────────────────────────────────────────────
 SWAP_PRESSURE_THRESHOLD_MB: int = int(os.environ.get("TOKENPAK_SWAP_WARN_MB", "600"))
 _SWAP_WARN_LAST_LOGGED: float = 0.0
@@ -321,6 +405,9 @@ SWAP_TELEGRAM_ALERT_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_MB", "1024
 _SWAP_TELEGRAM_LAST_SENT: float = 0.0
 _SWAP_TELEGRAM_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_COOLDOWN_S", "1800"))
 _SWAP_TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "461720084")
+SWAP_SELF_HEAL_SCRIPT: str = os.environ.get("TOKENPAK_SWAP_SELF_HEAL_SCRIPT", os.path.expanduser("~/vault/06_RUNTIME/scripts/self-heal-memory.sh"))
+_SWAP_SELF_HEAL_LAST_RUN: float = 0.0
+_SWAP_SELF_HEAL_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_SELF_HEAL_COOLDOWN_S", "1800"))
 
 
 def get_swap_mb() -> int:
@@ -349,6 +436,36 @@ def _get_system_swap_mb() -> int:
         return (total - free) // 1024
     except Exception:
         return 0
+
+
+def _run_swap_self_heal(swap_mb: int) -> bool:
+    """Run the external self-heal script (rate-limited)."""
+    global _SWAP_SELF_HEAL_LAST_RUN
+    import time as _time
+    now = _time.time()
+    if now - _SWAP_SELF_HEAL_LAST_RUN < _SWAP_SELF_HEAL_COOLDOWN_S:
+        return False
+    try:
+        if not os.path.exists(SWAP_SELF_HEAL_SCRIPT):
+            logging.warning("[swap_alert] self-heal script missing: %s", SWAP_SELF_HEAL_SCRIPT)
+            return False
+        proc = subprocess.run(
+            [SWAP_SELF_HEAL_SCRIPT, str(SWAP_TELEGRAM_ALERT_MB)],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+        _SWAP_SELF_HEAL_LAST_RUN = now
+        if proc.stdout:
+            logging.info("[swap_alert] self-heal stdout: %s", proc.stdout.strip().replace("\n", " | "))
+        if proc.stderr:
+            logging.warning("[swap_alert] self-heal stderr: %s", proc.stderr.strip().replace("\n", " | "))
+        logging.info("[swap_alert] self-heal exit=%s for swap=%dMB", proc.returncode, swap_mb)
+        return proc.returncode == 0
+    except Exception as _e:
+        logging.warning("[swap_alert] self-heal failed: %s", _e)
+        return False
 
 
 def _send_swap_telegram_alert(swap_mb: int) -> None:
@@ -401,10 +518,15 @@ def check_swap_pressure() -> int:
                 "(threshold: %dMB)", swap_mb, SWAP_PRESSURE_THRESHOLD_MB
             )
             _SWAP_WARN_LAST_LOGGED = now
-    # Check system-wide swap for Telegram alert (separate threshold)
+    # Check system-wide swap for self-heal + alert escalation (separate threshold)
     sys_swap_mb = _get_system_swap_mb()
     if sys_swap_mb >= SWAP_TELEGRAM_ALERT_MB:
-        _send_swap_telegram_alert(sys_swap_mb)
+        healed = _run_swap_self_heal(sys_swap_mb)
+        post_heal_swap_mb = _get_system_swap_mb() if healed else sys_swap_mb
+        if post_heal_swap_mb >= SWAP_TELEGRAM_ALERT_MB:
+            _send_swap_telegram_alert(post_heal_swap_mb)
+        else:
+            logging.info("[swap_alert] self-heal resolved swap pressure: %dMB -> %dMB", sys_swap_mb, post_heal_swap_mb)
     return swap_mb
 
 VAULT_SYNC_INTERVAL = 60
@@ -540,6 +662,27 @@ if CACHE_REGISTRY_ENABLED:
         print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
         CACHE_REGISTRY_ENABLED = False
 
+# CACHE-P4-001: CacheSpec singleton — loaded once at module startup from config
+CACHE_SPEC: Optional["_CacheSpec"] = None
+if _CACHE_SPEC_AVAILABLE:
+    try:
+        CACHE_SPEC = _load_cache_spec_from_config(_cfg)
+        print(
+            f"  🗂️  CacheSpec initialized: enabled={CACHE_SPEC.enabled}, "
+            f"fallback={CACHE_SPEC.fallback_policy.value}"
+        )
+    except Exception as _cs_init_err:
+        print(f"  ⚠️ CacheSpec init failed (cache disabled): {_cs_init_err}")
+
+# CACHE-P4-002: CacheTelemetry singleton — per-provider hit/miss/mode tracking
+CACHE_TELEMETRY: Optional["_CacheTelemetry"] = None
+if _CACHE_TELEMETRY_AVAILABLE:
+    try:
+        CACHE_TELEMETRY = _CacheTelemetry()
+        print("  📊 CacheTelemetry initialized: per-provider tracking enabled")
+    except Exception as _ct_init_err:
+        print(f"  ⚠️ CacheTelemetry init failed: {_ct_init_err}")
+
 # Upstream
 UPSTREAM_TIMEOUT: int = _cfg("upstream.timeout", 90, "TOKENPAK_UPSTREAM_TIMEOUT", int)
 STRICT_VALIDATION: bool = _cfg("features.strict_mode", False, "TOKENPAK_STRICT_MODE", bool)
@@ -589,6 +732,9 @@ VAULT_CACHE_PRELOAD: int = _cfg(
 RETRIEVAL_BACKEND = _cfg(
     "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
 ).lower()
+SEMANTIC_BACKEND = _cfg(
+    "vault.semantic_backend", "", "TOKENPAK_SEMANTIC_BACKEND", str
+)
 
 # Term-Card Resolver
 TERM_RESOLVER_ENABLED: bool = _cfg(
@@ -725,95 +871,6 @@ def _build_key_pool() -> list:
     return pool
 
 _ANTHROPIC_KEY_POOL: list = _build_key_pool()
-
-
-# ---------------------------------------------------------------------------
-# ChatGPT Codex OAuth credentials — read from ~/.codex/auth.json (the file
-# the official Codex CLI manages). Cached in-process; reloaded if the file
-# mtime changes. Used to inject Authorization + chatgpt-account-id headers
-# when forwarding to chatgpt.com/backend-api.
-# ---------------------------------------------------------------------------
-_CODEX_AUTH_PATH = os.path.expanduser("~/.codex/auth.json")
-_CODEX_CREDS_CACHE: dict = {"mtime": 0.0, "access_token": "", "account_id": ""}
-_CODEX_CREDS_LOCK = threading.Lock()
-
-
-def _load_codex_credentials() -> Tuple[str, str]:
-    """Return ``(access_token, account_id)`` for ChatGPT Codex.
-
-    Reads ``~/.codex/auth.json`` (managed by the Codex CLI). Cached and
-    refreshed when the file mtime changes — keeps in-flight requests cheap
-    while still picking up `codex login` refreshes without a proxy restart.
-    Returns ``("", "")`` if the file is missing or unreadable.
-    """
-    try:
-        st = os.stat(_CODEX_AUTH_PATH)
-    except OSError:
-        return "", ""
-    with _CODEX_CREDS_LOCK:
-        if st.st_mtime != _CODEX_CREDS_CACHE["mtime"]:
-            try:
-                with open(_CODEX_AUTH_PATH, "r") as f:
-                    data = json.load(f)
-                tokens = data.get("tokens", {}) if isinstance(data, dict) else {}
-                _CODEX_CREDS_CACHE["access_token"] = tokens.get("access_token", "") or ""
-                _CODEX_CREDS_CACHE["account_id"] = tokens.get("account_id", "") or ""
-                _CODEX_CREDS_CACHE["mtime"] = st.st_mtime
-                tok_present = bool(_CODEX_CREDS_CACHE["access_token"])
-                print(
-                    f"[codex-auth] Loaded ~/.codex/auth.json (token={'yes' if tok_present else 'no'}, account_id={'yes' if _CODEX_CREDS_CACHE['account_id'] else 'no'})",
-                    flush=True,
-                )
-            except (OSError, ValueError) as exc:
-                print(f"[codex-auth] Failed to read {_CODEX_AUTH_PATH}: {exc}", flush=True)
-                return "", ""
-        return _CODEX_CREDS_CACHE["access_token"], _CODEX_CREDS_CACHE["account_id"]
-
-
-# ---------------------------------------------------------------------------
-# Claude CLI OAuth credentials — read from ~/.claude/.credentials.json
-# (managed by `claude` CLI / claude.ai login). Used to inject the
-# Authorization for outbound api.anthropic.com calls so OpenClaw and other
-# clients don't have to maintain their own copy of an Anthropic OAT — the
-# Claude CLI handles refresh, the proxy just reads the file.
-# ---------------------------------------------------------------------------
-_CLAUDE_CLI_CREDS_PATH = os.path.expanduser("~/.claude/.credentials.json")
-_CLAUDE_CLI_CREDS_CACHE: dict = {"mtime": 0.0, "access_token": ""}
-_CLAUDE_CLI_CREDS_LOCK = threading.Lock()
-
-
-def _load_claude_cli_token() -> str:
-    """Return the Claude CLI OAuth access token, or "" if unavailable.
-
-    Reads ``~/.claude/.credentials.json`` (the Claude CLI's credential
-    store). Cached and refreshed when the file mtime changes — when the
-    Claude CLI auto-refreshes the token, the proxy picks it up on the
-    next request without a restart.
-    """
-    try:
-        st = os.stat(_CLAUDE_CLI_CREDS_PATH)
-    except OSError:
-        return ""
-    with _CLAUDE_CLI_CREDS_LOCK:
-        if st.st_mtime != _CLAUDE_CLI_CREDS_CACHE["mtime"]:
-            try:
-                with open(_CLAUDE_CLI_CREDS_PATH, "r") as f:
-                    data = json.load(f)
-                oauth = data.get("claudeAiOauth", {}) if isinstance(data, dict) else {}
-                _CLAUDE_CLI_CREDS_CACHE["access_token"] = oauth.get("accessToken", "") or ""
-                _CLAUDE_CLI_CREDS_CACHE["mtime"] = st.st_mtime
-                tok_present = bool(_CLAUDE_CLI_CREDS_CACHE["access_token"])
-                print(
-                    f"[claude-cli-auth] Loaded ~/.claude/.credentials.json (token={'yes' if tok_present else 'no'})",
-                    flush=True,
-                )
-            except (OSError, ValueError) as exc:
-                print(
-                    f"[claude-cli-auth] Failed to read {_CLAUDE_CLI_CREDS_PATH}: {exc}",
-                    flush=True,
-                )
-                return ""
-        return _CLAUDE_CLI_CREDS_CACHE["access_token"]
 
 
 def _reload_config_from_env() -> str:
@@ -964,6 +1021,60 @@ def _cap_cache_control_blocks(body_bytes, max_blocks=4):
     return json.dumps(body).encode()
 
 
+# ---------------------------------------------------------------------------
+# CACHE-P3-001: Anthropic top-level auto cache mode
+# ---------------------------------------------------------------------------
+
+class CacheMode(Enum):
+    AUTO = "auto"       # Top-level request-level cache_control (Anthropic auto mode)
+    EXPLICIT = "explicit"  # Per-block cache_control markers (existing behavior)
+
+
+def _select_anthropic_cache_mode(headers: dict, body_dict: dict) -> CacheMode:
+    """Select auto vs explicit cache mode for an Anthropic request.
+
+    Pops 'tokenpak_cache_mode' from body_dict if present — it must not be
+    forwarded upstream.  Header takes precedence over body field; both take
+    precedence over the conversation-length heuristic.
+    """
+    mode_hint = headers.get("x-tokenpak-cache-mode") or body_dict.pop("tokenpak_cache_mode", None)
+    if mode_hint == "explicit":
+        return CacheMode.EXPLICIT
+    if mode_hint == "auto":
+        return CacheMode.AUTO
+    # Default: auto for multi-turn (>2 messages), explicit for short/single-turn
+    if len(body_dict.get("messages", [])) > 2:
+        return CacheMode.AUTO
+    return CacheMode.EXPLICIT
+
+
+def _apply_anthropic_auto_cache(body_dict: dict) -> None:
+    """Apply Anthropic top-level auto cache mode (in-place).
+
+    Strips per-block cache_control markers injected by earlier pipeline stages
+    and sets a single top-level cache_control field.  Anthropic automatically
+    moves the cache breakpoint to the last cacheable block as the conversation
+    grows, making this the preferred mode for multi-turn sessions.
+
+    API reference: top-level ``cache_control: {"type": "ephemeral"}`` on the
+    messages endpoint (same response fields as explicit mode —
+    cache_creation_input_tokens and cache_read_input_tokens in usage).
+    """
+    for block in body_dict.get("system", []):
+        if isinstance(block, dict):
+            block.pop("cache_control", None)
+    for tool in body_dict.get("tools", []):
+        if isinstance(tool, dict):
+            tool.pop("cache_control", None)
+    for msg in body_dict.get("messages", []):
+        content = msg.get("content", [])
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    block.pop("cache_control", None)
+    body_dict["cache_control"] = {"type": "ephemeral"}  # noqa: anthropic-only — caller guards Provider.ANTHROPIC
+
+
 def _resolve_upstream(adapter: FormatAdapter) -> str:
     mapped = UPSTREAM_ROUTES.get(adapter.source_format)
     if mapped:
@@ -1024,15 +1135,19 @@ _provider_circuit_lock = threading.Lock()
 
 
 def _provider_for_url(url: str) -> str:
-    if "anthropic.com" in url:
-        return "anthropic"
-    if "chatgpt.com" in url:
-        return "openai"
-    if "openai.com" in url:
-        return "openai"
-    if "googleapis.com" in url:
+    """Map *url* to a circuit-breaker key via ``detect_provider``.
+
+    Returns a plain string (the Provider enum value) for backward
+    compatibility with the ``_provider_circuits`` dict keys.  The special
+    mapping ``GEMINI -> "google"`` preserves the existing circuit key.
+    """
+    prov = detect_provider(url)
+    if prov is Provider.UNKNOWN:
+        return ""
+    # The circuit-breaker dict uses "google" for Gemini endpoints.
+    if prov is Provider.GEMINI:
         return "google"
-    return ""
+    return prov.value
 
 
 def _circuit_check(provider: str) -> bool:
@@ -1077,6 +1192,224 @@ def _circuit_record_success(provider: str):
             cb["open"] = False
 
 
+# ---------------------------------------------------------------------------
+# CCI-05: Provider Failover Chain (Anthropic 5xx/timeout → Bedrock → Vertex → queue)
+# ---------------------------------------------------------------------------
+# TOKENPAK_FALLBACK_CHAIN: comma-separated ordered provider list.
+# Default is "anthropic" only — failover is opt-in.
+# Example: TOKENPAK_FALLBACK_CHAIN=anthropic,bedrock,vertex,queue
+_FALLBACK_CHAIN_RAW: str = os.environ.get("TOKENPAK_FALLBACK_CHAIN", "anthropic")
+_FALLBACK_CHAIN: List[str] = [p.strip().lower() for p in _FALLBACK_CHAIN_RAW.split(",") if p.strip()]
+
+# Bedrock base URL — can be overridden via TOKENPAK_BEDROCK_BASE_URL
+_BEDROCK_BASE_URL: str = os.environ.get(
+    "TOKENPAK_BEDROCK_BASE_URL",
+    "https://bedrock-runtime.us-east-1.amazonaws.com",
+)
+# Vertex AI base URL — can be overridden via TOKENPAK_VERTEX_BASE_URL
+_VERTEX_BASE_URL: str = os.environ.get(
+    "TOKENPAK_VERTEX_BASE_URL",
+    "https://us-east5-aiplatform.googleapis.com",
+)
+# Vertex project ID — required if vertex is in the chain
+_VERTEX_PROJECT: str = os.environ.get("TOKENPAK_VERTEX_PROJECT", "")
+
+# SQLite queue for the "queue" fallback provider
+_FAILOVER_QUEUE_DB: str = os.environ.get(
+    "TOKENPAK_FAILOVER_QUEUE_DB",
+    str(Path(__file__).parent / "failover_queue.db"),
+)
+
+# In-memory failover event log (thread-safe, capped at 500 events)
+_FAILOVER_EVENTS: deque = deque(maxlen=500)
+_FAILOVER_EVENTS_LOCK = threading.Lock()
+
+
+def _log_failover_event(
+    from_provider: str,
+    to_provider: str,
+    reason: str,
+    model: str,
+    status_code: int = 0,
+    profile: str = "",
+) -> None:
+    """Append a failover event to the in-memory log."""
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "from_provider": from_provider,
+        "to_provider": to_provider,
+        "reason": reason,
+        "model": model,
+        "status_code": status_code,
+        "profile": profile,
+    }
+    with _FAILOVER_EVENTS_LOCK:
+        _FAILOVER_EVENTS.append(event)
+    print(
+        f"[failover] {from_provider} → {to_provider} | reason={reason} | model={model} | profile={profile}",
+        flush=True,
+    )
+
+
+# Model name translation table: Anthropic model id → provider-specific id.
+# Same model, different API surface name.  No model substitution.
+_MODEL_TRANSLATION: Dict[str, Dict[str, str]] = {
+    # Claude 3.5 Sonnet
+    "claude-3-5-sonnet-20241022": {
+        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "vertex": "claude-3-5-sonnet@20241022",
+    },
+    "claude-3-5-sonnet-latest": {
+        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "vertex": "claude-3-5-sonnet@20241022",
+    },
+    # Claude 3.5 Haiku
+    "claude-3-5-haiku-20241022": {
+        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "vertex": "claude-3-5-haiku@20241022",
+    },
+    "claude-3-5-haiku-latest": {
+        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "vertex": "claude-3-5-haiku@20241022",
+    },
+    # Claude 3 Opus
+    "claude-3-opus-20240229": {
+        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
+        "vertex": "claude-3-opus@20240229",
+    },
+    "claude-3-opus-latest": {
+        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
+        "vertex": "claude-3-opus@20240229",
+    },
+    # Claude 3 Sonnet
+    "claude-3-sonnet-20240229": {
+        "bedrock": "anthropic.claude-3-sonnet-20240229-v1:0",
+        "vertex": "claude-3-sonnet@20240229",
+    },
+    # Claude 3 Haiku
+    "claude-3-haiku-20240307": {
+        "bedrock": "anthropic.claude-3-haiku-20240307-v1:0",
+        "vertex": "claude-3-haiku@20240307",
+    },
+    # Claude 4 Sonnet (claude-sonnet-4-5 / claude-sonnet-4-6 shorthand)
+    "claude-sonnet-4-5": {
+        "bedrock": "anthropic.claude-sonnet-4-5-20251101-v1:0",
+        "vertex": "claude-sonnet-4-5@20251101",
+    },
+    "claude-sonnet-4-6": {
+        "bedrock": "anthropic.claude-sonnet-4-6-20260101-v1:0",
+        "vertex": "claude-sonnet-4-6@20260101",
+    },
+    "claude-opus-4-6": {
+        "bedrock": "anthropic.claude-opus-4-6-20260101-v1:0",
+        "vertex": "claude-opus-4-6@20260101",
+    },
+    # Aliases / shorthand used by Claude Code CLI
+    "sonnet": {
+        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "vertex": "claude-3-5-sonnet@20241022",
+    },
+    "haiku": {
+        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "vertex": "claude-3-5-haiku@20241022",
+    },
+    "opus": {
+        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
+        "vertex": "claude-3-opus@20240229",
+    },
+}
+
+
+def _translate_model(model_id: str, provider: str) -> str:
+    """
+    Translate an Anthropic model id to the provider-specific model id.
+    Returns the original model_id if no mapping exists (pass-through).
+    Never substitutes a different model family — only maps same model to provider API name.
+    """
+    entry = _MODEL_TRANSLATION.get(model_id, {})
+    return entry.get(provider, model_id)
+
+
+def _build_failover_url(provider: str, original_url: str, model: str) -> str:
+    """
+    Build the target URL for a fallback provider.
+    Returns "" if provider is not supported / credentials missing.
+    """
+    if provider == "bedrock":
+        bedrock_model = _translate_model(model, "bedrock")
+        return f"{_BEDROCK_BASE_URL}/model/{bedrock_model}/invoke"
+    if provider == "vertex":
+        if not _VERTEX_PROJECT:
+            print("[failover] vertex: TOKENPAK_VERTEX_PROJECT not set — skipping vertex", flush=True)
+            return ""
+        vertex_model = _translate_model(model, "vertex")
+        return (
+            f"{_VERTEX_BASE_URL}/v1/projects/{_VERTEX_PROJECT}"
+            f"/locations/us-east5/publishers/anthropic/models/{vertex_model}:streamRawPredict"
+        )
+    return ""
+
+
+def _build_failover_headers(provider: str, original_headers: dict) -> dict:
+    """
+    Build provider-specific headers for the fallback request.
+    Bedrock uses AWS SigV4 (injected by boto3 or env-level signing if available).
+    Vertex uses Google OAuth Bearer.
+    """
+    headers = {k: v for k, v in original_headers.items()}
+    # Strip Anthropic auth headers
+    for key in list(headers.keys()):
+        if key.lower() in ("x-api-key", "authorization"):
+            del headers[key]
+
+    if provider == "bedrock":
+        # Bedrock uses AWS SigV4 — boto3 session signing is out of scope for proxy-layer.
+        # We pass AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY from env and let boto3 sign.
+        # If boto3 not available, attempt unsigned (will 403 but caller can skip).
+        headers["Content-Type"] = "application/json"
+        headers["Accept"] = "application/json"
+        # Note: actual signing handled by boto3 session if available; otherwise unsigned stub
+    elif provider == "vertex":
+        gcp_token = os.environ.get("TOKENPAK_VERTEX_TOKEN", "")
+        if gcp_token:
+            headers["Authorization"] = f"Bearer {gcp_token}"
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def _write_failover_queue(body: Optional[bytes], model: str, profile: str) -> str:
+    """
+    Write a failed request to the local SQLite failover queue.
+    Returns the row id as a string for the Retry-After header.
+    Table is created on first write.
+    """
+    import sqlite3 as _sqlite3
+
+    try:
+        conn = _sqlite3.connect(_FAILOVER_QUEUE_DB, timeout=5)
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS failover_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                queued_at TEXT NOT NULL,
+                model TEXT NOT NULL,
+                profile TEXT NOT NULL,
+                body BLOB,
+                status TEXT NOT NULL DEFAULT 'pending'
+            )"""
+        )
+        cur = conn.execute(
+            "INSERT INTO failover_queue (queued_at, model, profile, body) VALUES (?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), model, profile, body),
+        )
+        conn.commit()
+        row_id = str(cur.lastrowid)
+        conn.close()
+        return row_id
+    except Exception as _qe:
+        print(f"[failover] queue write failed: {_qe}", flush=True)
+        return "0"
+
+
 # Per-IP rate limiting — token bucket, 60 req/min per IP by default
 _RATE_LIMIT_RPM = _cfg("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
 _rate_buckets: dict = {}
@@ -1104,7 +1437,30 @@ _BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
         "x-real-ip",
         "x-forwarded-host",  # prevent IP spoofing upstream
         "x-tokenpak-bypass",  # internal header — never forward to upstream
+        "x-tokenpak-cache-key",  # CACHE-P2-001: extracted and translated, not forwarded raw
+        "x-tokenpak-cache-retention",  # CACHE-P2-001: extracted and translated, not forwarded raw
     }
+)
+
+# CCG-04: Per-route HTTP header forwarding allowlists.
+# Mirrors the WS-path tuple (proxy.py line ~7303) onto the HTTP path.
+# OPENCLAW_HEADER_ALLOWLIST must never gain new entries — OpenClaw traffic
+# must produce exactly the same forwarded headers as before (bit-for-bit).
+# CLAUDE_CODE_HEADER_ALLOWLIST extends it with Claude Code-specific headers.
+OPENCLAW_HEADER_ALLOWLIST: tuple = (
+    "x-api-key",
+    "authorization",
+    "anthropic-version",
+    "anthropic-beta",
+)
+CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
+    "x-api-key",
+    "authorization",
+    "anthropic-version",
+    "anthropic-beta",
+    "anthropic-dangerous-direct-browser-access",
+    "x-claude-code-session-id",
+    "user-agent",
 )
 
 
@@ -1116,6 +1472,54 @@ def _sanitize_headers(raw_headers) -> dict:
             continue
         result[key] = raw_headers[key]
     return result
+
+
+def _classify_route(path: str, headers) -> str:
+    """Classify an incoming HTTP request as 'claude-code' or 'openclaw'.
+
+    Inspects headers only — no DB access, no network round-trips.
+    Claude Code wins when both X-Claude-Code-Session-Id and X-OpenClaw-Session
+    are present (matching CCG-03's resolver priority order).
+
+    Returns:
+        "claude-code"  if X-Claude-Code-Session-Id is present (case-insensitive)
+        "openclaw"     otherwise
+    """
+    if hasattr(headers, "items"):
+        for k, _ in headers.items():
+            if k.lower() == "x-claude-code-session-id":
+                return "claude-code"
+    elif hasattr(headers, "get"):
+        for variant in ("X-Claude-Code-Session-Id", "x-claude-code-session-id"):
+            if headers.get(variant):
+                return "claude-code"
+    return "openclaw"
+
+
+def _resolve_session_id(headers, model: str) -> str:
+    """Resolve session id with Claude Code priority.
+
+    Order: X-Claude-Code-Session-Id (Claude Code) -> X-OpenClaw-Session
+    (OpenClaw) -> model name (last-resort fallback).
+    """
+    # Case-insensitive header lookup
+    def _h(name):
+        if hasattr(headers, "get"):
+            # Try common cases first; many header collections are
+            # case-insensitive but some test contexts use plain dicts.
+            for variant in (name, name.lower(), name.title()):
+                v = headers.get(variant)
+                if v:
+                    return v
+        return None
+
+    cc_id = _h("X-Claude-Code-Session-Id")
+    if cc_id:
+        return cc_id
+    oc_id = _h("X-OpenClaw-Session")
+    if oc_id:
+        return oc_id
+    return model
 
 
 def _suggest_model(requested: str) -> Optional[str]:
@@ -1599,8 +2003,21 @@ class VaultIndex:
     def search(
         self, query: str, top_k: int = 5, min_score: float = 2.0
     ) -> List[Tuple[dict, float]]:
-        """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
-        query_terms = _bm25_tokenize(query)
+        """BM25 search across vault blocks with query expansion.
+
+        When query expansion is available, search terms are expanded with
+        synonyms/aliases (weight 0.5) and stemmed forms (weight 0.8).
+        Each expanded term's BM25 contribution is multiplied by its weight,
+        improving recall on vocabulary-mismatch queries while preserving
+        precision on exact matches.
+
+        Returns [(block_dict, score), ...] sorted by score descending.
+        """
+        # Use weighted query expansion when available
+        weighted_terms = _bm25_tokenize_query(query)
+        query_terms = [t for t, _ in weighted_terms]
+        term_weights = {t: w for t, w in weighted_terms}
+
         if not query_terms or not self.blocks:
             return []
 
@@ -1663,7 +2080,11 @@ class VaultIndex:
                     continue
                 numerator = term_freq * (k1 + 1)
                 denominator = term_freq + k1 * (1 - b_param + b_param * dl / avg_dl)
-                score += idf * numerator / denominator
+                # Weight the BM25 contribution by term weight (1.0 for original,
+                # 0.5 for aliases, 0.8 for stems) — expansion terms contribute
+                # proportionally less than exact matches
+                weight = term_weights.get(qt, 1.0)
+                score += weight * idf * numerator / denominator
             if score >= min_score:
                 scores[bid] = score
 
@@ -1724,9 +2145,27 @@ class VaultIndex:
 
 
 # BM25 tokenizer — lru_cache gives 50x speedup on repeated queries (search terms repeat often)
+# Enhanced with query expansion (stop words, stemming, aliases) when available.
 @lru_cache(maxsize=512)
 def _bm25_tokenize(text: str) -> List[str]:
+    """Tokenize text for BM25 indexing (includes stemmed forms, removes stop words)."""
+    if _QUERY_EXPANSION_AVAILABLE:
+        return list(_qe_tokenize(text, mode="index"))
     return re.findall(r"[a-z0-9_]+", text.lower())
+
+
+def _bm25_tokenize_query(query: str) -> List[Tuple[str, float]]:
+    """Tokenize a search query with expansion (aliases + stems + weights).
+
+    Returns list of (term, weight) tuples. Original terms get weight 1.0,
+    aliases get 0.5, stems get 0.8.
+    """
+    if _QUERY_EXPANSION_AVAILABLE:
+        tokens = list(_qe_tokenize(query, mode="query"))
+        return _qe_expand(tokens)
+    # Fallback: all terms weighted equally at 1.0
+    terms = re.findall(r"[a-z0-9_]+", query.lower())
+    return [(t, 1.0) for t in terms]
 
 
 # Global vault index instance — backend-aware
@@ -1745,9 +2184,77 @@ else:
     VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
     print(f"  📦 Vault retrieval backend: json_blocks ({VAULT_INDEX_PATH})")
 
+# Custom backend override (Replace mode): TOKENPAK_RETRIEVAL_BACKEND=custom:module.ClassName
+if RETRIEVAL_BACKEND.startswith("custom:") and _BACKEND_PROTOCOL_AVAILABLE:
+    try:
+        VAULT_INDEX = _load_custom_backend(RETRIEVAL_BACKEND, VAULT_INDEX_PATH)
+        print(f"  📦 Vault retrieval backend: custom ({RETRIEVAL_BACKEND})")
+    except (ValueError, ImportError, AttributeError, TypeError) as _custom_err:
+        print(f"  ⚠️  Custom backend failed ({_custom_err}), falling back to json_blocks")
+        VAULT_INDEX = VaultIndex(VAULT_INDEX_PATH)
+
 # HOTFIX 2026-03-27: Load vault index on startup (was previously only in bg timer)
 VAULT_INDEX.maybe_reload()
 print(f"  ✅ Vault index loaded: {len(VAULT_INDEX.blocks)} blocks")
+
+# Semantic scorer (Augment mode): TOKENPAK_SEMANTIC_BACKEND=custom:module.ClassName
+SEMANTIC_SCORER = None
+if SEMANTIC_BACKEND and SEMANTIC_BACKEND.startswith("custom:") and _BACKEND_PROTOCOL_AVAILABLE:
+    try:
+        SEMANTIC_SCORER = _load_custom_scorer(SEMANTIC_BACKEND)
+        print(f"  🧠 Semantic scorer loaded: {SEMANTIC_BACKEND}")
+    except (ValueError, ImportError, AttributeError, TypeError) as _scorer_err:
+        print(f"  ⚠️  Semantic scorer failed ({_scorer_err}), running without Augment mode")
+
+# Log query expansion status
+if _QUERY_EXPANSION_AVAILABLE:
+    print("  🔍 Query expansion: enabled (stop words, stemming, aliases)")
+else:
+    print("  🔍 Query expansion: disabled (module not available)")
+
+
+def _compile_from_results(
+    results: List[Tuple[dict, float]], budget: int
+) -> Tuple[str, int, List[str]]:
+    """Build injection text from pre-scored results within a token budget.
+
+    Used by Augment mode after multi-signal rescoring to format injection
+    from score_and_sort() output without re-searching.
+    """
+    if not results:
+        return "", 0, []
+
+    injection_parts: List[str] = []
+    tokens_used = 0
+    source_refs: List[str] = []
+
+    for block, score in results:
+        content = VAULT_INDEX._get_content(block["block_id"])
+        block_tokens = block.get("raw_tokens", 0) or count_tokens(content)
+
+        remaining = budget - tokens_used
+        if remaining <= 100:
+            break
+
+        if block_tokens > remaining:
+            char_limit = remaining * 4
+            content = content[:char_limit].rsplit("\n", 1)[0]
+            block_tokens = count_tokens(content)
+            if block_tokens > remaining:
+                break
+
+        source_path = block.get("source_path", block.get("block_id", "unknown"))
+        injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
+        tokens_used += block_tokens
+        source_refs.append(source_path)
+
+    if not injection_parts:
+        return "", 0, []
+
+    header = "\n\n## Retrieved Context\n"
+    injection_text = header + "\n\n".join(injection_parts)
+    tokens_used = count_tokens(injection_text)
+    return injection_text, tokens_used, source_refs
 
 
 def _vault_index_reload_timer() -> None:
@@ -2434,7 +2941,7 @@ def classify_message_risk(msg: dict) -> str:
 
 
 def can_compress(risk_class: str, mode: str) -> bool:
-    if mode == "strict":
+    if mode in ("strict", "transparent"):
         return False
     if risk_class == "protected":
         return False
@@ -2483,13 +2990,15 @@ def _db_writer_worker():
             try:
                 with _DB_LOCK:
                     conn = _get_db_connection(db_path)
+                    # CACHE-P4-002: Extended schema with cache telemetry columns
                     conn.execute(
                         """INSERT INTO requests
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_provider,cache_hit_inference,cache_estimated_savings,
+                            session_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -2514,6 +3023,69 @@ def _get_db_connection(db_path: str) -> sqlite3.Connection:
         _DB_CONNECTION.execute("PRAGMA synchronous=NORMAL")
         _DB_CONNECTION.execute("PRAGMA busy_timeout=5000")
     return _DB_CONNECTION
+
+
+def _prune_mutation_audit(conn: sqlite3.Connection, ttl_days: int) -> int:
+    """Delete mutation_audit rows older than ttl_days. Returns number of rows deleted.
+
+    CCG-02: No existing housekeeping cron path was found in proxy.py. CCG-06 should
+    call this function from its request-handling path or wire it into the DB worker
+    loop (_db_write_worker) on a periodic basis (e.g. once per N requests or on
+    Monitor startup alongside _init_db).
+    """
+    cur = conn.execute(
+        "DELETE FROM mutation_audit WHERE timestamp < datetime('now', '-' || ? || ' days')",
+        (ttl_days,),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
+def _write_mutation_audit(
+    db_path: str,
+    request_id,
+    session_id: str,
+    body_pre: bytes,
+    body_post: bytes,
+    rules_applied: list,
+    cache_risk: str,
+    mode: str,
+) -> None:
+    """CCG-06: Write one mutation_audit row per request.
+
+    Hashes body_pre and body_post with SHA-256. In transparent mode,
+    rules_applied must be [] and pre_hash must equal post_hash — the harness
+    asserts this contract.  Writes are synchronous (direct sqlite3, no queue)
+    so the row is durable even if the background DB worker is busy.
+    """
+    import hashlib as _hashlib
+    import json as _json
+
+    pre_hash = _hashlib.sha256(body_pre).hexdigest()
+    post_hash = _hashlib.sha256(body_post).hexdigest()
+    rollback_possible = 1  # always 1 in v1; may diverge in Phase 2
+    try:
+        _conn = sqlite3.connect(str(db_path))
+        _conn.execute(
+            "INSERT INTO mutation_audit "
+            "(request_id, session_id, timestamp, pre_hash, post_hash, "
+            "rules_applied, cache_risk, rollback_possible, mode) "
+            "VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)",
+            (
+                request_id,
+                session_id,
+                pre_hash,
+                post_hash,
+                _json.dumps(rules_applied),
+                cache_risk,
+                rollback_possible,
+                mode,
+            ),
+        )
+        _conn.commit()
+        _conn.close()
+    except Exception:
+        pass  # fail-open: never break a request over audit write
 
 
 class Monitor:
@@ -2573,6 +3145,25 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN would_have_saved INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        # CACHE-P4-002: Add cache telemetry columns
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_provider TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_hit_inference INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN cache_estimated_savings REAL DEFAULT 0.0")
+        except sqlite3.OperationalError:
+            pass
+        # CCG-02: Add session_id column for Claude Code session tracking
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -2586,6 +3177,25 @@ class Monitor:
                 triggered INTEGER DEFAULT 1
             )
         """)
+        conn.commit()
+
+        # CCG-02: mutation_audit table — per-request mutation telemetry
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mutation_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER,
+                session_id TEXT,
+                timestamp TEXT NOT NULL,
+                pre_hash TEXT,
+                post_hash TEXT,
+                rules_applied TEXT,
+                cache_risk TEXT,
+                rollback_possible INTEGER,
+                mode TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)")
         conn.commit()
 
         # Run migrations to bring DB schema up to current version
@@ -2621,7 +3231,13 @@ class Monitor:
         cache_read_tokens=0,
         cache_creation_tokens=0,
         would_have_saved=0,
+        cache_provider="",
+        cache_estimated_savings=0.0,
+        session_id="",
     ):
+        # CACHE-P4-002: Infer cache hit from cache_read_tokens
+        cache_hit_inference = 1 if cache_read_tokens > 0 else 0
+        
         # Enqueue write instead of writing directly (async, <0.1ms return)
         insert_params = (
             datetime.now().isoformat(),
@@ -2641,6 +3257,10 @@ class Monitor:
             cache_read_tokens,
             cache_creation_tokens,
             would_have_saved,
+            cache_provider,
+            cache_hit_inference,
+            cache_estimated_savings,
+            session_id,
         )
         _queued = False
         try:
@@ -2652,8 +3272,8 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings, session_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params
             )
             _conn.commit()
@@ -2886,6 +3506,8 @@ SESSION = {
         "schema_tool_change": 0,
         "retrieval_order_drift_or_unknown": 0,
     },
+    # Per-provider cache telemetry (CACHE-P4-002)
+    "cache_by_provider": {},  # provider_name -> {hits, misses, read_tokens, creation_tokens, savings_usd}
     "token_cache_hits": 0,
     "token_cache_misses": 0,
     "canon_hits": 0,
@@ -2964,6 +3586,54 @@ MODEL_COSTS = {
     "gemini-3-pro-preview": {"input": 1.25, "output": 5.0},
     "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
 }
+
+
+# ---------------------------------------------------------------------------
+# Cache Cost Multipliers — per-provider cache read/creation pricing
+# Source: Provider pricing docs (see CACHE-P4-002 task)
+# read = fraction of input cost for cached tokens
+# creation = multiplier on input cost for cache write (Anthropic only has surcharge)
+# ---------------------------------------------------------------------------
+CACHE_COST_MULTIPLIERS: Dict[Provider, Dict[str, float]] = {
+    Provider.ANTHROPIC: {"read": 0.10, "creation": 1.25},  # reads=10%, creation=125%
+    Provider.OPENAI: {"read": 0.50, "creation": 1.0},       # reads=50%, no creation surcharge
+    Provider.AZURE_OPENAI: {"read": 0.50, "creation": 1.0},
+    Provider.XAI: {"read": 0.50, "creation": 1.0},
+    Provider.GROQ: {"read": 0.0, "creation": 1.0},          # Free (volatile cache)
+    Provider.FIREWORKS: {"read": 0.0, "creation": 1.0},     # No cache pricing surcharge
+    Provider.TOGETHER: {"read": 0.0, "creation": 1.0},      # No cache pricing surcharge
+    Provider.GEMINI: {"read": 0.25, "creation": 1.0},       # 25% of input cost
+    Provider.BEDROCK: {"read": 0.10, "creation": 1.0},      # 10% of input cost
+    Provider.CODEX: {"read": 0.50, "creation": 1.0},        # Follows OpenAI pricing
+    Provider.UNKNOWN: {"read": 0.10, "creation": 1.25},     # Conservative default
+}
+
+
+def estimate_cache_savings(
+    provider: Provider, cache_read_tokens: int, model: str = ""
+) -> float:
+    """Estimate USD saved from cache hits for a given provider.
+    
+    Formula: cache_read_tokens * input_cost * (1.0 - read_multiplier)
+    Example: 1000 Anthropic cache reads at $3/MTok input → 1000 * 0.000003 * 0.90 = $0.0027 saved
+    """
+    if cache_read_tokens <= 0:
+        return 0.0
+    
+    # Get input cost per token
+    input_cost_per_mtok = 3.0  # default
+    for key, costs in MODEL_COSTS.items():
+        if key in model.lower():
+            input_cost_per_mtok = costs["input"]
+            break
+    input_cost_per_tok = input_cost_per_mtok / 1_000_000
+    
+    # Get cache read multiplier
+    multipliers = CACHE_COST_MULTIPLIERS.get(provider, CACHE_COST_MULTIPLIERS[Provider.UNKNOWN])
+    read_mult = multipliers["read"]
+    
+    # Savings = tokens * cost * (1 - discount)
+    return cache_read_tokens * input_cost_per_tok * (1.0 - read_mult)
 
 
 def estimate_cost(model, input_tokens, output_tokens, cache_read=0, cache_creation=0):
@@ -3082,9 +3752,35 @@ def inject_vault_context(
     _t_resolver_ms = (time.perf_counter() - _t2) * 1000
 
     _t3 = time.perf_counter()
-    injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
-        query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
-    )
+    # Augment mode: if a semantic scorer is configured, fuse BM25 + semantic scores
+    if SEMANTIC_SCORER is not None:
+        try:
+            bm25_results = VAULT_INDEX.search(
+                query, top_k=INJECT_TOP_K * 2, min_score=INJECT_MIN_SCORE
+            )
+            if bm25_results:
+                block_ids = [b["block_id"] for b, _ in bm25_results]
+                semantic_scores = SEMANTIC_SCORER.score(query, block_ids)
+                # Import score_and_sort for multi-signal fusion
+                from tokenpak.agent.vault.search import score_and_sort
+                rescored = score_and_sort(
+                    bm25_results, query=query, semantic_scores=semantic_scores
+                )[:INJECT_TOP_K]
+                # Build injection from rescored results
+                injection_text, tokens_used, source_refs = _compile_from_results(
+                    rescored, remaining_budget
+                )
+            else:
+                injection_text, tokens_used, source_refs = "", 0, []
+        except Exception as _sem_err:
+            logging.warning("Semantic scorer failed, falling back to BM25: %s", _sem_err)
+            injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+                query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+            )
+    else:
+        injection_text, tokens_used, source_refs = VAULT_INDEX.compile_injection(
+            query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        )
     _t_bm25_ms = (time.perf_counter() - _t3) * 1000
 
     # Combine glossary + vault injection if both present
@@ -3251,7 +3947,97 @@ def _classify_cache_miss_reason(
     return "retrieval_order_drift_or_unknown"
 
 
+def _get_cache_stats_by_window(hours: int = 24) -> Dict[str, Any]:
+    """Query DB for cache stats within a time window.
+    
+    Returns per-provider stats and overall totals for the given time window.
+    """
+    try:
+        from datetime import datetime, timedelta
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+        
+        conn = sqlite3.connect(str(MONITOR.db_path))
+        cur = conn.cursor()
+        
+        # Get overall stats
+        cur.execute("""
+            SELECT 
+                COUNT(*) as total_requests,
+                SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as cache_hits,
+                COALESCE(SUM(cache_read_tokens), 0) as total_cache_read,
+                COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation,
+                COALESCE(SUM(CASE WHEN cache_provider IS NOT NULL THEN cache_estimated_savings ELSE 0 END), 0) as total_savings
+            FROM requests 
+            WHERE timestamp >= ?
+        """, (cutoff,))
+        overall = cur.fetchone()
+        
+        # Get per-provider stats
+        cur.execute("""
+            SELECT 
+                cache_provider,
+                COUNT(*) as requests,
+                SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as hits,
+                COALESCE(SUM(cache_read_tokens), 0) as read_tokens,
+                COALESCE(SUM(cache_creation_tokens), 0) as creation_tokens,
+                COALESCE(SUM(cache_estimated_savings), 0) as savings
+            FROM requests 
+            WHERE timestamp >= ? AND cache_provider IS NOT NULL AND cache_provider != ''
+            GROUP BY cache_provider
+        """, (cutoff,))
+        per_provider = cur.fetchall()
+        
+        conn.close()
+        
+        total_requests = overall[0] or 0
+        cache_hits = overall[1] or 0
+        hit_rate = (cache_hits / total_requests) if total_requests > 0 else 0.0
+        
+        provider_stats = {}
+        for row in per_provider:
+            provider_name = row[0] or "unknown"
+            provider_requests = row[1] or 0
+            provider_hits = row[2] or 0
+            provider_stats[provider_name] = {
+                "requests": provider_requests,
+                "cache_hits": provider_hits,
+                "hit_rate": round((provider_hits / provider_requests) if provider_requests > 0 else 0.0, 4),
+                "cache_read_tokens": row[3] or 0,
+                "cache_creation_tokens": row[4] or 0,
+                "estimated_savings_usd": round(row[5] or 0.0, 6),
+            }
+        
+        return {
+            "total_requests": total_requests,
+            "cache_hits": cache_hits,
+            "hit_rate": round(hit_rate, 4),
+            "cache_read_tokens": overall[2] or 0,
+            "cache_creation_tokens": overall[3] or 0,
+            "estimated_savings_usd": round(overall[4] or 0.0, 6),
+            "per_provider": provider_stats,
+        }
+    except Exception as e:
+        # Fail gracefully — return session stats if DB query fails
+        return {
+            "total_requests": 0,
+            "cache_hits": 0,
+            "hit_rate": 0.0,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "estimated_savings_usd": 0.0,
+            "per_provider": {},
+            "error": str(e),
+        }
+
+
 def _build_cache_stats_payload() -> Dict[str, Any]:
+    """Build comprehensive cache stats including per-provider breakdowns.
+    
+    Returns:
+        - Session-level stats (since proxy start)
+        - Per-provider session stats
+        - DB-backed time-windowed stats (1h, 24h, 7d)
+    """
     global _TOKEN_CACHE_HITS, _TOKEN_CACHE_MISSES
     
     # Sync module counters to SESSION
@@ -3263,7 +4049,29 @@ def _build_cache_stats_payload() -> Dict[str, Any]:
     total = hits + misses
     hit_rate = (hits / total) if total > 0 else 0.0
     miss_reasons = dict(SESSION.get("cache_miss_reasons", {}))
+    
+    # Session per-provider stats
+    session_by_provider = {}
+    cache_by_provider = SESSION.get("cache_by_provider", {})
+    for provider_name, stats in cache_by_provider.items():
+        provider_hits = stats.get("hits", 0)
+        provider_total = provider_hits + stats.get("misses", 0)
+        session_by_provider[provider_name] = {
+            "cache_hits": provider_hits,
+            "cache_misses": stats.get("misses", 0),
+            "hit_rate": round((provider_hits / provider_total) if provider_total > 0 else 0.0, 4),
+            "cache_read_tokens": stats.get("read_tokens", 0),
+            "cache_creation_tokens": stats.get("creation_tokens", 0),
+            "estimated_savings_usd": round(stats.get("savings_usd", 0.0), 6),
+        }
+    
+    # Time-windowed stats from DB
+    stats_1h = _get_cache_stats_by_window(hours=1)
+    stats_24h = _get_cache_stats_by_window(hours=24)
+    stats_7d = _get_cache_stats_by_window(hours=168)
+    
     return {
+        # Session stats (backward compatible)
         "hit_rate": round(hit_rate, 4),
         "cache_read_tokens": int(SESSION.get("cache_read_tokens", 0) or 0),
         "cache_creation_tokens": int(SESSION.get("cache_creation_tokens", 0) or 0),
@@ -3273,6 +4081,20 @@ def _build_cache_stats_payload() -> Dict[str, Any]:
         "miss_reasons": miss_reasons,
         "token_cache_hits": SESSION["token_cache_hits"],
         "token_cache_misses": SESSION["token_cache_misses"],
+        
+        # Per-provider session stats
+        "session_by_provider": session_by_provider,
+        
+        # Time-windowed stats
+        "last_1h": stats_1h,
+        "last_24h": stats_24h,
+        "last_7d": stats_7d,
+        
+        # Active providers (for quick reference)
+        "active_providers": list(cache_by_provider.keys()) if cache_by_provider else [],
+        
+        # Timestamp
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -3364,9 +4186,357 @@ def compact_request_body(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
 
 
 # ---------------------------------------------------------------------------
+# Gemini cachedContent Support (CACHE-P3-002)
+# ---------------------------------------------------------------------------
+# GEMINI CACHED CONTENT LIFECYCLE:
+# 1. CREATE: Client calls Gemini's cachedContents.create() directly
+#    - Provides system instructions, tools, and/or content to cache
+#    - Gets back a resource name (e.g., "cachedContents/abc123")
+#    - Cache has a TTL (default 1 hour, can be extended up to 7 days)
+# 2. USE: Client passes resource name to TokenPak
+#    - Via header: x-tokenpak-cache-ref
+#    - Via body: tokenpak_cache_object_ref
+#    - TokenPak injects as cachedContent field in generateContent request
+# 3. RESPONSE: Gemini returns cachedContentTokenCount in usageMetadata
+#    - TokenPak maps this to cache_read_tokens in DB
+# 4. MANAGE: Client handles TTL extension, deletion, listing directly with Gemini
+#    - TokenPak does not manage cache object lifecycle
+
+
+def _inject_gemini_cache_ref(provider: Provider, headers: dict, body: bytes) -> bytes:
+    """Inject cachedContent reference for Gemini requests.
+    
+    Accepts cache ref from:
+    - Header: x-tokenpak-cache-ref
+    - Body field: tokenpak_cache_object_ref (stripped before forwarding)
+    
+    Header takes precedence over body field.
+    Only injects for Provider.GEMINI; returns body unchanged for other providers.
+    
+    Args:
+        provider: The detected LLM provider
+        headers: Request headers dict (case-sensitive keys)
+        body: Request body bytes
+        
+    Returns:
+        Modified body bytes with cachedContent injected (if applicable)
+    """
+    if provider != Provider.GEMINI:
+        return body
+    
+    if not body:
+        return body
+    
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+    
+    # Get cache ref: header takes precedence over body field
+    cache_ref = headers.get("x-tokenpak-cache-ref") or headers.get("X-TokenPak-Cache-Ref")
+    body_ref = None
+    
+    if "tokenpak_cache_object_ref" in data:
+        body_ref = data.pop("tokenpak_cache_object_ref")  # Strip from forwarded body
+    
+    final_ref = cache_ref or body_ref
+    
+    if not final_ref:
+        # No cache ref provided — return body (possibly modified to strip field)
+        if body_ref is not None:
+            return json.dumps(data).encode()
+        return body
+    
+    # Inject as Gemini's cachedContent field
+    data["cachedContent"] = final_ref
+    
+    return json.dumps(data).encode()
+
+
+def _parse_gemini_cached_tokens(response_data: dict) -> int:
+    """Parse cachedContentTokenCount from Gemini responses.
+    
+    Gemini returns cache usage in usageMetadata:
+    {
+        "usageMetadata": {
+            "promptTokenCount": 1000,
+            "candidatesTokenCount": 50,
+            "cachedContentTokenCount": 800  // tokens served from cache
+        }
+    }
+    
+    Args:
+        response_data: Parsed JSON response from Gemini
+        
+    Returns:
+        Number of tokens served from cache (0 if not present)
+    """
+    usage = response_data.get("usageMetadata", {})
+    if not isinstance(usage, dict):
+        return 0
+    return usage.get("cachedContentTokenCount", 0)
+
+
+# ---------------------------------------------------------------------------
+# Bedrock Cache Checkpoint Support (CACHE-P3-003)
+# ---------------------------------------------------------------------------
+# BEDROCK CACHE CHECKPOINT LIFECYCLE:
+# 1. CLIENT specifies checkpoint positions via tokenpak_checkpoints field
+# 2. PROXY inserts cachePoint blocks at those positions for Bedrock requests
+# 3. RESPONSE includes CacheReadInputTokens/CacheWriteInputTokens in usage
+# 4. Checkpoints mark boundaries — everything before a checkpoint is cached
+#
+# Key constraints:
+# - Max 4 checkpoints per request (Bedrock limit)
+# - Minimum tokens per checkpoint varies by model (1024-4096)
+# - TTL: 5 minutes default, 1 hour optional for some models
+# - Checkpoint indices are 0-based, insertion happens AFTER the index
+
+
+def _extract_bedrock_checkpoints(body: dict) -> list:
+    """Extract and validate checkpoint positions from TokenPak hints.
+    
+    Accepts tokenpak_checkpoints field containing array of insertion indices.
+    Indices are 0-based and refer to positions in the messages array.
+    A checkpoint at index N means: insert cachePoint AFTER message[N].
+    
+    Args:
+        body: Request body dict (will be modified to strip tokenpak_checkpoints)
+        
+    Returns:
+        List of valid checkpoint indices, sorted in reverse order (for safe insertion)
+    """
+    checkpoints = body.pop("tokenpak_checkpoints", [])
+    if not isinstance(checkpoints, list):
+        return []
+    
+    messages = body.get("messages", [])
+    max_idx = len(messages) - 1
+    
+    if max_idx < 0:
+        return []
+    
+    # Validate: must be integers, in range [0, max_idx], deduplicate
+    valid = []
+    for cp in checkpoints:
+        if isinstance(cp, int) and 0 <= cp <= max_idx:
+            valid.append(cp)
+    
+    # Sort in reverse order for safe insertion (higher indices first)
+    # Deduplicate by converting to set
+    return sorted(set(valid), reverse=True)
+
+
+def _inject_bedrock_checkpoints(provider: Provider, body: bytes) -> bytes:
+    """Insert cachePoint blocks at specified positions for Bedrock requests.
+    
+    Bedrock uses checkpoint blocks to mark cache boundaries. A cachePoint block
+    inserted after message[N] means everything up to and including message[N]
+    is eligible for caching.
+    
+    Format: {"cachePoint": {"type": "default"}}
+    Optional TTL: {"cachePoint": {"type": "default", "ttl": "1h"}}
+    
+    Args:
+        provider: Detected LLM provider
+        body: Request body bytes
+        
+    Returns:
+        Modified body bytes with cachePoint blocks inserted (if Bedrock)
+    """
+    if provider != Provider.BEDROCK:
+        return body
+    
+    if not body:
+        return body
+    
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+    
+    # Extract checkpoints (also strips tokenpak_checkpoints from body)
+    checkpoints = _extract_bedrock_checkpoints(data)
+    
+    if not checkpoints:
+        # No checkpoints specified, but still need to return body without tokenpak_checkpoints
+        return json.dumps(data).encode()
+    
+    messages = data.get("messages", [])
+    if not messages:
+        return json.dumps(data).encode()
+    
+    # Insert cachePoint blocks in reverse index order (preserves lower indices)
+    for idx in checkpoints:
+        # Insert AFTER the message at idx (so at position idx + 1)
+        cache_point = {"cachePoint": {"type": "default"}}
+        messages.insert(idx + 1, cache_point)
+    
+    data["messages"] = messages
+    return json.dumps(data).encode()
+
+
+# ---------------------------------------------------------------------------
+# OpenAI / Azure / Codex / xAI prompt_cache_key Passthrough (CACHE-P2-001)
+# ---------------------------------------------------------------------------
+
+
+def _extract_cache_hints(
+    headers: dict, body: dict
+) -> "tuple[str | None, str | None]":
+    """Extract cache key and retention hints from request headers and body.
+
+    Header takes precedence over body field when both are present.
+    ``tokenpak_cache_hint`` and ``tokenpak_cache_retention`` are *popped* from
+    *body* so they are never forwarded to the upstream provider.
+
+    Args:
+        headers: Request headers dict (case-sensitive).
+        body: Parsed request body dict — modified in-place to strip fields.
+
+    Returns:
+        ``(cache_key, cache_retention)`` — either may be ``None``.
+    """
+    # Always pop body fields to ensure they are stripped from the forwarded body,
+    # regardless of whether a header hint is also present.
+    body_key = body.pop("tokenpak_cache_hint", None)
+    body_retention = body.pop("tokenpak_cache_retention", None)
+    cache_key = headers.get("x-tokenpak-cache-key") or body_key
+    cache_retention = headers.get("x-tokenpak-cache-retention") or body_retention
+    return cache_key, cache_retention
+
+
+def _inject_prompt_cache_key(provider: Provider, headers: dict, body: bytes) -> bytes:
+    """Inject ``prompt_cache_key`` for OpenAI / Azure OpenAI / Codex / xAI requests.
+
+    Accepts cache hints from:
+    - Header ``x-tokenpak-cache-key`` (takes precedence over body field)
+    - Body field ``tokenpak_cache_hint`` (stripped before forwarding)
+
+    Accepts retention hint from:
+    - Header ``x-tokenpak-cache-retention``
+    - Body field ``tokenpak_cache_retention`` (stripped before forwarding)
+
+    The ``x-grok-conv-id`` header is forwarded naturally by ``_sanitize_headers``
+    (it is not in ``_BLOCKED_FORWARD_HEADERS``) — no special handling required here.
+
+    For providers that don't support ``prompt_cache_key``, ``tokenpak_*`` body
+    fields are still stripped so they never reach the upstream provider.
+
+    Args:
+        provider: Detected LLM provider.
+        headers: Request headers dict.
+        body: Request body bytes.
+
+    Returns:
+        Modified body bytes with cache fields injected and ``tokenpak_*`` stripped.
+    """
+    if not body:
+        return body
+
+    # Fast path: skip JSON parse when no cache hints are present
+    _has_header_hint = bool(
+        headers.get("x-tokenpak-cache-key") or headers.get("x-tokenpak-cache-retention")
+    )
+    _has_body_hint = b"tokenpak_cache" in body
+    if not _has_header_hint and not _has_body_hint:
+        return body
+
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return body
+
+    if not isinstance(data, dict):
+        return body
+
+    # Extract hints (pops tokenpak_* fields from data)
+    cache_key, cache_retention = _extract_cache_hints(headers, data)
+
+    if not cache_key:
+        # tokenpak_* fields may have been stripped; re-encode to apply removal
+        return json.dumps(data).encode()
+
+    _CACHE_KEY_PROVIDERS = (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX, Provider.XAI)
+    if provider in (Provider.OPENAI, Provider.AZURE_OPENAI, Provider.CODEX):
+        # Codex uses same Responses API as OpenAI — identical cache key fields
+        data["prompt_cache_key"] = cache_key
+        if cache_retention:
+            data["prompt_cache_retention"] = cache_retention
+    elif provider == Provider.XAI:
+        data["prompt_cache_key"] = cache_key
+        # x-grok-conv-id forwarding: handled by _sanitize_headers (not in blocked list)
+    # All other providers: silently ignore — tokenpak_* already stripped above
+
+    return json.dumps(data).encode()
+
+
+def _parse_bedrock_cached_tokens(response_data: dict) -> int:
+    """Parse cached token count from Bedrock responses.
+    
+    Bedrock returns cache metrics in the usage object:
+    {
+        "usage": {
+            "inputTokens": 1000,
+            "outputTokens": 50,
+            "cacheReadInputTokens": 800,    // tokens read from cache
+            "cacheWriteInputTokens": 200    // tokens written to cache
+        }
+    }
+    
+    Note: Bedrock also uses CacheReadInputTokens (camelCase) in some response formats.
+    We check both snake_case and camelCase variants.
+    
+    Args:
+        response_data: Parsed JSON response from Bedrock
+        
+    Returns:
+        Number of tokens read from cache (0 if not present)
+    """
+    usage = response_data.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0
+    
+    # Check both potential field names (Bedrock uses camelCase in Converse API)
+    cache_read = usage.get("cacheReadInputTokens", 0)
+    if not cache_read:
+        # Some responses might use this format
+        cache_read = usage.get("cacheReadInputTokenCount", 0)
+    
+    return cache_read if isinstance(cache_read, int) else 0
+
+
+def _parse_bedrock_cache_creation_tokens(response_data: dict) -> int:
+    """Parse cache creation token count from Bedrock responses.
+    
+    Args:
+        response_data: Parsed JSON response from Bedrock
+        
+    Returns:
+        Number of tokens written to cache (0 if not present)
+    """
+    usage = response_data.get("usage", {})
+    if not isinstance(usage, dict):
+        return 0
+    
+    cache_write = usage.get("cacheWriteInputTokens", 0)
+    if not cache_write:
+        cache_write = usage.get("cacheWriteInputTokenCount", 0)
+    
+    return cache_write if isinstance(cache_write, int) else 0
+
+
+# ---------------------------------------------------------------------------
 # SSE stream parsing
 # ---------------------------------------------------------------------------
 def _extract_sse_tokens(sse_bytes):
+    """Extract token usage from SSE stream responses.
+    
+    Supports Anthropic, OpenAI, and Gemini formats:
+    - Anthropic: cache_read_input_tokens, cache_creation_input_tokens in message_start/message_delta
+    - OpenAI: usage.prompt_tokens_details.cached_tokens in final chunk (with stream_options.include_usage)
+    - Gemini: usageMetadata.cachedContentTokenCount in response chunks
+    """
     result = {"output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     try:
         text = sse_bytes.decode("utf-8", errors="replace")
@@ -3381,18 +4551,52 @@ def _extract_sse_tokens(sse_bytes):
                 event = json.loads(data_str)
             except Exception:
                 continue
+            
+            # Anthropic format: message_start contains cache info in message.usage
             if event.get("type") == "message_start":
                 usage = event.get("message", {}).get("usage", {})
                 if "cache_read_input_tokens" in usage:
                     result["cache_read_input_tokens"] = usage["cache_read_input_tokens"]
                 if "cache_creation_input_tokens" in usage:
                     result["cache_creation_input_tokens"] = usage["cache_creation_input_tokens"]
+            
+            # Anthropic format: message_delta contains output_tokens
             if event.get("type") == "message_delta":
                 usage = event.get("usage", {})
                 if "output_tokens" in usage:
                     result["output_tokens"] = usage["output_tokens"]
+            
+            # OpenAI format: completion_tokens in usage object
             if "usage" in event and "completion_tokens" in event.get("usage", {}):
                 result["output_tokens"] = event["usage"]["completion_tokens"]
+            
+            # OpenAI format: prompt_tokens_details.cached_tokens for cache hits
+            # This appears in the final chunk when stream_options.include_usage is true
+            if "usage" in event:
+                usage = event["usage"]
+                prompt_details = usage.get("prompt_tokens_details", {})
+                if prompt_details:
+                    cached_tokens = prompt_details.get("cached_tokens", 0)
+                    if cached_tokens and cached_tokens > 0:
+                        # Map OpenAI cached_tokens to cache_read_input_tokens
+                        result["cache_read_input_tokens"] = cached_tokens
+                    # Store audio_tokens for future use (OpenAI audio model support)
+                    audio_tokens = prompt_details.get("audio_tokens", 0)
+                    if audio_tokens and audio_tokens > 0:
+                        result["audio_tokens"] = audio_tokens
+            
+            # Gemini format: usageMetadata.cachedContentTokenCount for cache hits
+            # Gemini streaming can include usageMetadata in response chunks
+            if "usageMetadata" in event:
+                usage_meta = event["usageMetadata"]
+                if isinstance(usage_meta, dict):
+                    cached_tokens = usage_meta.get("cachedContentTokenCount", 0)
+                    if cached_tokens and cached_tokens > 0:
+                        result["cache_read_input_tokens"] = cached_tokens
+                    # Also extract output tokens from Gemini format
+                    candidates_tokens = usage_meta.get("candidatesTokenCount", 0)
+                    if candidates_tokens and candidates_tokens > 0:
+                        result["output_tokens"] = candidates_tokens
     except Exception as e:
         print(f"  ⚠️ SSE parse error: {e}")
     return result
@@ -3488,15 +4692,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "endpoints": {
                     "health": "/health",
                     "stats": "/stats",
+                    "session_stats": "/stats/session/<session_id>",
                     "docs": "/docs",
-                    "proxy": "/v1/messages (POST), /v1/chat/completions (POST)",
+                    "proxy": "/v1/messages (POST), /v1/messages/count_tokens (POST), /v1/messages/* (POST passthrough), /v1/chat/completions (POST)",
                 },
-                "docs": "https://github.com/kaywhy331/tokenpak",
+                "docs": "https://github.com/tokenpak/tokenpak",
             }
             self._send_json(welcome)
             return
         # Fix: POST-only paths return 405 instead of 404 on wrong method
-        _POST_ONLY_PATHS = {"/v1/messages", "/v1/chat/completions", "/ingest"}
+        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/ingest"}
         if self.path.split("?")[0] in _POST_ONLY_PATHS:
             self.send_response(405)
             self.send_header("Allow", "POST, OPTIONS")
@@ -3580,6 +4785,15 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json(health_data)
             return
         if self.path == "/stats":
+            # CACHE-P4-002: Build cache summary for /stats
+            _cache_hits = SESSION.get("cache_hits", 0)
+            _cache_misses = SESSION.get("cache_misses", 0)
+            _cache_total = _cache_hits + _cache_misses
+            _cache_hit_rate = (_cache_hits / _cache_total) if _cache_total > 0 else 0.0
+            _cache_by_provider = SESSION.get("cache_by_provider", {})
+            _total_savings = sum(p.get("savings_usd", 0.0) for p in _cache_by_provider.values())
+            _active_providers = [p for p in _cache_by_provider.keys() if _cache_by_provider[p].get("hits", 0) > 0]
+            
             self._send_json(
                 {
                     "session": SESSION,
@@ -3598,6 +4812,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         "session_hits": SESSION.get("canon_hits", 0),
                         "tokens_saved": SESSION.get("canon_tokens_saved", 0),
                     },
+                    # CACHE-P4-002: Cache summary in /stats response
+                    "cache": {
+                        "enabled": True,
+                        "hit_rate_session": round(_cache_hit_rate, 4),
+                        "hits": _cache_hits,
+                        "misses": _cache_misses,
+                        "read_tokens": SESSION.get("cache_read_tokens", 0),
+                        "creation_tokens": SESSION.get("cache_creation_tokens", 0),
+                        "savings_usd_session": round(_total_savings, 6),
+                        "providers_active": _active_providers,
+                    },
+                    # CACHE-P4-002: Structured per-provider telemetry from CacheTelemetry
+                    "cache_telemetry": (
+                        CACHE_TELEMETRY.to_dict()
+                        if CACHE_TELEMETRY is not None
+                        else {"enabled": False}
+                    ),
                     "skeleton": {"enabled": SKELETON_ENABLED},
                     "shadow_reader": {"enabled": SHADOW_ENABLED},
                     "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
@@ -3663,6 +4894,68 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 }
             )
             return
+        if self.path.startswith("/stats/session/"):
+            # CCG-07: Per-session aggregate stats endpoint
+            # Returns zeros (not 404) for unknown sessions so dashboards don't break.
+            session_id = self.path[len("/stats/session/"):]
+            db_path = MONITOR.db_path
+            try:
+                _conn = sqlite3.connect(str(db_path))
+                _conn.row_factory = sqlite3.Row
+                # Main token/cost/count aggregates
+                agg_row = _conn.execute(
+                    """
+                    SELECT
+                        COALESCE(SUM(input_tokens), 0)          AS input_tokens,
+                        COALESCE(SUM(output_tokens), 0)         AS output_tokens,
+                        COALESCE(SUM(cache_read_tokens), 0)     AS cache_read_input_tokens,
+                        COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_input_tokens,
+                        COALESCE(SUM(estimated_cost), 0.0)      AS cost,
+                        COUNT(*)                                 AS request_count
+                    FROM requests WHERE session_id = ?
+                    """,
+                    (session_id,),
+                ).fetchone()
+                # mutation_count: rows where rules_applied != '[]'
+                try:
+                    mut_row = _conn.execute(
+                        "SELECT COUNT(*) FROM mutation_audit WHERE session_id = ? AND rules_applied != '[]'",
+                        (session_id,),
+                    ).fetchone()
+                    mutation_count = mut_row[0] if mut_row else 0
+                except sqlite3.OperationalError:
+                    # mutation_audit table not yet present (pre-CCG-02)
+                    mutation_count = 0
+                # latency percentiles — fetch all latency_ms values for this session, compute in Python
+                lat_rows = _conn.execute(
+                    "SELECT latency_ms FROM requests WHERE session_id = ? AND latency_ms IS NOT NULL ORDER BY latency_ms",
+                    (session_id,),
+                ).fetchall()
+                latencies = [r[0] for r in lat_rows]
+                if latencies:
+                    p50_idx = int(len(latencies) * 0.50)
+                    p99_idx = min(int(len(latencies) * 0.99), len(latencies) - 1)
+                    latency_p50 = latencies[p50_idx]
+                    latency_p99 = latencies[p99_idx]
+                else:
+                    latency_p50 = 0
+                    latency_p99 = 0
+                _conn.close()
+                self._send_json({
+                    "session_id": session_id,
+                    "input_tokens": agg_row["input_tokens"],
+                    "output_tokens": agg_row["output_tokens"],
+                    "cache_read_input_tokens": agg_row["cache_read_input_tokens"],
+                    "cache_creation_input_tokens": agg_row["cache_creation_input_tokens"],
+                    "cost": round(float(agg_row["cost"]), 6),
+                    "request_count": agg_row["request_count"],
+                    "mutation_count": mutation_count,
+                    "latency_p50": latency_p50,
+                    "latency_p99": latency_p99,
+                })
+            except Exception as _e:
+                self._send_json({"error": str(_e)}, status=500)
+            return
         if self.path == "/savings" or self.path.startswith("/savings?"):
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(self.path)
@@ -3691,6 +4984,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     "block_list": blocks_info,
                 }
             )
+            return
+        if self.path == "/dashboard/failovers":
+            # CCI-05: Failover event log panel
+            with _FAILOVER_EVENTS_LOCK:
+                events = list(_FAILOVER_EVENTS)
+            self._send_json({
+                "failovers": list(reversed(events)),  # newest first
+                "total": len(events),
+                "chain": _FALLBACK_CHAIN,
+                "chain_enabled": len(_FALLBACK_CHAIN) > 1,
+            })
             return
         if self.path == "/trace/last":
             trace = TRACE_STORAGE.get_last()
@@ -3876,8 +5180,53 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             self._send_json(dashboard_data)
             return
+        if self.path == "/metrics/dashboard/tools":
+            # CCI-02: Tool schema registry telemetry panel
+            # Exposes: tools_normalized_count, bytes_saved_total,
+            #          cache_hit_rate_for_tools_block, schema_changes
+            tool_reg_data = {
+                "enabled": TOOL_REGISTRY_AVAILABLE,
+                "tools_normalized_count": 0,
+                "bytes_saved_total": 0,
+                "frozen_tools": 0,
+                "frozen_bytes": 0,
+                "frozen_tokens_approx": 0,
+                "cache_hit_rate_for_tools_block": 0.0,
+                "schema_changes": 0,
+                "frozen_hash": None,
+                "session_bytes_saved": SESSION.get("tool_schema_bytes_saved", 0),
+                "session_frozen_tools": SESSION.get("tool_schema_frozen_tools", 0),
+            }
+            if TOOL_REGISTRY_AVAILABLE:
+                try:
+                    _treg = _get_tool_registry()
+                    if _treg:
+                        _ts = _treg.stats()
+                        _total_req = _ts.get("total_requests", 0)
+                        _schema_changes = _ts.get("schema_changes", 0)
+                        _cache_hit_rate = (
+                            round((_total_req - _schema_changes) / max(1, _total_req), 3)
+                            if _total_req > 0
+                            else 0.0
+                        )
+                        tool_reg_data.update({
+                            "tools_normalized_count": _total_req,
+                            "bytes_saved_total": _ts.get("bytes_saved", 0),
+                            "frozen_tools": _ts.get("frozen_tools", 0),
+                            "frozen_bytes": _ts.get("frozen_bytes", 0),
+                            "frozen_tokens_approx": _ts.get("frozen_tokens_approx", 0),
+                            "cache_hit_rate_for_tools_block": _cache_hit_rate,
+                            "schema_changes": _schema_changes,
+                            "frozen_hash": _ts.get("frozen_hash"),
+                        })
+                except Exception:
+                    pass
+            self._send_json(tool_reg_data)
+            return
         if self.path.startswith("http"):
             self._forward_request("GET")
+        elif self.path.split("?")[0] in ("/dashboard/tools", "/dashboard/tools/"):
+            self._serve_tools_panel()
         elif self.path.split("?")[0] == "/dashboard" or self.path.split("?")[0].startswith(
             "/dashboard/"
         ):
@@ -3963,12 +5312,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._forward_request("POST")
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("POST")
-        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
+        elif self.path.split("?")[0] == "/v1/messages/count_tokens":
+            self._handle_count_tokens()
+        elif self.path.startswith("/v1/messages/"):
+            # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
+            # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
             self._reverse_proxy("POST")
-        elif self.path.startswith("/codex/"):
-            # ChatGPT Codex backend path — clients (e.g. OpenClaw with
-            # tokenpak-openai-codex provider) hit /codex/responses directly.
-            # Routes to chatgpt.com/backend-api via the codex adapter.
+        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
         elif self.path == "/ingest" or self.path == "/ingest/batch":
             self._ingest(self.path)
@@ -4066,6 +5416,75 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         target = OLLAMA_UPSTREAM + real_path
         self._proxy_to(target, method, force_intercept=True)
 
+    def _handle_count_tokens(self):
+        """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
+
+        Parses the Anthropic Messages body, sums token counts across system/messages/tools
+        via the local count_tokens() helper, and returns {"input_tokens": N}.
+        No upstream round-trip. Honors anthropic-version and anthropic-beta headers
+        (they do not affect local computation).
+        """
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}},
+                status=400,
+            )
+            return
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}},
+                status=400,
+            )
+            return
+
+        total = 0
+
+        # system — string or list of content blocks
+        system = payload.get("system", "")
+        if isinstance(system, str):
+            total += count_tokens(system)
+        elif isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total += count_tokens(text)
+                elif isinstance(block, str):
+                    total += count_tokens(block)
+
+        # messages[].content — string or list of content blocks
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += count_tokens(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        text = block.get("text", "")
+                        if isinstance(text, str):
+                            total += count_tokens(text)
+                    elif isinstance(block, str):
+                        total += count_tokens(block)
+
+        # tools[] — name, description, and input_schema
+        for tool in payload.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
+            total += count_tokens(tool.get("name", ""))
+            total += count_tokens(tool.get("description", ""))
+            schema = tool.get("input_schema", {})
+            if isinstance(schema, dict):
+                total += count_tokens(json.dumps(schema, separators=(",", ":")))
+
+        self._send_json({"input_tokens": total})
+
     def _reverse_proxy(self, method):
         # Pre-flight: check for missing API credentials before touching upstream.
         # If the client sent no auth header AND the environment has no key set,
@@ -4076,13 +5495,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _req_headers_lower.get("x-api-key", "").strip()
             or _req_headers_lower.get("authorization", "").strip()
         )
-        # ChatGPT Codex paths use ~/.codex/auth.json for auth, not env vars —
-        # let them through the pre-flight even when the client has no auth.
-        _is_codex_path = (
-            self.path.startswith("/codex/")
-            or self.path.startswith("/v1/codex/")
-        )
-        if not _has_client_auth and not _is_codex_path:
+        if not _has_client_auth:
             _env_key = (
                 os.environ.get("ANTHROPIC_API_KEY", "").strip()
                 or os.environ.get("OPENAI_API_KEY", "").strip()
@@ -4176,6 +5589,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         final_request_body_for_cache_reason = body
         router_meta: Optional[dict] = None
 
+        # CCG-06: Mutation audit tracking — transparent mode byte-equality contract
+        _transparent_mode: bool = COMPILATION_MODE == "transparent"
+        _body_pre_audit: bytes = body if isinstance(body, bytes) else b""
+        _body_post_audit: bytes = _body_pre_audit  # updated after pipeline
+        _audit_rules: list = []
+        _audit_cache_risk: str = "none"
+
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
         _wf_id = None  # proxy workflow tracking (TOKENPAK_WORKFLOW_TRACKING=1)
@@ -4246,6 +5666,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     return
 
             _original_body = body  # save for fallback
+            # CCG-06: capture raw bytes before any mutation stage
+            _body_pre_audit = body if isinstance(body, bytes) else (body.encode() if isinstance(body, str) else b"")
             _t0_compression = time.monotonic()  # compression pipeline start time
 
             def _compression_budget_exceeded() -> bool:
@@ -4282,56 +5704,36 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
                     if SEMANTIC_CACHE_ENABLED and body:
-                        # CCG-14: Bypass lookup for streaming / Claude Code requests.
-                        # Invariant: _send_json MUST NOT be called on a streaming client — SSE parser crash.
-                        _sc_is_streaming = True  # conservative: bypass if detection fails
-                        _sc_is_agent = True
                         try:
-                            _sc_peek = json.loads(body) if isinstance(body, (bytes, str)) else body
-                            _sc_is_streaming = bool(_sc_peek.get("stream"))
-                        except Exception:
-                            _sc_is_streaming = True  # conservative
-                        try:
-                            _sc_is_agent = bool(_req_headers_lower.get("x-claude-code-session-id"))
-                            if not _sc_is_agent:
-                                _sc_ua = (_req_headers_lower.get("user-agent") or "").lower()
-                                _sc_is_agent = "claude-code" in _sc_ua
-                        except Exception:
-                            _sc_is_agent = True  # conservative
-                        if _sc_is_streaming or _sc_is_agent:
-                            SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
-                        else:
-                            try:
-                                _sem_cache = _get_sem_cache()
-                                if _sem_cache is None:
-                                    raise ImportError("SemanticCache unavailable")
-                                _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                                _cache_result = _sem_cache.lookup(_sem_query)
-                                if (
-                                    _cache_result is not None
-                                    and _cache_result.hit
-                                    and _cache_result.entry
-                                ):
-                                    SESSION["semantic_cache_hit"] = True
-                                    SESSION["phase_semantic_cache"] = "hit"
-                                    # Return cached response — skip all processing
-                                    # NOTE: _send_json MUST NOT be called on streaming clients — SSE parser crash.
-                                    _cached_resp = _cache_result.entry.response
-                                    if isinstance(_cached_resp, dict):
-                                        self._send_json(_cached_resp)
-                                    elif isinstance(_cached_resp, bytes):
-                                        self.wfile.write(_cached_resp)
-                                    else:
-                                        self._send_json(json.loads(_cached_resp))
-                                    return
-                                SESSION["phase_semantic_cache"] = "miss"
-                            except Exception as _sc_err:
-                                SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                                pass  # fail-open: never break a request over semantic cache
+                            _sem_cache = _get_sem_cache()
+                            if _sem_cache is None:
+                                raise ImportError("SemanticCache unavailable")
+                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
+                            _cache_result = _sem_cache.lookup(_sem_query)
+                            if (
+                                _cache_result is not None
+                                and _cache_result.hit
+                                and _cache_result.entry
+                            ):
+                                SESSION["semantic_cache_hit"] = True
+                                SESSION["phase_semantic_cache"] = "hit"
+                                # Return cached response — skip all processing
+                                _cached_resp = _cache_result.entry.response
+                                if isinstance(_cached_resp, dict):
+                                    self._send_json(_cached_resp)
+                                elif isinstance(_cached_resp, bytes):
+                                    self.wfile.write(_cached_resp)
+                                else:
+                                    self._send_json(json.loads(_cached_resp))
+                                return
+                            SESSION["phase_semantic_cache"] = "miss"
+                        except Exception as _sc_err:
+                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
+                            pass  # fail-open: never break a request over semantic cache
 
                     # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
                     # Enables Anthropic cache hits on repeated tool schemas
-                    if TOOL_REGISTRY_AVAILABLE and body:
+                    if TOOL_REGISTRY_AVAILABLE and body and not _transparent_mode:
                         try:
                             _tool_reg = _get_tool_registry()
                             if _tool_reg:
@@ -4340,45 +5742,49 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _tstats = _tool_reg.stats()
                                 SESSION["tool_schema_frozen_tools"] = _tstats.get("frozen_tools", 0)
                                 SESSION["tool_schema_bytes_saved"] = _tool_reg.bytes_saved
+                                if _tools_changed:
+                                    _audit_rules.append("tool_schema_normalize")
                         except Exception as _treg_err:
                             pass  # fail-open: never break a request over tool registry
 
                     # Phase 0: Manual routing rules — rewrite model before any processing
                     # PERF OPT: use singleton RouteEngine + cached rules + reuse req_data
-                    try:
-                        from tokenpak.routing.rules import (
-                            _count_tokens_approx,
-                            _extract_prompt_text,
-                        )
+                    if not _transparent_mode:
+                        try:
+                            from tokenpak.routing.rules import (
+                                _count_tokens_approx,
+                                _extract_prompt_text,
+                            )
 
-                        _route_engine = _get_route_engine()
-                        if _route_engine is not None:
-                            # Reuse already-parsed req_data if available, else fallback
-                            _route_payload = (
-                                req_data
-                                if req_data is not None
-                                else (json.loads(body) if body else {})
-                            )
-                            _route_prompt = _extract_prompt_text(_route_payload)
-                            _route_tokens = _count_tokens_approx(_route_prompt)
-                            _cached_rules = _get_cached_route_rules()
-                            _matched_rule = _route_engine.match(
-                                model=model,
-                                prompt=_route_prompt,
-                                token_count=_route_tokens,
-                                rules=_cached_rules,
-                            )
-                            if _matched_rule:
-                                _route_payload = dict(_route_payload)  # copy before mutate
-                                _route_payload["model"] = _matched_rule.target
-                                body = json.dumps(_route_payload).encode()
-                                req_data = _route_payload  # keep req_data in sync
-                                model = _matched_rule.target
-                                print(
-                                    f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}"
+                            _route_engine = _get_route_engine()
+                            if _route_engine is not None:
+                                # Reuse already-parsed req_data if available, else fallback
+                                _route_payload = (
+                                    req_data
+                                    if req_data is not None
+                                    else (json.loads(body) if body else {})
                                 )
-                    except Exception as _route_err:
-                        print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
+                                _route_prompt = _extract_prompt_text(_route_payload)
+                                _route_tokens = _count_tokens_approx(_route_prompt)
+                                _cached_rules = _get_cached_route_rules()
+                                _matched_rule = _route_engine.match(
+                                    model=model,
+                                    prompt=_route_prompt,
+                                    token_count=_route_tokens,
+                                    rules=_cached_rules,
+                                )
+                                if _matched_rule:
+                                    _route_payload = dict(_route_payload)  # copy before mutate
+                                    _route_payload["model"] = _matched_rule.target
+                                    body = json.dumps(_route_payload).encode()
+                                    req_data = _route_payload  # keep req_data in sync
+                                    model = _matched_rule.target
+                                    _audit_rules.append("model_route_rewrite")
+                                    print(
+                                        f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}"
+                                    )
+                        except Exception as _route_err:
+                            print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
 
                     # Phase 0.1: Precondition Gates — reject requests likely to fail
                     # PERF OPT: use singleton PreconditionGates (avoids per-request import + init)
@@ -4440,13 +5846,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
                     _intent_for_contract: str = "query"
-                    if ROUTER_ENABLED:
+                    if ROUTER_ENABLED and not _transparent_mode:
                         try:
-                            _session_id_router = self.headers.get("X-OpenClaw-Session", model)
+                            _session_id_router = _resolve_session_id(self.headers, model)
                             body, _router_meta = _run_router(body, session_id=_session_id_router)
                             router_meta = _router_meta
                             if _router_meta and not _router_meta.get("fallback"):
                                 _intent_for_contract = _router_meta.get("intent", "query")
+                                _audit_rules.append("router")
                                 print(
                                     f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)"
                                 )
@@ -4472,7 +5879,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         pass  # fail-open: contract enforcement is advisory
 
                     # Phase 0.5: Capsule builder — compress historical context blocks
-                    if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
+                    if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER and not _transparent_mode:
                         t_capsule = time.time()
                         capsule_stage = StageTrace(
                             name="capsule",
@@ -4495,6 +5902,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _, input_tokens = extract_request_tokens(
                                     body, adapter=active_adapter
                                 )
+                                _audit_rules.append("capsule_compress")
+                                _audit_cache_risk = "high"
                                 print(
                                     f"  💊 Capsule: {_cap_blocks} block(s) compressed "
                                     f"({_cap_chars_in}→{_cap_chars_out} chars, ratio={_cap_ratio})"
@@ -4536,12 +5945,34 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             SESSION["prefix_registry_error"] = str(_pr_err)
                             pass  # fail-open
 
+                    # CANONICAL PROMPT ORDER (do not reorder — prefix caching depends on stability):
+                    # 1. System policy blocks   (stable — never changes between requests)
+                    # 2. Tool/function schemas  (stable — normalized to byte-identical JSON by Phase -1)
+                    # 3. Injected vault context (stable during session; appended AFTER stable prefix)
+                    # 4. Conversation summary   (if trimming applied; chronological)
+                    # 5. Conversation history   (user/assistant turns, chronological insertion order)
+                    # 6. Current user turn      (most recent user message)
+                    # 7. Volatile metadata      (timestamps, session IDs — stripped below by Phase 0.9)
+                    #
+                    # All pipeline stages that modify content preserve insertion order (verified):
+                    #   Phase -1  : Tool Schema Registry — normalizes tool JSON, no message reorder
+                    #   Phase 0.5 : CapsuleBuilder — in-place content mod, iterates by index
+                    #   Phase 0.9 : Cache Poison Removal — scrubs dynamic tokens in-place (below)
+                    #   Phase 1   : Vault injection — appends AFTER existing stable system blocks
+                    #   Phase 1.5 : CANON dedup — block dedup preserves list insertion order
+                    #   Phase 1.7 : QueryRewriter — rewrites user content in-place, same list order
+                    #   Phase 1.8 : Salience Router — modifies content in-place, same list order
+                    #   Phase 2   : Compaction — compact_request_body iterates by index, in-place
+                    #   Phase 2.1 : Compression Dictionary — apply() returns new list in original order
+                    #
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
-                    if body:
+                    if body and not _transparent_mode:
                         _pre_poison_body = body
                         body = _strip_cache_poisons(body)
                         cache_poison_scrubbed = body != _pre_poison_body
+                        if cache_poison_scrubbed:
+                            _audit_rules.append("cache_poison_scrub")
 
                     # Compression budget check — if capsule took too long, skip remaining pipeline
                     if _compression_budget_exceeded():
@@ -4562,115 +5993,55 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=VAULT_INDEX.available,
                         input_tokens=input_tokens,
                     )
-                    if VAULT_INDEX.available:
-                        # CCI-01: Claude Code cache-boundary-safe vault injection
-                        # Active when: claude-code-* profile (not sdk) + TOKENPAK_VAULT_INJECT != 0
-                        # Uses inject_with_cache_boundary to preserve Anthropic prompt cache prefix.
-                        _cci01_profile = SESSION.get("active_profile", "")
-                        _cci01_eligible = (
-                            _cci01_profile.startswith("claude-code-")
-                            and _cci01_profile != "claude-code-sdk"
-                            and os.environ.get("TOKENPAK_VAULT_INJECT", "true").lower()
-                            not in ("0", "false", "no")
-                            and PROMPT_BUILDER_AVAILABLE
-                        )
-
-                        if _cci01_eligible:
-                            # Verify body has a system prompt — no injection target otherwise
-                            try:
-                                _cci01_req = json.loads(body)
-                                _cci01_has_system = bool(_cci01_req.get("system"))
-                            except Exception:
-                                _cci01_has_system = False
-
-                            _cci01_model_skip = bool(
-                                INJECT_SKIP_MODELS.strip()
+                    if VAULT_INDEX.available and not _transparent_mode:
+                        skip_injection = False
+                        if INJECT_SKIP_MODELS.strip():
+                            if any(
+                                skip.strip() and skip.strip().lower() in model.lower()
+                                for skip in INJECT_SKIP_MODELS.split(",")
+                            ):
+                                skip_injection = True
+                        if input_tokens < INJECT_MIN_PROMPT:
+                            skip_injection = True
+                        if skip_injection:
+                            SESSION["injection_skips"] += 1
+                            vault_stage.details["skipped"] = True
+                            vault_stage.details["reason"] = (
+                                "model_skip"
+                                if INJECT_SKIP_MODELS.strip()
                                 and any(
-                                    s.strip() and s.strip().lower() in model.lower()
+                                    s.lower() in model.lower()
                                     for s in INJECT_SKIP_MODELS.split(",")
                                 )
+                                else "prompt_too_short"
                             )
-
-                            if _cci01_has_system and not _cci01_model_skip:
-                                _cci01_query = extract_query_signal(body, adapter=active_adapter)
-                                if _cci01_query:
-                                    _cci01_text, _cci01_tok, _cci01_srcs = VAULT_INDEX.compile_injection(
-                                        _cci01_query,
-                                        budget=INJECT_BUDGET,
-                                        top_k=INJECT_TOP_K,
-                                        min_score=INJECT_MIN_SCORE,
-                                    )
-                                    if _cci01_text and _cci01_tok > 0:
-                                        body = _inject_with_cache_boundary(body, _cci01_text)
-                                        injected_tokens = _cci01_tok
-                                        injected_sources = _cci01_srcs
-                                        # CCI-01 telemetry
-                                        SESSION["vault_blocks_injected"] = len(_cci01_srcs)
-                                        SESSION["vault_tokens_injected"] = _cci01_tok
-                                        vault_stage.tokens_delta = _cci01_tok
-                                        vault_stage.details["blocks_matched"] = len(_cci01_srcs)
-                                        vault_stage.details["block_names"] = _cci01_srcs[:5]
-                                        vault_stage.details["tokens_injected"] = _cci01_tok
-                                        vault_stage.details["cc_vault_injection"] = True
-                                        _, input_tokens = extract_request_tokens(
-                                            body, adapter=active_adapter
-                                        )
-                                    else:
-                                        vault_stage.details["skipped"] = True
-                                        vault_stage.details["reason"] = "zero_blocks_above_min_score"
-                                else:
-                                    vault_stage.details["skipped"] = True
-                                    vault_stage.details["reason"] = "no_query_signal"
-                            elif _cci01_model_skip:
-                                vault_stage.details["skipped"] = True
-                                vault_stage.details["reason"] = "model_skip"
-                            else:
-                                vault_stage.details["skipped"] = True
-                                vault_stage.details["reason"] = "no_system_prompt"
-
+                            # Even when skipping vault injection, apply cache_control to stable prefix
+                            # Guard: only Anthropic supports cache_control markers
+                            if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
+                                body = _apply_stable_cache_control(body)
+                                _audit_rules.append("cache_control_stamp")
+                                if _audit_cache_risk == "none":
+                                    _audit_cache_risk = "low"
                         else:
-                            # Generic (non-Claude-Code) vault injection path
-                            skip_injection = False
-                            if INJECT_SKIP_MODELS.strip():
-                                if any(
-                                    skip.strip() and skip.strip().lower() in model.lower()
-                                    for skip in INJECT_SKIP_MODELS.split(",")
-                                ):
-                                    skip_injection = True
-                            if input_tokens < INJECT_MIN_PROMPT:
-                                skip_injection = True
-                            if skip_injection:
-                                SESSION["injection_skips"] += 1
-                                vault_stage.details["skipped"] = True
-                                vault_stage.details["reason"] = (
-                                    "model_skip"
-                                    if INJECT_SKIP_MODELS.strip()
-                                    and any(
-                                        s.lower() in model.lower()
-                                        for s in INJECT_SKIP_MODELS.split(",")
-                                    )
-                                    else "prompt_too_short"
-                                )
-                                # Even when skipping vault injection, apply cache_control to stable prefix
-                                if PROMPT_BUILDER_AVAILABLE:
-                                    body = _apply_stable_cache_control(body)
-                            else:
-                                body, injected_tokens, injected_sources = inject_vault_context(
+                            body, injected_tokens, injected_sources = inject_vault_context(
+                                body, adapter=active_adapter
+                            )
+                            if injected_tokens > 0:
+                                # Recount tokens after injection
+                                _, input_tokens = extract_request_tokens(
                                     body, adapter=active_adapter
                                 )
-                                if injected_tokens > 0:
-                                    # Recount tokens after injection
-                                    _, input_tokens = extract_request_tokens(
-                                        body, adapter=active_adapter
-                                    )
-                                    vault_stage.tokens_delta = injected_tokens
-                                    vault_stage.details["blocks_matched"] = len(injected_sources)
-                                    vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
-                                    vault_stage.details["tokens_injected"] = injected_tokens
-                                    # Enrich with sub-step timing from inject_vault_context
-                                    vault_stage.details["sub_timing_ms"] = SESSION.get(
-                                        "vault_last_timing_ms", {}
-                                    )
+                                _audit_rules.append("vault_inject")
+                                if _audit_cache_risk in ("none", "low"):
+                                    _audit_cache_risk = "medium"
+                                vault_stage.tokens_delta = injected_tokens
+                                vault_stage.details["blocks_matched"] = len(injected_sources)
+                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
+                                vault_stage.details["tokens_injected"] = injected_tokens
+                                # Enrich with sub-step timing from inject_vault_context
+                                vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                    "vault_last_timing_ms", {}
+                                )
                     vault_stage.output_tokens = input_tokens
                     vault_stage.duration_ms = (time.time() - t_inject) * 1000
                     if trace:
@@ -4717,7 +6088,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             input_tokens=input_tokens,
                         )
                         try:
-                            session_id = self.headers.get("X-OpenClaw-Session", model)
+                            session_id = _resolve_session_id(self.headers, model)
                             body, canon_refs, canon_saved = apply_canon_refs(body, session_id)
                             if canon_refs > 0:
                                 SESSION["canon_hits"] += canon_refs
@@ -4736,7 +6107,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             trace.stages.append(canon_stage)
 
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
-                    if SALIENCE_ROUTER_ENABLED and body:
+                    if SALIENCE_ROUTER_ENABLED and body and not _transparent_mode:
                         try:
                             from tokenpak.agent.compression.salience.router import (
                                 detect_content_type,
@@ -4761,12 +6132,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             if _salience_applied > 0:
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["salience_router_applied"] = _salience_applied
+                                _audit_rules.append("salience_route")
                         except Exception as _sr_err:
                             SESSION["salience_router_error"] = str(_sr_err)
                             pass  # fail-open
 
                     # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
-                    if QUERY_REWRITER_ENABLED and body:
+                    if QUERY_REWRITER_ENABLED and body and not _transparent_mode:
                         try:
                             from tokenpak.agent.compression.query_rewriter import QueryRewriter
 
@@ -4777,6 +6149,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _req_data["messages"] = _rewritten
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["query_rewriter_applied"] = len(_rewritten)
+                                _audit_rules.append("query_rewrite")
                         except Exception as _qr_err:
                             SESSION["query_rewriter_error"] = str(_qr_err)
                             pass  # fail-open
@@ -4804,7 +6177,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             pass  # fail-open
 
                     # Plugin system — run custom compressors first
-                    if _plugin_registry is not None and body:
+                    if _plugin_registry is not None and body and not _transparent_mode:
                         _plugin_context = {
                             "mode": COMPILATION_MODE,
                             "input_tokens": input_tokens,
@@ -4819,6 +6192,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                         _plugin_result = _plugin.compress(_content, _plugin_context)
                                         _msg["content"] = _plugin_result["text"]
                                 body = json.dumps(_req_data, separators=(",", ":"))
+                                _audit_rules.append("plugin_compress")
                             except Exception as _plugin_run_err:
                                 import logging as _logging
 
@@ -4844,7 +6218,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=ENABLE_COMPACTION,
                         input_tokens=input_tokens,
                     )
-                    if ENABLE_COMPACTION:
+                    if ENABLE_COMPACTION and not _transparent_mode:
                         body, sent_input_tokens, original_tokens, protected_tokens = (
                             compact_request_body(
                                 body,
@@ -4853,6 +6227,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         )
                         if original_tokens > 0:
                             input_tokens = original_tokens
+                        if original_tokens > sent_input_tokens:
+                            _audit_rules.append("compact")
+                            _audit_cache_risk = "high"
                         compaction_stage.output_tokens = sent_input_tokens
                         compaction_stage.tokens_delta = (
                             -(original_tokens - sent_input_tokens) if original_tokens else 0
@@ -4869,7 +6246,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(compaction_stage)
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body:
+                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode:
                         try:
                             from tokenpak.agent.compression.dictionary import CompressionDictionary
 
@@ -4880,6 +6257,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 _req_data["messages"] = _dict_result.messages
                                 body = json.dumps(_req_data, separators=(",", ":"))
                                 SESSION["compression_dict_applied"] = True
+                                _audit_rules.append("dict_compress")
                         except Exception as _cd_err:
                             SESSION["compression_dict_error"] = str(_cd_err)
                             pass  # fail-open
@@ -4906,6 +6284,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 sent_input_tokens = input_tokens
 
         final_request_body_for_cache_reason = body
+        # CCG-06: capture body bytes after all mutation stages are complete
+        _body_post_audit = body if isinstance(body, bytes) else (body.encode() if isinstance(body, str) else b"")
 
         # Final validation gate (pre-forward): budget, deterministic context, fingerprint, dry-run
         if should_log and is_messages and body and active_adapter.source_format != "passthrough":
@@ -4956,7 +6336,23 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _gate_err:
                     print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
-        fwd_headers = _sanitize_headers(self.headers)
+        # CCG-04: Per-route header allowlist on the HTTP path.
+        # Anthropic routes use an explicit allowlist (mirroring the WS-path at
+        # proxy.py:~7345).  All other providers keep the existing blocklist path
+        # (_sanitize_headers) — their forwarding behavior is unchanged.
+        if detect_provider(target_url) is Provider.ANTHROPIC:
+            _route = _classify_route(self.path, self.headers)
+            _allowlist = (
+                CLAUDE_CODE_HEADER_ALLOWLIST
+                if _route == "claude-code"
+                else OPENCLAW_HEADER_ALLOWLIST
+            )
+            fwd_headers = {}
+            for _hk, _hv in self.headers.items():
+                if _hk.lower() in _allowlist:
+                    fwd_headers[_hk.lower()] = _hv
+        else:
+            fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
@@ -4969,46 +6365,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             or _req_headers_lower.get("authorization", "").strip()
         )
         _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        # Anthropic auth injection — single-tenant proxy design: always
-        # override the client's auth header for anthropic.com so clients
-        # (OpenClaw, Sue's worker, etc.) never have to maintain their own
-        # OATs. Source priority:
-        #   1. Env-configured key pool (_ANTHROPIC_KEY_POOL) if non-empty
-        #   2. Claude CLI token (~/.claude/.credentials.json) — auto-refreshed
-        # Clients sending stale `sk-ant-oat01-…` tokens (e.g. OpenClaw's
-        # cached profile) get transparently swapped for the fresh CLI token,
-        # so a stale OpenClaw profile no longer 401s.
-        if "anthropic.com" in target_url:
-            _pool_key = ""
-            if _ANTHROPIC_KEY_POOL:
-                _pool_key, _current_key_idx = _get_next_key()
-            if not _pool_key:
-                _pool_key = _load_claude_cli_token()
+        if not _client_has_auth and _ANTHROPIC_KEY_POOL and detect_provider(target_url) is Provider.ANTHROPIC:
+            _pool_key, _current_key_idx = _get_next_key()
             if _pool_key:
                 fwd_headers["x-api-key"] = _pool_key
-                # Strip Authorization to avoid Anthropic preferring a stale
-                # Bearer over the fresh x-api-key (the API treats them as
-                # alternatives but Authorization wins when both are present).
-                for _k in ("Authorization", "authorization"):
-                    fwd_headers.pop(_k, None)
-
-        # ChatGPT Codex OAuth injection — clients (e.g. OpenClaw) hit
-        # /codex/responses with a placeholder x-api-key, so we always
-        # override Authorization with the JWT from ~/.codex/auth.json
-        # when the upstream is chatgpt.com. Codex requires a Bearer
-        # JWT and the chatgpt-account-id header.
-        if "chatgpt.com" in target_url:
-            _codex_token, _codex_account = _load_codex_credentials()
-            if _codex_token:
-                fwd_headers["Authorization"] = f"Bearer {_codex_token}"
-                # Strip stale x-api-key — Codex backend rejects any sk-/placeholder
-                for _k in ("x-api-key", "X-Api-Key", "X-API-Key"):
-                    fwd_headers.pop(_k, None)
-                if _codex_account:
-                    fwd_headers["chatgpt-account-id"] = _codex_account
-                fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
-                fwd_headers.setdefault("originator", "codex_cli_rs")
-                fwd_headers.setdefault("Accept", "text/event-stream")
 
         # Fix #5: Check per-provider circuit breaker before attempting upstream
         _cb_provider = _provider_for_url(target_url)
@@ -5050,8 +6410,82 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  🔍 debug error: {_e}")
             body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
-            # Fix Content-Length after cache_control cap may have changed body size
+            # CACHE-P4-001: CacheSpec unified mode resolution (replaces ad-hoc provider guards)
+            _detected_provider = detect_provider(target_url)
+            _cache_hint: Optional[str] = None
+
+            # Extract Anthropic-specific request hint and translate to CacheSpec mode names.
+            # _select_anthropic_cache_mode pops tokenpak_cache_mode from body (side-effect).
+            if _detected_provider is Provider.ANTHROPIC:
+                try:
+                    _ac_body = json.loads(body)
+                    _ac_headers = {k.lower(): v for k, v in self.headers.items()}
+                    _raw_ac_mode = _select_anthropic_cache_mode(_ac_headers, _ac_body)
+                    _cache_hint = (
+                        "prefix_auto" if _raw_ac_mode is CacheMode.AUTO else "block_explicit"
+                    )
+                    body = json.dumps(_ac_body).encode()
+                except Exception as _hint_err:
+                    print(f"  ⚠️ Cache hint extraction error: {_hint_err}", flush=True)
+                    _cache_hint = "block_explicit"
+
+            # Resolve effective mode via CacheSpec (request hint > config override > provider default)
+            _effective_mode = (
+                _resolve_cache_mode(CACHE_SPEC, _detected_provider, _cache_hint)
+                if _CACHE_SPEC_AVAILABLE and CACHE_SPEC is not None
+                else None
+            )
+
+            # Dispatch based on resolved mode
+            if _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT:
+                if _detected_provider is Provider.ANTHROPIC:
+                    try:
+                        _ac_body = json.loads(body)
+                        body = json.dumps(_ac_body).encode()
+                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
+                        print("  📦 Anthropic cache mode: EXPLICIT (per-block, capped)", flush=True)
+                    except Exception as _ac_err:
+                        print(f"  ⚠️ Cache mode error (falling back to cap): {_ac_err}", flush=True)
+                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
+            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.PREFIX_AUTO:
+                if _detected_provider is Provider.ANTHROPIC:
+                    try:
+                        _ac_body = json.loads(body)
+                        _apply_anthropic_auto_cache(_ac_body)
+                        body = json.dumps(_ac_body).encode()
+                        print("  🔄 Anthropic cache mode: AUTO (top-level ephemeral)", flush=True)
+                    except Exception as _ac_err:
+                        print(f"  ⚠️ Auto cache mode error: {_ac_err}", flush=True)
+            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.CACHE_OBJECT:
+                body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
+            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.CHECKPOINT:
+                body = _inject_bedrock_checkpoints(_detected_provider, body)
+            else:
+                # None: disabled, provider-default, or CacheSpec unavailable.
+                # Preserve original per-provider behavior for backward compatibility.
+                if _detected_provider is Provider.ANTHROPIC:
+                    try:
+                        _ac_body = json.loads(body)
+                        _ac_headers = {k.lower(): v for k, v in self.headers.items()}
+                        _fb_mode = _select_anthropic_cache_mode(_ac_headers, _ac_body)
+                        if _fb_mode is CacheMode.AUTO:
+                            _apply_anthropic_auto_cache(_ac_body)
+                            body = json.dumps(_ac_body).encode()
+                        else:
+                            body = json.dumps(_ac_body).encode()
+                            body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
+                    except Exception as _fb_err:
+                        body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
+                elif _detected_provider is Provider.GEMINI:
+                    body = _inject_gemini_cache_ref(_detected_provider, dict(self.headers), body)
+                elif _detected_provider is Provider.BEDROCK:
+                    body = _inject_bedrock_checkpoints(_detected_provider, body)
+
+            # Always run prompt_cache_key: injects for OpenAI/Azure/Codex/xAI,
+            # strips tokenpak_* fields from all providers (CACHE-P2-001).
+            body = _inject_prompt_cache_key(_detected_provider, dict(self.headers), body)
+
+            # Fix Content-Length after cache processing may have changed body size
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -5100,45 +6534,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
-            # Hotfix 2026-04-08 Sue: TTL ordering hotfix v2 — strip default-ttl
-            # cache_control blocks that come BEFORE the LAST explicit-ttl block.
-            # Anthropic rejects 1h-after-5m. Claude Code's actual output is 1h→95m→1h
-            # which the v1 (first-ttl) logic missed; v2 uses last-ttl position.
-            try:
-                _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
-                _hf_locs = []
-                for _hs in (_hf_dbody.get("system") or []):
-                    if isinstance(_hs, dict):
-                        _hf_locs.append(_hs)
-                for _ht in (_hf_dbody.get("tools") or []):
-                    if isinstance(_ht, dict):
-                        _hf_locs.append(_ht)
-                for _hm in (_hf_dbody.get("messages") or []):
-                    _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
-                    if isinstance(_hcontent, list):
-                        for _hc in _hcontent:
-                            if isinstance(_hc, dict):
-                                _hf_locs.append(_hc)
-                _last_ext_ttl = None
-                for _hi, _hb in enumerate(_hf_locs):
-                    _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                    if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
-                        _last_ext_ttl = _hi
-                if _last_ext_ttl is not None:
-                    _hf_stripped = 0
-                    for _hi in range(_last_ext_ttl):
-                        _hb = _hf_locs[_hi]
-                        _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                        if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
-                            _hb.pop("cache_control", None)
-                            _hf_stripped += 1
-                    if _hf_stripped > 0:
-                        print(f"  🧹 TTL ordering hotfix v2: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
-                        body = json.dumps(_hf_dbody).encode()
-            except Exception as _e_hf:
-                print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
             body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
+            # Safety net: second cap for EXPLICIT mode in case injection re-added blocks
+            if _detected_provider is Provider.ANTHROPIC and (
+                not _CACHE_SPEC_AVAILABLE
+                or _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT
+            ):
+                body = _cap_cache_control_blocks(body)  # Provider.ANTHROPIC guard at block entry
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
@@ -5231,6 +6633,102 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         f"({int((time.monotonic() - _t0_conn) * 1000)}ms)",
                         flush=True,
                     )
+
+            # CCI-05: Provider failover — only for claude-code-* profiles, only on 5xx or timeout.
+            # The fallback chain is opt-in via TOKENPAK_FALLBACK_CHAIN (default: "anthropic" only).
+            # Timeout is represented by status == 0 (set in the except block above this try).
+            _cc05_profile = SESSION.get("active_profile", "")
+            _cc05_is_cc_profile = _cc05_profile.startswith("claude-code-")
+            _cc05_triggered = False
+            if (
+                _cc05_is_cc_profile
+                and len(_FALLBACK_CHAIN) > 1
+                and (500 <= status <= 599 or status == 0)
+            ):
+                # Determine which provider originally handled this request
+                _cc05_current_provider = "anthropic" if "anthropic.com" in target_url else "other"
+                # Walk the chain starting from the provider AFTER the current one
+                try:
+                    _cc05_chain_start = _FALLBACK_CHAIN.index(_cc05_current_provider) + 1
+                except ValueError:
+                    _cc05_chain_start = 1  # start from second if current not in chain
+                _cc05_reason = "timeout" if status == 0 else f"http_{status}"
+                _cc05_model_str = model  # captured earlier in _proxy_to
+                for _cc05_next in _FALLBACK_CHAIN[_cc05_chain_start:]:
+                    if _cc05_next == "queue":
+                        # Last-resort: queue the request and return 202
+                        _cc05_row_id = _write_failover_queue(body, _cc05_model_str, _cc05_profile)
+                        _log_failover_event(
+                            _cc05_current_provider, "queue", _cc05_reason,
+                            _cc05_model_str, status, _cc05_profile,
+                        )
+                        try:
+                            resp.drain_conn()
+                        except Exception:
+                            pass
+                        _queue_resp = json.dumps({
+                            "type": "queued",
+                            "message": "Request queued for retry — provider temporarily unavailable.",
+                            "queue_id": _cc05_row_id,
+                        }).encode()
+                        self.send_response(202)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(_queue_resp)))
+                        self.send_header("Retry-After", "60")
+                        self.send_header("X-TokenPak-Failover", f"queued:{_cc05_row_id}")
+                        self.end_headers()
+                        self.wfile.write(_queue_resp)
+                        _cc05_triggered = True
+                        break
+                    # Build URL + headers for next provider
+                    _cc05_fb_url = _build_failover_url(_cc05_next, target_url, _cc05_model_str)
+                    if not _cc05_fb_url:
+                        print(f"[failover] {_cc05_next}: no URL — skipping", flush=True)
+                        continue
+                    _cc05_fb_headers = _build_failover_headers(_cc05_next, fwd_headers)
+                    # Translate model name in request body
+                    _cc05_fb_body = body
+                    try:
+                        if body:
+                            _cc05_parsed_body = json.loads(body)
+                            _cc05_translated_model = _translate_model(_cc05_model_str, _cc05_next)
+                            if _cc05_translated_model != _cc05_parsed_body.get("model", ""):
+                                _cc05_parsed_body["model"] = _cc05_translated_model
+                                _cc05_fb_body = json.dumps(_cc05_parsed_body).encode()
+                                _cc05_fb_headers["Content-Length"] = str(len(_cc05_fb_body))
+                    except Exception as _cc05_body_err:
+                        print(f"[failover] body translation error: {_cc05_body_err}", flush=True)
+                    _log_failover_event(
+                        _cc05_current_provider, _cc05_next, _cc05_reason,
+                        _cc05_model_str, status, _cc05_profile,
+                    )
+                    try:
+                        resp.drain_conn()
+                    except Exception:
+                        pass
+                    _t0_fb = time.monotonic()
+                    resp = _POOL_MANAGER.request(
+                        method,
+                        _cc05_fb_url,
+                        headers=_cc05_fb_headers,
+                        body=_cc05_fb_body,
+                        timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
+                        preload_content=False,
+                    )
+                    status = resp.status
+                    print(
+                        f"[failover] {_cc05_next} → HTTP {status} "
+                        f"({int((time.monotonic() - _t0_fb) * 1000)}ms)",
+                        flush=True,
+                    )
+                    if status < 500:
+                        # Succeeded — add failover header so user can see it happened
+                        _cc05_triggered = True
+                        break
+                    # Still failing — try next in chain
+                    _cc05_current_provider = _cc05_next
+            if _cc05_triggered and status == 202:
+                return  # 202 queue response already sent
 
             # Fix #5: Record success/failure for circuit breaker
             if status >= 500:
@@ -5536,7 +7034,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             serialize_capsule,
                         )
 
-                        _session_id = self.headers.get("X-OpenClaw-Session", model)
+                        _session_id = _resolve_session_id(self.headers, model)
                         _capsule_text = body.decode("utf-8") if isinstance(body, bytes) else body
                         _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
                         _capsule_str = serialize_capsule(_capsule)
@@ -5559,9 +7057,43 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         resp_for_metrics, adapter=active_adapter
                     )
                     try:
-                        usage = json.loads(resp_for_metrics).get("usage", {})
+                        _resp_json = json.loads(resp_for_metrics)
+                        usage = _resp_json.get("usage", {})
+                        # Anthropic format: direct fields in usage object
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                        
+                        # OpenAI format: prompt_tokens_details.cached_tokens
+                        # Only apply if Anthropic fields not present (avoid double-counting)
+                        if cache_read_tokens == 0:
+                            prompt_details = usage.get("prompt_tokens_details", {})
+                            if prompt_details:
+                                openai_cached = prompt_details.get("cached_tokens", 0)
+                                if openai_cached and openai_cached > 0:
+                                    cache_read_tokens = openai_cached
+                                # Log audio_tokens for future use (OpenAI audio model support)
+                                audio_tokens = prompt_details.get("audio_tokens", 0)
+                                if audio_tokens and audio_tokens > 0:
+                                    # Future: store in dedicated column once schema supports it
+                                    pass  # Logged for awareness; schema migration needed for storage
+                        
+                        # Gemini format: usageMetadata.cachedContentTokenCount
+                        # Only apply if no cache tokens found from Anthropic/OpenAI formats
+                        if cache_read_tokens == 0:
+                            gemini_cached = _parse_gemini_cached_tokens(_resp_json)
+                            if gemini_cached > 0:
+                                cache_read_tokens = gemini_cached
+                        
+                        # Bedrock format: usage.cacheReadInputTokens (CACHE-P3-003)
+                        # Only apply if no cache tokens found from other providers
+                        if cache_read_tokens == 0:
+                            bedrock_cached = _parse_bedrock_cached_tokens(_resp_json)
+                            if bedrock_cached > 0:
+                                cache_read_tokens = bedrock_cached
+                            # Also check for Bedrock cache creation tokens
+                            bedrock_creation = _parse_bedrock_cache_creation_tokens(_resp_json)
+                            if bedrock_creation > 0:
+                                cache_creation_tokens = bedrock_creation
                     except Exception:
                         pass
 
@@ -5569,53 +7101,30 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             # Post-request: Store successful response in semantic cache
             if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
-                # CCG-14: Bypass store for streaming / Claude Code requests (same guard as lookup).
-                _sc_store_skip = True  # conservative: skip if detection fails
                 try:
-                    _sc_store_peek = (
-                        json.loads(_original_body)
-                        if isinstance(_original_body, (bytes, str))
+                    _sem_cache = _get_sem_cache()
+                    if _sem_cache is None:
+                        raise ImportError("SemanticCache unavailable")
+                    _store_query = (
+                        _original_body.decode("utf-8")
+                        if isinstance(_original_body, bytes)
                         else _original_body
                     )
-                    _sc_store_skip = bool(_sc_store_peek.get("stream"))
-                except Exception:
-                    _sc_store_skip = True  # conservative
-                if not _sc_store_skip:
-                    try:
-                        _sc_is_agent_store = bool(_req_headers_lower.get("x-claude-code-session-id"))
-                        if not _sc_is_agent_store:
-                            _sc_ua_store = (_req_headers_lower.get("user-agent") or "").lower()
-                            _sc_is_agent_store = "claude-code" in _sc_ua_store
-                    except Exception:
-                        _sc_is_agent_store = True  # conservative
-                    _sc_store_skip = _sc_is_agent_store
-                if _sc_store_skip:
-                    SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
-                else:
-                    try:
-                        _sem_cache = _get_sem_cache()
-                        if _sem_cache is None:
-                            raise ImportError("SemanticCache unavailable")
-                        _store_query = (
-                            _original_body.decode("utf-8")
-                            if isinstance(_original_body, bytes)
-                            else _original_body
-                        )
-                        _store_resp_raw = (
-                            resp_body
-                            if "resp_body" in locals()
-                            else json.dumps({"status": status}).encode()
-                        )
-                        _store_resp_dict = (
-                            json.loads(_store_resp_raw)
-                            if isinstance(_store_resp_raw, (bytes, str))
-                            else _store_resp_raw
-                        )
-                        _sem_cache.store(_store_query, _store_resp_dict)
-                        SESSION["semantic_cache_stored"] = True
-                    except Exception as _sc_store_err:
-                        SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                        pass  # fail-open
+                    _store_resp_raw = (
+                        resp_body
+                        if "resp_body" in locals()
+                        else json.dumps({"status": status}).encode()
+                    )
+                    _store_resp_dict = (
+                        json.loads(_store_resp_raw)
+                        if isinstance(_store_resp_raw, (bytes, str))
+                        else _store_resp_raw
+                    )
+                    _sem_cache.store(_store_query, _store_resp_dict)
+                    SESSION["semantic_cache_stored"] = True
+                except Exception as _sc_store_err:
+                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
+                    pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
 
@@ -5628,7 +7137,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
 
                     _ss = StabilityScorer()
-                    _workflow_id = self.headers.get("X-OpenClaw-Session", model)
+                    _workflow_id = _resolve_session_id(self.headers, model)
                     _resp_text = ""
                     try:
                         _resp_text = (
@@ -5700,6 +7209,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 cost_saved = max(0.0, cost_without_compression - cost)
                 sources_str = ",".join(injected_sources) if injected_sources else ""
                 _log_compilation_mode = "bypass" if _bypass_request else COMPILATION_MODE
+                
+                # CACHE-P4-002: Detect provider and calculate cache savings
+                _request_provider = detect_provider(target_url)
+                _provider_name = _request_provider.value if _request_provider else "unknown"
+                _cache_savings = estimate_cache_savings(_request_provider, cache_read_tokens, model)
+                
                 try:
                     MONITOR.log(
                         model,
@@ -5716,11 +7231,29 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         sources_str,
                         cache_read_tokens,
                         cache_creation_tokens,
+                        cache_provider=_provider_name,
+                        cache_estimated_savings=_cache_savings,
+                        session_id=_resolve_session_id(self.headers, model),
                     )
                 except Exception as _monitor_err:
                     print(
                         f"  ⚠️ Monitor.log() failed (SQLite error, request unaffected): {_monitor_err}"
                     )
+                # CCG-06: Write mutation audit row — every request in every mode
+                try:
+                    _audit_mode = "bypass" if _bypass_request else COMPILATION_MODE
+                    _write_mutation_audit(
+                        MONITOR_DB,
+                        None,  # request_id FK is advisory; not available synchronously
+                        _resolve_session_id(self.headers, model),
+                        _body_pre_audit,
+                        _body_post_audit,
+                        _audit_rules,
+                        _audit_cache_risk,
+                        _audit_mode,
+                    )
+                except Exception:
+                    pass  # fail-open: never break a request over audit write
                 try:
                     from tokenpak.telemetry.anon_metrics import record_request
 
@@ -5761,6 +7294,41 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
                     miss_map = SESSION.setdefault("cache_miss_reasons", {})
                     miss_map[miss_reason] = int(miss_map.get(miss_reason, 0) or 0) + 1
+                
+                # CACHE-P4-002: Per-provider cache tracking (SESSION dict — backward compat)
+                _provider_stats = SESSION["cache_by_provider"].setdefault(_provider_name, {
+                    "hits": 0,
+                    "misses": 0,
+                    "read_tokens": 0,
+                    "creation_tokens": 0,
+                    "savings_usd": 0.0,
+                })
+                _provider_stats["read_tokens"] += cache_read_tokens
+                _provider_stats["creation_tokens"] += cache_creation_tokens
+                _provider_stats["savings_usd"] += _cache_savings
+                if cache_read_tokens > 0:
+                    _provider_stats["hits"] += 1
+                else:
+                    _provider_stats["misses"] += 1
+
+                # CACHE-P4-002: CacheTelemetry — structured per-provider telemetry
+                if CACHE_TELEMETRY is not None:
+                    _mode_str = (
+                        _effective_mode.value
+                        if _effective_mode is not None and hasattr(_effective_mode, "value")
+                        else None
+                    )
+                    try:
+                        CACHE_TELEMETRY.record(
+                            provider=_provider_name,
+                            mode=_mode_str,
+                            cache_read_tokens=cache_read_tokens,
+                            cache_creation_tokens=cache_creation_tokens,
+                            savings_usd=_cache_savings,
+                        )
+                    except Exception:
+                        pass  # never break the proxy
+                
                 if injected_tokens > 0:
                     SESSION["injection_hits"] += 1
 
@@ -6054,6 +7622,136 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self._send_json(
             {"error": {"type": "not_found", "message": "openapi.yaml not found"}}, status=404
         )
+
+    def _serve_tools_panel(self):
+        """CCI-02: Serve /dashboard/tools — inline HTML panel for tool schema registry.
+
+        Shows 4 metrics: tools_normalized_count, bytes_saved_total,
+        cache_hit_rate_for_tools_block, and schema_changes (recent normalizations proxy).
+        Fetches live data from /metrics/dashboard/tools every 30 s.
+        """
+        html = b"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenPak \xe2\x80\x94 Tool Registry</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:#0a0a0a;color:#e4e4e7;padding:2rem;min-height:100vh}
+    .container{max-width:1100px;margin:0 auto}
+    h1{font-size:1.75rem;margin-bottom:.25rem;color:#fafafa}
+    .subtitle{font-size:.875rem;color:#71717a;margin-bottom:2rem}
+    .nav{font-size:.8rem;margin-bottom:1.5rem}
+    .nav a{color:#10b981;text-decoration:none}
+    .nav a:hover{text-decoration:underline}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-bottom:2rem}
+    .card{background:#18181b;border:1px solid #27272a;border-radius:.5rem;padding:1.5rem;transition:border-color .2s}
+    .card:hover{border-color:#3f3f46}
+    .card-title{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#a1a1a6;margin-bottom:.75rem}
+    .card-value{font-size:2rem;font-weight:600;color:#10b981;font-variant-numeric:tabular-nums}
+    .card-sub{font-size:.75rem;color:#71717a;margin-top:.5rem}
+    .card.warn .card-value{color:#f59e0b}
+    .footer{font-size:.75rem;color:#52525b;margin-top:1rem}
+    .status-ok{color:#10b981}.status-warn{color:#f59e0b}.status-err{color:#ef4444}
+    #last-update{font-style:italic}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="nav"><a href="/dashboard">\xe2\x86\x90 Dashboard</a></div>
+  <h1>Tool Schema Registry</h1>
+  <p class="subtitle">Prompt-cache stability via deterministic tool normalization</p>
+  <div class="grid">
+    <div class="card" id="card-normalized">
+      <div class="card-title">Tools Normalized</div>
+      <div class="card-value" id="normalized-count">\xe2\x80\xa6</div>
+      <div class="card-sub" id="normalized-sub">requests processed by registry</div>
+    </div>
+    <div class="card" id="card-bytes">
+      <div class="card-title">Bytes Saved (Session)</div>
+      <div class="card-value" id="bytes-saved">\xe2\x80\xa6</div>
+      <div class="card-sub" id="bytes-sub">vs un-normalized request bodies</div>
+    </div>
+    <div class="card" id="card-hitrate">
+      <div class="card-title">Cache-Hit Rate (Tools Block)</div>
+      <div class="card-value" id="hit-rate">\xe2\x80\xa6</div>
+      <div class="card-sub" id="hitrate-sub">requests where frozen schema matched</div>
+    </div>
+    <div class="card" id="card-changes">
+      <div class="card-title">Schema Changes</div>
+      <div class="card-value" id="schema-changes">\xe2\x80\xa6</div>
+      <div class="card-sub" id="changes-sub">tool set updates since session start</div>
+    </div>
+  </div>
+  <div class="footer">
+    Auto-refreshing every 30 s \xc2\xb7 <span id="last-update">Never</span>
+    \xc2\xb7 Data from <code>/metrics/dashboard/tools</code>
+  </div>
+</div>
+<script>
+const API = '/metrics/dashboard/tools';
+const REFRESH = 30000;
+
+function fmt(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return String(Math.round(n));
+}
+function fmtBytes(b) {
+  if (b >= 1048576) return (b/1048576).toFixed(2)+' MB';
+  if (b >= 1024) return (b/1024).toFixed(1)+' KB';
+  return b+' B';
+}
+function fmtPct(r) { return (r*100).toFixed(1)+'%'; }
+
+async function refresh() {
+  try {
+    const r = await fetch(API);
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d = await r.json();
+
+    document.getElementById('normalized-count').textContent = fmt(d.tools_normalized_count||0);
+    document.getElementById('normalized-sub').textContent =
+      'frozen tools: '+(d.frozen_tools||0)+' (\xe2\x89\x88'+(d.frozen_tokens_approx||0)+' tokens)';
+
+    document.getElementById('bytes-saved').textContent = fmtBytes(d.bytes_saved_total||0);
+    const fb = d.frozen_bytes||0;
+    document.getElementById('bytes-sub').textContent =
+      fb ? 'frozen schema: '+fmtBytes(fb) : 'vs un-normalized request bodies';
+
+    const hr = d.cache_hit_rate_for_tools_block||0;
+    const hitEl = document.getElementById('hit-rate');
+    hitEl.textContent = fmtPct(hr);
+    const card = document.getElementById('card-hitrate');
+    card.className = 'card'+(hr < 0.5 ? ' warn' : '');
+
+    const sc = d.schema_changes||0;
+    document.getElementById('schema-changes').textContent = fmt(sc);
+    const fh = d.frozen_hash;
+    document.getElementById('changes-sub').textContent =
+      fh ? 'current hash: '+fh : (sc===0 ? 'stable since session start' : sc+' invalidation(s)');
+
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+  } catch(e) {
+    console.error('tools panel fetch failed:', e);
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH);
+</script>
+</body>
+</html>
+"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", len(html))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(html)
 
     def _serve_dashboard(self):
         """Serve static dashboard files (HTML/CSS/JS)."""

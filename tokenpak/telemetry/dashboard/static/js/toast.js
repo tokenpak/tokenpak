@@ -1,6 +1,6 @@
 /**
  * TokenPak Dashboard — Toast Notification System
- * 
+ *
  * Lightweight toast manager for user feedback.
  * Usage: showToast('Filter applied', 'success')
  */

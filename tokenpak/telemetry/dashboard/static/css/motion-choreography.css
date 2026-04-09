@@ -1,9 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    TokenPak Dashboard — Motion Choreography & Transitions (Enhanced)
-   
-   Polished motion design that makes filter changes, drilldowns, and depth 
+
+   Polished motion design that makes filter changes, drilldowns, and depth
    transitions feel like "zooming into data" rather than page switches.
-   
+
    Performance targets:
    - All animations 60fps (GPU-accelerated via transform & opacity)
    - Filter reaction perceived <400ms
@@ -21,7 +21,7 @@
   --tp-ease-out: cubic-bezier(.16, 1, .3, 1);
   --tp-ease-smooth: cubic-bezier(.4, 0, .2, 1);
   --tp-ease-in: cubic-bezier(.8, 0, .2, 1);
-  
+
   --tp-duration-instant: 150ms;
   --tp-duration-quick: 200ms;
   --tp-duration-normal: 300ms;
@@ -69,15 +69,15 @@
 }
 
 @keyframes tp-stat-pulse {
-  0% { 
+  0% {
     border-color: var(--tp-border);
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
-  50% { 
+  50% {
     border-color: rgba(99, 102, 241, 0.8);
     box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
   }
-  100% { 
+  100% {
     border-color: var(--tp-border);
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
@@ -159,17 +159,17 @@ canvas.hovering {
 }
 
 @keyframes tp-filter-highlight {
-  0% { 
+  0% {
     background: var(--tp-bg3);
     border-color: var(--tp-border);
     transform: scale(1);
   }
-  50% { 
+  50% {
     background: rgba(99, 102, 241, 0.15);
     border-color: var(--tp-accent);
     transform: scale(1.01);
   }
-  100% { 
+  100% {
     background: var(--tp-bg3);
     border-color: var(--tp-border);
     transform: scale(1);
@@ -184,22 +184,22 @@ canvas.hovering {
 }
 
 @keyframes tp-content-fade-out {
-  from { 
+  from {
     opacity: 1;
     transform: translateY(0);
   }
-  to { 
+  to {
     opacity: 0.4;
     transform: translateY(-4px);
   }
 }
 
 @keyframes tp-content-fade-in {
-  from { 
+  from {
     opacity: 0;
     transform: translateY(4px);
   }
-  to { 
+  to {
     opacity: 1;
     transform: translateY(0);
   }
@@ -257,15 +257,15 @@ canvas.hovering {
    ════════════════════════════════════════════════════════════════════════ */
 
 @keyframes tp-drill-pulse {
-  0% { 
+  0% {
     transform: scale(1);
     opacity: 1;
   }
-  50% { 
+  50% {
     transform: scale(1.08);
     opacity: 0.95;
   }
-  100% { 
+  100% {
     transform: scale(1);
     opacity: 1;
   }

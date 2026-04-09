@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenpak"
-version = "1.0.1"
+version = "1.0.2"
 description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -70,6 +70,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.12.0",
     "black>=24.0.0",
     "ruff>=0.2.0",
 ]
@@ -90,6 +91,7 @@ Changelog = "https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tokenpak = "tokenpak.cli:main"
+tokenpak-main = "tokenpak.cli.main:main"
 tokenpak-admin = "tokenpak.agent.license.admin_cli:main"
 
 [tool.setuptools.packages.find]
@@ -103,6 +105,8 @@ include = [
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
+    "runtime/*.py",
+    "recipes_oss/*.yaml",
 ]
 
 [tool.pytest.ini_options]
@@ -112,12 +116,22 @@ testpaths = [
 python_files = [
     "test_*.py",
 ]
+norecursedirs = [
+    "tests/archive",
+    ".git",
+    "__pycache__",
+    "*.egg-info",
+    "dist",
+    "build",
+]
 markers = [
+    "quick: fast subset for CI and audit checks (<30s) — no live proxy or network",
     "integration: integration tests requiring external services or running proxy",
     "chaos: fault injection and chaos tests",
     "slow: tests that take longer than 5 seconds",
     "flaky: tests that may fail intermittently — run with --reruns",
 ]
+timeout = 30
 
 [tool.black]
 line-length = 100

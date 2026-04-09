@@ -135,7 +135,9 @@ class PatternStats:
 
     @property
     def recent_failures(self) -> List[SkillEpisode]:
-        recent = sorted(self.episodes, key=lambda episode: episode.timestamp)[-RECENT_FAILURE_WINDOW:]
+        recent = sorted(self.episodes, key=lambda episode: episode.timestamp)[
+            -RECENT_FAILURE_WINDOW:
+        ]
         return [episode for episode in recent if not episode.counted_success]
 
     @property
@@ -177,7 +179,7 @@ class SkillStore:
 
     def _build_macro_steps(self, steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert extracted skill steps to MacroStep-compatible format.
-        
+
         Handles both formats:
         - MacroStep format: {'name': ..., 'cmd': ...}
         - Tool format: {'tool': ..., 'args': ...}
@@ -199,20 +201,24 @@ class SkillStore:
                     cmd_parts.extend(str(a) for a in args)
                 else:
                     cmd_parts.append(str(args))
-                macro_steps.append({
-                    "name": tool.replace("-", "_").replace(".", "_").lower()[:32],
-                    "cmd": " ".join(cmd_parts),
-                    "label": step.get("label", tool),
-                    "timeout": step.get("timeout", 60),
-                })
+                macro_steps.append(
+                    {
+                        "name": tool.replace("-", "_").replace(".", "_").lower()[:32],
+                        "cmd": " ".join(cmd_parts),
+                        "label": step.get("label", tool),
+                        "timeout": step.get("timeout", 60),
+                    }
+                )
             else:
                 # Fallback: treat entire step as a command
-                macro_steps.append({
-                    "name": f"step_{len(macro_steps)}",
-                    "cmd": json.dumps(step) if isinstance(step, dict) else str(step),
-                    "label": "Auto-converted step",
-                    "timeout": 60,
-                })
+                macro_steps.append(
+                    {
+                        "name": f"step_{len(macro_steps)}",
+                        "cmd": json.dumps(step) if isinstance(step, dict) else str(step),
+                        "label": "Auto-converted step",
+                        "timeout": 60,
+                    }
+                )
         return macro_steps
 
     def register_with_macro_engine(self, skill: ExtractedSkill, overwrite: bool = True) -> Path:
@@ -264,7 +270,9 @@ class SkillStore:
                 continue
         return skills
 
-    def execute(self, skill_id: str, variables: Optional[Dict[str, Any]] = None, dry_run: bool = False) -> MacroResult:
+    def execute(
+        self, skill_id: str, variables: Optional[Dict[str, Any]] = None, dry_run: bool = False
+    ) -> MacroResult:
         skill = self.get(skill_id)
         if skill is None:
             raise FileNotFoundError(f"Skill '{skill_id}' not found")
@@ -319,7 +327,9 @@ class SkillCompiler:
             return False
         if stats.avg_token_savings <= PROMOTION_MIN_TOKEN_SAVINGS:
             return False
-        recent = sorted(stats.episodes, key=lambda episode: episode.timestamp)[-self.recent_failure_window:]
+        recent = sorted(stats.episodes, key=lambda episode: episode.timestamp)[
+            -self.recent_failure_window :
+        ]
         if any(not episode.counted_success for episode in recent):
             return False
         return True
@@ -339,7 +349,11 @@ class SkillCompiler:
     def compile_skill(self, stats: PatternStats) -> ExtractedSkill:
         seed = stats.successful_episodes[-1]
         task_type = stats.trigger_pattern["task_type"]
-        primary_file = Path(stats.trigger_pattern["file_targets"][0]).stem if stats.trigger_pattern["file_targets"] else task_type
+        primary_file = (
+            Path(stats.trigger_pattern["file_targets"][0]).stem
+            if stats.trigger_pattern["file_targets"]
+            else task_type
+        )
         skill_id = _slugify(f"{task_type}-{primary_file}")
         return ExtractedSkill(
             skill_id=skill_id,

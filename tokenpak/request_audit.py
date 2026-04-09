@@ -51,7 +51,11 @@ class RequestAudit:
         """Cost with TokenPak (compression + cache discounts)."""
         rates = get_rates(self.model)
         sent_cost = self.sent_input_tokens * rates["input"] / 1_000_000
-        cache_cost = self.cache_read_tokens * rates.get("cached", rates["input"] * CACHE_READ_DISCOUNT) / 1_000_000
+        cache_cost = (
+            self.cache_read_tokens
+            * rates.get("cached", rates["input"] * CACHE_READ_DISCOUNT)
+            / 1_000_000
+        )
         output_cost = self.output_tokens * rates["output"] / 1_000_000
         return sent_cost + cache_cost + output_cost
 
@@ -68,7 +72,11 @@ class RequestAudit:
             return 0.0
         rates = get_rates(self.model)
         full_cost = self.cache_read_tokens * rates["input"] / 1_000_000
-        cache_cost = self.cache_read_tokens * rates.get("cached", rates["input"] * CACHE_READ_DISCOUNT) / 1_000_000
+        cache_cost = (
+            self.cache_read_tokens
+            * rates.get("cached", rates["input"] * CACHE_READ_DISCOUNT)
+            / 1_000_000
+        )
         return full_cost - cache_cost
 
     @property
@@ -158,19 +166,40 @@ class RequestAuditor:
         if records is None:
             records = list(self._records)
         headers = [
-            "request_id", "timestamp", "model", "input_tokens",
-            "sent_input_tokens", "output_tokens", "cache_read_tokens",
-            "cache_hit", "compression_savings_usd", "cache_savings_usd",
-            "total_savings_usd", "savings_pct",
+            "request_id",
+            "timestamp",
+            "model",
+            "input_tokens",
+            "sent_input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_hit",
+            "compression_savings_usd",
+            "cache_savings_usd",
+            "total_savings_usd",
+            "savings_pct",
         ]
         lines = [",".join(headers)]
         for r in records:
-            lines.append(",".join(str(v) for v in [
-                r.request_id, r.timestamp, r.model, r.input_tokens,
-                r.sent_input_tokens, r.output_tokens, r.cache_read_tokens,
-                r.cache_hit, f"{r.compression_savings:.6f}", f"{r.cache_savings:.6f}",
-                f"{r.total_savings:.6f}", f"{r.savings_pct:.1f}",
-            ]))
+            lines.append(
+                ",".join(
+                    str(v)
+                    for v in [
+                        r.request_id,
+                        r.timestamp,
+                        r.model,
+                        r.input_tokens,
+                        r.sent_input_tokens,
+                        r.output_tokens,
+                        r.cache_read_tokens,
+                        r.cache_hit,
+                        f"{r.compression_savings:.6f}",
+                        f"{r.cache_savings:.6f}",
+                        f"{r.total_savings:.6f}",
+                        f"{r.savings_pct:.1f}",
+                    ]
+                )
+            )
         return "\n".join(lines)
 
 
@@ -186,26 +215,37 @@ def format_audit_report(records: List[RequestAudit]) -> str:
     ]
     for i, r in enumerate(reversed(records), 1):
         from datetime import datetime
-        ts = datetime.fromtimestamp(r.timestamp).strftime("%Y-%m-%d %H:%M:%S") if r.timestamp else "unknown"
-        status_icon = "✅ CACHE HIT" if r.cache_hit else ("✅ 200" if r.status == 200 else f"❌ {r.status}")
+
+        ts = (
+            datetime.fromtimestamp(r.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            if r.timestamp
+            else "unknown"
+        )
+        status_icon = (
+            "✅ CACHE HIT" if r.cache_hit else ("✅ 200" if r.status == 200 else f"❌ {r.status}")
+        )
         lines.append(f"Request #{i}:")
         lines.append(f"  Model:              {r.model}")
         lines.append(f"  Timestamp:          {ts}")
         lines.append(f"  Status:             {status_icon}")
-        lines.append(f"")
+        lines.append("")
         lines.append(f"  Input tokens:       {r.input_tokens:,}")
-        lines.append(f"  After compression:  {r.sent_input_tokens:,} ({r.compression_tokens_saved:,} saved)")
+        lines.append(
+            f"  After compression:  {r.sent_input_tokens:,} ({r.compression_tokens_saved:,} saved)"
+        )
         if r.cache_read_tokens:
             lines.append(f"  Cache read:         {r.cache_read_tokens:,} tokens")
-        lines.append(f"")
-        lines.append(f"  Cost breakdown:")
+        lines.append("")
+        lines.append("  Cost breakdown:")
         lines.append(f"    Without TokenPak: ${r.baseline_cost:.4f}")
         if r.compression_savings > 0:
             lines.append(f"    Compression:     -${r.compression_savings:.4f}")
         if r.cache_savings > 0:
             lines.append(f"    Cache savings:   -${r.cache_savings:.4f}")
-        lines.append(f"    ──────────────────")
+        lines.append("    ──────────────────")
         lines.append(f"    With TokenPak:    ${r.actual_cost:.4f}")
-        lines.append(f"    💰 SAVED:        ${r.total_savings:.4f} ({r.savings_pct:.0f}% reduction)")
-        lines.append(f"")
+        lines.append(
+            f"    💰 SAVED:        ${r.total_savings:.4f} ({r.savings_pct:.0f}% reduction)"
+        )
+        lines.append("")
     return "\n".join(lines)

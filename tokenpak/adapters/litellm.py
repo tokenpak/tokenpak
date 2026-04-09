@@ -49,7 +49,6 @@ from typing import Any
 from tokenpak.adapters.anthropic import AnthropicAdapter
 from tokenpak.adapters.base import (
     TokenPakAdapter,
-    TokenPakAdapterError,
     TokenPakConfigError,
 )
 from tokenpak.adapters.openai import OpenAIAdapter
@@ -149,9 +148,7 @@ class LiteLLMAdapter(TokenPakAdapter):
         bare model name.
         """
         if "model" not in request:
-            raise TokenPakConfigError(
-                "LiteLLMAdapter.prepare_request: 'model' field is required."
-            )
+            raise TokenPakConfigError("LiteLLMAdapter.prepare_request: 'model' field is required.")
         if "messages" not in request:
             raise TokenPakConfigError(
                 "LiteLLMAdapter.prepare_request: 'messages' field is required."

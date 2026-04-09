@@ -40,7 +40,7 @@ def _print_upgrade() -> None:
     print("This feature requires an Enterprise license.")
     print(f"Current tier: {_tier_name()}")
     print()
-    print("Learn more: https://tokenpak.dev/enterprise")
+    print("Learn more: https://tokenpak.io/pricing")
     print()
 
 
@@ -50,7 +50,6 @@ def _run_report(standard: str, args: list[str]) -> None:
         sys.exit(2)
 
     import argparse
-    from datetime import datetime, timezone
 
     p = argparse.ArgumentParser(prog=f"tokenpak compliance report {standard}")
     p.add_argument("--output", "-o", default=None, help="Save report to file (JSON)")
@@ -111,7 +110,7 @@ def run(argv: list[str] | None = None) -> None:
         print()
         if not _enterprise_check():
             print(f"  ⚠  Enterprise license required (current tier: {_tier_name()})")
-            print("     https://tokenpak.dev/enterprise")
+            print("     https://tokenpak.io/pricing")
             print()
         return
 

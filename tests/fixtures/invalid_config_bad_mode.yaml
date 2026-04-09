@@ -1,0 +1,8 @@
+# Invalid: mode not in enum
+port: 8766
+mode: ultra-aggressive
+
+compression:
+  enabled: true
+  max_chars: 120
+  threshold_tokens: 4500

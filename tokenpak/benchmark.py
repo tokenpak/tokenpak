@@ -1256,7 +1256,9 @@ def benchmark_indexing_optimized(directory: str, iterations: int = 3) -> dict[st
     return results
 
 
-def benchmark_search(registry: BlockRegistry, queries: List[str], iterations: int = 3) -> dict[str, Any]:
+def benchmark_search(
+    registry: BlockRegistry, queries: List[str], iterations: int = 3
+) -> dict[str, Any]:
     """Benchmark search operations."""
     results: dict[str, Any] = {}
 

@@ -334,18 +334,18 @@ table td.metric {
 
 /*
  * Contrast ratios (verified for WCAG AA compliance):
- * 
+ *
  * Text on backgrounds:
  * - text-primary (#f1f5f9) on bg-page (#0a0a0b): 14.8:1 ✓
  * - text-secondary (#cbd5e1) on bg-page (#0a0a0b): 10.2:1 ✓
  * - text-muted (#94a3b8) on bg-page (#0a0a0b): 5.8:1 ✓
  * - text-primary (#f1f5f9) on bg-card (#1a1a24): 13.1:1 ✓
- * 
+ *
  * Interactive elements:
  * - color-primary (#6366f1) on bg-page (#0a0a0b): 4.9:1 ✓
  * - color-positive (#10b981) on bg-page (#0a0a0b): 5.2:1 ✓
  * - color-danger (#ef4444) on bg-page (#0a0a0b): 4.8:1 ✓
- * 
+ *
  * All meet or exceed WCAG AA requirements:
  * - Normal text: ≥4.5:1 ✓
  * - Large text (18px+): ≥3:1 ✓

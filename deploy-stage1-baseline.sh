@@ -1,7 +1,7 @@
 #!/bin/bash
 # TokenPak Phase 3 Stage 1 — Baseline Deployment Script
-# Usage: bash deploy-stage1-baseline.sh [sue|trixbot|cali|all]
-# Run as: sue@sue-machine, trix@trixbot, cali@cali-machine
+# Usage: bash deploy-stage1-baseline.sh [agent-1|agent-2|agent-3|all]
+# Run as: user@host-1, user@host-2, user@host-3
 
 set -e
 
@@ -80,7 +80,7 @@ case "$MACHINE" in
         echo "🖥️  Deploying to Sue's machine..."
         deploy_local
         ;;
-    trixbot)
+    agent-2)
         echo "🖥️  Deploying to TrixBot..."
         deploy_local
         ;;
@@ -93,14 +93,14 @@ case "$MACHINE" in
         echo ""
         echo "⚠️  NOTE: This script must be run on each machine individually:"
         echo "   1. bash deploy-stage1-baseline.sh sue"
-        echo "   2. ssh trix@trixbot 'cd ~/Projects/tokenpak && bash deploy-stage1-baseline.sh trixbot'"
+        echo "   2. ssh user@host-2 'cd ~/Projects/tokenpak && bash deploy-stage1-baseline.sh agent-2'"
         echo "   3. ssh cali@cali 'cd ~/Projects/tokenpak && bash deploy-stage1-baseline.sh cali'"
         echo ""
         echo "   Or run this script locally and it will deploy locally."
         deploy_local
         ;;
     *)
-        echo "Usage: bash deploy-stage1-baseline.sh [sue|trixbot|cali|all]"
+        echo "Usage: bash deploy-stage1-baseline.sh [agent-1|agent-2|agent-3|all]"
         exit 1
         ;;
 esac

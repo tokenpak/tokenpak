@@ -60,7 +60,12 @@ class ValidationGate:
         try:
             payload = json.loads(request_body)
         except Exception as exc:
-            return ValidationResult(valid=False, errors=[f"invalid JSON payload: {exc}"], budget_used=input_tokens, budget_limit=self.token_budget_cap)
+            return ValidationResult(
+                valid=False,
+                errors=[f"invalid JSON payload: {exc}"],
+                budget_used=input_tokens,
+                budget_limit=self.token_budget_cap,
+            )
 
         budget_used = int(input_tokens or 0)
         if self.token_budget_cap > 0 and budget_used > self.token_budget_cap:
@@ -68,9 +73,19 @@ class ValidationGate:
 
         dry_run = self._extract_dry_run(payload)
         deterministic_requested = self._is_deterministic(payload, router_meta)
+        explicitly_deterministic = self._is_explicitly_deterministic(payload)
 
-        if deterministic_requested and not self._has_context_block(payload):
+        # Hard-error only when the caller *explicitly* set tokenpak.deterministic=True
+        # but forgot to supply a context_block.  Intent-driven routing paths often lack
+        # a context_block legitimately (health checks, heartbeat probes, utility calls);
+        # flagging those as errors produced false-positive soft-blocks.  Demote that
+        # case to an advisory warning so the proxy forwards without noise.
+        if explicitly_deterministic and not self._has_context_block(payload):
             errors.append("deterministic request missing required context block")
+        elif deterministic_requested and not explicitly_deterministic and not self._has_context_block(payload):
+            warnings.append(
+                "intent-driven deterministic request has no context_block (advisory — forwarding)"
+            )
 
         fingerprint = self._compute_fingerprint(router_meta, payload)
 
@@ -112,8 +127,20 @@ class ValidationGate:
 
     @staticmethod
     def _is_deterministic(payload: Mapping[str, Any], router_meta: Mapping[str, Any]) -> bool:
+        """Return True for any deterministic path: explicit flag OR intent-driven routing."""
         if router_meta.get("intent") and not router_meta.get("fallback", False):
             return True
+        tokenpak = payload.get("tokenpak")
+        return isinstance(tokenpak, Mapping) and bool(tokenpak.get("deterministic", False))
+
+    @staticmethod
+    def _is_explicitly_deterministic(payload: Mapping[str, Any]) -> bool:
+        """Return True only when the caller explicitly set tokenpak.deterministic=True.
+
+        Intent-driven routing (router_meta.intent) is *not* considered explicit.
+        This distinction controls whether a missing context_block is a hard error
+        (explicit) or an advisory warning (intent-driven).
+        """
         tokenpak = payload.get("tokenpak")
         return isinstance(tokenpak, Mapping) and bool(tokenpak.get("deterministic", False))
 
@@ -141,5 +168,9 @@ class ValidationGate:
         if not isinstance(slots, Mapping):
             slots = {}
         recipe_hash = hashlib.sha256(recipe.encode("utf-8")).hexdigest()[:12]
-        blob = json.dumps({"intent": intent, "slots": slots, "recipe_hash": recipe_hash}, sort_keys=True, separators=(",", ":"))
+        blob = json.dumps(
+            {"intent": intent, "slots": slots, "recipe_hash": recipe_hash},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]

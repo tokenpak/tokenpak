@@ -839,6 +839,8 @@ def record_lesson(
     """
     from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
+    )
+    from tokenpak.agent.agentic.memory_promoter import (
         record_lesson as _record,
     )
 
@@ -888,6 +890,8 @@ def get_durable_lessons(
     """
     from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
+    )
+    from tokenpak.agent.agentic.memory_promoter import (
         get_durable_lessons as _get_durable,
     )
 

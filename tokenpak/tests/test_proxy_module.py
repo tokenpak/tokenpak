@@ -10,12 +10,13 @@ Covers proxy server logic:
 """
 
 import pytest
-from tokenpak.proxy.credential_passthrough import CredentialPassthrough
 
+from tokenpak.proxy.credential_passthrough import CredentialPassthrough
 
 # ─────────────────────────────────────────────────────────────────────────
 # CREDENTIAL PASSTHROUGH TESTS (60+ tests)
 # ─────────────────────────────────────────────────────────────────────────
+
 
 class TestCredentialPassthrough:
     """Test credential passthrough security and routing."""

@@ -1,4 +1,5 @@
 pytest
+pytest-timeout
 pip-audit
 bandit
 ruff

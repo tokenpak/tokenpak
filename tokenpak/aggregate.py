@@ -1,4 +1,5 @@
 """aggregate.py — Request ledger aggregation across machines."""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,10 @@ REQUESTS_PATH = Path.home() / ".tokenpak" / "requests.jsonl"
 
 @dataclass
 class AggregateRow:
+    """A single row in the agent usage aggregate report.
+
+    Holds per-agent, per-machine, per-model request and cost totals.
+    """
     agent: str
     machine: str
     model: str
@@ -43,7 +48,9 @@ def parse_since(value: Optional[str]) -> Optional[datetime]:
     if m:
         qty = int(m.group(1))
         unit = m.group(2)
-        delta = {"d": timedelta(days=qty), "h": timedelta(hours=qty), "m": timedelta(minutes=qty)}[unit]
+        delta = {"d": timedelta(days=qty), "h": timedelta(hours=qty), "m": timedelta(minutes=qty)}[
+            unit
+        ]
         return datetime.now(timezone.utc) - delta
     # ISO date or datetime
     dt = _parse_iso(raw)
@@ -68,7 +75,18 @@ def _coerce_float(value: Any) -> float:
         return 0.0
 
 
-def load_requests(path: Optional[Path] = None, since: Optional[datetime] = None) -> List[Dict[str, Any]]:
+def load_requests(
+    path: Optional[Path] = None, since: Optional[datetime] = None
+) -> List[Dict[str, Any]]:
+    """Load request records from JSONL file with optional time filtering.
+    
+    Args:
+        path: Optional path to requests.jsonl (defaults to ~/.tokenpak/requests.jsonl)
+        since: Optional datetime to filter records (skip earlier timestamps)
+    
+    Returns:
+        list: Loaded request records (empty list if file doesn't exist)
+    """
     p = path or REQUESTS_PATH
     if not p.exists():
         return []
@@ -93,7 +111,18 @@ def load_requests(path: Optional[Path] = None, since: Optional[datetime] = None)
     return rows
 
 
-def aggregate_records(records: Iterable[Dict[str, Any]], machine: str) -> Tuple[List[AggregateRow], Dict[str, Any]]:
+def aggregate_records(
+    records: Iterable[Dict[str, Any]], machine: str
+) -> Tuple[List[AggregateRow], Dict[str, Any]]:
+    """Aggregate request records by agent and model.
+    
+    Args:
+        records: Iterable of request dicts (typically from load_requests)
+        machine: Machine/hostname identifier for output rows
+    
+    Returns:
+        tuple: (list of AggregateRow, dict of totals with request/token/cost/saved)
+    """
     totals = {
         "requests": 0,
         "tokens": 0,
@@ -144,6 +173,14 @@ def aggregate_records(records: Iterable[Dict[str, Any]], machine: str) -> Tuple[
 
 
 def format_tokens(n: int) -> str:
+    """Format token count with human-readable suffixes (M, K).
+    
+    Args:
+        n: Token count
+    
+    Returns:
+        str: Formatted token count (e.g. '1.5M', '500K', '100')
+    """
     if n >= 1_000_000:
         return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
@@ -152,6 +189,7 @@ def format_tokens(n: int) -> str:
 
 
 def fmt_cost(amount: float) -> str:
+    """Format a cost value as a human-readable dollar string."""
     if amount >= 1:
         return f"${amount:.2f}"
     if amount >= 0.01:
@@ -160,10 +198,12 @@ def fmt_cost(amount: float) -> str:
 
 
 def default_machine_name() -> str:
+    """Return the machine name from TOKENPAK_MACHINE env var or hostname."""
     return os.environ.get("TOKENPAK_MACHINE") or socket.gethostname().split(".")[0]
 
 
 def render_table(rows: List[AggregateRow], totals: Dict[str, Any]) -> str:
+    """Render aggregate usage rows as a formatted ASCII table string."""
     if not rows:
         return "No request ledger entries found."
 

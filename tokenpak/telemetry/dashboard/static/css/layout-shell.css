@@ -392,7 +392,7 @@
     flex-wrap: wrap;
     min-height: auto;
   }
-  
+
   .main-content-inner {
     padding: var(--space-lg) var(--space-md);
   }
@@ -403,28 +403,28 @@
   .nav-bar {
     padding: 0 var(--space-md);
   }
-  
+
   .nav-tabs {
     gap: var(--space-micro);
   }
-  
+
   .nav-tab {
     padding: var(--space-sm);
     font-size: 12px;
   }
-  
+
   .nav-logo {
     font-size: var(--font-size-base);
   }
-  
+
   .filter-bar {
     padding: var(--space-sm);
   }
-  
+
   .main-content-inner {
     padding: var(--space-md) var(--space-sm);
   }
-  
+
   .toast-container {
     left: var(--space-sm);
     right: var(--space-sm);

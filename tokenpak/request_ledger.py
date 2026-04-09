@@ -1,4 +1,5 @@
 """request_ledger.py — Append-only per-request ledger for aggregation."""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +10,6 @@ from typing import Any, Dict, Optional
 REQUESTS_PATH = Path.home() / ".tokenpak" / "requests.jsonl"
 
 MAX_REQUESTS = 1000
-
 
 
 def append_request(record: Dict[str, Any], path: Optional[Path] = None) -> None:

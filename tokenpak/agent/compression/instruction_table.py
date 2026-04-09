@@ -6,8 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
-
+from typing import Any
 
 TAG_PREFIX = "[INSTRUCTION:"
 TAG_SUFFIX = "]"
@@ -113,7 +112,11 @@ class InstructionTable:
                 continue
             token_est = _estimate_tokens(text)
             h = _hash_text(text)
-            entries[instruction_id] = {"text": text, "tokens": token_est, "seen_count": max(2, self.min_occurrences)}
+            entries[instruction_id] = {
+                "text": text,
+                "tokens": token_est,
+                "seen_count": max(2, self.min_occurrences),
+            }
             observed[h] = {
                 "text": text,
                 "tokens": token_est,
@@ -190,8 +193,12 @@ class InstructionTable:
         tag_tokens = _estimate_tokens(tag)
         saved = max(0, original_tokens - tag_tokens)
 
-        stats.replacements_by_id[instruction_id] = stats.replacements_by_id.get(instruction_id, 0) + 1
-        stats.tokens_saved_by_id[instruction_id] = stats.tokens_saved_by_id.get(instruction_id, 0) + saved
+        stats.replacements_by_id[instruction_id] = (
+            stats.replacements_by_id.get(instruction_id, 0) + 1
+        )
+        stats.tokens_saved_by_id[instruction_id] = (
+            stats.tokens_saved_by_id.get(instruction_id, 0) + saved
+        )
         return tag
 
     def _expand_text(self, text: str, entries: dict[str, Any]) -> str:

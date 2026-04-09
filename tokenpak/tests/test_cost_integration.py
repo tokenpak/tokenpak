@@ -5,15 +5,15 @@ Covers: telemetry/cost.py, telemetry/pricing.py — cost models, pricing, saving
 
 import sqlite3
 import tempfile
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 from tokenpak.telemetry.cost import (
+    SEED_PRICING,
     CostEngine,
     CostResult,
-    SEED_PRICING,
 )
 
 
@@ -37,9 +37,7 @@ class TestCostEngineBasics:
         """tp_pricing table is created on initialization."""
         conn = sqlite3.connect(cost_engine.db_path)
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='tp_pricing'"
-        )
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tp_pricing'")
         result = cursor.fetchone()
         conn.close()
         assert result is not None, "tp_pricing table not created"
@@ -344,7 +342,7 @@ class TestDatabaseOperations:
         """Multiple engine instances can share the same database."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.db"
-            
+
             # Create first engine and calculate
             engine1 = CostEngine(db_path=str(db_path))
             result1 = engine1.calculate(
@@ -353,7 +351,7 @@ class TestDatabaseOperations:
                 final_input_tokens=100,
                 output_tokens=10,
             )
-            
+
             # Create second engine on same db
             engine2 = CostEngine(db_path=str(db_path))
             result2 = engine2.calculate(
@@ -362,7 +360,7 @@ class TestDatabaseOperations:
                 final_input_tokens=100,
                 output_tokens=10,
             )
-            
+
             # Results should be consistent
             assert abs(result1.baseline_cost - result2.baseline_cost) < 0.01
 
@@ -371,7 +369,7 @@ class TestDatabaseOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "custom_cost.db"
             engine = CostEngine(db_path=str(db_path))
-            
+
             # Calculate something to ensure db is written
             engine.calculate(
                 model="claude-sonnet-4-6",
@@ -379,7 +377,7 @@ class TestDatabaseOperations:
                 final_input_tokens=100,
                 output_tokens=10,
             )
-            
+
             # File should exist
             assert db_path.exists()
 

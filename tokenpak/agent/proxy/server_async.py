@@ -23,20 +23,19 @@ Env vars (all optional):
     TOKENPAK_HTTPX_POOL_SIZE   (default 100) — httpx connection pool size
     TOKENPAK_HTTPX_TIMEOUT     (default 300) — upstream timeout seconds
 """
+
 from __future__ import annotations
 
 import asyncio
 import gzip
 import json
 import os
-import signal
-import sys
 import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 import httpx
 from starlette.applications import Starlette
@@ -86,6 +85,7 @@ def _client() -> httpx.AsyncClient:
 # Concurrency limiter middleware — backpressure / 503 when at capacity
 # ---------------------------------------------------------------------------
 
+
 class ConcurrencyLimiterMiddleware(BaseHTTPMiddleware):
     """Return HTTP 503 when MAX_CONCURRENCY in-flight requests are active."""
 
@@ -122,6 +122,7 @@ class ConcurrencyLimiterMiddleware(BaseHTTPMiddleware):
 # Helper: should we intercept and log this request?
 # ---------------------------------------------------------------------------
 
+
 def _should_intercept(url: str) -> bool:
     return any(h in url for h in INTERCEPT_HOSTS)
 
@@ -133,6 +134,7 @@ def _is_messages_endpoint(url: str) -> bool:
 # ---------------------------------------------------------------------------
 # Helper: estimate tokens from body
 # ---------------------------------------------------------------------------
+
 
 def _estimate_tokens(body: bytes) -> int:
     try:
@@ -203,16 +205,21 @@ def _parse_sse_tokens(sse_bytes: bytes) -> Dict[str, int]:
 def _build_forward_headers(request: Request, target_url: str) -> Dict[str, str]:
     """Build headers to forward to the upstream provider."""
     from urllib.parse import urlparse
+
     parsed = urlparse(target_url)
     skip = {
-        "host", "proxy-connection", "proxy-authorization",
-        "connection", "keep-alive", "transfer-encoding",
-        "te", "trailer", "upgrade", "accept-encoding",
+        "host",
+        "proxy-connection",
+        "proxy-authorization",
+        "connection",
+        "keep-alive",
+        "transfer-encoding",
+        "te",
+        "trailer",
+        "upgrade",
+        "accept-encoding",
     }
-    headers = {
-        k: v for k, v in request.headers.items()
-        if k.lower() not in skip
-    }
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in skip}
     headers["host"] = parsed.netloc
     return headers
 
@@ -220,6 +227,7 @@ def _build_forward_headers(request: Request, target_url: str) -> Dict[str, str]:
 # ---------------------------------------------------------------------------
 # Pipeline runner (runs sync pipeline in thread pool to avoid blocking)
 # ---------------------------------------------------------------------------
+
 
 def _run_pipeline_sync(ps, body: bytes, model: str, trace) -> tuple:
     """
@@ -234,6 +242,7 @@ def _run_pipeline_sync(ps, body: bytes, model: str, trace) -> tuple:
         return result
     except Exception as exc:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "tokenpak async: pipeline failed (%s: %s) — passthrough", type(exc).__name__, exc
         )
@@ -244,6 +253,7 @@ def _run_pipeline_sync(ps, body: bytes, model: str, trace) -> tuple:
 # ---------------------------------------------------------------------------
 # Core forwarding logic (async)
 # ---------------------------------------------------------------------------
+
 
 async def _forward_request(request: Request, target_url: str) -> Response:
     """
@@ -259,6 +269,30 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     # Read body
     body = await request.body()
 
+    # Check request size against thresholds (monitoring)
+    try:
+        from tokenpak.monitoring.request_size import get_monitor
+
+        monitor = get_monitor()
+        # Extract session ID from headers if available
+        session_id = request.headers.get("X-Session-ID", None)
+        size_alert = monitor.check_request_size(len(body), session_id=session_id)
+        if size_alert and ps.telemetry_events:
+            # Log alert to telemetry
+            ps.telemetry_events.append(
+                {
+                    "type": "request_size_alert",
+                    "timestamp": datetime.now().isoformat(),
+                    "level": size_alert.level.value,
+                    "size_bytes": size_alert.size_bytes,
+                    "message": size_alert.message,
+                    "session_id": session_id,
+                }
+            )
+    except Exception:
+        # Silently ignore monitoring errors
+        pass
+
     model = "unknown"
     input_tokens = 0
     sent_input_tokens = 0
@@ -273,6 +307,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
         # Import here to avoid circular imports
         try:
             from tokenpak.agent.proxy.server import PipelineTrace
+
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
@@ -284,6 +319,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     if should_log and is_messages and body:
         try:
             from tokenpak.agent.proxy.router import ProviderRouter
+
             _router = ProviderRouter()
             route = _router.route(target_url, dict(request.headers), body)
             model = route.model
@@ -298,7 +334,12 @@ async def _forward_request(request: Request, target_url: str) -> Response:
             pass
 
         # Run pipeline in thread pool (sync code, must not block event loop)
-        body, sent_input_tokens, input_tokens, protected_tokens = await asyncio.get_event_loop().run_in_executor(
+        (
+            body,
+            sent_input_tokens,
+            input_tokens,
+            protected_tokens,
+        ) = await asyncio.get_event_loop().run_in_executor(
             None, _run_pipeline_sync, ps, body, model, trace
         )
 
@@ -325,7 +366,11 @@ async def _forward_request(request: Request, target_url: str) -> Response:
                 nonlocal output_tokens, cache_read_tokens, cache_creation_tokens
                 try:
                     async with client.stream(
-                        request.method, target_url, content=body, headers=fwd_headers, timeout=HTTPX_TIMEOUT
+                        request.method,
+                        target_url,
+                        content=body,
+                        headers=fwd_headers,
+                        timeout=HTTPX_TIMEOUT,
                     ) as resp:
                         async for chunk in resp.aiter_bytes(chunk_size=4096):
                             if chunk:
@@ -345,8 +390,10 @@ async def _forward_request(request: Request, target_url: str) -> Response:
                 request.method, target_url, content=body, headers=fwd_headers, timeout=HTTPX_TIMEOUT
             ) as upstream:
                 resp_headers = {
-                    k: v for k, v in upstream.headers.items()
-                    if k.lower() not in ("content-length", "transfer-encoding", "connection", "keep-alive")
+                    k: v
+                    for k, v in upstream.headers.items()
+                    if k.lower()
+                    not in ("content-length", "transfer-encoding", "connection", "keep-alive")
                 }
 
                 async def _inner_stream():
@@ -364,9 +411,16 @@ async def _forward_request(request: Request, target_url: str) -> Response:
                     # Record telemetry after stream
                     latency_ms = int((time.monotonic() - t0) * 1000)
                     _record_telemetry(
-                        ps, trace, model, input_tokens, sent_input_tokens,
-                        output_tokens, protected_tokens, cache_read_tokens,
-                        cache_creation_tokens, latency_ms
+                        ps,
+                        trace,
+                        model,
+                        input_tokens,
+                        sent_input_tokens,
+                        output_tokens,
+                        protected_tokens,
+                        cache_read_tokens,
+                        cache_creation_tokens,
+                        latency_ms,
                     )
 
                 response = StreamingResponse(
@@ -383,8 +437,10 @@ async def _forward_request(request: Request, target_url: str) -> Response:
         else:
             # ── Non-streaming path ────────────────────────────────────────
             resp = await client.request(
-                request.method, target_url,
-                content=body, headers=fwd_headers,
+                request.method,
+                target_url,
+                content=body,
+                headers=fwd_headers,
                 timeout=HTTPX_TIMEOUT,
             )
             resp_body = resp.content
@@ -406,14 +462,23 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
             latency_ms = int((time.monotonic() - t0) * 1000)
             _record_telemetry(
-                ps, trace, model, input_tokens, sent_input_tokens,
-                output_tokens, protected_tokens, cache_read_tokens,
-                cache_creation_tokens, latency_ms
+                ps,
+                trace,
+                model,
+                input_tokens,
+                sent_input_tokens,
+                output_tokens,
+                protected_tokens,
+                cache_read_tokens,
+                cache_creation_tokens,
+                latency_ms,
             )
 
             resp_headers = {
-                k: v for k, v in resp.headers.items()
-                if k.lower() not in ("content-length", "transfer-encoding", "connection", "keep-alive")
+                k: v
+                for k, v in resp.headers.items()
+                if k.lower()
+                not in ("content-length", "transfer-encoding", "connection", "keep-alive")
             }
             resp_headers["Access-Control-Allow-Origin"] = "*"
             return Response(
@@ -440,10 +505,15 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
 
 def _record_telemetry(
-    ps, trace, model: str,
-    input_tokens: int, sent_input_tokens: int,
-    output_tokens: int, protected_tokens: int,
-    cache_read_tokens: int, cache_creation_tokens: int,
+    ps,
+    trace,
+    model: str,
+    input_tokens: int,
+    sent_input_tokens: int,
+    output_tokens: int,
+    protected_tokens: int,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
     latency_ms: int,
 ) -> None:
     """Record telemetry for a completed request. Thread-safe."""
@@ -451,8 +521,13 @@ def _record_telemetry(
         return
     try:
         from tokenpak.agent.proxy.router import estimate_cost
-        cost = estimate_cost(model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
-        cost_without = estimate_cost(model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens)
+
+        cost = estimate_cost(
+            model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+        )
+        cost_without = estimate_cost(
+            model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+        )
         saved = max(0, input_tokens - sent_input_tokens)
         cost_saved = max(0.0, cost_without - cost)
 
@@ -515,6 +590,7 @@ def _record_telemetry(
 # Management endpoint handlers
 # ---------------------------------------------------------------------------
 
+
 async def handle_health(request: Request) -> JSONResponse:
     return JSONResponse(_ps().health())
 
@@ -553,21 +629,30 @@ async def handle_trace_by_id(request: Request) -> JSONResponse:
 
 async def handle_degradation(request: Request) -> JSONResponse:
     from tokenpak.agent.proxy.degradation import get_degradation_tracker
+
     return JSONResponse(get_degradation_tracker().summary())
 
 
 async def handle_circuit_breakers(request: Request) -> JSONResponse:
     from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry
+
     registry = get_circuit_breaker_registry()
-    return JSONResponse({
-        "enabled": registry.enabled,
-        "circuit_breakers": registry.all_statuses(),
-    })
+    return JSONResponse(
+        {
+            "enabled": registry.enabled,
+            "circuit_breakers": registry.all_statuses(),
+        }
+    )
 
 
 async def handle_sessions(request: Request) -> JSONResponse:
     from tokenpak.agent.dashboard.session_filter import FilterParams
-    qs = str(request.query_string, "utf-8") if isinstance(request.query_string, bytes) else request.query_string  # type: ignore[attr-defined]
+
+    qs = (
+        str(request.query_string, "utf-8")
+        if isinstance(request.query_string, bytes)
+        else request.query_string
+    )  # type: ignore[attr-defined]
     try:
         params = FilterParams.from_query_string(qs)
     except (ValueError, TypeError) as exc:
@@ -581,6 +666,7 @@ async def handle_sessions(request: Request) -> JSONResponse:
 
 async def handle_export_csv(request: Request) -> Response:
     from tokenpak.agent.dashboard.export_api import ExportAPI
+
     ps = _ps()
     raw_body = await request.body()
     traces = [t.to_dict() for t in ps.trace_storage.get_all()]
@@ -592,6 +678,7 @@ async def handle_export_csv(request: Request) -> Response:
 # ---------------------------------------------------------------------------
 # Generic proxy handler (full URL forwarding)
 # ---------------------------------------------------------------------------
+
 
 async def handle_proxy(request: Request) -> Response:
     """Handle requests where the path is a full URL (forward proxy mode)."""
@@ -608,6 +695,7 @@ async def handle_proxy(request: Request) -> Response:
 async def handle_v1_proxy(request: Request) -> Response:
     """Handle /v1/* paths — reverse proxy to the appropriate provider."""
     from tokenpak.agent.proxy.router import ProviderRouter
+
     router = ProviderRouter()
     path = request.url.path
     query = request.url.query
@@ -628,6 +716,7 @@ async def handle_not_found(request: Request, exc=None) -> JSONResponse:
 # ---------------------------------------------------------------------------
 # Lifespan — create/destroy the shared httpx.AsyncClient
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def lifespan(app):
@@ -651,6 +740,7 @@ async def lifespan(app):
     _oauth_refresher = None
     try:
         from tokenpak.agent.config import get_config
+
         cfg = get_config()
         auth_cfg = cfg.get("auth", {}) if isinstance(cfg.get("auth"), dict) else {}
         cooldown_enabled = auth_cfg.get("auto_clear_cooldowns", True)
@@ -658,16 +748,19 @@ async def lifespan(app):
 
         if cooldown_enabled:
             from tokenpak.agent.auth.cooldown_manager import BackgroundCooldownClearer
+
             _cooldown_clearer = BackgroundCooldownClearer(interval=60, enabled=True)
             await _cooldown_clearer.start()
 
         if oauth_enabled:
             from tokenpak.agent.auth.oauth_manager import BackgroundOAuthRefresher
+
             _oauth_refresher = BackgroundOAuthRefresher(interval=300, enabled=True)
             await _oauth_refresher.start()
 
     except Exception as _bg_exc:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "lifespan: could not start background tasks: %s", _bg_exc
         )
@@ -688,6 +781,7 @@ async def lifespan(app):
 # ---------------------------------------------------------------------------
 # ASGI application factory
 # ---------------------------------------------------------------------------
+
 
 def create_async_app(proxy_server) -> Starlette:
     """
@@ -714,7 +808,9 @@ def create_async_app(proxy_server) -> Starlette:
         # Export
         Route("/v1/export/csv", handle_export_csv, methods=["POST"]),
         # Reverse proxy (all /v1/* paths)
-        Route("/v1/{path:path}", handle_v1_proxy, methods=["GET", "POST", "PUT", "DELETE", "PATCH"]),
+        Route(
+            "/v1/{path:path}", handle_v1_proxy, methods=["GET", "POST", "PUT", "DELETE", "PATCH"]
+        ),
     ]
 
     app = Starlette(
@@ -732,6 +828,7 @@ def create_async_app(proxy_server) -> Starlette:
 # ---------------------------------------------------------------------------
 # CONNECT tunnel handler (asyncio TCP level)
 # ---------------------------------------------------------------------------
+
 
 async def _handle_connect_tunnel(
     host: str, port: int, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
@@ -781,6 +878,7 @@ async def _handle_connect_tunnel(
 # ---------------------------------------------------------------------------
 # Custom TCP server that handles CONNECT + delegates HTTP to uvicorn
 # ---------------------------------------------------------------------------
+
 
 class _AsyncTCPProxy:
     """
@@ -866,9 +964,7 @@ class _AsyncTCPProxy:
                     pass
 
     async def start(self):
-        self._server = await asyncio.start_server(
-            self._handle_connection, self.host, self.port
-        )
+        self._server = await asyncio.start_server(self._handle_connection, self.host, self.port)
 
     async def stop(self):
         if self._server:
@@ -879,6 +975,7 @@ class _AsyncTCPProxy:
 # ---------------------------------------------------------------------------
 # Async proxy runner (called from ProxyServer.start_async())
 # ---------------------------------------------------------------------------
+
 
 async def run_async_proxy(
     proxy_server,
@@ -900,6 +997,7 @@ async def run_async_proxy(
     # Check if internal port is available; if not, use direct mode (no CONNECT support)
     _use_tcp_proxy = True
     import socket as _socket
+
     try:
         _sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         _sock.bind(("127.0.0.1", uvicorn_port))
@@ -955,6 +1053,7 @@ async def run_async_proxy(
 # ---------------------------------------------------------------------------
 # Thread-based entry point (called from ProxyServer.start())
 # ---------------------------------------------------------------------------
+
 
 def start_async_proxy_in_thread(
     proxy_server,

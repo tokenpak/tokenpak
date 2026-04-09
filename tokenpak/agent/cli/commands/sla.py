@@ -38,7 +38,7 @@ def _print_upgrade() -> None:
     print("This feature requires an Enterprise license.")
     print(f"Current tier: {_tier_name()}")
     print()
-    print("Learn more: https://tokenpak.dev/enterprise")
+    print("Learn more: https://tokenpak.io/pricing")
     print()
 
 
@@ -99,7 +99,7 @@ def _run_set(args: list[str]) -> None:
 
     parsed = p.parse_args(args)
 
-    from tokenpak.enterprise.sla import SLAProfile, SLATier, SLARouter
+    from tokenpak.enterprise.sla import SLAProfile, SLARouter, SLATier
 
     profile = SLAProfile(
         name=parsed.name,
@@ -114,7 +114,9 @@ def _run_set(args: list[str]) -> None:
 
     router = SLARouter()
     router.set_profile(profile)
-    print(f"✓ SLA profile '{parsed.name}' saved (tier={parsed.tier}, p95≤{parsed.max_latency_ms}ms)")
+    print(
+        f"✓ SLA profile '{parsed.name}' saved (tier={parsed.tier}, p95≤{parsed.max_latency_ms}ms)"
+    )
 
 
 def run(argv: list[str] | None = None) -> None:

@@ -1,0 +1,69 @@
+name: Repo Hygiene Check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  hygiene:
+    name: Check for internal/sensitive content
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for internal filenames
+        run: |
+          echo "Scanning tracked files for internal document patterns..."
+          # Check for files with internal naming patterns (exact filename patterns, not word matches)
+          BLOCKED=$(git ls-files | grep -iE '(^|/)AUDIT[^/]*\.md$|(^|/)SECURITY_AUDIT[^/]*\.md$|(^|/)COVERAGE_GAPS[^/]*\.md$|(^|/)LAUNCH_CHECKLIST[^/]*\.md$' || true)
+          if [ -n "$BLOCKED" ]; then
+            echo "::error::Internal files detected in repo:"
+            echo "$BLOCKED"
+            echo ""
+            echo "These files belong in the private vault, not the public repo."
+            echo "Remove them with: git rm <file>"
+            exit 1
+          fi
+          echo "✅ No internal filenames found"
+
+      - name: Check for hardcoded internal IPs
+        run: |
+          echo "Scanning for hardcoded internal IP addresses..."
+          LEAKS=$(grep -rn '192\.168\.168\.\|100\.83\.165\.\|100\.116\.72\.' \
+            --include='*.md' --include='*.py' --include='*.yaml' --include='*.yml' \
+            --include='*.json' --include='*.toml' --include='*.cfg' --include='*.ini' \
+            --include='*.txt' --include='*.rst' --include='*.sh' \
+            . || true)
+          if [ -n "$LEAKS" ]; then
+            echo "::error::Hardcoded internal IPs detected:"
+            echo "$LEAKS"
+            echo ""
+            echo "Replace with generic placeholders like <your-ip> or 192.168.x.x"
+            exit 1
+          fi
+          echo "✅ No hardcoded internal IPs found"
+
+      - name: Check for internal hostnames
+        run: |
+          echo "Scanning for internal hostnames..."
+          # Use git ls-files to scan only tracked files (avoids false positives from
+          # build/ artifacts, .github/ workflow source patterns, and other untracked dirs)
+          HOSTS=$(git ls-files \
+            --exclude-standard \
+            | grep -E '\.(md|py|yaml|yml|json|toml|cfg|ini|txt|rst|sh)$' \
+            | grep -v '^\.github/' \
+            | xargs grep -n 'suewu\|trixbot\|calibot' 2>/dev/null \
+            | grep -v '\.gitignore' || true)
+          if [ -n "$HOSTS" ]; then
+            echo "::error::Internal hostnames detected:"
+            echo "$HOSTS"
+            echo ""
+            echo "Replace with generic names like agent-1, agent-2, or <hostname>"
+            exit 1
+          fi
+          echo "✅ No internal hostnames found"

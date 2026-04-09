@@ -1,129 +1,194 @@
 """
-TokenPak Auth Alert Hook — Phase 1
+TokenPak Auth Alert — Generic Notification Hook
 
-Wires the AuthGuard event into a Telegram notification for Kevin.
-Loaded lazily at proxy startup via register_auth_alert_hook().
+Provides a pluggable notification system for auth failure events emitted
+by AuthGuard. Ships with a WebhookNotificationHook (generic HTTP POST) and
+a no-op NullNotificationHook.
 
-The alert message matches the spec from the task:
-  ⚠️ TokenPak Auth Failure
-  Your Anthropic token is expired/revoked.
-  Proxy is OFFLINE. Requests now bypass compression (2-3x cost).
-  Fix immediately: bash ~/update-anthropic-token.sh <NEW_TOKEN>
+Usage — register any callable as a handler:
+
+    from tokenpak.auth_alert import register_auth_alert_hook, WebhookNotificationHook
+
+    # Option 1: Generic webhook (any HTTP endpoint)
+    hook = WebhookNotificationHook(
+        url="https://your-service.com/alerts",
+        headers={"Authorization": "Bearer your-token"},
+    )
+    register_auth_alert_hook(hook)
+
+    # Option 2: Custom callable
+    def my_handler(provider: str, event: str, details: dict) -> None:
+        print(f"Auth failure: {provider} — {details}")
+
+    register_auth_alert_hook(my_handler)
+
+    # Option 3: Adapter-specific hooks (see examples/06_auth_alerts.py)
+    # Telegram, Slack, PagerDuty, etc. wire here using the same interface.
+
+Env vars:
+    TOKENPAK_ALERT_WEBHOOK_URL  — if set, auto-registers a WebhookNotificationHook at startup
+    TOKENPAK_ALERT_WEBHOOK_HEADERS — JSON string of extra headers (optional)
 """
 
+from __future__ import annotations
+
+import json
 import logging
 import os
-import subprocess
-from typing import Optional
+import urllib.request
+from typing import Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Config
+# Public hook protocol
 # ---------------------------------------------------------------------------
-TELEGRAM_BOT_TOKEN = os.environ.get("TOKENPAK_TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TOKENPAK_TELEGRAM_CHAT_ID", "461720084")
+# A notification hook is any callable with the signature:
+#   (provider: str, event: str, details: dict) -> None
+# This matches the AuthGuard.on_auth_failure handler interface exactly.
+NotificationHook = Callable[[str, str, dict], None]
 
 
-def _send_telegram(message: str, chat_id: Optional[str] = None) -> bool:
-    """
-    Send a Telegram message via the openclaw message tool (subprocess) or
-    curl if the bot token is configured directly.
+# ---------------------------------------------------------------------------
+# Built-in hook: Generic HTTP webhook
+# ---------------------------------------------------------------------------
 
-    Returns True if sent successfully, False otherwise.
-    """
-    target = chat_id or TELEGRAM_CHAT_ID
 
-    # Strategy 1: Try openclaw CLI (preferred — uses existing Telegram integration)
-    try:
-        result = subprocess.run(
-            ["openclaw", "message", "send", "--target", target, "--message", message],
-            capture_output=True,
-            text=True,
-            timeout=15,
+class WebhookNotificationHook:
+    """Send auth-failure alerts as JSON POST to any HTTP endpoint.
+
+    Args:
+        url: The webhook URL to POST to.
+        headers: Optional extra HTTP headers (e.g. Authorization).
+        timeout: Request timeout in seconds (default: 15).
+
+    Example::
+
+        hook = WebhookNotificationHook(
+            url="https://hooks.slack.com/services/...",
+            headers={"Content-Type": "application/json"},
         )
-        if result.returncode == 0:
-            logger.info("auth_alert: Telegram sent via openclaw CLI")
-            return True
-        else:
-            logger.warning("auth_alert: openclaw CLI failed: %s", result.stderr.strip())
-    except FileNotFoundError:
-        logger.debug("auth_alert: openclaw CLI not found, trying curl")
-    except Exception as exc:
-        logger.warning("auth_alert: openclaw CLI error: %s", exc)
+        register_auth_alert_hook(hook)
+    """
 
-    # Strategy 2: Direct Telegram API via curl
-    if TELEGRAM_BOT_TOKEN:
+    def __init__(
+        self,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: int = 15,
+    ) -> None:
+        self.url = url
+        self.headers = headers or {}
+        self.timeout = timeout
+
+    def __call__(self, provider: str, event: str, details: dict) -> None:
+        if event != "auth-failure-detected":
+            return
+        payload = json.dumps(
+            {
+                "event": event,
+                "provider": provider,
+                "details": details,
+                "message": _build_alert_message(provider, details),
+            }
+        ).encode()
+        req = urllib.request.Request(
+            self.url,
+            data=payload,
+            headers={"Content-Type": "application/json", **self.headers},
+            method="POST",
+        )
         try:
-            import json
-            import urllib.request
-
-            payload = json.dumps({
-                "chat_id": target,
-                "text": message,
-                "parse_mode": "HTML",
-            }).encode()
-            req = urllib.request.Request(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                body = resp.read()
-                data = json.loads(body)
-                if data.get("ok"):
-                    logger.info("auth_alert: Telegram sent via direct API")
-                    return True
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                status = resp.getcode()
+                if status < 300:
+                    logger.info("auth_alert: webhook delivered (HTTP %s) to %s", status, self.url)
                 else:
-                    logger.warning("auth_alert: Telegram API error: %s", data)
+                    logger.warning("auth_alert: webhook returned HTTP %s from %s", status, self.url)
         except Exception as exc:
-            logger.error("auth_alert: direct Telegram API failed: %s", exc)
+            logger.error("auth_alert: webhook delivery failed to %s — %s", self.url, exc)
 
-    return False
+
+# ---------------------------------------------------------------------------
+# Built-in hook: No-op (useful for testing or explicit disablement)
+# ---------------------------------------------------------------------------
+
+
+class NullNotificationHook:
+    """A no-op hook — swallows all events. Useful for testing."""
+
+    def __call__(self, provider: str, event: str, details: dict) -> None:
+        logger.debug(
+            "auth_alert: NullNotificationHook received event=%s provider=%s", event, provider
+        )
+
+
+# ---------------------------------------------------------------------------
+# Message builder (public — tested directly in test_auth_guard.py)
+# ---------------------------------------------------------------------------
 
 
 def _build_alert_message(provider: str, details: dict) -> str:
+    """Build a human-readable alert message for an auth failure event."""
     count = details.get("consecutive_failures", "?")
     ts = details.get("timestamp", "unknown")
     provider_display = provider.capitalize()
     return (
-        f"⚠️ <b>TokenPak Auth Failure</b>\n"
-        f"Your {provider_display} token is expired or revoked.\n"
+        f"TokenPak Auth Failure — {provider_display} token is expired or revoked.\n"
         f"Proxy is OFFLINE. Requests now bypass compression (2-3x cost).\n\n"
-        f"Fix immediately:\n"
-        f"<code>bash ~/update-anthropic-token.sh &lt;NEW_TOKEN&gt;</code>\n\n"
+        f"Fix: update your {provider_display} API key and restart the proxy.\n"
+        f"  Script: update-anthropic-token.sh\n\n"
         f"Details: {count} consecutive 401/403 from {provider_display} @ {ts}"
     )
 
 
-def _on_auth_failure(provider: str, event: str, details: dict) -> None:
-    """Handler registered with AuthGuard."""
-    if event != "auth-failure-detected":
+# ---------------------------------------------------------------------------
+# Registration
+# ---------------------------------------------------------------------------
+
+
+def register_auth_alert_hook(hook: NotificationHook) -> None:
+    """Register a notification hook with the global AUTH_GUARD singleton.
+
+    The hook is called whenever AuthGuard detects an auth failure threshold
+    breach. Multiple hooks can be registered; all are called in order.
+
+    Args:
+        hook: Any callable with signature (provider, event, details) -> None,
+              or an instance of WebhookNotificationHook / NullNotificationHook.
+
+    Example::
+
+        from tokenpak.auth_alert import register_auth_alert_hook, WebhookNotificationHook
+
+        register_auth_alert_hook(WebhookNotificationHook(
+            url="https://your-endpoint.com/tokenpak-alerts",
+        ))
+    """
+    from tokenpak.auth_guard import AUTH_GUARD  # noqa: PLC0415 (lazy import — avoids circular)
+
+    AUTH_GUARD.on_auth_failure(hook)
+    logger.info("auth_alert: registered notification hook: %s", type(hook).__name__)
+
+
+def _auto_register_from_env() -> None:
+    """Auto-register a WebhookNotificationHook if TOKENPAK_ALERT_WEBHOOK_URL is set.
+
+    Called at proxy startup. Users who prefer explicit registration should
+    call register_auth_alert_hook() directly instead of using env vars.
+    """
+    url = os.environ.get("TOKENPAK_ALERT_WEBHOOK_URL", "").strip()
+    if not url:
         return
-
-    logger.warning(
-        "auth_alert: AUTH FAILURE DETECTED — provider=%s failures=%s",
-        provider,
-        details.get("consecutive_failures"),
-    )
-
-    message = _build_alert_message(provider, details)
-    sent = _send_telegram(message)
-    if not sent:
-        # Last resort: print to stdout so it shows in proxy logs
-        logger.error("auth_alert: FAILED TO SEND TELEGRAM ALERT!\nMessage was:\n%s", message)
-        print(f"\n{'='*60}")
-        print("⚠️  AUTH ALERT (Telegram delivery failed):")
-        print(message)
-        print(f"{'='*60}\n")
-
-
-def register_auth_alert_hook() -> None:
-    """
-    Register the Telegram alert handler with the global AUTH_GUARD singleton.
-    Call once at proxy startup.
-    """
-    from tokenpak.auth_guard import AUTH_GUARD
-    AUTH_GUARD.on_auth_failure(_on_auth_failure)
-    logger.info("auth_alert: Telegram alert hook registered")
+    headers: Dict[str, str] = {}
+    raw_headers = os.environ.get("TOKENPAK_ALERT_WEBHOOK_HEADERS", "").strip()
+    if raw_headers:
+        try:
+            headers = json.loads(raw_headers)
+        except json.JSONDecodeError:
+            logger.warning(
+                "auth_alert: TOKENPAK_ALERT_WEBHOOK_HEADERS is not valid JSON — ignoring"
+            )
+    hook = WebhookNotificationHook(url=url, headers=headers)
+    register_auth_alert_hook(hook)
+    logger.info("auth_alert: auto-registered WebhookNotificationHook from env (url=%s)", url)

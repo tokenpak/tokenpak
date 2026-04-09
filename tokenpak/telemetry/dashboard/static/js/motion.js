@@ -9,7 +9,7 @@ const MotionChoreography = {
   animatingElements: new Set(),
   filterChangeTimeout: null,
   lastFilterChangeTime: 0,
-  
+
   /**
    * 1. NUMBER VALUE TRANSITIONS
    * Animate KPI/metric numbers when values change (typically via HTMX swap)
@@ -43,7 +43,7 @@ const MotionChoreography = {
 
     // Pulse animation to indicate change
     element.classList.add('animating');
-    
+
     // Ensure tabular numerals for consistent width (already in CSS, but enforce)
     element.style.fontVariantNumeric = 'tabular-nums';
 
@@ -67,7 +67,7 @@ const MotionChoreography = {
       const charts = event.detail.xhr.responseText.includes('canvas') ||
                     event.detail.xhr.responseText.includes('chartjs') ||
                     event.detail.xhr.responseText.includes('chart-');
-      
+
       if (charts && event.detail.target) {
         // Fade out existing charts before swap
         const existingCharts = event.detail.target.querySelectorAll('.chart-container');
@@ -84,7 +84,7 @@ const MotionChoreography = {
         // Remove old fade-out, apply fade-in
         chart.classList.remove('chart-fade-out');
         chart.classList.add('chart-fade-in');
-        
+
         // Remove animation class after duration
         setTimeout(() => {
           chart.classList.remove('chart-fade-in');
@@ -99,7 +99,7 @@ const MotionChoreography = {
    */
   initFilterChangeAnimation() {
     const filterItems = document.querySelectorAll('.filter-item, [data-filter]');
-    
+
     filterItems.forEach((filterItem) => {
       filterItem.addEventListener('change', (event) => {
         this.handleFilterChange(filterItem);
@@ -147,7 +147,7 @@ const MotionChoreography = {
       mainContent.classList.remove('affected-section');
       mainContent.classList.remove('loading');
       mainContent.classList.add('loaded');
-      
+
       setTimeout(() => {
         mainContent.classList.remove('loaded');
       }, 200 + 50);
@@ -171,7 +171,7 @@ const MotionChoreography = {
       if (canvasParent) {
         canvasParent.classList.add('chart-element');
         canvasParent.classList.add('clicked');
-        
+
         setTimeout(() => {
           canvasParent.classList.remove('clicked');
         }, 300 + 50);
@@ -190,7 +190,7 @@ const MotionChoreography = {
     // Listen for depth change events (from router/navigation)
     document.addEventListener('depth-change', (event) => {
       const { entering, exiting } = event.detail;
-      
+
       if (exiting) {
         exiting.classList.add('exiting');
         setTimeout(() => {
@@ -271,7 +271,7 @@ const MotionChoreography = {
     }
 
     drawer.classList.remove('closing');
-    
+
     // Content fades in after slide animation
     const content = drawer.querySelector('.drawer-content');
     if (content) {
@@ -285,7 +285,7 @@ const MotionChoreography = {
     if (!drawer) return;
 
     drawer.classList.add('closing');
-    
+
     const overlay = drawer.previousElementSibling;
     if (overlay && overlay.classList.contains('drawer-overlay')) {
       overlay.classList.add('closing');
@@ -343,7 +343,7 @@ const MotionChoreography = {
 
       // Find sections that toggle based on mode
       const modeSections = document.querySelectorAll('[data-mode="advanced"], [data-mode="basic"]');
-      
+
       modeSections.forEach((section) => {
         if (section.dataset.mode === newMode) {
           // Show this section
@@ -358,7 +358,7 @@ const MotionChoreography = {
 
       // Update body attribute
       document.body.dataset.viewMode = newMode;
-      
+
       // Persist preference
       localStorage.setItem('dashboard-view-mode', newMode);
     });
@@ -386,16 +386,16 @@ const MotionChoreography = {
       const frameRateMeter = () => {
         const now = performance.now();
         const frameTime = now - lastFrameTime;
-        
+
         // If frame time > 16.67ms (60fps), log performance warning
         if (frameTime > 16.67 && frameTime < 100) {
           console.debug(`[Motion] Potential frame drop: ${frameTime.toFixed(2)}ms`);
         }
-        
+
         lastFrameTime = now;
         requestAnimationFrame(frameRateMeter);
       };
-      
+
       // Only run meter during animations to save CPU
       document.addEventListener('htmx:xhr:loadstart', () => {
         requestAnimationFrame(frameRateMeter);
@@ -412,7 +412,7 @@ const MotionChoreography = {
    */
   init() {
     console.log('[Motion] Initializing choreography...');
-    
+
     this.initNumberTransitions();
     this.initChartTransitions();
     this.initFilterChangeAnimation();

@@ -1,16 +1,15 @@
 """test_models.py — Tests for per-model analytics and efficiency metrics."""
 
-import pytest
-import tempfile
 import json
+import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 from tokenpak.models import (
-    ModelStats,
     ModelAnalyzer,
+    ModelStats,
     get_model_pricing,
-    MODEL_PRICING,
 )
 
 

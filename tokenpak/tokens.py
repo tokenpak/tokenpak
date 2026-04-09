@@ -115,13 +115,12 @@ def truncate_to_tokens(text: str, max_tokens: int) -> Tuple[str, int]:
 
 
 def estimate_tokens(text: str) -> int:
-    """Fast token estimate without encoding (for pre-filtering)."""
+    """Fast token estimate — ~4 chars per token for English text."""
     if not text:
         return 0
-    # Heuristic: ~4 chars per token for English, ~1.5 for CJK
-    ascii_chars = sum(1 for c in text if ord(c) < 128)
-    non_ascii = len(text) - ascii_chars
-    return max(1, (ascii_chars // 4) + (non_ascii // 2))
+    # len(encode) handles multibyte correctly; still O(n) but no Python-level loop
+    byte_len = len(text.encode('utf-8'))
+    return max(1, byte_len // 4)
 
 
 def clear_cache():

@@ -24,7 +24,7 @@ except ImportError:
             return json.load(f)
 
 
-CONFIG_PATH = Path.home() / ".tokenpak" / "config.yaml"
+CONFIG_PATH = Path(os.environ.get("TOKENPAK_CONFIG", str(Path.home() / ".tokenpak" / "config.yaml")))
 
 # Cached config
 _config: Optional[Dict[str, Any]] = None
@@ -48,7 +48,12 @@ def _bool_env(val: str) -> bool:
 
 
 def load_config(path: Optional[str] = None) -> Dict[str, Any]:
-    """Load config from YAML file. Returns empty dict if file missing."""
+    """Load config from YAML file. Returns empty dict if file missing.
+
+    If a legacy config.json exists alongside config.yaml, emits a warning
+    suggesting the user run 'tokenpak config migrate'.
+    """
+    import logging as _logging
     global _config
     if _config is not None and path is None:
         return _config
@@ -61,13 +66,23 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
             _config = {}
     else:
         _config = {}
+
+    # Warn if legacy config.json exists (migration reminder)
+    if path is None:
+        legacy_json = CONFIG_PATH.parent / "config.json"
+        if legacy_json.exists():
+            _logging.getLogger(__name__).warning(
+                "Detected legacy ~/.tokenpak/config.json — "
+                "run 'tokenpak config migrate' to merge settings into config.yaml"
+            )
+
     return _config
 
 
 def get(key: str, default=None, env_var: str = None, cast=None):
     """
     Get config value. Priority: env var > config file > default.
-    
+
     Args:
         key: Dot-path into config YAML (e.g. 'compression.threshold_tokens')
         default: Default value if not found
@@ -108,9 +123,15 @@ def get_all() -> Dict[str, Any]:
 
     # Compression
     result["compression.enabled"] = get("compression.enabled", True, "TOKENPAK_COMPACT", bool)
-    result["compression.max_chars"] = get("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
-    result["compression.threshold_tokens"] = get("compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)
-    result["compression.cache_size"] = get("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
+    result["compression.max_chars"] = get(
+        "compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int
+    )
+    result["compression.threshold_tokens"] = get(
+        "compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int
+    )
+    result["compression.cache_size"] = get(
+        "compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int
+    )
 
     # Features
     for feat, env_suffix, default in [
@@ -140,36 +161,74 @@ def get_all() -> Dict[str, Any]:
         ("query_rewriter", "QUERY_REWRITER", False),
         ("stability_scorer", "STABILITY_SCORER", False),
     ]:
-        result[f"features.{feat}"] = get(f"features.{feat}", default, f"TOKENPAK_{env_suffix}", bool)
+        result[f"features.{feat}"] = get(
+            f"features.{feat}", default, f"TOKENPAK_{env_suffix}", bool
+        )
 
     # Budget
     result["budget.total_tokens"] = get("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
-    result["budget.validation_gate_cap"] = get("budget.validation_gate_cap", 120000, "TOKENPAK_VALIDATION_GATE_BUDGET_CAP", int)
+    result["budget.validation_gate_cap"] = get(
+        "budget.validation_gate_cap", 120000, "TOKENPAK_VALIDATION_GATE_BUDGET_CAP", int
+    )
 
     # Capsule
     result["capsule.min_chars"] = get("capsule.min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int)
     result["capsule.hot_window"] = get("capsule.hot_window", 2, "TOKENPAK_CAPSULE_HOT_WINDOW", int)
 
     # Vault / Injection
-    result["vault.index_path"] = get("vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str)
+    result["vault.index_path"] = get(
+        "vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str
+    )
     result["vault.inject_budget"] = get("vault.inject_budget", 4000, "TOKENPAK_INJECT_BUDGET", int)
     result["vault.inject_top_k"] = get("vault.inject_top_k", 5, "TOKENPAK_INJECT_TOP_K", int)
-    result["vault.inject_min_score"] = get("vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float)
-    result["vault.inject_skip_models"] = get("vault.inject_skip_models", "haiku", "TOKENPAK_INJECT_SKIP_MODELS", str)
-    result["vault.inject_min_prompt"] = get("vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_PROMPT", int)
-    result["vault.retrieval_backend"] = get("vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str)
+    result["vault.inject_min_score"] = get(
+        "vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float
+    )
+    result["vault.inject_skip_models"] = get(
+        "vault.inject_skip_models", "haiku", "TOKENPAK_INJECT_SKIP_MODELS", str
+    )
+    result["vault.inject_min_prompt"] = get(
+        "vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_PROMPT", int
+    )
+    result["vault.retrieval_backend"] = get(
+        "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
+    )
 
     # Term resolver
-    result["term_resolver.top_k"] = get("term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int)
-    result["term_resolver.max_bytes"] = get("term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int)
+    result["term_resolver.top_k"] = get(
+        "term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int
+    )
+    result["term_resolver.max_bytes"] = get(
+        "term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int
+    )
 
     # Upstream
     result["upstream.timeout"] = get("upstream.timeout", 300, "TOKENPAK_UPSTREAM_TIMEOUT", int)
-    result["upstream.ollama"] = get("upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str)
-    result["upstream.ollama_timeout"] = get("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
+    result["upstream.ollama"] = get(
+        "upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
+    )
+    result["upstream.ollama_timeout"] = get(
+        "upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int
+    )
 
     # Rate limit
     result["rate_limit_rpm"] = get("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)
+
+    # Logging (merged from legacy config.json)
+    result["logging.enabled"] = get("logging.enabled", True, "TOKENPAK_LOG_ENABLED", bool)
+    result["logging.level"] = get("logging.level", "info", "TOKENPAK_LOG_LEVEL", str)
+    result["logging.destination"] = get("logging.destination", "file", "TOKENPAK_LOG_DESTINATION", str)
+    result["logging.retention_days"] = get("logging.retention_days", 30, "TOKENPAK_LOG_RETENTION_DAYS", int)
+    result["logging.include_request_body"] = get("logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool)
+    result["logging.include_response_body"] = get("logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool)
+
+    # Validation (merged from legacy config.json)
+    result["validation.mode"] = get("validation.mode", "warn", "TOKENPAK_REQUEST_VALIDATION", str)
+    result["validation.strict"] = get("validation.strict", False, "TOKENPAK_VALIDATION_STRICT", bool)
+
+    # Plugins (merged from legacy config.json)
+    result["plugins.enabled"] = get("plugins.enabled", [], None, list)
+    result["plugins.registry_path"] = get("plugins.registry_path", None, None, str)
 
     return result
 
@@ -246,6 +305,22 @@ upstream:
   ollama_timeout: 20
 
 rate_limit_rpm: 60
+
+logging:
+  enabled: true
+  level: info  # debug|info|warn
+  destination: file  # file|stdout|syslog
+  retention_days: 30
+  include_request_body: false
+  include_response_body: false
+
+validation:
+  mode: warn  # silent|warn|strict
+  strict: false
+
+plugins:
+  enabled: []  # List of CompressorPlugin class paths to load
+  registry_path: null  # Optional custom plugin registry path
 
 failover:
   enabled: false

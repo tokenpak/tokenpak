@@ -1,10 +1,10 @@
 # TokenPak
 
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-54%25-brightgreen)
+
+
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![PyPI](https://img.shields.io/badge/pypi-1.0.0-blue)
+
 
 > **Zero-token operations. Maximum context efficiency.**
 
@@ -15,8 +15,9 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 - ✅ Schema: [`schemas/tokenpak-v1.0.json`](schemas/tokenpak-v1.0.json)
 - 🧪 Validator: [`tokenpak/validator.py`](tokenpak/validator.py)
 - 🧩 Examples: [`examples/`](examples/)
+- 📖 Usage Examples: [`docs/EXAMPLES.md`](docs/EXAMPLES.md)
 
-[![CI](https://github.com/tokenpak/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/tokenpak/tokenpak/actions)
+[![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Downloads](https://static.pepy.tech/badge/tokenpak/month)](https://pepy.tech/project/tokenpak)
@@ -353,7 +354,7 @@ tokenpak/
 │       ├── text.py         # Markdown/HTML compression
 │       └── data.py         # JSON/YAML/CSV handling
 ├── portal/                 # self-service web portal
-├── recipes/oss/            # built-in compression recipes (YAML)
+├── tokenpak/recipes_oss/   # built-in compression recipes (YAML)
 ├── tests/
 └── pyproject.toml
 ```
@@ -366,6 +367,10 @@ Default config: `~/.tokenpak/config.json`
 
 ```json
 {
+  "api_keys": {
+    "anthropic": "sk-ant-...",
+    "openai": "sk-..."
+  },
   "proxy": {
     "port": 8766,
     "passthrough_url": "https://api.openai.com"
@@ -385,6 +390,8 @@ Default config: `~/.tokenpak/config.json`
 }
 ```
 
+> **Tip:** The fastest way to generate a valid config is `tokenpak setup` — it scans your environment variables and writes the file automatically.
+
 ---
 
 ## Requirements
@@ -400,16 +407,16 @@ Default config: `~/.tokenpak/config.json`
 
 We welcome issues, pull requests, and feedback of all kinds!
 
-- 🐛 **Bug reports** → [Open an issue](https://github.com/tokenpak/tokenpak/issues/new?template=bug_report.md)
-- 💡 **Feature requests** → [Request a feature](https://github.com/tokenpak/tokenpak/issues/new?template=feature_request.md)
-- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/tokenpak/tokenpak/discussions)
+- 🐛 **Bug reports** → [Open an issue](https://github.com/kaywhy331/tokenpak/issues/new?template=bug_report.md)
+- 💡 **Feature requests** → [Request a feature](https://github.com/kaywhy331/tokenpak/issues/new?template=feature_request.md)
+- 💬 **Questions & ideas** → [GitHub Discussions](https://github.com/kaywhy331/tokenpak/discussions)
 - 📖 **Full guide** → [CONTRIBUTING.md](CONTRIBUTING.md)
 - 📋 **Version history** → [CHANGELOG.md](CHANGELOG.md)
 
 ### Quick setup
 
 ```bash
-git clone https://github.com/tokenpak/tokenpak
+git clone https://github.com/kaywhy331/tokenpak
 cd tokenpak
 pip install -e ".[dev]"
 pytest tests/ -q
@@ -436,6 +443,97 @@ This pushes to both remotes and SSH-verifies the commit hash landed. **Never use
 
 ---
 
+## Docker
+
+The fastest way to run TokenPak with zero local Python setup.
+
+### Quick Start
+
+```bash
+# Pull and run
+docker pull tokenpak/tokenpak:latest
+docker run -d --name tokenpak -p 8766:8766 tokenpak/tokenpak:latest
+
+# Confirm it's healthy
+curl http://localhost:8766/health
+```
+
+Point your LLM client at `http://localhost:8766` — same as the local install.
+
+### Build from Source
+
+```bash
+git clone https://github.com/kaywhy331/tokenpak
+cd tokenpak
+docker build -t tokenpak:latest .
+docker run -d --name tokenpak -p 8766:8766 tokenpak:latest
+```
+
+### Docker Compose (recommended for production)
+
+```bash
+# Copy the example config and edit as needed
+cp config/tokenpak.config.json.example config/tokenpak.config.json
+
+# Start the proxy
+docker compose up -d
+
+# Start with Redis distributed cache (optional)
+docker compose --profile with-cache up -d
+
+# View logs
+docker compose logs -f tokenpak
+
+# Stop
+docker compose down
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOKENPAK_PORT` | `8766` | Proxy listen port |
+| `TOKENPAK_LOG_LEVEL` | `info` | Log verbosity (`debug`\|`info`\|`warning`\|`error`) |
+| `TOKENPAK_ENABLE_METRICS` | `true` | Enable `/metrics` endpoint |
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
+---
+
+## Shell Completions
+
+TokenPak ships with shell completions for bash, zsh, and fish.
+
+### Install
+
+```bash
+bash scripts/install-completions.sh
+```
+
+Then reload your shell:
+
+```bash
+# bash
+source ~/.bashrc
+
+# zsh
+exec zsh
+
+# fish (loads automatically)
+```
+
+### What completes
+
+- All `tokenpak <command>` names (e.g. `tokenpak st<TAB>` → `start stats status stop`)
+- Per-command flags (e.g. `tokenpak cost --<TAB>` → `--period --json --help`)
+- Sub-commands (e.g. `tokenpak config <TAB>` → `sync pull validate`)
+
+### Dry-run preview
+
+```bash
+bash scripts/install-completions.sh --dry-run
+```

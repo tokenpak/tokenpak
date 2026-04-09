@@ -8,7 +8,7 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 @dataclass
@@ -52,7 +52,7 @@ class PruneJob:
             cursor = conn.cursor()
 
             # Calculate cutoff date
-            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
             cutoff_str = cutoff.isoformat()
 
             # Delete events older than cutoff
@@ -79,7 +79,7 @@ class PruneJob:
             cursor = conn.cursor()
 
             # Calculate cutoff date
-            cutoff = datetime.utcnow() - timedelta(days=older_than_days)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
             cutoff_str = cutoff.isoformat()
 
             # Delete rollups older than cutoff

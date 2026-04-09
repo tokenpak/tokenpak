@@ -482,7 +482,7 @@ def run_optimize(verbose: bool = False, as_json: bool = False, apply: bool = Fal
     """Run the full optimization analysis."""
     # Pro+ gate
     try:
-        from tokenpak.agent.license.activation import is_pro
+        from tokenpak.infrastructure.license_activation import is_pro
         if not is_pro():
             print("⚠  /tokenpak optimize requires a Pro (or higher) license.")
             print("   Run: tokenpak activate <key>")

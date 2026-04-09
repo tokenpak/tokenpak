@@ -3,7 +3,7 @@
 
 Provides index_directory() for the rebuild-vault-index.sh script.
 Output format: ~/vault/.tokenpak/index.json + blocks/*.txt
-Compatible with proxy_v4.py VaultIndex reader.
+Compatible with proxy.py VaultIndex reader.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from typing import Callable, Optional
 # Precomputation pipeline (lazy import to avoid circular deps)
 try:
     from .precompute import recompute_all as _recompute_all
+
     _PRECOMPUTE_AVAILABLE = True
 except ImportError:
     _PRECOMPUTE_AVAILABLE = False

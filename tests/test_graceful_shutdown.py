@@ -149,7 +149,7 @@ class TestGracefulShutdown:
 @pytest.fixture(scope="module")
 def proxy():
     """Start a proxy on an ephemeral port for integration tests."""
-    srv = ProxyServer(host="127.0.0.1", port=18867, shutdown_timeout=5.0)
+    srv = ProxyServer(host="127.0.0.1", port=18890, shutdown_timeout=5.0)
     srv.start(blocking=False)
     time.sleep(0.15)
     yield srv
@@ -173,18 +173,18 @@ class TestShutdownRejects503:
 
     def test_503_after_shutdown_begin(self):
         """Directly begin shutdown and verify management of 503 state."""
-        srv = ProxyServer(host="127.0.0.1", port=18868, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=18891, shutdown_timeout=1.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
         # Confirm healthy
-        status, data = _get(18868, "/health")
+        status, data = _get(18891, "/health")
         assert status == 200
         assert data["is_shutting_down"] is False
 
         # Begin shutdown
         srv.shutdown.begin()
-        status, data = _get(18868, "/health")
+        status, data = _get(18891, "/health")
         assert data["is_shutting_down"] is True
         assert data["status"] == "shutting_down"
 
@@ -198,7 +198,7 @@ class TestShutdownRejects503:
         When shutdown is active, proxied GET requests (paths starting with 'http')
         return 503 with Retry-After header.
         """
-        srv = ProxyServer(host="127.0.0.1", port=18869, shutdown_timeout=1.0)
+        srv = ProxyServer(host="127.0.0.1", port=18892, shutdown_timeout=1.0)
         srv.start(blocking=False)
         time.sleep(0.1)
 
@@ -401,7 +401,7 @@ class TestHealthDuringShutdown:
 
     def test_health_shows_shutting_down_status(self, proxy):
         # Proxy fixture is not in shutdown — verify baseline
-        status, data = _get(18867, "/health")
+        status, data = _get(18890, "/health")
         assert status == 200
         assert "is_shutting_down" in data
         assert data["is_shutting_down"] is False

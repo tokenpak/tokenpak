@@ -1,6 +1,9 @@
-"""TokenPak debug module — verbose per-request logging."""
+"""tokenpak.agent.debug — backward-compat shim.
 
-from .logger import DebugLogger
-from .state import DebugState
+DebugLogger and DebugState have moved to tokenpak.infrastructure.debug.
+This module re-exports them for backward compatibility.
+"""
 
-__all__ = ["DebugState", "DebugLogger"]
+from tokenpak.infrastructure.debug import DebugLogger, DebugState
+
+__all__ = ["DebugLogger", "DebugState"]

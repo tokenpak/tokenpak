@@ -1,6 +1,6 @@
 # TokenPak Docker Compose Configuration
-# Supports single-machine and multi-container deployments
-# Production defaults: logging enabled, metrics enabled, secure config
+# Quick start: docker compose up -d
+# With Redis cache: docker compose --profile with-cache up -d
 
 version: '3.8'
 
@@ -9,68 +9,69 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: tokenpak:latest
     container_name: tokenpak-proxy
     ports:
+      # Host port:Container port — override with TOKENPAK_PORT env var
       - "${TOKENPAK_PORT:-8766}:8766"
     environment:
-      # TokenPak Settings
+      # --- TokenPak Settings ---
+      # Port the proxy listens on (must match EXPOSE in Dockerfile)
       TOKENPAK_PORT: "${TOKENPAK_PORT:-8766}"
+      # Log verbosity: debug | info | warning | error
       TOKENPAK_LOG_LEVEL: "${TOKENPAK_LOG_LEVEL:-info}"
+      # Enable Prometheus-compatible metrics endpoint (/metrics)
       TOKENPAK_ENABLE_METRICS: "${TOKENPAK_ENABLE_METRICS:-true}"
-      
-      # Python Settings
+
+      # --- Python Settings ---
       PYTHONUNBUFFERED: "1"
-    
-    # Volume mounts
+
     volumes:
-      # Config volume (read-only)
-      - ./config/tokenpack.config.json:/app/tokenpack.config.json:ro
-      
-      # Logs volume (persistent)
-      - tokenpak-logs:/logs
-      
-      # Cache volume (optional, for cache persistence)
-      - tokenpak-cache:/cache
-    
-    # Health check
+      # Config file (optional — uses defaults if not present)
+      # Copy config/tokenpak.config.json.example → config/tokenpak.config.json and edit
+      - ./config/tokenpak.config.json:/app/config/tokenpak.config.json:ro
+
+      # Persistent logs (survives container restarts)
+      - tokenpak-logs:/app/logs
+
+      # Persistent cache (optional, speeds up repeated requests)
+      - tokenpak-cache:/app/cache
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
-    # Restart policy
+
     restart: unless-stopped
-    
-    # Resource limits (optional, adjust based on your needs)
+
+    # Resource limits (uncomment and adjust as needed)
     # deploy:
     #   resources:
     #     limits:
     #       cpus: '1'
     #       memory: 512M
     #     reservations:
-    #       cpus: '0.5'
-    #       memory: 256M
-    
-    # Logging configuration
+    #       cpus: '0.25'
+    #       memory: 128M
+
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-        labels: "service=tokenpak"
-    
-    # Network
+
     networks:
       - tokenpak-network
 
-  # Optional: Redis cache service for distributed deployments
+  # --- Optional: Redis for distributed caching ---
+  # Enable with: docker compose --profile with-cache up -d
   redis:
     image: redis:7-alpine
     container_name: tokenpak-redis
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -93,7 +94,7 @@ volumes:
   redis-data:
     driver: local
 
-# Named network for service communication
+# Internal network — services communicate by container name
 networks:
   tokenpak-network:
     driver: bridge

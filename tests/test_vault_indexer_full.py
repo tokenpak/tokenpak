@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 from tokenpak.agent.vault.blocks import BlockStore
@@ -9,6 +10,7 @@ def _make_indexer() -> VaultIndexer:
     return VaultIndexer(block_store=BlockStore(":memory:"), symbol_table=SymbolTable())
 
 
+@pytest.mark.quick
 def test_indexer_supports_full_extension_set(tmp_path: Path):
     files = {
         "main.py": "APP_NAME = 'tokenpak'\n\ndef run():\n    return True\n",
@@ -55,6 +57,7 @@ def test_indexer_supports_full_extension_set(tmp_path: Path):
     assert "store.db" not in indexed_paths
 
 
+@pytest.mark.quick
 def test_symbol_extraction_for_python_markdown_and_json(tmp_path: Path):
     py = tmp_path / "app.py"
     py.write_text(

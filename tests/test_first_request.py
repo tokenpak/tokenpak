@@ -67,9 +67,14 @@ def proxy_url():
 class TestProxyStartup:
     """Test proxy startup and health."""
 
+    @pytest.mark.integration
     def test_proxy_starts(self, proxy_process):
-        """Proxy process starts without error."""
-        assert proxy_process.poll() is None  # Still running
+        """Proxy process starts without error (or detects already-running proxy)."""
+        # Acceptable outcomes:
+        #   - Still running (poll() is None) — proxy launched fresh
+        #   - Exited 0 — proxy already running, start reported it and exited cleanly
+        result = proxy_process.poll()
+        assert result in (None, 0), f"Proxy exited with error code: {result}"
 
     def test_health_check_endpoint_exists(self, proxy_url):
         """Health check endpoint accessible."""
@@ -77,8 +82,10 @@ class TestProxyStartup:
         endpoint = f"{proxy_url}/health"
         assert "health" in endpoint
 
+    @pytest.mark.slow
+    @pytest.mark.integration
     def test_health_check_timeout_30_seconds(self, proxy_process, proxy_url):
-        """Health check with 30 second timeout."""
+        """Health check with 30 second timeout (requires live proxy)."""
         timeout = 30
         assert timeout > 0
         # Retry logic up to timeout
@@ -92,11 +99,15 @@ class TestProxyStartup:
                 pass
             time.sleep(0.5)
 
+    @pytest.mark.integration
     def test_proxy_stderr_no_startup_errors(self, proxy_process):
         """Proxy startup has no critical errors in stderr."""
-        # Wait briefly then check
         time.sleep(1)
-        assert proxy_process.poll() is None
+        result = proxy_process.poll()
+        # Acceptable: still running or already-running detection (exit 0)
+        if result not in (None, 0):
+            stderr_out = proxy_process.stderr.read().decode("utf-8", errors="replace") if proxy_process.stderr else ""
+            pytest.fail(f"Proxy exited with code {result}. stderr: {stderr_out[:500]}")
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -208,6 +219,7 @@ class TestLogging:
 class TestCleanup:
     """Test proxy cleanup."""
 
+    @pytest.mark.integration
     def test_proxy_terminates_gracefully(self, proxy_process):
         """Proxy terminates without hanging."""
         proxy_process.terminate()
@@ -218,6 +230,7 @@ class TestCleanup:
             proxy_process.kill()
             assert False
 
+    @pytest.mark.integration
     def test_proxy_exit_code_clean(self, proxy_process):
         """Proxy exit code is clean."""
         proxy_process.terminate()

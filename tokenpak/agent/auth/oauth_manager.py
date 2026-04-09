@@ -26,6 +26,7 @@ Profile schema (subset relevant to OAuth):
 SECURITY: Token values are NEVER logged. Only metadata (expiry, provider name,
 seconds-remaining) is written to logs.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -73,6 +74,7 @@ def _save_profiles(data: Dict[str, Any]) -> None:
 # Token refresh logic (per-provider)
 # ---------------------------------------------------------------------------
 
+
 async def _refresh_token_openai_codex(
     profile_name: str,
     profile: Dict[str, Any],
@@ -82,9 +84,7 @@ async def _refresh_token_openai_codex(
 
     refresh_token = profile.get("refresh_token", "")
     client_id = profile.get("client_id", "")
-    token_endpoint = profile.get(
-        "token_endpoint", "https://auth.openai.com/oauth/token"
-    )
+    token_endpoint = profile.get("token_endpoint", "https://auth.openai.com/oauth/token")
 
     if not refresh_token:
         raise OAuthRefreshError(f"{profile_name}: no refresh_token available")
@@ -103,9 +103,7 @@ async def _refresh_token_openai_codex(
         )
 
     if resp.status_code != 200:
-        raise OAuthRefreshError(
-            f"{profile_name}: refresh failed HTTP {resp.status_code}"
-        )
+        raise OAuthRefreshError(f"{profile_name}: refresh failed HTTP {resp.status_code}")
 
     data = resp.json()
     updated = dict(profile)
@@ -127,9 +125,7 @@ async def _refresh_token_anthropic(
 
     refresh_token = profile.get("refresh_token", "")
     client_id = profile.get("client_id", "")
-    token_endpoint = profile.get(
-        "token_endpoint", "https://claude.ai/api/oauth/token"
-    )
+    token_endpoint = profile.get("token_endpoint", "https://claude.ai/api/oauth/token")
 
     if not refresh_token:
         raise OAuthRefreshError(f"{profile_name}: no refresh_token available")
@@ -148,9 +144,7 @@ async def _refresh_token_anthropic(
         )
 
     if resp.status_code != 200:
-        raise OAuthRefreshError(
-            f"{profile_name}: Anthropic refresh failed HTTP {resp.status_code}"
-        )
+        raise OAuthRefreshError(f"{profile_name}: Anthropic refresh failed HTTP {resp.status_code}")
 
     data = resp.json()
     updated = dict(profile)
@@ -172,6 +166,7 @@ _REFRESH_HANDLERS = {
 # ---------------------------------------------------------------------------
 # OAuthManager — check and refresh
 # ---------------------------------------------------------------------------
+
 
 class OAuthManager:
     """Check OAuth token expiry and refresh tokens proactively.
@@ -304,6 +299,7 @@ class OAuthManager:
 # Background task (async)
 # ---------------------------------------------------------------------------
 
+
 class BackgroundOAuthRefresher:
     """Asyncio background task that checks and refreshes OAuth tokens every N seconds.
 
@@ -324,9 +320,7 @@ class BackgroundOAuthRefresher:
         self._stop_event = asyncio.Event()
 
     async def _loop(self) -> None:
-        logger.info(
-            "[tokenpak] BackgroundOAuthRefresher started (interval=%ds)", self.interval
-        )
+        logger.info("[tokenpak] BackgroundOAuthRefresher started (interval=%ds)", self.interval)
         while not self._stop_event.is_set():
             try:
                 if self.enabled:

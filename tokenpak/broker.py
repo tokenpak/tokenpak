@@ -49,6 +49,10 @@ DEFAULT_TIERS_PATH = str(Path(__file__).parent.parent / "model_tiers.json")
 
 @dataclass
 class RoutingDecision:
+    """The result of a routing decision for a single request.
+
+    Captures which model was selected, why, and with what confidence.
+    """
     original_model: str
     selected_model: str
     action: str  # passthrough | downgrade | upgrade

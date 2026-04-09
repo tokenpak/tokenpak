@@ -1,10 +1,14 @@
+---
+title: "TERM_CARD_BUILDER"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Term-Card Builder — Developer Guide
 
 ## Overview
 
 The **Term-Card Builder** is the semantic layer for the TokenPak knowledge base. It creates, validates, and maintains compact **5W1H micro-cards** for deterministic term resolution — a thin vocabulary index sitting above the primary auto-indexed KB blocks.
 
-Location: `tokenpak/agent/semantic/term_card_builder.py`  
+Location: `tokenpak/agent/semantic/term_card_builder.py`
 Card store: `tokenpak/term_cards.json`
 
 ---
@@ -162,4 +166,3 @@ Cards are stored with **deterministic ordering**: sorted by `(tier ASC, term ASC
 - Git diffs are clean and reviewable
 - SHA256 of the file is stable for the same logical content
 - CI can verify no unintended changes with `git diff --exit-code`
-

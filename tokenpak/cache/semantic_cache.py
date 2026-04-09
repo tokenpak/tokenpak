@@ -48,8 +48,8 @@ import re
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_TTL = 300          # 5 minutes
+_DEFAULT_TTL = 300  # 5 minutes
 _DEFAULT_MAX_ENTRIES = 100
 _DEFAULT_THRESHOLD = 0.90
 _FILLER_RE = re.compile(
@@ -71,9 +71,11 @@ _FILLER_RE = re.compile(
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SemanticCacheEntry:
     """A single cached query/response pair."""
+
     query_normalized: str
     query_hash: str
     response: dict
@@ -93,32 +95,36 @@ class SemanticCacheEntry:
 @dataclass
 class SemanticCacheLookup:
     """Result of a cache lookup — attach to trace/span metadata."""
+
     hit: bool
     query_hash: str = ""
     matched_hash: str = ""
     similarity: float = 0.0
-    match_strategy: str = "none"   # "exact" | "jaccard" | "embedding" | "none"
+    match_strategy: str = "none"  # "exact" | "jaccard" | "embedding" | "none"
     entry: Optional[SemanticCacheEntry] = None
-    savings_tokens: int = 0        # estimated input tokens saved
+    savings_tokens: int = 0  # estimated input tokens saved
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SemanticCacheConfig:
     """Runtime configuration for SemanticCache."""
+
     enabled: bool = True
     ttl_seconds: int = _DEFAULT_TTL
     similarity_threshold: float = _DEFAULT_THRESHOLD
     max_entries: int = _DEFAULT_MAX_ENTRIES
-    scope: str = "session"          # "session" | "agent" | "global"
+    scope: str = "session"  # "session" | "agent" | "global"
 
 
 # ---------------------------------------------------------------------------
 # Core cache
 # ---------------------------------------------------------------------------
+
 
 class SemanticCache:
     """
@@ -173,7 +179,8 @@ class SemanticCache:
                 self._total_hits += 1
                 logger.debug(
                     "[SemanticCache] HIT exact hash=%s hits=%d",
-                    query_hash[:8], entry.hit_count,
+                    query_hash[:8],
+                    entry.hit_count,
                 )
                 return SemanticCacheLookup(
                     hit=True,
@@ -201,7 +208,8 @@ class SemanticCache:
             self._total_hits += 1
             logger.debug(
                 "[SemanticCache] HIT jaccard=%.3f hash=%s",
-                best_score, query_hash[:8],
+                best_score,
+                query_hash[:8],
             )
             return SemanticCacheLookup(
                 hit=True,
@@ -300,6 +308,7 @@ class SemanticCache:
 # ---------------------------------------------------------------------------
 # Module-level helpers
 # ---------------------------------------------------------------------------
+
 
 def _normalise(text: str) -> str:
     """

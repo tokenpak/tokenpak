@@ -4,14 +4,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
-from tokenpak.agent.teacher import build_teacher_pack
+try:
+    from tokenpak.agent.teacher import build_teacher_pack
+except ImportError:
+
+    def build_teacher_pack(*args, **kwargs):
+        print("TOKENPAK  |  Enterprise Feature: Teacher Pack Builder")
+        print("────────────────────────────────────────")
+        print()
+        print("This feature requires an Enterprise license (tokenpak-pro).")
+        print("   Get a license: https://tokenpak.io/pricing")
+        print()
+        print("To use this feature:")
+        print("1. Install tokenpak-pro: pip install tokenpak-pro")
+        print("2. Activate your Enterprise license")
+        print()
+        sys.exit(2)
 
 
-DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/System", "~/vault/Agents"]
-DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
-DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
+DEFAULT_SOURCE_ROOTS = []  # Configure via --source-root or TOKENPAK_SOURCE_ROOTS env var
+DEFAULT_COMMAND_ROOTS = []  # Configure via --command-root
+DEFAULT_OUTPUT_ROOT = "~/.tokenpak/recipes/context"
 
 
 def run_teacher_cmd(argv: list[str]) -> None:
@@ -19,11 +35,17 @@ def run_teacher_cmd(argv: list[str]) -> None:
     sub = p.add_subparsers(dest="teacher_cmd")
 
     gen = sub.add_parser("generate", help="Generate deterministic context recipes")
-    gen.add_argument("--source-root", action="append", default=None, help="Source root (repeatable)")
-    gen.add_argument("--command-root", action="append", default=None, help="Command root (repeatable)")
+    gen.add_argument(
+        "--source-root", action="append", default=None, help="Source root (repeatable)"
+    )
+    gen.add_argument(
+        "--command-root", action="append", default=None, help="Command root (repeatable)"
+    )
     gen.add_argument("--output-root", default=DEFAULT_OUTPUT_ROOT, help="Output root directory")
     gen.add_argument("--version", default="v1", help="Version folder under output root")
-    gen.add_argument("--token-budget", type=int, default=1600, help="Default token budget per intent")
+    gen.add_argument(
+        "--token-budget", type=int, default=1600, help="Default token budget per intent"
+    )
     gen.add_argument("--json", action="store_true", help="Print JSON result")
 
     val = sub.add_parser("validate", help="Generate + print validation summary")

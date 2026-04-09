@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 # Storage helpers
 # ---------------------------------------------------------------------------
 
-VAULT_ENTRIES_DIR = Path(os.path.expanduser("~/vault/.tokenpak/entries"))
+VAULT_ENTRIES_DIR = Path(
+    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", "~/.tokenpak/entries"))
+)
 
 
 def _entries_file(date_str: Optional[str] = None) -> Path:
@@ -165,6 +167,7 @@ def create_ingest_app(prefix: str = "") -> Any:
     # Mount Phase 5B query router if available
     try:
         from tokenpak.agent.query.api import router as query_router
+
         app.include_router(query_router, prefix=prefix)
     except ImportError:
         pass

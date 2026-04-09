@@ -1,0 +1,13 @@
+name: py-init-dedup
+category: python
+description: Remove duplicate __all__ entries and re-export lines in __init__.py files.
+pattern:
+  match: filename
+  filenames:
+  - __init__.py
+action:
+  operations:
+  - type: dedup_consecutive_lines
+    strip_before_compare: true
+  - type: python_init_dedup_all_entries
+  compression_hint: 0.15

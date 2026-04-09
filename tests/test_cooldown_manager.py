@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
-from tokenpak.agent.auth.cooldown_manager import (
+from tokenpak.infrastructure.cooldown import (
     CooldownManager,
     BackgroundCooldownClearer,
 )

@@ -6,7 +6,7 @@
 set -euo pipefail
 
 BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
-SHARED_HOST="sue@suewu"
+SHARED_HOST="${SHARED_HOST:-user@shared-host}"
 SHARED_REPO="~/tokenpak-origin.git"
 
 RED='\033[0;31m'

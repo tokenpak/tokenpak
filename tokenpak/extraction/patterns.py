@@ -5,9 +5,7 @@ from __future__ import annotations
 import re
 
 # Basic path detection: unix, home-relative, and windows-ish
-FILE_PATH_RE = re.compile(
-    r"(?P<path>(?:~?/|/)[\w./-]+|[A-Za-z]:\\[\\\w .-]+(?:\\[\\\w .-]+)*)"
-)
+FILE_PATH_RE = re.compile(r"(?P<path>(?:~?/|/)[\w./-]+|[A-Za-z]:\\[\\\w .-]+(?:\\[\\\w .-]+)*)")
 
 API_ENDPOINT_RE = re.compile(
     r"(?:(?P<method>GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+)?(?P<path>/[A-Za-z0-9_./{}:-]+)"

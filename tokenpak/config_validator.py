@@ -12,7 +12,7 @@ Validates proxy config on boot:
 
 Usage:
     from tokenpak.config_validator import ConfigValidator
-    
+
     validator = ConfigValidator()
     errors = validator.validate(config_dict)
     if errors:
@@ -23,9 +23,7 @@ Usage:
 """
 
 import os
-import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 
@@ -99,18 +97,40 @@ class ConfigValidator:
         return self.errors
 
     def _validate_required_fields(self, config: Dict[str, Any]) -> None:
-        """Check that all required fields are present."""
+        """Check that all required fields are present or set via environment variables."""
         for field in self.REQUIRED_FIELDS:
             if field not in config:
-                self.errors.append(
-                    ConfigValidationError(
-                        field=field,
-                        expected="present",
-                        actual="missing",
-                        message=f"Required field missing",
-                        suggestion=f'Add "{field}" to config (required for proxy operation)',
+                if field == "api_keys":
+                    self.errors.append(
+                        ConfigValidationError(
+                            field=field,
+                            expected="present in config",
+                            actual="missing",
+                            message="Required field 'api_keys' is missing",
+                            suggestion='Add api_keys to config (e.g., {"anthropic": "sk-..."}) or set ANTHROPIC_API_KEY env var',
+                        )
                     )
-                )
+                else:
+                    self.errors.append(
+                        ConfigValidationError(
+                            field=field,
+                            expected="present",
+                            actual="missing",
+                            message="Required field missing",
+                            suggestion=f'Add "{field}" to config (required for proxy operation)',
+                        )
+                    )
+
+    @staticmethod
+    def _has_env_api_key() -> bool:
+        """Check if any API key is set in environment variables."""
+        env_vars = [
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "GOOGLE_API_KEY",
+            "GEMINI_API_KEY",
+        ]
+        return any(os.environ.get(var) for var in env_vars)
 
     def _validate_types(self, config: Dict[str, Any]) -> None:
         """Validate field types."""
@@ -193,7 +213,7 @@ class ConfigValidator:
                         expected="positive integer",
                         actual=ttl,
                         message="Cache TTL must be positive",
-                        suggestion=f"Change cache_ttl to positive integer (e.g., 3600)",
+                        suggestion="Change cache_ttl to positive integer (e.g., 3600)",
                     )
                 )
 
@@ -236,7 +256,7 @@ class ConfigValidator:
                                 expected="valid URL",
                                 actual=url,
                                 message=f"Invalid URL for provider {provider}",
-                                suggestion=f'Use valid URL: "https://api.provider.com"',
+                                suggestion='Use valid URL: "https://api.provider.com"',
                             )
                         )
 

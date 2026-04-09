@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -16,10 +16,10 @@ class StageTrace:
     name: str  # capsule, segmentizer, recipe_engine, slot_filler, validation_gate
     enabled: bool
     input_tokens: int
-    output_tokens: int
-    tokens_delta: int
-    details: Dict[str, Any]
-    duration_ms: float
+    output_tokens: int = 0
+    tokens_delta: int = 0
+    details: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: float = 0.0
 
 
 @dataclass

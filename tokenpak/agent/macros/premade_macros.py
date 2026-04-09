@@ -222,4 +222,11 @@ def list_macros() -> List[Dict[str, str]]:
 
 def format_macro_output(result: Dict[str, Any]) -> str:
     """Format macro results for display."""
-    return _get_runner().format_output(result)
+    # If result has expected macro runner fields, use runner formatting
+    if all(k in result for k in ("name", "steps", "description")):
+        return _get_runner().format_output(result)
+    # Fallback: generic key-value formatting for arbitrary dicts
+    lines = []
+    for k, v in result.items():
+        lines.append(f"  {k}: {v}")
+    return "\n".join(lines) if lines else "(empty)"

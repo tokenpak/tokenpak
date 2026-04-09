@@ -120,6 +120,7 @@ def capsule_request_hook(
         # ── Tool schema normalization (even when capsule builder is disabled) ──
         try:
             from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+
             body, _schema_changed = _get_registry().normalize_request(body)
         except Exception as _exc:
             logger.debug("tool_schema_registry: normalization skipped (%s)", _exc)
@@ -179,6 +180,7 @@ def capsule_request_hook(
     # This prevents cache misses caused by non-deterministic tool schema ordering.
     try:
         from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+
         body, _schema_changed = _get_registry().normalize_request(body)
         if _schema_changed:
             sent_tokens = _estimate_tokens(body)

@@ -6,6 +6,7 @@ Thread-safe via a file lock (write-then-rename pattern).
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import pathlib
@@ -74,7 +75,7 @@ class AlertSettings:
     def load(self) -> dict[str, Any]:
         """Return current config, merging with defaults for missing keys."""
         if not self._path.exists():
-            return dict(DEFAULT_ALERT_CONFIG)
+            return copy.deepcopy(DEFAULT_ALERT_CONFIG)
         try:
             with open(self._path) as f:
                 saved = json.load(f)

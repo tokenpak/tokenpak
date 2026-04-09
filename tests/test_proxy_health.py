@@ -48,6 +48,7 @@ def _get_health(port: int = 18766) -> tuple[int, dict]:
 # Test 1 — HTTP 200
 # ---------------------------------------------------------------------------
 
+@pytest.mark.quick
 def test_health_returns_200(proxy):
     status, _ = _get_health()
     assert status == 200
@@ -68,6 +69,7 @@ REQUIRED_FIELDS = {
 }
 
 
+@pytest.mark.quick
 def test_health_required_fields_present(proxy):
     _, data = _get_health()
     missing = REQUIRED_FIELDS - data.keys()
@@ -78,6 +80,7 @@ def test_health_required_fields_present(proxy):
 # Test 3 — status field equals "ok"
 # ---------------------------------------------------------------------------
 
+@pytest.mark.quick
 def test_health_status_ok(proxy):
     _, data = _get_health()
     assert data["status"] == "ok"
@@ -105,6 +108,7 @@ def test_health_uptime_is_int(proxy):
 # Test 6 — version matches expected pattern
 # ---------------------------------------------------------------------------
 
+@pytest.mark.quick
 def test_health_version_string(proxy):
     _, data = _get_health()
     assert isinstance(data["version"], str)

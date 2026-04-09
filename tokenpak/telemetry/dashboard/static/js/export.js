@@ -11,12 +11,12 @@
   function buildExportURL(format) {
     const url = new URL(window.location.origin + `/dashboard/export/${format}`);
     const params = new URLSearchParams(window.location.search);
-    
+
     // Copy relevant filter params
     ['days', 'provider', 'model', 'agent', 'status'].forEach(key => {
       if (params.has(key)) url.searchParams.set(key, params.get(key));
     });
-    
+
     return url.toString();
   }
 
@@ -28,7 +28,7 @@
     }
 
     const url = buildExportURL(format);
-    
+
     // Trigger download
     const link = document.createElement('a');
     link.href = url;
@@ -36,7 +36,7 @@
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    
+
     setTimeout(() => {
       document.body.removeChild(link);
       if (btn) {
@@ -50,14 +50,14 @@
   function exportTrace(traceId) {
     if (!traceId) return;
     const url = `/dashboard/export/trace/${traceId}`;
-    
+
     const link = document.createElement('a');
     link.href = url;
     link.download = '';
     link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    
+
     setTimeout(() => document.body.removeChild(link), 500);
     if (window.a11yAnnounce) window.a11yAnnounce('Trace export started');
   }

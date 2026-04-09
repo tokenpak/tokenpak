@@ -1,6 +1,6 @@
 /**
  * TokenPak Dashboard — Compression Pipeline Explainer
- * 
+ *
  * Educational overlay for the token compression pipeline.
  * Explains Raw → QMD → TokenPak → Final stages with expandable details.
  */
@@ -82,7 +82,7 @@
           <div class="stage-label">${escHtml(cfg.label)}</div>
           <div class="stage-count">${(s.count || 0).toLocaleString()}</div>
           <div class="stage-pct">(${s.pct}%)</div>
-          <button class="stage-learn-more" onclick="CompressionExplainer.toggleStageDetail('${s.key}')" 
+          <button class="stage-learn-more" onclick="CompressionExplainer.toggleStageDetail('${s.key}')"
                   aria-label="Learn more about ${cfg.label}" aria-expanded="false">
             ℹ Learn More
           </button>

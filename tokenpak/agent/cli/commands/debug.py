@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def _state():
-    from tokenpak.agent.debug.state import DebugState
+    from tokenpak.infrastructure.debug import DebugState
 
     return DebugState()
 

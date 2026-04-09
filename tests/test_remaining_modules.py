@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.auth.cooldown_manager import CooldownManager
+from tokenpak.infrastructure.cooldown import CooldownManager
 from tokenpak.agent.ingest.claim_indexer import extract_claims_from_document, ClaimEvidence, extract_claims_from_text
 from tokenpak.agent.fingerprint.privacy import apply_privacy, PrivacyLevel
 from tokenpak.agent.macros.premade_macros import PREMADE_MACROS, PremadeMacroRunner
@@ -30,7 +30,7 @@ from tokenpak.agent.macros.script_hooks import fire_hook, list_hooks, get_hook_p
 from tokenpak.agent.proxy.providers.stream_translator import StreamingTranslator
 from tokenpak.agent.proxy.stats_api import StatsAPI, get_stats_storage
 from tokenpak.agent.config import get_config
-from tokenpak.agent.debug.logger import DebugLogger
+from tokenpak.infrastructure.debug import DebugLogger
 from tokenpak.agent.agentic.capabilities import AgentCapabilities
 
 
