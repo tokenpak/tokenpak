@@ -4,6 +4,10 @@ This directory is the source tree for the `tokenpak-claude-code` Claude Code plu
 
 The plugin extends Claude Code with token-aware context packing, semantic search, and structured field extraction backed by the [tokenpak](https://github.com/tokenpak/tokenpak) open-source library. Refer to the main repository for installation instructions, usage documentation, and contribution guidelines.
 
+## Per-mode behavior
+
+The plugin behaves differently depending on how Claude Code is invoked (TUI, CLI `-p`, `--bare`, TMUX, IDE, cron, SDK). See [MODES.md](./MODES.md) for the full per-mode behavior matrix, unsupported modes, and the `--bare` future-default warning.
+
 ## Configuration
 
 Claude Code prompts for these values when the plugin is enabled. All keys are optional; defaults are applied when left blank.
