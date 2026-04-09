@@ -1558,6 +1558,12 @@ _active_request_lock = threading.Lock()
 _active_requests_drained = threading.Event()
 
 # ---------------------------------------------------------------------------
+# Readiness flag — set True once server is fully initialised and accepting
+# requests; cleared during graceful shutdown so /ready returns 503.
+# ---------------------------------------------------------------------------
+_proxy_ready: bool = False
+
+# ---------------------------------------------------------------------------
 # Last Request Stats — captures most recent request for /stats/last
 # ---------------------------------------------------------------------------
 LAST_REQUEST = {
@@ -2038,6 +2044,69 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
+            # ------------------------------------------------------------------
+            # Build component statuses
+            # ------------------------------------------------------------------
+            now_ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            uptime_secs = int(time.time() - SESSION["start_time"])
+            total_reqs = SESSION.get("requests", 0)
+            total_errors = SESSION.get("errors", 0)
+            error_rate = (total_errors / total_reqs) if total_reqs > 0 else 0.0
+
+            # Cache component
+            try:
+                from tokenpak.cache.registry import CacheRegistry
+                _cache_summary = CacheRegistry.summary()
+                _cache_entries = sum(v.get("size", 0) for v in _cache_summary.values())
+                cache_component = {"status": "ok", "entries": _cache_entries}
+            except Exception as _ce:
+                cache_component = {"status": "degraded", "error": str(_ce)}
+
+            # Provider connections (from circuit breakers — no live network calls)
+            _provider_status: Dict[str, Any] = {}
+            _any_circuit_open = False
+            _all_circuits_open = True
+            with _provider_circuit_lock:
+                for _p, _cb in _provider_circuits.items():
+                    _is_open = _cb["open"]
+                    _provider_status[_p] = {
+                        "status": "degraded" if _is_open else "ok",
+                        "circuit_open": _is_open,
+                        "failures": _cb["failures"],
+                    }
+                    if _is_open:
+                        _any_circuit_open = True
+                    else:
+                        _all_circuits_open = False
+
+            # Config component
+            config_component = {"status": "ok"}
+
+            # Suggestions for degraded states
+            suggestions: list = []
+
+            # Overall status logic
+            if _all_circuits_open:
+                overall_status = "critical"
+                suggestions.append("All upstream providers are unreachable — check network and API keys.")
+            elif _any_circuit_open:
+                overall_status = "degraded"
+                suggestions.append("One or more provider circuits are open — retries will resume after cooldown.")
+            elif error_rate > 0.10:
+                overall_status = "degraded"
+                suggestions.append(
+                    f"High error rate detected ({error_rate:.0%}). "
+                    "Check upstream provider health and request logs."
+                )
+            elif cache_component["status"] == "degraded":
+                overall_status = "degraded"
+                suggestions.append("Cache registry unavailable — requests will still succeed but without caching.")
+            else:
+                overall_status = "healthy"
+
+            http_status = 503 if overall_status == "critical" else 200
+
+            # Backward-compatible legacy fields + new structured fields
             vault_info = {
                 "available": VAULT_INDEX.available,
                 "blocks": len(VAULT_INDEX.blocks),
@@ -2045,7 +2114,18 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             }
             router_info = _router_health()
             self._send_json({
-                "status": "ok",
+                # --- Required schema fields ---
+                "status": overall_status,
+                "uptime": uptime_secs,
+                "version": __import__("tokenpak").__version__,
+                "timestamp": now_ts,
+                "components": {
+                    "cache": cache_component,
+                    "provider_connections": _provider_status,
+                    "config": config_component,
+                },
+                "suggestions": suggestions,
+                # --- Legacy / extended fields (kept for backward compat) ---
                 "compilation_mode": COMPILATION_MODE,
                 "vault_index": vault_info,
                 "router": {"enabled": ROUTER_ENABLED, **router_info},
@@ -2069,7 +2149,21 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "upstream_timeout_seconds": UPSTREAM_TIMEOUT,
                 "circuit_breakers": {p: {"open": cb["open"], "failures": cb["failures"]} for p, cb in _provider_circuits.items()},
                 "stats": SESSION,
-            })
+            }, status=http_status)
+            return
+
+        if self.path == "/ready":
+            # ------------------------------------------------------------------
+            # Readiness probe — suitable for K8s/Docker health checks.
+            # 200 when fully ready; 503 during startup or shutdown.
+            # Response < 50ms (no I/O — just flag check).
+            # No authentication required.
+            # ------------------------------------------------------------------
+            if _proxy_ready and not _shutdown_event.is_set():
+                self._send_json({"ready": True, "status": "ready"}, status=200)
+            else:
+                reason = "shutting_down" if _shutdown_event.is_set() else "starting_up"
+                self._send_json({"ready": False, "status": reason}, status=503)
             return
         if self.path == "/license":
             # License status endpoint (WS-1)
@@ -3824,8 +3918,10 @@ def main():
     _pid_path.write_text(str(os.getpid()))
 
     def _handle_signal(signum, frame):
+        global _proxy_ready
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
         print(f"\n[shutdown] {sig_name} received — stopping gracefully…")
+        _proxy_ready = False  # /ready returns 503 immediately during shutdown
         _shutdown_event.set()
         _pid_path.unlink(missing_ok=True)
         # shutdown() must be called from a different thread than serve_forever()
@@ -3833,6 +3929,10 @@ def main():
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
+
+    # Mark proxy as ready — /ready will return 200 from this point on
+    global _proxy_ready
+    _proxy_ready = True
 
     server.serve_forever()
 
