@@ -13,6 +13,16 @@ from .canonical import CanonicalRequest
 class GoogleGenerativeAIAdapter(FormatAdapter):
     source_format = "google-generative-ai"
 
+    # JSON Schema primitive type → Google type name (uppercase)
+    _GOOGLE_TYPE_MAP: Dict[str, str] = {
+        "string": "STRING",
+        "number": "NUMBER",
+        "integer": "INTEGER",
+        "boolean": "BOOLEAN",
+        "array": "ARRAY",
+        "object": "OBJECT",
+    }
+
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         lower_headers = {k.lower(): v for k, v in headers.items()}
         return "/v1beta/" in path or "x-goog-api-key" in lower_headers or "key=" in path
@@ -60,9 +70,6 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         )
 
     def denormalize(self, canonical: CanonicalRequest) -> bytes:
-        if canonical.tools is not None and canonical.tools:
-            self._validate_tool_support()
-
         payload: Dict[str, Any] = {
             "contents": self._to_google_contents(canonical.messages),
             "stream": canonical.stream,
@@ -73,12 +80,10 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         if canonical.system not in (None, "", []):
             payload["systemInstruction"] = {"parts": self._to_google_parts(canonical.system)}
 
-        # Validate tool support before serializing
-        # Only raise if tools is a non-empty list or dict (actual tools present)
         if canonical.tools is not None and canonical.tools:
-            self._validate_tool_support()
-        
-        if canonical.tools is not None:
+            payload["tools"] = self._translate_tools_to_google(canonical.tools)
+        elif canonical.tools is not None:
+            # Empty list — preserve as-is (backward compat)
             payload["tools"] = copy.deepcopy(canonical.tools)
 
         if "generationConfig" in canonical.generation:
@@ -106,13 +111,118 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
     def get_sse_format(self) -> str:
         return "google-ndjson"
 
-    def _validate_tool_support(self) -> None:
-        """Raise NotImplementedError for function calling — not yet supported by this adapter."""
-        raise NotImplementedError(
-            "Google adapter does not support function calling. "
-            "Use TokenPak with the OpenAI or Anthropic adapter instead. "
-            "See docs/provider-gaps.md for details and ETA."
-        )
+    def _translate_tools_to_google(self, tools: List[Any]) -> List[Dict[str, Any]]:
+        """Translate OpenAI or Anthropic tool definitions to Google functionDeclarations.
+
+        Accepts:
+          - OpenAI format: [{"type": "function", "function": {"name": ..., "parameters": ...}}]
+          - Anthropic format: [{"name": ..., "description": ..., "input_schema": ...}]
+
+        Returns Google format:
+          [{"functionDeclarations": [{"name": ..., "description": ..., "parameters": ...}]}]
+
+        Raises ValueError for unrecognized tool formats or untranslatable schemas.
+        """
+        function_declarations: List[Dict[str, Any]] = []
+
+        for tool in tools:
+            if not isinstance(tool, dict):
+                raise ValueError(
+                    f"Cannot translate tool to Google functionDeclarations: "
+                    f"expected a dict, got {type(tool).__name__}"
+                )
+
+            # OpenAI format: {"type": "function", "function": {...}}
+            if tool.get("type") == "function" and "function" in tool:
+                fn = tool["function"]
+                decl: Dict[str, Any] = {"name": fn["name"]}
+                if fn.get("description"):
+                    decl["description"] = fn["description"]
+                if "parameters" in fn:
+                    decl["parameters"] = self._google_schema_freeze(fn["parameters"])
+                function_declarations.append(decl)
+
+            # Anthropic format: {"name": ..., "input_schema": {...}}
+            elif "name" in tool and "input_schema" in tool:
+                decl = {"name": tool["name"]}
+                if tool.get("description"):
+                    decl["description"] = tool["description"]
+                decl["parameters"] = self._google_schema_freeze(tool["input_schema"])
+                function_declarations.append(decl)
+
+            else:
+                raise ValueError(
+                    f"Cannot translate tool to Google functionDeclarations: "
+                    f"unrecognized tool format. Expected OpenAI (type='function') "
+                    f"or Anthropic (input_schema) format. Got keys: {sorted(tool.keys())}"
+                )
+
+        return [{"functionDeclarations": function_declarations}]
+
+    def _google_schema_freeze(self, schema: Any) -> Any:
+        """Convert a JSON Schema object to Google functionDeclarations parameter format.
+
+        - Uppercases type names (object→OBJECT, string→STRING, etc.)
+        - Strips JSON Schema keys unsupported by Google's API
+        - Recursively processes nested objects (properties) and arrays (items)
+        - Translates T|null unions to type=T + nullable=true
+        - Raises ValueError for $ref (unresolvable without a definitions context)
+          or unsupported multi-type unions
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        if "$ref" in schema:
+            raise ValueError(
+                f"Cannot translate schema with '$ref' to Google format: "
+                f"resolve all $ref references before calling the Google adapter. "
+                f"Offending schema snippet: {json.dumps(schema)[:200]}"
+            )
+
+        result: Dict[str, Any] = {}
+
+        # --- type -----------------------------------------------------------
+        if "type" in schema:
+            raw_type = schema["type"]
+            if isinstance(raw_type, list):
+                # JSON Schema allows ["string", "null"] — Google uses nullable
+                non_null = [t for t in raw_type if t != "null"]
+                if len(non_null) == 0:
+                    result["type"] = "STRING"
+                    result["nullable"] = True
+                elif len(non_null) == 1:
+                    result["type"] = self._GOOGLE_TYPE_MAP.get(non_null[0], non_null[0].upper())
+                    if "null" in raw_type:
+                        result["nullable"] = True
+                else:
+                    raise ValueError(
+                        f"Cannot translate multi-type union {raw_type} to Google format: "
+                        f"Google only supports T|null unions, not arbitrary multi-type unions."
+                    )
+            elif isinstance(raw_type, str):
+                result["type"] = self._GOOGLE_TYPE_MAP.get(raw_type, raw_type.upper())
+
+        # --- scalar fields Google supports ----------------------------------
+        for key in ("description", "enum", "nullable"):
+            if key in schema:
+                result[key] = copy.deepcopy(schema[key])
+
+        # --- required -------------------------------------------------------
+        if "required" in schema:
+            result["required"] = list(schema["required"])
+
+        # --- properties (recurse) -------------------------------------------
+        if "properties" in schema:
+            result["properties"] = {
+                k: self._google_schema_freeze(v)
+                for k, v in schema["properties"].items()
+            }
+
+        # --- items (arrays, recurse) ----------------------------------------
+        if "items" in schema:
+            result["items"] = self._google_schema_freeze(schema["items"])
+
+        return result
 
     def _to_google_contents(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         contents: List[Dict[str, Any]] = []
@@ -141,25 +251,3 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
                 return [{"text": content["text"]}]
             return [copy.deepcopy(content)]
         return [{"text": str(content)}]
-
-    def _validate_tool_support(self) -> None:
-        """
-        Raise NotImplementedError for function calling requests.
-
-        Google Generative AI (Gemini) does not yet support function calling
-        in this adapter. While Gemini natively supports functionDeclarations,
-        the TokenPak adapter does not yet translate OpenAI/Anthropic tool
-        schemas to Google's format.
-
-        Workaround: Use the OpenAI or Anthropic adapter for tool-calling workflows.
-        ETA: Google function calling support planned Q2 2026.
-
-        Reference:
-        - https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/function-calling
-        - ~/vault/01_PROJECTS/.../docs/provider-gaps.md (Gap #1)
-        """
-        raise NotImplementedError(
-            "Google adapter does not support function calling. "
-            "Use TokenPak with the OpenAI or Anthropic adapter instead. "
-            "See https://...provider-gaps.md for details and ETA."
-        )
