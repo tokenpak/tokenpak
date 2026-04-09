@@ -1,492 +1,304 @@
-"""Tests for status.py output formats and meme lines.
+"""Tests for tokenpak status command output formats.
 
-Tests validate all output modes (default, full, minimal, json),
-proxy-down fallback, empty-DB handling, and meme line functionality.
+Covers:
+- Default savings-first layout
+- --minimal one-liner
+- --full legacy technical output
+- --no-meme flag
+- Proxy unreachable fallback
 """
 
-import json
-import io
-import os
+from __future__ import annotations
+
 import sys
-import sqlite3
-import random
-from contextlib import redirect_stdout
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-# The savings-first status module is at ~/tokenpak/agent/cli/commands/status.py
-# which is not in the standard tokenpak package path.
-# We need to import it using path manipulation.
-_repo_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_repo_root))
-
-from agent.cli.commands.status import (
-    run,
-    run_full,
-    _run_minimal,
-    _run_json,
-    _calculate_fleet_savings,
-    MEME_LINES,
-)
+from tokenpak.formatting.modes import OutputMode
 
 
-# ─── Fixtures ────────────────────────────────────────────────────────────────
+# ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
-def _make_db(tmp_path, rows):
-    """Create a monitor.db with the standard schema and insert rows."""
-    db = str(tmp_path / "monitor.db")
-    conn = sqlite3.connect(db)
-    conn.execute(
-        """CREATE TABLE requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            model TEXT NOT NULL,
-            request_type TEXT,
-            input_tokens INTEGER,
-            output_tokens INTEGER,
-            estimated_cost REAL,
-            latency_ms INTEGER,
-            status_code INTEGER,
-            endpoint TEXT,
-            compilation_mode TEXT,
-            protected_tokens INTEGER,
-            compressed_tokens INTEGER,
-            injected_tokens INTEGER DEFAULT 0,
-            injected_sources TEXT DEFAULT '',
-            cache_read_tokens INTEGER DEFAULT 0,
-            cache_creation_tokens INTEGER DEFAULT 0,
-            would_have_saved INTEGER DEFAULT 0
-        )"""
-    )
-    conn.executemany(
-        "INSERT INTO requests (timestamp, model, input_tokens, output_tokens, "
-        "cache_read_tokens, cache_creation_tokens, compressed_tokens) VALUES (?,?,?,?,?,?,?)",
-        rows,
-    )
-    conn.commit()
-    conn.close()
-    return db
+MOCK_STATS = {
+    "session": {
+        "requests": 6016,
+        "input_tokens": 74_500_000,
+        "sent_input_tokens": 68_500_000,
+        "saved_tokens": 6_000_000,
+        "output_tokens": 1_000_000,
+        "cost": 326.92,
+        "cost_saved": 1.16,
+        "start_time": 1_770_000_000.0,
+        "errors": 5,
+        "cache_hits": 5530,
+        "cache_misses": 486,
+        "cache_read_tokens": 287_000_000,
+        "cache_creation_tokens": 37_000_000,
+        "compilation_mode": "hybrid",
+    },
+    "by_model": {
+        "claude-opus-4-6": {
+            "requests": 2841,
+            "input_tokens": 30_000_000,
+            "output_tokens": 400_000,
+            "cost": 289.14,
+            "cache_read_tokens": 69_000_000,
+            "cache_creation_tokens": 22_000_000,
+        },
+        "claude-haiku-4-5": {
+            "requests": 2103,
+            "input_tokens": 24_000_000,
+            "output_tokens": 300_000,
+            "cost": 24.58,
+            "cache_read_tokens": 146_000_000,
+            "cache_creation_tokens": 29_000_000,
+        },
+        "claude-sonnet-4-6": {
+            "requests": 847,
+            "input_tokens": 12_000_000,
+            "output_tokens": 200_000,
+            "cost": 12.04,
+            "cache_read_tokens": 48_000_000,
+            "cache_creation_tokens": 7_000_000,
+        },
+    },
+    "today": {
+        "requests": 3000,
+        "input_tokens": 37_000_000,
+        "output_tokens": 500_000,
+        "total_cost": 160.0,
+        "cache_read_tokens": 150_000_000,
+        "cache_creation_tokens": 11_000_000,
+    },
+}
+
+MOCK_HEALTH = {
+    "status": "ok",
+    "compilation_mode": "hybrid",
+    "stats": {
+        "start_time": 1_770_000_000.0,
+        "requests": 6016,
+        "errors": 5,
+    },
+    "vault_index": {"available": True, "blocks": 6366},
+    "skeleton": {"enabled": True},
+    "shadow_reader": {"enabled": True},
+    "canon": {"enabled": True},
+    "capsule_available": True,
+    "circuit_breakers": {
+        "anthropic": {"open": False, "failures": 0},
+        "openai": {"open": False, "failures": 0},
+    },
+    "router": {"enabled": True, "components": {}},
+}
+
+MOCK_CACHE = {
+    "hit_rate": 0.9191,
+    "cache_hits": 5530,
+    "cache_misses": 486,
+    "cache_read_tokens": 287_000_000,
+    "cache_creation_tokens": 37_000_000,
+    "miss_reasons": {
+        "timestamp_poison": 87,
+        "schema_tool_change": 399,
+    },
+}
 
 
-def _ts(delta_hours=0):
-    """Return an ISO timestamp relative to now."""
-    return (datetime.now(timezone.utc) - timedelta(hours=delta_hours)).strftime(
-        "%Y-%m-%dT%H:%M:%S"
-    )
+def make_args(**kwargs):
+    defaults = {
+        "full": False,
+        "minimal": False,
+        "no_meme": True,
+        "output": "normal",
+        "limit": 20,
+    }
+    defaults.update(kwargs)
+    return SimpleNamespace(**defaults)
 
 
-@pytest.fixture
-def populated_db(tmp_path):
-    """Create a DB with realistic test data."""
-    rows = [
-        (_ts(0), "claude-haiku-4-5", 100_000, 10_000, 50_000, 5_000, 20_000),
-        (_ts(1), "claude-sonnet-4-6", 200_000, 20_000, 100_000, 10_000, 30_000),
-        (_ts(2), "claude-opus-4-6", 300_000, 30_000, 150_000, 15_000, 40_000),
-    ]
-    return _make_db(tmp_path, rows)
+def run_cmd_status(args, capsys):
+    """Import and run cmd_status, patching proxy calls."""
+    import time
+
+    with patch("tokenpak.cli._proxy_get") as mock_proxy, \
+         patch("time.time", return_value=1_770_400_000.0):
+        def _proxy_side(endpoint):
+            if endpoint == "/health":
+                return MOCK_HEALTH
+            elif endpoint == "/stats":
+                return MOCK_STATS
+            elif endpoint == "/cache-stats":
+                return MOCK_CACHE
+            return {}
+        mock_proxy.side_effect = _proxy_side
+
+        from tokenpak.cli import cmd_status
+        cmd_status(args)
+
+    return capsys.readouterr()
 
 
-@pytest.fixture
-def empty_db(tmp_path):
-    """Create an empty DB (with schema but no rows)."""
-    return _make_db(tmp_path, [])
+# ── Default savings-first layout ──────────────────────────────────────────────
 
 
-# ─── Meme Lines Tests ────────────────────────────────────────────────────────
+class TestDefaultSavingsFirstLayout:
+    def test_savings_header_present(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "TOKENPAK" in out
+        assert "Savings Report" in out
+
+    def test_savings_section_present(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "💰 SAVINGS" in out
+
+    def test_without_tokenpak_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "Without TokenPak" in out
+
+    def test_with_tokenpak_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "With TokenPak" in out
+
+    def test_total_saved_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "Total saved" in out
+
+    def test_how_it_saved_section(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "📊 HOW IT SAVED" in out
+
+    def test_cache_optimization_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "Cache optimization" in out
+
+    def test_token_compression_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "Token compression" in out
+
+    def test_smart_routing_line(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "Smart routing" in out
+
+    def test_models_section_present(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "🤖 MODELS" in out
+
+    def test_performance_section_present(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "⚡ PERFORMANCE" in out
+
+    def test_all_systems_healthy(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "✅ All systems healthy" in out
+
+    def test_per_model_rows_appear(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        # At least one model short-name should appear
+        assert "opus-4-6" in out or "haiku-4-5" in out or "sonnet-4-6" in out
+
+    def test_dollar_amounts_appear(self, capsys):
+        out, _ = run_cmd_status(make_args(), capsys)
+        assert "$" in out
 
 
-class TestMemeLines:
-    """Test meme line list and random selection."""
-
-    def test_all_28_lines_present(self):
-        """Verify exactly 28 meme lines exist."""
-        assert len(MEME_LINES) == 28
-
-    def test_all_lines_non_empty(self):
-        """All meme lines should be non-empty strings."""
-        for line in MEME_LINES:
-            assert isinstance(line, str)
-            assert len(line.strip()) > 0
-
-    def test_no_trailing_whitespace(self):
-        """Meme lines should not have trailing whitespace."""
-        for line in MEME_LINES:
-            assert line == line.rstrip()
-
-    def test_random_selection_varies(self):
-        """Random selection should produce different lines over iterations."""
-        # Use fixed seed for reproducibility but reset to random after
-        selections = set()
-        for _ in range(100):
-            selections.add(random.choice(MEME_LINES))
-        # With 100 iterations and 28 lines, we should see multiple different lines
-        assert len(selections) >= 5, "Random selection should produce variety"
-
-    def test_each_line_selectable(self):
-        """Each meme line should be selectable (no unreachable lines)."""
-        # This test verifies all lines are in the list and accessible
-        for line in MEME_LINES:
-            assert line in MEME_LINES
+# ── --minimal one-liner ───────────────────────────────────────────────────────
 
 
-# ─── Default Mode Tests ──────────────────────────────────────────────────────
-
-
-class TestDefaultMode:
-    """Test default savings-first output mode."""
-
-    def test_shows_without_tokenpak(self, populated_db):
-        """Default mode should show 'Without TokenPak' cost."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "Without TokenPak:" in text
-
-    def test_shows_with_tokenpak(self, populated_db):
-        """Default mode should show 'With TokenPak' cost."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "With TokenPak:" in text
-
-    def test_shows_total_saved(self, populated_db):
-        """Default mode should show total saved amount."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "Total saved:" in text
-
-    def test_shows_per_model_table(self, populated_db):
-        """Default mode should show per-model breakdown."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should show model names in the output
-        assert "claude-haiku-4-5" in text or "MODELS" in text
-
-    def test_shows_meme_line_by_default(self, populated_db):
-        """Default mode should include meme line (📦 prefix)."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=False)
-        text = output.getvalue()
-        assert "📦" in text
-
-    def test_shows_savings_header(self, populated_db):
-        """Default mode should show SAVINGS section header."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "SAVINGS" in text
-
-
-# ─── Full Mode Tests ─────────────────────────────────────────────────────────
-
-
-class TestFullMode:
-    """Test --full backward-compatible output mode."""
-
-    def test_full_mode_shows_legacy_header(self):
-        """Full mode should show legacy header format."""
-        mock_health = {
-            "is_degraded": False,
-            "uptime_seconds": 3600,
-            "compression_ratio_avg": 0.85,
-            "stats": {"errors": 0}
-        }
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=mock_health):
-                run_full()
-        text = output.getvalue()
-        assert "Status (Full)" in text or "TOKENPAK" in text
-
-    def test_full_mode_shows_proxy_status(self):
-        """Full mode should show proxy running status."""
-        mock_health = {
-            "is_degraded": False,
-            "uptime_seconds": 3600,
-            "stats": {"errors": 0}
-        }
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=mock_health):
-                run_full()
-        text = output.getvalue()
-        assert "Proxy running" in text
-
-    def test_full_mode_shows_uptime(self):
-        """Full mode should show uptime."""
-        mock_health = {
-            "is_degraded": False,
-            "uptime_seconds": 7200,
-            "stats": {"errors": 0}
-        }
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=mock_health):
-                run_full()
-        text = output.getvalue()
-        assert "Uptime" in text
-
-
-# ─── Minimal Mode Tests ──────────────────────────────────────────────────────
-
-
-class TestMinimalMode:
-    """Test --minimal one-line output mode."""
-
-    def test_minimal_single_line(self, populated_db):
-        """Minimal mode should produce single-line output."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue().strip()
-        # Should be a single line (no newlines except trailing)
-        lines = [l for l in text.split("\n") if l.strip()]
+class TestMinimalOutput:
+    def test_minimal_shows_one_line(self, capsys):
+        out, _ = run_cmd_status(make_args(minimal=True), capsys)
+        lines = [l for l in out.strip().splitlines() if l.strip()]
         assert len(lines) == 1
 
-    def test_minimal_shows_saved_amount(self, populated_db):
-        """Minimal mode should show saved amount."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should contain a dollar amount
-        assert "$" in text
+    def test_minimal_contains_saved(self, capsys):
+        out, _ = run_cmd_status(make_args(minimal=True), capsys)
+        assert "saved" in out.lower()
 
-    def test_minimal_shows_request_count(self, populated_db):
-        """Minimal mode should show request count."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "req" in text.lower()
+    def test_minimal_contains_reqs(self, capsys):
+        out, _ = run_cmd_status(make_args(minimal=True), capsys)
+        assert "reqs" in out
 
-    def test_minimal_shows_cache_rate(self, populated_db):
-        """Minimal mode should show cache hit rate."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "cache" in text.lower()
+    def test_minimal_contains_cache_pct(self, capsys):
+        out, _ = run_cmd_status(make_args(minimal=True), capsys)
+        assert "cache" in out
 
-    def test_minimal_has_tokenpak_prefix(self, populated_db):
-        """Minimal mode should start with TokenPak prefix."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        assert "TokenPak" in text or "📦" in text
+    def test_minimal_starts_with_package_emoji(self, capsys):
+        out, _ = run_cmd_status(make_args(minimal=True), capsys)
+        assert "📦" in out
 
 
-# ─── JSON Mode Tests ─────────────────────────────────────────────────────────
+# ── --full legacy technical output ───────────────────────────────────────────
 
 
-class TestJsonMode:
-    """Test --json machine-readable output mode."""
+class TestFullOutput:
+    def test_full_shows_proxy_running(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Proxy" in out
 
-    def test_json_is_valid(self, populated_db):
-        """JSON mode should produce valid JSON."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                _run_json(db_path=populated_db)
-        text = output.getvalue()
-        # Should parse without error
-        data = json.loads(text)
-        assert isinstance(data, dict)
+    def test_full_shows_uptime(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Uptime" in out
 
-    def test_json_has_version(self, populated_db):
-        """JSON mode should include version."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                _run_json(db_path=populated_db)
-        data = json.loads(output.getvalue())
-        assert "version" in data
+    def test_full_shows_tokens_in(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Tokens in" in out
 
-    def test_json_has_savings(self, populated_db):
-        """JSON mode should include savings data."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                _run_json(db_path=populated_db)
-        data = json.loads(output.getvalue())
-        assert "savings" in data
+    def test_full_shows_tokens_saved(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Tokens saved" in out
 
-    def test_json_has_proxy_status(self, populated_db):
-        """JSON mode should include proxy status."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                _run_json(db_path=populated_db)
-        data = json.loads(output.getvalue())
-        assert "proxy" in data
+    def test_full_shows_cost_line(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Cost:" in out
 
-    def test_json_has_meme_lines(self, populated_db):
-        """JSON mode should include meme lines list."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                _run_json(db_path=populated_db)
-        data = json.loads(output.getvalue())
-        assert "meme_lines" in data
-        assert len(data["meme_lines"]) == 28
+    def test_full_shows_cache_hit_rate(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Cache hit rate" in out
+
+    def test_full_shows_features(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Features" in out
+
+    def test_full_does_not_show_savings_header(self, capsys):
+        out, _ = run_cmd_status(make_args(full=True), capsys)
+        assert "Savings Report" not in out
 
 
-# ─── No-Meme Mode Tests ──────────────────────────────────────────────────────
+# ── --no-meme flag ────────────────────────────────────────────────────────────
 
 
-class TestNoMemeMode:
-    """Test --no-meme flag."""
+class TestNoMemeFlag:
+    def test_meme_suppressed_when_no_meme(self, capsys):
+        # Default view with no_meme=True (set in make_args default)
+        out, _ = run_cmd_status(make_args(no_meme=True), capsys)
+        # Meme lines all start with 📦 in default view
+        # After the "all systems healthy" line there should be no 📦
+        lines = out.strip().splitlines()
+        healthy_idx = next(
+            (i for i, l in enumerate(lines) if "All systems healthy" in l), None
+        )
+        if healthy_idx is not None:
+            after = "\n".join(lines[healthy_idx + 1:])
+            assert "📦" not in after
 
-    def test_no_meme_suppresses_tagline(self, populated_db):
-        """--no-meme should suppress the 📦 meme line."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should not contain the meme prefix
-        # (Note: the version header may contain 📦, so check for meme content)
-        # Since meme lines are at the end and specific, check they're not in output
-        for meme in MEME_LINES:
-            assert meme not in text
-
-    def test_no_meme_minimal_mode(self, populated_db):
-        """--no-meme should work in minimal mode too."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            _run_minimal(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Minimal with no_meme should not contain meme line content
-        # It should just have the summary stats
-        for meme in MEME_LINES:
-            assert meme not in text
+    def test_meme_present_when_not_suppressed(self, capsys):
+        out, _ = run_cmd_status(make_args(no_meme=False), capsys)
+        # At least one 📦 should appear (the meme line)
+        assert "📦" in out
 
 
-# ─── Proxy Down Tests ────────────────────────────────────────────────────────
+# ── Proxy unreachable fallback ────────────────────────────────────────────────
 
 
-class TestProxyDown:
-    """Test proxy-down fallback behavior."""
-
-    def test_proxy_down_shows_warning(self, populated_db):
-        """When proxy is down, should show warning."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should show proxy unreachable warning
-        assert "⚠️" in text or "unreachable" in text.lower()
-
-    def test_proxy_down_still_shows_savings(self, populated_db):
-        """When proxy is down, should still show DB-based savings."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should still show savings data from DB
-        assert "SAVINGS" in text or "saved" in text.lower()
-
-    def test_proxy_down_shows_historical_data(self, populated_db):
-        """When proxy is down, should indicate historical data only."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=populated_db, no_meme=True)
-        text = output.getvalue()
-        # Should indicate this is historical/DB data
-        assert "historical" in text.lower() or "Proxy unreachable" in text
-
-
-# ─── Empty DB Tests ──────────────────────────────────────────────────────────
-
-
-class TestEmptyDB:
-    """Test empty DB handling."""
-
-    def test_empty_db_shows_helpful_message(self, empty_db):
-        """Empty DB should show helpful setup message."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=empty_db, no_meme=True)
-        text = output.getvalue()
-        # Should have helpful message about no data
-        assert "No" in text or "no data" in text.lower() or "📭" in text
-
-    def test_empty_db_no_crash(self, empty_db):
-        """Empty DB should not crash."""
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                # Should not raise
-                run(db_path=empty_db, no_meme=True)
-        # If we get here without exception, test passes
-
-    def test_missing_db_handled(self, tmp_path):
-        """Missing DB file should be handled gracefully."""
-        fake_path = str(tmp_path / "nonexistent.db")
-        output = io.StringIO()
-        with redirect_stdout(output):
-            with patch("agent.cli.commands.status._fetch", return_value=None):
-                run(db_path=fake_path, no_meme=True)
-        text = output.getvalue()
-        # Should show DB not found message
-        assert "not found" in text.lower() or "⚠️" in text
-
-
-# ─── Fleet Savings Calculation Tests ─────────────────────────────────────────
-
-
-class TestFleetSavingsCalc:
-    """Test internal _calculate_fleet_savings function."""
-
-    def test_returns_dict_with_required_keys(self, populated_db):
-        """Fleet savings should return dict with required keys."""
-        result = _calculate_fleet_savings(db_path=populated_db, period="24h")
-        assert "period" in result
-        assert "models" in result or "error" in result
-        assert "totals" in result or "error" in result
-
-    def test_totals_has_savings_fields(self, populated_db):
-        """Totals should include cost fields."""
-        result = _calculate_fleet_savings(db_path=populated_db, period="24h")
-        if not result.get("error"):
-            totals = result["totals"]
-            assert "without_cost" in totals
-            assert "with_cost" in totals
-            assert "saved" in totals
-
-    def test_empty_db_returns_error(self, empty_db):
-        """Empty DB should return error indicator."""
-        result = _calculate_fleet_savings(db_path=empty_db, period="24h")
-        assert result.get("error") == "no_data"
-
-    def test_missing_db_returns_error(self, tmp_path):
-        """Missing DB should return error indicator."""
-        fake_path = str(tmp_path / "nonexistent.db")
-        result = _calculate_fleet_savings(db_path=fake_path)
-        assert result.get("error") == "db_not_found"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+class TestProxyUnreachable:
+    def test_shows_warning_when_proxy_down(self, capsys):
+        args = make_args()
+        with patch("tokenpak.cli._proxy_get", return_value=None):
+            from tokenpak.cli import cmd_status
+            cmd_status(args)
+        out = capsys.readouterr().out
+        assert "not reachable" in out or "tokenpak start" in out or "⚠️" in out

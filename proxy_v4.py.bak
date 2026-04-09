@@ -1368,13 +1368,21 @@ class Monitor:
             "cache_creation_tokens": row[9],
         }
 
-    def get_by_model(self):
+    def get_by_model(self, hours=None):
         conn = sqlite3.connect(self.db_path)
-        rows = conn.execute("""
-            SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(estimated_cost),
-                   SUM(cache_read_tokens), SUM(cache_creation_tokens)
-            FROM requests GROUP BY model ORDER BY SUM(estimated_cost) DESC
-        """).fetchall()
+        if hours is not None:
+            rows = conn.execute("""
+                SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(estimated_cost),
+                       SUM(cache_read_tokens), SUM(cache_creation_tokens)
+                FROM requests WHERE timestamp >= datetime('now', ?)
+                GROUP BY model ORDER BY SUM(estimated_cost) DESC
+            """, (f"-{hours} hours",)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT model, COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(estimated_cost),
+                       SUM(cache_read_tokens), SUM(cache_creation_tokens)
+                FROM requests GROUP BY model ORDER BY SUM(estimated_cost) DESC
+            """).fetchall()
         conn.close()
         return {r[0]: {"requests": r[1], "input_tokens": r[2], "output_tokens": r[3], "cost": round(r[4],4),
                        "cache_read_tokens": r[5] or 0, "cache_creation_tokens": r[6] or 0} for r in rows}
@@ -1988,7 +1996,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "skeleton": {"enabled": SKELETON_ENABLED},
                 "shadow_reader": {"enabled": SHADOW_ENABLED},
                 "budget": {"enabled": True, "total_tokens": BUDGET_TOTAL_TOKENS},
-                "today": MONITOR.get_stats(),
+                "today": {**MONITOR.get_stats(), "by_model": MONITOR.get_by_model(hours=24)},
                 "by_model": MONITOR.get_by_model(),
                 "recent": MONITOR.recent(10),
             })
