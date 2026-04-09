@@ -1430,6 +1430,9 @@ _active_request_count = 0
 _active_request_lock = threading.Lock()
 _active_requests_drained = threading.Event()
 
+# Readiness flag — True once server is accepting requests; False during shutdown.
+_proxy_ready: bool = False
+
 # ---------------------------------------------------------------------------
 # Last Request Stats — captures most recent request for /stats/last
 # ---------------------------------------------------------------------------
@@ -1959,6 +1962,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             _health_cache["data"] = health_data
             _health_cache["ts"] = now
             self._send_json(health_data)
+            return
+        if self.path == "/ready":
+            if _proxy_ready and not _shutdown_event.is_set():
+                self._send_json({"ready": True, "status": "ready"}, status=200)
+            else:
+                reason = "shutting_down" if _shutdown_event.is_set() else "starting_up"
+                self._send_json({"ready": False, "status": reason}, status=503)
             return
         if self.path == "/stats":
             self._send_json({
@@ -3760,6 +3770,46 @@ def validate_tokenpak_config():
     else:
         print("✅ TokenPak config validated - all settings correct")
 
+def _startup_preflight(port: int) -> None:
+    """
+    Run pre-flight validation checks before binding the port.
+
+    Raises SystemExit on any fatal condition so the process never reaches
+    serve_forever() in a broken state.
+    """
+    errors: list[str] = []
+
+    # 1. Port availability — detect by attempting a client connect.
+    #    Using connect() (not bind+SO_REUSEADDR) is the reliable way to tell
+    #    whether something is *listening* on the port right now.
+    _port_in_use = False
+    try:
+        _probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _probe.settimeout(0.3)
+        _probe.connect(("127.0.0.1", port))
+        _probe.close()
+        _port_in_use = True  # connect succeeded → a server is listening
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        pass  # refused or timeout → port is free
+
+    if _port_in_use:
+        errors.append(
+            f"Port {port} is already in use.\n"
+            f"  Fix: stop the existing process, or set TOKENPAK_PORT to a free port.\n"
+            f"  Check: lsof -i :{port}  or  ss -tlnp | grep {port}"
+        )
+
+    # 2. Config validation (already run below, but surface as fatal if critical keys missing)
+    # validate_tokenpak_config() handles auto-correct; no blocking here.
+
+    if errors:
+        print("\n[startup] ❌ Pre-flight checks FAILED — proxy will not start:\n")
+        for err in errors:
+            print(f"  • {err}")
+        print()
+        sys.exit(1)
+
+
 def main():
     port = PROXY_PORT
     mode_desc = {
@@ -3768,6 +3818,9 @@ def main():
         "aggressive": "Everything except protected gets compressed",
     }
 
+    # Pre-flight: validate port availability before binding anything
+    _startup_preflight(port)
+
     # Validate config at startup
     validate_tokenpak_config()
 
@@ -3775,16 +3828,17 @@ def main():
     VAULT_INDEX.maybe_reload()
     vault_status = f"{len(VAULT_INDEX.blocks)} blocks" if VAULT_INDEX.available else "not found"
 
-    # Proxy workflow tracking — startup dangling workflow check
+    # Proxy workflow tracking — startup dangling workflow check (kill -9 recovery)
     try:
         import sys as _sys; _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tokenpak"))
         from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
         dangling = recover_proxy_workflows()
         if dangling:
-            print(f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run:")
+            print(f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run (kill -9 recovery):")
             for wf in dangling[:5]:
                 running_step = next((s["name"] for s in wf["steps"] if s["status"] == "running"), "—")
                 print(f"  • {wf['id'][:8]}… step={running_step}")
+            print("[proxy_workflow] ✅ Recovered — stale workflows marked as interrupted")
     except Exception as _e:
         print(f"[proxy_workflow] startup check skipped: {_e}")
 
@@ -3813,7 +3867,7 @@ def main():
 ║                   in aggressive)                                 ║
 ║    ⚙️  CONFIG    — JSON/YAML/config (strict in hybrid)            ║
 ║                                                                  ║
-║  Endpoints:  /health  /stats  /recent  /vault                    ║
+║  Endpoints:  /health  /ready  /stats  /recent  /vault             ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
     """)
@@ -3836,8 +3890,10 @@ def main():
     _pid_path.write_text(str(os.getpid()))
 
     def _handle_signal(signum, frame):
+        global _proxy_ready
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
         print(f"\n[shutdown] {sig_name} received — stopping gracefully…")
+        _proxy_ready = False   # /ready returns 503 immediately
         _shutdown_event.set()
         _pid_path.unlink(missing_ok=True)
         # shutdown() must be called from a different thread than serve_forever()
@@ -3846,10 +3902,16 @@ def main():
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
+    # Mark proxy as ready — /ready returns 200 from this point
+    global _proxy_ready
+    _proxy_ready = True
+    print(f"[startup] ✅ TokenPak proxy ready — port={port} version={__import__('tokenpak').__version__}")
+
     server.serve_forever()
 
-    # --- Drain in-flight requests (up to 10s) ---
-    drain_timeout = 10
+    # --- Drain in-flight requests (up to 30s — matches systemd TimeoutStopSec) ---
+    _SHUTDOWN_DRAIN_TIMEOUT = int(os.getenv("TOKENPAK_SHUTDOWN_TIMEOUT", "30"))
+    drain_timeout = _SHUTDOWN_DRAIN_TIMEOUT
     with _active_request_lock:
         count = _active_request_count
     if count > 0:
