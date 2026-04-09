@@ -5102,32 +5102,53 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 if pipeline_enabled:
                     # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
                     if SEMANTIC_CACHE_ENABLED and body:
+                        # CCG-14: Bypass lookup for streaming / Claude Code requests.
+                        # Invariant: _send_json MUST NOT be called on a streaming client — SSE parser crash.
+                        _sc_is_streaming = True  # conservative: bypass if detection fails
+                        _sc_is_agent = True
                         try:
-                            _sem_cache = _get_sem_cache()
-                            if _sem_cache is None:
-                                raise ImportError("SemanticCache unavailable")
-                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
-                        except Exception as _sc_err:
-                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                            pass  # fail-open: never break a request over semantic cache
+                            _sc_peek = json.loads(body) if isinstance(body, (bytes, str)) else body
+                            _sc_is_streaming = bool(_sc_peek.get("stream"))
+                        except Exception:
+                            _sc_is_streaming = True  # conservative
+                        try:
+                            _sc_hdrs = {k.lower(): v for k, v in self.headers.items()}
+                            _sc_is_agent = bool(_sc_hdrs.get("x-claude-code-session-id"))
+                            if not _sc_is_agent:
+                                _sc_ua = (_sc_hdrs.get("user-agent") or "").lower()
+                                _sc_is_agent = "claude-code" in _sc_ua
+                        except Exception:
+                            _sc_is_agent = True  # conservative
+                        if _sc_is_streaming or _sc_is_agent:
+                            SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                        else:
+                            try:
+                                _sem_cache = _get_sem_cache()
+                                if _sem_cache is None:
+                                    raise ImportError("SemanticCache unavailable")
+                                _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
+                                _cache_result = _sem_cache.lookup(_sem_query)
+                                if (
+                                    _cache_result is not None
+                                    and _cache_result.hit
+                                    and _cache_result.entry
+                                ):
+                                    SESSION["semantic_cache_hit"] = True
+                                    SESSION["phase_semantic_cache"] = "hit"
+                                    # Return cached response — skip all processing
+                                    # NOTE: _send_json MUST NOT be called on streaming clients — SSE parser crash.
+                                    _cached_resp = _cache_result.entry.response
+                                    if isinstance(_cached_resp, dict):
+                                        self._send_json(_cached_resp)
+                                    elif isinstance(_cached_resp, bytes):
+                                        self.wfile.write(_cached_resp)
+                                    else:
+                                        self._send_json(json.loads(_cached_resp))
+                                    return
+                                SESSION["phase_semantic_cache"] = "miss"
+                            except Exception as _sc_err:
+                                SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
+                                pass  # fail-open: never break a request over semantic cache
 
                     # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
                     # Enables Anthropic cache hits on repeated tool schemas
@@ -6505,30 +6526,55 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
             # Post-request: Store successful response in semantic cache
             if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
+                # CCG-14: Bypass store for streaming / Claude Code requests (same guard as lookup).
+                _sc_store_skip = True  # conservative: skip if detection fails
                 try:
-                    _sem_cache = _get_sem_cache()
-                    if _sem_cache is None:
-                        raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
+                    _sc_store_peek = (
+                        json.loads(_original_body)
+                        if isinstance(_original_body, (bytes, str))
                         else _original_body
                     )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
-                except Exception as _sc_store_err:
-                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                    pass  # fail-open
+                    _sc_store_skip = bool(_sc_store_peek.get("stream"))
+                except Exception:
+                    _sc_store_skip = True  # conservative
+                if not _sc_store_skip:
+                    try:
+                        _sc_hdrs_store = {k.lower(): v for k, v in self.headers.items()}
+                        _sc_is_agent_store = bool(_sc_hdrs_store.get("x-claude-code-session-id"))
+                        if not _sc_is_agent_store:
+                            _sc_ua_store = (_sc_hdrs_store.get("user-agent") or "").lower()
+                            _sc_is_agent_store = "claude-code" in _sc_ua_store
+                    except Exception:
+                        _sc_is_agent_store = True  # conservative
+                    _sc_store_skip = _sc_is_agent_store
+                if _sc_store_skip:
+                    if not SESSION.get("phase_semantic_cache"):
+                        SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                else:
+                    try:
+                        _sem_cache = _get_sem_cache()
+                        if _sem_cache is None:
+                            raise ImportError("SemanticCache unavailable")
+                        _store_query = (
+                            _original_body.decode("utf-8")
+                            if isinstance(_original_body, bytes)
+                            else _original_body
+                        )
+                        _store_resp_raw = (
+                            resp_body
+                            if "resp_body" in locals()
+                            else json.dumps({"status": status}).encode()
+                        )
+                        _store_resp_dict = (
+                            json.loads(_store_resp_raw)
+                            if isinstance(_store_resp_raw, (bytes, str))
+                            else _store_resp_raw
+                        )
+                        _sem_cache.store(_store_query, _store_resp_dict)
+                        SESSION["semantic_cache_stored"] = True
+                    except Exception as _sc_store_err:
+                        SESSION["semantic_cache_store_error"] = str(_sc_store_err)
+                        pass  # fail-open
 
             latency_ms = int((time.time() - t0) * 1000)
 
