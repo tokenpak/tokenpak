@@ -1,0 +1,42 @@
+[Unit]
+Description=TokenPak LLM Proxy (Graceful Degradation)
+Documentation=https://docs.tokenpak.dev/proxy
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+# Replace %h with actual home path if running as a system service (not user service)
+ExecStart=/usr/bin/env tokenpak serve
+Restart=on-failure
+RestartSec=5s
+# Allow up to 5 restarts in 60 seconds before giving up
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Graceful shutdown: allow 35s for in-flight drain (proxy drains up to 30s via
+# TOKENPAK_SHUTDOWN_TIMEOUT, plus 5s buffer for cleanup and final log writes).
+# `systemctl stop` sends SIGTERM; proxy drains requests, persists stats, then exits 0.
+TimeoutStopSec=35
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tokenpak-proxy
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/.tokenpak %h/vault
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+# TOKENPAK_SHUTDOWN_TIMEOUT controls the in-flight drain window (default: 30s).
+# Set lower (e.g. 5) for faster deploys; set higher for long-running requests.
+Environment=TOKENPAK_SHUTDOWN_TIMEOUT=30
+# Add your API key env vars here (or use EnvironmentFile):
+# EnvironmentFile=%h/.tokenpak/env
+
+[Install]
+# For user service: systemctl --user enable tokenpak-proxy
+WantedBy=default.target

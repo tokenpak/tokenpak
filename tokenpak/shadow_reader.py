@@ -1,558 +1,381 @@
 # SPDX-License-Identifier: MIT
-"""Shadow Reader — Compression Validation for TokenPak.
+"""Shadow Reader — Passive request observation for TokenPak Phase 3.
 
-Before sending AGGRESSIVE-mode output to the LLM, validates that the
-compressed text is still coherent. Heuristics only — no GPU, no LLM.
-Tier 1 compatible (4GB RAM).
+Allows observing requests WITHOUT executing them. Useful for:
+- Safe production testing of new compression rules
+- Gradual rollout of validation changes
+- Analyzing request patterns without side effects
+- Collecting metrics for future optimization
 
-Auto-fallback: AGGRESSIVE → HYBRID when validation fails.
-Results logged to .tokenpak/validation_log.json.
+Shadow mode is PASSIVE: reads requests, logs observations, does NOT modify behavior.
 """
 
 import json
-import math
-import re
-from dataclasses import dataclass, field
+import logging
+import os
+import threading
+import time
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-DEFAULT_VALIDATION_LOG = ".tokenpak/validation_log.json"
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 
-# Coverage ratio bounds
-MIN_COVERAGE = 0.05  # Not over-compressed
-MAX_COVERAGE = 0.95  # Something must have been removed
+SHADOW_MODE = os.environ.get("TOKENPAK_SHADOW_MODE", "").lower() == "true"
+SHADOW_LOG_PATH = Path(
+    os.environ.get(
+        "TOKENPAK_SHADOW_LOG", str(Path.home() / ".tokenpak" / "shadow_observations.jsonl")
+    )
+)
 
-# Key term retention threshold
-MIN_TERM_RETENTION = 0.50  # At least 50% of top terms must appear in compressed
+# Enable/disable per-category logging in shadow mode
+SHADOW_LOG_REQUESTS = os.environ.get("TOKENPAK_SHADOW_LOG_REQUESTS", "true").lower() == "true"
+SHADOW_LOG_RESPONSES = os.environ.get("TOKENPAK_SHADOW_LOG_RESPONSES", "true").lower() == "true"
+SHADOW_LOG_METRICS = os.environ.get("TOKENPAK_SHADOW_LOG_METRICS", "true").lower() == "true"
 
-# Sentence length bounds (in words)
-MIN_AVG_SENTENCE_LEN = 5
-MAX_AVG_SENTENCE_LEN = 80
-MAX_SENTENCE_LEN = 120
+# Batch size before flushing to disk (non-blocking write in background)
+SHADOW_BATCH_SIZE = int(os.environ.get("TOKENPAK_SHADOW_BATCH_SIZE", "50"))
+
+# ---------------------------------------------------------------------------
+# Logger
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Stopword list (~100 common English stopwords)
-# ---------------------------------------------------------------------------
-
-_STOPWORDS = {
-    "a",
-    "an",
-    "the",
-    "and",
-    "or",
-    "but",
-    "in",
-    "on",
-    "at",
-    "to",
-    "for",
-    "of",
-    "with",
-    "by",
-    "from",
-    "up",
-    "about",
-    "into",
-    "through",
-    "during",
-    "before",
-    "after",
-    "above",
-    "below",
-    "between",
-    "out",
-    "off",
-    "over",
-    "under",
-    "again",
-    "then",
-    "once",
-    "here",
-    "there",
-    "when",
-    "where",
-    "why",
-    "how",
-    "all",
-    "both",
-    "each",
-    "few",
-    "more",
-    "most",
-    "other",
-    "some",
-    "such",
-    "no",
-    "nor",
-    "not",
-    "only",
-    "own",
-    "same",
-    "so",
-    "than",
-    "too",
-    "very",
-    "s",
-    "t",
-    "can",
-    "will",
-    "just",
-    "don",
-    "should",
-    "now",
-    "i",
-    "me",
-    "my",
-    "we",
-    "our",
-    "you",
-    "your",
-    "he",
-    "him",
-    "his",
-    "she",
-    "her",
-    "they",
-    "them",
-    "their",
-    "it",
-    "its",
-    "this",
-    "that",
-    "these",
-    "those",
-    "am",
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "being",
-    "have",
-    "has",
-    "had",
-    "having",
-    "do",
-    "does",
-    "did",
-    "doing",
-    "would",
-    "could",
-    "should",
-    "might",
-    "may",
-    "shall",
-    "must",
-    "need",
-    "dare",
-    "used",
-    "also",
-    "as",
-    "if",
-    "what",
-    "which",
-    "who",
-    "whom",
-    "whose",
-    "while",
-    "although",
-    "because",
-    "since",
-    "unless",
-    "until",
-    "yet",
-    "even",
-    "though",
-    "however",
-    "therefore",
-    "thus",
-    "hence",
-    "otherwise",
-    "otherwise",
-}
-
-# Pattern to split into sentences (crude but fast)
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-
-# Pattern to find code fences
-_CODE_FENCE_OPEN = re.compile(r"^```", re.MULTILINE)
-_CODE_FENCE_CLOSE = re.compile(r"^```\s*$", re.MULTILINE)
-
-# Number detection (integers + decimals + $ amounts + percentages)
-_NUMBER_PATTERN = re.compile(r"\$?\d+(?:[,_]\d{3})*(?:\.\d+)?%?|\d+\.\d+")
-
-
-# ---------------------------------------------------------------------------
-# Result types
+# Data Types
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class ValidationResult:
-    passed: bool
-    score: float  # 0.0–1.0 overall
-    reason: str  # Summary of first failure (or "ok")
-    checks_run: List[str] = field(default_factory=list)
-    check_scores: dict = field(default_factory=dict)  # check_name → float
+class ShadowObservation:
+    """Single shadow observation record."""
+
+    timestamp: str  # ISO 8601
+    observation_id: str  # Unique ID for this record
+    mode: str  # "request", "response", "metric"
+
+    # Request fields (if mode == "request")
+    request_method: Optional[str] = None
+    request_path: Optional[str] = None
+    request_headers: Optional[Dict[str, str]] = None
+    request_body_size: Optional[int] = None
+    request_model: Optional[str] = None
+
+    # Response fields (if mode == "response")
+    response_status: Optional[int] = None
+    response_headers: Optional[Dict[str, str]] = None
+    response_body_size: Optional[int] = None
+    response_latency_ms: Optional[float] = None
+
+    # Metric fields (if mode == "metric")
+    metric_name: Optional[str] = None
+    metric_value: Optional[float] = None
+    metric_tags: Optional[Dict[str, str]] = field(default_factory=dict)
+
+    # Analysis fields (populated after observation)
+    compression_applicable: Optional[bool] = None
+    compression_gain_tokens: Optional[int] = None
+    estimated_cost_change: Optional[float] = None
+    safety_concern: Optional[str] = None  # "protected", "config", etc. if not applicable
 
 
 # ---------------------------------------------------------------------------
-# TF-IDF term extractor (pure Python)
+# Shadow Reader Instance
 # ---------------------------------------------------------------------------
 
 
-def top_terms(text: str, n: int = 10) -> List[str]:
-    """
-    Extract top-n TF-IDF terms from text.
+class ShadowReader:
+    """Passive request observer for Phase 3 testing."""
 
-    Tokenises on whitespace + strips punctuation. Filters stopwords.
-    Uses within-document sentence-level IDF to approximate TF-IDF.
-    """
-    # Split into sentences (docs for IDF)
-    sentences = _SENTENCE_SPLIT.split(text) if text else []
-    if not sentences:
-        return []
+    def __init__(self, shadow_log_path: Path = None):
+        self.enabled = SHADOW_MODE
+        self.log_path = shadow_log_path or SHADOW_LOG_PATH
+        self.log_requests = SHADOW_LOG_REQUESTS
+        self.log_responses = SHADOW_LOG_RESPONSES
+        self.log_metrics = SHADOW_LOG_METRICS
+        self.batch_size = SHADOW_BATCH_SIZE
 
-    # Tokenize each sentence
-    def tokenize(s: str) -> List[str]:
-        return [w.lower().strip("\"'()[]{}.,;:!?-_") for w in s.split() if len(w) >= 3]
+        # In-memory buffer (flushed periodically)
+        self._buffer: List[ShadowObservation] = []
+        self._buffer_lock = threading.Lock()
+        self._flush_thread = None
+        self._stop_flush = threading.Event()
 
-    sent_tokens = [tokenize(s) for s in sentences]
-    doc_count = len(sentences)
-
-    # Document frequency: how many sentences contain each term
-    df: dict = {}
-    for tokens in sent_tokens:
-        for tok in set(tokens):
-            if tok not in _STOPWORDS:
-                df[tok] = df.get(tok, 0) + 1
-
-    if not df:
-        return []
-
-    # Term frequency: count across whole text
-    tf: dict = {}
-    all_tokens = [t for toks in sent_tokens for t in toks if t not in _STOPWORDS]
-    total = max(len(all_tokens), 1)
-    for tok in all_tokens:
-        tf[tok] = tf.get(tok, 0) + 1
-
-    # TF-IDF score
-    scores = {}
-    for tok, freq in tf.items():
-        tf_score = freq / total
-        idf_score = math.log((doc_count + 1) / (df.get(tok, 0) + 1)) + 1
-        scores[tok] = tf_score * idf_score
-
-    # Return top-n by score
-    ranked = sorted(scores, key=lambda t: scores[t], reverse=True)
-    return ranked[:n]
-
-
-# ---------------------------------------------------------------------------
-# Individual checks
-# ---------------------------------------------------------------------------
-
-
-def _check_coverage(original: str, compressed: str) -> tuple:
-    """Return (passed, score, reason)."""
-    if not original:
-        return True, 1.0, "no original"
-    ratio = len(compressed) / len(original)
-    if ratio < MIN_COVERAGE:
-        return False, ratio / MIN_COVERAGE, f"over-compressed (ratio {ratio:.3f} < {MIN_COVERAGE})"
-    if ratio > MAX_COVERAGE:
-        return (
-            False,
-            (1 - ratio) / (1 - MAX_COVERAGE),
-            f"under-compressed (ratio {ratio:.3f} > {MAX_COVERAGE})",
-        )
-    # Score: 1.0 in the middle of the acceptable range
-    mid = (MIN_COVERAGE + MAX_COVERAGE) / 2
-    score = 1.0 - abs(ratio - mid) / (mid - MIN_COVERAGE)
-    return True, max(0.0, min(1.0, score)), "ok"
-
-
-def _check_sentence_coherence(compressed: str) -> tuple:
-    """Return (passed, score, reason)."""
-    if not compressed.strip():
-        return True, 1.0, "empty"
-    sentences = [s for s in _SENTENCE_SPLIT.split(compressed) if s.strip()]
-    if not sentences:
-        return True, 1.0, "no sentences"
-
-    lens = [len(s.split()) for s in sentences]
-    avg_len = sum(lens) / len(lens)
-    max_len = max(lens)
-
-    if max_len > MAX_SENTENCE_LEN:
-        return False, 0.2, f"sentence too long ({max_len} words > {MAX_SENTENCE_LEN})"
-    if avg_len < MIN_AVG_SENTENCE_LEN:
-        return (
-            False,
-            avg_len / MIN_AVG_SENTENCE_LEN,
-            f"avg sentence too short ({avg_len:.1f} < {MIN_AVG_SENTENCE_LEN})",
-        )
-    if avg_len > MAX_AVG_SENTENCE_LEN:
-        return (
-            False,
-            MAX_AVG_SENTENCE_LEN / avg_len,
-            f"avg sentence too long ({avg_len:.1f} > {MAX_AVG_SENTENCE_LEN})",
-        )
-
-    return True, 1.0, "ok"
-
-
-def _check_key_terms(original: str, compressed: str) -> tuple:
-    """Return (passed, score, reason)."""
-    terms = top_terms(original, n=10)
-    if not terms:
-        return True, 1.0, "no key terms"
-    comp_lower = compressed.lower()
-    found = sum(1 for t in terms if re.search(r"\b" + re.escape(t) + r"\b", comp_lower))
-    retention = found / len(terms)
-    if retention < MIN_TERM_RETENTION:
-        missing = [t for t in terms if not re.search(r"\b" + re.escape(t) + r"\b", comp_lower)]
-        return (
-            False,
-            retention,
-            f"key term retention {retention:.0%} < {MIN_TERM_RETENTION:.0%} "
-            f"(missing: {', '.join(missing[:3])})",
-        )
-    return True, retention, "ok"
-
-
-def _check_code_integrity(original: str, compressed: str) -> tuple:
-    """Check code fences are properly closed and indentation not destroyed."""
-    # Count fences: must be even (open = close)
-    open_fences = len(_CODE_FENCE_OPEN.findall(compressed))
-    if open_fences % 2 != 0:
-        return False, 0.0, f"unclosed code fence ({open_fences} ``` markers)"
-
-    # Indentation check: count lines with leading spaces in original
-    orig_indented = sum(
-        1 for l in original.splitlines() if l.startswith("    ") or l.startswith("\t")
-    )
-    comp_indented = sum(
-        1 for l in compressed.splitlines() if l.startswith("    ") or l.startswith("\t")
-    )
-    if orig_indented > 0:
-        preserved_ratio = comp_indented / orig_indented
-        if preserved_ratio < 0.3:  # Lost >70% of indentation → likely destroyed
-            return (
-                False,
-                preserved_ratio,
-                f"indentation destroyed (retained {preserved_ratio:.0%} of indented lines)",
-            )
-
-    return True, 1.0, "ok"
-
-
-def _check_numeric_preservation(original: str, compressed: str) -> tuple:
-    """Verify numbers in compressed match numbers from original exactly."""
-    orig_nums = set(_NUMBER_PATTERN.findall(original))
-    comp_nums = set(_NUMBER_PATTERN.findall(compressed))
-
-    # Numbers that appear in compressed must match their original form
-    altered = []
-    for num in comp_nums:
-        if num not in orig_nums:
-            # Check if this number appeared in original in any form
-            altered.append(num)
-
-    if altered:
-        return (
-            False,
-            0.5,
-            f"numeric alteration detected: {', '.join(altered[:3])}",
-        )
-    return True, 1.0, "ok"
-
-
-# ---------------------------------------------------------------------------
-# Main validation function
-# ---------------------------------------------------------------------------
-
-
-def validate(
-    compressed_text: str,
-    original_text: str,
-    risk_class: str,
-    checks_config: Optional[dict] = None,
-) -> ValidationResult:
-    """
-    Validate compressed text against the original.
-
-    Args:
-        compressed_text: Output of AGGRESSIVE compression.
-        original_text:   Original input text.
-        risk_class:      Block risk class (CODE, NUMERIC, LEGAL, NARRATIVE, etc.)
-        checks_config:   Optional dict to toggle individual checks.
-                         Keys: coverage, coherence, key_terms, code_integrity,
-                               numeric_preservation. Values: True/False.
-
-    Returns:
-        ValidationResult with passed, score, reason, checks_run, check_scores.
-    """
-    cfg = checks_config or {}
-    risk_upper = risk_class.upper()
-
-    all_scores: dict = {}
-    checks_run: List[str] = []
-    first_failure: str = ""
-    failed = False
-
-    def _run(name: str, check_fn, *args):
-        nonlocal failed, first_failure
-        if not cfg.get(name, True):
-            return
-        checks_run.append(name)
-        passed, score, reason = check_fn(*args)
-        all_scores[name] = score
-        if not passed and not failed:
-            failed = True
-            first_failure = f"{name}: {reason}"
-
-    # Always run
-    _run("coverage", _check_coverage, original_text, compressed_text)
-    _run("coherence", _check_sentence_coherence, compressed_text)
-    _run("key_terms", _check_key_terms, original_text, compressed_text)
-
-    # Risk-class conditional
-    if risk_upper == "CODE":
-        _run("code_integrity", _check_code_integrity, original_text, compressed_text)
-
-    if risk_upper in ("NUMERIC", "LEGAL"):
-        _run("numeric_preservation", _check_numeric_preservation, original_text, compressed_text)
-
-    # Aggregate score: average of all check scores
-    overall = sum(all_scores.values()) / max(len(all_scores), 1)
-
-    return ValidationResult(
-        passed=not failed,
-        score=round(overall, 4),
-        reason=first_failure if failed else "ok",
-        checks_run=checks_run,
-        check_scores=all_scores,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Auto-fallback + logging
-# ---------------------------------------------------------------------------
-
-
-def log_validation_result(
-    result: ValidationResult,
-    block_ref: str,
-    action: str,
-    log_path: str = DEFAULT_VALIDATION_LOG,
-) -> None:
-    """Append a validation result to the JSON log (non-destructive)."""
-    p = Path(log_path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-
-    existing: list = []
-    if p.exists():
-        try:
-            existing = json.loads(p.read_text())
-        except (json.JSONDecodeError, OSError):
-            existing = []
-
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "block_ref": block_ref,
-        "action": action,
-        "passed": result.passed,
-        "score": result.score,
-        "reason": result.reason,
-        "checks_run": result.checks_run,
-    }
-    existing.append(entry)
-    p.write_text(json.dumps(existing, indent=2))
-
-
-def apply_fallback(
-    compressed_text: str,
-    original_text: str,
-    risk_class: str,
-    block_ref: str = "unknown",
-    log_path: str = DEFAULT_VALIDATION_LOG,
-) -> tuple:
-    """
-    Validate compression. If failed, fall back to original (HYBRID behaviour).
-
-    Args:
-        compressed_text: AGGRESSIVE-mode compressed output.
-        original_text:   Original source text.
-        risk_class:      Block risk class.
-        block_ref:       Block identifier for logging.
-        log_path:        Path to validation log.
-
-    Returns:
-        (text, action) where:
-          text   = compressed_text if validation passed, else original_text
-          action = "kept" | "fallback_to_hybrid"
-    """
-    result = validate(compressed_text, original_text, risk_class)
-
-    if result.passed:
-        action = "kept"
-        text = compressed_text
-    else:
-        action = "fallback_to_hybrid"
-        text = original_text
-
-    log_validation_result(result, block_ref, action, log_path)
-    return text, action
-
-
-def get_validation_stats(log_path: str = DEFAULT_VALIDATION_LOG) -> dict:
-    """
-    Return aggregate statistics from the validation log.
-
-    Returns:
-        Dict with total_checked, passed, failed, fallback_rate,
-        avg_score, most_common_failure.
-    """
-    p = Path(log_path)
-    if not p.exists():
-        return {
-            "total_checked": 0,
-            "passed": 0,
-            "failed": 0,
-            "fallback_rate": 0.0,
-            "avg_score": 0.0,
-            "most_common_failure": None,
+        # Statistics
+        self._stats = {
+            "observations_logged": 0,
+            "bytes_written": 0,
+            "flush_count": 0,
+            "last_flush": None,
         }
-    try:
-        entries = json.loads(p.read_text())
-    except (json.JSONDecodeError, OSError):
-        entries = []
+        self._stats_lock = threading.Lock()
 
-    total = len(entries)
-    passed = sum(1 for e in entries if e.get("passed"))
-    failed = total - passed
-    avg_score = sum(e.get("score", 0) for e in entries) / max(total, 1)
+        # Ensure log directory exists
+        if self.enabled:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Shadow Reader initialized: {self.log_path}")
 
-    # Most common failure reason
-    reasons = [e.get("reason", "") for e in entries if not e.get("passed")]
-    most_common = None
-    if reasons:
-        freq: dict = {}
-        for r in reasons:
-            key = r.split(":")[0].strip()  # Check name only
-            freq[key] = freq.get(key, 0) + 1
-        most_common = max(freq, key=lambda k: freq[k])
+        # Start background flush thread
+        if self.enabled:
+            self._start_flush_thread()
 
-    return {
-        "total_checked": total,
-        "passed": passed,
-        "failed": failed,
-        "fallback_rate": round(failed / max(total, 1), 4),
-        "avg_score": round(avg_score, 4),
-        "most_common_failure": most_common,
-    }
+    def _start_flush_thread(self):
+        """Start background thread to flush observations every 5 seconds."""
+
+        def flush_loop():
+            while not self._stop_flush.is_set():
+                time.sleep(5)  # Flush every 5 sec
+                self.flush()
+
+        self._flush_thread = threading.Thread(target=flush_loop, daemon=True)
+        self._flush_thread.start()
+
+    def observe_request(
+        self,
+        method: str,
+        path: str,
+        headers: Dict[str, str],
+        body_size: int,
+        model: Optional[str] = None,
+    ) -> str:
+        """Log incoming request observation. Returns observation_id."""
+        if not self.enabled or not self.log_requests:
+            return ""
+
+        obs_id = self._gen_obs_id()
+        obs = ShadowObservation(
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            observation_id=obs_id,
+            mode="request",
+            request_method=method,
+            request_path=path,
+            request_headers=dict(headers),  # Copy to avoid mutations
+            request_body_size=body_size,
+            request_model=model,
+        )
+
+        self._add_to_buffer(obs)
+        return obs_id
+
+    def observe_response(
+        self,
+        obs_id: str,
+        status: int,
+        headers: Dict[str, str],
+        body_size: int,
+        latency_ms: float,
+    ):
+        """Log outgoing response observation."""
+        if not self.enabled or not self.log_responses:
+            return
+
+        obs = ShadowObservation(
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            observation_id=obs_id or self._gen_obs_id(),
+            mode="response",
+            response_status=status,
+            response_headers=dict(headers),
+            response_body_size=body_size,
+            response_latency_ms=latency_ms,
+        )
+
+        self._add_to_buffer(obs)
+
+    def observe_metric(
+        self,
+        metric_name: str,
+        metric_value: float,
+        tags: Optional[Dict[str, str]] = None,
+    ):
+        """Log a metric observation."""
+        if not self.enabled or not self.log_metrics:
+            return
+
+        obs = ShadowObservation(
+            timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            observation_id=self._gen_obs_id(),
+            mode="metric",
+            metric_name=metric_name,
+            metric_value=metric_value,
+            metric_tags=tags or {},
+        )
+
+        self._add_to_buffer(obs)
+
+    def mark_compression_analysis(
+        self,
+        obs_id: str,
+        applicable: bool,
+        gain_tokens: Optional[int] = None,
+        cost_change: Optional[float] = None,
+        safety_concern: Optional[str] = None,
+    ):
+        """Annotate observation with post-processing analysis."""
+        if not self.enabled:
+            return
+
+        with self._buffer_lock:
+            for obs in self._buffer:
+                if obs.observation_id == obs_id:
+                    obs.compression_applicable = applicable
+                    obs.compression_gain_tokens = gain_tokens
+                    obs.estimated_cost_change = cost_change
+                    obs.safety_concern = safety_concern
+                    break
+
+    def _add_to_buffer(self, obs: ShadowObservation):
+        """Add observation to buffer. Flush if batch size reached."""
+        with self._buffer_lock:
+            self._buffer.append(obs)
+            if len(self._buffer) >= self.batch_size:
+                self._flush_locked()
+
+    def _flush_locked(self):
+        """Flush buffer to disk. MUST be called with _buffer_lock held."""
+        if not self._buffer:
+            return
+
+        try:
+            buffer_copy = self._buffer[:]
+            self._buffer.clear()
+
+            # Write in background to avoid blocking
+            threading.Thread(
+                target=self._write_observations,
+                args=(buffer_copy,),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.error(f"Shadow flush error: {e}")
+
+    def flush(self):
+        """Explicit flush (thread-safe)."""
+        with self._buffer_lock:
+            self._flush_locked()
+
+    def _write_observations(self, observations: List[ShadowObservation]):
+        """Write observations to JSONL file (non-blocking)."""
+        try:
+            with open(self.log_path, "a") as f:
+                for obs in observations:
+                    line = json.dumps(asdict(obs))
+                    f.write(line + "\n")
+
+                    with self._stats_lock:
+                        self._stats["observations_logged"] += 1
+                        self._stats["bytes_written"] += len(line) + 1
+
+            with self._stats_lock:
+                self._stats["flush_count"] += 1
+                self._stats["last_flush"] = (
+                    datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                )
+        except Exception as e:
+            logger.error(f"Shadow write error: {e}")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Return shadow reader statistics."""
+        with self._stats_lock:
+            return dict(self._stats)
+
+    def stop(self):
+        """Stop the flush thread cleanly."""
+        if self.enabled and self._flush_thread:
+            self.flush()  # Final flush
+            self._stop_flush.set()
+            self._flush_thread.join(timeout=2)
+
+    @staticmethod
+    def _gen_obs_id() -> str:
+        """Generate unique observation ID."""
+        import uuid
+
+        return str(uuid.uuid4())[:8]
+
+
+# ---------------------------------------------------------------------------
+# Singleton Instance
+# ---------------------------------------------------------------------------
+
+_shadow_reader: Optional[ShadowReader] = None
+
+
+def get_shadow_reader() -> ShadowReader:
+    """Get or create the shadow reader singleton."""
+    global _shadow_reader
+    if _shadow_reader is None:
+        _shadow_reader = ShadowReader()
+    return _shadow_reader
+
+
+def is_shadow_mode_enabled() -> bool:
+    """Check if shadow mode is enabled."""
+    return SHADOW_MODE
+
+
+# ---------------------------------------------------------------------------
+# Example Usage
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # Enable shadow mode for demo
+    os.environ["TOKENPAK_SHADOW_MODE"] = "true"
+
+    reader = get_shadow_reader()
+
+    # Simulate a request
+    obs_id = reader.observe_request(
+        method="POST",
+        path="/v1/messages",
+        headers={"content-type": "application/json", "authorization": "Bearer xxx"},
+        body_size=1024,
+        model="claude-3-opus",
+    )
+    print(f"Logged request observation: {obs_id}")
+
+    # Simulate response
+    reader.observe_response(
+        obs_id=obs_id,
+        status=200,
+        headers={"content-type": "application/json"},
+        body_size=512,
+        latency_ms=250.5,
+    )
+    print(f"Logged response for {obs_id}")
+
+    # Simulate metric
+    reader.observe_metric(
+        "compression.savings",
+        42.5,
+        tags={"model": "claude-3-opus", "category": "code"},
+    )
+
+    # Mark analysis
+    reader.mark_compression_analysis(
+        obs_id=obs_id,
+        applicable=True,
+        gain_tokens=128,
+        cost_change=-0.012,
+    )
+
+    # Flush and show stats
+    reader.flush()
+    time.sleep(1)
+    print(f"\nStats: {json.dumps(reader.get_stats(), indent=2)}")
+
+    # Read a few lines from the log
+    if reader.log_path.exists():
+        print(f"\nFirst 3 observations from {reader.log_path}:")
+        with open(reader.log_path) as f:
+            for i, line in enumerate(f):
+                if i >= 3:
+                    break
+                record = json.loads(line)
+                print(
+                    f"  [{i+1}] {record['mode']:8} id={record['observation_id']} ts={record['timestamp']}"
+                )

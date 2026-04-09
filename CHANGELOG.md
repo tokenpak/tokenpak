@@ -108,7 +108,51 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.x] - Legacy
-- Pre-1.0 development and experimental iterations.
-- No stability guarantees.
-- Historical changes retained in git history and prior release artifacts.
+## [0.9.0] - 2026-02-20
+
+### Added
+- Provider-agnostic routing foundation with Anthropic and OpenAI adapter support.
+- Vault index: semantic retrieval of compressed context blocks from local markdown vaults.
+- Compression pipeline: salience-based extraction, dedup, and token budgeting.
+- Telemetry server with SQLite-backed usage tracking.
+- Docker image with multi-stage build and non-root runtime.
+
+### Changed
+- Migrated from single-file proxy to modular `tokenpak/` package structure.
+
+### Fixed
+- Streaming SSE passthrough race condition under concurrent requests.
+
+---
+
+## [0.5.0] - 2026-01-28
+
+### Added
+- Initial compression pipeline: document and code salience extractors.
+- Vault block indexing with FAISS-backed retrieval (replaced with SQLite in v0.9).
+- Basic CLI: `tokenpak serve`, `tokenpak status`, `tokenpak doctor`.
+- WebSocket proxy endpoint (`/ws`) for real-time streaming clients.
+- Benchmark suite for proxy passthrough, vault lookup, and routing decisions.
+
+### Changed
+- Moved from monolithic `proxy.py` to layered architecture (router → adapter → backend).
+
+---
+
+## [0.3.0] - 2026-01-10
+
+### Added
+- Core HTTPS proxy with pass-through to Anthropic Messages API.
+- Token counting and budget enforcement hooks.
+- Request/response logging with configurable verbosity.
+- Initial recipe system for reusable compression configurations.
+
+---
+
+## [0.1.0] - 2025-12-20
+
+### Added
+- Initial prototype: HTTPS proxy rewriting requests to Anthropic Claude API.
+- Proof-of-concept context compression reducing prompt tokens by ~30%.
+- Basic configuration via YAML file.
+- Single-file `proxy.py` implementation.

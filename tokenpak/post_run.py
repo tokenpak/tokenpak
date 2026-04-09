@@ -202,7 +202,9 @@ class PostRunProcessor:
         boosted = set(existing.get("boost_files") or [])
         boosted.update(files)
         data = {"boost_files": sorted(boosted), "updated_at": int(time.time())}
-        self.retrieval_rules_path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        self.retrieval_rules_path.write_text(
+            json.dumps(data, indent=2, sort_keys=True), encoding="utf-8"
+        )
         return sorted(files)
 
     @staticmethod

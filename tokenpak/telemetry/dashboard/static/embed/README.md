@@ -1,3 +1,7 @@
+---
+title: "README"
+created: 2026-03-24T19:05:55Z
+---
 # TokenPak Dashboard — Web Component Embed
 
 ## Quick Start
@@ -9,7 +13,7 @@
   <script src="/dashboard/static/embed/tokenpak-dashboard.js"></script>
 </head>
 <body>
-  <tokenpak-dashboard 
+  <tokenpak-dashboard
     data-source="http://localhost:17888"
     view="finops"
     date-range="7d">
@@ -66,10 +70,10 @@ tokenpak-dashboard {
 ## iframe Fallback
 
 ```html
-<iframe 
+<iframe
   src="http://localhost:17888/dashboard/finops?embed=1&days=7"
-  width="100%" 
-  height="600px" 
+  width="100%"
+  height="600px"
   frameborder="0">
 </iframe>
 ```

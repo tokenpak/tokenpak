@@ -6,7 +6,7 @@ Supports JSON (structured) and text output, with async file writing,
 stdout, and syslog destinations.  Designed for zero-blocking overhead:
 all I/O is dispatched to a background queue.
 
-Configuration (via ~/.tokenpak/config.json under key "logging"):
+Configuration (via ~/.tokenpak/config.yaml under key "logging"):
     enabled              bool   default True
     level                str    "debug" | "info" | "warn"  (default "info")
     destination          str    "file" | "stdout" | "syslog"  (default "file")
@@ -20,6 +20,7 @@ Env var overrides (all optional):
     TOKENPAK_LOG_DESTINATION    "file" / "stdout" / "syslog"
     TOKENPAK_LOG_RETENTION_DAYS integer
 """
+
 from __future__ import annotations
 
 import json
@@ -56,43 +57,26 @@ _LEVEL_ORDER = {LEVEL_DEBUG: 0, LEVEL_INFO: 1, LEVEL_WARN: 2}
 # Config helpers
 # ---------------------------------------------------------------------------
 
+
 def _load_logging_config() -> Dict[str, Any]:
-    """Return the merged logging config (env vars override config.json)."""
+    """Return the merged logging config (env vars override config.yaml)."""
+    from tokenpak.config_loader import get
+    
     defaults: Dict[str, Any] = {
-        "enabled": True,
-        "level": LEVEL_INFO,
-        "destination": "file",
-        "retention_days": 30,
-        "include_request_body": False,
-        "include_response_body": False,
+        "enabled": get("logging.enabled", True, "TOKENPAK_LOG_ENABLED", bool),
+        "level": get("logging.level", LEVEL_INFO, "TOKENPAK_LOG_LEVEL", str).lower(),
+        "destination": get("logging.destination", "file", "TOKENPAK_LOG_DESTINATION", str).lower(),
+        "retention_days": get("logging.retention_days", 30, "TOKENPAK_LOG_RETENTION_DAYS", int),
+        "include_request_body": get("logging.include_request_body", False, "TOKENPAK_LOG_REQUEST_BODY", bool),
+        "include_response_body": get("logging.include_response_body", False, "TOKENPAK_LOG_RESPONSE_BODY", bool),
     }
-    # Try to load from ~/.tokenpak/config.json
-    cfg_path = Path(os.path.expanduser("~/.tokenpak/config.json"))
-    if cfg_path.exists():
-        try:
-            raw = json.loads(cfg_path.read_text())
-            file_cfg = raw.get("logging", {})
-            defaults.update(file_cfg)
-        except Exception:
-            pass
-    # Env var overrides
-    if os.environ.get("TOKENPAK_LOG_ENABLED") is not None:
-        defaults["enabled"] = os.environ["TOKENPAK_LOG_ENABLED"] not in ("0", "false", "False")
-    if os.environ.get("TOKENPAK_LOG_LEVEL"):
-        defaults["level"] = os.environ["TOKENPAK_LOG_LEVEL"].lower()
-    if os.environ.get("TOKENPAK_LOG_DESTINATION"):
-        defaults["destination"] = os.environ["TOKENPAK_LOG_DESTINATION"].lower()
-    if os.environ.get("TOKENPAK_LOG_RETENTION_DAYS"):
-        try:
-            defaults["retention_days"] = int(os.environ["TOKENPAK_LOG_RETENTION_DAYS"])
-        except ValueError:
-            pass
     return defaults
 
 
 # ---------------------------------------------------------------------------
 # Log record
 # ---------------------------------------------------------------------------
+
 
 class RequestLogRecord:
     """Immutable snapshot of a single proxied request/response cycle."""
@@ -191,6 +175,7 @@ class RequestLogRecord:
 # Writer implementations
 # ---------------------------------------------------------------------------
 
+
 class _FileWriter:
     """Thread-safe daily-rotating file writer."""
 
@@ -227,6 +212,7 @@ class _FileWriter:
         """Delete log files older than retention_days."""
         try:
             import time as _time
+
             cutoff = _time.time() - self._retention_days * 86400
             for p in self._log_dir.glob("proxy-*.log"):
                 if p.stat().st_mtime < cutoff:
@@ -258,6 +244,7 @@ class _SyslogWriter:
     def __init__(self) -> None:
         try:
             import syslog as _syslog
+
             _syslog.openlog("tokenpak-proxy", _syslog.LOG_PID)
             self._syslog = _syslog
             self._available = True
@@ -283,6 +270,7 @@ class _SyslogWriter:
 # ---------------------------------------------------------------------------
 # RequestLogger
 # ---------------------------------------------------------------------------
+
 
 class RequestLogger:
     """
@@ -425,18 +413,21 @@ class RequestLogger:
             request_id=kwargs.pop("request_id", str(uuid.uuid4())),
             timestamp=datetime.now(timezone.utc).isoformat(),
             level=level,
-            **{k: kwargs.pop(k, v) for k, v in [
-                ("client_ip", ""),
-                ("method", ""),
-                ("endpoint", ""),
-                ("request_body_size", 0),
-                ("response_status", 0),
-                ("response_body_size", 0),
-                ("compression_ratio", None),
-                ("latency_ms", 0.0),
-                ("model", ""),
-                ("provider", ""),
-            ]},
+            **{
+                k: kwargs.pop(k, v)
+                for k, v in [
+                    ("client_ip", ""),
+                    ("method", ""),
+                    ("endpoint", ""),
+                    ("request_body_size", 0),
+                    ("response_status", 0),
+                    ("response_body_size", 0),
+                    ("compression_ratio", None),
+                    ("latency_ms", 0.0),
+                    ("model", ""),
+                    ("provider", ""),
+                ]
+            },
             extra=kwargs,
         )
         self.log(record)
@@ -472,6 +463,7 @@ class RequestLogger:
 # ---------------------------------------------------------------------------
 # Module-level convenience: log request-end event
 # ---------------------------------------------------------------------------
+
 
 def log_request(
     *,

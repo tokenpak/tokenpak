@@ -1,0 +1,12 @@
+name: cfg-json-whitespace-normalization
+category: config
+description: Compact JSON by removing unnecessary whitespace (minify).
+pattern:
+  match: extension
+  extensions:
+  - .json
+action:
+  operations:
+  - type: json_minify
+    indent: null
+  compression_hint: 0.2

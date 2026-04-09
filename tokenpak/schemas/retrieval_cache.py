@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -36,10 +36,10 @@ class RetrievalCacheSchema:
     ttl_minutes: int = 20
     """Time-to-live in minutes."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """When cache entry was created."""
 
-    last_used_at: datetime = field(default_factory=datetime.utcnow)
+    last_used_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     """Last time cache was accessed."""
 
     use_count: int = 0
@@ -50,13 +50,13 @@ class RetrievalCacheSchema:
 
     def is_expired(self) -> bool:
         """Check if cache entry has expired."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         ttl_delta = timedelta(minutes=self.ttl_minutes)
         return (now - self.created_at) > ttl_delta
 
     def touch(self) -> None:
         """Update last_used_at and increment use_count."""
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc)
         self.use_count += 1
 
     def to_dict(self) -> Dict[str, Any]:

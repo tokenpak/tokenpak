@@ -331,12 +331,17 @@ class DoctorDiskSpaceTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
-        # Create a large file (simulated)
-        large_file = config_dir / "large.bin"
-        large_file.write_text("x" * (600 * 1024 * 1024))  # 600MB
-        
-        with patch('pathlib.Path.home', return_value=self.temp_path):
+
+        # Mock a large file stat rather than writing 600MB to disk (which causes test hangs)
+        fake_stat = MagicMock()
+        fake_stat.st_size = 600 * 1024 * 1024  # 600MB
+
+        fake_file = MagicMock()
+        fake_file.is_file.return_value = True
+        fake_file.stat.return_value = fake_stat
+
+        with patch('pathlib.Path.home', return_value=self.temp_path), \
+             patch.object(type(config_dir), 'rglob', return_value=[fake_file]):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)

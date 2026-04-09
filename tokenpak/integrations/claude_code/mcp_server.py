@@ -375,7 +375,7 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
     if not query:
         return {"status": "error", "error": "query is required and must be non-empty"}
 
-    from tokenpak.vault.search import extract_must_hit_terms  # lazy
+    from tokenpak.agent.vault.search import extract_must_hit_terms  # lazy
     from tokenpak.retrieval.vault_index import VaultIndex  # lazy
 
     tokenpak_dir = os.path.join(vault_root, ".tokenpak")
@@ -681,19 +681,31 @@ def _run_server() -> None:
 
 def _self_test() -> None:
     """
-    Smoke-test all five tools without a real vault.
+    Smoke-test all five tools.
 
-    Tests:
+    Behaviour depends on TOKENPAK_VAULT_ROOT:
+    - Unset / empty → no-corpus path: every vault tool must return status=no-corpus.
+    - Non-empty     → normal path: vault tools must NOT return status=no-corpus
+                      (they may return no-index if the dir lacks an index, which is fine).
+
+    Tests always run:
     - tools/list → 5 tools
-    - All tools return no-corpus when vault_root is unset/empty
     - extract_structured_fields works without vault_root
+    - lazy import check
     """
     import os as _os
 
-    # Force no-corpus mode
-    _os.environ["TOKENPAK_VAULT_ROOT"] = ""
+    external_vault = _os.environ.get("TOKENPAK_VAULT_ROOT", "").strip()
+    no_corpus_mode = not external_vault
+
+    if no_corpus_mode:
+        _os.environ["TOKENPAK_VAULT_ROOT"] = ""
 
     print("=== tokenpak mcp_server self-test ===", file=sys.stderr)
+    print(
+        f"  mode: {'no-corpus (vault_root unset)' if no_corpus_mode else f'normal (vault_root={external_vault})'}",
+        file=sys.stderr,
+    )
 
     # 1. tools/list
     resp = json.loads(_dispatch({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}))
@@ -709,7 +721,7 @@ def _self_test() -> None:
     ], f"Unexpected tool names: {names}"
     print(f"  [OK] tools/list → {len(tools)} tools: {names}", file=sys.stderr)
 
-    # 2. no-corpus for vault-dependent tools
+    # 2. vault-dependent tools
     vault_tools = [
         "search_corpus",
         "summarize_related_issues",
@@ -730,11 +742,20 @@ def _self_test() -> None:
         )
         content_text = resp["result"]["content"][0]["text"]
         result = json.loads(content_text)
-        assert result.get("status") == "no-corpus", (
-            f"{tool_name}: expected no-corpus, got {result}"
-        )
-        no_corpus_count += 1
-    print(f"  [OK] no-corpus response from {no_corpus_count} vault tools", file=sys.stderr)
+        status = result.get("status")
+        if no_corpus_mode:
+            assert status == "no-corpus", (
+                f"{tool_name}: expected no-corpus, got {result}"
+            )
+            no_corpus_count += 1
+            print(f"  [OK] {tool_name}: status=no-corpus", file=sys.stderr)
+        else:
+            assert status != "no-corpus", (
+                f"{tool_name}: unexpected no-corpus with vault_root={external_vault}"
+            )
+            print(f"  [OK] {tool_name}: status={status} (not no-corpus)", file=sys.stderr)
+    if no_corpus_mode:
+        print(f"  [OK] no-corpus response from {no_corpus_count} vault tools", file=sys.stderr)
 
     # 3. extract_structured_fields works without vault
     sample = "Decided: use BM25 for retrieval. Deadline: 2026-04-15. GET /api/v1/search"
@@ -764,7 +785,8 @@ def _self_test() -> None:
     print("  [OK] lazy imports: compaction.policy not forced at module load", file=sys.stderr)
 
     print("=== self-test PASSED ===", file=sys.stderr)
-    _os.environ.pop("TOKENPAK_VAULT_ROOT", None)
+    if no_corpus_mode:
+        _os.environ.pop("TOKENPAK_VAULT_ROOT", None)
 
 
 # ---------------------------------------------------------------------------

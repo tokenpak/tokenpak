@@ -26,6 +26,7 @@ from typing import Dict, Set, Optional
 
 class LicenseTier(str, Enum):
     """Licensing tier levels."""
+
     OSS = "oss"
     PRO = "pro"
     TEAM = "team"
@@ -49,7 +50,6 @@ FEATURE_TIER_MAP: Dict[str, LicenseTier] = {
     # "request_parsing": LicenseTier.OSS,
     # "response_formatting": LicenseTier.OSS,
     # ... 36 more OSS features not gated
-
     # ─────────────────────────────────────────────────────────────────
     # PRO Features (30 features + inherits from OSS)
     # ─────────────────────────────────────────────────────────────────
@@ -84,7 +84,6 @@ FEATURE_TIER_MAP: Dict[str, LicenseTier] = {
     "compression_cache": LicenseTier.PRO,  # Compression result caching
     "model_telemetry": LicenseTier.PRO,  # Per-model usage tracking
     "performance_metrics": LicenseTier.PRO,  # Response time + latency metrics
-
     # ─────────────────────────────────────────────────────────────────
     # TEAM Features (8+ features + inherits from Pro + OSS)
     # ─────────────────────────────────────────────────────────────────
@@ -96,7 +95,6 @@ FEATURE_TIER_MAP: Dict[str, LicenseTier] = {
     "api_tokens": LicenseTier.TEAM,  # API token management for team
     "usage_attribution": LicenseTier.TEAM,  # Track usage per user
     "team_audit_log": LicenseTier.TEAM,  # Basic team audit trail
-
     # ─────────────────────────────────────────────────────────────────
     # ENTERPRISE Features (12+ features + inherits from Team + Pro + OSS)
     # ─────────────────────────────────────────────────────────────────
@@ -121,43 +119,63 @@ FEATURE_TIER_MAP: Dict[str, LicenseTier] = {
 TIER_FEATURE_SETS: Dict[LicenseTier, Set[str]] = {
     LicenseTier.OSS: {
         # 42 base features (not gated, always available)
-        "compression_basic", "model_routing_local", "cli", "proxy_server",
-        "request_parsing", "response_formatting", "gzip_support", "json_parsing",
-        "error_handling", "rate_limiting_basic", "connection_pooling_basic",
-        "timeout_handling", "retry_logic", "health_checks", "metrics_basic",
-        "logging_basic", "config_loading", "env_override", "file_validation",
-        "schema_validation", "version_check", "dependency_resolution",
-        "vendor_classification", "model_detection", "api_dispatch",
-        "request_id_tracking", "request_deduplication", "caching_basic",
-        "memory_pooling", "buffer_management", "stdio_capture", "profiling_basic",
-        "documentation_generation", "schema_documentation", "api_documentation",
-        "test_fixtures", "benchmark_framework", "monitoring_basic", "alerts_basic",
-        "version_management", "changelog_tracking",
+        "compression_basic",
+        "model_routing_local",
+        "cli",
+        "proxy_server",
+        "request_parsing",
+        "response_formatting",
+        "gzip_support",
+        "json_parsing",
+        "error_handling",
+        "rate_limiting_basic",
+        "connection_pooling_basic",
+        "timeout_handling",
+        "retry_logic",
+        "health_checks",
+        "metrics_basic",
+        "logging_basic",
+        "config_loading",
+        "env_override",
+        "file_validation",
+        "schema_validation",
+        "version_check",
+        "dependency_resolution",
+        "vendor_classification",
+        "model_detection",
+        "api_dispatch",
+        "request_id_tracking",
+        "request_deduplication",
+        "caching_basic",
+        "memory_pooling",
+        "buffer_management",
+        "stdio_capture",
+        "profiling_basic",
+        "documentation_generation",
+        "schema_documentation",
+        "api_documentation",
+        "test_fixtures",
+        "benchmark_framework",
+        "monitoring_basic",
+        "alerts_basic",
+        "version_management",
+        "changelog_tracking",
     },
 }
 
 # Pro inherits OSS + adds Pro features
 _pro_features = TIER_FEATURE_SETS[LicenseTier.OSS].copy()
-_pro_features.update({
-    k for k, v in FEATURE_TIER_MAP.items()
-    if v == LicenseTier.PRO
-})
+_pro_features.update({k for k, v in FEATURE_TIER_MAP.items() if v == LicenseTier.PRO})
 TIER_FEATURE_SETS[LicenseTier.PRO] = _pro_features
 
 # Team inherits Pro + adds Team features
 _team_features = TIER_FEATURE_SETS[LicenseTier.PRO].copy()
-_team_features.update({
-    k for k, v in FEATURE_TIER_MAP.items()
-    if v == LicenseTier.TEAM
-})
+_team_features.update({k for k, v in FEATURE_TIER_MAP.items() if v == LicenseTier.TEAM})
 TIER_FEATURE_SETS[LicenseTier.TEAM] = _team_features
 
 # Enterprise inherits Team + adds Enterprise features
 _enterprise_features = TIER_FEATURE_SETS[LicenseTier.TEAM].copy()
-_enterprise_features.update({
-    k for k, v in FEATURE_TIER_MAP.items()
-    if v == LicenseTier.ENTERPRISE
-})
+_enterprise_features.update({k for k, v in FEATURE_TIER_MAP.items() if v == LicenseTier.ENTERPRISE})
 TIER_FEATURE_SETS[LicenseTier.ENTERPRISE] = _enterprise_features
 
 # ─────────────────────────────────────────────────────────────────────
@@ -204,12 +222,10 @@ def is_feature_active(feature_id: str, active_features: Set[str]) -> bool:
 # Metadata
 # ─────────────────────────────────────────────────────────────────────
 
+
 def get_feature_count_by_tier() -> Dict[str, int]:
     """Return the number of features available in each tier."""
-    return {
-        tier.value: len(TIER_FEATURE_SETS[tier])
-        for tier in LicenseTier
-    }
+    return {tier.value: len(TIER_FEATURE_SETS[tier]) for tier in LicenseTier}
 
 
 def describe_tier(tier: LicenseTier) -> str:

@@ -34,6 +34,11 @@ class Action(Enum):
 
     @property
     def icon(self) -> str:
+        """Return emoji icon representing this action.
+        
+        Returns:
+            str: One of ✅ (kept), 📦 (compacted), ❌ (removed), ✂️ (truncated)
+        """
         return {
             Action.KEPT: "✅",
             Action.COMPACTED: "📦",
@@ -43,6 +48,11 @@ class Action(Enum):
 
     @property
     def label(self) -> str:
+        """Return label text representing this action.
+        
+        Returns:
+            str: One of 'KEPT', 'COMPACTED', 'REMOVED', 'TRUNCATED'
+        """
         return {
             Action.KEPT: "KEPT",
             Action.COMPACTED: "COMPACTED",
@@ -72,9 +82,19 @@ class Decision:
 
     @property
     def tokens_saved(self) -> int:
+        """Calculate tokens saved by this decision.
+        
+        Returns:
+            int: Max of 0 or (tokens_before - tokens_after)
+        """
         return max(0, self.tokens_before - self.tokens_after)
 
     def to_dict(self) -> Dict[str, Any]:
+        """Convert decision to dictionary for serialization.
+        
+        Returns:
+            dict: Serializable representation with action enum converted to string value
+        """
         d: dict = {
             "block_id": self.block_id,
             "block_type": self.block_type,
@@ -118,16 +138,31 @@ class CompileReport:
 
     @property
     def tokens_saved(self) -> int:
+        """Calculate total tokens saved in this compilation.
+        
+        Returns:
+            int: Max of 0 or (input_tokens - output_tokens)
+        """
         return max(0, self.input_tokens - self.output_tokens)
 
     @property
     def savings_percent(self) -> float:
+        """Calculate percentage of tokens saved.
+        
+        Returns:
+            float: Percentage rounded to 1 decimal place
+        """
         if self.input_tokens == 0:
             return 0.0
         return round((self.tokens_saved / self.input_tokens) * 100, 1)
 
     @property
     def budget_used_percent(self) -> float:
+        """Calculate percentage of allocated budget used.
+        
+        Returns:
+            float: Percentage rounded to 1 decimal place
+        """
         if self.budget == 0:
             return 0.0
         return round((self.output_tokens / self.budget) * 100, 1)

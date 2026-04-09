@@ -15,7 +15,7 @@
 </head>
 <body>
 <div class="dashboard-shell">
-  
+
   <!-- Zone 1: Top Navigation Bar -->
   <nav class="nav-bar">
     <div class="nav-left">
@@ -104,7 +104,7 @@
 function refreshTelemetry(btn) {
   btn.disabled = true;
   btn.textContent = '⏳ Refreshing...';
-  
+
   fetch('/v1/telemetry/refresh', {method:'POST'})
     .then(r => r.json())
     .then(data => {

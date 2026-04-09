@@ -170,7 +170,7 @@ def run_retain(
     """Dispatch retain subcommand."""
     # Tier gate
     try:
-        from tokenpak.agent.license.activation import is_pro
+        from tokenpak.infrastructure.license_activation import is_pro
         if not is_pro():
             print("⛔ /tokenpak retain requires a Pro or higher license.")
             print("   Upgrade at: https://tokenpak.dev/pro")

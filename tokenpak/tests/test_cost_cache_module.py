@@ -19,6 +19,7 @@ import pytest
 # COST MODULE TESTS (50 tests)
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TestTokenCounting:
     """Test token counting accuracy."""
 
@@ -317,6 +318,7 @@ class TestCostReporting:
 # CACHE MODULE TESTS (50 tests)
 # ─────────────────────────────────────────────────────────────────────────
 
+
 class TestCacheOperations:
     """Test basic cache operations."""
 
@@ -518,6 +520,7 @@ class TestCachePoisoning:
         cached = "not valid json"
         try:
             import json
+
             json.loads(cached)
         except json.JSONDecodeError:
             poisoned = True
@@ -532,6 +535,7 @@ class TestCachePoisoning:
     def test_poison_detection_future_timestamp(self):
         """Detect future timestamps."""
         import time
+
         now = time.time()
         entry_time = now + 1000  # Future
         assert entry_time > now

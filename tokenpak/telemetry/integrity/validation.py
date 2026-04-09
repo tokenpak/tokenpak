@@ -5,7 +5,7 @@ Validation layer, reconciliation system, and anomaly detection.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 
@@ -158,7 +158,7 @@ class EventValidator:
             )
             return False
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if timestamp.tzinfo is not None:
             timestamp = timestamp.replace(tzinfo=None)
 

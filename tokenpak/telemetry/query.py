@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from tokenpak.telemetry.query_models import CostSummary, DailyTrend, ModelUsage, SavingsReport
+from tokenpak.telemetry.query_models import CostSummary, DailyTrend, ModelCompressionBreakdown, ModelUsage, SavingsReport
 
 
 @dataclass
@@ -178,29 +178,42 @@ def get_model_usage(db_path=None, days=30) -> list[ModelUsage]:
 
 def get_savings_report(db_path=None, days=30) -> SavingsReport:
     """Query token savings (raw vs compressed) from the telemetry DB."""
+    import sqlite3
     conn = _get_conn(db_path)
     try:
         s, e = _ts_range(days)
         cur = conn.cursor()
-        cur.execute(
-            "SELECT COALESCE(SUM(c.actual_cost),0) as tc, COALESCE(SUM(c.baseline_cost),0) as bc, COALESCE(SUM(c.savings_total),0) as sv FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
-            (s, e),
-        )
-        r = cur.fetchone()
-        tc, bc, sv = r["tc"] or 0, r["bc"] or 0, r["sv"] or 0
-        cur.execute(
-            "SELECT COALESCE(SUM(u.cache_read),0) as cr, COALESCE(SUM(u.input_billed+u.cache_read),0) as ti FROM tp_usage u JOIN tp_events e ON u.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
-            (s, e),
-        )
-        cr = cur.fetchone()
-        cache_read, total_in = cr["cr"] or 0, cr["ti"] or 0
-        return SavingsReport(
-            total_cost=tc,
-            estimated_without_compression=bc,
-            savings_amount=sv,
-            savings_pct=(sv / bc * 100 if bc else 0),
-            cache_hit_rate=(cache_read / total_in if total_in else 0),
-        )
+        try:
+            cur.execute(
+                "SELECT COALESCE(SUM(c.actual_cost),0) as tc, COALESCE(SUM(c.baseline_cost),0) as bc, COALESCE(SUM(c.savings_total),0) as sv FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
+                (s, e),
+            )
+            r = cur.fetchone()
+            tc, bc, sv = r["tc"] or 0, r["bc"] or 0, r["sv"] or 0
+            cur.execute(
+                "SELECT COALESCE(SUM(u.cache_read),0) as cr, COALESCE(SUM(u.input_billed+u.cache_read),0) as ti FROM tp_usage u JOIN tp_events e ON u.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
+                (s, e),
+            )
+            cr = cur.fetchone()
+            cache_read, total_in = cr["cr"] or 0, cr["ti"] or 0
+            return SavingsReport(
+                total_cost=tc,
+                estimated_without_compression=bc,
+                savings_amount=sv,
+                savings_pct=(sv / bc * 100 if bc else 0),
+                cache_hit_rate=(cache_read / total_in if total_in else 0),
+            )
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e):
+                # Empty database — return zeroed report
+                return SavingsReport(
+                    total_cost=0.0,
+                    estimated_without_compression=0.0,
+                    savings_amount=0.0,
+                    savings_pct=0.0,
+                    cache_hit_rate=0.0,
+                )
+            raise  # re-raise unexpected SQLite errors
     finally:
         conn.close()
 
@@ -231,6 +244,76 @@ def get_recent_events(db_path=None, limit=50) -> list[dict]:
             }
             for r in cur.fetchall()
         ]
+    finally:
+        conn.close()
+
+
+def get_model_compression_breakdown(db_path=None, days=1) -> list[ModelCompressionBreakdown]:
+    """Query per-model compression ratio breakdown from the telemetry DB.
+
+    Joins tp_events with tp_costs and tp_usage to compute per-model compression
+    stats. Falls back gracefully when tables are absent or data is sparse.
+
+    Args:
+        db_path: Optional path to the SQLite DB (uses default if None).
+        days: Number of days to look back (default 1 for daily report).
+
+    Returns:
+        List of ModelCompressionBreakdown sorted by tokens_saved descending.
+        Returns empty list if no data or DB is unavailable.
+    """
+    conn = _get_conn(db_path)
+    try:
+        s, e = _ts_range(days)
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                SELECT
+                    e.model,
+                    COUNT(*) AS req_count,
+                    COALESCE(AVG(c.baseline_input_tokens), 0) AS avg_raw,
+                    COALESCE(AVG(u.input_billed), 0) AS avg_final,
+                    COALESCE(SUM(c.savings_total), 0) AS savings,
+                    COALESCE(SUM(c.baseline_input_tokens - u.input_billed), 0) AS tokens_saved
+                FROM tp_events e
+                LEFT JOIN tp_costs c ON e.trace_id = c.trace_id
+                LEFT JOIN tp_usage u ON e.trace_id = u.trace_id
+                WHERE e.ts >= ? AND e.ts <= ?
+                  AND e.event_type = 'request_end'
+                  AND (e.model IS NOT NULL AND e.model != '')
+                GROUP BY e.model
+                ORDER BY tokens_saved DESC
+                """,
+                (s, e),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc):
+                return []
+            raise
+
+        results = []
+        for r in rows:
+            avg_raw = r["avg_raw"] or 0.0
+            avg_final = r["avg_final"] or 0.0
+            # Compression ratio: final / raw (< 1.0 means compressed; 0 if no data)
+            if avg_raw > 0:
+                ratio = avg_final / avg_raw
+            else:
+                ratio = 1.0  # no compression data → treat as no compression
+            results.append(
+                ModelCompressionBreakdown(
+                    model=r["model"] or "unknown",
+                    request_count=r["req_count"],
+                    avg_compression_ratio=round(ratio, 4),
+                    tokens_saved=max(int(r["tokens_saved"]), 0),
+                    avg_raw_tokens=round(avg_raw, 1),
+                    avg_final_tokens=round(avg_final, 1),
+                    savings_amount=round(r["savings"] or 0.0, 6),
+                )
+            )
+        return results
     finally:
         conn.close()
 

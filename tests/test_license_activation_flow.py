@@ -36,14 +36,14 @@ from tokenpak.agent.license.keys import (
     format_license_key,
     LicensePayload,
 )
-from tokenpak.agent.license.validator import (
+from tokenpak.infrastructure.license_validation import (
     LicenseValidator,
     LicenseTier,
     LicenseStatus,
     GRACE_PERIOD_DAYS,
 )
-from tokenpak.agent.license import activation
-from tokenpak.agent.license.activation import (
+import tokenpak.infrastructure.license_activation as activation
+from tokenpak.infrastructure.license_activation import (
     activate,
     deactivate,
     get_plan,

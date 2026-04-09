@@ -201,8 +201,8 @@ def _empty_diff(trace_id: str = "none") -> ContextDiff:
 
 def _get_recent_trace(since: Optional[str] = None) -> Optional[dict]:
     """Load recent trace from vault or storage. Returns None if not found."""
-    # TODO: Implement actual trace retrieval from tp_events or vault
-    # For now, this is a stub that returns None (simulating no trace data)
+    # NOTE: Stub implementation — returns None (simulating no trace data).
+    # Full retrieval from tp_events or vault is deferred to a future iteration.
     return None
 
 
@@ -288,7 +288,7 @@ def print_diff_json(diff: ContextDiff) -> None:
 
 def run_diff_cmd(args) -> None:
     """Main dispatcher for 'tokenpak diff' subcommand."""
-    from tokenpak.agent.license.activation import is_pro
+    from tokenpak.infrastructure.license_activation import is_pro
 
     if not is_pro():
         print("⚠ Context Diff requires a Pro (or higher) license.")

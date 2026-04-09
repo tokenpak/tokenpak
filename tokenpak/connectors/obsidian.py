@@ -93,7 +93,9 @@ class ObsidianConnector(LocalConnector):
         In lenient mode (default), malformed/duplicate frontmatter is warned and
         normalized where possible. In strict mode, malformed/duplicate data raises.
         """
-        self.last_frontmatter_diagnostics = FrontmatterDiagnostics(mode="strict" if strict else "lenient")
+        self.last_frontmatter_diagnostics = FrontmatterDiagnostics(
+            mode="strict" if strict else "lenient"
+        )
         if not content.startswith("---"):
             return {}
 

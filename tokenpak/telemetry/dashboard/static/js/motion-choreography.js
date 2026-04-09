@@ -1,9 +1,9 @@
 /**
  * TokenPak Dashboard — Motion Choreography System (Enhanced)
- * 
+ *
  * Implements polished motion design that makes filter changes, drilldowns, and
  * depth transitions feel like "zooming into data" rather than page switches.
- * 
+ *
  * Key Features:
  * - Number value animations (300-500ms, smooth counting)
  * - Chart transitions (fade: 150ms out, 200ms in)
@@ -13,7 +13,7 @@
  * - Drawer animations (300ms in, 250ms out)
  * - Hover micro-interactions (elevation, scale, glow)
  * - Mode switch animations (smooth expand/collapse)
- * 
+ *
  * Performance:
  * - GPU-accelerated: transform & opacity only
  * - Target: 60fps, <500ms total transition
@@ -200,7 +200,7 @@
 
     setupFilterAnimations() {
       const filterControls = document.querySelectorAll('.filter-select, .filter-chip, [data-filter-item]');
-      
+
       filterControls.forEach(control => {
         control.addEventListener('change', (evt) => {
           this.triggerFilterReaction(evt.target);
@@ -372,7 +372,7 @@
     setupAdvancedModeToggle() {
       document.addEventListener('click', (evt) => {
         if (!evt.target.matches('[data-advanced-toggle]')) return;
-        
+
         const sections = document.querySelectorAll('.advanced-section');
         const isVisible = sections[0]?.classList.contains('visible');
 
@@ -405,7 +405,7 @@
         if (!newLevel) return;
 
         const currentLevels = document.querySelectorAll('[data-depth]');
-        
+
         currentLevels.forEach(level => {
           const levelNum = parseInt(level.dataset.depth);
           if (levelNum < levelNumber) {

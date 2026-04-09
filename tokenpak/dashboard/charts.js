@@ -11,22 +11,22 @@ function updateCharts() {
 function updateRequestRateChart() {
     const ctx = document.getElementById('requestRateChart')?.getContext('2d');
     if (!ctx) return;
-    
+
     // Generate 60 5-minute buckets for the last hour
     const now = Date.now();
     const buckets = [];
     const labels = [];
-    
+
     for (let i = 59; i >= 0; i--) {
         const timestamp = now - (i * 5 * 60 * 1000);
         buckets.push({ timestamp, rate: 0 });
-        
+
         const date = new Date(timestamp);
         const hours = date.getHours().toString().padStart(2, '0');
         const minutes = date.getMinutes().toString().padStart(2, '0');
         labels.push(`${hours}:${minutes}`);
     }
-    
+
     // Calculate rates from request history
     for (let i = 0; i < metricsState.requestHistory.length - 1; i++) {
         const curr = metricsState.requestHistory[i];
@@ -34,17 +34,17 @@ function updateRequestRateChart() {
         const timeDiff = (next.timestamp - curr.timestamp) / 1000; // seconds
         const countDiff = next.count - curr.count;
         const rate = timeDiff > 0 ? countDiff / timeDiff : 0;
-        
+
         // Find bucket for this timestamp
-        const bucket = buckets.find(b => 
-            b.timestamp <= next.timestamp && 
+        const bucket = buckets.find(b =>
+            b.timestamp <= next.timestamp &&
             next.timestamp <= b.timestamp + 5 * 60 * 1000
         );
         if (bucket) bucket.rate = rate;
     }
-    
+
     const data = buckets.map(b => b.rate);
-    
+
     if (requestRateChartInstance) {
         requestRateChartInstance.data.labels = labels;
         requestRateChartInstance.data.datasets[0].data = data;
@@ -87,18 +87,18 @@ function updateRequestRateChart() {
 function updateCompressionRatioChart() {
     const ctx = document.getElementById('compressionRatioChart')?.getContext('2d');
     if (!ctx) return;
-    
+
     const sorted = Object.entries(metricsState.documentTypes)
         .sort((a, b) => b[1].frequency - a[1].frequency)
         .slice(0, 10);
-    
+
     const labels = sorted.map(([type]) => shortenLabel(type, 20));
-    const data = sorted.map(([, stats]) => 
+    const data = sorted.map(([, stats]) =>
         stats.frequency > 0 ? (stats.ratioSum / stats.frequency * 100) : 0
     );
-    
+
     const colors = generateColors(data.length);
-    
+
     if (compressionRatioChartInstance) {
         compressionRatioChartInstance.data.labels = labels;
         compressionRatioChartInstance.data.datasets[0].data = data;
@@ -138,32 +138,32 @@ function updateCompressionRatioChart() {
 function updateTokensSavedChart() {
     const ctx = document.getElementById('tokensSavedChart')?.getContext('2d');
     if (!ctx) return;
-    
+
     // Generate timeline of cumulative tokens saved
     const now = Date.now();
     const buckets = [];
     const labels = [];
     let cumulativeTokens = 0;
-    
+
     for (let i = 59; i >= 0; i--) {
         const timestamp = now - (i * 5 * 60 * 1000);
         buckets.push({ timestamp, cumulative: 0 });
-        
+
         const date = new Date(timestamp);
         const hours = date.getHours().toString().padStart(2, '0');
         const minutes = date.getMinutes().toString().padStart(2, '0');
         labels.push(`${hours}:${minutes}`);
     }
-    
+
     // Approximate cumulative from current total
     const avgTokensPerBucket = metricsState.tokensSaved / Math.max(1, buckets.length);
     for (let i = 0; i < buckets.length; i++) {
         buckets[i].cumulative = Math.round(avgTokensPerBucket * i);
     }
     buckets[buckets.length - 1].cumulative = metricsState.tokensSaved;
-    
+
     const data = buckets.map(b => b.cumulative);
-    
+
     if (tokensSavedChartInstance) {
         tokensSavedChartInstance.data.labels = labels;
         tokensSavedChartInstance.data.datasets[0].data = data;
@@ -206,15 +206,15 @@ function updateTokensSavedChart() {
 function updateTopTypesChart() {
     const ctx = document.getElementById('topTypesChart')?.getContext('2d');
     if (!ctx) return;
-    
+
     const sorted = Object.entries(metricsState.documentTypes)
         .sort((a, b) => b[1].frequency - a[1].frequency)
         .slice(0, 8);
-    
+
     const labels = sorted.map(([type]) => shortenLabel(type, 15));
     const data = sorted.map(([, stats]) => stats.frequency);
     const colors = generateColors(data.length, true);
-    
+
     if (topTypesChartInstance) {
         topTypesChartInstance.data.labels = labels;
         topTypesChartInstance.data.datasets[0].data = data;
@@ -255,13 +255,13 @@ function shortenLabel(text, maxLen) {
 function generateColors(count, pastel = false) {
     const colors = [];
     const hues = [210, 150, 120, 30, 0, 280, 320];
-    
+
     for (let i = 0; i < count; i++) {
         const hue = hues[i % hues.length];
         const saturation = pastel ? 60 : 80;
         const lightness = pastel ? 70 : 50;
         colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
     }
-    
+
     return colors;
 }

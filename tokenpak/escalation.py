@@ -48,7 +48,9 @@ def detect_insufficient_context_signal(response_text: str, query: str = "") -> b
     query_terms = [t for t in extract_query_terms(query) if len(t) >= 3]
     if query_terms:
         lower = text.lower()
-        strong_terms = [t for t in query_terms if ("/" in t or "_" in t or any(c.isupper() for c in t))]
+        strong_terms = [
+            t for t in query_terms if ("/" in t or "_" in t or any(c.isupper() for c in t))
+        ]
         if strong_terms and not any(term.lower() in lower for term in strong_terms):
             return True
 

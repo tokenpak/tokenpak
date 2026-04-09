@@ -1,0 +1,236 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tokenpak:directive-schema:v1",
+  "title": "TokenPak Intelligence Server Directive",
+  "description": "Schema for compression directives returned by the TokenPak intelligence server.",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "Unique identifier correlating this response to the originating fingerprint request."
+    },
+    "compression": {
+      "type": "array",
+      "description": "Ordered list of segment-level compression operations to apply.",
+      "items": {
+        "type": "object",
+        "required": ["target", "action"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "Segment identifier (e.g. 'segment_0') or segment ID from the payload.",
+            "examples": ["segment_0", "segment_3", "intro"]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "prune",
+              "collapse",
+              "dedup",
+              "reorder",
+              "prune_turns",
+              "compression_mode_change",
+              "recipe_override",
+              "budget_adjustment"
+            ],
+            "description": "Compression operation to perform on the target segment."
+          },
+          "params": {
+            "type": "object",
+            "description": "Action-specific parameters.",
+            "oneOf": [
+              {
+                "title": "prune params",
+                "properties": {
+                  "keep_ratio": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "default": 0.7,
+                    "description": "Fraction of lines to keep (head-truncate)."
+                  }
+                }
+              },
+              {
+                "title": "collapse params",
+                "properties": {
+                  "keep_signature": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Keep first line (e.g. function signature) and replace body with '...'."
+                  }
+                }
+              },
+              {
+                "title": "dedup params",
+                "description": "No required params. Removes duplicate lines in place."
+              },
+              {
+                "title": "reorder params",
+                "properties": {
+                  "order": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Line indices in desired order. Unlisted lines appended at end."
+                  }
+                }
+              },
+              {
+                "title": "prune_turns params",
+                "properties": {
+                  "remove": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "Zero-based indices of conversation turns to remove."
+                  }
+                }
+              },
+              {
+                "title": "compression_mode_change params",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["aggressive", "conservative", "lossless", "summarize"],
+                    "default": "aggressive",
+                    "description": "Target compression mode for this segment."
+                  },
+                  "keep_ratio": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Override keep ratio for aggressive/conservative modes."
+                  }
+                }
+              },
+              {
+                "title": "recipe_override params",
+                "properties": {
+                  "recipe_name": {
+                    "type": "string",
+                    "description": "Server-specified recipe to use in place of local recipe."
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "description": "Override max_tokens from local recipe."
+                  },
+                  "priority_order": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Override block priority_order from local recipe."
+                  },
+                  "required_blocks": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Override required_blocks from local recipe."
+                  }
+                }
+              },
+              {
+                "title": "budget_adjustment params",
+                "properties": {
+                  "max_tokens": {
+                    "type": "integer",
+                    "description": "Absolute token cap for this segment. Content trimmed to fit."
+                  },
+                  "reduction_pct": {
+                    "type": "number",
+                    "minimum": 0.0,
+                    "maximum": 1.0,
+                    "description": "Fractional reduction (e.g. 0.3 = trim to 70% of current size)."
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "model_route": {
+      "type": "object",
+      "description": "Model routing recommendation from the intelligence server.",
+      "required": ["recommended"],
+      "properties": {
+        "recommended": {
+          "type": "string",
+          "description": "Preferred model alias (e.g. 'haiku', 'sonnet')."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Routing confidence score."
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback model alias if recommended is unavailable."
+        }
+      }
+    },
+    "context_plan": {
+      "type": "object",
+      "description": "Vault block reordering and pruning instructions.",
+      "properties": {
+        "block_priority": {
+          "type": "array",
+          "items": {},
+          "description": "Block IDs in desired priority order (highest priority first)."
+        },
+        "drop_blocks": {
+          "type": "array",
+          "items": {},
+          "description": "Block IDs to remove entirely from the context."
+        }
+      }
+    },
+    "pattern_hints": {
+      "type": "object",
+      "description": "Hints for local compression heuristics (informational, not applied by directive engine).",
+      "properties": {
+        "keep_last": {
+          "type": "integer",
+          "description": "Suggested number of recent turns to preserve."
+        },
+        "preserve_code": {
+          "type": "boolean",
+          "description": "If true, avoid pruning code segments."
+        }
+      }
+    },
+    "agent_dedup": {
+      "type": "object",
+      "description": "Agent-level block deduplication instructions.",
+      "properties": {
+        "skip_blocks": {
+          "type": "array",
+          "items": {},
+          "description": "Block IDs that are redundant and should be skipped."
+        }
+      }
+    },
+    "estimated_savings": {
+      "type": "object",
+      "description": "Server estimate of token savings after applying all directives.",
+      "properties": {
+        "tokens": {
+          "type": "integer",
+          "description": "Estimated absolute token reduction."
+        },
+        "pct": {
+          "type": "number",
+          "description": "Estimated percentage reduction."
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "description": "Optional global budget constraints from the server.",
+      "properties": {
+        "max_context_tokens": {
+          "type": "integer",
+          "description": "Hard cap on total context token count."
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

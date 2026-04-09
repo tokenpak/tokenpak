@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# TokenPak Pre-Commit Hook — Repo Hygiene Check
+#
+# Prevents commits containing internal files, hardcoded IPs, or hostnames.
+#
+# INSTALLATION (opt-in, not auto-installed):
+#   cp .github/hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Or use a symlink:
+#   ln -sf ../../.github/hooks/pre-commit .git/hooks/pre-commit
+#
+# To bypass for a single commit (use sparingly):
+#   git commit --no-verify
+
+set -euo pipefail
+
+ERRORS=0
+
+# --- Check 1: Internal filenames in staged files ---
+echo "🔍 Checking for internal filenames..."
+BLOCKED=$(git diff --cached --name-only | grep -iE '(^|/)AUDIT[^/]*\.md$|(^|/)SECURITY_AUDIT[^/]*\.md$|(^|/)COVERAGE_GAPS[^/]*\.md$|(^|/)LAUNCH_CHECKLIST[^/]*\.md$' || true)
+if [ -n "$BLOCKED" ]; then
+  echo "❌ Internal files staged for commit:"
+  echo "$BLOCKED"
+  echo "   These files belong in the private vault, not the public repo."
+  ERRORS=$((ERRORS + 1))
+fi
+
+# --- Check 2: Hardcoded internal IPs in staged content ---
+echo "🔍 Checking for hardcoded internal IPs..."
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(md|py|yaml|yml|json|toml|cfg|ini|txt|rst|sh)$' || true)
+if [ -n "$STAGED_FILES" ]; then
+  LEAKS=$(echo "$STAGED_FILES" | xargs grep -n '192\.168\.168\.\|100\.83\.165\.\|100\.116\.72\.' 2>/dev/null || true)
+  if [ -n "$LEAKS" ]; then
+    echo "❌ Hardcoded internal IPs found in staged files:"
+    echo "$LEAKS"
+    echo "   Replace with generic placeholders like <your-ip> or 192.168.x.x"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# --- Check 3: Internal hostnames in staged content ---
+echo "🔍 Checking for internal hostnames..."
+if [ -n "$STAGED_FILES" ]; then
+  HOSTS=$(echo "$STAGED_FILES" | xargs grep -n 'suewu\|trixbot\|calibot' 2>/dev/null | grep -v '\.gitignore' || true)
+  if [ -n "$HOSTS" ]; then
+    echo "❌ Internal hostnames found in staged files:"
+    echo "$HOSTS"
+    echo "   Replace with generic names like agent-1, agent-2, or <hostname>"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# --- Result ---
+if [ "$ERRORS" -gt 0 ]; then
+  echo ""
+  echo "🚫 Pre-commit hook blocked commit ($ERRORS check(s) failed)"
+  echo "   Fix the issues above, or use 'git commit --no-verify' to bypass."
+  exit 1
+fi
+
+echo "✅ All hygiene checks passed"
+exit 0

@@ -1,66 +1,54 @@
-# TokenPak Proxy — Official Production Docker Image
-# Multi-stage build: minimal final image, non-root user, health check
-# Target size: <200MB
+# TokenPak Proxy — Production Docker Image
+# Base: Python 3.11 slim (secure, minimal)
+# Size target: <500MB
 
-# ============================================================
-# Stage 1: Builder — install dependencies into a venv
-# ============================================================
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim as builder
 
 WORKDIR /build
 
-# Install build deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first (layer caching — only re-runs on requirement changes)
+# Copy requirements first (Docker layer caching)
 COPY requirements.txt .
 
-# Install into isolated venv
+# Install dependencies in a virtual environment
 RUN python -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    /opt/venv/bin/pip install --upgrade pip setuptools && \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# ============================================================
-# Stage 2: Runtime — minimal image, no build tools
-# ============================================================
+# ============================================
+# Final stage (multi-stage build for size)
+# ============================================
+
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Install curl for the HEALTHCHECK command (minimal, no extras)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user (security: never run as root)
+# Create non-root user (security best practice)
 RUN useradd -m -u 1000 tokenpak
 
-# Copy venv from builder (no pip needed at runtime)
+# Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Copy application source (owned by tokenpak user)
+# Copy application code
 COPY --chown=tokenpak:tokenpak . .
 
-# Environment variables
-# TOKENPAK_PORT     — proxy listen port (default: 8766)
-# TOKENPAK_LOG_LEVEL — log verbosity: debug | info | warning | error (default: info)
-# TOKENPAK_CONFIG   — path to config JSON (optional, uses defaults if unset)
+# Set environment to use venv
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    TOKENPAK_PORT=8766 \
-    TOKENPAK_LOG_LEVEL=info
+    TOKENPAK_PORT=8766
 
-# Expose default proxy port
+# Expose default port
 EXPOSE 8766
 
-# Health check — polls the /health endpoint every 30s
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:${TOKENPAK_PORT}/health || exit 1
-
-# Switch to non-root user before starting
+# Switch to non-root user
 USER tokenpak
 
-# Start the TokenPak proxy
+# Health check (Docker native health check)
+# Uses /ready — returns 200 only when fully initialised and accepting requests.
+# Allows 60s start-period so CI images don't fail before server finishes boot.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${TOKENPAK_PORT}/ready || exit 1
+
+# Start proxy (use proxy.py as entry point)
+# Note: assumes proxy.py has a main() that starts the server
 CMD ["python", "-m", "tokenpak.cli", "proxy", "--port", "8766"]

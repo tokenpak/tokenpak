@@ -40,6 +40,19 @@ class SavingsReport:
 
 
 @dataclass
+class ModelCompressionBreakdown:
+    """Per-model compression ratio breakdown for the daily report."""
+
+    model: str = ""
+    request_count: int = 0
+    avg_compression_ratio: float = 0.0  # compressed / raw (lower = more compression)
+    tokens_saved: int = 0               # avg_raw - avg_final, summed over requests
+    avg_raw_tokens: float = 0.0
+    avg_final_tokens: float = 0.0
+    savings_amount: float = 0.0         # USD saved via compression
+
+
+@dataclass
 class DailyTrend:
     """Daily aggregated usage entry for trend visualisation."""
 

@@ -1,0 +1,51 @@
+{
+  "port": 8766,
+  "mode": "hybrid",
+  "db": "~/.openclaw/workspace/.ocp/monitor.db",
+  "compression": {
+    "enabled": true,
+    "max_chars": 120,
+    "threshold_tokens": 4500,
+    "cache_size": 2000
+  },
+  "features": {
+    "skeleton": true,
+    "shadow_reader": true,
+    "router": true,
+    "validation_gate": true,
+    "validation_gate_soft": true,
+    "capsule_builder": false,
+    "term_resolver": false,
+    "chat_footer": false
+  },
+  "budget": {
+    "total_tokens": 12000,
+    "validation_gate_cap": 120000
+  },
+  "capsule": {
+    "min_chars": 400,
+    "hot_window": 2
+  },
+  "vault": {
+    "index_path": "~/vault/.tokenpak",
+    "inject_budget": 4000,
+    "inject_top_k": 5,
+    "inject_min_score": 2.0,
+    "inject_skip_models": "haiku",
+    "inject_min_prompt": 1000,
+    "retrieval_backend": "json_blocks"
+  },
+  "term_resolver": {
+    "top_k": 3,
+    "max_bytes": 200
+  },
+  "upstream": {
+    "timeout": 300,
+    "ollama": "http://100.80.241.118:11434",
+    "ollama_timeout": 20
+  },
+  "rate_limit_rpm": 60,
+  "failover": {
+    "enabled": false
+  }
+}

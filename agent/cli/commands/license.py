@@ -20,7 +20,7 @@ import sys
 
 
 def _run_activate(token: str) -> None:
-    from tokenpak.agent.license.activation import activate
+    from tokenpak.infrastructure.license_activation import activate
 
     try:
         result = activate(token)
@@ -35,14 +35,14 @@ def _run_activate(token: str) -> None:
 
 
 def _run_deactivate() -> None:
-    from tokenpak.agent.license.activation import deactivate
+    from tokenpak.infrastructure.license_activation import deactivate
 
     deactivate()
     print("✅ License removed. Reverted to OSS (free).")
 
 
 def _run_plan() -> None:
-    from tokenpak.agent.license.activation import get_plan
+    from tokenpak.infrastructure.license_activation import get_plan
 
     result = get_plan()
     print("TOKENPAK  |  Plan")

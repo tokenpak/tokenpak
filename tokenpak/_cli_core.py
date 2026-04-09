@@ -39,7 +39,6 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
-        ("setup", "Configure your LLM client to use tokenpak (wizard)"),
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
@@ -67,6 +66,7 @@ _COMMAND_GROUPS = {
     "Operations": [
         ("benchmark", "Run compression benchmarks"),
         ("calibrate", "Calibrate worker count for this host"),
+        ("diagnose", "Health checks: config, index, cache, proxy, permissions, disk"),
         ("doctor", "Run diagnostics"),
         ("dashboard", "Real-time health dashboard (TUI)"),
         ("timeline", "View savings trend over 7/30 days"),
@@ -200,10 +200,164 @@ def cmd_help(args):
 
 
 def cmd_setup(args):
-    """Configure LLM clients to use the TokenPak proxy (wizard)."""
-    from .agent.cli.commands.setup import run_setup_cmd
+    """Interactive wizard for first-time TokenPak configuration."""
+    import os
+    import subprocess
+    import time
+    from pathlib import Path
 
-    run_setup_cmd(args)
+    import yaml
+
+    from .profiles import get_profile
+
+    config_dir = Path.home() / ".tokenpak"
+    config_file = config_dir / "config.yaml"
+
+    # Check for existing config
+    if config_file.exists():
+        print(f"Configuration already exists at {config_file}")
+        response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
+        if response not in ("yes", "y"):
+            print("Setup cancelled.")
+            return
+
+    # Detect API keys from environment
+    print("\n🔍 Scanning for API keys...\n")
+    api_keys = {}
+
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        print("✅ Found Anthropic API key")
+        api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
+
+    if os.environ.get("OPENAI_API_KEY"):
+        print("✅ Found OpenAI API key")
+        api_keys["openai"] = os.environ["OPENAI_API_KEY"]
+
+    if os.environ.get("GOOGLE_API_KEY"):
+        print("✅ Found Google API key")
+        api_keys["google"] = os.environ["GOOGLE_API_KEY"]
+
+    if not api_keys:
+        print("⚠️  No API keys detected in environment variables.")
+        print("   Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY")
+        print("   Example: export ANTHROPIC_API_KEY='sk-...'")
+        return
+
+    # Auto-detect primary provider
+    available_providers = list(api_keys.keys())
+    default_provider = available_providers[0] if available_providers else "anthropic"
+
+    print(f"\nDetected providers: {', '.join(available_providers)}")
+    provider = input(f"Which provider to proxy? [{default_provider}]: ").strip()
+    if not provider:
+        provider = default_provider
+
+    if provider not in api_keys:
+        print(f"Error: {provider} API key not found.")
+        return
+
+    # Ask for port
+    port_input = input("Port number [8766]: ").strip()
+    port = int(port_input) if port_input else 8766
+
+    # Ask for profile
+    print("\nChoose a compression profile:")
+    print("  [1] minimal    — compression only (safest, ~5% savings)")
+    print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
+    print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
+
+    profile_input = input("\nProfile [2]: ").strip()
+    profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
+    profile_name = profile_map.get(profile_input, "balanced")
+
+    # Build base config
+    config = {
+        "proxy": {
+            "port": port,
+            "host": "localhost",
+            "provider": provider,
+        },
+        "modules": {},
+    }
+
+    # Apply profile
+    profile = get_profile(profile_name)
+    config["modules"] = profile["features"]
+    config["profile"] = profile_name
+
+    # Create config directory and write config
+    config_dir.mkdir(parents=True, exist_ok=True)
+    with open(config_file, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+    print(f"\n✅ Configuration saved to {config_file}")
+    print(f"   Profile: {profile_name} — {profile['description']}")
+
+    # Start the proxy
+    print("\n🚀 Starting proxy...\n")
+
+    import sys
+
+    # Find proxy — prefer bundled runtime/ first, then fall back to root/home paths
+    candidates = [
+        Path(__file__).resolve().parent / "runtime" / "proxy.py",  # bundled (pip install)
+        Path(__file__).resolve().parent.parent / "proxy_v4.py",
+        Path.home() / "tokenpak" / "proxy_v4.py",
+        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
+    ]
+    proxy_path = None
+    for c in candidates:
+        if c.exists():
+            proxy_path = c
+            break
+
+    if not proxy_path:
+        print("Warning: proxy_v4.py not found. Skipping auto-start.")
+        return
+
+    # Start proxy
+    env = os.environ.copy()
+    env["TOKENPAK_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, str(proxy_path)],
+        env=env,
+        cwd=str(proxy_path.parent),
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid_path.write_text(str(proc.pid))
+
+    # Wait and verify
+    time.sleep(1.5)
+
+    # Try health check
+    try:
+        import json
+        import urllib.request
+        health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
+        health_data = json.loads(health_resp.read().decode())
+        mode = health_data.get("compilation_mode", "hybrid")
+
+        print(f"✅ Proxy running on http://localhost:{port} (mode: {mode})")
+    except Exception:
+        print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
+
+    # Success message with next steps
+    print("\nNext steps:")
+    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+    print("  2. Run: tokenpak status    (check health)")
+    print("  3. Run: tokenpak savings   (see your ROI)")
+    print()
+    print("💡 Quick commands:")
+    print("  tokenpak start      — start the proxy")
+    print("  tokenpak stop       — stop the proxy")
+    print("  tokenpak status     — check proxy health")
+    print("  tokenpak savings    — view compression savings")
+    print()
 
 
 def cmd_start(args):
@@ -1294,209 +1448,26 @@ def _cmd_dashboard_public(args):
         webbrowser.open(f"{urls[0]}?token={token}")
 
 
+def cmd_diagnose(args):
+    """Run tokenpak diagnose — health check, index integrity, cache stats."""
+    from .cli_diagnose import cmd_diagnose as _run
+    _run(args)
+
+
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
     if getattr(args, "fleet", False):
         from .agent.cli.commands.doctor import run_fleet_doctor
         rc = run_fleet_doctor(fix=getattr(args, "fix", False), deploy=getattr(args, "deploy", False))
         sys.exit(rc)
-    print("\nTOKENPAK  |  Doctor")
-    print("──────────────────────────────\n")
+    from .agent.cli.commands.doctor import run_doctor
+    rc = run_doctor(
+        fix=getattr(args, "fix", False),
+        output_json=getattr(args, "json_output", False) is True,
+    )
+    if rc != 0:
+        sys.exit(rc)
 
-    results = {"pass": 0, "warn": 0, "fail": 0}
-    fixes_needed = []
-
-    # Check 1: Python version
-    py_major, py_minor, py_micro = sys.version_info[:3]
-    py_version = f"{py_major}.{py_minor}.{py_micro}"
-    if sys.version_info >= (3, 10):
-        print(Colors.ok(f"Python version      {py_version} — OK"))
-        results["pass"] += 1
-    else:
-        print(Colors.fail(f"Python version      {py_version} — requires ≥3.10"))
-        results["fail"] += 1
-
-    # Check 2: Config file
-    config_path = Path.home() / ".tokenpak" / "config.json"
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                json.load(f)
-            print(Colors.ok(f"Config file         {config_path} — valid"))
-            results["pass"] += 1
-        except json.JSONDecodeError:
-            print(Colors.fail(f"Config file         {config_path} — invalid JSON"))
-            results["fail"] += 1
-            fixes_needed.append(("reset config", config_path))
-    else:
-        print(Colors.warn(f"Config file         {config_path} — not found"))
-        results["warn"] += 1
-        fixes_needed.append(("create config", config_path))
-
-    # Check 3: Vault index
-    index_path = Path.home() / ".tokenpak" / "index.json"
-    if index_path.exists():
-        try:
-            with open(index_path) as f:
-                data = json.load(f)
-                block_count = len(data.get("blocks", []))
-            if block_count > 0:
-                print(Colors.ok(f"Vault index         {index_path} — {block_count} blocks"))
-                results["pass"] += 1
-            else:
-                print(
-                    Colors.warn(
-                        f"Vault index         {index_path} — 0 blocks (run: tokenpak index)"
-                    )
-                )
-                results["warn"] += 1
-        except json.JSONDecodeError:
-            print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
-            results["fail"] += 1
-    else:
-        print(Colors.warn(f"Vault index         {index_path} — not found"))
-        results["warn"] += 1
-
-    # Check 4: Proxy health
-    proxy_port = int(os.environ.get("TOKENPAK_PORT", "8766"))
-    health = _proxy_get("/health")
-    if health:
-        mode = health.get("compilation_mode", "unknown")
-        reqs = health.get("stats", {}).get("requests", 0)
-        errs = health.get("stats", {}).get("errors", 0)
-        print(Colors.ok(f"Proxy reachable     port {proxy_port} — {mode} mode, {reqs} reqs, {errs} errors"))
-        results["pass"] += 1
-        # Feature status
-        for feat_name, feat_key in [("Skeleton", "skeleton"), ("Shadow reader", "shadow_reader"),
-                                     ("Canon", "canon")]:
-            data = health.get(feat_key, {})
-            enabled = data.get("enabled", False) if isinstance(data, dict) else bool(data)
-            if enabled:
-                results["pass"] += 1
-            else:
-                results["warn"] += 1
-        # Circuit breakers
-        for name, cb in health.get("circuit_breakers", {}).items():
-            if cb.get("open"):
-                print(Colors.fail(f"Circuit breaker     {name} — OPEN"))
-                results["fail"] += 1
-            else:
-                results["pass"] += 1
-    else:
-        print(Colors.warn(f"Proxy reachable     port {proxy_port} — not reachable (run: tokenpak start)"))
-        results["warn"] += 1
-
-    # Check 5: Disk usage
-    tokenpak_dir = Path.home() / ".tokenpak"
-    try:
-        total_size = sum(f.stat().st_size for f in tokenpak_dir.rglob("*") if f.is_file())
-        size_mb = total_size / (1024 * 1024)
-        if size_mb < 500:
-            print(Colors.ok(f"Disk usage          {size_mb:.1f} MB — OK"))
-            results["pass"] += 1
-        else:
-            print(Colors.warn(f"Disk usage          {size_mb:.1f} MB — consider cleanup"))
-            results["warn"] += 1
-    except Exception:
-        print(Colors.warn("Disk usage          could not measure"))
-        results["warn"] += 1
-
-    # Check 6: Log file
-    log_path = Path.home() / ".tokenpak" / "debug.log"
-    if log_path.exists():
-        log_size_mb = log_path.stat().st_size / (1024 * 1024)
-        print(Colors.ok(f"Debug log           {log_path} — {log_size_mb:.2f} MB"))
-        results["pass"] += 1
-    else:
-        print(Colors.ok("Debug log           (not present)"))
-        results["pass"] += 1
-
-    # Check 7: Required directories exist
-    required_dirs = [
-        Path.home() / ".tokenpak",
-        Path.home() / ".tokenpak" / "cache",
-    ]
-    missing_dirs = [d for d in required_dirs if not d.exists()]
-    if not missing_dirs:
-        print(Colors.ok(f"Required dirs       all present ({len(required_dirs)} checked)"))
-        results["pass"] += 1
-    else:
-        missing_list = ", ".join(str(d) for d in missing_dirs)
-        print(Colors.warn(f"Required dirs       missing: {missing_list}"))
-        results["warn"] += 1
-        fixes_needed.append(("create dirs", missing_dirs))
-
-    # Check 8: Python dependencies installed
-    missing_deps = []
-    optional_deps = []
-    required_packages = [
-        ("pathlib", True),
-        ("json", True),
-        ("sqlite3", True),
-        ("aiohttp", False),
-        ("fastapi", False),
-        ("uvicorn", False),
-    ]
-    import importlib
-
-    for pkg, is_required in required_packages:
-        spec = importlib.util.find_spec(pkg)
-        if spec is None:
-            if is_required:
-                missing_deps.append(pkg)
-            else:
-                optional_deps.append(pkg)
-
-    if not missing_deps and not optional_deps:
-        print(Colors.ok("Dependencies        all packages present"))
-        results["pass"] += 1
-    elif not missing_deps and optional_deps:
-        opt_list = ", ".join(optional_deps)
-        print(
-            Colors.warn(
-                f"Dependencies        optional missing: {opt_list} (run: pip install tokenpak[full])"
-            )
-        )
-        results["warn"] += 1
-    else:
-        dep_list = ", ".join(missing_deps)
-        print(
-            Colors.fail(
-                f"Dependencies        required missing: {dep_list} (run: pip install tokenpak)"
-            )
-        )
-        results["fail"] += 1
-
-    # Summary
-    print("\n──────────────────────────────")
-    summary = f"{results['fail']} error{'s' if results['fail'] != 1 else ''}, {results['warn']} warning{'s' if results['warn'] != 1 else ''}."
-    print(summary)
-
-    if hasattr(args, "fix") and args.fix and fixes_needed:
-        print("\nAuto-fix requested. Fixing issues...")
-        for fix_type, fix_path in fixes_needed:
-            if fix_type == "create config":
-                tokenpak_dir.mkdir(parents=True, exist_ok=True)
-                default_config = {"version": "1.0", "port": 8766, "compress": True}
-                secure_write_config(fix_path, default_config)
-                print(f"  ✓ Created {fix_path} (mode 600)")
-            elif fix_type == "reset config":
-                # Backup before overwriting
-                backup_path = Path(str(fix_path) + ".backup")
-                if fix_path.exists():
-                    fix_path.rename(backup_path)
-                    print(f"  ✓ Backed up invalid config to {backup_path}")
-                tokenpak_dir.mkdir(parents=True, exist_ok=True)
-                default_config = {"version": "1.0", "port": 8766, "compress": True}
-                secure_write_config(fix_path, default_config)
-                print(f"  ✓ Recreated {fix_path} (mode 600)")
-            elif fix_type == "create dirs":
-                for d in fix_path:
-                    d.mkdir(parents=True, exist_ok=True)
-                    print(f"  ✓ Created {d}")
-
-    if results["fail"] > 0:
-        sys.exit(1)
 
 
 def build_parser():
@@ -1520,15 +1491,7 @@ def build_parser():
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
-    p_setup = sub.add_parser(
-        "setup",
-        help="Configure your LLM client to use tokenpak (wizard)",
-    )
-    p_setup.add_argument(
-        "--yes", "-y",
-        action="store_true",
-        help="Skip confirmation prompts (non-interactive / CI mode)",
-    )
+    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
     p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
@@ -1675,8 +1638,14 @@ def build_parser():
     p_cal.add_argument("--rounds", type=int, default=2)
     p_cal.set_defaults(func=cmd_calibrate)
 
+    p_diagnose = sub.add_parser("diagnose", help="Run health checks: config, vault index, cache, proxy, permissions, disk")
+    p_diagnose.add_argument("--json", dest="json_output", action="store_true", help="Output as machine-parseable JSON")
+    p_diagnose.add_argument("--verbose", action="store_true", help="Show extra detail for each check")
+    p_diagnose.set_defaults(func=cmd_diagnose)
+
     p_doctor = sub.add_parser("doctor", help="Run system diagnostics")
     p_doctor.add_argument("--fix", action="store_true", help="Auto-fix issues where possible")
+    p_doctor.add_argument("--json", dest="json_output", action="store_true", help="Output results as machine-readable JSON")
     p_doctor.add_argument("--fleet", action="store_true", help="Check all agents in ~/.tokenpak/fleet.yaml")
     p_doctor.add_argument("--deploy", action="store_true", help="Push latest doctor to all agents (use with --fleet)")
     p_doctor.set_defaults(func=cmd_doctor)
@@ -1752,12 +1721,6 @@ def build_parser():
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
-
-    # Top-level prune alias — delegates to `audit prune` (CALI-MTC-01)
-    p_prune_top = sub.add_parser("prune", help="Remove old audit log entries (alias for `tokenpak audit prune`)")
-    p_prune_top.add_argument("--days", type=int, default=90, help="Retention window in days (default: 90)")
-    p_prune_top.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_prune_top.set_defaults(func=cmd_audit_prune)
 
     return parser
 
@@ -2807,7 +2770,21 @@ def cmd_config_sync(args):
 
 
 def cmd_config_validate(args):
-    """Validate openclaw.json config against expected schema."""
+    """Validate config against schema.
+
+    With --config FILE: validates a proxy config file (JSON/YAML) against JSON Schema.
+    Without --config: validates the OpenClaw meta config (openclaw.json).
+    """
+    # Route to JSON schema validator when --config is provided
+    config_file = getattr(args, "config_file", None)
+    if config_file:
+        from tokenpak.agent.cli.commands.validate_config import run as _schema_validate
+        rc = _schema_validate(config_file)
+        if rc != 0:
+            sys.exit(rc)
+        return
+
+    # --- OpenClaw meta config validation (legacy) ---
     required_meta_fields = ["configVersion", "tokenpakVersion", "lastUpdated", "configHash"]
 
     try:
@@ -2911,6 +2888,12 @@ def _build_config_mgmt_parser(sub):
 
     # validate
     p_val = csub.add_parser("validate", help="Validate config against schema")
+    p_val.add_argument(
+        "--config",
+        dest="config_file",
+        metavar="FILE",
+        help="Path to proxy config file (JSON/YAML) to validate against schema",
+    )
     p_val.set_defaults(func=cmd_config_validate)
 
     # show — merged config (file + env overrides)
@@ -2969,7 +2952,7 @@ def main():
         "preview",
         "aggregate",
         "requests",
-        "prune",
+        "diagnose",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds and "--help" in sys.argv:

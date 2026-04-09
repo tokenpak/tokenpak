@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .ab_optimizer import ABOptimizerStore, ExperimentStatus
 from .auth import LicenseTier
+from tokenpak.license.tier import LicenseTier as GlobalLicenseTier
 
 ab_router = APIRouter(tags=["ab-optimizer"])
 
@@ -56,18 +57,31 @@ def _store() -> ABOptimizerStore:
 
 _PRO_TIERS = {LicenseTier.PRO, LicenseTier.TEAM, LicenseTier.ENTERPRISE}
 
+_AB_CTA = (
+    "A/B testing is a Pro feature — "
+    "start a free trial: https://portal.tokenpak.io/trial"
+)
+
 
 def _require_pro(request: Request) -> Optional[JSONResponse]:
-    tier: LicenseTier = getattr(request.state, "tier", LicenseTier.FREE)
-    if tier not in _PRO_TIERS:
+    """Return a 402 JSONResponse if neither the per-request tier nor the global license is Pro+."""
+    # Check per-request tier (set by intelligence server auth middleware)
+    req_tier: LicenseTier = getattr(request.state, "tier", LicenseTier.FREE)
+
+    # Also check process-global license tier (set by tokenpak.license.loader)
+    try:
+        from tokenpak.license.loader import get_active_tier
+        global_tier = get_active_tier()
+        global_is_pro = global_tier >= GlobalLicenseTier.PRO
+    except Exception:
+        global_is_pro = False
+
+    if req_tier not in _PRO_TIERS and not global_is_pro:
         return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
             content={
-                "error": "Forbidden",
-                "detail": (
-                    "A/B Auto-Optimizer is a Pro+ feature. "
-                    "Upgrade at https://tokenpak.ai/pricing"
-                ),
+                "error": "Payment Required",
+                "detail": _AB_CTA,
             },
         )
     return None

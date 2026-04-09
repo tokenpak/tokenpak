@@ -2,7 +2,7 @@
 
 import pytest
 
-from tokenpak.errors import (
+from tokenpak.infrastructure.error_handling import (
     CacheCorruptedError,
     ConfigValidationError,
     InvalidAPIKeyError,

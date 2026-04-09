@@ -62,25 +62,53 @@ class RoutingConfig:
 class ProviderRouter:
     """Main router orchestrating provider selection and failover."""
 
-    def __init__(self, config: Optional[RoutingConfig] = None):
+    def __init__(
+        self,
+        config: Optional[RoutingConfig] = None,
+        *,
+        registry: Optional[AdapterRegistry] = None,
+        detector: Optional[ProviderDetector] = None,
+        cost_tracker: Optional[CostTracker] = None,
+        failover_base_delay: float = 1.0,
+        failover_attempts: int = 3,
+        **kwargs,
+    ):
         """
         Initialize router.
 
         Args:
             config: RoutingConfig instance
+            registry: Custom AdapterRegistry (optional)
+            detector: Custom ProviderDetector (optional)
+            cost_tracker: Custom CostTracker (optional)
+            failover_base_delay: Base delay for failover retries
+            failover_attempts: Max failover attempts
+            **kwargs: Additional config kwargs (for future compatibility)
         """
         self.config = config or RoutingConfig()
-        self.detector = ProviderDetector()
-        self.registry = AdapterRegistry(
-            custom_adapters={
-                Provider(k): v
-                for k, v in self.config.adapter_configs.items()
-            }
+        self.detector = detector or ProviderDetector()
+        self.registry = registry or AdapterRegistry(
+            custom_adapters={Provider(k): v for k, v in self.config.adapter_configs.items()}
             if self.config.adapter_configs
             else None
         )
-        self.cost_tracker = CostTracker() if self.config.cost_tracking else None
+        self.cost_tracker = cost_tracker
+        if cost_tracker is None and self.config.cost_tracking:
+            self.cost_tracker = CostTracker()
+
+        self._failover_base_delay = failover_base_delay
+        self._failover_attempts = failover_attempts
         self._adapters: Dict[Provider, Any] = {}
+
+    @property
+    def costs(self) -> "Optional[CostTracker]":
+        """Alias for cost_tracker for compatibility."""
+        return self.cost_tracker
+
+    @property
+    def failover(self) -> "Optional[FailoverHandler]":
+        """Failover handler (None when not configured via FailoverHandler directly)."""
+        return None
 
     def initialize_adapters(self, adapter_instances: Dict[Provider, Any]) -> None:
         """
@@ -133,15 +161,168 @@ class ProviderRouter:
             return None
 
         try:
-            provider, reason = self.detector.detect(
-                api_key=api_key, model=model, headers=headers
-            )
+            provider, reason = self.detector.detect(api_key=api_key, model=model, headers=headers)
             if provider:
                 logger.info(f"Auto-detected provider: {provider} ({reason})")
             return provider
         except Exception as e:
             logger.warning(f"Provider detection failed: {e}")
             return None
+
+    def detect_provider(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        headers: Optional[dict] = None,
+    ) -> Optional[str]:
+        """
+        Public API: detect provider from request context.
+
+        Returns provider as string (e.g., "anthropic", "openai") or None.
+        """
+        provider = self._detect_provider(api_key=api_key, model=model, headers=headers)
+        return provider.value if provider else None
+
+    def route(
+        self,
+        request_func,
+        provider: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        headers: Optional[dict] = None,
+        fallback_providers: Optional[List[str]] = None,
+        *args,
+        **kwargs,
+    ) -> Any:
+        """
+        Public API: route request synchronously with failover.
+
+        Args:
+            request_func: Sync function to call with (provider, *args, **kwargs)
+            provider: Specific provider to use
+            api_key: API key for detection
+            model: Model name for detection
+            headers: Request headers for detection
+            fallback_providers: List of provider names to try in order
+            *args: Additional args for request_func
+            **kwargs: Additional kwargs for request_func
+
+        Returns:
+            Result from request_func
+
+        Raises:
+            RuntimeError: If provider detection fails or all providers fail
+        """
+        # Detect provider if not specified
+        detected_provider = None
+        if not provider and self.config.auto_detect:
+            detected_provider = self._detect_provider(api_key=api_key, model=model, headers=headers)
+            if detected_provider:
+                provider = detected_provider.value
+
+        # Build provider list
+        providers_to_try: List[str] = []
+        if provider:
+            providers_to_try.append(provider)
+        if fallback_providers:
+            for p in fallback_providers:
+                if p not in providers_to_try:
+                    providers_to_try.append(p)
+
+        # If still no providers, try to use registered providers
+        if not providers_to_try:
+            registered = self.registry.get_all_providers()
+            if registered:
+                # Convert Provider enums to strings and sort
+                providers_to_try = sorted(
+                    [p.value if isinstance(p, Provider) else str(p) for p in registered]
+                )
+            else:
+                raise RuntimeError("Provider detection failed: no providers specified or detected")
+
+        # Try each provider with failover
+        last_error = None
+        for attempt, prov in enumerate(providers_to_try):
+            try:
+                result = request_func(prov, *args, **kwargs)
+                if self.cost_tracker:
+                    self.cost_tracker.track_request(
+                        provider=prov,
+                        model=model,
+                        status="success",
+                    )
+                return result
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Provider {prov} failed: {e}")
+                if self.cost_tracker:
+                    self.cost_tracker.track_request(
+                        provider=prov,
+                        model=model,
+                        status="error",
+                        metadata={"error": str(e)},
+                    )
+                if attempt < len(providers_to_try) - 1:
+                    # More providers to try, continue
+                    continue
+
+        # All providers failed
+        if last_error:
+            raise last_error
+        raise RuntimeError(f"All providers failed: {providers_to_try}")
+
+    def track(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+    ) -> None:
+        """
+        Public API: track costs for a request.
+
+        Args:
+            provider: Provider name
+            model: Model name
+            input_tokens: Input token count
+            output_tokens: Output token count
+            cost: Total cost in USD
+        """
+        if not self.cost_tracker:
+            logger.warning("Cost tracking disabled")
+            return
+
+        self.cost_tracker.track_request(
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            request_cost=cost,  # map public `cost` → CostTracker.request_cost
+        )
+
+    def cost_summary(self) -> Optional[dict]:
+        """
+        Public API: get cost tracking summary.
+
+        Returns dict with per-provider summaries or None if tracking disabled.
+        """
+        if not self.cost_tracker:
+            return None
+
+        summaries = self.cost_tracker.get_all_summaries()
+        result = {}
+        for provider, summary in summaries.items():
+            prov_str = provider.value if isinstance(provider, Provider) else provider
+            if hasattr(summary, "to_dict"):
+                summary_dict = summary.to_dict()
+                # Rename 'total_cost' to 'total_cost_usd' for consistency
+                if "total_cost" in summary_dict:
+                    summary_dict["total_cost_usd"] = summary_dict.pop("total_cost")
+                result[prov_str] = summary_dict
+            else:
+                result[prov_str] = summary
+        return result
 
     async def route_request(
         self,

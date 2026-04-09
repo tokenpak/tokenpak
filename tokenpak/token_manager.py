@@ -38,8 +38,7 @@ def get_token() -> str:
     """
     if not TOKEN_FILE.exists():
         raise FileNotFoundError(
-            "Dashboard token not found. "
-            "Run: tokenpak dashboard --show-token  (auto-creates one)"
+            "Dashboard token not found. " "Run: tokenpak dashboard --show-token  (auto-creates one)"
         )
     return TOKEN_FILE.read_text().strip()
 

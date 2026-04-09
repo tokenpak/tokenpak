@@ -1,6 +1,6 @@
 /**
  * TokenPak Dashboard — Breadcrumb & Drill State Navigation
- * 
+ *
  * Manages drill path state in URL params, renders breadcrumb trail,
  * filter chips, depth indicator, back navigation, and reset.
  */

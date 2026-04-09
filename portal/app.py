@@ -486,7 +486,7 @@ def invite_member():
             (mid, session["customer_id"], email, time.time())
         )
 
-    # TODO: send invite email via SendGrid/SES
+    # NOTE: Email invite via SendGrid/SES is deferred — not implemented in v1.0.
     logger.info("Invited %s to team %s", email, session["customer_id"])
     return jsonify({"status": "invited", "email": email})
 

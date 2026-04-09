@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tokenpak-claude-code": {
+      "command": "python",
+      "args": ["-m", "tokenpak.integrations.claude_code.mcp_server"],
+      "env": {
+        "TOKENPAK_VAULT_ROOT": "${pluginConfigs.tokenpak-claude-code.vault_root}"
+      }
+    }
+  }
+}

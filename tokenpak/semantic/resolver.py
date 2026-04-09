@@ -27,6 +27,7 @@ Usage::
     # normalized: "usage for model last 7 days"
     # meta: {"intent": ResolveResult(...), "entities": [...]}
 """
+
 from __future__ import annotations
 
 import re
@@ -42,10 +43,11 @@ from .loader import SemanticMap, SemanticMapLoader
 @dataclass
 class ResolveResult:
     """Result of a single alias resolution."""
-    canonical: str          # Resolved canonical key
-    alias_matched: str      # Which alias triggered the match
-    confidence: float       # 1.0 = exact/substring; 0.0 = no match
-    match_type: str         # "exact" | "substring" | "none"
+
+    canonical: str  # Resolved canonical key
+    alias_matched: str  # Which alias triggered the match
+    confidence: float  # 1.0 = exact/substring; 0.0 = no match
+    match_type: str  # "exact" | "substring" | "none"
 
     def __bool__(self) -> bool:
         return self.match_type != "none"
@@ -54,10 +56,11 @@ class ResolveResult:
 @dataclass
 class PreprocessResult:
     """Result of preprocessing raw text through the semantic resolver."""
-    normalized_text: str                            # Text with aliases replaced
-    intent_resolution: Optional[ResolveResult]      # Resolved intent (if any)
+
+    normalized_text: str  # Text with aliases replaced
+    intent_resolution: Optional[ResolveResult]  # Resolved intent (if any)
     entity_resolutions: List[ResolveResult] = field(default_factory=list)  # All entity hits
-    resolution_metadata: Dict[str, object] = field(default_factory=dict)   # For debug/routing
+    resolution_metadata: Dict[str, object] = field(default_factory=dict)  # For debug/routing
 
 
 # ---------------------------------------------------------------------------
@@ -139,12 +142,14 @@ class SemanticResolver:
             if canonical in seen_canonicals:
                 continue
             if self._alias_in_text(alias, lowered):
-                results.append(ResolveResult(
-                    canonical=canonical,
-                    alias_matched=alias,
-                    confidence=1.0,
-                    match_type="substring",
-                ))
+                results.append(
+                    ResolveResult(
+                        canonical=canonical,
+                        alias_matched=alias,
+                        confidence=1.0,
+                        match_type="substring",
+                    )
+                )
                 seen_canonicals.add(canonical)
 
         return results
@@ -188,8 +193,7 @@ class SemanticResolver:
             )
 
         metadata["entity_aliases"] = [
-            {"alias": er.alias_matched, "canonical": er.canonical}
-            for er in entity_results
+            {"alias": er.alias_matched, "canonical": er.canonical} for er in entity_results
         ]
         metadata["normalized"] = normalized
 

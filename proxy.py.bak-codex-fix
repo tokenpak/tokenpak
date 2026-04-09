@@ -14,7 +14,7 @@ Env vars:
     TOKENPAK_MODE             (default: hybrid) — strict|hybrid|aggressive
     TOKENPAK_COMPACT          (default: 1) — master on/off switch
     TOKENPAK_COMPACT_MAX_CHARS      (default: 120) — max chars for compressed text
-    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default: 4500) — skip compaction below this
+    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default: 1500) — skip compaction below this
     TOKENPAK_COMPACT_CACHE_SIZE     (default: 2000)
     TOKENPAK_DB               (default: .ocp/monitor.db)
     TOKENPAK_VAULT_INDEX      (default: ~/vault/.tokenpak) — path to shared vault index
@@ -34,7 +34,7 @@ Env vars:
     
     # Tier 2A Modules (2026-03-11, all default OFF)
     TOKENPAK_ERROR_NORMALIZER  (default: 0) — normalize error responses across providers
-    TOKENPAK_BUDGET_CONTROLLER (default: 0) — enforce token budget limits per request
+    TOKENPAK_BUDGET_CONTROLLER (default: 1) — enforce token budget limits per request
     TOKENPAK_REQUEST_LOGGER    (default: 0) — structured request/response logging
     TOKENPAK_SALIENCE_ROUTER   (default: 0) — content-type-aware extraction before compaction
     
@@ -55,6 +55,7 @@ import gzip
 import io
 import math
 import hashlib
+import hmac
 import asyncio
 import http.client
 from functools import lru_cache
@@ -268,11 +269,14 @@ except ImportError:
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "0.0.0.0", "TOKENPAK_LISTEN_ADDRESS", str)
 DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOARD_AUTH", bool)
+# Proxy-level auth — AC-2.2 (TRIX-07). When set, non-localhost clients must send
+# "Authorization: Bearer <token>". Value is never logged.
+PROXY_AUTH_TOKEN: str = os.environ.get("TOKENPAK_PROXY_AUTH_TOKEN", "")
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
-COMPACT_THRESHOLD_TOKENS = _cfg("compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)
+COMPACT_THRESHOLD_TOKENS = _cfg("compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)  # Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
 
@@ -286,6 +290,7 @@ ROUTER_ENABLED: bool = _cfg("features.router", True, "TOKENPAK_ROUTER_ENABLED", 
 SKELETON_ENABLED: bool = _cfg("features.skeleton", True, "TOKENPAK_SKELETON_ENABLED", bool)
 SHADOW_ENABLED: bool = _cfg("features.shadow_reader", True, "TOKENPAK_SHADOW_ENABLED", bool)
 BUDGET_TOTAL_TOKENS: int = _cfg("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
+BUDGET_MONTHLY_USD: Optional[float] = _cfg("budget.monthly_usd", None, "TOKENPAK_BUDGET_MONTHLY_USD", float)
 CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_FOOTER", bool)
 
 # Tier 1 modules
@@ -296,7 +301,7 @@ TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
 
 # Tier 2 modules
 ERROR_NORMALIZER_ENABLED: bool = _cfg("features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool)
-BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", False, "TOKENPAK_BUDGET_CONTROLLER", bool)
+BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool)  # Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
 REQUEST_LOGGER_ENABLED: bool = _cfg("features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool)
 SALIENCE_ROUTER_ENABLED: bool = _cfg("features.salience_router", False, "TOKENPAK_SALIENCE_ROUTER", bool)
 CACHE_REGISTRY_ENABLED: bool = _cfg("features.cache_registry", False, "TOKENPAK_CACHE_REGISTRY", bool)
@@ -934,6 +939,23 @@ if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
     except Exception as e:
         print(f"  ⚠️ Failed to initialize term resolver: {e}")
 
+# ---------------------------------------------------------------------------
+# RecipeEngine — eager load OSS recipes on serve start
+# Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
+# ---------------------------------------------------------------------------
+_RECIPE_ENGINE_MODULE_PATH = str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi")
+if _RECIPE_ENGINE_MODULE_PATH not in sys.path:
+    sys.path.insert(0, _RECIPE_ENGINE_MODULE_PATH)
+try:
+    from tokenpak.agent.compression.recipes import RecipeEngine as _EagerRecipeEngine
+    _EAGER_RECIPE_ENGINE = _EagerRecipeEngine()
+    print("  📖 RecipeEngine loaded (OSS recipes ready)")
+except Exception as _re_err:
+    _EagerRecipeEngine = None  # type: ignore[assignment,misc]
+    _EAGER_RECIPE_ENGINE = None
+    print(f"  ⚠️  RecipeEngine unavailable: {_re_err}")
+
+
 # Global capsule builder instance
 try:
     from tokenpak.capsule.builder import CapsuleBuilder as _CapsuleBuilder
@@ -1414,6 +1436,28 @@ def _get_budget_controller():
                     pass
     return _BUDGET_CTRL_INSTANCE
 
+
+# ---------------------------------------------------------------------------
+# Monthly USD spend cache — avoids DB hit on every request (TTL: 60 s)
+# ---------------------------------------------------------------------------
+_MONTHLY_SPEND_CACHE: dict = {"usd": 0.0, "ts": 0.0}
+_MONTHLY_SPEND_CACHE_TTL: float = 60.0
+
+
+def _get_cached_monthly_spend_usd() -> float:
+    """Return current-month spend in USD, refreshing from DB at most once per 60 s."""
+    now = time.time()
+    if now - _MONTHLY_SPEND_CACHE["ts"] < _MONTHLY_SPEND_CACHE_TTL:
+        return _MONTHLY_SPEND_CACHE["usd"]
+    try:
+        spent = MONITOR.get_monthly_cost()
+    except Exception:
+        spent = _MONTHLY_SPEND_CACHE["usd"]  # use stale value on error
+    _MONTHLY_SPEND_CACHE["usd"] = spent
+    _MONTHLY_SPEND_CACHE["ts"] = now
+    return spent
+
+
 # ---------------------------------------------------------------------------
 # Style Contract: Protected content detection
 # ---------------------------------------------------------------------------
@@ -1562,6 +1606,17 @@ class Monitor:
             "cache_creation_tokens": row[9],
         }
 
+    def get_monthly_cost(self) -> float:
+        """Return total estimated_cost for the current calendar month (UTC)."""
+        conn = sqlite3.connect(self.db_path)
+        row = conn.execute("""
+            SELECT COALESCE(SUM(estimated_cost), 0)
+            FROM requests
+            WHERE timestamp >= strftime('%Y-%m-01', 'now')
+        """).fetchone()
+        conn.close()
+        return float(row[0])
+
     def get_by_model(self):
         conn = sqlite3.connect(self.db_path)
         rows = conn.execute("""
@@ -1614,6 +1669,7 @@ SESSION = {
     "canon_hits": 0,
     "canon_tokens_saved": 0,
     "ingest_entries": 0,
+    "budget_blocked_total": 0,
 }
 
 # ---------------------------------------------------------------------------
@@ -2056,7 +2112,54 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def _check_proxy_auth(self) -> bool:
+        """Enforce TOKENPAK_PROXY_AUTH_TOKEN for non-localhost clients.
+
+        Decision tree (AC-2.2, TRIX-07):
+          localhost                         → allow (return True)
+          non-localhost, env var unset      → 403, return False
+          non-localhost, env var set, no/wrong header → 401, return False
+          non-localhost, env var set, correct header  → allow (return True)
+
+        Token is compared with hmac.compare_digest() and never logged.
+        """
+        client_ip = self.client_address[0]
+        # Localhost (IPv4 and IPv6 loopback) always trusted — preserves OpenClaw path.
+        if client_ip in ("127.0.0.1", "::1"):
+            return True
+
+        # Non-localhost path.
+        if not PROXY_AUTH_TOKEN:
+            # Env var not configured — operator must set it before exposing to network.
+            self._send_json(
+                {"error": {"type": "forbidden",
+                           "message": "TOKENPAK_PROXY_AUTH_TOKEN not configured; "
+                                      "cannot accept non-localhost requests"}},
+                status=403,
+            )
+            return False
+
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            self._send_json(
+                {"error": {"type": "unauthorized", "message": "Missing Authorization header"}},
+                status=401,
+            )
+            return False
+
+        provided_token = auth_header[len("Bearer "):]
+        if not hmac.compare_digest(provided_token, PROXY_AUTH_TOKEN):
+            self._send_json(
+                {"error": {"type": "unauthorized", "message": "Invalid token"}},
+                status=401,
+            )
+            return False
+
+        return True
+
     def do_CONNECT(self):
+        if not self._check_proxy_auth():
+            return
         host, _, port = self.path.partition(":")
         port = int(port) if port else 443
         self._tunnel_connect(host, port)
@@ -2104,6 +2207,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         remote.close()
 
     def do_GET(self):
+        if not self._check_proxy_auth():
+            return
         if self.path == "/health":
             # Use 1-second response cache to reduce per-request overhead
             now = _time_module.monotonic()
@@ -2471,6 +2576,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_POST(self):
+        if not self._check_proxy_auth():
+            return
         # Fix #7: Per-IP rate limiting
         client_ip = self.client_address[0]
         if not _rate_limit_check(client_ip):
@@ -2491,12 +2598,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_PUT(self):
+        if not self._check_proxy_auth():
+            return
         if self.path.startswith("http"):
             self._forward_request("PUT")
         else:
             self._send_json({"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}}, status=404)
 
     def do_DELETE(self):
+        if not self._check_proxy_auth():
+            return
         if self.path.startswith("http"):
             self._forward_request("DELETE")
         else:
@@ -2786,6 +2897,33 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         except Exception as _bc_err:
                             SESSION["budget_controller_error"] = str(_bc_err)
                             pass  # fail-open
+
+                    # Phase 0.2.B: Monthly USD budget enforcement
+                    # Reads budget.monthly_usd from config; default=None (unlimited).
+                    # Uses a 60-second TTL cache so the DB is not hit on every request.
+                    if BUDGET_MONTHLY_USD is not None:
+                        try:
+                            _bc_monthly = _get_budget_controller()
+                            if _bc_monthly is not None:
+                                _monthly_spent = _get_cached_monthly_spend_usd()
+                                _bc_result = _bc_monthly.check(BUDGET_MONTHLY_USD, _monthly_spent)
+                                if _bc_result.exceeded:
+                                    SESSION["budget_blocked_total"] += 1
+                                    self._send_json({
+                                        "error": {
+                                            "type": "budget_exceeded",
+                                            "message": (
+                                                f"Monthly budget of ${BUDGET_MONTHLY_USD:.2f} exceeded. "
+                                                f"Spent: ${_monthly_spent:.4f}"
+                                            ),
+                                            "limit_usd": _bc_result.limit_usd,
+                                            "spent_usd": _bc_result.spent_usd,
+                                            "reset_at": _bc_result.reset_at,
+                                        }
+                                    }, status=429)
+                                    return
+                        except Exception as _bc_monthly_err:
+                            pass  # fail-open: never block requests due to budget check error
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
                     _intent_for_contract: str = "query"

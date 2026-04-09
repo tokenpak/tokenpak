@@ -1,4 +1,5 @@
 """request_explorer.py — Utilities for live request exploration."""
+
 from __future__ import annotations
 
 import json
@@ -117,8 +118,6 @@ def age_label(timestamp: str) -> str:
         return f"{hours}h"
     days = hours // 24
     return f"{days}d"
-
-
 
 
 def format_tokens(n: int) -> str:

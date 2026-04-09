@@ -103,7 +103,7 @@ class TestCmdReplayList:
     def test_list_empty(self, capsys):
         args = make_args(limit=20, provider=None)
         with patch("tokenpak.cli._replay_store_path", return_value=":memory:"), \
-             patch("tokenpak.cli._get_replay_store") as mock_store:
+             patch("tokenpak._cli_core._get_replay_store") as mock_store:
             from tokenpak.agent.telemetry.replay import ReplayStore
             mock_store.return_value = ReplayStore(":memory:")
             cmd_replay_list(args)
@@ -113,7 +113,7 @@ class TestCmdReplayList:
     def test_list_shows_entries(self, capsys):
         store, entries = make_store_with_entries()
         args = make_args(limit=20, provider=None)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_list(args)
         out = capsys.readouterr().out
         assert entries[0].replay_id in out
@@ -124,7 +124,7 @@ class TestCmdReplayList:
     def test_list_shows_content_indicator(self, capsys):
         store, entries = make_store_with_entries()
         args = make_args(limit=20, provider=None)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_list(args)
         out = capsys.readouterr().out
         assert "📦" in out  # e1 has messages
@@ -132,7 +132,7 @@ class TestCmdReplayList:
     def test_list_provider_filter(self, capsys):
         store, entries = make_store_with_entries()
         args = make_args(limit=20, provider="anthropic")
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_list(args)
         out = capsys.readouterr().out
         assert "anthropic" in out
@@ -141,7 +141,7 @@ class TestCmdReplayList:
     def test_list_limit(self, capsys):
         store, entries = make_store_with_entries()
         args = make_args(limit=1, provider=None)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_list(args)
         out = capsys.readouterr().out
         # Only 1 entry shown
@@ -157,7 +157,7 @@ class TestCmdReplayShow:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, show_messages=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_show(args)
         out = capsys.readouterr().out
         assert e.replay_id in out
@@ -168,7 +168,7 @@ class TestCmdReplayShow:
     def test_show_missing_id_exits(self, capsys):
         store, _ = make_store_with_entries()
         args = make_args(id="doesnotexist", show_messages=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             with pytest.raises(SystemExit):
                 cmd_replay_show(args)
 
@@ -176,7 +176,7 @@ class TestCmdReplayShow:
         store, entries = make_store_with_entries()
         e = entries[1]  # no messages
         args = make_args(id=e.replay_id, show_messages=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_show(args)
         out = capsys.readouterr().out
         assert "not captured" in out
@@ -185,7 +185,7 @@ class TestCmdReplayShow:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, show_messages=True)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_show(args)
         out = capsys.readouterr().out
         assert "compress this document" in out
@@ -200,7 +200,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         assert "standard compression" in out
@@ -211,7 +211,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=True, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         assert "aggressive compression" in out
@@ -220,7 +220,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=True, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         assert "no compression" in out
@@ -230,7 +230,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model="claude-3-opus", no_compress=False, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         assert "claude-3-opus" in out
@@ -239,7 +239,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=True, diff=True)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         assert "Diff" in out
@@ -247,7 +247,7 @@ class TestCmdReplayRun:
     def test_run_missing_id_exits(self):
         store, _ = make_store_with_entries()
         args = make_args(id="ghost", model=None, no_compress=False, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             with pytest.raises(SystemExit):
                 cmd_replay_run(args)
 
@@ -255,7 +255,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[1]  # no messages
         args = make_args(id=e.replay_id, model=None, no_compress=False, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             with pytest.raises(SystemExit):
                 cmd_replay_run(args)
 
@@ -265,7 +265,7 @@ class TestCmdReplayRun:
         store, entries = make_store_with_entries()
         e = entries[0]
         args = make_args(id=e.replay_id, model=None, no_compress=True, aggressive=False, diff=False)
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_run(args)
         out = capsys.readouterr().out
         # Result tokens should match raw
@@ -280,7 +280,7 @@ class TestReplayClearCLI:
         from unittest.mock import patch, MagicMock
         store = ReplayStore(":memory:")
         args = MagicMock()
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_clear(args)
         out = capsys.readouterr().out
         assert "0" in out
@@ -292,7 +292,7 @@ class TestReplayClearCLI:
         store, _ = make_store_with_entries()
         assert store.count() > 0
         args = MagicMock()
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             cmd_replay_clear(args)
         out = capsys.readouterr().out
         assert store.count() == 0
@@ -308,7 +308,7 @@ class TestReplayClearCLI:
         sub = parser.add_subparsers()
         _build_replay_parser(sub)
         args = parser.parse_args(["replay", "clear"])
-        with patch("tokenpak.cli._get_replay_store", return_value=store):
+        with patch("tokenpak._cli_core._get_replay_store", return_value=store):
             args.func(args)
         out = capsys.readouterr().out
         assert "Cleared" in out

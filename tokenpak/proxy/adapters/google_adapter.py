@@ -60,6 +60,9 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         )
 
     def denormalize(self, canonical: CanonicalRequest) -> bytes:
+        if canonical.tools is not None and canonical.tools:
+            self._validate_tool_support()
+
         payload: Dict[str, Any] = {
             "contents": self._to_google_contents(canonical.messages),
             "stream": canonical.stream,
@@ -68,9 +71,7 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
             payload["model"] = canonical.model
 
         if canonical.system not in (None, "", []):
-            payload["systemInstruction"] = {
-                "parts": self._to_google_parts(canonical.system)
-            }
+            payload["systemInstruction"] = {"parts": self._to_google_parts(canonical.system)}
 
         # Validate tool support before serializing
         # Only raise if tools is a non-empty list or dict (actual tools present)
@@ -104,6 +105,14 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
 
     def get_sse_format(self) -> str:
         return "google-ndjson"
+
+    def _validate_tool_support(self) -> None:
+        """Raise NotImplementedError for function calling — not yet supported by this adapter."""
+        raise NotImplementedError(
+            "Google adapter does not support function calling. "
+            "Use TokenPak with the OpenAI or Anthropic adapter instead. "
+            "See docs/provider-gaps.md for details and ETA."
+        )
 
     def _to_google_contents(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         contents: List[Dict[str, Any]] = []

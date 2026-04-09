@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WritingState",
+  "description": "State schema for writing/create intent — content and brand context.",
+  "type": "object",
+  "properties": {
+    "audience": {
+      "type": "string",
+      "description": "Target audience description (e.g. 'enterprise engineers', 'general public')"
+    },
+    "tone": {
+      "type": "string",
+      "description": "Desired tone (e.g. 'professional', 'casual', 'technical')"
+    },
+    "cta": {
+      "type": "string",
+      "description": "Call-to-action to embed or drive toward"
+    },
+    "brand_constraints": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Brand style rules or restrictions (e.g. 'no exclamation marks', 'use Oxford comma')"
+    },
+    "source_points": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Key facts, quotes, or data points to incorporate"
+    }
+  },
+  "required": ["audience"],
+  "additionalProperties": false
+}

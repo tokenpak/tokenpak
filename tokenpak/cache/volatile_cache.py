@@ -22,7 +22,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TTL = 270.0   # 4.5 minutes — aligns with proxy injection cache
+_DEFAULT_TTL = 270.0  # 4.5 minutes — aligns with proxy injection cache
 _DEFAULT_MAX_SIZE = 1000
 
 

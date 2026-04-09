@@ -25,6 +25,7 @@ Destination = Literal["file", "stdout", "syslog"]
 @dataclass
 class LogRecord:
     """Structured log record."""
+
     timestamp: str  # ISO 8601
     request_id: str
     level: str  # debug, info, warn, error
@@ -58,6 +59,7 @@ class LogRecord:
 @dataclass
 class LoggingConfig:
     """Logging configuration."""
+
     enabled: bool = True
     level: LogLevel = "info"
     destination: Destination = "file"
@@ -101,9 +103,7 @@ class AsyncLogger:
 
     def _setup_handler(self):
         """Setup logging handler based on destination."""
-        formatter = logging.Formatter(
-            '%(message)s'
-        )
+        formatter = logging.Formatter("%(message)s")
 
         if self.config.destination == "file":
             log_dir = self.config.resolve_log_dir()
@@ -114,12 +114,12 @@ class AsyncLogger:
                 os.path.join(log_dir, f"proxy-{datetime.now().strftime('%Y-%m-%d')}.log"),
                 when="midnight",
                 interval=1,
-                backupCount=self.config.retention_days
+                backupCount=self.config.retention_days,
             )
         elif self.config.destination == "stdout":
             handler = logging.StreamHandler(sys.stdout)
         elif self.config.destination == "syslog":
-            handler = logging.handlers.SysLogHandler(address='/dev/log')
+            handler = logging.handlers.SysLogHandler(address="/dev/log")
         else:
             raise ValueError(f"Unknown destination: {self.config.destination}")
 
@@ -209,7 +209,7 @@ class RequestLogger:
             latency_ms=latency_ms,
             compression_ratio=compression_ratio,
             message=message,
-            context=context or {}
+            context=context or {},
         )
 
         self.async_logger.log(record)

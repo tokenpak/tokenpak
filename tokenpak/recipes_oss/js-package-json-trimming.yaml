@@ -1,0 +1,20 @@
+name: js-package-json-trimming
+category: javascript
+description: Keep only name, version, description, dependencies, devDependencies, and scripts.
+pattern:
+  match: filename
+  filenames:
+  - package.json
+action:
+  operations:
+  - type: json_keep_keys
+    keys:
+    - name
+    - version
+    - description
+    - main
+    - scripts
+    - dependencies
+    - devDependencies
+    - peerDependencies
+  compression_hint: 0.4

@@ -1,0 +1,18 @@
+name: cp-sql-normalization
+category: common_patterns
+description: 'Normalize SQL: uppercase keywords, collapse inline whitespace, strip inline comments.'
+pattern:
+  match: extension
+  extensions:
+  - .sql
+action:
+  operations:
+  - type: sql_uppercase_keywords
+  - type: regex_replace
+    pattern: --[^\n]*
+    replacement: ''
+  - type: regex_replace
+    pattern: \s+
+    replacement: ' '
+    scope: inline
+  compression_hint: 0.15

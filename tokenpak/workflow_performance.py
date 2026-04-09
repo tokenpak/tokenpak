@@ -221,12 +221,7 @@ class WorkflowPerformanceTracker:
         # Regression-free: 1.0 when no regressions
         no_regression = 1.0 - stats.regression_rate
 
-        return (
-            success_score * 0.5
-            + speed_score * 0.2
-            + token_eff * 0.2
-            + no_regression * 0.1
-        )
+        return success_score * 0.5 + speed_score * 0.2 + token_eff * 0.2 + no_regression * 0.1
 
     def rank_templates(
         self,

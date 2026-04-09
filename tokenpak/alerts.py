@@ -25,6 +25,7 @@ except ImportError:
 
     def _load_yaml(path: str) -> dict:
         import json
+
         try:
             with open(path, "r") as f:
                 return json.load(f)
@@ -65,6 +66,7 @@ class AlertRuleState:
         self.fired_count += 1
 
     def to_dict(self) -> dict:
+        """Serialize alert to a plain dictionary."""
         return asdict(self)
 
 

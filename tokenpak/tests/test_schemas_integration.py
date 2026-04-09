@@ -15,6 +15,7 @@ class TestSchemaStructures:
         """Artifact schema is defined."""
         try:
             from tokenpak.schemas.artifact import Artifact
+
             assert is_dataclass(Artifact)
         except ImportError:
             pytest.skip("artifact schema not available")
@@ -23,6 +24,7 @@ class TestSchemaStructures:
         """Chunk schema is defined."""
         try:
             from tokenpak.schemas.chunk import Chunk
+
             assert is_dataclass(Chunk)
         except ImportError:
             pytest.skip("chunk schema not available")
@@ -31,6 +33,7 @@ class TestSchemaStructures:
         """Schemas can be serialized to dict."""
         try:
             from tokenpak.schemas.artifact import Artifact
+
             artifact = Artifact(
                 id="test-1",
                 name="test artifact",
@@ -51,6 +54,7 @@ class TestSchemaValidation:
         """Artifact requires id, name, content_type, content."""
         try:
             from tokenpak.schemas.artifact import Artifact
+
             # Should fail without required fields
             with pytest.raises((TypeError, ValueError)):
                 Artifact()
@@ -65,6 +69,7 @@ class TestSchemaInteroperability:
         """Schemas can reference and compose with each other."""
         try:
             from tokenpak.schemas.artifact import Artifact
+
             # Basic composition works
             artifacts = [
                 Artifact(

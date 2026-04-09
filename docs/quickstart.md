@@ -1,105 +1,181 @@
-# TokenPak Python SDK: Quick Start Guide
+# TokenPak Quick Start Guide
 
-## What is TokenPak?
+Get from zero to savings in 5 minutes. Pick your path:
 
-TokenPak is a context compression library for LLM agents and applications. It reduces the size of long context blocks by 40-60% while preserving semantic meaning, allowing you to stay within token budgets without sacrificing information. Works with any LLM provider (OpenAI, Anthropic, Google, local models, etc.).
+| Path | Best for |
+|------|----------|
+| [**Proxy Path**](#proxy-path-zero-config-optimization) | Existing apps — drop-in optimization, no code changes |
+| [**SDK Path**](#sdk-path-protocol-first) | New projects or when you want protocol-level control |
 
-## Installation
+---
 
-Install TokenPak via pip:
+## Proxy Path: Zero-Config Optimization
+
+**You already write prompts. TokenPak compresses them before they hit the API.**
+
+### Minute 1: Install
 
 ```bash
 pip install tokenpak
 ```
 
-If you need ML-based compression features, install the full extras:
+### Minute 2: Start the proxy
 
 ```bash
-pip install tokenpak[ml,tiktoken]
+tokenpak start
+# → ✅ Proxy running on http://localhost:8766
 ```
 
-## Basic Example
+### Minute 3: Point your app at the proxy
 
-Here's a minimal 5-minute example to get you started:
+Change your LLM client's base URL to `http://localhost:8766`. That's it. No other code changes.
+
+### Minute 4: See your savings
+
+```bash
+tokenpak demo     # see compression in action on a sample prompt
+tokenpak cost     # view today's spend and tokens saved
+```
+
+That's it. Every request is now compressed automatically.
+
+---
+
+## SDK Path: Protocol-First
+
+**Use the TokenPak format with any LLM client — no proxy needed.**
+
+### Install
+
+```bash
+pip install tokenpak-sdk
+```
+
+### Compress and send
 
 ```python
-from tokenpak import HeuristicEngine
-from tokenpak.engines.base import CompactionHints
+from tokenpak import TokenPak, Block
 
-# Your long context (could be from a file, API, chat history, etc.)
-context = """
-Long document with 10,000+ tokens...
-[Your actual long text here]
-"""
+pack = TokenPak(budget=4000)
+pack.add_instructions("You are a helpful assistant.")
+pack.add_knowledge("docs", "Your long documentation here...")
+pack.add_conversation([{"role": "user", "content": "Summarize the docs"}])
 
-# Create a compression engine
-engine = HeuristicEngine()
+# Works with any OpenAI-compatible client
+from openai import OpenAI
+client = OpenAI()
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=pack.to_messages()
+)
 
-# Define a target budget (tokens)
-hints = CompactionHints(target_tokens=2048)
-
-# Compress the context
-compressed = engine.compact(context, hints)
-
-# Use the compressed result in your LLM prompt
-prompt = f"""
-Context (compressed):
-{compressed}
-
-Question: What are the key points?
-"""
-
-print(f"Original: {len(context.split())} words")
-print(f"Compressed: {len(compressed.split())} words")
-print(f"Savings: {100 * (1 - len(compressed) / len(context)):.1f}%")
+# See how much was saved
+print(pack.compile().report)
+# → Input: 8,420 tokens → Output: 3,200 tokens | Savings: 62%
 ```
 
-## What Just Happened?
-
-1. **Tokenization:** TokenPak tokenizes your input using tiktoken or a compatible tokenizer.
-2. **Block-based compression:** The heuristic engine identifies important blocks (headers, summaries, semantic boundaries) and removes or condenses less critical content.
-3. **Deterministic output:** The same input always produces the same compressed output, making it safe for reproducible LLM workflows.
-4. **Budget compliance:** The engine respects your target token count while prioritizing information density.
+---
 
 ## Common Use Cases
 
-- **Chat history compression** — Keep long conversation threads within token limits while preserving context
-- **Document retrieval augmentation** — Compress search results before feeding them to your LLM
-- **Multi-turn dialogue** — Maintain context across many exchanges without hitting rate limits
-- **Batch processing** — Process large document collections with a fixed token budget per item
+### "I use Claude Code"
 
-## Verify Your Install
-
-Test that everything is working:
+Claude Code uses an OpenAI-compatible API. Point it at the proxy:
 
 ```bash
-python3 -c "from tokenpak import HeuristicEngine; print('TokenPak installed successfully!')"
+# Start the proxy
+tokenpak start
+
+# Set the base URL in your Claude Code config or environment:
+export ANTHROPIC_BASE_URL=http://localhost:8766
 ```
 
-## Using the Proxy Instead of the SDK
+All requests are automatically compressed before reaching Anthropic. No code changes needed.
 
-If you'd rather route an existing LLM client through TokenPak without changing application code,
-use the proxy path:
+### "I use the OpenAI SDK"
+
+```python
+from openai import OpenAI
+
+# Just change base_url — everything else stays the same
+client = OpenAI(
+    api_key="your-openai-key",
+    base_url="http://localhost:8766"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Your prompt here"}]
+)
+```
+
+### "I use LangChain"
+
+```python
+from langchain_openai import ChatOpenAI
+
+# Point LangChain at the proxy
+llm = ChatOpenAI(
+    model="gpt-4",
+    openai_api_base="http://localhost:8766",
+    openai_api_key="your-key"
+)
+
+response = llm.invoke("Your prompt here")
+```
+
+### "I use LiteLLM / other frameworks"
+
+Most frameworks support a `base_url` or `api_base` parameter. Set it to `http://localhost:8766`.
+
+---
+
+## Troubleshooting
+
+### "It's not connecting"
 
 ```bash
-pip install "tokenpak[serve]"            # install with proxy support
-tokenpak setup                           # auto-configure your LLM client (one-time wizard)
-tokenpak serve --port 8766 --workers 4  # start the proxy
+tokenpak status    # is the proxy running?
+tokenpak start     # start it if not
 ```
 
-`tokenpak setup` detects Claude Code, OpenAI SDK, or Google AI SDK and writes the proxy URL
-into the right config file automatically. See the [Getting Started guide](./getting-started.md)
-for full proxy setup instructions.
+Check that your client is pointing at `http://localhost:8766` (not `https://`).
 
-## Next Steps
+### "My API key isn't being forwarded"
 
-- **[Getting Started](./getting-started.md)** — Proxy setup with `tokenpak setup` and `tokenpak serve`
-- **[Installation Guide](./install-guide.md)** — Detailed setup, Python versions, virtual environments
-- **[API Reference](./api-reference.md)** — Full API documentation and all available options
-- **[Compression Options](./compression.md)** — Advanced configuration and custom engines
-- **[Examples](./examples/README.md)** — Real-world examples and patterns
-- **[CLI Reference](./cli-reference.md)** — Command-line tools for compression tasks
+TokenPak is a passthrough proxy — it never stores or modifies your credentials. Make sure:
+- Your API key is set in your environment: `export ANTHROPIC_API_KEY='sk-...'`
+- Or pass it directly in your client config
 
-## Support
+### "I'm not seeing any savings"
 
-For questions, issues, or feature requests, visit the [TokenPak GitHub repository](https://github.com/tokenpak/tokenpak).
+```bash
+tokenpak cost --week    # check a longer time window
+tokenpak demo           # verify compression is working
+```
+
+Short prompts compress less. Savings show up most on long conversations and large document contexts.
+
+### "The proxy started but requests aren't going through"
+
+Verify your client is using the right port:
+```bash
+curl http://localhost:8766/health
+# → {"status": "ok", ...}
+```
+
+If the health check fails, restart with `tokenpak restart`.
+
+---
+
+## What Do I Do Next?
+
+- **Check your savings:** `tokenpak cost --week`
+- **Tune compression:** See [compression.md](./compression.md) for aggressiveness settings
+- **Index your vault:** `tokenpak index ~/your-docs` for semantic search at zero token cost
+- **Full CLI reference:** [cli-reference.md](./cli-reference.md) — all commands explained
+- **API reference:** [api-reference.md](./api-reference.md) — SDK classes and methods
+
+---
+
+> **Tip:** Run `tokenpak demo` at any time to see live compression on a sample prompt — no proxy needed.

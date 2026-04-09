@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><title>TokenPak — Token Usage</title></head>
+<body>
+  <h1>Token Usage</h1>
+  <p>Total input: {{ total_input | default(0) }}</p>
+  <p>Total output: {{ total_output | default(0) }}</p>
+  <p>Tokens saved: {{ total_saved | default(0) }}</p>
+  {% for row in data %}
+  <tr><td>{{ row.date }}</td><td>{{ row.input_tokens }}</td><td>{{ row.output_tokens }}</td></tr>
+  {% endfor %}
+  {% for v in chart_input %}
+  <span class="input-val">{{ v }}</span>
+  {% endfor %}
+</body>
+</html>

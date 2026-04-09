@@ -1079,7 +1079,7 @@ Persistent agent registry with heartbeat tracking.
 
 Usage:
     registry = AgentRegistry()
-    agent_id = registry.register("trix", "trixbot", {"gpu": False, "memory_gb": 4})
+    agent_id = registry.register("worker-1", "host-1", {"gpu": False, "memory_gb": 4})
     registry.heartbeat(agent_id)
     agents = registry.list_active()
     registry.deregister(agent_id)

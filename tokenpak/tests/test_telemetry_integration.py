@@ -15,6 +15,7 @@ class TestTelemetryCollectorBasics:
         """TelemetryCollector initializes successfully."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             # Try different initialization approaches
             try:
                 collector = TelemetryCollector()
@@ -29,6 +30,7 @@ class TestTelemetryCollectorBasics:
         """Collector accepts and records events."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             try:
                 collector = TelemetryCollector()
             except TypeError:
@@ -55,19 +57,22 @@ class TestEventTracking:
         """Track a completion event with model and token usage."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             try:
                 collector = TelemetryCollector()
             except TypeError:
                 pytest.skip("TelemetryCollector constructor signature unclear")
 
             try:
-                collector.record_event({
-                    "type": "completion",
-                    "model": "claude-sonnet-4-6",
-                    "input_tokens": 100,
-                    "output_tokens": 50,
-                    "cost_cents": 15,
-                })
+                collector.record_event(
+                    {
+                        "type": "completion",
+                        "model": "claude-sonnet-4-6",
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "cost_cents": 15,
+                    }
+                )
             except AttributeError:
                 pytest.skip("Event tracking not yet available")
         except ImportError:
@@ -77,17 +82,20 @@ class TestEventTracking:
         """Track an error event."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             try:
                 collector = TelemetryCollector()
             except TypeError:
                 pytest.skip("TelemetryCollector constructor signature unclear")
 
             try:
-                collector.record_event({
-                    "type": "error",
-                    "error_type": "rate_limit",
-                    "model": "claude-sonnet-4-6",
-                })
+                collector.record_event(
+                    {
+                        "type": "error",
+                        "error_type": "rate_limit",
+                        "model": "claude-sonnet-4-6",
+                    }
+                )
             except AttributeError:
                 pytest.skip("Event tracking not yet available")
         except ImportError:
@@ -101,14 +109,17 @@ class TestTelemetryStorage:
         """Events recorded to collector are persisted."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Record event in first collector instance
                 collector1 = TelemetryCollector(db_path=tmpdir)
-                collector1.record_event({
-                    "type": "completion",
-                    "model": "claude-sonnet-4-6",
-                    "tokens": 100,
-                })
+                collector1.record_event(
+                    {
+                        "type": "completion",
+                        "model": "claude-sonnet-4-6",
+                        "tokens": 100,
+                    }
+                )
 
                 # Create second instance and verify data persists
                 collector2 = TelemetryCollector(db_path=tmpdir)
@@ -121,15 +132,18 @@ class TestTelemetryStorage:
         """Events can be retrieved and queried."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 # Record some events
                 for i in range(5):
-                    collector.record_event({
-                        "type": "completion",
-                        "model": "claude-sonnet-4-6",
-                        "tokens": 100 + i,
-                    })
+                    collector.record_event(
+                        {
+                            "type": "completion",
+                            "model": "claude-sonnet-4-6",
+                            "tokens": 100 + i,
+                        }
+                    )
 
                 # Should be able to query events
                 events = collector.get_events()
@@ -145,6 +159,7 @@ class TestTelemetryAggregation:
         """Aggregate token usage across events."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 events = [
@@ -166,6 +181,7 @@ class TestTelemetryAggregation:
         """Aggregate cost across events."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 events = [
@@ -191,14 +207,17 @@ class TestTelemetryMetrics:
         """Calculate average tokens per event."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 tokens_list = [100, 200, 150, 250]
                 for tokens in tokens_list:
-                    collector.record_event({
-                        "type": "completion",
-                        "tokens": tokens,
-                    })
+                    collector.record_event(
+                        {
+                            "type": "completion",
+                            "tokens": tokens,
+                        }
+                    )
 
                 avg = collector.get_average_tokens_per_event()
                 if avg is not None:
@@ -211,15 +230,18 @@ class TestTelemetryMetrics:
         """Get breakdown of events by model."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 models = ["claude-sonnet-4-6", "gpt-4-turbo", "claude-sonnet-4-6"]
                 for model in models:
-                    collector.record_event({
-                        "type": "completion",
-                        "model": model,
-                        "tokens": 100,
-                    })
+                    collector.record_event(
+                        {
+                            "type": "completion",
+                            "model": model,
+                            "tokens": 100,
+                        }
+                    )
 
                 distribution = collector.get_model_distribution()
                 if distribution is not None:
@@ -235,12 +257,15 @@ class TestEdgeCases:
         """Events with zero tokens are handled gracefully."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
-                collector.record_event({
-                    "type": "completion",
-                    "tokens": 0,
-                })
+                collector.record_event(
+                    {
+                        "type": "completion",
+                        "tokens": 0,
+                    }
+                )
         except (ImportError, AttributeError, TypeError):
             pytest.skip("Event recording not available")
 
@@ -248,6 +273,7 @@ class TestEdgeCases:
         """Events with missing optional fields are accepted."""
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
                 # Minimal event with only required type
@@ -258,18 +284,22 @@ class TestEdgeCases:
     def test_many_events_performance(self):
         """Recording many events doesn't degrade performance."""
         import time
+
         try:
             from tokenpak.telemetry.collector import TelemetryCollector
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 collector = TelemetryCollector(db_path=tmpdir)
 
                 start = time.time()
                 for i in range(100):
-                    collector.record_event({
-                        "type": "completion",
-                        "model": f"model_{i % 3}",
-                        "tokens": 100 + i,
-                    })
+                    collector.record_event(
+                        {
+                            "type": "completion",
+                            "model": f"model_{i % 3}",
+                            "tokens": 100 + i,
+                        }
+                    )
                 elapsed = time.time() - start
 
                 # Should handle 100 events in < 1s
