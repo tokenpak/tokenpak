@@ -298,7 +298,7 @@ TRACE_STORAGE = TraceStorage(max_traces=10)
 # Config — reads ~/.tokenpak/config.yaml with env var overrides
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.config_loader import get as _cfg
+    from tokenpak._internal.config_loader import get as _cfg
 
     print("📄 Config: ~/.tokenpak/config.yaml (env vars override)")
 except ImportError:
@@ -800,6 +800,9 @@ QUERY_REWRITER_ENABLED: bool = _cfg(
 )
 STABILITY_SCORER_ENABLED: bool = _cfg(
     "features.stability_scorer", False, "TOKENPAK_STABILITY_SCORER", bool
+)
+DLP_ENABLED: bool = _cfg(
+    "features.dlp", True, "TOKENPAK_DLP_ENABLED", bool
 )
 
 # WebSocket proxy
@@ -2594,7 +2597,7 @@ def _shadow_validate(original: str, compressed: str) -> bool:
         sys.path.insert(
             0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak._internal.shadow_reader import ShadowReader
 
         reader = ShadowReader()
         result = reader.validate(original=original, compressed=compressed)
@@ -2613,7 +2616,7 @@ def _apply_budget(components: dict, total_tokens: int = None) -> dict:
         sys.path.insert(
             0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
-        from tokenpak.budgeter import Budgeter
+        from tokenpak._internal.budgeter import Budgeter
 
         b = Budgeter()
         return b.allocate(components, total_tokens=total)
@@ -2646,7 +2649,7 @@ def _get_router():
                 from tokenpak.agent.proxy.intent_policy import decide as _policy_decide
 
                 try:
-                    from tokenpak.validation_gate import ValidationGate
+                    from tokenpak._internal.validation_gate import ValidationGate
                 except ImportError:
                     ValidationGate = None  # type: ignore[assignment,misc]
 
@@ -2736,7 +2739,7 @@ _VALIDATION_GATE_LOCK = threading.Lock()
 
 def _has_validation_gate() -> bool:
     try:
-        from tokenpak.validation_gate import ValidationGate  # noqa
+        from tokenpak._internal.validation_gate import ValidationGate  # noqa
 
         return True
     except Exception:
@@ -2750,7 +2753,7 @@ def _get_validation_gate():
     with _VALIDATION_GATE_LOCK:
         if _VALIDATION_GATE_INSTANCE is None:
             try:
-                from tokenpak.validation_gate import ValidationGate
+                from tokenpak._internal.validation_gate import ValidationGate
 
                 _VALIDATION_GATE_INSTANCE = ValidationGate(
                     enabled=True,
@@ -3101,7 +3104,7 @@ def _get_budget_controller():
         with _BUDGET_CTRL_LOCK:
             if _BUDGET_CTRL_INSTANCE is None:
                 try:
-                    from tokenpak.budget_controller import BudgetController
+                    from tokenpak._internal.budget_controller import BudgetController
 
                     _BUDGET_CTRL_INSTANCE = BudgetController()
                 except Exception:
@@ -6058,7 +6061,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # PERF OPT: use singleton BudgetController (avoids per-request import + init)
                     if BUDGET_CONTROLLER_ENABLED and body:
                         try:
-                            from tokenpak.budget_controller import ClassificationResult, IntentClass
+                            from tokenpak._internal.budget_controller import ClassificationResult, IntentClass
 
                             _bc = _get_budget_controller()
                             _bc_tokens = input_tokens or 0
@@ -6086,6 +6089,43 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 return
                         except Exception as _bc_err:
                             SESSION["budget_controller_error"] = str(_bc_err)
+                            pass  # fail-open
+
+                    # Phase 0.25: DLP Scanner — scan outbound prompt for secrets/PII before forwarding
+                    if DLP_ENABLED and body:
+                        try:
+                            from tokenpak.security.dlp import DLPBlockError, DLPScanner
+
+                            _dlp = DLPScanner()
+                            _dlp_text = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else body
+                            if _dlp.mode == "block":
+                                if not _dlp.block_check(_dlp_text):
+                                    _dlp_findings = _dlp.scan(_dlp_text)
+                                    SESSION["dlp_blocked"] = [(f.rule_id, f.severity) for f in _dlp_findings]
+                                    print(f"  🚫 DLP block: {len(_dlp_findings)} secret(s) detected")
+                                    self._send_json(
+                                        {
+                                            "error": {
+                                                "type": "dlp_blocked",
+                                                "message": f"Request blocked by DLP scanner: {len(_dlp_findings)} secret(s) detected",
+                                            }
+                                        },
+                                        status=400,
+                                    )
+                                    return
+                            elif _dlp.mode == "redact":
+                                _dlp_redacted = _dlp.redact(_dlp_text)
+                                if _dlp_redacted != _dlp_text:
+                                    body = _dlp_redacted.encode("utf-8") if isinstance(body, bytes) else _dlp_redacted
+                                    SESSION["dlp_redacted"] = True
+                                    print("  🔒 DLP redact: secrets replaced in outbound body")
+                            else:  # warn (default)
+                                _dlp_findings = _dlp.scan(_dlp_text)
+                                if _dlp_findings:
+                                    SESSION["dlp_findings"] = [(f.rule_id, f.severity) for f in _dlp_findings]
+                                    print(f"  ⚠️ DLP warn: {[(f.rule_id, f.severity) for f in _dlp_findings]}")
+                        except Exception as _dlp_err:
+                            SESSION["dlp_error"] = str(_dlp_err)
                             pass  # fail-open
 
                     # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
@@ -8127,7 +8167,7 @@ setInterval(refresh, REFRESH);
         if DASHBOARD_AUTH_ENABLED:
             from urllib.parse import parse_qs, urlparse
 
-            from tokenpak.token_manager import load_or_create_token
+            from tokenpak._internal.token_manager import load_or_create_token
 
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
