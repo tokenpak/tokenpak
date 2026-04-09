@@ -36,7 +36,6 @@ __all__ = [
     "AsyncLogger",
     "init_logger",
     "get_logger",
-
     # Audit
     "CompileAudit",
     "CacheAudit",
@@ -47,7 +46,6 @@ __all__ = [
     "create_compile_audit",
     "create_cache_audit",
     "create_metrics_audit",
-
     # Middleware
     "LoggingMiddleware",
     "SemanticCacheMiddleware",

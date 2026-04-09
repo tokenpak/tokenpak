@@ -23,6 +23,7 @@ _adapters: Dict[str, Any] = {}
 
 # ── Registration helpers ───────────────────────────────────────────────────
 
+
 def register_compression(name: str, impl: Any) -> None:
     _compression[name] = impl
 
@@ -53,6 +54,7 @@ def register_adapter(name: str, impl: Any) -> None:
 
 # ── Getters ───────────────────────────────────────────────────────────────
 
+
 def get_compression(name: str) -> Optional[Any]:
     return _compression.get(name)
 
@@ -82,6 +84,7 @@ def get_adapters() -> Dict[str, Any]:
 
 
 # ── Plugin discovery (entry_points based) ─────────────────────────────────
+
 
 def _load_plugins() -> None:
     """Discover and load tokenpak_pro plugins via entry_points."""

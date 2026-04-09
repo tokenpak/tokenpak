@@ -98,18 +98,11 @@ class TestWorkersFlag:
 
         monkeypatch.setattr(uvicorn, "run", fake_run)
 
-        # Provide a stub create_ingest_app so fastapi isn't required in test env
+        # Stub create_combined_app so fastapi/ingest imports aren't required
         fake_app = object()
 
-        import types
-        fake_api_mod = types.ModuleType("tokenpak.agent.ingest.api")
-        fake_api_mod.create_ingest_app = lambda prefix="": fake_app
-
-        monkeypatch.setitem(sys.modules, "tokenpak.agent.ingest.api", fake_api_mod)
-        # Also stub the parent package if needed
-        if "tokenpak.agent.ingest" not in sys.modules:
-            fake_ingest_pkg = types.ModuleType("tokenpak.agent.ingest")
-            monkeypatch.setitem(sys.modules, "tokenpak.agent.ingest", fake_ingest_pkg)
+        import tokenpak.agent.dashboard.app as dashboard_app_mod
+        monkeypatch.setattr(dashboard_app_mod, "create_combined_app", lambda: fake_app)
 
         from tokenpak.agent.cli.commands.serve import run_serve_cmd
 

@@ -35,6 +35,7 @@ __all__ = [
 @dataclass
 class ErrorContext:
     """Structured error context for logging"""
+
     timestamp: str
     request_id: str
     error_type: str
@@ -148,9 +149,7 @@ class ErrorLogger:
         except Exception as e:
             logger.error(f"Failed to archive log {log_file.name}: {e}")
 
-    def get_error_summary(
-        self, days: int = 1, error_type: Optional[str] = None
-    ) -> Dict[str, Any]:
+    def get_error_summary(self, days: int = 1, error_type: Optional[str] = None) -> Dict[str, Any]:
         """
         Get error summary for reporting.
 
@@ -245,6 +244,7 @@ def log_exception(request_id: str, context: Optional[Dict[str, Any]] = None):
         def call_llm():
             return openai.ChatCompletion.create(...)
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -253,5 +253,100 @@ def log_exception(request_id: str, context: Optional[Dict[str, Any]] = None):
             except Exception as e:
                 get_error_logger().log_error(request_id, e, context)
                 raise
+
         return wrapper
+
     return decorator
+
+
+# ---------------------------------------------------------------------------
+# Public API additions (backwards-compat shims)
+# ---------------------------------------------------------------------------
+
+from pathlib import Path as _Path
+
+# Canonical log directory constant
+LOGS_DIR = str(_Path(os.path.expanduser("~/.tokenpak/logs")))
+
+
+@dataclass
+class ErrorRecord:
+    """Flat record for a single logged error (compatible with get_error_logs)."""
+
+    request_id: str
+    error_type: str
+    message: str
+    timestamp: str
+    context: Dict[str, Any]
+    stack_trace: str = ""
+
+
+def log_error(
+    request_id: str,
+    error: Exception,
+    context: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Module-level convenience wrapper for get_error_logger().log_error()."""
+    get_error_logger().log_error(request_id, error, context)
+
+
+def get_error_logs(
+    days: int = 7,
+    error_type: Optional[str] = None,
+) -> list:
+    """Return a list of ErrorRecord objects from the log directory."""
+    logger_instance = get_error_logger()
+    log_file = logger_instance.log_dir / "errors.jsonl"
+    records: list = []
+    if not log_file.exists():
+        return records
+    from datetime import timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    try:
+        with open(log_file, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ts_str = entry.get("timestamp", "")
+                try:
+                    ts = datetime.fromisoformat(ts_str)
+                    if ts.tzinfo is None:
+                        from datetime import timezone
+
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts < cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+                etype = entry.get("error_type", "")
+                if error_type and etype != error_type:
+                    continue
+                records.append(
+                    ErrorRecord(
+                        request_id=entry.get("request_id", ""),
+                        error_type=etype,
+                        message=entry.get("message", ""),
+                        timestamp=ts_str,
+                        context=entry.get("context", {}),
+                        stack_trace=entry.get("stack_trace", ""),
+                    )
+                )
+    except OSError:
+        pass
+    return records
+
+
+def get_error_summary(days: int = 7) -> Dict[str, Any]:
+    """Module-level convenience wrapper for ErrorLogger.get_error_summary()."""
+    return get_error_logger().get_error_summary(days)
+
+
+def clear_error_metrics() -> None:
+    """Clear the in-memory Prometheus-style metrics counter."""
+    get_error_logger()._prometheus_metrics.clear()

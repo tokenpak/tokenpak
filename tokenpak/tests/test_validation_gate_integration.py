@@ -47,6 +47,7 @@ class TestBypassMode:
     def test_skip_validation_env_var(self):
         """TOKENPAK_SKIP_GATE=1 allows requests to bypass validation."""
         import os
+
         os.environ["TOKENPAK_SKIP_GATE"] = "1"
         gate = ValidationGate()
         result = gate.validate({})
@@ -135,6 +136,7 @@ class TestValidationPerformance:
     def test_validation_is_fast_for_small_request(self):
         """Validation completes quickly for typical request."""
         import time
+
         gate = ValidationGate()
         request = {"model": "claude-sonnet-4-6", "messages": []}
 
@@ -148,10 +150,7 @@ class TestValidationPerformance:
     def test_validation_handles_many_messages(self):
         """Validation works with large message histories."""
         gate = ValidationGate()
-        messages = [
-            {"role": "user", "content": f"Message {i}"}
-            for i in range(100)
-        ]
+        messages = [{"role": "user", "content": f"Message {i}"} for i in range(100)]
         request = {"model": "claude-sonnet-4-6", "messages": messages}
 
         result = gate.validate(request)
@@ -165,7 +164,7 @@ class TestValidateRequestMethod:
         """validate_request accepts valid JSON payload."""
         gate = ValidationGate()
         payload = {"model": "claude-sonnet-4-6", "messages": []}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -191,7 +190,7 @@ class TestValidateRequestMethod:
         """validate_request fails when input_tokens exceed budget."""
         gate = ValidationGate(token_budget_cap=1000)
         payload = {"model": "claude-sonnet-4-6"}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -205,7 +204,7 @@ class TestValidateRequestMethod:
         """validate_request passes when input_tokens within budget."""
         gate = ValidationGate(token_budget_cap=1000)
         payload = {"model": "claude-sonnet-4-6"}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -218,7 +217,7 @@ class TestValidateRequestMethod:
         """validate_request detects dry_run flags."""
         gate = ValidationGate()
         payload = {"dry_run": True}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -231,7 +230,7 @@ class TestValidateRequestMethod:
         """validate_request detects dry_run in tokenpak namespace."""
         gate = ValidationGate()
         payload = {"tokenpak": {"dry_run": True}}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -244,7 +243,7 @@ class TestValidateRequestMethod:
         """validate_request detects deterministic intent."""
         gate = ValidationGate()
         payload = {"tokenpak": {"deterministic": True}}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -258,7 +257,7 @@ class TestValidateRequestMethod:
         """validate_request fails if deterministic but no context_block."""
         gate = ValidationGate()
         payload = {"tokenpak": {"deterministic": True}}  # No context_block
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -272,13 +271,8 @@ class TestValidateRequestMethod:
     def test_validate_request_with_context_block(self):
         """validate_request accepts context_block."""
         gate = ValidationGate()
-        payload = {
-            "tokenpak": {
-                "deterministic": True,
-                "context_block": "Important context here"
-            }
-        }
-        request_body = json.dumps(payload).encode('utf-8')
+        payload = {"tokenpak": {"deterministic": True, "context_block": "Important context here"}}
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -293,7 +287,7 @@ class TestValidateRequestMethod:
         """validate_request generates fingerprint."""
         gate = ValidationGate()
         payload = {}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -308,7 +302,7 @@ class TestValidateRequestMethod:
         """validate_request includes plan in result."""
         gate = ValidationGate()
         payload = {}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -329,7 +323,7 @@ class TestBudgetValidation:
         """Budget cap of 0 means unlimited."""
         gate = ValidationGate(token_budget_cap=0)
         payload = {}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         result = gate.validate_request(
             request_body=request_body,
@@ -342,7 +336,7 @@ class TestBudgetValidation:
         """Custom budget cap is enforced."""
         gate = ValidationGate(token_budget_cap=5000)
         payload = {}
-        request_body = json.dumps(payload).encode('utf-8')
+        request_body = json.dumps(payload).encode("utf-8")
 
         # Within budget
         result1 = gate.validate_request(

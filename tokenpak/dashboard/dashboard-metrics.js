@@ -37,7 +37,7 @@ async function fetchDashboardMetrics() {
 function updateConnectionStatus(isConnected) {
     const dot = document.getElementById('connection-status');
     const text = document.getElementById('status-text');
-    
+
     if (isConnected) {
         dot.classList.remove('status-loading', 'status-error');
         dot.classList.add('status-ok');
@@ -47,7 +47,7 @@ function updateConnectionStatus(isConnected) {
         dot.classList.add('status-error');
         text.textContent = 'Disconnected';
     }
-    
+
     if (dashboardState.lastUpdate) {
         document.getElementById('last-update').textContent = `Last update: ${dashboardState.lastUpdate}`;
     }
@@ -92,12 +92,12 @@ function updateDashboard(metrics) {
         timestamp: Date.now(),
         metrics: JSON.parse(JSON.stringify(metrics))
     });
-    
+
     // Trim history
     if (dashboardState.history.length > dashboardState.maxHistorySize) {
         dashboardState.history = dashboardState.history.slice(-dashboardState.maxHistorySize);
     }
-    
+
     // Update all metric displays
     updateMetric1(metrics);      // Request count + throughput
     updateMetric2(metrics);      // Latency histogram
@@ -115,9 +115,9 @@ function updateDashboard(metrics) {
  */
 function updateMetric1(metrics) {
     const requests = metrics.requests || {};
-    document.getElementById('metric1-requests').textContent = 
+    document.getElementById('metric1-requests').textContent =
         formatNumber(requests.total || 0);
-    document.getElementById('metric1-throughput').textContent = 
+    document.getElementById('metric1-throughput').textContent =
         (requests.throughput_req_per_sec || 0).toFixed(3);
 }
 
@@ -126,13 +126,13 @@ function updateMetric1(metrics) {
  */
 function updateMetric2(metrics) {
     const latency = metrics.latency || {};
-    document.getElementById('metric2-p50').textContent = 
+    document.getElementById('metric2-p50').textContent =
         (latency.p50_ms || 0).toFixed(0) + 'ms';
-    document.getElementById('metric2-p95').textContent = 
+    document.getElementById('metric2-p95').textContent =
         (latency.p95_ms || 0).toFixed(0) + 'ms';
-    document.getElementById('metric2-p99').textContent = 
+    document.getElementById('metric2-p99').textContent =
         (latency.p99_ms || 0).toFixed(0) + 'ms';
-    document.getElementById('metric2-avg').textContent = 
+    document.getElementById('metric2-avg').textContent =
         (latency.avg_ms || 0).toFixed(0) + 'ms';
 }
 
@@ -140,9 +140,9 @@ function updateMetric2(metrics) {
  * KEY METRIC 3: Model Provider Distribution
  */
 function updateMetric3(metrics) {
-    document.getElementById('metric3-model-count').textContent = 
+    document.getElementById('metric3-model-count').textContent =
         metrics.model_count || 0;
-    
+
     // Find top cost model
     let topCost = 0;
     if (metrics.models) {
@@ -152,7 +152,7 @@ function updateMetric3(metrics) {
             }
         }
     }
-    document.getElementById('metric3-top-cost').textContent = 
+    document.getElementById('metric3-top-cost').textContent =
         '$' + topCost.toFixed(2);
 }
 
@@ -161,7 +161,7 @@ function updateMetric3(metrics) {
  */
 function updateMetric4(metrics) {
     const routing = metrics.routing || {};
-    document.getElementById('metric4-routing').textContent = 
+    document.getElementById('metric4-routing').textContent =
         formatPercent(routing.smart_routing_hit_rate || 0);
 }
 
@@ -170,9 +170,9 @@ function updateMetric4(metrics) {
  */
 function updateMetric5(metrics) {
     const cache = metrics.cache || {};
-    document.getElementById('metric5-cache-ratio').textContent = 
+    document.getElementById('metric5-cache-ratio').textContent =
         formatPercent(cache.hit_ratio || 0);
-    document.getElementById('metric5-cache-read').textContent = 
+    document.getElementById('metric5-cache-read').textContent =
         formatNumber(cache.read_tokens || 0);
 }
 
@@ -181,11 +181,11 @@ function updateMetric5(metrics) {
  */
 function updateMetric6(metrics) {
     const errors = metrics.errors || {};
-    document.getElementById('metric6-error-rate').textContent = 
+    document.getElementById('metric6-error-rate').textContent =
         (errors.error_rate * 100).toFixed(2) + '%';
-    document.getElementById('metric6-error-count').textContent = 
+    document.getElementById('metric6-error-count').textContent =
         errors.error_count || 0;
-    
+
     // Top failure type
     let topFailure = 'None';
     if (errors.top_failures && Object.keys(errors.top_failures).length > 0) {
@@ -201,9 +201,9 @@ function updateMetric6(metrics) {
  */
 function updateMetric7(metrics) {
     const streaming = metrics.streaming || {};
-    document.getElementById('metric7-streaming').textContent = 
+    document.getElementById('metric7-streaming').textContent =
         streaming.count || 0;
-    document.getElementById('metric7-uptime').textContent = 
+    document.getElementById('metric7-uptime').textContent =
         formatDuration(metrics.uptime_seconds || 0);
 }
 
@@ -212,13 +212,13 @@ function updateMetric7(metrics) {
  */
 function updateMetric8(metrics) {
     const window24h = metrics.window_24h || {};
-    document.getElementById('metric8-input').textContent = 
+    document.getElementById('metric8-input').textContent =
         formatNumber(window24h.input_tokens || 0);
-    document.getElementById('metric8-output').textContent = 
+    document.getElementById('metric8-output').textContent =
         formatNumber(window24h.output_tokens || 0);
-    document.getElementById('metric8-cost').textContent = 
+    document.getElementById('metric8-cost').textContent =
         '$' + (window24h.total_cost || 0).toFixed(2);
-    document.getElementById('metric8-protected').textContent = 
+    document.getElementById('metric8-protected').textContent =
         formatNumber(window24h.protected_tokens || 0);
 }
 
@@ -228,14 +228,14 @@ function updateMetric8(metrics) {
 function updateModelsTable(metrics) {
     const tbody = document.getElementById('modelsBody');
     if (!tbody) return;  // Element might not exist in simplified view
-    
+
     tbody.innerHTML = '';
     const models = metrics.models || {};
-    
+
     // Sort by cost (descending)
     const sorted = Object.entries(models)
         .sort((a, b) => (b[1].cost || 0) - (a[1].cost || 0));
-    
+
     for (const [modelName, data] of sorted) {
         const row = document.createElement('tr');
         row.innerHTML = `

@@ -16,6 +16,7 @@ Usage::
     normalized = resolver.normalize_text("token usage for gpt last 7 days")
     # "usage for model last 7 days"
 """
+
 from .loader import SemanticMapError, SemanticMapLoader
 from .resolver import ResolveResult, SemanticResolver
 

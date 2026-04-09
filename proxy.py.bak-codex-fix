@@ -14,7 +14,7 @@ Env vars:
     TOKENPAK_MODE             (default: hybrid) — strict|hybrid|aggressive
     TOKENPAK_COMPACT          (default: 1) — master on/off switch
     TOKENPAK_COMPACT_MAX_CHARS      (default: 120) — max chars for compressed text
-    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default: 4500) — skip compaction below this
+    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default: 1500) — skip compaction below this
     TOKENPAK_COMPACT_CACHE_SIZE     (default: 2000)
     TOKENPAK_DB               (default: .ocp/monitor.db)
     TOKENPAK_VAULT_INDEX      (default: ~/vault/.tokenpak) — path to shared vault index
@@ -34,7 +34,7 @@ Env vars:
     
     # Tier 2A Modules (2026-03-11, all default OFF)
     TOKENPAK_ERROR_NORMALIZER  (default: 0) — normalize error responses across providers
-    TOKENPAK_BUDGET_CONTROLLER (default: 0) — enforce token budget limits per request
+    TOKENPAK_BUDGET_CONTROLLER (default: 1) — enforce token budget limits per request
     TOKENPAK_REQUEST_LOGGER    (default: 0) — structured request/response logging
     TOKENPAK_SALIENCE_ROUTER   (default: 0) — content-type-aware extraction before compaction
     
@@ -276,7 +276,7 @@ MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB"
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
-COMPACT_THRESHOLD_TOKENS = _cfg("compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)
+COMPACT_THRESHOLD_TOKENS = _cfg("compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)  # Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
 
@@ -301,7 +301,7 @@ TRACE_ENABLED: bool = _cfg("features.trace", False, "TOKENPAK_TRACE", bool)
 
 # Tier 2 modules
 ERROR_NORMALIZER_ENABLED: bool = _cfg("features.error_normalizer", False, "TOKENPAK_ERROR_NORMALIZER", bool)
-BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", False, "TOKENPAK_BUDGET_CONTROLLER", bool)
+BUDGET_CONTROLLER_ENABLED: bool = _cfg("features.budget_controller", True, "TOKENPAK_BUDGET_CONTROLLER", bool)  # Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
 REQUEST_LOGGER_ENABLED: bool = _cfg("features.request_logger", False, "TOKENPAK_REQUEST_LOGGER", bool)
 SALIENCE_ROUTER_ENABLED: bool = _cfg("features.salience_router", False, "TOKENPAK_SALIENCE_ROUTER", bool)
 CACHE_REGISTRY_ENABLED: bool = _cfg("features.cache_registry", False, "TOKENPAK_CACHE_REGISTRY", bool)
@@ -938,6 +938,23 @@ if TERM_RESOLVER_AVAILABLE and TERM_RESOLVER_ENABLED:
         print(f"  🔤 Term resolver initialized (top_k={TERM_RESOLVER_TOP_K}, enabled={TERM_RESOLVER_ENABLED})")
     except Exception as e:
         print(f"  ⚠️ Failed to initialize term resolver: {e}")
+
+# ---------------------------------------------------------------------------
+# RecipeEngine — eager load OSS recipes on serve start
+# Flipped 2026-04-07 — see TRIX-01 / pmgtm initiative
+# ---------------------------------------------------------------------------
+_RECIPE_ENGINE_MODULE_PATH = str(Path.home() / "vault" / "Projects" / "ocp-protocol" / "packages" / "pypi")
+if _RECIPE_ENGINE_MODULE_PATH not in sys.path:
+    sys.path.insert(0, _RECIPE_ENGINE_MODULE_PATH)
+try:
+    from tokenpak.agent.compression.recipes import RecipeEngine as _EagerRecipeEngine
+    _EAGER_RECIPE_ENGINE = _EagerRecipeEngine()
+    print("  📖 RecipeEngine loaded (OSS recipes ready)")
+except Exception as _re_err:
+    _EagerRecipeEngine = None  # type: ignore[assignment,misc]
+    _EAGER_RECIPE_ENGINE = None
+    print(f"  ⚠️  RecipeEngine unavailable: {_re_err}")
+
 
 # Global capsule builder instance
 try:
