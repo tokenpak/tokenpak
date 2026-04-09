@@ -30,6 +30,7 @@ _REDIRECTS = {
     "telemetry": "tokenpak.telemetry",
     "vault": "tokenpak.vault",
     # _internal modules (moved into tokenpak._internal/)
+    "config": "tokenpak._internal.config",
     "auth": "tokenpak._internal.auth",
     "debug": "tokenpak._internal.debug",
     "fingerprint": "tokenpak._internal.fingerprint",

@@ -43,6 +43,10 @@ What anonymous metrics include:
 - Model names
 - OS/Python version
 - TokenPak version
+- **Active profile** — the loaded workflow profile name (e.g. `balanced`, `agentic`, `claude-code-cli`).
+  This is an anonymous categorical string that tells us which mode users adopt most.
+- **Consumption mode** — the auto-detected invocation mode (one of `cli`, `tui`, `tmux`, `sdk`, `ide`, `cron`).
+  Detected from environment variables at runtime; no user-identifying information.
 
 What they never include: prompts, responses, file names, API keys, user identifiers.
 
