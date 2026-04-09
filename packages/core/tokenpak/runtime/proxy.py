@@ -88,6 +88,16 @@ from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
 from tokenpak.runtime.providers import Provider, detect_provider
 
+# ---------------------------------------------------------------------------
+# Feature imports — EmbeddingRouter
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.proxy.adapters.embedding_router import EmbeddingRouter as _EmbeddingRouter
+    _EMBEDDING_ROUTER_AVAILABLE = True
+except Exception:
+    _EmbeddingRouter = None  # type: ignore[assignment,misc]
+    _EMBEDDING_ROUTER_AVAILABLE = False
+
 # CACHE-P4-001: CacheSpec normalized config schema
 try:
     from tokenpak.runtime.cache_spec import (
@@ -930,6 +940,7 @@ _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
 
 ADAPTER_REGISTRY = build_default_registry()
+_EMBEDDING_ROUTER = _EmbeddingRouter() if _EMBEDDING_ROUTER_AVAILABLE else None
 
 
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
@@ -5635,6 +5646,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._serve_api_docs()
         elif self.path == "/openapi.yaml":
             self._serve_openapi_yaml()
+        elif self.path == "/v1/embeddings/providers":
+            self._handle_embedding_providers_status()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
         else:
@@ -8379,6 +8392,20 @@ setInterval(refresh, REFRESH);
             self.wfile.write(body)
         except Exception as e:
             self._send_json({"error": {"type": "server_error", "message": str(e)}}, status=500)
+
+    def _handle_embedding_providers_status(self):
+        """Return status of all embedding providers as JSON.
+
+        Response: {providers: [{name, available, healthy, default_model, key_set, cooldown_until}]}
+        Always returns 200; reports unavailability via the available/key_set fields.
+        """
+        if _EMBEDDING_ROUTER is None:
+            self._send_json({
+                "providers": [],
+                "error": "EmbeddingRouter not available — install embedding adapters",
+            })
+            return
+        self._send_json({"providers": _EMBEDDING_ROUTER.get_providers_status()})
 
     def _send_json(self, data, status=200):
         body = json.dumps(data, separators=(",", ":")).encode()  # compact JSON: faster + smaller

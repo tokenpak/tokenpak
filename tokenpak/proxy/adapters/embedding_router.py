@@ -46,6 +46,26 @@ _PROVIDER_UPSTREAM_DEFAULTS: Dict[str, str] = {
     "cohere": "https://api.cohere.com",
 }
 
+# Maps provider name → API key environment variable name used to check availability.
+_PROVIDER_KEY_ENV: Dict[str, str] = {
+    "voyage": "VOYAGE_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "cohere": "CO_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "jina": "JINA_API_KEY",
+    "ollama": "TOKENPAK_OLLAMA_URL",
+}
+
+# Default embedding model per provider.
+_PROVIDER_DEFAULT_MODEL: Dict[str, str] = {
+    "voyage": "voyage-3.5",
+    "openai": "text-embedding-3-small",
+    "cohere": "embed-english-v3.0",
+    "gemini": "gemini-embedding-001",
+    "jina": "jina-embeddings-v3",
+    "ollama": "nomic-embed-text",
+}
+
 # Cost per 1M tokens in USD.  Mirrors EMBEDDING_COST_PER_1M in anon_metrics.
 _COST_PER_1M: Dict[str, float] = {
     "voyage": 0.06,
@@ -384,6 +404,36 @@ class EmbeddingRouter:
                     "last_error_code": None,
                     "last_error_time": 0.0,
                 }
+        return result
+
+    def get_providers_status(self) -> List[Dict]:
+        """Return status of all configured providers.
+
+        Each entry contains: name, available, healthy, default_model, key_set, cooldown_until.
+        - available/key_set: True if the provider's API key env var is set.
+        - healthy: True if the provider is not in a cooldown period.
+        - cooldown_until: ISO timestamp if in cooldown, else null.
+        """
+        health = self.get_health_status()
+        result: List[Dict] = []
+        for provider in self._providers:
+            key_env = _PROVIDER_KEY_ENV.get(provider)
+            key_set = bool(os.environ.get(key_env, "").strip()) if key_env else False
+            h = health.get(provider, {})
+            healthy = h.get("healthy", True)
+            cooldown_raw = h.get("cooldown_until", 0.0)
+            cooldown_until = (
+                None if (not cooldown_raw or cooldown_raw <= time.time())
+                else cooldown_raw
+            )
+            result.append({
+                "name": provider,
+                "available": key_set,
+                "healthy": healthy,
+                "default_model": _PROVIDER_DEFAULT_MODEL.get(provider),
+                "key_set": key_set,
+                "cooldown_until": cooldown_until,
+            })
         return result
 
     # ------------------------------------------------------------------
