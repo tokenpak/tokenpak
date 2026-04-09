@@ -10,6 +10,8 @@
 
 TokenPak is an open-source LLM proxy agent that compresses context, routes requests intelligently, and tracks costs — all without touching your prompts or credentials.
 
+**Evaluating alternatives?** See [how TokenPak compares to Helicone, LangSmith, LiteLLM, Portkey, Langfuse, and OpenRouter](docs/comparison.md).
+
 **Protocol spec (v1.0):**
 - 📜 Spec: [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 - ✅ Schema: [`schemas/tokenpak-v1.0.json`](schemas/tokenpak-v1.0.json)

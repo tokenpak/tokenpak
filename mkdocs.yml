@@ -74,6 +74,7 @@ nav:
     - Compression: compression.md
     - Caching: cache.md
     - Telemetry & Privacy: telemetry.md
+  - Compare: comparison.md
   - Blog:
     - Why Zero Data Architecture: blog/zero-data-architecture.md
     - Save 35% on LLM Tokens: blog/save-35-percent-tokens.md
