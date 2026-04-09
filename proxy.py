@@ -5549,6 +5549,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._reverse_proxy("POST")
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
+        elif self.path.startswith("/codex/"):
+            self._reverse_proxy("POST")
         elif self.path == "/ingest" or self.path == "/ingest/batch":
             self._ingest(self.path)
         else:
