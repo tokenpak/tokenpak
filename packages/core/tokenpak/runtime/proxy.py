@@ -3792,6 +3792,17 @@ MODEL_COSTS = {
     "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
 }
 
+# Embedding provider cost per 1M tokens in USD (TPK-EMBED-13).
+# Used by _handle_embeddings() and EmbeddingRouter for cost telemetry.
+EMBEDDING_COST_PER_1M: Dict[str, float] = {
+    "voyage": 0.06,
+    "openai": 0.02,
+    "jina": 0.02,
+    "gemini": 0.0,
+    "ollama": 0.0,
+    "cohere": 0.1,
+}
+
 
 # ---------------------------------------------------------------------------
 # Cache Cost Multipliers — per-provider cache read/creation pricing
@@ -7803,6 +7814,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # never break the proxy
+                # Embedding telemetry is emitted by EmbeddingRouter._emit_telemetry()
+                # when _handle_embeddings() routes through EmbeddingRouter.handle_request().
+                # See: tokenpak/proxy/adapters/embedding_router.py
                 # Record request latency for p50/p99 tracking
                 _req_elapsed_ms = (time.time() - t0) * 1000
                 with _latency_lock:

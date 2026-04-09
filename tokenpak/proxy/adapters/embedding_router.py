@@ -17,6 +17,7 @@ Environment:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -44,6 +45,22 @@ _PROVIDER_UPSTREAM_DEFAULTS: Dict[str, str] = {
     "openai": "https://api.openai.com",
     "cohere": "https://api.cohere.com",
 }
+
+# Cost per 1M tokens in USD.  Mirrors EMBEDDING_COST_PER_1M in anon_metrics.
+_COST_PER_1M: Dict[str, float] = {
+    "voyage": 0.06,
+    "openai": 0.02,
+    "jina": 0.02,
+    "gemini": 0.0,
+    "ollama": 0.0,
+    "cohere": 0.1,
+}
+
+
+def _calc_embedding_cost(provider: str, input_tokens: int) -> float:
+    """Return estimated USD cost for an embedding request."""
+    rate = _COST_PER_1M.get(provider, 0.0)
+    return round(rate * input_tokens / 1_000_000, 8)
 
 
 # ---------------------------------------------------------------------------
@@ -223,11 +240,18 @@ class EmbeddingRouter:
     # Public API
     # ------------------------------------------------------------------
 
-    def handle_request(self, request_body: bytes) -> Tuple[int, Dict[str, str], bytes]:
+    def handle_request(
+        self,
+        request_body: bytes,
+        *,
+        cache_hit: bool = False,
+    ) -> Tuple[int, Dict[str, str], bytes]:
         """Route an embedding request through the provider failover chain.
 
         Args:
             request_body: Raw request body bytes (JSON payload for /v1/embeddings).
+            cache_hit:    True if the caller already served this from a local cache.
+                          Used in telemetry and _tokenpak metadata only.
 
         Returns:
             Tuple of (status_code, response_headers, response_body).
@@ -241,10 +265,23 @@ class EmbeddingRouter:
                 "inject a ProviderCallFn before calling handle_request()"
             )
 
+        t0 = time.time()
         healthy_providers = [p for p in self._providers if self._health.is_healthy(p)]
 
         if not healthy_providers:
-            return self._all_cooldown_response()
+            status, headers, body = self._all_cooldown_response()
+            self._emit_telemetry(
+                provider="",
+                model="",
+                request_body=request_body,
+                response_body=body,
+                latency_ms=(time.time() - t0) * 1000,
+                cache_hit=cache_hit,
+                fallback_used=False,
+                status=status,
+                error="all_providers_in_cooldown",
+            )
+            return status, headers, body
 
         tried: List[str] = []
 
@@ -266,12 +303,32 @@ class EmbeddingRouter:
                 continue
 
             if 200 <= status < 300:
-                if tried:
+                fallback_used = bool(tried)
+                if fallback_used:
                     logger.info(
                         "embedding_router: success on provider=%s after skipping %s",
                         provider,
                         tried,
                     )
+                latency_ms = (time.time() - t0) * 1000
+                body = self._inject_tokenpak(
+                    body=body,
+                    provider=provider,
+                    latency_ms=latency_ms,
+                    cached=cache_hit,
+                    fallback_used=fallback_used,
+                )
+                self._emit_telemetry(
+                    provider=provider,
+                    model="",
+                    request_body=request_body,
+                    response_body=body,
+                    latency_ms=latency_ms,
+                    cache_hit=cache_hit,
+                    fallback_used=fallback_used,
+                    status=status,
+                    error=None,
+                )
                 return status, headers, body
 
             if status in (401, 403, 429):
@@ -293,7 +350,19 @@ class EmbeddingRouter:
             )
 
         # All providers tried and failed
-        return self._exhausted_response(tried)
+        status, headers, body = self._exhausted_response(tried)
+        self._emit_telemetry(
+            provider="",
+            model="",
+            request_body=request_body,
+            response_body=body,
+            latency_ms=(time.time() - t0) * 1000,
+            cache_hit=cache_hit,
+            fallback_used=bool(tried),
+            status=status,
+            error="all_providers_failed",
+        )
+        return status, headers, body
 
     def get_health_status(self) -> Dict[str, Any]:
         """Return health state dict for all known providers.
@@ -367,6 +436,104 @@ class EmbeddingRouter:
 
         # Should not be reached
         return None, {}, b""  # pragma: no cover
+
+    # ------------------------------------------------------------------
+    # Telemetry and _tokenpak injection helpers
+    # ------------------------------------------------------------------
+
+    def _inject_tokenpak(
+        self,
+        body: bytes,
+        provider: str,
+        latency_ms: float,
+        cached: bool,
+        fallback_used: bool,
+    ) -> bytes:
+        """Inject _tokenpak metadata block into a successful JSON response body.
+
+        Parses the body JSON and adds a '_tokenpak' key.  If parsing fails
+        the original body is returned unchanged (fail-open).
+        """
+        try:
+            parsed = json.loads(body)
+            upstream_model = ""
+            if isinstance(parsed, dict):
+                # OpenAI-compatible response has 'model' at top level
+                upstream_model = parsed.get("model", "")
+            parsed["_tokenpak"] = {
+                "provider": provider,
+                "upstream_model": upstream_model,
+                "latency_ms": round(latency_ms, 1),
+                "cached": cached,
+                "fallback_used": fallback_used,
+            }
+            return json.dumps(parsed).encode()
+        except Exception:
+            return body  # fail-open: never corrupt a response
+
+    def _emit_telemetry(
+        self,
+        *,
+        provider: str,
+        model: str,
+        request_body: bytes,
+        response_body: bytes,
+        latency_ms: float,
+        cache_hit: bool,
+        fallback_used: bool,
+        status: int,
+        error: Optional[str],
+    ) -> None:
+        """Write one embedding telemetry record. Never raises."""
+        try:
+            # Parse request for input_count
+            input_count = 0
+            try:
+                req = json.loads(request_body)
+                inp = req.get("input", [])
+                input_count = len(inp) if isinstance(inp, list) else (1 if inp else 0)
+            except Exception:
+                pass
+
+            # Parse response for model, tokens, dimensions
+            upstream_model = model
+            input_tokens = 0
+            dimensions = 0
+            try:
+                resp = json.loads(response_body)
+                if isinstance(resp, dict):
+                    upstream_model = resp.get("model", model) or model
+                    usage = resp.get("usage", {})
+                    input_tokens = (
+                        usage.get("total_tokens")
+                        or usage.get("prompt_tokens")
+                        or 0
+                    )
+                    data = resp.get("data", [])
+                    if data and isinstance(data, list):
+                        emb = data[0].get("embedding", [])
+                        dimensions = len(emb) if isinstance(emb, list) else 0
+            except Exception:
+                pass
+
+            cost_usd = _calc_embedding_cost(provider, input_tokens)
+
+            from tokenpak.telemetry.anon_metrics import record_embedding_request
+
+            record_embedding_request(
+                provider=provider,
+                model=upstream_model,
+                input_count=input_count,
+                input_tokens=input_tokens,
+                dimensions=dimensions,
+                latency_ms=latency_ms,
+                cache_hit=cache_hit,
+                fallback_used=fallback_used,
+                cost_usd=cost_usd,
+                error=error,
+            )
+        except Exception:
+            pass  # telemetry must never break the proxy
 
     def _all_cooldown_response(self) -> Tuple[int, Dict[str, str], bytes]:
         """503 response when every provider is in cooldown."""

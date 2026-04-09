@@ -23,7 +23,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 METRICS_DB = Path(os.path.expanduser("~/.tokenpak/metrics.db"))
 
@@ -339,5 +339,78 @@ def record_request(
             consumption_mode=_mode,
         )
         get_store().record(rec)
+    except Exception:
+        pass  # telemetry must never break the proxy
+
+
+# ---------------------------------------------------------------------------
+# Embedding telemetry
+# ---------------------------------------------------------------------------
+
+_EMBEDDING_TELEMETRY_FILE = Path(os.path.expanduser("~/.tokenpak/embedding_telemetry.jsonl"))
+
+# Cost per 1M tokens in USD, keyed by provider name.
+# Source: provider pricing docs (as of 2026-04-09).
+EMBEDDING_COST_PER_1M: Dict[str, float] = {
+    "voyage": 0.06,
+    "openai": 0.02,
+    "jina": 0.02,
+    "gemini": 0.0,
+    "ollama": 0.0,
+    "cohere": 0.1,
+}
+
+
+def record_embedding_request(
+    *,
+    provider: str,
+    model: str,
+    input_count: int,
+    input_tokens: int,
+    dimensions: int,
+    latency_ms: float,
+    cache_hit: bool = False,
+    fallback_used: bool = False,
+    cost_usd: float = 0.0,
+    error: Optional[str] = None,
+) -> None:
+    """Record one embedding request to the embedding telemetry JSONL file.
+
+    Writes to ~/.tokenpak/embedding_telemetry.jsonl — same directory as metrics.db.
+    Never raises; all errors are silently suppressed to avoid breaking the proxy.
+
+    Args:
+        provider:      Provider name (e.g. "voyage", "openai").
+        model:         Model name returned by the provider.
+        input_count:   Number of input strings in the batch.
+        input_tokens:  Total tokens consumed (from usage.total_tokens).
+        dimensions:    Embedding vector dimensions (0 if unknown).
+        latency_ms:    End-to-end request latency in milliseconds.
+        cache_hit:     True if the response was served from the embedding cache.
+        fallback_used: True if a fallback provider was used.
+        cost_usd:      Estimated cost in USD.
+        error:         Error message if the request failed, else None.
+    """
+    try:
+        import json as _json
+        from datetime import datetime, timezone
+
+        entry = {
+            "type": "embedding",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "provider": provider,
+            "model": model,
+            "input_count": input_count,
+            "input_tokens": input_tokens,
+            "dimensions": dimensions,
+            "latency_ms": round(latency_ms, 1),
+            "cache_hit": cache_hit,
+            "fallback_used": fallback_used,
+            "cost_usd": round(cost_usd, 8),
+            "error": error,
+        }
+        _EMBEDDING_TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_EMBEDDING_TELEMETRY_FILE, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(entry) + "\n")
     except Exception:
         pass  # telemetry must never break the proxy
