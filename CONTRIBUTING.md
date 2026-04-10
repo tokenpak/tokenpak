@@ -91,6 +91,109 @@ tokenpak/
 
 ---
 
+## Repo Map: Canonical vs Legacy Paths
+
+This section exists specifically so you don't need private context to orient yourself. Read it before writing any new code.
+
+### The canonical source tree
+
+All production code lives in `tokenpak/` (the Python package). This is the source of truth.
+
+```
+tokenpak/                     ← repo root
+├── tokenpak/                 ← THE canonical package (install via pip)
+│   ├── proxy/                ← Proxy request pipeline, cache, routing
+│   ├── compression/          ← Compression algorithms and pipeline
+│   ├── engines/              ← Compaction engine implementations
+│   ├── telemetry/            ← Usage tracking and cost analytics
+│   ├── agent/                ← Multi-agent coordination and handoff
+│   ├── agentic/              ← Agentic workflow primitives
+│   ├── adapters/             ← Provider adapters (OpenAI, Anthropic, etc.)
+│   ├── routing/              ← Route selection and fallback rules
+│   ├── cache/                ← Response caching
+│   ├── registry/             ← Block registry
+│   ├── cli/                  ← CLI subcommand implementations
+│   ├── runtime/              ← Runtime support (provider detection, cache spec)
+│   ├── plugins/              ← Plugin interface + examples
+│   ├── validation/           ← Schema and config validation
+│   ├── connectors/           ← External data source connectors
+│   ├── _internal/            ← Private internals (not public API — do not import directly)
+│   ├── cli.py                ← CLI entry point (`tokenpak <cmd>`)
+│   ├── budgeter.py           ← Token budget allocation
+│   ├── tokens.py             ← Token counting utilities
+│   ├── pack.py               ← Context packing (ContextPack, PackBlock)
+│   └── ...
+├── packages/                 ← Independently-published adapter packages
+│   ├── langchain-tokenpak/   ← LangChain integration
+│   ├── llamaindex-tokenpak/  ← LlamaIndex integration
+│   ├── crewai-tokenpak/      ← CrewAI integration
+│   ├── autogen-tokenpak/     ← AutoGen integration
+│   ├── langfuse-tokenpak/    ← Langfuse observability integration
+│   ├── tokenpak-local/       ← Local OpenAI-compatible SDK wrapper
+│   ├── tokenpak-agents/      ← Agent coordination package
+│   ├── tokenpak-js/          ← JavaScript/TypeScript SDK
+│   ├── tokenpak-vectordb/    ← Vector database integration
+│   └── core/                 ← Shared core (see note below)
+├── tests/                    ← Integration and system tests (repo root)
+├── docs/                     ← Documentation (mkdocs source)
+├── recipes/                  ← Reusable compression recipes
+├── examples/                 ← Runnable usage examples
+├── schemas/                  ← JSON schemas for config/blocks
+└── scripts/                  ← Utility scripts (CI, release, etc.)
+```
+
+### Where new code should land
+
+| What you are adding | Where it goes |
+|---|---|
+| New compression algorithm | `tokenpak/compression/` |
+| New provider adapter | `tokenpak/adapters/` |
+| New routing rule | `tokenpak/routing/` |
+| New CLI subcommand | `tokenpak/cli/` + register in `tokenpak/cli.py` |
+| New proxy middleware | `tokenpak/proxy/` |
+| New agent primitive | `tokenpak/agent/` or `tokenpak/agentic/` |
+| New plugin | `tokenpak/plugins/` (see Plugin section below) |
+| Framework integration (LangChain, etc.) | `packages/<framework>-tokenpak/` |
+| Unit tests for `tokenpak/` code | `tokenpak/tests/` |
+| Integration tests | `tests/` (repo root) |
+| New public API symbol | `tokenpak/__init__.py` lazy map |
+
+### Legacy and parallel paths — do not add new code here
+
+The following paths exist for backward compatibility or are development artifacts. They look like source files but are **not** the canonical location for new work.
+
+| Path | Status | What it is |
+|---|---|---|
+| `proxy.py` (repo root) | **Runtime entry point** — do not replace | The server process that `tokenpak start` launches. It imports from `tokenpak.proxy.*`. It's being incrementally migrated into the modular tree; add new proxy features to `tokenpak/proxy/` instead. |
+| `proxy_v4.py` | **Legacy shim** — do not add to | Re-exports globals from the old monolith so legacy tests can still be collected. Treat as read-only. |
+| `proxy.py.bak*` | **Development artifacts** — ignore | Working backups from active hot-patching sessions. Not part of the canonical tree. |
+| `tokenpak/runtime/proxy.py` | **Compatibility shim** — do not add to | Bridges the old monolith symbols to their new modular homes. New proxy code goes in `tokenpak/proxy/`. |
+| `tokenpak/_internal/` | **Private internals** — do not import | Implementation details used inside the package only. The public API is `tokenpak/__init__.py`. |
+| `packages/core/` | **Parallel extraction tree** — see note | Mirrors parts of `tokenpak/` during incremental extraction. If you're unsure whether to touch this, ask in an issue first. |
+| `tests.old/` | **Archived tests** — do not add to | Superseded by `tests/` (root) and `tokenpak/tests/`. |
+| `_archive/` and `archive/` | **Archived files** — do not add to | Historical reference only. |
+| `build/` and `dist/` | **Build artifacts** — do not edit | Auto-generated by `make build`. |
+
+### The `proxy.py` situation
+
+`proxy.py` at the repo root is the **live server entry point** — it's the process that runs when you call `tokenpak start`. It is large because it has accumulated inline functionality that has not yet been fully extracted into `tokenpak/proxy/`. The canonical pattern for new proxy work is:
+
+1. Write new logic in `tokenpak/proxy/` (modular, importable, testable)
+2. Have `proxy.py` import and use it (it already does this for most subsystems)
+3. Do not add business logic directly into `proxy.py`
+
+If you are patching `proxy.py` directly to test something locally, use a `.bak` suffix for your safety copy — but don't commit those.
+
+### The `packages/` relationship
+
+Each package in `packages/` is a **standalone, separately published PyPI package** that depends on `tokenpak` (the core). They are not part of the `tokenpak` package namespace. Each has its own versioning, tests, and `pyproject.toml`.
+
+- Install and develop each independently: `cd packages/langchain-tokenpak && pip install -e ".[dev]"`
+- Tests live under each package: `packages/langchain-tokenpak/tests/`
+- Do not add framework-specific imports to the core `tokenpak/` package
+
+---
+
 ## Running Tests
 
 ```bash
