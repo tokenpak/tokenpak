@@ -215,7 +215,13 @@ class TestProxySourceStructure:
         return PROXY_PATH.read_text(encoding="utf-8")
 
     def test_lookup_guard_skips_on_streaming_or_agent(self, src):
-        """Lookup block must set skipped:streaming-or-agent before calling _get_sem_cache()."""
+        """Lookup block must set skipped:streaming-or-agent for Claude Code requests.
+
+        CCG-15 update: the bypass now covers Claude Code (agent) only.
+        Non-CC streaming clients go through the SSE-aware cache path.
+        The guard still uses the 'skipped:streaming-or-agent' SESSION marker
+        (backward compat with journal grep patterns).
+        """
         # Find the Phase -2 block
         lookup_idx = src.find("# Phase -2: Semantic Cache")
         assert lookup_idx != -1, "Phase -2 block not found in proxy.py"
@@ -226,8 +232,9 @@ class TestProxySourceStructure:
             "Lookup guard missing 'skipped:streaming-or-agent' marker"
         assert "x-claude-code-session-id" in lookup_src, \
             "Lookup guard missing X-Claude-Code-Session-Id header check"
-        assert '"stream"' in lookup_src or "'stream'" in lookup_src, \
-            "Lookup guard missing stream field check"
+        # CCG-15: is_streaming drives expected_format detection, not the bypass
+        assert "is_streaming" in lookup_src, \
+            "Lookup block missing is_streaming reference (used for expected_format detection)"
 
     def test_store_guard_present(self, src):
         """Store block must have a CCG-14 bypass guard."""
@@ -261,38 +268,43 @@ class TestProxySourceStructure:
         assert skip_idx < cache_call_idx, \
             "Guard must appear before _sem_cache.store() call"
 
-    def test_send_json_only_inside_else_branch(self, src):
-        """_send_json call must appear only inside the else (non-streaming) branch.
+    def test_cache_hit_uses_content_type_not_send_json(self, src):
+        """CCG-15: cache hit path must use entry.content_type + wfile.write, not _send_json.
 
-        The guard structure must be:
-            if skip: SESSION[...] = "skipped:..."
-            else:
-                ... (only here can _send_json appear)
+        The invariant: never use _send_json for cache hits because it always
+        encodes as application/json regardless of the entry's wire_format.
+        SSE entries served via _send_json would crash SSE parsers.
+
+        After CCG-15 the else branch must contain:
+          - entry.content_type  (format-aware serving)
+          - self.wfile.write(   (raw-bytes serving)
+          - NOT self._send_json( for the cache hit case
         """
         lookup_block_idx = src.find("# Phase -2: Semantic Cache")
         next_block_idx = src.find("# Phase -1:", lookup_block_idx)
         lookup_src = src[lookup_block_idx:next_block_idx] if next_block_idx != -1 else src[lookup_block_idx:lookup_block_idx + 3000]
 
-        # Verify _send_json appears only AFTER the else: (i.e. in the non-streaming path)
         skip_marker = '"skipped:streaming-or-agent"'
         skip_idx = lookup_src.find(skip_marker)
         assert skip_idx != -1, "Guard marker not found in lookup block"
 
-        # Find the 'else:' that follows the skip marker
+        # The else branch is where cache hits are served
         else_idx = lookup_src.find("else:", skip_idx)
         assert else_idx != -1, "else: branch not found after skip marker"
 
-        # _send_json must appear AFTER the else: branch
-        send_json_idx = lookup_src.find("self._send_json(", else_idx)
-        assert send_json_idx != -1, "_send_json not found in else branch"
-
-        # Make sure _send_json does NOT appear between the skip marker and else:
-        between = lookup_src[skip_idx:else_idx]
-        # Strip comments — they may mention _send_json in prose
-        non_comment_lines = [
-            ln for ln in between.splitlines()
+        else_src = lookup_src[else_idx:]
+        # CCG-15: must use entry.content_type for format-aware response
+        assert "entry.content_type" in else_src, \
+            "CCG-15: else branch must use entry.content_type for format-aware serving"
+        # CCG-15: must use wfile.write for raw-bytes serving
+        assert "self.wfile.write(" in else_src, \
+            "CCG-15: else branch must use self.wfile.write() for raw-bytes cache hit serving"
+        # CCG-15: must NOT use _send_json in the cache hit path (it ignores content_type)
+        # Strip comments to avoid false positives
+        code_lines = [
+            ln for ln in else_src.splitlines()
             if ln.strip() and not ln.strip().startswith("#")
         ]
-        between_code = "\n".join(non_comment_lines)
-        assert "self._send_json(" not in between_code, \
-            "_send_json call appears between skip marker and else: — streaming clients could get JSON"
+        else_code = "\n".join(code_lines)
+        assert "self._send_json(" not in else_code, \
+            "CCG-15: _send_json must not appear in cache hit path — it ignores entry.content_type"

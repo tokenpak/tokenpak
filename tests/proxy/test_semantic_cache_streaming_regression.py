@@ -290,8 +290,14 @@ class TestCaseA_CacheMissHit:
 
 class TestCaseB_StreamingBypass:
     """
-    Request with stream: true must never touch the semantic cache.
-    This is the primary regression guard for the 2026-04-08 incident.
+    CCG-15 update: Non-Claude-Code streaming requests (stream: true) now go through
+    the cache with expected_format="sse".  Only Claude Code requests are bypassed.
+
+    The safety guarantee from the 2026-04-08 incident still holds: JSON entries
+    are never served to SSE clients (cross-format mismatch → miss).
+
+    The phase_semantic_cache marker will be "miss" (cache consulted, no entry) for
+    non-Claude-Code streaming requests, rather than "skipped:streaming-or-agent".
     """
 
     def test_streaming_bypass(self, proxy_and_stub):
@@ -299,12 +305,21 @@ class TestCaseB_StreamingBypass:
 
         _proxy.SESSION.pop("phase_semantic_cache", None)
         body = _make_anthropic_body(stream=True)
-        _send(proxy_port, stub_port, body)
+        response_body = _send(proxy_port, stub_port, body)
         time.sleep(0.05)
 
-        _assert_cache_bypassed(_proxy.SESSION)
-        mock_cache.lookup.assert_not_called()
-        mock_cache.store.assert_not_called()
+        # CCG-15: non-agent streaming requests are now cache-eligible (expected_format="sse").
+        # Phase is "miss" (mock returns hit=False) — no longer "skipped:streaming-or-agent".
+        phase = _proxy.SESSION.get("phase_semantic_cache")
+        assert phase in ("miss", "hit"), (
+            f"CCG-15: streaming request phase should be 'miss' or 'hit' (cache-eligible), "
+            f"got {phase!r}. If it is 'skipped:streaming-or-agent', the CCG-15 SSE cache "
+            f"path is not active."
+        )
+        # Safety guarantee: lookup was called with sse format (not bypassed entirely)
+        mock_cache.lookup.assert_called_once()
+        # Safety guarantee: response must not be a raw JSON Anthropic dict served to SSE client
+        _assert_not_json_over_sse(response_body, accept_header="text/event-stream")
 
 
 # ---------------------------------------------------------------------------
@@ -380,14 +395,17 @@ class TestCaseE_JsonCacheNotServedToStreamingClient:
     def test_json_cache_not_served_to_streaming_client(self, proxy_and_stub):
         proxy_port, stub, mock_cache, real_cache, stub_port = proxy_and_stub
 
-        # Pre-populate cache with JSON dict (the old broken store shape)
+        # Pre-populate cache with JSON bytes (as CCG-15 stores them)
         query = "What is the capital of France?"
-        cached_json_response = json.loads(_JSON_BODY)
-        real_cache.store(query, cached_json_response)
+        real_cache.store(query, _JSON_BODY, content_type="application/json", wire_format="json")
 
-        # Verify it's actually cached (lookup returns hit)
-        lookup_result = real_cache.lookup(query)
-        assert lookup_result.hit, "Pre-populated cache entry should be a hit"
+        # Verify it's cached as a JSON entry
+        lookup_result = real_cache.lookup(query, expected_format="json")
+        assert lookup_result.hit, "Pre-populated JSON cache entry should be a hit for JSON clients"
+
+        # JSON entry must NOT hit for SSE clients (cross-format mismatch)
+        sse_lookup = real_cache.lookup(query, expected_format="sse")
+        assert not sse_lookup.hit, "JSON cache entry must not be served to SSE clients (CCG-15 cross-format guard)"
 
         # Now send a streaming request with the same query
         with patch("proxy._get_sem_cache", return_value=real_cache):
@@ -405,12 +423,14 @@ class TestCaseE_JsonCacheNotServedToStreamingClient:
             )
             time.sleep(0.05)
 
-        # Assertion: CCG-14 guard must have fired (most important check)
+        # CCG-15: the SSE client gets a cache miss (cross-format mismatch — JSON entry not served).
+        # Either "miss" (CCG-15 cross-format guard) or "skipped:streaming-or-agent" (CCG-14 bypass)
+        # are acceptable — both prevent the 2026-04-08 bug.
         phase = _proxy.SESSION.get("phase_semantic_cache")
-        assert phase == "skipped:streaming-or-agent", (
-            f"Expected cache bypass for streaming client, got phase={phase!r}. "
-            "The JSON cache entry may have been served to the SSE parser — "
-            "this is the 2026-04-08 bug."
+        assert phase in ("miss", "skipped:streaming-or-agent"), (
+            f"Expected cache miss or bypass for SSE client, got phase={phase!r}. "
+            "A JSON entry may have been served to the SSE parser — "
+            "this would be the 2026-04-08 bug."
         )
 
         # Assertion: response must NOT be a raw JSON Anthropic dict served to SSE client
@@ -453,14 +473,19 @@ class TestCaseF_OriginalIncidentReproducer:
         )
         time.sleep(0.05)
 
-        # Primary assertion: CCG-14 bypass fired
+        # CCG-15 update: the failing request has stream:true but no Claude Code headers.
+        # Under CCG-15, it is cache-eligible (expected_format="sse"), so the phase is
+        # "miss" or "hit" rather than "skipped:streaming-or-agent".
+        # The original 2026-04-08 bug (JSON bytes served to SSE parser) is prevented by
+        # the cross-format guard — JSON entries are never served to SSE clients.
         phase = _proxy.SESSION.get("phase_semantic_cache")
-        assert phase == "skipped:streaming-or-agent", (
-            f"Incident reproducer: expected cache bypass, got phase={phase!r}. "
-            "The 2026-04-08 bug may be present."
+        assert phase in ("miss", "hit", "skipped:streaming-or-agent"), (
+            f"Incident reproducer: unexpected phase={phase!r}. "
+            "Expected 'miss' (CCG-15 cache consulted, no SSE entry) or "
+            "'skipped:streaming-or-agent' (CCG-14 bypass)."
         )
 
-        # Secondary assertion: response must not be raw JSON Anthropic dict
+        # Primary safety assertion: response must not be raw JSON Anthropic dict served to SSE client
         _assert_not_json_over_sse(response_body, accept_header="text/event-stream")
 
         # Tertiary: if we got SSE bytes, they should start with 'data:'
@@ -471,5 +496,7 @@ class TestCaseF_OriginalIncidentReproducer:
             )
         # If we got neither SSE nor JSON, that's also fine — it means the proxy
         # returned an error (e.g., no API key) but did NOT crash the SSE parser.
-        mock_cache.lookup.assert_not_called()
-        mock_cache.store.assert_not_called()
+
+        # CCG-15: mock_cache.lookup IS called for non-agent streaming (with expected_format="sse")
+        # This is different from CCG-14 where streaming was fully bypassed.
+        mock_cache.lookup.assert_called_once()
