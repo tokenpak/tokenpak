@@ -128,14 +128,14 @@ except ImportError as _cte:
 
 # Query expansion — stop words, stemming, synonym aliases for better BM25 recall
 try:
-    from tokenpak.agent.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
+    from tokenpak.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
     _QUERY_EXPANSION_AVAILABLE = True
 except ImportError:
     _QUERY_EXPANSION_AVAILABLE = False
 
 # Backend protocol — pluggable retrieval backends and semantic scorers
 try:
-    from tokenpak.agent.vault.backend_protocol import (
+    from tokenpak.vault.backend_protocol import (
         load_custom_backend as _load_custom_backend,
         load_custom_scorer as _load_custom_scorer,
     )
@@ -175,10 +175,10 @@ except ImportError:
 # PromptBuilder — stable/volatile prefix split for cache efficiency
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.proxy.prompt_builder import (
+    from tokenpak.proxy.prompt_builder import (
         apply_stable_cache_control as _apply_stable_cache_control,
     )
-    from tokenpak.agent.proxy.prompt_builder import (
+    from tokenpak.proxy.prompt_builder import (
         inject_with_cache_boundary as _inject_with_cache_boundary,
     )
 
@@ -198,7 +198,7 @@ except ImportError:
 # Enables Anthropic prompt cache hits on repeated tool calls
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_tool_registry
+    from tokenpak.proxy.tool_schema_registry import get_registry as _get_tool_registry
 
     TOOL_REGISTRY_AVAILABLE = True
 except ImportError:
@@ -212,7 +212,7 @@ except ImportError:
 # Term Resolver — deterministic glossary term extraction
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+    from tokenpak.semantic import TermResolver, TermResolverConfig
 
     TERM_RESOLVER_AVAILABLE = True
 except ImportError:
@@ -330,7 +330,10 @@ except ImportError:
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     "safe": {
-        "TOKENPAK_MODE": "strict",
+        # CCG-10: safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
+        # Stable cache control fires unconditionally; no body compression.
+        "TOKENPAK_MODE": "safe",
+        "TOKENPAK_STABLE_CACHE_CONTROL_AUTO": "true",
         "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "8000",
         "TOKENPAK_SKELETON_ENABLED": "false",
         "TOKENPAK_CAPSULE_BUILDER": "false",
@@ -726,6 +729,10 @@ COMPACT_MAX_TOKENS = _cfg(
 )
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
+# CCG-10: Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
+STABLE_CACHE_CONTROL_AUTO: bool = _cfg(
+    "features.stable_cache_control_auto", False, "TOKENPAK_STABLE_CACHE_CONTROL_AUTO", bool
+)
 
 # Capsule Builder
 ENABLE_CAPSULE_BUILDER = _cfg("features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER", bool)
@@ -2895,7 +2902,7 @@ def _bm25_tokenize_query(query: str) -> List[Tuple[str, float]]:
 # Global vault index instance — backend-aware
 if RETRIEVAL_BACKEND == "sqlite":
     try:
-        from tokenpak.agent.vault.sqlite_retrieval import SQLiteRetrievalBackend as _SQLiteBackend
+        from tokenpak.vault.sqlite_retrieval import SQLiteRetrievalBackend as _SQLiteBackend
 
         VAULT_INDEX = _SQLiteBackend(VAULT_INDEX_PATH)
         print(f"  📦 Vault retrieval backend: sqlite ({VAULT_INDEX_PATH})")
@@ -3135,10 +3142,10 @@ def _get_router():
                     0,
                     str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi"),
                 )
-                from tokenpak.agent.compression.pipeline import CompressionPipeline
-                from tokenpak.agent.compression.recipes import RecipeEngine
-                from tokenpak.agent.compression.slot_filler import SlotFiller
-                from tokenpak.agent.proxy.intent_policy import decide as _policy_decide
+                from tokenpak.compression.pipeline import CompressionPipeline
+                from tokenpak.compression.recipes import RecipeEngine
+                from tokenpak.compression.slot_filler import SlotFiller
+                from tokenpak.proxy.intent_policy import decide as _policy_decide
 
                 try:
                     from tokenpak._internal.validation_gate import ValidationGate
@@ -3574,7 +3581,7 @@ def _get_precond_gates():
         with _PRECOND_GATES_LOCK:
             if _PRECOND_GATES_INSTANCE is None:
                 try:
-                    from tokenpak.agent.agentic.precondition_gates import PreconditionGates
+                    from tokenpak._internal.agentic.precondition_gates import PreconditionGates
 
                     _PRECOND_GATES_INSTANCE = PreconditionGates()
                 except Exception:
@@ -3665,13 +3672,63 @@ def classify_message_risk(msg: dict) -> str:
 
 
 def can_compress(risk_class: str, mode: str) -> bool:
-    if mode in ("strict", "transparent"):
+    if mode in ("strict", "transparent", "safe"):  # CCG-10: safe mode disables compression
         return False
     if risk_class == "protected":
         return False
     if mode == "hybrid":
         return risk_class == "narrative"
     return True
+
+
+# ---------------------------------------------------------------------------
+# CCG-10: Stable/volatile partition + fingerprinting (TOKENPAK_MODE=safe)
+# ---------------------------------------------------------------------------
+
+def _partition_stable_volatile(body: bytes) -> tuple:
+    """Partition request body into (stable_bytes, volatile_bytes) for sha256 fingerprinting.
+
+    Spec Component 8 partition rules:
+      Stable region  — tools array + system array + all messages except the newest turn.
+                       These fields are byte-equal across consecutive turns when the user
+                       has not changed tools/system/persistent instructions.
+      Volatile region — newest user turn (messages[-1]).
+                        Changes every request; not suitable for cache-prefix preservation.
+
+    Both regions are serialized as deterministic JSON (sort_keys=True, utf-8) so the
+    sha256 digest is reproducible independent of dict insertion order.
+
+    Returns:
+        (stable_bytes, volatile_bytes) — both are bytes objects ready for sha256().
+        If the body cannot be parsed as JSON, returns (b"", body) so volatile_hash
+        is non-empty and stable_hash is empty — callers should record both as-is.
+    """
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return b"", body
+
+    messages = data.get("messages", [])
+    tools = data.get("tools", [])
+    system = data.get("system", [])
+
+    # Stable: tools + system + settled turns (all messages except the newest turn)
+    stable_messages = messages[:-1] if len(messages) > 1 else []
+    stable_part = {
+        "tools": tools,
+        "system": system,
+        "messages": stable_messages,
+    }
+
+    # Volatile: newest turn (the user message or most recent content)
+    volatile_messages = messages[-1:] if messages else []
+    volatile_part = {
+        "messages": volatile_messages,
+    }
+
+    stable_bytes = json.dumps(stable_part, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    volatile_bytes = json.dumps(volatile_part, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return stable_bytes, volatile_bytes
 
 
 # ---------------------------------------------------------------------------
@@ -3714,15 +3771,15 @@ def _db_writer_worker():
             try:
                 with _DB_LOCK:
                     conn = _get_db_connection(db_path)
-                    # CACHE-P4-002: Extended schema with cache telemetry columns
+                    # CACHE-P4-002 / CCG-10: Extended schema with cache telemetry + fingerprint columns
                     conn.execute(
                         """INSERT INTO requests
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
                             would_have_saved,cache_provider,cache_hit_inference,cache_estimated_savings,
-                            session_id)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            session_id,stable_hash,volatile_hash)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -4024,151 +4081,6 @@ def _write_proxy_audit_event(
     t.start()
 
 
-# ---------------------------------------------------------------------------
-# CCI-08: Shadow A/B model comparison logging helpers
-# ---------------------------------------------------------------------------
-
-def _extract_response_text(resp_body: bytes) -> str:
-    """Extract plain text from an Anthropic-format response body for similarity comparison."""
-    if not resp_body:
-        return ""
-    try:
-        data = json.loads(resp_body)
-        parts = []
-        for block in data.get("content", []):
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(block.get("text", ""))
-        return " ".join(parts)
-    except Exception:
-        return resp_body.decode("utf-8", errors="replace")[:2000]
-
-
-def _compute_similarity(text1: str, text2: str) -> Optional[float]:
-    """Compute character-overlap similarity score [0.0, 1.0] using difflib.
-    Returns None if either text is empty (not comparable).
-    """
-    if not text1 or not text2:
-        return None
-    import difflib
-    ratio = difflib.SequenceMatcher(None, text1[:4000], text2[:4000]).ratio()
-    return round(ratio, 4)
-
-
-def _shadow_provider_model(shadow_provider: str) -> Tuple[str, str]:
-    """Map a shadow provider string to (upstream_url, model_name).
-
-    Returns ("", "") if the provider is unknown (fail-open: shadow silently skipped).
-    """
-    p = shadow_provider.lower().strip()
-    if p in ("anthropic-haiku", "haiku"):
-        return ("https://api.anthropic.com/v1/messages", "claude-haiku-4-5-20251001")
-    if p in ("anthropic-sonnet", "sonnet"):
-        return ("https://api.anthropic.com/v1/messages", "claude-sonnet-4-6")
-    if p in ("gemini-flash", "gemini-2-flash"):
-        return ("", "")  # Gemini not supported yet — skip silently
-    if p.startswith("ollama-"):
-        return ("", "")  # Ollama not supported yet — skip silently
-    return ("", "")
-
-
-def _run_shadow_request(
-    db_path: str,
-    request_id: str,
-    session_id: str,
-    primary_model: str,
-    primary_input_tokens: int,
-    primary_output_tokens: int,
-    primary_cost_usd: float,
-    request_body: bytes,
-    primary_response_text: str,
-    shadow_provider: str,
-    store_content: bool = True,
-) -> None:
-    """Background thread: fire request against shadow provider, log comparison row.
-
-    Must NEVER raise — all exceptions caught and silently dropped so the user
-    response path is completely unaffected.
-    """
-    try:
-        shadow_url, shadow_model = _shadow_provider_model(shadow_provider)
-        if not shadow_url:
-            return  # provider not supported — silent no-op
-
-        try:
-            req_data = json.loads(request_body)
-        except Exception:
-            return
-        req_data["model"] = shadow_model
-        req_data["stream"] = False
-        shadow_body = json.dumps(req_data).encode()
-
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        fwd_headers = {
-            "Content-Type": "application/json",
-            "anthropic-version": "2023-06-01",
-        }
-        if api_key:
-            fwd_headers["x-api-key"] = api_key
-
-        import urllib.request as _urllib_req
-        import urllib.error as _urllib_err
-
-        req = _urllib_req.Request(
-            shadow_url, data=shadow_body, headers=fwd_headers, method="POST",
-        )
-        shadow_response_text = ""
-        shadow_input_tokens = 0
-        shadow_output_tokens = 0
-        shadow_cost_usd = 0.0
-
-        try:
-            with _urllib_req.urlopen(req, timeout=30) as resp:
-                shadow_resp_body = resp.read()
-            shadow_data = json.loads(shadow_resp_body)
-            usage = shadow_data.get("usage", {})
-            shadow_input_tokens = usage.get("input_tokens", 0)
-            shadow_output_tokens = usage.get("output_tokens", 0)
-            shadow_cost_usd = estimate_cost(shadow_model, shadow_input_tokens, shadow_output_tokens)
-            shadow_response_text = _extract_response_text(shadow_resp_body)
-        except (_urllib_err.URLError, Exception):
-            pass
-
-        similarity = _compute_similarity(primary_response_text, shadow_response_text)
-
-        if store_content:
-            p_text = primary_response_text
-            s_text = shadow_response_text
-        else:
-            import hashlib as _hl
-            p_text = _hl.sha256(primary_response_text.encode()).hexdigest() if primary_response_text else ""
-            s_text = _hl.sha256(shadow_response_text.encode()).hexdigest() if shadow_response_text else ""
-
-        try:
-            conn = sqlite3.connect(str(db_path), check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute(
-                """INSERT INTO shadow_comparisons
-                   (request_id, session_id, primary_model, shadow_model,
-                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
-                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
-                    semantic_similarity_score, primary_response_text, shadow_response_text,
-                    timestamp)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
-                (
-                    request_id, session_id, primary_model, shadow_model,
-                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
-                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
-                    similarity, p_text, s_text,
-                ),
-            )
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-
 class Monitor:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -4245,6 +4157,15 @@ class Monitor:
         except sqlite3.OperationalError:
             pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
+        # CCG-10: Add stable_hash and volatile_hash columns for safe-mode fingerprinting
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN stable_hash TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN volatile_hash TEXT")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -4339,11 +4260,14 @@ class Monitor:
         cache_provider="",
         cache_estimated_savings=0.0,
         session_id="",
+        stable_hash="",
+        volatile_hash="",
     ):
         # CACHE-P4-002: Infer cache hit from cache_read_tokens
         cache_hit_inference = 1 if cache_read_tokens > 0 else 0
-        
+
         # Enqueue write instead of writing directly (async, <0.1ms return)
+        # CCG-10: stable_hash and volatile_hash appended; writer checks column presence
         insert_params = (
             datetime.now().isoformat(),
             model,
@@ -4366,6 +4290,8 @@ class Monitor:
             cache_hit_inference,
             cache_estimated_savings,
             session_id,
+            stable_hash,
+            volatile_hash,
         )
         _queued = False
         try:
@@ -4377,8 +4303,9 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings, session_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_provider, cache_hit_inference, cache_estimated_savings, session_id, "
+                "stable_hash, volatile_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params
             )
             _conn.commit()
@@ -4904,7 +4831,7 @@ def inject_vault_context(
                 block_ids = [b["block_id"] for b, _ in bm25_results]
                 semantic_scores = SEMANTIC_SCORER.score(query, block_ids)
                 # Import score_and_sort for multi-signal fusion
-                from tokenpak.agent.vault.search import score_and_sort
+                from tokenpak.vault.search import score_and_sort
                 rescored = score_and_sort(
                     bm25_results, query=query, semantic_scores=semantic_scores
                 )[:INJECT_TOP_K]
@@ -6962,6 +6889,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         _audit_rules: list = []
         _audit_cache_risk: str = "none"
 
+        # CCG-10: Safe mode fingerprinting — stable/volatile partition hashes
+        _safe_mode: bool = COMPILATION_MODE == "safe" or STABLE_CACHE_CONTROL_AUTO
+        _stable_hash: str = ""
+        _volatile_hash: str = ""
+
         # Pipeline trace
         trace: Optional[PipelineTrace] = None
         _wf_id = None  # proxy workflow tracking (TOKENPAK_WORKFLOW_TRACKING=1)
@@ -6972,7 +6904,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
             # Start workflow tracking (no-op when feature flag is OFF)
             try:
-                from tokenpak.agent.agentic.proxy_workflow import start_proxy_workflow
+                from tokenpak.agentic.proxy_workflow import start_proxy_workflow
 
                 _wf_id = start_proxy_workflow(
                     trace.request_id,
@@ -7035,6 +6967,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # CCG-06: capture raw bytes before any mutation stage
             _body_pre_audit = body if isinstance(body, bytes) else (body.encode() if isinstance(body, str) else b"")
             _t0_compression = time.monotonic()  # compression pipeline start time
+
+            # CCG-10: Compute stable/volatile fingerprints from original body (safe mode only).
+            # Computed here — before any body mutation — so hashes reflect the client's request.
+            if _safe_mode and _body_pre_audit:
+                try:
+                    import hashlib as _hashlib
+                    _sv_stable_bytes, _sv_volatile_bytes = _partition_stable_volatile(_body_pre_audit)
+                    _stable_hash = _hashlib.sha256(_sv_stable_bytes).hexdigest() if _sv_stable_bytes else ""
+                    _volatile_hash = _hashlib.sha256(_sv_volatile_bytes).hexdigest() if _sv_volatile_bytes else ""
+                except Exception:
+                    pass  # fail-open: never break a request over fingerprinting
 
             def _compression_budget_exceeded() -> bool:
                 """Return True if we've blown the MAX_COMPRESSION_TIME_MS budget."""
@@ -7265,7 +7208,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 0.4: Context contract enforcement — quota + scope + omission
                     try:
-                        from tokenpak.agent.proxy.intent_policy import (
+                        from tokenpak.proxy.intent_policy import (
                             resolve_policy as _resolve_policy,
                         )
 
@@ -7450,10 +7393,27 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(vault_stage)
 
+                    # CCG-10: Safe mode — apply stable cache control unconditionally.
+                    # In safe mode (TOKENPAK_MODE=safe / TOKENPAK_STABLE_CACHE_CONTROL_AUTO=true)
+                    # _apply_stable_cache_control fires regardless of vault injection outcome.
+                    # apply_stable_cache_control is idempotent (won't double-mark).
+                    # Guard: only Anthropic supports cache_control markers; transparent is unchanged.
+                    if (
+                        _safe_mode
+                        and not _transparent_mode
+                        and PROMPT_BUILDER_AVAILABLE
+                        and detect_provider(target_url) is Provider.ANTHROPIC
+                        and "cache_control_stamp" not in _audit_rules
+                    ):
+                        body = _apply_stable_cache_control(body)
+                        _audit_rules.append("cache_control_stamp")
+                        if _audit_cache_risk == "none":
+                            _audit_cache_risk = "low"
+
                     # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
                     if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
                         try:
-                            from tokenpak.agent.regression.retrieval_watchdog import (
+                            from tokenpak._internal.regression.retrieval_watchdog import (
                                 QueryRetrievalRecord,
                                 RetrievalQualityWatchdog,
                             )
@@ -7512,10 +7472,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
                     if SALIENCE_ROUTER_ENABLED and body and not _transparent_mode:
                         try:
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 detect_content_type,
                             )
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 extract as salience_extract,
                             )
 
@@ -7543,7 +7503,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
                     if QUERY_REWRITER_ENABLED and body and not _transparent_mode:
                         try:
-                            from tokenpak.agent.compression.query_rewriter import QueryRewriter
+                            from tokenpak.compression.query_rewriter import QueryRewriter
 
                             _qr = QueryRewriter()
                             _req_data = json.loads(body)
@@ -7560,7 +7520,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
                     if FIDELITY_TIERS_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.fidelity_tiers import (
+                            from tokenpak.compression.fidelity_tiers import (
                                 TierSelector,
                             )
 
@@ -7651,7 +7611,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
                     if COMPRESSION_DICT_ENABLED and body and not _transparent_mode:
                         try:
-                            from tokenpak.agent.compression.dictionary import CompressionDictionary
+                            from tokenpak.compression.dictionary import CompressionDictionary
 
                             _dict = CompressionDictionary()
                             _req_data = json.loads(body)
@@ -7668,7 +7628,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Workflow: vault_inject done → compress done → begin forward
                     if _wf_id:
                         try:
-                            from tokenpak.agent.agentic.proxy_workflow import advance_step
+                            from tokenpak.agentic.proxy_workflow import advance_step
 
                             advance_step(_wf_id, "vault_inject", "compress")
                             advance_step(_wf_id, "compress", "forward")
@@ -8247,7 +8207,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Tier 2A: Error Normalizer — further standardize error message text
                     if ERROR_NORMALIZER_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
+                            from tokenpak.agentic.error_normalizer import ErrorNormalizer
 
                             _en = ErrorNormalizer()
                             _err_msg = _normalized.get("error", {}).get("message", "")
@@ -8259,7 +8219,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Tier 2C: Failure Memory — record error signature for future avoidance
                     if FAILURE_MEMORY_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.failure_memory import (
+                            from tokenpak._internal.agentic.failure_memory import (
                                 FailureMemoryDB,
                                 FailureSignature,
                             )
@@ -8579,7 +8539,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Phase 2.2: Session Capsules — compress and store session context
                 if SESSION_CAPSULES_ENABLED and body:
                     try:
-                        from tokenpak.agent.memory.session_capsules import (
+                        from tokenpak._internal.memory.session_capsules import (
                             build_session_capsule,
                             serialize_capsule,
                         )
@@ -8681,7 +8641,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Post-request: Stability Scorer — track response consistency over time
             if STABILITY_SCORER_ENABLED:
                 try:
-                    from tokenpak.agent.regression.stability_scorer import (
+                    from tokenpak._internal.regression.stability_scorer import (
                         RunRecord,
                         StabilityScorer,
                     )
@@ -8784,6 +8744,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         cache_provider=_provider_name,
                         cache_estimated_savings=_cache_savings,
                         session_id=_resolve_session_id(self.headers, model),
+                        stable_hash=_stable_hash,
+                        volatile_hash=_volatile_hash,
                     )
                 except Exception as _monitor_err:
                     print(
@@ -8935,7 +8897,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Workflow tracking: mark forward done → log_metrics → complete
                 if _wf_id:
                     try:
-                        from tokenpak.agent.agentic.proxy_workflow import (
+                        from tokenpak.agentic.proxy_workflow import (
                             advance_step,
                             complete_workflow,
                         )
@@ -9015,7 +8977,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Workflow tracking: mark the in-progress step as failed (not whole workflow)
             if _wf_id:
                 try:
-                    from tokenpak.agent.agentic.proxy_workflow import fail_step as _wf_fail
+                    from tokenpak.agentic.proxy_workflow import fail_step as _wf_fail
 
                     _wf_fail(_wf_id, "forward", error=f"{type(e).__name__}: {e}")
                 except Exception:
@@ -10011,7 +9973,7 @@ def _run_startup() -> StartupResult:
     try:
         import sys as _sys
         _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tokenpak"))
-        from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
+        from tokenpak.agentic.proxy_workflow import recover_proxy_workflows
         dangling = recover_proxy_workflows()
         _wf_detail = f"{len(dangling)} dangling" if dangling else "clean"
     except Exception as _e:
@@ -10055,7 +10017,7 @@ def main():
 
     # Handle dangling proxy workflows (already recovered in _run_startup, just print warnings)
     try:
-        from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
+        from tokenpak.agentic.proxy_workflow import recover_proxy_workflows
         dangling = recover_proxy_workflows()
         if dangling:
             print(f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run:")
@@ -10121,9 +10083,9 @@ def main():
     # Pre-load compression pipeline to eliminate first-request penalty
     def _warmup():
         try:
-            from tokenpak.agent.compression.pipeline import CompressionPipeline
-            from tokenpak.agent.compression.recipes import RecipeEngine
-            from tokenpak.agent.compression.slot_filler import SlotFiller
+            from tokenpak.compression.pipeline import CompressionPipeline
+            from tokenpak.compression.recipes import RecipeEngine
+            from tokenpak.compression.slot_filler import SlotFiller
             print("  ✅ Compression pipeline pre-loaded", flush=True)
         except ImportError:
             print("  ℹ️  Compression pipeline not available — skipping warmup", flush=True)
