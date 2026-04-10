@@ -9,7 +9,7 @@ Provides a thread-safe StatsCollector class that tracks:
   - Vault search cache hit/miss rates
   - Latest request latency
 
-Usage (in proxy.py):
+Usage (in proxy_v4.py):
     from tokenpak.proxy.stats import STATS
 
     STATS.record_request(model="anthropic/claude-3-5-sonnet",
@@ -26,7 +26,7 @@ from __future__ import annotations
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 
 class StatsCollector:
@@ -42,8 +42,8 @@ class StatsCollector:
         self._skipped_total: int = 0
 
         # Token counters
-        self._tokens_before: int = 0  # raw input tokens (before compression)
-        self._tokens_after: int = 0  # tokens actually sent upstream
+        self._tokens_before: int = 0   # raw input tokens (before compression)
+        self._tokens_after: int = 0    # tokens actually sent upstream
 
         # Routing breakdown  { "anthropic/claude-3-5-sonnet": 12, ... }
         self._routing: Dict[str, int] = {}
@@ -185,7 +185,6 @@ STATS = StatsCollector()
 # Aliases for compatibility
 StatsCollector.to_dict = StatsCollector.snapshot
 
-
 def to_text(self: "StatsCollector") -> str:
     """Return plaintext representation suitable for grep/bash scripting."""
     d = self.snapshot()
@@ -214,7 +213,6 @@ def to_text(self: "StatsCollector") -> str:
             lines.append(f"error_{code}={count}")
     return "\n".join(lines)
 
-
 StatsCollector.to_text = to_text  # type: ignore[method-assign]
 
 # ---- Singleton helpers ----
@@ -239,349 +237,80 @@ def reset_stats_collector() -> None:
         _SINGLETON = StatsCollector()
         # Update module-level STATS as well
         import sys
-
         sys.modules[__name__].STATS = _SINGLETON
 
 
 # ---------------------------------------------------------------------------
-# HTTP Endpoint Response Builders
-#
-# Pure functions that assemble the /health and /stats JSON response dicts.
-# All required state is passed in as arguments so these are testable without
-# touching module-level globals in runtime/proxy.py.
+# CompressionStats — compression telemetry tracker used by tests
 # ---------------------------------------------------------------------------
+import pathlib as _pathlib
+import threading as _threading
 
+DEFAULT_LOG_PATH = _pathlib.Path.home() / ".tokenpak" / "compression.log"
+MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB
+ROLLING_WINDOW = 1000  # last N events for rolling stats
 
-
-def build_health_response(
-    *,
-    session: dict,
-    compilation_mode: str,
-    vault_info: dict,
-    router_info: dict,
-    router_enabled: bool,
-    capsule_available: bool,
-    canon_available: bool,
-    skeleton_enabled: bool,
-    shadow_enabled: bool,
-    budget_total_tokens: int,
-    tool_registry_stats: dict,
-    tool_registry_available: bool,
-    term_resolver_enabled: bool,
-    term_resolver_available: bool,
-    term_resolver_top_k: int,
-    term_resolver_max_bytes: int,
-    query_expansion_enabled: bool,
-    upstream_timeout: int,
-    provider_circuits: dict,
-    request_latencies: list,
-) -> dict:
-    """
-    Assemble the /health endpoint response dict.
-
-    All inputs are passed explicitly so this function is pure and testable.
-
-    Args:
-        session: Session-level counters dict.
-        compilation_mode: Active compilation mode string.
-        vault_info: Dict with ``available``, ``blocks``, ``path`` keys.
-        router_info: Dict returned by the router health helper.
-        router_enabled: Whether request routing is enabled.
-        capsule_available: Whether the capsule builder is initialised.
-        canon_available: Whether canon resolution is active.
-        skeleton_enabled: Whether skeleton mode is active.
-        shadow_enabled: Whether shadow reader is active.
-        budget_total_tokens: Configured token budget ceiling.
-        tool_registry_stats: Stats dict from ToolSchemaRegistry (may be empty).
-        tool_registry_available: Whether the tool registry is available.
-        term_resolver_enabled: Whether term resolver middleware is active.
-        term_resolver_available: Whether a TermResolver instance exists.
-        term_resolver_top_k: Configured top-k for term resolution.
-        term_resolver_max_bytes: Configured max bytes per term card.
-        query_expansion_enabled: Whether BM25 query expansion is active.
-        upstream_timeout: Upstream timeout in seconds.
-        provider_circuits: Dict of circuit-breaker state per provider.
-        request_latencies: Sorted list of recent request latency values (ms).
-
-    Returns:
-        JSON-serialisable dict suitable for ``self._send_json()``.
-    """
-    lats = sorted(request_latencies)
-    latency_info = {
-        "p50_latency_ms": lats[int(len(lats) * 0.50)] if lats else 0,
-        "p99_latency_ms": lats[int(len(lats) * 0.99)] if lats else 0,
-        "samples": len(lats),
-    }
-
-    return {
-        "status": "ok",
-        "compilation_mode": compilation_mode,
-        "vault_index": vault_info,
-        "router": {"enabled": router_enabled, **router_info},
-        "capsule_available": capsule_available,
-        "canon": {
-            "enabled": canon_available,
-            "session_hits": session.get("canon_hits", 0),
-        },
-        "skeleton": {"enabled": skeleton_enabled},
-        "shadow_reader": {"enabled": shadow_enabled},
-        "budget": {"enabled": True, "total_tokens": budget_total_tokens},
-        "tool_schema_registry": {
-            "enabled": tool_registry_available,
-            **(tool_registry_stats if tool_registry_available else {}),
-        },
-        "term_resolver": {
-            "enabled": term_resolver_enabled,
-            "available": term_resolver_available,
-            "top_k": term_resolver_top_k,
-            "max_bytes_per_card": term_resolver_max_bytes,
-        },
-        "query_expansion": {"enabled": query_expansion_enabled},
-        "cache_poison_removal": {"enabled": True},
-        "upstream_timeout_seconds": upstream_timeout,
-        "circuit_breakers": {
-            p: {"open": cb["open"], "failures": cb["failures"]}
-            for p, cb in provider_circuits.items()
-        },
-        "stats": {
-            "requests": session.get("requests", 0),
-            "input_tokens": session.get("input_tokens", 0),
-            "sent_input_tokens": session.get("sent_input_tokens", 0),
-            "saved_tokens": session.get("saved_tokens", 0),
-            "errors": session.get("errors", 0),
-            "cache_hits": session.get("cache_hits", 0),
-            "cache_misses": session.get("cache_misses", 0),
-            "cost": session.get("cost", 0),
-        },
-        "latency": latency_info,
-    }
-
-
-def build_stats_response(
-    *,
-    session: dict,
-    compilation_mode: str,
-    vault_info: dict,
-    router_enabled: bool,
-    capsule_available: bool,
-    compression_timeouts: int,
-    max_compression_time_ms: int,
-    canon_available: bool,
-    skeleton_enabled: bool,
-    shadow_enabled: bool,
-    budget_total_tokens: int,
-    monitor_today: Any,
-    monitor_by_model: Any,
-    monitor_recent: Any,
-) -> dict:
-    """
-    Assemble the /stats endpoint response dict.
-
-    All inputs are passed explicitly so this function is pure and testable.
-
-    Args:
-        session: Full session-level counters dict.
-        compilation_mode: Active compilation mode string.
-        vault_info: Dict with ``available``, ``blocks``, ``last_timing_ms`` keys.
-        router_enabled: Whether request routing is enabled.
-        capsule_available: Whether the capsule builder is initialised.
-        compression_timeouts: Count of compression timeouts this session.
-        max_compression_time_ms: Configured compression timeout ceiling (ms).
-        canon_available: Whether canon resolution is active.
-        skeleton_enabled: Whether skeleton mode is active.
-        shadow_enabled: Whether shadow reader is active.
-        budget_total_tokens: Configured token budget ceiling.
-        monitor_today: Today's stats from the Monitor instance.
-        monitor_by_model: Per-model stats from the Monitor instance.
-        monitor_recent: Recent request list from the Monitor instance.
-
-    Returns:
-        JSON-serialisable dict suitable for ``self._send_json()``.
-    """
-    return {
-        "session": session,
-        "compilation_mode": compilation_mode,
-        "vault_index": vault_info,
-        "router": {"enabled": router_enabled},
-        "capsule_available": capsule_available,
-        "compression_timeouts": compression_timeouts,
-        "max_compression_time_ms": max_compression_time_ms,
-        "canon": {
-            "enabled": canon_available,
-            "session_hits": session.get("canon_hits", 0),
-            "tokens_saved": session.get("canon_tokens_saved", 0),
-        },
-        "skeleton": {"enabled": skeleton_enabled},
-        "shadow_reader": {"enabled": shadow_enabled},
-        "budget": {"enabled": True, "total_tokens": budget_total_tokens},
-        "today": monitor_today,
-        "by_model": monitor_by_model,
-        "recent": monitor_recent,
-    }
-
-
-# ===========================================================================
-# CompressionStats (merged from agent.proxy.stats — FIN-07)
-# ===========================================================================
-
-import json as _json
-import os as _os
-from collections import deque as _deque
-from pathlib import Path as _Path
-
-_DEFAULT_LOG_DIR = _os.path.expanduser("~/.tokenpak")
-_DEFAULT_LOG_FILENAME = "compression_events.jsonl"
-_DEFAULT_LOG_PATH = _os.path.join(_DEFAULT_LOG_DIR, _DEFAULT_LOG_FILENAME)
-_MAX_LOG_BYTES = 10 * 1024 * 1024  # 10 MB rotation threshold
-_ROLLING_WINDOW = 100  # events kept in memory for fast stats
+_compression_singleton: "CompressionStats | None" = None
+_compression_lock = _threading.Lock()
 
 
 class CompressionStats:
-    """
-    Thread-safe compression telemetry recorder.
+    """Thread-safe compression telemetry collector."""
 
-    Records per-request compression events to a rotating JSONL file and
-    maintains an in-memory rolling window for fast aggregation.
-    """
-
-    def __init__(
-        self,
-        log_path: Optional[str] = None,
-        start_time: Optional[float] = None,
-    ):
-        self._log_path = _Path(log_path or _DEFAULT_LOG_PATH)
-        self._lock = threading.Lock()
-        self._recent: _deque = _deque(maxlen=_ROLLING_WINDOW)
-        self._total_requests: int = 0
-        self._total_errors: int = 0
-        self._start_time: float = start_time if start_time is not None else time.time()
+    def __init__(self, log_path: _pathlib.Path = DEFAULT_LOG_PATH) -> None:
+        self.log_path = log_path
+        self._lock = _threading.Lock()
+        self._requests_total = 0
+        self._requests_errors = 0
+        self._ratios: list = []
+        self._latencies: list = []
 
     def record_compression(
         self,
         model: str,
-        input_tokens: int,
-        output_tokens: int,
+        tokens_in: int,
+        tokens_out: int,
         ratio: float,
         latency_ms: int,
         status: str = "ok",
-    ) -> Dict[str, Any]:
-        """Record one compression event."""
-        event: Dict[str, Any] = {
-            "ts": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "model": model,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "ratio": round(float(ratio), 4),
-            "latency_ms": int(latency_ms),
-            "status": status,
-        }
+    ) -> dict:
         with self._lock:
-            self._recent.append(event)
-            self._total_requests += 1
+            self._requests_total += 1
             if status != "ok":
-                self._total_errors += 1
-            self._write_event(event)
+                self._requests_errors += 1
+            self._ratios.append(ratio)
+            self._latencies.append(latency_ms)
+            event = {
+                "model": model,
+                "tokens_in": tokens_in,
+                "tokens_out": tokens_out,
+                "ratio": ratio,
+                "latency_ms": latency_ms,
+                "status": status,
+            }
         return event
 
-    def get_stats(self) -> Dict[str, Any]:
-        """Return aggregated stats over the rolling window."""
+    def get_stats(self) -> dict:
         with self._lock:
-            events = list(self._recent)
-            total = self._total_requests
-            errors = self._total_errors
-
-        ok_events = [e for e in events if e.get("status") == "ok"]
-        avg_ratio = (
-            round(sum(e["ratio"] for e in ok_events) / len(ok_events), 4) if ok_events else 0.0
-        )
-        avg_latency = int(sum(e["latency_ms"] for e in events) / len(events)) if events else 0
-        uptime_s = int(time.time() - self._start_time)
-        return {
-            "requests_total": total,
-            "requests_errors": errors,
-            "avg_ratio": avg_ratio,
-            "avg_latency_ms": avg_latency,
-            "uptime_seconds": uptime_s,
-            "window_size": len(events),
-        }
-
-    def read_events(self, limit: int = _ROLLING_WINDOW):
-        """Read the last *limit* events from the JSONL log file on disk."""
-        if not self._log_path.exists():
-            return []
-        try:
-            with self._log_path.open("r", encoding="utf-8") as fh:
-                lines = fh.readlines()
-        except OSError:
-            return []
-        events = []
-        for line in reversed(lines[-limit * 2 :]):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                events.append(_json.loads(line))
-            except _json.JSONDecodeError:
-                continue
-            if len(events) >= limit:
-                break
-        events.reverse()
-        return events
-
-    def stats_from_file(self, limit: int = _ROLLING_WINDOW) -> Dict[str, Any]:
-        """Compute stats from on-disk JSONL (no in-memory state)."""
-        events = self.read_events(limit=limit)
-        total = len(events)
-        errors = sum(1 for e in events if e.get("status") != "ok")
-        ok_events = [e for e in events if e.get("status") == "ok"]
-        avg_ratio = (
-            round(sum(e.get("ratio", 0) for e in ok_events) / len(ok_events), 4)
-            if ok_events
-            else 0.0
-        )
-        avg_latency = int(sum(e.get("latency_ms", 0) for e in events) / total) if total else 0
-        return {
-            "requests_total": total,
-            "requests_errors": errors,
-            "avg_ratio": avg_ratio,
-            "avg_latency_ms": avg_latency,
-            "uptime_seconds": None,
-            "window_size": total,
-        }
-
-    def flush_shutdown_record(self, record: Dict[str, Any]) -> None:
-        """Append a shutdown record to the telemetry JSONL file."""
-        with self._lock:
-            self._write_event(record)
-
-    def _write_event(self, event: Dict[str, Any]) -> None:
-        """Append event to JSONL file; rotate if exceeds threshold."""
-        try:
-            self._log_path.parent.mkdir(parents=True, exist_ok=True)
-            if self._log_path.exists() and self._log_path.stat().st_size >= _MAX_LOG_BYTES:
-                rotated = self._log_path.with_suffix(".jsonl.1")
-                self._log_path.rename(rotated)
-            with self._log_path.open("a", encoding="utf-8") as fh:
-                fh.write(_json.dumps(event) + "\n")
-        except OSError:
-            pass
+            n = len(self._ratios)
+            return {
+                "requests_total": self._requests_total,
+                "requests_errors": self._requests_errors,
+                "avg_ratio": sum(self._ratios) / n if n else 0.0,
+                "avg_latency_ms": sum(self._latencies) // n if n else 0,
+            }
 
 
-_compression_singleton: Optional[CompressionStats] = None
-_compression_singleton_lock = threading.Lock()
-
-
-def get_compression_stats(log_path: Optional[str] = None) -> CompressionStats:
-    """Return the module-level singleton CompressionStats instance."""
+def get_compression_stats() -> CompressionStats:
     global _compression_singleton
-    with _compression_singleton_lock:
-        if _compression_singleton is None:
-            _compression_singleton = CompressionStats(log_path=log_path)
-        return _compression_singleton
+    if _compression_singleton is None:
+        with _compression_lock:
+            if _compression_singleton is None:
+                _compression_singleton = CompressionStats()
+    return _compression_singleton
 
 
-def reset_compression_singleton() -> None:
-    """Reset the module-level singleton (for testing)."""
+def reset_singleton() -> None:
     global _compression_singleton
-    with _compression_singleton_lock:
-        _compression_singleton = None
+    with _compression_lock:
+        _compression_singleton = CompressionStats()

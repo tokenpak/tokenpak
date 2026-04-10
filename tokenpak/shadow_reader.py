@@ -379,3 +379,89 @@ if __name__ == "__main__":
                 print(
                     f"  [{i+1}] {record['mode']:8} id={record['observation_id']} ts={record['timestamp']}"
                 )
+
+# ---------------------------------------------------------------------------
+# Validation utilities (used by tests that import from this module)
+# ---------------------------------------------------------------------------
+import re as _re
+from dataclasses import dataclass as _dataclass, field as _field
+from typing import List as _List, Optional as _Optional
+
+MIN_COVERAGE = 0.5
+MAX_COVERAGE = 1.0
+MIN_TERM_RETENTION = 0.5
+
+_STOP_WORDS = frozenset({
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "this", "that", "these",
+    "those", "i", "he", "she", "we", "they", "it", "as", "by", "from",
+    "up", "out", "if", "then", "than", "so", "not", "no", "go", "over",
+    "about",
+})
+
+
+def top_terms(text: str, n: int = 10) -> _List[str]:
+    """Return the *n* most frequent non-stopword tokens (≥3 chars) from *text*."""
+    if not text.strip():
+        return []
+    tokens = _re.findall(r"[a-zA-Z]+", text.lower())
+    freq: dict = {}
+    for tok in tokens:
+        if len(tok) >= 3 and tok not in _STOP_WORDS:
+            freq[tok] = freq.get(tok, 0) + 1
+    sorted_terms = sorted(freq, key=lambda k: -freq[k])
+    return sorted_terms[:n]
+
+
+@_dataclass
+class ValidationResult:
+    """Result of a shadow validation run."""
+    original_terms: _List[str] = _field(default_factory=list)
+    compressed_terms: _List[str] = _field(default_factory=list)
+    coverage: float = 0.0
+    term_retention: float = 0.0
+    passed: bool = False
+    reason: str = ""
+
+
+def validate(original: str, compressed: str, n_terms: int = 10) -> ValidationResult:
+    """Check that *compressed* retains key terms from *original*."""
+    orig_terms = top_terms(original, n=n_terms)
+    comp_terms = top_terms(compressed, n=n_terms * 2)
+    if not orig_terms:
+        return ValidationResult(passed=True, reason="no key terms")
+    retained = [t for t in orig_terms if t in set(comp_terms)]
+    coverage = len(compressed) / max(len(original), 1)
+    retention = len(retained) / len(orig_terms)
+    passed = MIN_COVERAGE <= coverage <= MAX_COVERAGE and retention >= MIN_TERM_RETENTION
+    return ValidationResult(
+        original_terms=orig_terms,
+        compressed_terms=comp_terms,
+        coverage=coverage,
+        term_retention=retention,
+        passed=passed,
+        reason="ok" if passed else f"retention={retention:.2f} coverage={coverage:.2f}",
+    )
+
+
+_validation_stats: dict = {"total": 0, "passed": 0, "failed": 0}
+
+
+def log_validation_result(result: ValidationResult) -> None:
+    _validation_stats["total"] += 1
+    if result.passed:
+        _validation_stats["passed"] += 1
+    else:
+        _validation_stats["failed"] += 1
+
+
+def get_validation_stats() -> dict:
+    return dict(_validation_stats)
+
+
+def apply_fallback(original: str, compressed: str) -> str:
+    """Return *original* if *compressed* fails validation."""
+    result = validate(original, compressed)
+    return compressed if result.passed else original

@@ -332,3 +332,77 @@ def calculate_savings_breakdown(per_model_data: list) -> dict:
         "token_compression": round(compression_savings, 4),
         "total": round(cache_savings + compression_savings, 4),
     }
+
+
+def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
+    """Compute savings summary from proxy session stats and per-model breakdown.
+
+    Parameters
+    ----------
+    stats : dict
+        Aggregate session stats (keys: requests, input_tokens, sent_input_tokens,
+        saved_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+        cost, cache_hits, cache_misses, …).
+    by_model : dict
+        Per-model breakdown (model name → same keys as stats).
+
+    Returns
+    -------
+    dict with keys:
+        cost_without_tokenpak, cost_with_tokenpak, total_saved,
+        cache_saved, compression_saved, routing_saved,
+        total_saved_pct, cache_hit_rate, total_requests, per_model.
+    """
+    requests = stats.get("requests", 0)
+    cache_hits = stats.get("cache_hits", 0)
+    cache_misses = stats.get("cache_misses", requests)
+    total_reqs = requests or 1
+    cache_hit_rate = cache_hits / total_reqs
+
+    input_tokens = stats.get("input_tokens", 0)
+    sent_input_tokens = stats.get("sent_input_tokens", input_tokens)
+    saved_tokens = stats.get("saved_tokens", input_tokens - sent_input_tokens)
+    output_tokens = stats.get("output_tokens", 0)
+    cost_with = stats.get("cost", 0.0)
+
+    # Estimate cost without tokenpak from raw input tokens
+    default_model = "claude-sonnet-4-6"
+    in_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("input", DEFAULT_RATE)
+    out_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("output", DEFAULT_RATE)
+    cost_without = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000
+
+    # Estimate per-component savings
+    compression_saved = (saved_tokens * in_rate) / 1_000_000 if saved_tokens else 0.0
+    cache_saved = max(0.0, cost_without - cost_with - compression_saved)
+    routing_saved = 0.0  # routing savings not tracked at this level
+
+    total_saved = max(0.0, cost_without - cost_with)
+    total_saved_pct = (total_saved / cost_without * 100) if cost_without > 0 else 0.0
+
+    # Per-model breakdown
+    per_model = {}
+    for model, mstats in by_model.items():
+        m_in = mstats.get("input_tokens", 0)
+        m_out = mstats.get("output_tokens", 0)
+        m_in_rate = MODEL_RATES.get(model, {}).get("input", DEFAULT_RATE)
+        m_out_rate = MODEL_RATES.get(model, {}).get("output", DEFAULT_RATE)
+        m_cost_without = (m_in * m_in_rate + m_out * m_out_rate) / 1_000_000
+        m_cost_with = mstats.get("cost", 0.0)
+        per_model[model] = {
+            "cost_without_tokenpak": m_cost_without,
+            "cost_with_tokenpak": m_cost_with,
+            "total_saved": max(0.0, m_cost_without - m_cost_with),
+        }
+
+    return {
+        "cost_without_tokenpak": cost_without,
+        "cost_with_tokenpak": cost_with,
+        "total_saved": total_saved,
+        "cache_saved": cache_saved,
+        "compression_saved": compression_saved,
+        "routing_saved": routing_saved,
+        "total_saved_pct": total_saved_pct,
+        "cache_hit_rate": cache_hit_rate,
+        "total_requests": requests,
+        "per_model": per_model,
+    }
