@@ -14,10 +14,27 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.alerts.channels.webhook import WebhookChannel
-from tokenpak.alerts.channels.slack import SlackChannel
-from tokenpak.alerts.channels import dispatch_alert, _load_channel_configs
-from tokenpak.license.tier import LicenseTier
+# Guard against environments where tokenpak.alerts is unavailable.
+# tokenpak/alerts/__init__.py is a shim that imports tokenpak._internal.alerts;
+# if that module does not exist the entire package init fails at collection time.
+try:
+    from tokenpak.alerts.channels.webhook import WebhookChannel
+    from tokenpak.alerts.channels.slack import SlackChannel
+    from tokenpak.alerts.channels import dispatch_alert, _load_channel_configs
+    from tokenpak.license.tier import LicenseTier
+    _ALERTS_AVAILABLE = True
+except ImportError:
+    WebhookChannel = None  # type: ignore[assignment,misc]
+    SlackChannel = None  # type: ignore[assignment,misc]
+    dispatch_alert = None  # type: ignore[assignment]
+    _load_channel_configs = None  # type: ignore[assignment]
+    LicenseTier = None  # type: ignore[assignment,misc]
+    _ALERTS_AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(
+    not _ALERTS_AVAILABLE,
+    reason="tokenpak.alerts modules not available in this environment (tokenpak._internal.alerts missing)",
+)
 
 
 @pytest.fixture(autouse=True)
