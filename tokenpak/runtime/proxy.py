@@ -75,14 +75,14 @@ from tokenpak.runtime.providers import Provider, detect_provider
 
 # Query expansion — stop words, stemming, synonym aliases for better BM25 recall
 try:
-    from tokenpak.agent.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
+    from tokenpak.vault.query_expansion import tokenize as _qe_tokenize, expand_query as _qe_expand
     _QUERY_EXPANSION_AVAILABLE = True
 except ImportError:
     _QUERY_EXPANSION_AVAILABLE = False
 
 # Backend protocol — pluggable retrieval backends and semantic scorers
 try:
-    from tokenpak.agent.vault.backend_protocol import (
+    from tokenpak.vault.backend_protocol import (
         load_custom_backend as _load_custom_backend,
         load_custom_scorer as _load_custom_scorer,
     )
@@ -122,10 +122,10 @@ except ImportError:
 # PromptBuilder — stable/volatile prefix split for cache efficiency
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.proxy.prompt_builder import (
+    from tokenpak.proxy.prompt_builder import (
         apply_stable_cache_control as _apply_stable_cache_control,
     )
-    from tokenpak.agent.proxy.prompt_builder import (
+    from tokenpak.proxy.prompt_builder import (
         inject_with_cache_boundary as _inject_with_cache_boundary,
     )
 
@@ -145,7 +145,7 @@ except ImportError:
 # Enables Anthropic prompt cache hits on repeated tool calls
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_tool_registry
+    from tokenpak.proxy.tool_schema_registry import get_registry as _get_tool_registry
 
     TOOL_REGISTRY_AVAILABLE = True
 except ImportError:
@@ -159,7 +159,7 @@ except ImportError:
 # Term Resolver — deterministic glossary term extraction
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+    from tokenpak.semantic import TermResolver, TermResolverConfig
 
     TERM_RESOLVER_AVAILABLE = True
 except ImportError:
@@ -1703,7 +1703,7 @@ def _bm25_tokenize_query(query: str) -> List[Tuple[str, float]]:
 # Global vault index instance — backend-aware
 if RETRIEVAL_BACKEND == "sqlite":
     try:
-        from tokenpak.agent.vault.sqlite_retrieval import SQLiteRetrievalBackend as _SQLiteBackend
+        from tokenpak.vault.sqlite_retrieval import SQLiteRetrievalBackend as _SQLiteBackend
 
         VAULT_INDEX = _SQLiteBackend(VAULT_INDEX_PATH)
         print(f"  📦 Vault retrieval backend: sqlite ({VAULT_INDEX_PATH})")
@@ -1943,10 +1943,10 @@ def _get_router():
                     0,
                     str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi"),
                 )
-                from tokenpak.agent.compression.pipeline import CompressionPipeline
-                from tokenpak.agent.compression.recipes import RecipeEngine
-                from tokenpak.agent.compression.slot_filler import SlotFiller
-                from tokenpak.agent.proxy.intent_policy import decide as _policy_decide
+                from tokenpak.compression.pipeline import CompressionPipeline
+                from tokenpak.compression.recipes import RecipeEngine
+                from tokenpak.compression.slot_filler import SlotFiller
+                from tokenpak.proxy.intent_policy import decide as _policy_decide
 
                 try:
                     from tokenpak.validation_gate import ValidationGate
@@ -2382,7 +2382,7 @@ def _get_precond_gates():
         with _PRECOND_GATES_LOCK:
             if _PRECOND_GATES_INSTANCE is None:
                 try:
-                    from tokenpak.agent.agentic.precondition_gates import PreconditionGates
+                    from tokenpak._internal.agentic.precondition_gates import PreconditionGates
 
                     _PRECOND_GATES_INSTANCE = PreconditionGates()
                 except Exception:
@@ -3203,7 +3203,7 @@ def inject_vault_context(
                 block_ids = [b["block_id"] for b, _ in bm25_results]
                 semantic_scores = SEMANTIC_SCORER.score(query, block_ids)
                 # Import score_and_sort for multi-signal fusion
-                from tokenpak.agent.vault.search import score_and_sort
+                from tokenpak.vault.search import score_and_sort
                 rescored = score_and_sort(
                     bm25_results, query=query, semantic_scores=semantic_scores
                 )[:INJECT_TOP_K]
@@ -4591,7 +4591,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             )
             # Start workflow tracking (no-op when feature flag is OFF)
             try:
-                from tokenpak.agent.agentic.proxy_workflow import start_proxy_workflow
+                from tokenpak.agentic.proxy_workflow import start_proxy_workflow
 
                 _wf_id = start_proxy_workflow(
                     trace.request_id,
@@ -4840,7 +4840,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
                     # Phase 0.4: Context contract enforcement — quota + scope + omission
                     try:
-                        from tokenpak.agent.proxy.intent_policy import (
+                        from tokenpak.proxy.intent_policy import (
                             resolve_policy as _resolve_policy,
                         )
 
@@ -4998,7 +4998,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
                     if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
                         try:
-                            from tokenpak.agent.regression.retrieval_watchdog import (
+                            from tokenpak._internal.regression.retrieval_watchdog import (
                                 QueryRetrievalRecord,
                                 RetrievalQualityWatchdog,
                             )
@@ -5057,10 +5057,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
                     if SALIENCE_ROUTER_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 detect_content_type,
                             )
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 extract as salience_extract,
                             )
 
@@ -5087,7 +5087,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
                     if QUERY_REWRITER_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.query_rewriter import QueryRewriter
+                            from tokenpak.compression.query_rewriter import QueryRewriter
 
                             _qr = QueryRewriter()
                             _req_data = json.loads(body)
@@ -5103,7 +5103,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
                     if FIDELITY_TIERS_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.fidelity_tiers import (
+                            from tokenpak.compression.fidelity_tiers import (
                                 TierSelector,
                             )
 
@@ -5190,7 +5190,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
                     if COMPRESSION_DICT_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.dictionary import CompressionDictionary
+                            from tokenpak.compression.dictionary import CompressionDictionary
 
                             _dict = CompressionDictionary()
                             _req_data = json.loads(body)
@@ -5206,7 +5206,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Workflow: vault_inject done → compress done → begin forward
                     if _wf_id:
                         try:
-                            from tokenpak.agent.agentic.proxy_workflow import advance_step
+                            from tokenpak.agentic.proxy_workflow import advance_step
 
                             advance_step(_wf_id, "vault_inject", "compress")
                             advance_step(_wf_id, "compress", "forward")
@@ -5540,7 +5540,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Tier 2A: Error Normalizer — further standardize error message text
                     if ERROR_NORMALIZER_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
+                            from tokenpak.agentic.error_normalizer import ErrorNormalizer
 
                             _en = ErrorNormalizer()
                             _err_msg = _normalized.get("error", {}).get("message", "")
@@ -5552,7 +5552,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # Tier 2C: Failure Memory — record error signature for future avoidance
                     if FAILURE_MEMORY_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.failure_memory import (
+                            from tokenpak._internal.agentic.failure_memory import (
                                 FailureMemoryDB,
                                 FailureSignature,
                             )
@@ -5785,7 +5785,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Phase 2.2: Session Capsules — compress and store session context
                 if SESSION_CAPSULES_ENABLED and body:
                     try:
-                        from tokenpak.agent.memory.session_capsules import (
+                        from tokenpak._internal.memory.session_capsules import (
                             build_session_capsule,
                             serialize_capsule,
                         )
@@ -5876,7 +5876,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Post-request: Stability Scorer — track response consistency over time
             if STABILITY_SCORER_ENABLED:
                 try:
-                    from tokenpak.agent.regression.stability_scorer import (
+                    from tokenpak._internal.regression.stability_scorer import (
                         RunRecord,
                         StabilityScorer,
                     )
@@ -6058,7 +6058,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # Workflow tracking: mark forward done → log_metrics → complete
                 if _wf_id:
                     try:
-                        from tokenpak.agent.agentic.proxy_workflow import (
+                        from tokenpak.agentic.proxy_workflow import (
                             advance_step,
                             complete_workflow,
                         )
@@ -6108,7 +6108,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Workflow tracking: mark the in-progress step as failed (not whole workflow)
             if _wf_id:
                 try:
-                    from tokenpak.agent.agentic.proxy_workflow import fail_step as _wf_fail
+                    from tokenpak.agentic.proxy_workflow import fail_step as _wf_fail
 
                     _wf_fail(_wf_id, "forward", error=f"{type(e).__name__}: {e}")
                 except Exception:
@@ -6769,7 +6769,7 @@ def _run_startup() -> StartupResult:
     try:
         import sys as _sys
         _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "tokenpak"))
-        from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
+        from tokenpak.agentic.proxy_workflow import recover_proxy_workflows
         dangling = recover_proxy_workflows()
         _wf_detail = f"{len(dangling)} dangling" if dangling else "clean"
     except Exception as _e:
@@ -6813,7 +6813,7 @@ def main():
 
     # Handle dangling proxy workflows (already recovered in _run_startup, just print warnings)
     try:
-        from tokenpak.agent.agentic.proxy_workflow import recover_proxy_workflows
+        from tokenpak.agentic.proxy_workflow import recover_proxy_workflows
         dangling = recover_proxy_workflows()
         if dangling:
             print(f"[proxy_workflow] ⚠️  {len(dangling)} incomplete proxy workflow(s) from prior run:")
@@ -6879,9 +6879,9 @@ def main():
     # Pre-load compression pipeline to eliminate first-request penalty
     def _warmup():
         try:
-            from tokenpak.agent.compression.pipeline import CompressionPipeline
-            from tokenpak.agent.compression.recipes import RecipeEngine
-            from tokenpak.agent.compression.slot_filler import SlotFiller
+            from tokenpak.compression.pipeline import CompressionPipeline
+            from tokenpak.compression.recipes import RecipeEngine
+            from tokenpak.compression.slot_filler import SlotFiller
             print("  ✅ Compression pipeline pre-loaded", flush=True)
         except ImportError:
             print("  ℹ️  Compression pipeline not available — skipping warmup", flush=True)
