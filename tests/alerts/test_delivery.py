@@ -17,6 +17,16 @@ import pytest
 from tokenpak.alerts.channels.webhook import WebhookChannel
 from tokenpak.alerts.channels.slack import SlackChannel
 from tokenpak.alerts.channels import dispatch_alert, _load_channel_configs
+from tokenpak.license.tier import LicenseTier
+
+
+@pytest.fixture(autouse=True)
+def _mock_pro_tier(monkeypatch):
+    """Bypass the Pro license gate so delivery logic can be tested without a real license."""
+    monkeypatch.setattr(
+        "tokenpak.license.loader._active_tier",
+        LicenseTier.PRO,
+    )
 
 
 # ---------------------------------------------------------------------------

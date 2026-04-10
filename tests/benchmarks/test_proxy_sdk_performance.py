@@ -1,10 +1,24 @@
 from __future__ import annotations
 
 import random
+import socket
 import statistics
 import time
 import tracemalloc
 import zlib
+
+import pytest
+
+
+def _proxy_reachable() -> bool:
+    """Return True if tokenpak proxy is reachable on localhost."""
+    import os
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            return True
+    except OSError:
+        return False
 
 
 def _payload(size_tokens: int = 4000) -> str:
@@ -78,6 +92,10 @@ def test_sdk_compression_speed_tokens_per_sec() -> None:
     assert tps > 500_000, f"sdk compression too slow: {tps:,.0f} tokens/sec"
 
 
+@pytest.mark.skipif(
+    not _proxy_reachable(),
+    reason="tokenpak proxy not running — latency percentile test requires live proxy",
+)
 def test_proxy_latency_percentiles() -> None:
     payload = _payload()
     p50, p95, p99 = _latency_percentiles_ms(_proxy_compress, payload)
