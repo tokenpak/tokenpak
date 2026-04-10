@@ -2500,13 +2500,13 @@ def _cci06_translate_to_ollama(body: bytes) -> Optional[dict]:
 
     messages: list = []
 
-    # Convert Anthropic system prompt -> OpenAI system message
+    # Convert Anthropic system prompt → OpenAI system message
     system = req.get("system")
     if system:
         if isinstance(system, str):
             messages.append({"role": "system", "content": system})
         elif isinstance(system, list):
-            # Array of content blocks -- flatten text blocks to a single string
+            # Array of content blocks — flatten text blocks to a single string
             parts = [
                 b.get("text", "") for b in system
                 if isinstance(b, dict) and b.get("type") == "text"
@@ -2515,7 +2515,7 @@ def _cci06_translate_to_ollama(body: bytes) -> Optional[dict]:
             if combined:
                 messages.append({"role": "system", "content": combined})
 
-    # Convert Anthropic messages -> OpenAI messages
+    # Convert Anthropic messages → OpenAI messages
     for msg in req.get("messages", []):
         role = msg.get("role", "user")
         content = msg.get("content", "")
@@ -7176,6 +7176,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         injected_tokens = 0
         injected_sources: List[str] = []
         is_streaming = False
+        _sc_tee_buf = b""       # CCG-15: accumulator for SSE semantic cache (set in SSE loop)
+        _sc_tee_capped = False  # CCG-15: True when SSE response exceeded 256 KB cap
         cache_read_tokens = 0
         cache_creation_tokens = 0
         cache_poison_scrubbed = False
@@ -7379,24 +7381,35 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             if _sem_cache is None:
                                 raise ImportError("SemanticCache unavailable")
                             _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
+                            # CCG-14 guard: bypass for Claude Code agent requests.
+                            # Replayed message_id/tool_use IDs break the agent loop — Tier 3 needed.
+                            _hdrs_lower = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
+                            _is_agent_req = bool(_hdrs_lower.get("x-claude-code-session-id")) or "claude-code" in (_hdrs_lower.get("user-agent") or "").lower()
+                            if _is_agent_req:
+                                SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                            else:
+                                # CCG-15: detect expected_format from is_streaming.
+                                # SSE clients (stream=true) need "sse" format; JSON clients need "json".
+                                _expected_format = "sse" if is_streaming else "json"
+                                _cache_result = _sem_cache.lookup(_sem_query, expected_format=_expected_format)
+                                if (
+                                    _cache_result is not None
+                                    and _cache_result.hit
+                                    and _cache_result.entry
+                                ):
+                                    SESSION["semantic_cache_hit"] = True
+                                    SESSION["phase_semantic_cache"] = "hit"
+                                    # CCG-15: serve raw bytes with original Content-Type header.
+                                    # Never use _send_json — it hard-codes application/json and
+                                    # would crash an SSE parser receiving JSON-shaped bytes.
+                                    _entry = _cache_result.entry
+                                    self.send_response(200)
+                                    self.send_header("Content-Type", _entry.content_type)
+                                    self.send_header("Access-Control-Allow-Origin", "*")
+                                    self.end_headers()
+                                    self.wfile.write(_entry.response)
+                                    return
+                                SESSION["phase_semantic_cache"] = "miss"
                         except Exception as _sc_err:
                             SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
                             pass  # fail-open: never break a request over semantic cache
@@ -8672,6 +8685,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _footer_injected = False
                 import zlib as _zlib
 
+                # CCG-15: SSE tee buffer — accumulate chunks for semantic cache while streaming.
+                # Tee is parallel to forwarding: client still receives chunks in real time.
+                _SC_TEE_CAP = 256 * 1024  # 256 KB: bypass cache silently for oversized responses
+                _sc_tee_buf = b""
+                _sc_tee_capped = False
+
                 _ce = resp.getheader("Content-Encoding", "")
                 _decomp = _zlib.decompressobj(_zlib.MAX_WBITS | 16) if "gzip" in _ce else None
                 while True:
@@ -8810,6 +8829,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         break
                     if should_log and is_messages:
                         sse_buffer += chunk
+                    # CCG-15: tee into semantic cache buffer (bounded, parallel to forwarding)
+                    if SEMANTIC_CACHE_ENABLED and not _sc_tee_capped:
+                        _sc_tee_buf += chunk
+                        if len(_sc_tee_buf) > _SC_TEE_CAP:
+                            _sc_tee_capped = True
+                            _sc_tee_buf = b""  # free memory — response too large to cache
                 if should_log and is_messages:
                     sse_usage = _extract_sse_tokens(sse_buffer)
                     output_tokens = extract_response_tokens(
@@ -8976,23 +9001,39 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     _sem_cache = _get_sem_cache()
                     if _sem_cache is None:
                         raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
-                        else _original_body
-                    )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
+                    # CCG-14 guard: don't store Claude Code responses — IDs would poison cache.
+                    # (Tier 3 will synthesize fresh IDs on hit; until then, Claude Code bypassed.)
+                    _store_hdrs_lower = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
+                    _is_agent_store = bool(_store_hdrs_lower.get("x-claude-code-session-id")) or "claude-code" in (_store_hdrs_lower.get("user-agent") or "").lower()
+                    if _is_agent_store:
+                        SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                    else:
+                        _store_query = (
+                            _original_body.decode("utf-8")
+                            if isinstance(_original_body, bytes)
+                            else _original_body
+                        )
+                        # CCG-15: store raw bytes with content_type and wire_format.
+                        # SSE path: use tee buffer if captured and not capped.
+                        # JSON path: use resp_body from non-streaming branch.
+                        if is_sse and not _sc_tee_capped and _sc_tee_buf:
+                            _store_resp_bytes: bytes = _sc_tee_buf
+                            _store_wire_format = "sse"
+                            _store_content_type = content_type or "text/event-stream; charset=utf-8"
+                        elif not is_sse and "resp_body" in locals() and resp_body:
+                            _store_resp_bytes = resp_body if isinstance(resp_body, bytes) else resp_body.encode()
+                            _store_wire_format = "json"
+                            _store_content_type = content_type or "application/json"
+                        else:
+                            _store_resp_bytes = b""
+                        if _store_resp_bytes:
+                            _sem_cache.store(
+                                _store_query,
+                                _store_resp_bytes,
+                                content_type=_store_content_type,
+                                wire_format=_store_wire_format,
+                            )
+                            SESSION["semantic_cache_stored"] = True
                 except Exception as _sc_store_err:
                     SESSION["semantic_cache_store_error"] = str(_sc_store_err)
                     pass  # fail-open
