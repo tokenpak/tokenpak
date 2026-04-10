@@ -91,6 +91,49 @@ paths:
         "502":
           $ref: "#/components/responses/UpstreamError"
 
+  /v1/messages/forecast:
+    post:
+      operationId: forecastMessageCost
+      summary: Cost forecast (local, no upstream call)
+      description: |
+        Estimates the cost of a `/v1/messages` request before it is sent.
+        Accepts the same body shape as `/v1/messages`. Runs `count_tokens`
+        locally, applies the model pricing config, and returns an estimated
+        cost breakdown. **No upstream API call is made.**
+
+        Used by IDE plugins for inline cost previews and TUI mode for
+        "are you sure?" prompts on expensive turns (AC-3.3).
+      tags: [passthrough]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnthropicMessagesRequest"
+            example:
+              model: claude-sonnet-4-5
+              messages:
+                - role: user
+                  content: Summarise this document…
+      responses:
+        "200":
+          description: Cost forecast for the given request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CostForecastResponse"
+              example:
+                estimated_cost_usd: 0.00023
+                ttfb_estimate_ms: 800
+                cache_hit_likelihood: 0.5
+                breakdown:
+                  input_tokens: 42
+                  output_estimate: 500
+                  cache_hits_estimate: 0
+                  cache_creates_estimate: 0
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
   /v1/chat/completions:
     post:
       operationId: createChatCompletion
@@ -493,6 +536,47 @@ components:
           maximum: 1
         top_p:
           type: number
+
+    CostForecastResponse:
+      type: object
+      description: Estimated cost breakdown for a /v1/messages request (local, no upstream call).
+      properties:
+        estimated_cost_usd:
+          type: number
+          format: float
+          description: Estimated total cost in USD.
+          example: 0.00023
+        ttfb_estimate_ms:
+          type: integer
+          description: Estimated time-to-first-byte in milliseconds, derived from rolling average of recent requests.
+          example: 800
+        cache_hit_likelihood:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Estimated probability of a cache hit for this session (0.0–1.0). Defaults to 0.5 if no session history is available.
+          example: 0.5
+        breakdown:
+          type: object
+          description: Token-level breakdown used to compute the estimate.
+          properties:
+            input_tokens:
+              type: integer
+              description: Total input tokens counted locally.
+              example: 42
+            output_estimate:
+              type: integer
+              description: Estimated output tokens (defaults to 500; set to max_tokens when max_tokens < 500).
+              example: 500
+            cache_hits_estimate:
+              type: integer
+              description: Estimated tokens served from cache.
+              example: 0
+            cache_creates_estimate:
+              type: integer
+              description: Estimated tokens that will create new cache entries (from cache_control hints).
+              example: 0
 
     AnthropicMessagesResponse:
       type: object
