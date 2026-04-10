@@ -1,7 +1,7 @@
 """
 tokenpak.vault — vault indexing, search, AST parsing, and block storage.
 
-This package promotes tokenpak.agent.vault to a top-level namespace.
+This package promotes tokenpak.vault to a top-level namespace.
 All vault functionality is free (V1-V8 per architecture doc).
 
 Public API:

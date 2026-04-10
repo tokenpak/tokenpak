@@ -7,7 +7,7 @@ within token budgets, and uses tokenpak HandoffManager for persistent tracking.
 
 from typing import Any, Dict, List, Optional, cast
 
-from tokenpak.agent.agentic.handoff import (
+from tokenpak.agentic.handoff import (
     ContextRef,
     HandoffBlock,
     HandoffManager,

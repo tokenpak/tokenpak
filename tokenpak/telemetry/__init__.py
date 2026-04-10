@@ -8,7 +8,7 @@ This module (4B) owns canonical.py and the adapters/ sub-package.
 from __future__ import annotations
 
 try:
-    from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+    from tokenpak.telemetry.cost_tracker import CostTracker as CompletionTracker
 except ImportError:
     CompletionTracker = None  # type: ignore[assignment,misc]
 from tokenpak.telemetry.adapters.registry import AdapterRegistry

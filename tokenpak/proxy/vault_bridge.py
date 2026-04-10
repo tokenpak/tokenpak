@@ -330,7 +330,7 @@ def _build_vault_index() -> object:
     """Create the correct VaultIndex backend (sqlite or json_blocks)."""
     if RETRIEVAL_BACKEND == "sqlite":
         try:
-            from tokenpak.agent.vault.sqlite_backend import (
+            from tokenpak.vault.sqlite_backend import (
                 SQLiteRetrievalBackend as _SQLiteBackend,
             )
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
-from .agent.telemetry.budget import BudgetTracker
+from .telemetry.budget import BudgetTracker
 
 
 @dataclass

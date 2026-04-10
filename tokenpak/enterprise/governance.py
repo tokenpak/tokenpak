@@ -168,7 +168,7 @@ class GovernanceEngine(GovernanceEngineBase):
 
     def _try_load_enterprise(self) -> Optional[GovernanceEngineBase]:
         try:
-            from tokenpak.agent.license.activation import is_enterprise
+            from tokenpak.infrastructure.license_activation import is_enterprise
 
             if not is_enterprise():
                 return None
@@ -178,7 +178,7 @@ class GovernanceEngine(GovernanceEngineBase):
 
     def _tier_name(self) -> str:
         try:
-            from tokenpak.agent.license.activation import get_plan
+            from tokenpak.infrastructure.license_activation import get_plan
 
             return get_plan().tier.value.upper()
         except Exception:

@@ -8,7 +8,7 @@ or via :func:`extract` which auto-detects the content type.
 
 Usage::
 
-    from tokenpak.agent.compression.salience import extract, ContentType
+    from tokenpak.compression.salience import extract, ContentType
 
     result = extract(text)
     # result.content_type  → detected type

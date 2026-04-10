@@ -1,4 +1,4 @@
-"""test_retrieval.py — Tests for tokenpak.agent.vault.retrieval.
+"""test_retrieval.py — Tests for tokenpak.vault.retrieval.
 
 Covers: sort_retrieval_results, inject_retrieved_context, measure_injection_consistency,
 compute_final_score, extract_must_hit_terms, compute_coverage_score, score_and_sort,
@@ -14,16 +14,16 @@ import pytest
 # ---------------------------------------------------------------------------
 # Patch broken ingest module before any tokenpak imports
 # ---------------------------------------------------------------------------
-_fake_ingest = types.ModuleType("tokenpak.agent.ingest")
-_fake_sc = types.ModuleType("tokenpak.agent.ingest.schema_converter")
+_fake_ingest = types.ModuleType("tokenpak._internal.ingest")
+_fake_sc = types.ModuleType("tokenpak._internal.ingest.schema_converter")
 _fake_sc.should_serve_schema = lambda intent: False
 _fake_sc.convert_document = MagicMock(return_value={})
 _fake_ingest.schema_converter = _fake_sc
-sys.modules.setdefault("tokenpak.agent.ingest", _fake_ingest)
-sys.modules.setdefault("tokenpak.agent.ingest.schema_converter", _fake_sc)
-sys.modules.setdefault("tokenpak.agent.ingest.api", MagicMock())
+sys.modules.setdefault("tokenpak._internal.ingest", _fake_ingest)
+sys.modules.setdefault("tokenpak._internal.ingest.schema_converter", _fake_sc)
+sys.modules.setdefault("tokenpak._internal.ingest.api", MagicMock())
 
-from tokenpak.agent.vault.search import (  # noqa: E402
+from tokenpak.vault.search import (  # noqa: E402
     RETRIEVED_CONTEXT_HEADER,
     DEFAULT_MAX_TOKENS,
     sort_retrieval_results,
@@ -152,7 +152,7 @@ class TestInjectRetrievedContext:
             "raw content",
             metadata={"schema": {"field": "value"}, "doc_type": "spec"},
         )
-        with patch("tokenpak.agent.ingest.schema_converter.should_serve_schema", return_value=True):
+        with patch("tokenpak._internal.ingest.schema_converter.should_serve_schema", return_value=True):
             text, _, _ = inject_retrieved_context(
                 [(block, 1.0)], intent="schema", count_tokens_fn=_token_counter
             )

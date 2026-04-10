@@ -15,7 +15,7 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
-from tokenpak.agent.telemetry.cost_tracker import CostTracker, get_cost_tracker
+from tokenpak.telemetry.cost_tracker import CostTracker, get_cost_tracker
 
 logger = logging.getLogger(__name__)
 

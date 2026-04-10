@@ -1,5 +1,5 @@
 """
-tokenpak.agent.agentic.locks
+tokenpak.agentic.locks
 ────────────────────────────
 File lock coordination for multi-agent environments.
 

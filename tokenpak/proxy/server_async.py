@@ -309,7 +309,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
             from tokenpak.proxy.server import PipelineTrace
 ========
-            from tokenpak.agent.proxy.server import PipelineTrace
+            from tokenpak.proxy.server import PipelineTrace
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
             trace = PipelineTrace(
@@ -325,7 +325,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
             from tokenpak.proxy.router import ProviderRouter
 ========
-            from tokenpak.agent.proxy.router import ProviderRouter
+            from tokenpak.proxy.router import ProviderRouter
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
             _router = ProviderRouter()
@@ -531,7 +531,7 @@ def _record_telemetry(
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
         from tokenpak.proxy.router import estimate_cost
 ========
-        from tokenpak.agent.proxy.router import estimate_cost
+        from tokenpak.proxy.router import estimate_cost
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
         cost = estimate_cost(
@@ -643,7 +643,7 @@ async def handle_degradation(request: Request) -> JSONResponse:
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.degradation import get_degradation_tracker
 ========
-    from tokenpak.agent.proxy.degradation import get_degradation_tracker
+    from tokenpak.proxy.degradation import get_degradation_tracker
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     return JSONResponse(get_degradation_tracker().summary())
@@ -653,7 +653,7 @@ async def handle_circuit_breakers(request: Request) -> JSONResponse:
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
 ========
-    from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry
+    from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     registry = get_circuit_breaker_registry()
@@ -666,7 +666,7 @@ async def handle_circuit_breakers(request: Request) -> JSONResponse:
 
 
 async def handle_sessions(request: Request) -> JSONResponse:
-    from tokenpak.agent.dashboard.session_filter import FilterParams
+    from tokenpak.dashboard.session_filter import FilterParams
 
     qs = (
         str(request.query_string, "utf-8")
@@ -685,7 +685,7 @@ async def handle_sessions(request: Request) -> JSONResponse:
 
 
 async def handle_export_csv(request: Request) -> Response:
-    from tokenpak.agent.dashboard.export_api import ExportAPI
+    from tokenpak.dashboard.export_api import ExportAPI
 
     ps = _ps()
     raw_body = await request.body()
@@ -717,7 +717,7 @@ async def handle_v1_proxy(request: Request) -> Response:
 <<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.router import ProviderRouter
 ========
-    from tokenpak.agent.proxy.router import ProviderRouter
+    from tokenpak.proxy.router import ProviderRouter
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     router = ProviderRouter()
@@ -763,7 +763,7 @@ async def lifespan(app):
     _cooldown_clearer = None
     _oauth_refresher = None
     try:
-        from tokenpak.agent.config import get_config
+        from tokenpak._internal.config import get_config
 
         cfg = get_config()
         auth_cfg = cfg.get("auth", {}) if isinstance(cfg.get("auth"), dict) else {}
@@ -771,13 +771,13 @@ async def lifespan(app):
         oauth_enabled = auth_cfg.get("oauth_auto_refresh", True)
 
         if cooldown_enabled:
-            from tokenpak.agent.auth.cooldown_manager import BackgroundCooldownClearer
+            from tokenpak._internal.auth.cooldown_manager import BackgroundCooldownClearer
 
             _cooldown_clearer = BackgroundCooldownClearer(interval=60, enabled=True)
             await _cooldown_clearer.start()
 
         if oauth_enabled:
-            from tokenpak.agent.auth.oauth_manager import BackgroundOAuthRefresher
+            from tokenpak._internal.auth.oauth_manager import BackgroundOAuthRefresher
 
             _oauth_refresher = BackgroundOAuthRefresher(interval=300, enabled=True)
             await _oauth_refresher.start()

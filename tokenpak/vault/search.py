@@ -12,7 +12,7 @@ produce byte-identical prompt injections, maximising Anthropic prompt cache hits
 
 Usage::
 
-    from tokenpak.agent.vault.retrieval import sort_retrieval_results, inject_retrieved_context
+    from tokenpak.vault.retrieval import sort_retrieval_results, inject_retrieved_context
 
     results = vault_index.search(query, top_k=10)
     injection = inject_retrieved_context(results, max_tokens=4000)

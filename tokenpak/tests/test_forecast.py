@@ -18,7 +18,7 @@ from tokenpak.forecast import (
     _calculate_wow_trend,
     format_burn_rate_display,
 )
-from tokenpak.agent.telemetry.budget import BudgetTracker
+from tokenpak.telemetry.budget import BudgetTracker
 
 
 # ---------------------------------------------------------------------------
