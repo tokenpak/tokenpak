@@ -940,7 +940,31 @@ _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
 
 ADAPTER_REGISTRY = build_default_registry()
-_EMBEDDING_ROUTER = _EmbeddingRouter() if _EMBEDDING_ROUTER_AVAILABLE else None
+
+
+def _embedding_call_provider(provider: str, upstream_url: str, body: bytes):
+    """HTTP call_provider for EmbeddingRouter — uses _POOL_MANAGER + per-provider Bearer auth."""
+    _key_env = {
+        "voyage": "VOYAGE_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "cohere": "CO_API_KEY",
+        "jina": "JINA_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+    }
+    hdrs = {"Content-Type": "application/json", "Accept": "application/json"}
+    api_key = os.environ.get(_key_env.get(provider, ""), "")
+    if api_key:
+        hdrs["Authorization"] = f"Bearer {api_key}"
+    full_url = upstream_url.rstrip("/") + "/v1/embeddings"
+    resp = _POOL_MANAGER.request("POST", full_url, body=body, headers=hdrs)
+    return resp.status, dict(resp.headers), resp.data
+
+
+_EMBEDDING_ROUTER = (
+    _EmbeddingRouter(call_provider=_embedding_call_provider)
+    if _EMBEDDING_ROUTER_AVAILABLE
+    else None
+)
 
 
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
@@ -3814,6 +3838,19 @@ EMBEDDING_COST_PER_1M: Dict[str, float] = {
     "cohere": 0.1,
 }
 
+# Per-model embedding cost rates in USD per 1M tokens (TPK-EMBED-21).
+# Keyed by model name returned in the embedding response.
+# Falls back to EMBEDDING_COST_PER_1M (provider-level) when model not found.
+EMBEDDING_COST_PER_1M_TOKENS: Dict[str, float] = {
+    "voyage-3.5": 0.06,
+    "voyage-code-3": 0.18,
+    "text-embedding-3-small": 0.02,
+    "gemini-embedding-001": 0.0,
+    "jina-embeddings-v3": 0.02,
+    "nomic-embed-text": 0.0,
+    "default": 0.0,
+}
+
 
 # ---------------------------------------------------------------------------
 # Cache Cost Multipliers — per-provider cache read/creation pricing
@@ -5731,6 +5768,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
             self._reverse_proxy("POST")
+        elif self.path.split("?")[0] == "/v1/embeddings":
+            self._handle_embeddings()
         elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
             self._reverse_proxy("POST")
         elif self.path == "/ingest" or self.path == "/ingest/batch":
@@ -8392,6 +8431,109 @@ setInterval(refresh, REFRESH);
             self.wfile.write(body)
         except Exception as e:
             self._send_json({"error": {"type": "server_error", "message": str(e)}}, status=500)
+
+    def _handle_embeddings(self):
+        """Handle POST /v1/embeddings — budget gate, EmbeddingRouter routing, cost logging."""
+        # 1. Pre-flight budget gate — reject before spending anything if over limit
+        if BUDGET_DAILY_LIMIT_USD > 0:
+            try:
+                _bconn = sqlite3.connect(str(MONITOR.db_path))
+                _daily_spent = float(
+                    _bconn.execute(
+                        "SELECT COALESCE(SUM(estimated_cost), 0) FROM requests "
+                        "WHERE date(timestamp) = date('now')"
+                    ).fetchone()[0] or 0.0
+                )
+                _bconn.close()
+                if _daily_spent >= BUDGET_DAILY_LIMIT_USD:
+                    self._send_json(
+                        {
+                            "error": {
+                                "type": "budget_exceeded",
+                                "message": (
+                                    f"Daily budget of ${BUDGET_DAILY_LIMIT_USD:.4f} USD exceeded "
+                                    f"(spent: ${_daily_spent:.4f} USD). Resets at midnight UTC."
+                                ),
+                            }
+                        },
+                        status=429,
+                    )
+                    return
+            except Exception:
+                pass  # never block a request on a budget check failure
+
+        # 2. Read request body
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+
+        # 3. Route via EmbeddingRouter (failover chain + dimension negotiation)
+        if _EMBEDDING_ROUTER is None:
+            self._send_json(
+                {
+                    "error": {
+                        "type": "embedding_unavailable",
+                        "message": "EmbeddingRouter not available — install embedding adapters.",
+                    }
+                },
+                status=503,
+            )
+            return
+
+        t0 = time.time()
+        status, resp_headers, resp_body = _EMBEDDING_ROUTER.handle_request(body)
+        latency_ms = (time.time() - t0) * 1000
+
+        # 4. Extract telemetry fields from response for MONITOR logging
+        input_tokens = 0
+        model_used = "embedding"
+        provider_used = ""
+        try:
+            resp_json = json.loads(resp_body)
+            if isinstance(resp_json, dict):
+                usage = resp_json.get("usage", {})
+                input_tokens = (
+                    usage.get("total_tokens") or usage.get("prompt_tokens") or 0
+                )
+                model_used = resp_json.get("model", "embedding") or "embedding"
+                tkp = resp_json.get("_tokenpak", {})
+                provider_used = tkp.get("provider", "")
+        except Exception:
+            pass
+
+        embed_cost = 0.0
+        if input_tokens:
+            rate = EMBEDDING_COST_PER_1M_TOKENS.get(
+                model_used,
+                EMBEDDING_COST_PER_1M.get(provider_used, 0.0),
+            )
+            embed_cost = round(rate * input_tokens / 1_000_000, 8)
+
+        # 5. Log cost to MONITOR — adds embedding spend to same daily budget as LLM calls
+        try:
+            MONITOR.log(
+                model_used,
+                input_tokens,
+                0,
+                embed_cost,
+                latency_ms,
+                status,
+                "/v1/embeddings",
+                "embedding",
+            )
+        except Exception:
+            pass  # never break the proxy
+
+        # 6. Forward response to client
+        self.send_response(status)
+        for k, v in resp_headers.items():
+            if k.lower() not in ("transfer-encoding", "connection", "content-length"):
+                try:
+                    self.send_header(k, v)
+                except Exception:
+                    pass
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.end_headers()
+        self.wfile.write(resp_body)
 
     def _handle_embedding_providers_status(self):
         """Return status of all embedding providers as JSON.
