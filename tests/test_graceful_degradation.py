@@ -19,13 +19,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.proxy.degradation import (
+from tokenpak.proxy.degradation import (
     DegradationEvent,
     DegradationEventType,
     DegradationTracker,
     get_degradation_tracker,
 )
-from tokenpak.agent.proxy.startup import format_startup_report, run_startup_checks
+from tokenpak.proxy.startup import format_startup_report, run_startup_checks
 
 
 # ===========================================================================
@@ -114,7 +114,7 @@ class TestStartupChecks:
 
     def test_startup_checks_never_raise(self):
         """Even on a broken system, startup checks must not raise."""
-        with patch("tokenpak.agent.proxy.startup.socket.socket") as mock_sock:
+        with patch("tokenpak.proxy.startup.socket.socket") as mock_sock:
             mock_sock.side_effect = OSError("socket creation failed")
             # Should not raise
             all_ok, warnings = run_startup_checks(9999)
@@ -141,14 +141,14 @@ class TestConfigFallbacks:
     """Missing / invalid config → defaults, never crash."""
 
     def test_load_failover_config_missing_file_returns_disabled(self, tmp_path):
-        from tokenpak.agent.proxy.failover import load_failover_config
+        from tokenpak.proxy.failover import load_failover_config
 
         cfg = load_failover_config(path=tmp_path / "nonexistent.yaml")
         assert cfg.enabled is False
         assert cfg.chain == []
 
     def test_load_failover_config_invalid_yaml_returns_disabled(self, tmp_path):
-        from tokenpak.agent.proxy.failover import load_failover_config
+        from tokenpak.proxy.failover import load_failover_config
 
         bad = tmp_path / "config.yaml"
         bad.write_text(": : bad: yaml: [[ unclosed")
@@ -156,7 +156,7 @@ class TestConfigFallbacks:
         assert cfg.enabled is False
 
     def test_load_failover_config_empty_file_returns_disabled(self, tmp_path):
-        from tokenpak.agent.proxy.failover import load_failover_config
+        from tokenpak.proxy.failover import load_failover_config
 
         empty = tmp_path / "config.yaml"
         empty.write_text("")
@@ -164,7 +164,7 @@ class TestConfigFallbacks:
         assert cfg.enabled is False
 
     def test_load_failover_config_missing_fields_use_defaults(self, tmp_path):
-        from tokenpak.agent.proxy.failover import load_failover_config
+        from tokenpak.proxy.failover import load_failover_config
 
         partial = tmp_path / "config.yaml"
         partial.write_text("failover:\n  enabled: true\n  chain: []\n")
@@ -189,8 +189,8 @@ class TestProviderFailover:
     """Failover engine error messages are actionable."""
 
     def test_failover_engine_disabled_yields_only_primary(self):
-        from tokenpak.agent.proxy.failover import FailoverConfig
-        from tokenpak.agent.proxy.failover_engine import FailoverEngine
+        from tokenpak.proxy.failover import FailoverConfig
+        from tokenpak.proxy.failover_engine import FailoverEngine
 
         engine = FailoverEngine(config=FailoverConfig(enabled=False))
         attempts = list(engine.iter_attempts("claude-sonnet-4-5", "anthropic"))
@@ -198,8 +198,8 @@ class TestProviderFailover:
         assert attempts[0].is_primary is True
 
     def test_failover_engine_switches_on_server_error(self):
-        from tokenpak.agent.proxy.failover import FailoverConfig, ProviderEntry
-        from tokenpak.agent.proxy.failover_engine import (
+        from tokenpak.proxy.failover import FailoverConfig, ProviderEntry
+        from tokenpak.proxy.failover_engine import (
             CircuitBreaker,
             FailoverEngine,
             FailoverEventLog,
@@ -226,14 +226,14 @@ class TestProviderFailover:
             assert error.should_switch is True
 
     def test_classify_error_rate_limit_returns_rate_limit_type(self):
-        from tokenpak.agent.proxy.failover_engine import ErrorType, classify_error
+        from tokenpak.proxy.failover_engine import ErrorType, classify_error
 
         e = classify_error(http_status=429)
         assert e.error_type == ErrorType.RATE_LIMIT
         assert e.should_switch is True
 
     def test_classify_error_auth_does_not_switch(self):
-        from tokenpak.agent.proxy.failover_engine import ErrorType, classify_error
+        from tokenpak.proxy.failover_engine import ErrorType, classify_error
 
         e = classify_error(http_status=401)
         assert e.error_type == ErrorType.AUTH_ERROR
@@ -326,14 +326,14 @@ class TestErrorMessages:
         assert "pkill" in report or "kill" in report.lower()
 
     def test_classify_auth_error_message_is_actionable(self):
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         e = classify_error(http_status=401)
         assert e.message  # has a message
         assert "401" in e.message or "auth" in e.message.lower()
 
     def test_classify_timeout_message_mentions_timeout(self):
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         e = classify_error(exception=TimeoutError("read timeout"))
         assert "timeout" in e.message.lower() or "Timeout" in e.message

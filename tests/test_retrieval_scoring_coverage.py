@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.vault.retrieval import (
+from tokenpak.vault.retrieval import (
     COVERAGE_OK,
     COVERAGE_STRONG,
     _BOOST_PATH,

@@ -71,7 +71,7 @@ class TestWorkersFlag:
 
     def test_default_workers_value(self):
         """Default workers = max(1, cpu_count // 2) — at least 1."""
-        from tokenpak.agent.cli.commands.serve import _default_workers
+        from tokenpak.cli.commands.serve import _default_workers
 
         result = _default_workers()
         cpu = os.cpu_count() or 1
@@ -80,7 +80,7 @@ class TestWorkersFlag:
 
     def test_workers_less_than_one_rejected(self, tmp_path, capsys):
         """--workers 0 exits with error."""
-        from tokenpak.agent.cli.commands.serve import run_serve_cmd
+        from tokenpak.cli.commands.serve import run_serve_cmd
 
         args = argparse.Namespace(host="127.0.0.1", port=BASE_PORT, workers=0)
         with pytest.raises(SystemExit) as exc_info:
@@ -101,10 +101,10 @@ class TestWorkersFlag:
         # Stub create_combined_app so fastapi/ingest imports aren't required
         fake_app = object()
 
-        import tokenpak.agent.dashboard.app as dashboard_app_mod
+        import tokenpak.dashboard.app as dashboard_app_mod
         monkeypatch.setattr(dashboard_app_mod, "create_combined_app", lambda: fake_app)
 
-        from tokenpak.agent.cli.commands.serve import run_serve_cmd
+        from tokenpak.cli.commands.serve import run_serve_cmd
 
         args = argparse.Namespace(host="127.0.0.1", port=BASE_PORT + 1, workers=1)
         run_serve_cmd(args)
@@ -124,7 +124,7 @@ class TestWorkersFlag:
 
         monkeypatch.setattr(uvicorn, "run", fake_run)
 
-        from tokenpak.agent.cli.commands.serve import run_serve_cmd
+        from tokenpak.cli.commands.serve import run_serve_cmd
 
         args = argparse.Namespace(host="127.0.0.1", port=BASE_PORT + 2, workers=2)
         run_serve_cmd(args)
@@ -141,7 +141,7 @@ class TestWorkersFlag:
 
 class TestDefaultWorkers:
     def test_default_matches_cpu_formula(self):
-        from tokenpak.agent.cli.commands.serve import _default_workers
+        from tokenpak.cli.commands.serve import _default_workers
 
         cpu = os.cpu_count() or 1
         assert _default_workers() == max(1, cpu // 2)
@@ -149,7 +149,7 @@ class TestDefaultWorkers:
     def test_default_never_zero(self, monkeypatch):
         """Even on a 1-core machine the default is at least 1."""
         monkeypatch.setattr(os, "cpu_count", lambda: 1)
-        from tokenpak.agent.cli.commands import serve as serve_mod
+        from tokenpak.cli.commands import serve as serve_mod
         # Reload to pick up monkeypatched cpu_count
         assert serve_mod._default_workers() == 1
 
@@ -160,7 +160,7 @@ class TestDefaultWorkers:
         calls = []
         monkeypatch.setattr(uvicorn, "run", lambda app, **kw: calls.append(kw))
 
-        from tokenpak.agent.cli.commands.serve import _default_workers, run_serve_cmd
+        from tokenpak.cli.commands.serve import _default_workers, run_serve_cmd
 
         args = argparse.Namespace(host="127.0.0.1", port=BASE_PORT + 3, workers=None)
         run_serve_cmd(args)
@@ -310,7 +310,7 @@ class TestArgparse:
     def test_workers_arg_passed_to_run(self, monkeypatch):
         """Verify workers=4 is forwarded through main() → run_serve_cmd."""
         import uvicorn
-        from tokenpak.agent.cli.commands import serve as serve_mod
+        from tokenpak.cli.commands import serve as serve_mod
 
         received = {}
 

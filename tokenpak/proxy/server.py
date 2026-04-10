@@ -89,7 +89,127 @@ from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_c
 # Systemd integration — read sd_notify socket path from environment
 # Transferred from monolith (TPK-CONSOLIDATION-A2a, lines 7577/7601)
 # ---------------------------------------------------------------------------
-_SD_NOTIFY_SOCKET: str = os.environ.get("NOTIFY_SOCKET", "")
+from tokenpak.proxy.adapters.base import FormatAdapter  # noqa: F401
+from tokenpak.proxy.streaming import _extract_sse_tokens  # noqa: F401
+from tokenpak.proxy.cache_poison import (  # noqa: F401
+    _strip_cache_poisons,
+    _classify_cache_miss_reason,
+)
+from tokenpak.proxy.request_pipeline import (  # noqa: F401
+    _get_router,
+    _get_validation_gate,
+    _has_validation_gate,
+    _RouterResult,
+    _classify_intent,
+    _extract_user_text,
+    _run_router,
+    _router_health,
+    _health_cache,
+    _HEALTH_CACHE_TTL,
+    _get_route_engine,
+    _get_cached_route_rules,
+    _get_precond_gates,
+    _get_budget_controller,
+    PROTECTED_MARKERS,
+    is_protected_content,
+    classify_message_risk,
+    can_compress,
+)
+from tokenpak.proxy.tracing import (  # noqa: F401
+    _CompressionTimeout,
+    StageTrace,
+    PipelineTrace,
+    TraceStorage,
+    TRACE_STORAGE,
+)
+from tokenpak.proxy.config import (  # noqa: F401
+    ACTIVE_PROFILE,
+    PROXY_AUTH_KEY,
+    DASHBOARD_AUTH_ENABLED,
+    COMPILATION_MODE,
+    ENABLE_COMPACTION,
+    COMPACT_MAX_CHARS,
+    COMPACT_THRESHOLD_TOKENS,
+    COMPACT_MAX_TOKENS,
+    COMPACT_CACHE_SIZE,
+    ENABLE_CAPSULE_BUILDER,
+    CAPSULE_MIN_CHARS,
+    CAPSULE_HOT_WINDOW,
+    ROUTER_ENABLED,
+    SKELETON_ENABLED,
+    SHADOW_ENABLED,
+    BUDGET_TOTAL_TOKENS,
+    CHAT_FOOTER_ENABLED,
+    HTTP100_KEEPALIVE_ENABLED,
+    SEMANTIC_CACHE_ENABLED,
+    _get_sem_cache,
+    PREFIX_REGISTRY_ENABLED,
+    COMPRESSION_DICT_ENABLED,
+    TRACE_ENABLED,
+    ERROR_NORMALIZER_ENABLED,
+    BUDGET_CONTROLLER_ENABLED,
+    REQUEST_LOGGER_ENABLED,
+    SALIENCE_ROUTER_ENABLED,
+    CACHE_REGISTRY_ENABLED,
+    RETRIEVAL_WATCHDOG_ENABLED,
+    FAILURE_MEMORY_ENABLED,
+    FIDELITY_TIERS_ENABLED,
+    SESSION_CAPSULES_ENABLED,
+    PRECONDITION_GATES_ENABLED,
+    QUERY_REWRITER_ENABLED,
+    STABILITY_SCORER_ENABLED,
+    WS_PORT,
+    WS_MAX_CONNECTIONS,
+    _plugin_registry,
+    _cache_registry,
+    UPSTREAM_TIMEOUT,
+    STRICT_VALIDATION,
+    _POOL_MANAGER,
+    VALIDATION_GATE_ENABLED,
+    VALIDATION_GATE_BUDGET_CAP,
+    VALIDATION_GATE_SOFT,
+    INJECT_BUDGET,
+    INJECT_TOP_K,
+    INJECT_MIN_SCORE,
+    INJECT_SKIP_MODELS,
+    INJECT_MIN_PROMPT,
+    MAX_COMPRESSION_TIME_MS,
+    TERM_RESOLVER_ENABLED,
+    TERM_RESOLVER_TOP_K,
+    TERM_RESOLVER_MAX_BYTES,
+    _COMPACT_CACHE,
+    _COMPACT_CACHE_ORDER,
+    ADAPTER_REGISTRY,
+    UPSTREAM_ROUTES,
+)
+from tokenpak.proxy.fallback import (  # noqa: F401
+    _ANTHROPIC_KEY_POOL,
+    _reload_config_from_env,
+    _cool_down_key,
+    _get_next_key,
+    _strip_empty_text_blocks,
+    _cap_cache_control_blocks,
+    _resolve_upstream,
+    INTERCEPT_HOSTS,
+    OLLAMA_UPSTREAM,
+    OLLAMA_CONNECT_TIMEOUT,
+    _provider_for_url,
+    _circuit_check,
+    _circuit_record_failure,
+    _circuit_record_success,
+    _sanitize_headers,
+    _make_structured_error,
+    _enrich_upstream_error,
+    _rate_limit_check,
+    _KEY_COOLDOWN_429,
+    _KEY_COOLDOWN_401,
+    # circuit breaker state used directly by ForwardProxyHandler
+    _ollama_circuit,
+    _ollama_circuit_lock,
+    _provider_circuits,
+    _RATE_LIMIT_RPM,
+    _MAX_REQUEST_BYTES,
+)
 
 # ---------------------------------------------------------------------------
 # Pipeline trace types
@@ -615,6 +735,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
             )
+            # Start workflow tracking (no-op when feature flag is OFF)
+            try:
+                from tokenpak.agentic.proxy_workflow import start_proxy_workflow
 
         # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
@@ -748,12 +871,271 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "original request will be forwarded unchanged",
                         type(hook_err).__name__, hook_err,
                     )
-                    print(
-                        f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
-                        f"    → Forwarding original request (passthrough mode). "
-                        f"Run `tokenpak doctor` for diagnostics."
+                    if VAULT_INDEX.available:
+                        skip_injection = False
+                        if INJECT_SKIP_MODELS.strip():
+                            if any(
+                                skip.strip() and skip.strip().lower() in model.lower()
+                                for skip in INJECT_SKIP_MODELS.split(",")
+                            ):
+                                skip_injection = True
+                        if input_tokens < INJECT_MIN_PROMPT:
+                            skip_injection = True
+                        if skip_injection:
+                            SESSION["injection_skips"] += 1
+                            vault_stage.details["skipped"] = True
+                            vault_stage.details["reason"] = (
+                                "model_skip"
+                                if INJECT_SKIP_MODELS.strip()
+                                and any(
+                                    s.lower() in model.lower()
+                                    for s in INJECT_SKIP_MODELS.split(",")
+                                )
+                                else "prompt_too_short"
+                            )
+                            # Even when skipping vault injection, apply cache_control to stable prefix
+                            if PROMPT_BUILDER_AVAILABLE:
+                                body = _apply_stable_cache_control(body)
+                        else:
+                            body, injected_tokens, injected_sources = inject_vault_context(
+                                body, adapter=active_adapter
+                            )
+                            if injected_tokens > 0:
+                                # Recount tokens after injection
+                                _, input_tokens = extract_request_tokens(
+                                    body, adapter=active_adapter
+                                )
+                                vault_stage.tokens_delta = injected_tokens
+                                vault_stage.details["blocks_matched"] = len(injected_sources)
+                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
+                                vault_stage.details["tokens_injected"] = injected_tokens
+                                # Enrich with sub-step timing from inject_vault_context
+                                vault_stage.details["sub_timing_ms"] = SESSION.get(
+                                    "vault_last_timing_ms", {}
+                                )
+                    vault_stage.output_tokens = input_tokens
+                    vault_stage.duration_ms = (time.time() - t_inject) * 1000
+                    if trace:
+                        trace.stages.append(vault_stage)
+
+                    # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
+                    if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
+                        try:
+                            from tokenpak._internal.regression.retrieval_watchdog import (
+                                QueryRetrievalRecord,
+                                RetrievalQualityWatchdog,
+                            )
+
+                            _rw = RetrievalQualityWatchdog()
+                            _rw_chunk_count = len(injected_sources) if injected_sources else 0
+                            _rw_record = QueryRetrievalRecord(
+                                query_id=model or "unknown",
+                                query_text=_extract_user_text(
+                                    body
+                                    if isinstance(body, bytes)
+                                    else body.encode("utf-8")
+                                    if isinstance(body, str)
+                                    else b""
+                                )[:200],
+                                chunk_count=_rw_chunk_count,
+                                unique_chunk_count=_rw_chunk_count,
+                                relevance_scores=[1.0] * _rw_chunk_count,
+                                source_ids=injected_sources if injected_sources else [],
+                                chunk_ids_ordered=[f"chunk_{i}" for i in range(_rw_chunk_count)],
+                            )
+                            _rw_alert = _rw.observe(_rw_record)
+                            if _rw_alert:
+                                SESSION["retrieval_watchdog_alert"] = str(_rw_alert)
+                        except Exception as _rw_err:
+                            SESSION["retrieval_watchdog_error"] = str(_rw_err)
+                            pass  # fail-open
+
+                    # Phase 1.5: CANON dedup (AFTER injection, BEFORE compaction)
+                    if CANON_AVAILABLE and injected_tokens > 0:
+                        t_canon = time.time()
+                        canon_stage = StageTrace(
+                            name="canon_dedup",
+                            enabled=True,
+                            input_tokens=input_tokens,
+                        )
+                        try:
+                            session_id = self.headers.get("X-OpenClaw-Session", model)
+                            body, canon_refs, canon_saved = apply_canon_refs(body, session_id)
+                            if canon_refs > 0:
+                                SESSION["canon_hits"] += canon_refs
+                                SESSION["canon_tokens_saved"] += canon_saved
+                                canon_stage.tokens_delta = -canon_saved
+                                canon_stage.details["blocks_referenced"] = canon_refs
+                                canon_stage.details["tokens_saved"] = canon_saved
+                                _, input_tokens = extract_request_tokens(
+                                    body, adapter=active_adapter
+                                )
+                        except Exception as _canon_err:
+                            canon_stage.details["error"] = str(_canon_err)
+                        canon_stage.output_tokens = input_tokens
+                        canon_stage.duration_ms = (time.time() - t_canon) * 1000
+                        if trace:
+                            trace.stages.append(canon_stage)
+
+                    # Phase 1.8: Salience Router — content-type-aware extraction before compaction
+                    if SALIENCE_ROUTER_ENABLED and body:
+                        try:
+                            from tokenpak.compression.salience.router import (
+                                detect_content_type,
+                            )
+                            from tokenpak.compression.salience.router import (
+                                extract as salience_extract,
+                            )
+
+                            _req_data = json.loads(body)
+                            _salience_applied = 0
+                            for _msg in _req_data.get("messages", []):
+                                _content = _msg.get("content", "")
+                                if isinstance(_content, str) and len(_content) > 500:
+                                    _ctype = detect_content_type(_content)
+                                    if _ctype.value != "unknown":
+                                        _result = salience_extract(_content, content_type=_ctype)
+                                        if _result.compressed and len(_result.compressed) < len(
+                                            _content
+                                        ):
+                                            _msg["content"] = _result.compressed
+                                            _salience_applied += 1
+                            if _salience_applied > 0:
+                                body = json.dumps(_req_data, separators=(",", ":"))
+                                SESSION["salience_router_applied"] = _salience_applied
+                        except Exception as _sr_err:
+                            SESSION["salience_router_error"] = str(_sr_err)
+                            pass  # fail-open
+
+                    # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
+                    if QUERY_REWRITER_ENABLED and body:
+                        try:
+                            from tokenpak.compression.query_rewriter import QueryRewriter
+
+                            _qr = QueryRewriter()
+                            _req_data = json.loads(body)
+                            _rewritten = _qr.rewrite_messages(_req_data.get("messages", []))
+                            if _rewritten and _rewritten != _req_data.get("messages", []):
+                                _req_data["messages"] = _rewritten
+                                body = json.dumps(_req_data, separators=(",", ":"))
+                                SESSION["query_rewriter_applied"] = len(_rewritten)
+                        except Exception as _qr_err:
+                            SESSION["query_rewriter_error"] = str(_qr_err)
+                            pass  # fail-open
+
+                    # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
+                    if FIDELITY_TIERS_ENABLED and body:
+                        try:
+                            from tokenpak.compression.fidelity_tiers import (
+                                TierSelector,
+                            )
+
+                            _ts = TierSelector()
+                            _complexity = min(
+                                1.0, (input_tokens or 0) / 10000.0
+                            )  # simple heuristic
+                            _budget_remaining = max(0.0, 1.0 - _complexity)
+                            _selected_tier = _ts.select(_complexity, _budget_remaining)
+                            SESSION["fidelity_tier"] = (
+                                _selected_tier.name
+                                if hasattr(_selected_tier, "name")
+                                else str(_selected_tier)
+                            )
+                        except Exception as _ft_err:
+                            SESSION["fidelity_tier_error"] = str(_ft_err)
+                            pass  # fail-open
+
+                    # Plugin system — run custom compressors first
+                    if _plugin_registry is not None and body:
+                        _plugin_context = {
+                            "mode": COMPILATION_MODE,
+                            "input_tokens": input_tokens,
+                            "request_id": SESSION.get("request_id", ""),
+                        }
+                        for _plugin in _plugin_registry.get_plugins():
+                            try:
+                                _req_data = json.loads(body)
+                                for _msg in _req_data.get("messages", []):
+                                    _content = _msg.get("content", "")
+                                    if isinstance(_content, str):
+                                        _plugin_result = _plugin.compress(_content, _plugin_context)
+                                        _msg["content"] = _plugin_result["text"]
+                                body = json.dumps(_req_data, separators=(",", ":"))
+                            except Exception as _plugin_run_err:
+                                import logging as _logging
+
+                                _logging.getLogger(__name__).warning(
+                                    "Plugin '%s' raised an error: %s — skipping",
+                                    getattr(_plugin, "name", repr(_plugin)),
+                                    _plugin_run_err,
+                                )
+
+                    # Compression budget check — if vault injection took too long, skip compaction
+                    if _compression_budget_exceeded():
+                        print(
+                            f"  ⏱️  Compression budget exceeded ({MAX_COMPRESSION_TIME_MS}ms) after vault injection — "
+                            f"skipping compaction, forwarding as-is"
+                        )
+                        SESSION["compression_timeouts"] += 1
+                        raise _CompressionTimeout()
+
+                    # Phase 2: Compaction (AFTER injection)
+                    t_compact = time.time()
+                    compaction_stage = StageTrace(
+                        name="compaction",
+                        enabled=ENABLE_COMPACTION,
+                        input_tokens=input_tokens,
                     )
-                    get_degradation_tracker().record_compression_failure(hook_err)
+                    if ENABLE_COMPACTION:
+                        body, sent_input_tokens, original_tokens, protected_tokens = (
+                            compact_request_body(
+                                body,
+                                adapter=active_adapter,
+                            )
+                        )
+                        if original_tokens > 0:
+                            input_tokens = original_tokens
+                        compaction_stage.output_tokens = sent_input_tokens
+                        compaction_stage.tokens_delta = (
+                            -(original_tokens - sent_input_tokens) if original_tokens else 0
+                        )
+                        compaction_stage.details["mode"] = COMPILATION_MODE
+                        compaction_stage.details["protected_tokens"] = protected_tokens
+                        compaction_stage.details["tokens_removed"] = (
+                            max(0, original_tokens - sent_input_tokens) if original_tokens else 0
+                        )
+                    else:
+                        sent_input_tokens = input_tokens
+                        compaction_stage.output_tokens = sent_input_tokens
+                    compaction_stage.duration_ms = (time.time() - t_compact) * 1000
+                    if trace:
+                        trace.stages.append(compaction_stage)
+                    # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
+                    if COMPRESSION_DICT_ENABLED and body:
+                        try:
+                            from tokenpak.compression.dictionary import CompressionDictionary
+
+                            _dict = CompressionDictionary()
+                            _req_data = json.loads(body)
+                            if "messages" in _req_data:
+                                _dict_result = _dict.apply(_req_data["messages"])
+                                _req_data["messages"] = _dict_result.messages
+                                body = json.dumps(_req_data, separators=(",", ":"))
+                                SESSION["compression_dict_applied"] = True
+                        except Exception as _cd_err:
+                            SESSION["compression_dict_error"] = str(_cd_err)
+                            pass  # fail-open
+
+                    # Workflow: vault_inject done → compress done → begin forward
+                    if _wf_id:
+                        try:
+                            from tokenpak.agentic.proxy_workflow import advance_step
+
+                            advance_step(_wf_id, "vault_inject", "compress")
+                            advance_step(_wf_id, "compress", "forward")
+                        except Exception:
+                            pass
+                else:
                     sent_input_tokens = input_tokens
                     # body is unchanged (assignment failed, original value retained)
 
@@ -869,10 +1251,225 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
             _cb_success = False  # track whether request succeeded for circuit breaker
 
-            output_tokens = 0
-            if is_streaming:
-                # ── Streaming (SSE) path ──────────────────────────────────
-                # Use pool.stream() so the connection is kept alive after SSE ends
+                _fb = _j2.loads(body) if isinstance(body, (bytes, str)) else body
+                _all_cc = 0
+                for _sk in ["system", "tools", "messages"]:
+                    items = _fb.get(_sk, [])
+                    if isinstance(items, list):
+                        for _it in items:
+                            if isinstance(_it, dict):
+                                if "cache_control" in _it:
+                                    _all_cc += 1
+                                for _cv in (
+                                    _it.get("content", [])
+                                    if isinstance(_it.get("content"), list)
+                                    else []
+                                ):
+                                    if isinstance(_cv, dict) and "cache_control" in _cv:
+                                        _all_cc += 1
+                print(
+                    f"  🎯 FINAL body has {_all_cc} cache_control blocks (system+tools+messages)",
+                    flush=True,
+                )
+                if _all_cc > 4:
+                    with open("/tmp/debug_body.json", "w") as _df:
+                        _j2.dump(_fb, _df, indent=2)
+                    print("  ❌ DUMPED to /tmp/debug_body.json", flush=True)
+            except Exception as _de:
+                print(f"  debug error: {_de}", flush=True)
+
+            # --- Early SSE keepalive ---
+            # Send HTTP 200 + SSE headers BEFORE the upstream call when streaming.
+            # This prevents OpenClaw from timing out during compression + upstream TTFB.
+            # SSE comments (lines starting with ":") are ignored by spec-compliant parsers.
+            _early_sse_sent = False
+            # Keepalive disabled — causes framing issues with OpenClaw SDK
+
+            _t0_conn = time.monotonic()
+            resp = _POOL_MANAGER.request(
+                method,
+                target_url,
+                headers=fwd_headers,
+                body=body,
+                timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
+                preload_content=False,
+            )
+            _conn_ms = int((time.monotonic() - _t0_conn) * 1000)
+            print(f"  🔌 upstream connect+send: {_conn_ms}ms (pool reuse enabled)", flush=True)
+            status = resp.status
+
+            # Key pool failover: retry with next key on 401/429 (only when we injected)
+            if (
+                status in (401, 429)
+                and _current_key_idx >= 0
+                and not _client_has_auth
+                and len(_ANTHROPIC_KEY_POOL) > 1
+            ):
+                _cooldown_dur = _KEY_COOLDOWN_401 if status == 401 else _KEY_COOLDOWN_429
+                _cool_down_key(_current_key_idx, _cooldown_dur, f"HTTP {status}")
+                _retry_key, _retry_idx = _get_next_key(exclude_idx=_current_key_idx)
+                if _retry_key:
+                    print(
+                        f"[key-pool] Key #{_current_key_idx} returned {status}, "
+                        f"retrying with key #{_retry_idx}",
+                        flush=True,
+                    )
+                    fwd_headers["x-api-key"] = _retry_key
+                    _current_key_idx = _retry_idx
+                    try:
+                        resp.drain_conn()
+                    except Exception:
+                        pass
+                    _t0_conn = time.monotonic()
+                    resp = _POOL_MANAGER.request(
+                        method,
+                        target_url,
+                        headers=fwd_headers,
+                        body=body,
+                        timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
+                        preload_content=False,
+                    )
+                    status = resp.status
+                    print(
+                        f"[key-pool] Retry key #{_retry_idx} → HTTP {status} "
+                        f"({int((time.monotonic() - _t0_conn) * 1000)}ms)",
+                        flush=True,
+                    )
+
+            # Fix #5: Record success/failure for circuit breaker
+            if status >= 500:
+                _circuit_record_failure(_cb_provider)
+            else:
+                _circuit_record_success(_cb_provider)
+            content_type = resp.getheader("Content-Type", "")
+            is_sse = "text/event-stream" in content_type
+
+            # If upstream errored but we already sent 200+SSE headers, emit SSE error event
+            if _early_sse_sent and status >= 400:
+                try:
+                    _err_body = resp.read()
+                    _err_event = json.dumps({
+                        "type": "error",
+                        "error": {"type": "upstream_error", "message": f"HTTP {status}: {_err_body[:500].decode('utf-8', errors='replace')}"}
+                    })
+                    self.wfile.write(f"event: error\ndata: {_err_event}\n\n".encode())
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+
+            # Fix #4: Normalize upstream error responses to unified JSON shape
+            # Anthropic returns {"type":"error","error":{...},"request_id":"..."}
+            # We normalize all 4xx/5xx to {"error":{"type":...,"message":...}}
+            _resp_content_type = resp.getheader("Content-Type", "")
+            if status >= 400 and "application/json" in _resp_content_type and not is_sse:
+                try:
+                    _err_raw = resp.read()
+                    _err_data = json.loads(_err_raw)
+                    # Anthropic shape: {"type":"error","error":{"type":...,"message":...}}
+                    if (
+                        "type" in _err_data
+                        and _err_data.get("type") == "error"
+                        and "error" in _err_data
+                    ):
+                        _inner = _err_data["error"]
+                        _normalized = {
+                            "error": {
+                                "type": _inner.get("type", "upstream_error"),
+                                "message": _inner.get("message", ""),
+                                "request_id": _err_data.get("request_id", ""),
+                            }
+                        }
+                    # OpenAI shape: {"error":{"message":...,"type":...,"code":...}}
+                    elif "error" in _err_data and isinstance(_err_data["error"], dict):
+                        _normalized = _err_data  # already correct shape
+                    else:
+                        _normalized = {
+                            "error": {"type": "upstream_error", "message": str(_err_data)}
+                        }
+                    # Tier 2A: Error Normalizer — further standardize error message text
+                    if ERROR_NORMALIZER_ENABLED:
+                        try:
+                            from tokenpak.agentic.error_normalizer import ErrorNormalizer
+
+                            _en = ErrorNormalizer()
+                            _err_msg = _normalized.get("error", {}).get("message", "")
+                            if _err_msg:
+                                _normalized["error"]["message"] = _en.normalize(_err_msg)
+                                SESSION["error_normalizer_applied"] = True
+                        except Exception:
+                            pass  # fail-open
+                    # Tier 2C: Failure Memory — record error signature for future avoidance
+                    if FAILURE_MEMORY_ENABLED:
+                        try:
+                            from tokenpak._internal.agentic.failure_memory import (
+                                FailureMemoryDB,
+                                FailureSignature,
+                            )
+
+                            _fm = FailureMemoryDB()
+                            _fm_msg = _normalized.get("error", {}).get("message", "")
+                            _fm_type = _normalized.get("error", {}).get("type", "unknown")
+                            if _fm_msg and not _fm.match(_fm_msg):
+                                _fm.add(
+                                    FailureSignature(
+                                        error_type=_fm_type, pattern=_fm_msg[:200], model=model
+                                    )
+                                )
+                                SESSION["failure_memory_recorded"] = True
+                        except Exception:
+                            pass  # fail-open
+                    # Actionable error enrichment — add hint/retry_after for key error paths
+                    _retry_after_hdr = (
+                        resp.getheader("Retry-After", None) if hasattr(resp, "getheader") else None
+                    )
+                    _normalized = _enrich_upstream_error(_normalized, status, _retry_after_hdr)
+                    _err_body = json.dumps(_normalized, indent=2).encode()
+                    self.send_response(status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", len(_err_body))
+                    # Forward Retry-After header for 429 responses
+                    if status == 429 and _retry_after_hdr:
+                        self.send_header("Retry-After", _retry_after_hdr)
+                    self.end_headers()
+                    self.wfile.write(_err_body)
+                    return
+                except Exception:
+                    resp = type(
+                        "FakeResp",
+                        (),
+                        {
+                            "read": lambda self: _err_raw,
+                            "getheaders": lambda self: [],
+                            "getheader": lambda self, k, d="": d,
+                        },
+                    )()
+
+            # HTTP 100 Continue keepalive — send BEFORE response headers if enabled + SSE
+            # This signals liveness during compression/upstream delay to prevent client timeouts
+            if HTTP100_KEEPALIVE_ENABLED and is_sse and status == 200 and not _early_sse_sent:
+                try:
+                    self.wfile.write(b"HTTP/1.1 100 Continue\r\n\r\n")
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # Client disconnected — fail gracefully
+            
+            # Skip header sending if we already sent early SSE headers
+            if not _early_sse_sent:
+                self.send_response(status)
+                # urllib3 HTTPResponse uses .headers (HTTPHeaderDict) instead of .getheaders()
+                _resp_headers = resp.headers.items() if hasattr(resp, "headers") else resp.getheaders()
+                for h_key, h_val in _resp_headers:
+                    h_lower = h_key.lower()
+                    if h_lower in ("connection", "keep-alive", "transfer-encoding"):
+                        continue
+                    if h_lower == "content-length":
+                        continue
+                    self.send_header(h_key, h_val)
+                self.end_headers()
+
+            if is_sse:
+                output_tokens = 0
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
@@ -918,22 +1515,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # ── Non-streaming path ────────────────────────────────────
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
-                self.send_response(resp.status_code)
-                for h_key, h_val in resp.headers.items():
-                    h_lower = h_key.lower()
-                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
-                        continue
-                    self.send_header(h_key, h_val)
-                # Debug header: stable prefix hash for cache determinism verification.
-                # Emitted for all messages requests (not just intercepted hosts)
-                # so integration tests and local stubs can verify determinism.
-                if is_messages:
-                    _ph = _compute_stable_prefix_hash(body)
-                    if _ph:
-                        self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
-                # Propagate request ID to client for correlation
-                self.send_header("X-Request-ID", _req_id)
-                self.end_headers()
+                # Phase 2.2: Session Capsules — compress and store session context
+                if SESSION_CAPSULES_ENABLED and body:
+                    try:
+                        from tokenpak._internal.memory.session_capsules import (
+                            build_session_capsule,
+                            serialize_capsule,
+                        )
+
+                        _session_id = self.headers.get("X-OpenClaw-Session", model)
+                        _capsule_text = body.decode("utf-8") if isinstance(body, bytes) else body
+                        _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
+                        _capsule_str = serialize_capsule(_capsule)
+                        SESSION["session_capsule_built"] = True
+                        SESSION["session_capsule_size"] = len(_capsule_str)
+                    except Exception as _sc_err:
+                        SESSION["session_capsule_error"] = str(_sc_err)
+                        pass  # fail-open
 
                 resp_body = resp.content
                 self.wfile.write(resp_body)
@@ -958,36 +1556,70 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _forecast_latencies.append(latency_ms)
             _cb_success = True  # reached here without exception → request succeeded
 
-            # ── Request logging ───────────────────────────────────────────
-            try:
-                _resp_status = resp.status_code if "resp" in dir() else 0  # type: ignore
-                _req_body_sz = content_length
-                _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
-                _comp_ratio = None
-                if input_tokens > 0 and sent_input_tokens > 0:
-                    _comp_ratio = sent_input_tokens / input_tokens
-                _provider_name = ""
-                if "anthropic" in target_url:
-                    _provider_name = "anthropic"
-                elif "openai" in target_url:
-                    _provider_name = "openai"
-                elif "googleapis" in target_url:
-                    _provider_name = "google"
-                log_request(
-                    request_id=_req_id,
-                    client_ip=self.client_address[0] if self.client_address else "",
-                    method=method,
-                    endpoint=parsed.path,
-                    request_body_size=_req_body_sz,
-                    response_status=_resp_status,
-                    response_body_size=_resp_body_sz,
-                    compression_ratio=_comp_ratio,
-                    latency_ms=latency_ms,
-                    model=model,
-                    provider=_provider_name,
-                )
-            except Exception:
-                pass  # logging must never break the proxy
+            # Post-request: Stability Scorer — track response consistency over time
+            if STABILITY_SCORER_ENABLED:
+                try:
+                    from tokenpak._internal.regression.stability_scorer import (
+                        RunRecord,
+                        StabilityScorer,
+                    )
+
+                    _ss = StabilityScorer()
+                    _workflow_id = self.headers.get("X-OpenClaw-Session", model)
+                    _resp_text = ""
+                    try:
+                        _resp_text = (
+                            (
+                                resp_body[:500].decode("utf-8")
+                                if isinstance(resp_body, bytes)
+                                else str(resp_body)[:500]
+                            )
+                            if "resp_body" in locals()
+                            else ""
+                        )
+                    except Exception:
+                        pass
+                    _record = RunRecord(
+                        timestamp=str(int(time.time())),
+                        passed=status == 200,
+                        retried=False,
+                        token_count=(input_tokens or 0) + (output_tokens or 0),
+                        output_text=_resp_text,
+                        validation_passed=status == 200,
+                    )
+                    _ss.record_run(_workflow_id, _record)
+                    _score = _ss.score_workflow(_workflow_id)
+                    SESSION["stability_score"] = (
+                        _score.score if hasattr(_score, "score") else str(_score)
+                    )
+                except Exception as _ss_err:
+                    SESSION["stability_scorer_error"] = str(_ss_err)
+                    pass  # fail-open
+
+            # Post-request: Log completed request via Request Logger
+            if REQUEST_LOGGER_ENABLED and _request_log_id:
+                try:
+                    from tokenpak.monitoring.request_logger import RequestLogger
+
+                    _req_logger = RequestLogger.get_instance()
+                    _record = _req_logger.build_record(
+                        request_id=_request_log_id,
+                        method="POST",
+                        endpoint=target_url,
+                        request_body_size=len(body) if body else 0,
+                        response_status=status,
+                        compression_ratio=round(sent_input_tokens / input_tokens, 3)
+                        if input_tokens
+                        else None,
+                        latency_ms=latency_ms,
+                        model=model,
+                        provider=_cb_provider if "_cb_provider" in dir() else "",
+                    )
+                    _req_logger.log(_record)
+                    SESSION["request_logger_logged"] = True
+                except Exception as _rl_post_err:
+                    SESSION["request_logger_post_error"] = str(_rl_post_err)
+                    pass  # fail-open
 
             if should_log and is_messages and input_tokens > 0:
                 cost = estimate_cost(model, sent_input_tokens, output_tokens,
@@ -1064,18 +1696,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     trace.status = "complete"
                     ps.trace_storage.store(trace)
 
-                with ps._last_lock:
-                    ps._last_request = {
-                        "request_id": trace.request_id if trace else "?",
-                        "timestamp": datetime.now().isoformat(),
-                        "model": model,
-                        "input_tokens_raw": input_tokens,
-                        "input_tokens_sent": sent_input_tokens,
-                        "output_tokens": output_tokens,
-                        "tokens_saved": saved,
-                        "cost_saved": round(cost_saved, 6),
-                        "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
-                    }
+                # Workflow tracking: mark forward done → log_metrics → complete
+                if _wf_id:
+                    try:
+                        from tokenpak.agentic.proxy_workflow import (
+                            advance_step,
+                            complete_workflow,
+                        )
 
                 # ── Stats footer ──────────────────────────────────────────
                 if get_stats_footer_enabled():
@@ -1104,19 +1731,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             with ps._session_lock:
                 ps.session["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
-            # Record error event in compression telemetry if this was an intercepted request
-            if should_log and is_messages and input_tokens > 0:
-                ps.compression_stats.record_compression(
-                    model=model,
-                    input_tokens=input_tokens,
-                    output_tokens=0,
-                    ratio=0.0,
-                    latency_ms=latency_ms,
-                    status="error",
-                )
-            exc_type = type(exc).__name__
-            exc_msg = str(exc)
-            # Log the failed request
+            import traceback as _tb
+
+            _tb.print_exc(file=__import__("sys").stderr)
+            print(f"  ❌ Proxy error: {type(e).__name__}: {e} | {latency_ms}ms")
+            # Workflow tracking: mark the in-progress step as failed (not whole workflow)
+            if _wf_id:
+                try:
+                    from tokenpak.agentic.proxy_workflow import fail_step as _wf_fail
+
+                    _wf_fail(_wf_id, "forward", error=f"{type(e).__name__}: {e}")
+                except Exception:
+                    pass
             try:
                 log_request(
                     request_id=_req_id,

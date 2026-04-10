@@ -7,8 +7,8 @@ import logging
 from datetime import datetime
 from unittest.mock import patch
 
-from tokenpak.agent.telemetry.collector import RequestStats
-from tokenpak.agent.telemetry.footer import (
+from tokenpak.telemetry.proxy_collector import RequestStats
+from tokenpak.telemetry.footer import (
     render_footer,
     render_footer_oneline,
     render_footer_with_failover,

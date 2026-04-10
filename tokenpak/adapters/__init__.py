@@ -32,7 +32,10 @@ from tokenpak.adapters.base import (
     TokenPakConfigError,
     TokenPakTimeoutError,
 )
-from tokenpak.adapters.langchain import LangChainAdapter
+try:
+    from tokenpak.adapters.langchain.adapter import LangChainAdapter
+except ImportError:
+    from tokenpak.adapters.langchain import LangChainAdapter  # type: ignore[no-redef]
 from tokenpak.adapters.litellm import LiteLLMAdapter
 from tokenpak.adapters.openai import OpenAIAdapter
 

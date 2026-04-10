@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime, date, timedelta
 
-from tokenpak.agent.telemetry.budget import (
+from tokenpak.telemetry.budget import (
     BudgetConfig,
     BudgetTracker,
     SpendRecord,

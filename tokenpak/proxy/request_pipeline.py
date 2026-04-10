@@ -40,9 +40,9 @@ def _get_router():
                     0,
                     str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi"),
                 )
-                from tokenpak.agent.compression.pipeline import CompressionPipeline
-                from tokenpak.agent.compression.recipes import RecipeEngine
-                from tokenpak.agent.compression.slot_filler import SlotFiller
+                from tokenpak.compression.pipeline import CompressionPipeline
+                from tokenpak.compression.recipes import RecipeEngine
+                from tokenpak.compression.slot_filler import SlotFiller
                 from tokenpak.proxy.intent_policy import decide as _policy_decide
 
                 try:
@@ -477,7 +477,7 @@ def _get_precond_gates():
         with _PRECOND_GATES_LOCK:
             if _PRECOND_GATES_INSTANCE is None:
                 try:
-                    from tokenpak.agent.agentic.precondition_gates import PreconditionGates
+                    from tokenpak.agentic.precondition_gates import PreconditionGates
 
                     _PRECOND_GATES_INSTANCE = PreconditionGates()
                 except Exception:

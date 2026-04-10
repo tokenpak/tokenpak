@@ -56,8 +56,8 @@ _classify_intent = _pv4._classify_intent
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "tokenpak"))
 
-from tokenpak.agent.compression.slot_filler import SlotFiller  # noqa: E402
-from tokenpak.agent.proxy.intent_policy import (  # noqa: E402
+from tokenpak.compression.slot_filler import SlotFiller  # noqa: E402
+from tokenpak.proxy.intent_policy import (  # noqa: E402
     decide,
     is_known_intent,
     CANONICAL_INTENTS,

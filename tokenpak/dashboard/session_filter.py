@@ -1,4 +1,4 @@
-"""tokenpak.agent.dashboard.session_filter — DB-backed session filtering.
+"""tokenpak.dashboard.session_filter — DB-backed session filtering.
 
 Queries the SQLite requests table (monitor.db) with server-side filtering
 and pagination.

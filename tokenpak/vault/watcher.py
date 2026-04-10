@@ -4,7 +4,7 @@ Implements `tokenpak index --watch` (task 1.5).
 
 Usage::
 
-    from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
+    from tokenpak.vault.watcher import VaultWatcher, WatcherConfig
 
     config = WatcherConfig(watch_paths=["~/myproject"])
     watcher = VaultWatcher(config)

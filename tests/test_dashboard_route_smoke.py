@@ -36,7 +36,7 @@ from starlette.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     """Create a TestClient against create_combined_app() once per test module."""
-    from tokenpak.agent.dashboard.app import create_combined_app
+    from tokenpak.dashboard.app import create_combined_app
     app = create_combined_app()
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c

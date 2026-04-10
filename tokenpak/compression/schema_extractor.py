@@ -7,7 +7,7 @@ docs like meeting notes, PRs, bug reports, log output, and config files.
 
 Usage::
 
-    from tokenpak.agent.compression.schema_extractor import SchemaExtractor
+    from tokenpak.compression.schema_extractor import SchemaExtractor
 
     extractor = SchemaExtractor()
     result = extractor.extract(text)

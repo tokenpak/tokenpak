@@ -10,7 +10,7 @@ Verifies:
 """
 
 import pytest
-from tokenpak.agent.proxy.intent_policy import (
+from tokenpak.proxy.intent_policy import (
     resolve_policy,
     apply_context_contract,
     FALLBACK_POLICY,

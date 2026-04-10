@@ -1,6 +1,6 @@
 from tokenpak.extraction import EntityExtractor, EntityType
-from tokenpak.agent.vault.indexer import VaultIndexer
-from tokenpak.agent.vault.blocks import BlockStore
+from tokenpak.vault.indexer import VaultIndexer
+from tokenpak.vault.blocks import BlockStore
 
 
 def test_extracts_file_paths_correctly():

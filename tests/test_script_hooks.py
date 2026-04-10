@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.macros.script_hooks module."""
+"""Tests for tokenpak._internal.macros.script_hooks module."""
 import pytest
-from tokenpak.agent.macros.script_hooks import fire_hook, fire_on_error, fire_on_request, fire_on_budget_alert, HOOK_NAMES
+from tokenpak._internal.macros.script_hooks import fire_hook, fire_on_error, fire_on_request, fire_on_budget_alert, HOOK_NAMES
 
 class TestScriptHooks:
     def test_fire_hook_callable(self):

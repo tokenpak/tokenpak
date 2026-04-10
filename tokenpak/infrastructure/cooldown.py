@@ -1,3 +1,6 @@
+"""tokenpak._internal.auth.cooldown_manager — backward-compat shim.
+
+CooldownManager and BackgroundCooldownClearer have moved to tokenpak.infrastructure.cooldown.
 """
 TokenPak CooldownManager — Auth cooldown tracking and background auto-clear.
 

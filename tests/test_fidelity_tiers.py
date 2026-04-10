@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Tests for tokenpak.agent.compression.fidelity_tiers."""
+"""Tests for tokenpak.compression.fidelity_tiers."""
 
 from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.compression.fidelity_tiers import (
+from tokenpak.compression.fidelity_tiers import (
     FidelityTier,
     TIER_COST_FACTOR,
     TieredBlock,

@@ -282,7 +282,7 @@ def get_tracker(stats_path: Path = STATS_PATH) -> WorkflowPerformanceTracker:
 
 
 def record_workflow_execution(
-    workflow,  # WorkflowRecord from tokenpak.agent.agentic.workflow
+    workflow,  # WorkflowRecord from tokenpak.agentic.workflow
     *,
     tokens_used: int = 0,
     regression: bool = False,
@@ -293,7 +293,7 @@ def record_workflow_execution(
     If the workflow has no template set, returns ``None`` and does nothing.
 
     Args:
-        workflow: A :class:`~tokenpak.agent.agentic.workflow.WorkflowRecord`.
+        workflow: A :class:`~tokenpak.agentic.workflow.WorkflowRecord`.
         tokens_used: Total tokens consumed by this run.
         regression: Whether a regression was detected post-completion.
         tracker: Optional explicit tracker; defaults to module singleton.
@@ -301,7 +301,7 @@ def record_workflow_execution(
     if workflow.template is None:
         return None
 
-    from tokenpak.agent.agentic.workflow import WorkflowStatus  # local import
+    from tokenpak.agentic.workflow import WorkflowStatus  # local import
 
     success = workflow.status == WorkflowStatus.COMPLETED
     duration = workflow.duration_seconds() or 0.0

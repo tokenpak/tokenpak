@@ -23,12 +23,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.proxy.failover import (
+from tokenpak.proxy.failover import (
     FailoverConfig,
     FailoverManager,
     ProviderEntry,
 )
-from tokenpak.agent.proxy.failover_engine import (
+from tokenpak.proxy.failover_engine import (
     CIRCUIT_COOL_DOWN_SECONDS,
     CIRCUIT_FAILURE_THRESHOLD,
     RATE_LIMIT_WAIT_SECONDS,

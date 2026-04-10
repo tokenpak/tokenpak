@@ -1,7 +1,7 @@
 """
 tests/test_routing_fallback.py
 ──────────────────────────────
-Tests for tokenpak.agent.routing.fallback — proxy-layer fallback bridge.
+Tests for tokenpak.routing.fallback — proxy-layer fallback bridge.
 
 Coverage:
   1.  FallbackRouter: success on first try
@@ -25,13 +25,13 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call as mock_call
 
-from tokenpak.agent.routing.fallback import (
+from tokenpak.routing.fallback import (
     FallbackRouter,
     FallbackExhaustedError,
     fallback_call,
     get_recent_fallback_events,
 )
-from tokenpak.agent.agentic.retry import RetryExhaustedError
+from tokenpak.agentic.retry import RetryExhaustedError
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ class TestFallbackRouterExhaustion:
 class TestFallbackRouterFailover:
     def _make_failover_manager(self, providers=("anthropic", "openai", "google")):
         """Build a FailoverManager with given providers all credential-available."""
-        from tokenpak.agent.proxy.failover import FailoverConfig, ProviderEntry
+        from tokenpak.proxy.failover import FailoverConfig, ProviderEntry
         chain = [
             ProviderEntry(
                 provider=p,
@@ -154,7 +154,7 @@ class TestFallbackRouterFailover:
         mgr.enabled = True
 
         # Build real iteration from config
-        from tokenpak.agent.proxy.failover import FailoverManager
+        from tokenpak.proxy.failover import FailoverManager
         real_mgr = FailoverManager(config=cfg)
         # Patch env so credentials appear available
         with patch.dict("os.environ", {f"{p.upper()}_API_KEY": "test-key" for p in providers}):
@@ -165,9 +165,9 @@ class TestFallbackRouterFailover:
 
     def test_failover_disabled_uses_default_switch(self, tmp_path):
         """When failover disabled, provider switch hook is None → RetryEngine uses its own default."""
-        from tokenpak.agent.proxy.failover import FailoverConfig
+        from tokenpak.proxy.failover import FailoverConfig
         cfg = FailoverConfig(enabled=False, chain=[])
-        from tokenpak.agent.proxy.failover import FailoverManager
+        from tokenpak.proxy.failover import FailoverManager
         mgr = FailoverManager(config=cfg)
 
         providers_seen = []
@@ -189,7 +189,7 @@ class TestFallbackRouterFailover:
 
     def test_failover_enabled_drives_provider_switch(self, tmp_path):
         """When failover enabled, FailoverManager provides provider ordering."""
-        from tokenpak.agent.proxy.failover import FailoverConfig, ProviderEntry, FailoverManager
+        from tokenpak.proxy.failover import FailoverConfig, ProviderEntry, FailoverManager
         chain = [
             ProviderEntry(provider="anthropic", model_map={}, credential_env="ANTHROPIC_API_KEY"),
             ProviderEntry(provider="openai", model_map={}, credential_env="OPENAI_API_KEY"),
@@ -266,7 +266,7 @@ class TestFunctionalAPI:
 
     def test_get_recent_fallback_events(self, tmp_path):
         with patch(
-            "tokenpak.agent.routing.fallback.load_recent_retry_events",
+            "tokenpak.routing.fallback.load_recent_retry_events",
             return_value=[{"event": "run_start"}],
         ) as mock_fn:
             events = get_recent_fallback_events(n=5)

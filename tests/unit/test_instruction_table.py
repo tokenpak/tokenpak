@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tokenpak.agent.compression.instruction_table import InstructionTable
-from tokenpak.agent.compression.pipeline import CompressionPipeline
+from tokenpak.compression.instruction_table import InstructionTable
+from tokenpak.compression.pipeline import CompressionPipeline
 
 
 def _long_instruction() -> str:

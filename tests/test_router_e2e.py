@@ -17,7 +17,7 @@ from pathlib import Path
 # Add proxy_v4 location to path
 sys.path.insert(0, str(Path.home()))
 
-from tokenpak.agent.proxy.intent_policy import known_intents
+from tokenpak.proxy.intent_policy import known_intents
 
 
 class TestRouterE2E:
@@ -25,7 +25,7 @@ class TestRouterE2E:
 
     def test_slot_filler_duration(self):
         """Slot filler should extract duration values."""
-        from tokenpak.agent.compression.slot_filler import SlotFiller
+        from tokenpak.compression.slot_filler import SlotFiller
 
         filler = SlotFiller()
         result = filler.fill("summarize", "summarize the vault for the last 7 days")
@@ -34,7 +34,7 @@ class TestRouterE2E:
 
     def test_slot_filler_multiple_intents(self):
         """Slot filler should work across all canonical intents."""
-        from tokenpak.agent.compression.slot_filler import SlotFiller
+        from tokenpak.compression.slot_filler import SlotFiller
 
         filler = SlotFiller()
 
@@ -54,7 +54,7 @@ class TestRouterE2E:
 
     def test_intent_policy_all_intents(self):
         """Policy should have entries for all canonical intents."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         intents = known_intents()
         for intent in intents:
@@ -65,7 +65,7 @@ class TestRouterE2E:
 
     def test_policy_consistency_across_calls(self):
         """Multiple calls with same args should produce identical decisions."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         slots = {"period": "7d", "target": "vault"}
         d1 = decide("summarize", slots, 0.9)
@@ -78,8 +78,8 @@ class TestRouterE2E:
 
     def test_slot_filler_with_policy(self):
         """Full pipeline: fill slots → resolve policy."""
-        from tokenpak.agent.compression.slot_filler import SlotFiller
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.compression.slot_filler import SlotFiller
+        from tokenpak.proxy.intent_policy import decide
 
         filler = SlotFiller()
 
@@ -93,7 +93,7 @@ class TestRouterE2E:
 
     def test_low_confidence_fallback_behavior(self):
         """Low-confidence results should use fallback recipe."""
-        from tokenpak.agent.proxy.intent_policy import decide, CONFIDENCE_THRESHOLD
+        from tokenpak.proxy.intent_policy import decide, CONFIDENCE_THRESHOLD
 
         low_conf = CONFIDENCE_THRESHOLD - 0.05
         decision = decide("plan", {}, low_conf)
@@ -104,7 +104,7 @@ class TestRouterE2E:
 
     def test_unknown_intent_fallback(self):
         """Unknown intent should use fallback recipe."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         decision = decide("unknown_intent_xyz_123", {}, 1.0)
 
@@ -114,7 +114,7 @@ class TestRouterE2E:
 
     def test_search_always_retrieves(self):
         """Search intent should always enable retrieval."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         decision = decide("search", {}, 1.0)
         assert decision.action.retrieve is True
@@ -122,7 +122,7 @@ class TestRouterE2E:
 
     def test_status_no_compression(self):
         """Status intent should skip compression."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         decision = decide("status", {}, 1.0)
         assert decision.action.compress is False
@@ -130,7 +130,7 @@ class TestRouterE2E:
 
     def test_plan_with_detailed_scope(self):
         """Plan intent with detailed scope should enable retrieval."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         slots = {"scope": "detailed"}
         decision = decide("plan", slots, 1.0)
@@ -138,7 +138,7 @@ class TestRouterE2E:
 
     def test_execute_dry_run_mode(self):
         """Execute intent with dry_run mode should set flag."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         slots = {"mode": "dry_run"}
         decision = decide("execute", slots, 1.0)
@@ -147,7 +147,7 @@ class TestRouterE2E:
 
     def test_decision_is_immutable(self):
         """RoutingDecision should be frozen (immutable)."""
-        from tokenpak.agent.proxy.intent_policy import decide
+        from tokenpak.proxy.intent_policy import decide
 
         decision = decide("status", {}, 1.0)
 

@@ -9,10 +9,10 @@ Tests for salience extraction modules:
 
 import pytest
 
-from tokenpak.agent.compression.salience.code_extractor import CodeExtractor, CodeExtractionResult
-from tokenpak.agent.compression.salience.doc_extractor import DocExtractor, DocExtractionResult
-from tokenpak.agent.compression.salience.log_extractor import LogExtractor, LogExtractionResult
-from tokenpak.agent.compression.slot_filler import SlotFiller, FilledSlots
+from tokenpak.compression.salience.code_extractor import CodeExtractor, CodeExtractionResult
+from tokenpak.compression.salience.doc_extractor import DocExtractor, DocExtractionResult
+from tokenpak.compression.salience.log_extractor import LogExtractor, LogExtractionResult
+from tokenpak.compression.slot_filler import SlotFiller, FilledSlots
 
 
 class TestCodeExtractor:

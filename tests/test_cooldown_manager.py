@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.auth.cooldown_manager module."""
+"""Tests for tokenpak._internal.auth.cooldown_manager module."""
 
 import asyncio
 import json

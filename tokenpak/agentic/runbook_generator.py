@@ -30,7 +30,7 @@ Runbook Markdown Template
 
 Usage
 -----
-    from tokenpak.agent.agentic.runbook_generator import RunbookDB, RunbookEntry, maybe_generate
+    from tokenpak.agentic.runbook_generator import RunbookDB, RunbookEntry, maybe_generate
 
     db = RunbookDB()
     # After a successful task completion:

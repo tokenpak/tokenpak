@@ -205,7 +205,7 @@ class TestWorkflowPerformanceTracker:
 
 class TestRecordWorkflowExecution:
     def _make_wf(self, template, status_value, started_at, completed_at):
-        from tokenpak.agent.agentic.workflow import WorkflowRecord, WorkflowStatus
+        from tokenpak.agentic.workflow import WorkflowRecord, WorkflowStatus
         wf = MagicMock(spec=WorkflowRecord)
         wf.template = template
         wf.status = WorkflowStatus(status_value)

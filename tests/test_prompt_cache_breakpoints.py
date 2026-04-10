@@ -1,6 +1,6 @@
 import json
 
-from tokenpak.agent.proxy.prompt_builder import (
+from tokenpak.proxy.prompt_builder import (
     apply_deterministic_cache_breakpoints,
     get_stats,
 )

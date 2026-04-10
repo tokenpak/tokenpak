@@ -10,7 +10,7 @@ Verifies:
 """
 
 import hashlib
-from tokenpak.agent.vault.retrieval import (
+from tokenpak.vault.retrieval import (
     sort_retrieval_results,
     inject_retrieved_context,
     measure_injection_consistency,

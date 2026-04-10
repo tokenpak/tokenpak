@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.compression.dictionary import (
+from tokenpak.compression.dictionary import (
     CompressionDictionary,
     DictionaryResult,
     SuggestedEntry,

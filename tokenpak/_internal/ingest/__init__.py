@@ -9,7 +9,7 @@ except (TypeError, ImportError) as _ingest_init_err:
     # Proxy runs in standalone HTTP mode — ingest API not required for core proxy operation
     import warnings as _warnings
     _warnings.warn(
-        f"tokenpak.agent.ingest.api unavailable (FastAPI compat): {_ingest_init_err}",
+        f"tokenpak._internal.ingest.api unavailable (FastAPI compat): {_ingest_init_err}",
         ImportWarning,
         stacklevel=2,
     )

@@ -17,7 +17,7 @@ import json
 
 
 def _metrics_enabled() -> bool:
-    from tokenpak.agent.config import get_metrics_enabled
+    from tokenpak._internal.config import get_metrics_enabled
 
     return get_metrics_enabled()
 

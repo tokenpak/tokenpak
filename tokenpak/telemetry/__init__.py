@@ -7,7 +7,10 @@ proxy stats collection, replay, footer rendering, and demos.
 
 from __future__ import annotations
 
-# --- Canonical types & adapters (existing) ---
+try:
+    from tokenpak.telemetry.cost_tracker import CostTracker as CompletionTracker
+except ImportError:
+    CompletionTracker = None  # type: ignore[assignment,misc]
 from tokenpak.telemetry.adapters.registry import AdapterRegistry
 from tokenpak.telemetry.cache import CacheStore as CacheManager
 from tokenpak.telemetry.canonical import (

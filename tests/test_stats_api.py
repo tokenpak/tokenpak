@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.proxy.stats_api module."""
+"""Tests for tokenpak.proxy.stats_api module."""
 import pytest
-from tokenpak.agent.proxy.stats_api import StatsAPI
+from tokenpak.proxy.stats_api import StatsAPI
 
 class TestStatsAPI:
     @pytest.mark.quick

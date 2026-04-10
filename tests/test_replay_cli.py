@@ -5,7 +5,7 @@ import pytest
 from io import StringIO
 from unittest.mock import patch
 
-from tokenpak.agent.telemetry.replay import ReplayEntry, ReplayStore
+from tokenpak.telemetry.replay import ReplayEntry, ReplayStore
 from tokenpak.cli import build_parser, cmd_replay_list, cmd_replay_show, cmd_replay_run
 
 
@@ -104,7 +104,7 @@ class TestCmdReplayList:
         args = make_args(limit=20, provider=None)
         with patch("tokenpak.cli._replay_store_path", return_value=":memory:"), \
              patch("tokenpak._cli_core._get_replay_store") as mock_store:
-            from tokenpak.agent.telemetry.replay import ReplayStore
+            from tokenpak.telemetry.replay import ReplayStore
             mock_store.return_value = ReplayStore(":memory:")
             cmd_replay_list(args)
         out = capsys.readouterr().out

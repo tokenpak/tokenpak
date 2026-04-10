@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Tests for tokenpak.agent.agentic.state_collector."""
+"""Tests for tokenpak.agentic.state_collector."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.agentic.state_collector import (
+from tokenpak.agentic.state_collector import (
     SCHEMA_VERSION,
     STALE_THRESHOLD_SECONDS,
     EnvState,

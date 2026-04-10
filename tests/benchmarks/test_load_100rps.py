@@ -22,7 +22,7 @@ from typing import List, Tuple
 
 import pytest
 
-from tokenpak.agent.proxy.server import ProxyServer
+from tokenpak.proxy.server import ProxyServer
 
 
 # ---------------------------------------------------------------------------

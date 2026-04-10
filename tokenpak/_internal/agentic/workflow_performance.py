@@ -1,4 +1,4 @@
-"""tokenpak.agent.agentic.workflow_performance — Performance tracking and ranking for workflows.
+"""tokenpak.agentic.workflow_performance — Performance tracking and ranking for workflows.
 
 Tracks execution metrics per workflow template (success rate, duration, tokens, regressions)
 and provides deterministic ranking for selecting the best workflow for a problem class.

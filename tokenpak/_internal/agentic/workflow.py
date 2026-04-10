@@ -1,4 +1,4 @@
-"""tokenpak.agent.agentic.workflow — Workflow state machine with crash recovery.
+"""tokenpak.agentic.workflow — Workflow state machine with crash recovery.
 
 Workflows are ordered step sequences with optional inter-step dependencies.
 State is persisted to disk after each mutation so crashes are recoverable.

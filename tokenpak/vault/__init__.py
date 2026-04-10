@@ -1,10 +1,8 @@
 """TokenPak vault package — re-exports from agent.vault for compatibility."""
 import os as _os
 
-# Canonical path to the vault-editable install root.
-# Transferred from monolith (TPK-CONSOLIDATION-A2a, line 60).
-# Used by the monolith's sys.path fixup and by vault indexer path resolution.
-_VAULT_TOKENPAK: str = _os.path.expanduser("~/.tokenpak/vault")
+This package promotes tokenpak.vault to a top-level namespace.
+All vault functionality is free (V1-V8 per architecture doc).
 
 try:
     from tokenpak.agent.vault.query_expansion import tokenize, expand_query, stem_token, get_query_terms_with_weights

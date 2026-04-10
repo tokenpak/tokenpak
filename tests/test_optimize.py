@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 # Ensure tokenpak is importable
 sys.path.insert(0, "/home/cali/tokenpak")
 
-from tokenpak.agent.cli.commands.optimize import (
+from tokenpak.cli.commands.optimize import (
     _analyze_compression,
     _analyze_redundancy,
     _build_recommendations,
@@ -152,12 +152,12 @@ class TestBuildRecommendations(unittest.TestCase):
 class TestRunOptimize(unittest.TestCase):
     """Integration smoke test for run_optimize."""
 
-    @patch("tokenpak.agent.cli.commands.optimize._proxy_get")
-    @patch("tokenpak.agent.cli.commands.optimize._db_connect")
-    @patch("tokenpak.agent.cli.commands.optimize.is_pro", create=True)
+    @patch("tokenpak.cli.commands.optimize._proxy_get")
+    @patch("tokenpak.cli.commands.optimize._db_connect")
+    @patch("tokenpak.cli.commands.optimize.is_pro", create=True)
     def test_json_output_is_valid(self, mock_pro, mock_db, mock_proxy):
         # Bypass pro gate by patching is_pro at module level
-        import tokenpak.agent.cli.commands.optimize as opt_mod
+        import tokenpak.cli.commands.optimize as opt_mod
         opt_mod_is_pro = getattr(opt_mod, "is_pro", None)
 
         mock_proxy.return_value = {
@@ -177,7 +177,7 @@ class TestRunOptimize(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             try:
-                with patch("tokenpak.agent.license.activation.is_pro", return_value=True):
+                with patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True):
                     run_optimize(as_json=True)
             except SystemExit:
                 pass

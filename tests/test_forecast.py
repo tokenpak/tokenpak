@@ -8,7 +8,7 @@ from tokenpak.forecast import (
     format_burn_rate_display,
     _calculate_wow_trend,
 )
-from tokenpak.agent.telemetry.budget import BudgetTracker, BudgetConfig
+from tokenpak.telemetry.budget import BudgetTracker, BudgetConfig
 
 
 class TestBurnRateCalculation:

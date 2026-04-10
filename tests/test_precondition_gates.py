@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.precondition_gates"""
+"""Tests for tokenpak._internal.agentic.precondition_gates"""
 import json
 import os
 import subprocess
@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tokenpak.agent.agentic.precondition_gates import (
+from tokenpak._internal.agentic.precondition_gates import (
     Gate,
     GateResult,
     PreconditionGates,

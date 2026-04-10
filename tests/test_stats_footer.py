@@ -26,8 +26,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tokenpak.agent.telemetry.collector import RequestStats, TelemetryCollector
-from tokenpak.agent.telemetry.footer import (
+from tokenpak.telemetry.proxy_collector import RequestStats, TelemetryCollector
+from tokenpak.telemetry.footer import (
     render_footer_oneline,
     render_footer,
     render_footer_compact,
@@ -89,7 +89,7 @@ class TestFooterWithRealData:
         assert "─" in block, "Multi-line footer missing separator"
 
     def test_multiline_footer_with_session(self):
-        from tokenpak.agent.telemetry.collector import SessionStats
+        from tokenpak.telemetry.proxy_collector import SessionStats
         stats = _make_stats()
         session = SessionStats(
             session_requests=5,
@@ -124,40 +124,40 @@ class TestFooterWithRealData:
 class TestFooterDisabled:
 
     def test_get_stats_footer_disabled_by_env_var_zero(self):
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "0"}):
             assert get_stats_footer_enabled() is False
 
     def test_get_stats_footer_disabled_by_env_var_false(self):
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "false"}):
             assert get_stats_footer_enabled() is False
 
     def test_get_stats_footer_disabled_by_default(self):
         """Without any config or env var, footer is off (opt-in)."""
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_STATS_FOOTER"}
         with patch.dict(os.environ, env, clear=True):
-            with patch("tokenpak.agent.config._load", return_value={}):
+            with patch("tokenpak._internal.config._load", return_value={}):
                 assert get_stats_footer_enabled() is False
 
     def test_get_stats_footer_enabled_by_env_var(self):
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "1"}):
             assert get_stats_footer_enabled() is True
 
     def test_get_stats_footer_enabled_by_config_file(self):
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         env = {k: v for k, v in os.environ.items() if k != "TOKENPAK_STATS_FOOTER"}
         with patch.dict(os.environ, env, clear=True):
-            with patch("tokenpak.agent.config._load", return_value={"stats_footer": True}):
+            with patch("tokenpak._internal.config._load", return_value={"stats_footer": True}):
                 assert get_stats_footer_enabled() is True
 
     def test_env_var_overrides_config_file(self):
         """Env var=0 wins even if config file says True."""
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         with patch.dict(os.environ, {"TOKENPAK_STATS_FOOTER": "0"}):
-            with patch("tokenpak.agent.config._load", return_value={"stats_footer": True}):
+            with patch("tokenpak._internal.config._load", return_value={"stats_footer": True}):
                 assert get_stats_footer_enabled() is False
 
 
@@ -219,29 +219,29 @@ class TestConfigRoundTrip:
 
     def test_set_and_get_stats_footer_true(self, tmp_path):
         config_file = tmp_path / "config.json"
-        with patch("tokenpak.agent.config.CONFIG_PATH", config_file):
-            from tokenpak.agent.config import set_config, _load
+        with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
+            from tokenpak._internal.config import set_config, _load
             set_config("stats_footer", True)
             data = _load()
             assert data["stats_footer"] is True
 
     def test_set_and_get_stats_footer_false(self, tmp_path):
         config_file = tmp_path / "config.json"
-        with patch("tokenpak.agent.config.CONFIG_PATH", config_file):
-            from tokenpak.agent.config import set_config, _load
+        with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
+            from tokenpak._internal.config import set_config, _load
             set_config("stats_footer", False)
             data = _load()
             assert data["stats_footer"] is False
 
     def test_load_returns_empty_if_missing(self, tmp_path):
         config_file = tmp_path / "nonexistent.json"
-        with patch("tokenpak.agent.config.CONFIG_PATH", config_file):
-            from tokenpak.agent.config import _load
+        with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
+            from tokenpak._internal.config import _load
             assert _load() == {}
 
     def test_load_returns_empty_on_corrupt_json(self, tmp_path):
         config_file = tmp_path / "config.json"
         config_file.write_text("NOT JSON {{{")
-        with patch("tokenpak.agent.config.CONFIG_PATH", config_file):
-            from tokenpak.agent.config import _load
+        with patch("tokenpak._internal.config.CONFIG_PATH", config_file):
+            from tokenpak._internal.config import _load
             assert _load() == {}

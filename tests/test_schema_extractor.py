@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.agent.compression.schema_extractor
+Tests for tokenpak.compression.schema_extractor
 
 Covers:
   1. Meeting note detection + field extraction
@@ -17,7 +17,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
-from tokenpak.agent.compression.schema_extractor import (
+from tokenpak.compression.schema_extractor import (
     CONFIDENCE_THRESHOLD,
     TEMPLATES,
     ExtractionResult,

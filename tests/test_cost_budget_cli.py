@@ -66,7 +66,7 @@ def temp_db(tmp_path):
 def cost_mod(temp_db):
     """Import cost module patched to use temp DB."""
     import importlib
-    import tokenpak.agent.cli.commands.cost as cost
+    import tokenpak.cli.commands.cost as cost
     importlib.reload(cost)
     with patch.object(cost, "_MONITOR_DB", temp_db):
         yield cost
@@ -76,7 +76,7 @@ def cost_mod(temp_db):
 def budget_mod(temp_db, tmp_path):
     """Import budget module patched to use temp DB + temp config."""
     import importlib
-    import tokenpak.agent.cli.commands.budget as budget
+    import tokenpak.cli.commands.budget as budget
     importlib.reload(budget)
     cfg_path = tmp_path / "budget_config.yaml"
     with patch.object(budget, "_MONITOR_DB", temp_db), \
@@ -109,7 +109,7 @@ class TestQuerySummary:
         assert result["requests"] == 4
 
     def test_empty_db_returns_zeros(self, tmp_path):
-        import tokenpak.agent.cli.commands.cost as cost
+        import tokenpak.cli.commands.cost as cost
         empty_db = tmp_path / "empty.db"
         conn = sqlite3.connect(str(empty_db))
         conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)")
@@ -120,7 +120,7 @@ class TestQuerySummary:
         assert result["total_cost_usd"] == 0.0
 
     def test_missing_db_returns_error(self, tmp_path):
-        import tokenpak.agent.cli.commands.cost as cost
+        import tokenpak.cli.commands.cost as cost
         with patch.object(cost, "_MONITOR_DB", str(tmp_path / "nonexistent.db")):
             result = cost.query_summary("today")
         assert "error" in result
@@ -171,7 +171,7 @@ class TestExportCsv:
         assert len(lines) == 4  # 1 header + 3 data rows
 
     def test_empty_db_returns_only_header(self, tmp_path):
-        import tokenpak.agent.cli.commands.cost as cost
+        import tokenpak.cli.commands.cost as cost
         empty_db = tmp_path / "empty.db"
         conn = sqlite3.connect(str(empty_db))
         conn.execute("CREATE TABLE requests (id INTEGER PRIMARY KEY, timestamp TEXT, model TEXT, request_type TEXT, input_tokens INTEGER, output_tokens INTEGER, estimated_cost REAL, latency_ms REAL, status_code INTEGER, endpoint TEXT, compilation_mode TEXT, protected_tokens INTEGER, compressed_tokens INTEGER, injected_tokens INTEGER, injected_sources TEXT, cache_read_tokens INTEGER, cache_creation_tokens INTEGER)")

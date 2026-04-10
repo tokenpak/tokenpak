@@ -1,9 +1,9 @@
 """
-tokenpak.agent.routing.fallback
+tokenpak.routing.fallback
 ────────────────────────────────
 Proxy-layer fallback bridge.
 
-Wraps :class:`~tokenpak.agent.agentic.retry.RetryEngine` with a
+Wraps :class:`~tokenpak.agentic.retry.RetryEngine` with a
 simpler, context-oriented API for the proxy layer.  Consumers work
 with a single ``FallbackRouter`` instance (or the ``fallback_call``
 convenience function) and never touch the lower-level engine directly.
@@ -96,7 +96,7 @@ class FallbackRouter:
         Directory for persisting partial state on failure.
         Defaults to ``~/.tokenpak/retry_state``.
     failover_manager:
-        Optional :class:`~tokenpak.agent.proxy.failover.FailoverManager`.
+        Optional :class:`~tokenpak.proxy.failover.FailoverManager`.
         When attached and enabled, its ``iter_providers`` drives the
         provider-switch hook.
     on_handoff:
@@ -293,6 +293,6 @@ def get_recent_fallback_events(n: int = 20) -> list[dict]:
     """
     Return up to *n* most-recent retry/fallback events from the JSONL log.
 
-    Delegates to :func:`tokenpak.agent.agentic.retry.load_recent_retry_events`.
+    Delegates to :func:`tokenpak.agentic.retry.load_recent_retry_events`.
     """
     return load_recent_retry_events(n)

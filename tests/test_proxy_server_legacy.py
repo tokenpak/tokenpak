@@ -28,7 +28,7 @@ from typing import Any, Dict, Optional
 
 import pytest
 
-from tokenpak.agent.proxy.server import (
+from tokenpak.proxy.server import (
     GracefulShutdown,
     PipelineTrace,
     ProxyServer,
@@ -907,7 +907,7 @@ class TestProxyServerEndpointCoverage:
 
     def test_trace_by_id_found(self, proxy):
         """Store a trace then retrieve it."""
-        from tokenpak.agent.proxy.server import PipelineTrace
+        from tokenpak.proxy.server import PipelineTrace
         trace = PipelineTrace(request_id="test-find-me", timestamp="12:00:00")
         proxy.trace_storage.store(trace)
         status, data = _get(f"http://127.0.0.1:{proxy.port}/trace/test-find-me")

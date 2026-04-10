@@ -34,14 +34,14 @@ def _make_proxy_server():
     """Create a ProxyServer without binding a socket (bind_and_activate=False)."""
     from unittest.mock import patch
     # Prevent actual TCP socket creation
-    with patch("tokenpak.agent.proxy.server._ThreadedHTTPServer") as _mock:
+    with patch("tokenpak.proxy.server._ThreadedHTTPServer") as _mock:
         _mock.return_value = None
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         ps = ProxyServer.__new__(ProxyServer)
         # Call only the hook-wiring portion of __init__ by invoking it with a stub
         # that skips socket binding.  We can also just instantiate and not call start().
     # Re-import clean to avoid patch bleed
-    from tokenpak.agent.proxy.server import ProxyServer as PS
+    from tokenpak.proxy.server import ProxyServer as PS
     return PS.__new__(PS)
 
 
@@ -51,8 +51,8 @@ def _make_proxy_server():
 
 def _build_hook():
     """Replicate the hook-chain wiring from ProxyServer.__init__."""
-    from tokenpak.agent.proxy.capsule_integration import get_capsule_request_hook
-    from tokenpak.agent.proxy.prompt_builder import apply_stable_cache_control
+    from tokenpak.proxy.capsule_integration import get_capsule_request_hook
+    from tokenpak.proxy.prompt_builder import apply_stable_cache_control
 
     base = get_capsule_request_hook(base_hook=None)  # capsule is off by default
 

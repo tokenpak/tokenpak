@@ -27,9 +27,9 @@ from __future__ import annotations
 import sys as _sys
 import warnings as _warnings
 
-if _sys.modules.get("tokenpak.agent.proxy") is None:
+if _sys.modules.get("tokenpak.proxy") is None:
     _warnings.warn(
-        "tokenpak.agent.proxy.server is deprecated — use proxy.py instead. "
+        "tokenpak.proxy.server is deprecated — use proxy.py instead. "
         "Run `tokenpak serve` to launch the current proxy.",
         DeprecationWarning,
         stacklevel=2,
@@ -53,10 +53,10 @@ from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
 from tokenpak import __version__ as _tokenpak_version
-from tokenpak.agent.adapters.registry import detect_platform
-from tokenpak.agent.config import get_stats_footer_enabled
-from tokenpak.agent.dashboard.export_api import ExportAPI
-from tokenpak.agent.dashboard.session_filter import (
+from tokenpak.adapters.registry import detect_platform
+from tokenpak._internal.config import get_stats_footer_enabled
+from tokenpak.dashboard.export_api import ExportAPI
+from tokenpak.dashboard.session_filter import (
     FilterParams,
     SessionFilter,
 )

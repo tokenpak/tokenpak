@@ -32,23 +32,23 @@ from unittest import mock
 import pytest
 
 # Import modules under test
-from tokenpak.agent.proxy.proxy import record_proxy_request
-from tokenpak.agent.proxy.failover import (
+from tokenpak.proxy.proxy import record_proxy_request
+from tokenpak.proxy.failover import (
     FailoverManager,
     FailoverConfig,
     ProviderEntry,
     load_failover_config,
 )
-from tokenpak.agent.proxy.circuit_breaker import (
+from tokenpak.proxy.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerRegistry,
     CircuitState,
     CircuitBreakerConfig,
     provider_from_url,
 )
-from tokenpak.agent.proxy.streaming import extract_sse_tokens, StreamHandler
-from tokenpak.agent.proxy.passthrough import CredentialPassthrough, PassthroughConfig
-from tokenpak.agent.proxy.router import ProviderRouter
+from tokenpak.proxy.streaming import extract_sse_tokens, StreamHandler
+from tokenpak.proxy.passthrough import CredentialPassthrough, PassthroughConfig
+from tokenpak.proxy.router import ProviderRouter
 
 
 # ==============================================================================
@@ -62,7 +62,7 @@ class TestInvalidApiKeyHandling(unittest.TestCase):
         """Test cost tracking gracefully degrades when tracker unavailable."""
         with mock.patch.dict(os.environ, {"TOKENPAK_COST_TRACKING": "1"}):
             with mock.patch(
-                "tokenpak.agent.telemetry.cost_tracker.get_cost_tracker",
+                "tokenpak.telemetry.cost_tracker.get_cost_tracker",
                 side_effect=ImportError("Cost tracker module not found"),
             ):
                 # Should not raise — graceful degradation
@@ -78,7 +78,7 @@ class TestInvalidApiKeyHandling(unittest.TestCase):
         """Test cost tracking can be disabled via feature flag."""
         # Reload the module to pick up the env var
         import importlib
-        import tokenpak.agent.proxy.proxy as proxy_module
+        import tokenpak.proxy.proxy as proxy_module
         
         with mock.patch.dict(os.environ, {"TOKENPAK_COST_TRACKING": "0"}):
             importlib.reload(proxy_module)
@@ -250,7 +250,7 @@ data: {"type": "message_delta", "usage": {"output_tokens": 10}}
     def test_failover_malformed_config_yaml(self):
         """Test failover gracefully handles malformed YAML config."""
         with mock.patch(
-            "tokenpak.agent.proxy.failover.load_failover_config"
+            "tokenpak.proxy.failover.load_failover_config"
         ) as mock_load:
             mock_load.side_effect = Exception("YAML parse error")
             # Should not crash
@@ -350,7 +350,7 @@ class TestLoggingFailures(unittest.TestCase):
     def test_cost_tracker_logging_failure_does_not_crash(self):
         """Test that logging failures don't crash the proxy."""
         with mock.patch(
-            "tokenpak.agent.proxy.proxy.logger.warning",
+            "tokenpak.proxy.proxy.logger.warning",
             side_effect=Exception("Logging failed"),
         ):
             # Should not crash even if logger fails

@@ -28,13 +28,13 @@ import pytest
 # Import guard — fail fast with a useful message
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.dashboard.export_csv import (
+    from tokenpak.dashboard.export_csv import (
         CSVExporter,
         ExportDataType,
         ExportFormat,
         _format_filename,
     )
-    from tokenpak.agent.dashboard.export_api import ExportAPI
+    from tokenpak.dashboard.export_api import ExportAPI
 except ImportError as exc:
     pytest.fail(f"Failed to import dashboard modules: {exc}")
 
@@ -259,7 +259,7 @@ class TestLargeExport:
 
     def test_all_columns_present_full(self):
         """Full export must have every declared column for all rows."""
-        from tokenpak.agent.dashboard.export_csv import _TRACE_FULL_COLUMNS
+        from tokenpak.dashboard.export_csv import _TRACE_FULL_COLUMNS
         traces = [_make_trace(i) for i in range(self.NUM_ROWS)]
         exporter = CSVExporter(traces=traces)
         csv_bytes, _ = exporter.export(data_type=ExportDataType.TRACES, fmt=ExportFormat.FULL)
@@ -348,22 +348,22 @@ class TestRegressionExistingImports:
     """AC 5: Adding dashboard module must not break existing proxy imports."""
 
     def test_proxy_server_imports_cleanly(self):
-        from tokenpak.agent.proxy import ProxyServer, start_proxy
+        from tokenpak.proxy import ProxyServer, start_proxy
         assert ProxyServer is not None
 
     def test_export_api_import_in_server_module(self):
         """server.py must import ExportAPI without error."""
         import importlib
-        import tokenpak.agent.proxy.server as srv_mod
+        import tokenpak.proxy.server as srv_mod
         importlib.reload(srv_mod)  # force re-import
         assert hasattr(srv_mod, "ExportAPI")
 
     def test_dashboard_module_importable(self):
-        from tokenpak.agent.dashboard import CSVExporter, ExportAPI
+        from tokenpak.dashboard import CSVExporter, ExportAPI
         assert CSVExporter is not None
         assert ExportAPI is not None
 
     def test_existing_trace_dataclass_still_works(self):
-        from tokenpak.agent.proxy.server import PipelineTrace, StageTrace
+        from tokenpak.proxy.server import PipelineTrace, StageTrace
         t = PipelineTrace(request_id="test-id", timestamp="2026-03-03T00:00:00Z")
         assert t.request_id == "test-id"

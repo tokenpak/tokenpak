@@ -9,13 +9,13 @@ import tempfile
 import time
 from pathlib import Path
 
-from tokenpak.agent.agentic.registry import (
+from tokenpak.agentic.registry import (
     AgentRegistry,
     AgentInfo,
     get_registry,
     DEFAULT_EXPIRE_SECONDS,
 )
-from tokenpak.agent.agentic.capabilities import (
+from tokenpak.agentic.capabilities import (
     CapabilityMatcher,
     AgentCapabilities,
     TaskRequirements,
@@ -365,7 +365,7 @@ class TestAgentCLI:
         from types import SimpleNamespace
         
         # Patch the registry path
-        monkeypatch.setattr("tokenpak.agent.agentic.registry.REGISTRY_PATH", temp_registry.path)
+        monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", temp_registry.path)
         
         args = SimpleNamespace(all=False, json=False)
         cmd_agent_list(args)
@@ -377,7 +377,7 @@ class TestAgentCLI:
         from tokenpak.cli import cmd_agent_register, cmd_agent_list
         from types import SimpleNamespace
         
-        monkeypatch.setattr("tokenpak.agent.agentic.registry.REGISTRY_PATH", temp_registry.path)
+        monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", temp_registry.path)
         
         # Register
         args = SimpleNamespace(
@@ -406,7 +406,7 @@ class TestAgentCLI:
         from tokenpak.cli import cmd_agent_match
         from types import SimpleNamespace
         
-        monkeypatch.setattr("tokenpak.agent.agentic.registry.REGISTRY_PATH", populated_registry.path)
+        monkeypatch.setattr("tokenpak.agentic.registry.REGISTRY_PATH", populated_registry.path)
         
         args = SimpleNamespace(gpu=True, memory=None, specialty=[], provider=[], json=True)
         cmd_agent_match(args)

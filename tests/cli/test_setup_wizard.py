@@ -23,7 +23,7 @@ from unittest import mock
 
 import pytest
 
-from tokenpak.agent.cli.commands.setup import (
+from tokenpak.cli.commands.setup import (
     PROXY_URL,
     OPENAI_PROXY_URL,
     configure_claude_code,
@@ -73,28 +73,28 @@ def test_detect_claude_code_present(claude_settings):
 
 
 def test_detect_openai_when_installed():
-    from tokenpak.agent.cli.commands.setup import detect_openai
+    from tokenpak.cli.commands.setup import detect_openai
 
     with mock.patch("importlib.util.find_spec", return_value=object()):
         assert detect_openai() is True
 
 
 def test_detect_openai_when_missing():
-    from tokenpak.agent.cli.commands.setup import detect_openai
+    from tokenpak.cli.commands.setup import detect_openai
 
     with mock.patch("importlib.util.find_spec", return_value=None):
         assert detect_openai() is False
 
 
 def test_detect_google_when_installed():
-    from tokenpak.agent.cli.commands.setup import detect_google
+    from tokenpak.cli.commands.setup import detect_google
 
     with mock.patch("importlib.util.find_spec", return_value=object()):
         assert detect_google() is True
 
 
 def test_detect_google_when_missing():
-    from tokenpak.agent.cli.commands.setup import detect_google
+    from tokenpak.cli.commands.setup import detect_google
 
     with mock.patch("importlib.util.find_spec", return_value=None):
         assert detect_google() is False
@@ -179,13 +179,13 @@ def test_run_setup_no_clients(tmp_home, capsys):
     args = types.SimpleNamespace(yes=True)
     with (
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_claude_code", return_value=False
+            "tokenpak.cli.commands.setup.detect_claude_code", return_value=False
         ),
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_openai", return_value=False
+            "tokenpak.cli.commands.setup.detect_openai", return_value=False
         ),
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_google", return_value=False
+            "tokenpak.cli.commands.setup.detect_google", return_value=False
         ),
     ):
         run_setup_cmd(args)
@@ -209,10 +209,10 @@ def test_run_setup_claude_code_writes_config(tmp_home, capsys):
 
     with (
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_openai", return_value=False
+            "tokenpak.cli.commands.setup.detect_openai", return_value=False
         ),
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_google", return_value=False
+            "tokenpak.cli.commands.setup.detect_google", return_value=False
         ),
     ):
         run_setup_cmd(args)
@@ -230,10 +230,10 @@ def test_run_setup_idempotent_second_run(tmp_home, capsys):
 
     with (
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_openai", return_value=False
+            "tokenpak.cli.commands.setup.detect_openai", return_value=False
         ),
         mock.patch(
-            "tokenpak.agent.cli.commands.setup.detect_google", return_value=False
+            "tokenpak.cli.commands.setup.detect_google", return_value=False
         ),
     ):
         run_setup_cmd(args)  # first run

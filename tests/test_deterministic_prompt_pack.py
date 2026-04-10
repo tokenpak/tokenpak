@@ -19,7 +19,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tokenpak.agent.proxy.prompt_builder import DeterministicPromptPack
+from tokenpak.proxy.prompt_builder import DeterministicPromptPack
 
 
 class TestDeterministicPromptPackBasics:

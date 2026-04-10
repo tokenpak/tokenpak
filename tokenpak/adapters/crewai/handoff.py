@@ -1,4 +1,20 @@
-from typing import Any, Dict
+"""
+TokenPakHandoff — Manages context handoff between CrewAI agents using HandoffManager.
+
+Compresses messages and state when passing between agents to stay
+within token budgets, and uses tokenpak HandoffManager for persistent tracking.
+"""
+
+from typing import Any, Dict, List, Optional, cast
+
+from tokenpak.agentic.handoff import (
+    ContextRef,
+    HandoffBlock,
+    HandoffManager,
+    HandoffStatus,
+    HandoffWire,
+    TokenPak,
+)
 
 
 class TokenPakHandoff:

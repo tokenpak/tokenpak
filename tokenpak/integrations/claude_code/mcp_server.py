@@ -375,7 +375,7 @@ def _handle_summarize_related_issues(params: Dict[str, Any]) -> Dict[str, Any]:
     if not query:
         return {"status": "error", "error": "query is required and must be non-empty"}
 
-    from tokenpak.agent.vault.search import extract_must_hit_terms  # lazy
+    from tokenpak.vault.search import extract_must_hit_terms  # lazy
     from tokenpak.retrieval.vault_index import VaultIndex  # lazy
 
     tokenpak_dir = os.path.join(vault_root, ".tokenpak")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tokenpak.agent.ingest.disclosure import (
+from tokenpak._internal.ingest.disclosure import (
     DocumentView,
     SectionView,
     LEVEL_FULL_SECTIONS,

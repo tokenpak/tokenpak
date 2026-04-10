@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from tokenpak.agent.compression.segmentizer import (
+from tokenpak.compression.segmentizer import (
     Segment,
     SegmentType,
     _sha256,

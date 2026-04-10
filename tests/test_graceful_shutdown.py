@@ -22,7 +22,7 @@ import urllib.request
 
 import pytest
 
-from tokenpak.agent.proxy.server import GracefulShutdown, ProxyServer
+from tokenpak.proxy.server import GracefulShutdown, ProxyServer
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ class TestTelemetryFlush:
     def test_flush_shutdown_record_written(self, tmp_path):
         log_path = tmp_path / "test_compression_events.jsonl"
 
-        from tokenpak.agent.proxy.stats import CompressionStats
+        from tokenpak.proxy.stats import CompressionStats
         stats = CompressionStats(log_path=str(log_path))
 
         record = {
@@ -282,7 +282,7 @@ class TestTelemetryFlush:
         """ProxyServer.stop() writes a shutdown record to the log file."""
         log_path = tmp_path / "events.jsonl"
 
-        from tokenpak.agent.proxy.stats import CompressionStats
+        from tokenpak.proxy.stats import CompressionStats
         srv = ProxyServer(host="127.0.0.1", port=18871, shutdown_timeout=1.0)
         # Override compression_stats to use our temp log file
         srv.compression_stats = CompressionStats(log_path=str(log_path))

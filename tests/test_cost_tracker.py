@@ -1,7 +1,7 @@
-"""Tests for tokenpak.agent.telemetry.cost_tracker."""
+"""Tests for tokenpak.telemetry.cost_tracker."""
 
 import pytest
-from tokenpak.agent.telemetry.cost_tracker import CostTracker, estimate_cost, get_cost_tracker
+from tokenpak.telemetry.cost_tracker import CostTracker, estimate_cost, get_cost_tracker
 
 
 # ---------------------------------------------------------------------------

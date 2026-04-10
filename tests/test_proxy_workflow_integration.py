@@ -33,24 +33,24 @@ def _reload_proxy_workflow(tracking: str, workflow_dir: str):
     # Clear module cache so WORKFLOW_TRACKING_ENABLED is re-evaluated
     for mod_name in list(sys.modules.keys()):
         if "proxy_workflow" in mod_name or (
-            "tokenpak.agent.agentic" in mod_name and "workflow" in mod_name
+            "tokenpak.agentic" in mod_name and "workflow" in mod_name
         ):
             del sys.modules[mod_name]
 
     with patch.dict(os.environ, env_patch, clear=False):
         # Point WorkflowManager to the temp dir
         with patch(
-            "tokenpak.agent.agentic.workflow.DEFAULT_WORKFLOW_DIR",
+            "tokenpak.agentic.workflow.DEFAULT_WORKFLOW_DIR",
             Path(workflow_dir),
         ):
-            import tokenpak.agent.agentic.proxy_workflow as pw
+            import tokenpak.agentic.proxy_workflow as pw
             # Override the manager so it uses our temp dir
             pw._manager_override = None
 
             def _patched_get_manager():
                 if not pw.WORKFLOW_TRACKING_ENABLED:
                     return None
-                from tokenpak.agent.agentic.workflow import WorkflowManager
+                from tokenpak.agentic.workflow import WorkflowManager
                 return WorkflowManager(workflow_dir=workflow_dir)
 
             pw._get_manager = _patched_get_manager
@@ -201,7 +201,7 @@ class TestCrashRecovery:
 
     def test_recover_returns_only_proxy_workflows(self):
         """Non-proxy workflows should not appear in recover_proxy_workflows()."""
-        from tokenpak.agent.agentic.workflow import WorkflowManager, WorkflowStep
+        from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
         mgr = WorkflowManager(workflow_dir=self.tmpdir)
         # Create a non-proxy workflow
         non_proxy = mgr.create(
@@ -243,18 +243,18 @@ class TestWorkflowCLI:
         self.tmpdir = tempfile.mkdtemp()
 
     def _make_manager(self):
-        from tokenpak.agent.agentic.workflow import WorkflowManager
+        from tokenpak.agentic.workflow import WorkflowManager
         return WorkflowManager(workflow_dir=self.tmpdir)
 
     def test_list_type_proxy_filters_correctly(self):
         """--type proxy should only return workflows tagged 'proxy'."""
         from click.testing import CliRunner
-        from tokenpak.agent.cli.commands.workflow import list_cmd
+        from tokenpak.cli.commands.workflow import list_cmd
 
         mgr = self._make_manager()
 
         # Create a proxy-tagged workflow
-        from tokenpak.agent.agentic.workflow import WorkflowStep
+        from tokenpak.agentic.workflow import WorkflowStep
         proxy_wf = mgr.create(
             name="proxy-request-req-xyz",
             steps=[WorkflowStep("vault_inject"), WorkflowStep("forward", depends_on=["vault_inject"])],
@@ -267,8 +267,8 @@ class TestWorkflowCLI:
             tags=["deploy"],
         )
 
-        with patch("tokenpak.agent.agentic.workflow.DEFAULT_WORKFLOW_DIR", Path(self.tmpdir)):
-            with patch("tokenpak.agent.cli.commands.workflow.get_manager") as mock_mgr:
+        with patch("tokenpak.agentic.workflow.DEFAULT_WORKFLOW_DIR", Path(self.tmpdir)):
+            with patch("tokenpak.cli.commands.workflow.get_manager") as mock_mgr:
                 mock_mgr.return_value = mgr
                 runner = CliRunner()
                 result = runner.invoke(list_cmd, ["--type", "proxy"])
@@ -280,8 +280,8 @@ class TestWorkflowCLI:
     def test_recover_type_proxy_filters_correctly(self):
         """tokenpak workflow recover --type proxy only shows incomplete proxy workflows."""
         from click.testing import CliRunner
-        from tokenpak.agent.cli.commands.workflow import recover_cmd
-        from tokenpak.agent.agentic.workflow import WorkflowManager, WorkflowStep
+        from tokenpak.cli.commands.workflow import recover_cmd
+        from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
 
         mgr = self._make_manager()
 
@@ -302,7 +302,7 @@ class TestWorkflowCLI:
         )
         mgr.start(other_wf.id)
 
-        with patch("tokenpak.agent.cli.commands.workflow.get_manager", return_value=mgr):
+        with patch("tokenpak.cli.commands.workflow.get_manager", return_value=mgr):
             runner = CliRunner()
             result = runner.invoke(recover_cmd, ["--type", "proxy"])
 
@@ -313,8 +313,8 @@ class TestWorkflowCLI:
     def test_list_no_type_shows_all(self):
         """Without --type, all workflows are shown."""
         from click.testing import CliRunner
-        from tokenpak.agent.cli.commands.workflow import list_cmd
-        from tokenpak.agent.agentic.workflow import WorkflowManager, WorkflowStep
+        from tokenpak.cli.commands.workflow import list_cmd
+        from tokenpak.agentic.workflow import WorkflowManager, WorkflowStep
 
         mgr = self._make_manager()
         mgr.create(
@@ -328,7 +328,7 @@ class TestWorkflowCLI:
             tags=["deploy"],
         )
 
-        with patch("tokenpak.agent.cli.commands.workflow.get_manager", return_value=mgr):
+        with patch("tokenpak.cli.commands.workflow.get_manager", return_value=mgr):
             runner = CliRunner()
             result = runner.invoke(list_cmd, [])
 
@@ -349,7 +349,7 @@ class TestRegressionNoBreakage:
             for mod in list(sys.modules.keys()):
                 if "proxy_workflow" in mod:
                     del sys.modules[mod]
-            import tokenpak.agent.agentic.proxy_workflow as pw
+            import tokenpak.agentic.proxy_workflow as pw
             assert pw.WORKFLOW_TRACKING_ENABLED is False
             # All functions should return None / [] without raising
             assert pw.start_proxy_workflow("r1") is None
@@ -360,7 +360,7 @@ class TestRegressionNoBreakage:
 
     def test_proxy_template_in_workflow_templates(self):
         """The 'proxy' template must be registered in WORKFLOW_TEMPLATES."""
-        from tokenpak.agent.agentic.workflow import WORKFLOW_TEMPLATES, list_templates
+        from tokenpak.agentic.workflow import WORKFLOW_TEMPLATES, list_templates
         assert "proxy" in WORKFLOW_TEMPLATES
         assert "proxy" in list_templates()
         steps = WORKFLOW_TEMPLATES["proxy"]
@@ -369,7 +369,7 @@ class TestRegressionNoBreakage:
 
     def test_proxy_template_step_dependencies(self):
         """Steps in proxy template should have correct dependency chain."""
-        from tokenpak.agent.agentic.workflow import WORKFLOW_TEMPLATES
+        from tokenpak.agentic.workflow import WORKFLOW_TEMPLATES
         steps = {s["name"]: s for s in WORKFLOW_TEMPLATES["proxy"]}
         assert steps["vault_inject"]["depends_on"] == []
         assert "vault_inject" in steps["compress"]["depends_on"]

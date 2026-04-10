@@ -837,10 +837,10 @@ def record_lesson(
     Returns:
         Lesson dataclass from memory_promoter.
     """
-    from tokenpak.agent.agentic.memory_promoter import (
+    from tokenpak.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
     )
-    from tokenpak.agent.agentic.memory_promoter import (
+    from tokenpak.agentic.memory_promoter import (
         record_lesson as _record,
     )
 
@@ -869,7 +869,7 @@ def run_memory_promotion(
     Returns:
         Dict of {lesson_id: action_taken} for all modified lessons.
     """
-    from tokenpak.agent.agentic.memory_promoter import (
+    from tokenpak.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
         promote_all,
     )
@@ -888,10 +888,10 @@ def get_durable_lessons(
     Returns:
         List of Lesson dataclasses.
     """
-    from tokenpak.agent.agentic.memory_promoter import (
+    from tokenpak.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
     )
-    from tokenpak.agent.agentic.memory_promoter import (
+    from tokenpak.agentic.memory_promoter import (
         get_durable_lessons as _get_durable,
     )
 

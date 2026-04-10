@@ -260,7 +260,7 @@ class TestOpenClawIntegration:
 
     def test_provider_auto_discovery_from_auth_header(self):
         """Auth header type detection maps correctly to provider."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         # x-api-key → API key (Anthropic)
         headers_anthropic = {"x-api-key": "sk-ant-fakekey"}
@@ -442,42 +442,42 @@ class TestOAuthFlow:
 
     def test_sk_prefix_detected_as_api_key(self):
         """Bearer sk-... is classified as API key, not OAuth."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         result = detect_auth_type({"authorization": "Bearer sk-mykey"})
         assert result == "apikey"
 
     def test_sk_ant_prefix_detected_as_api_key(self):
         """Anthropic API keys (sk-ant-...) are classified as API key."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         result = detect_auth_type({"authorization": "Bearer sk-ant-mykey"})
         assert result == "apikey"
 
     def test_jwt_bearer_detected_as_oauth(self):
         """Non-sk Bearer tokens are classified as OAuth."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         result = detect_auth_type({"authorization": "Bearer eyJhbGci.payload.sig"})
         assert result == "oauth"
 
     def test_x_api_key_header_detected_as_api_key(self):
         """x-api-key header is always API key auth."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         result = detect_auth_type({"x-api-key": "sk-ant-fakekey"})
         assert result == "apikey"
 
     def test_no_auth_header_returns_none_type(self):
         """Missing auth header returns 'none' type."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type
+        from tokenpak.proxy.oauth import detect_auth_type
 
         result = detect_auth_type({})
         assert result == "none"
 
     def test_oauth_type_marked_as_skip_cache_keying(self):
         """OAuth requests must not be shared across sessions (no cache keying)."""
-        from tokenpak.agent.proxy.oauth import detect_auth_type, AUTH_TYPE_OAUTH, AUTH_TYPE_APIKEY
+        from tokenpak.proxy.oauth import detect_auth_type, AUTH_TYPE_OAUTH, AUTH_TYPE_APIKEY
 
         def _is_oauth_bearer(token: str) -> bool:
             headers = {"authorization": f"Bearer {token}"}
@@ -557,7 +557,7 @@ class TestMultiAgent:
 
     def test_fleet_doctor_checks_all_providers(self):
         """Doctor checks report covers all registered providers."""
-        from tokenpak.agent.proxy.startup import run_startup_checks
+        from tokenpak.proxy.startup import run_startup_checks
 
         # run_startup_checks returns (bool, list[str])
         # Passing an unused port to avoid conflicts

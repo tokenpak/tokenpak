@@ -30,7 +30,7 @@ import pytest
 # Direct module imports (per acceptance criteria #5)
 from tokenpak.cache.semantic_cache import SemanticCache, SemanticCacheConfig
 from tokenpak.cache.prefix_registry import StablePrefixRegistry, fingerprint, get_registry, reset_registry
-from tokenpak.agent.compression.dictionary import CompressionDictionary, DictionaryResult
+from tokenpak.compression.dictionary import CompressionDictionary, DictionaryResult
 
 
 # ---------------------------------------------------------------------------

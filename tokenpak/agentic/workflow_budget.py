@@ -1,4 +1,4 @@
-"""tokenpak.agent.agentic.workflow_budget — Dynamic token budget rebalancing for workflows.
+"""tokenpak.agentic.workflow_budget — Dynamic token budget rebalancing for workflows.
 
 Tracks token budget across workflow steps and redistributes surplus/deficit
 dynamically so steps always have a fair allocation without silent truncation.
