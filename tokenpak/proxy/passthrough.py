@@ -130,6 +130,20 @@ class PassthroughConfig:
 
     require_auth: bool = True
 
+    def __post_init__(self) -> None:
+        """Validate config consistency after deserialization.
+
+        Raises:
+            ValueError: If any header appears in both strip_headers and safe_to_log,
+                which would produce contradictory behaviour (strip AND log).
+        """
+        overlap = self.strip_headers & self.safe_to_log
+        if overlap:
+            raise ValueError(
+                f"PassthroughConfig: headers cannot be in both strip_headers and "
+                f"safe_to_log: {sorted(overlap)}"
+            )
+
 
 # Singleton default — module-level, never holds key material
 _DEFAULT_CONFIG = PassthroughConfig()
