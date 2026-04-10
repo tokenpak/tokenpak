@@ -254,7 +254,7 @@ def test_cli_recipe_benchmark(tmp_path):
 # ── 17. _apply_operations: regex_replace ──────────────────────────────────────
 
 def test_apply_regex_replace():
-    from tokenpak.agent.recipe_sdk import _apply_operations
+    from tokenpak.recipe_sdk import _apply_operations
     text = "foo bar baz"
     ops = [{"type": "regex_replace", "pattern": r"\bbar\b", "replacement": "REPLACED"}]
     result, applied = _apply_operations(text, ops)
@@ -265,7 +265,7 @@ def test_apply_regex_replace():
 # ── 18. _apply_operations: deduplicate_lines ─────────────────────────────────
 
 def test_apply_deduplicate_lines():
-    from tokenpak.agent.recipe_sdk import _apply_operations
+    from tokenpak.recipe_sdk import _apply_operations
     text = "line1\nline2\nline1\nline3\nline2"
     result, applied = _apply_operations(text, [{"type": "deduplicate_lines"}])
     lines = result.strip().splitlines()
@@ -276,7 +276,7 @@ def test_apply_deduplicate_lines():
 # ── 19. _apply_operations: collapse_whitespace ───────────────────────────────
 
 def test_apply_collapse_whitespace():
-    from tokenpak.agent.recipe_sdk import _apply_operations
+    from tokenpak.recipe_sdk import _apply_operations
     text = "too   many   spaces\n\n\n\nmany blank lines"
     result, applied = _apply_operations(text, [{"type": "collapse_whitespace"}])
     assert "   " not in result
@@ -287,7 +287,7 @@ def test_apply_collapse_whitespace():
 # ── 20. _apply_operations: json_compact ──────────────────────────────────────
 
 def test_apply_json_compact():
-    from tokenpak.agent.recipe_sdk import _apply_operations
+    from tokenpak.recipe_sdk import _apply_operations
     text = json.dumps({"a": 1, "b": [1, 2, 3]}, indent=4)
     result, applied = _apply_operations(text, [{"type": "json_compact"}])
     assert " " not in result  # compacted
