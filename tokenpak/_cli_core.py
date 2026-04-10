@@ -2268,6 +2268,26 @@ def _build_audit_parser(sub):
     p_summary.add_argument("--db", dest="audit_db", default=None)
     p_summary.set_defaults(func=cmd_audit_summary)
 
+    # TRIX-08: proxy compliance audit query (audit_events in monitor.db)
+    p_query = asub.add_parser("query", help="Query proxy compliance audit log (audit_events)")
+    p_query.add_argument(
+        "--since",
+        default=None,
+        metavar="DATE",
+        help="Filter rows since date/datetime (ISO format, e.g. 2026-04-01)",
+    )
+    p_query.add_argument("--user", default=None, metavar="USER_ID", help="Filter by user_id (substring)")
+    p_query.add_argument("--limit", type=int, default=100, help="Max rows (default: 100)")
+    p_query.add_argument(
+        "--db",
+        dest="monitor_db",
+        default=None,
+        metavar="PATH",
+        help="Path to monitor.db (default: auto-detect from tokenpak install)",
+    )
+    p_query.add_argument("--json", dest="as_json", action="store_true", help="Output as JSON")
+    p_query.set_defaults(func=cmd_audit_query)
+
 
 def _get_audit_db(args) -> str:
     import os
@@ -2406,6 +2426,74 @@ def cmd_audit_summary(args):
             outcome = r.get("outcome", "?") if isinstance(r, dict) else r[0]
             n = r.get("n", 0) if isinstance(r, dict) else r[1]
             print(f"  {outcome:<20} {n}")
+
+
+def _get_monitor_db(args) -> str:
+    """Return path to monitor.db for audit query command."""
+    import os
+    from pathlib import Path
+
+    if hasattr(args, "monitor_db") and args.monitor_db:
+        return args.monitor_db
+    # Prefer environment override, then standard install location
+    env_db = os.environ.get("TOKENPAK_DB", "")
+    if env_db:
+        return env_db
+    # Try to locate the proxy's monitor.db relative to the tokenpak install
+    try:
+        import tokenpak as _tp
+        _pkg_dir = Path(_tp.__file__).parent.parent
+        candidate = _pkg_dir / "monitor.db"
+        if candidate.exists():
+            return str(candidate)
+    except Exception:
+        pass
+    # Fallback: ~/.tokenpak/monitor.db
+    return str(Path.home() / ".tokenpak" / "monitor.db")
+
+
+def cmd_audit_query(args):
+    """TRIX-08: Query audit_events table in monitor.db."""
+    import json as _json
+
+    db_path = _get_monitor_db(args)
+    since = getattr(args, "since", None)
+    user = getattr(args, "user", None)
+    limit = getattr(args, "limit", 100)
+    as_json = getattr(args, "as_json", False)
+
+    try:
+        from tokenpak.pro.audit_log import ProxyAuditLog
+    except ImportError as exc:
+        print(f"Error: could not import ProxyAuditLog: {exc}")
+        sys.exit(2)
+
+    log = ProxyAuditLog.get_instance(db_path)
+    rows = log.query(since=since, user=user, limit=limit)
+
+    if as_json:
+        print(_json.dumps(rows, indent=2, default=str))
+        return
+
+    if not rows:
+        print("No audit events found.")
+        return
+
+    header = f"{'Time':<28} {'RequestID':<36} {'User':<18} {'IP':<16} {'Model':<28} {'TokIn':>8} {'TokOut':>8} {'Cost':>10}"
+    print(header)
+    print("-" * len(header))
+    for r in rows:
+        print(
+            f"{(r.get('ts') or '')[:27]:<28} "
+            f"{(r.get('request_id') or '-'):<36} "
+            f"{(r.get('user_id') or '-'):<18} "
+            f"{(r.get('client_ip') or '-'):<16} "
+            f"{(r.get('model') or '-'):<28} "
+            f"{(r.get('tokens_in') or 0):>8,} "
+            f"{(r.get('tokens_out') or 0):>8,} "
+            f"${(r.get('cost_usd') or 0.0):>9.4f}"
+        )
+    print(f"\n{len(rows)} event(s)  db={db_path}")
 
 
 # ---------------------------------------------------------------------------
