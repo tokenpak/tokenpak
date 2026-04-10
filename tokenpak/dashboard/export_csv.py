@@ -1,4 +1,4 @@
-"""tokenpak.dashboard.export_csv — CSV export for dashboard data.
+"""tokenpak.agent.dashboard.export_csv — CSV export for dashboard data.
 
 Generates downloadable CSV files from proxy pipeline data.
 Supports:

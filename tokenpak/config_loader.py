@@ -205,7 +205,7 @@ def get_all() -> Dict[str, Any]:
     # Upstream
     result["upstream.timeout"] = get("upstream.timeout", 300, "TOKENPAK_UPSTREAM_TIMEOUT", int)
     result["upstream.ollama"] = get(
-        "upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
+        "upstream.ollama", "http://localhost:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
     )
     result["upstream.ollama_timeout"] = get(
         "upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int
@@ -301,7 +301,7 @@ term_resolver:
 
 upstream:
   timeout: 300
-  ollama: http://100.80.241.118:11434
+  ollama: http://localhost:11434
   ollama_timeout: 20
 
 rate_limit_rpm: 60
@@ -337,4 +337,16 @@ failover:
         claude-opus-4-5: gemini-1.5-pro
         claude-sonnet-4-5: gemini-1.5-pro
       credential_env: GOOGLE_API_KEY
+
+# Custom providers — register any OpenAI/Anthropic/Google-compatible endpoint.
+# Each entry becomes a routable provider with full compression/caching pipeline.
+# providers:
+#   my-local-llm:
+#     endpoint: http://localhost:8000/v1
+#     format: openai          # openai | anthropic | google
+#     api_key_env: MY_LLM_API_KEY   # env var holding the API key
+#   deepseek:
+#     endpoint: https://api.deepseek.com/v1
+#     format: openai
+#     api_key_env: DEEPSEEK_API_KEY
 """

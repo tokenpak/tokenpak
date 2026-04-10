@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """SpanExtractor — extractive span selection from text chunks.
 
 Extracts the most relevant 20-80 token sentences from a chunk given a query.

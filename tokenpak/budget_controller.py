@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Budget controller for dynamic context token tiers.
 
 Maps intent + complexity to a target token budget tier and determines whether

@@ -28,6 +28,8 @@ class Provider(Enum):
     # CODEX currently routes through OpenAI endpoints.  If a distinct
     # hostname or header is introduced in the future, add detection here.
     CODEX = "codex"
+    VOYAGE = "voyage"
+    JINA = "jina"
     UNKNOWN = "unknown"
 
 
@@ -41,6 +43,9 @@ _EXACT_HOSTS: dict[str, Provider] = {
     "api.fireworks.ai": Provider.FIREWORKS,
     "api.together.xyz": Provider.TOGETHER,
     "api.together.ai": Provider.TOGETHER,
+    "chatgpt.com": Provider.CODEX,
+    "api.voyageai.com": Provider.VOYAGE,
+    "api.jina.ai": Provider.JINA,
 }
 
 # Suffix-based checks for subdomains — evaluated in order, first match wins.

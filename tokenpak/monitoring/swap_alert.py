@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 SWAP_ALERT_THRESHOLD_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_THRESHOLD_MB", "1024"))
 SWAP_ALERT_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_COOLDOWN_S", "1800"))  # 30 min
-TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "461720084")
+TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_ALERT_CHAT_ID", "")
 HOSTNAME: str = os.environ.get("TOKENPAK_ALERT_HOSTNAME", os.uname().nodename)
 
 # ── Additional thresholds — transferred from monolith (TPK-CONSOLIDATION-A2a) ──
@@ -36,7 +36,7 @@ SWAP_TELEGRAM_ALERT_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_MB", "1024
 # Self-heal script path and cooldown
 SWAP_SELF_HEAL_SCRIPT: str = os.environ.get(
     "TOKENPAK_SWAP_SELF_HEAL_SCRIPT",
-    os.path.expanduser("~/vault/06_RUNTIME/scripts/self-heal-memory.sh"),
+    os.path.expanduser("~/.tokenpak/scripts/self-heal-memory.sh"),
 )
 _SWAP_SELF_HEAL_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_SELF_HEAL_COOLDOWN_S", "1800"))
 
@@ -79,8 +79,8 @@ def _get_swap_mb() -> tuple[float, float, float]:
 
 
 def _get_telegram_token() -> Optional[str]:
-    """Read Telegram bot token from OpenClaw config."""
-    config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+    """Read Telegram bot token from tokenpak config."""
+    config_path = os.path.expanduser("~/.tokenpak/config.json")
     try:
         with open(config_path) as f:
             cfg = json.load(f)

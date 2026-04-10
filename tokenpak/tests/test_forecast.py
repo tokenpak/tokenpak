@@ -48,7 +48,7 @@ def spend_records_7days() -> List[Dict[str, Any]]:
             "timestamp": f"{date_str}T08:00:00Z",
             "cost_usd": base_cost + (day_offset * 0.5),
             "model": "claude-3-sonnet",
-            "agent": "OpenClaw agent tasks",
+            "agent": "Agent tasks",
         })
         records.append({
             "timestamp": f"{date_str}T14:00:00Z",
@@ -82,7 +82,7 @@ def spend_records_30days() -> List[Dict[str, Any]]:
             "timestamp": f"{date_str}T10:00:00Z",
             "cost_usd": daily_base,
             "model": "claude-3-sonnet",
-            "agent": "OpenClaw agent tasks",
+            "agent": "Agent tasks",
         })
         records.append({
             "timestamp": f"{date_str}T15:00:00Z",
@@ -110,7 +110,7 @@ def single_day_record() -> List[Dict[str, Any]]:
             "timestamp": f"{date_str}T10:00:00Z",
             "cost_usd": 25.50,
             "model": "claude-3-opus",
-            "agent": "OpenClaw agent tasks",
+            "agent": "Agent tasks",
         }
     ]
 
@@ -151,14 +151,14 @@ def test_burn_rate_analysis_with_breakdown() -> None:
         monthly_projection=429.0,
         week_over_week_trend=15.5,
         by_model={"claude-3-sonnet": 60.0, "gpt-4": 40.0},
-        by_activity={"OpenClaw": 62.0, "TokenPak CLI": 16.0, "Cron": 22.0},
+        by_activity={"Agent": 62.0, "TokenPak CLI": 16.0, "Cron": 22.0},
         data_points=21,
         start_date=date(2026, 3, 21),
         end_date=date(2026, 3, 27),
     )
     
     assert analysis.by_model["claude-3-sonnet"] == 60.0
-    assert analysis.by_activity["OpenClaw"] == 62.0
+    assert analysis.by_activity["Agent"] == 62.0
     assert analysis.week_over_week_trend == 15.5
     assert analysis.data_points == 21
 
@@ -184,7 +184,7 @@ def test_get_burn_rate_7days(mock_budget_tracker, spend_records_7days) -> None:
     assert "claude-3-sonnet" in analysis.by_model
     assert "gpt-4" in analysis.by_model
     # Should have activity breakdown
-    assert "OpenClaw agent tasks" in analysis.by_activity or "Cron jobs" in analysis.by_activity
+    assert "Agent tasks" in analysis.by_activity or "Cron jobs" in analysis.by_activity
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +379,7 @@ def test_format_burn_rate_display_with_data() -> None:
         monthly_projection=429.0,
         week_over_week_trend=12.5,
         by_model={"claude-3-sonnet": 60.0, "gpt-4": 40.0},
-        by_activity={"OpenClaw": 62.0, "TokenPak CLI": 38.0},
+        by_activity={"Agent": 62.0, "TokenPak CLI": 38.0},
         data_points=14,
     )
     
@@ -395,7 +395,7 @@ def test_format_burn_rate_display_with_data() -> None:
     assert "Growth trend" in output
     assert "12.5" in output
     assert "claude-3-sonnet" in output
-    assert "OpenClaw" in output
+    assert "Agent" in output
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +498,7 @@ def test_get_burn_rate_activity_breakdown(mock_budget_tracker) -> None:
             "timestamp": f"{date_str}T08:00:00Z",
             "cost_usd": 50.0,
             "model": "claude-3-sonnet",
-            "agent": "OpenClaw agent tasks",
+            "agent": "Agent tasks",
         },
         {
             "timestamp": f"{date_str}T09:00:00Z",
@@ -517,7 +517,7 @@ def test_get_burn_rate_activity_breakdown(mock_budget_tracker) -> None:
     mock_budget_tracker.list_spend.return_value = records
     analysis = get_burn_rate(mock_budget_tracker, window_days=1)
     
-    assert analysis.by_activity["OpenClaw agent tasks"] == 50.0
+    assert analysis.by_activity["Agent tasks"] == 50.0
     assert analysis.by_activity["TokenPak CLI"] == 30.0
     assert analysis.by_activity["Cron jobs"] == 20.0
 

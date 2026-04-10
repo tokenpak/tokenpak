@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Unit tests for calibration.py — worker count optimization and dynamic adjustment."""
 
 import json

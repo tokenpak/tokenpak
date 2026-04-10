@@ -1,4 +1,4 @@
-"""tokenpak.agentic.handoff — Context handoff between agents.
+"""tokenpak.agent.agentic.handoff — Context handoff between agents.
 
 Allows agents to pass context references, summaries, and next steps
 to each other. Handoffs are stored as JSON in ~/.tokenpak/handoffs/.

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """TokenPak — Universal Content Compiler for LLMs.
 
-Public API surface for TokenPak v1.0.3.
+Public API surface for TokenPak v1.1.0.
 Formalizes importable classes for agent integrations, deployment, and testing.
 
 Quick start:
@@ -12,13 +12,13 @@ Sub-package imports:
     from tokenpak.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
-    from tokenpak.agentic.handoff import HandoffManager, HandoffBlock
+    from tokenpak.agent.agentic.handoff import HandoffManager, HandoffBlock
 """
 
 from __future__ import annotations
 
-__version__ = "1.0.3"
-__author__ = "Kevin Yang"
+__version__ = "1.1.0"
+__author__ = "TokenPak Contributors"
 __license__ = "Apache-2.0"
 __description__ = "Deterministic compression for multi-agent AI workflows"
 
@@ -57,15 +57,15 @@ def __getattr__(name: str):
         "Decision": lambda: __import__("tokenpak.report", fromlist=["Decision"]).Decision,
         # CLI
         "main": lambda: __import__("tokenpak.cli", fromlist=["main"]).main,
-        # Agent Handoff Protocol (tokenpak.agentic.handoff — canonical location)
-        "HandoffManager": lambda: __import__("tokenpak.agentic.handoff", fromlist=["HandoffManager"]).HandoffManager,
-        "HandoffBlock": lambda: __import__("tokenpak.agentic.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
-        "HandoffStatus": lambda: __import__("tokenpak.agentic.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
-        "HandoffWire": lambda: __import__("tokenpak.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
-        "TokenPak": lambda: __import__("tokenpak.agentic.handoff", fromlist=["TokenPak"]).TokenPak,
-        "ContextRef": lambda: __import__("tokenpak.agentic.handoff", fromlist=["ContextRef"]).ContextRef,
+        # Agent Handoff Protocol (tokenpak.agent.agentic.handoff — canonical location)
+        "HandoffManager": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffManager"]).HandoffManager,
+        "HandoffBlock": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
+        "HandoffStatus": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
+        "HandoffWire": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "TokenPak": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["TokenPak"]).TokenPak,
+        "ContextRef": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["ContextRef"]).ContextRef,
         # Handoff alias
-        "Handoff": lambda: __import__("tokenpak.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "Handoff": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
     }
     if name in _lazy_map:
         val = _lazy_map[name]()

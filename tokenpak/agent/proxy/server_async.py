@@ -333,6 +333,14 @@ async def _forward_request(request: Request, target_url: str) -> Response:
         except Exception:
             pass
 
+        # Google streaming is signalled by URL, not body: path contains
+        # streamGenerateContent or query param ?alt=sse.
+        if not is_streaming and (
+            "streamGenerateContent" in target_url
+            or "alt=sse" in target_url
+        ):
+            is_streaming = True
+
         # Run pipeline in thread pool (sync code, must not block event loop)
         (
             body,

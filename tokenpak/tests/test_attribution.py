@@ -31,7 +31,7 @@ class TestAttributionRecord(unittest.TestCase):
         rec = AttributionRecord(
             request_id="req-1",
             timestamp=1000.0,
-            source="trix-openclaw",
+            source="agent-alpha",
             model="claude-sonnet-4-6",
             tokens_saved=500,
             cost_saved=0.0123456,
@@ -67,24 +67,24 @@ class TestDetectSource(unittest.TestCase):
         self.assertEqual(src, "my-app")
 
     def test_skill_header(self):
-        src = detect_source(headers={"X-OpenClaw-Skill": "weather"})
+        src = detect_source(headers={"X-TokenPak-Skill": "weather"})
         self.assertEqual(src, "skill:weather")
 
-    def test_session_header_with_agent_name_trix(self):
-        src = detect_source(headers={"X-OpenClaw-Session": "trix-heartbeat"})
-        self.assertEqual(src, "trix-openclaw")
+    def test_session_header_with_agent_name_alpha(self):
+        src = detect_source(headers={"X-TokenPak-Session": "alpha-heartbeat"})
+        self.assertEqual(src, "agent-alpha")
 
-    def test_session_header_with_agent_name_sue(self):
-        src = detect_source(headers={"X-OpenClaw-Session": "sue-main"})
-        self.assertEqual(src, "sue-openclaw")
+    def test_session_header_with_agent_name_beta(self):
+        src = detect_source(headers={"X-TokenPak-Session": "beta-main"})
+        self.assertEqual(src, "agent-beta")
 
     def test_session_header_no_agent_name(self):
-        src = detect_source(headers={"X-OpenClaw-Session": "unknown-session-123"})
+        src = detect_source(headers={"X-TokenPak-Session": "unknown-session-123"})
         self.assertTrue(src.startswith("session:"))
 
-    def test_user_agent_openclaw(self):
-        src = detect_source(user_agent="OpenClaw/1.0")
-        self.assertEqual(src, "openclaw")
+    def test_user_agent_tokenpak(self):
+        src = detect_source(user_agent="TokenPak/1.0")
+        self.assertEqual(src, "tokenpak")
 
     def test_user_agent_codex(self):
         src = detect_source(user_agent="codex-agent/2.0")
@@ -101,7 +101,7 @@ class TestDetectSource(unittest.TestCase):
     def test_explicit_source_takes_priority_over_skill(self):
         src = detect_source(headers={
             "X-TokenPak-Source": "explicit",
-            "X-OpenClaw-Skill": "weather",
+            "X-TokenPak-Skill": "weather",
         })
         self.assertEqual(src, "explicit")
 
@@ -112,7 +112,7 @@ class TestDetectSource(unittest.TestCase):
 
 class TestAttributionTracker(unittest.TestCase):
 
-    def _make_rec(self, source="trix-openclaw", model="claude-sonnet-4-6",
+    def _make_rec(self, source="agent-alpha", model="claude-sonnet-4-6",
                   tokens_saved=100, cost_saved=0.01, cache_hit=False, ts=None):
         return AttributionRecord(
             request_id="req",
@@ -144,11 +144,11 @@ class TestAttributionTracker(unittest.TestCase):
 
     def test_rollup_by_source_basic(self):
         tracker = AttributionTracker()
-        tracker.record(self._make_rec(source="sue-openclaw", tokens_saved=200, cost_saved=0.05, cache_hit=True))
-        tracker.record(self._make_rec(source="sue-openclaw", tokens_saved=100, cost_saved=0.03))
+        tracker.record(self._make_rec(source="agent-beta", tokens_saved=200, cost_saved=0.05, cache_hit=True))
+        tracker.record(self._make_rec(source="agent-beta", tokens_saved=100, cost_saved=0.03))
         rollup = tracker.rollup_by_source()
-        self.assertIn("sue-openclaw", rollup)
-        entry = rollup["sue-openclaw"]
+        self.assertIn("agent-beta", rollup)
+        entry = rollup["agent-beta"]
         self.assertEqual(entry["requests"], 2)
         self.assertEqual(entry["tokens_saved"], 300)
         self.assertAlmostEqual(entry["cost_saved"], 0.08, places=4)
@@ -182,7 +182,7 @@ class TestAttributionTracker(unittest.TestCase):
 
     def test_leakage_pct_no_unknown(self):
         tracker = AttributionTracker()
-        tracker.record(self._make_rec(source="trix-openclaw"))
+        tracker.record(self._make_rec(source="agent-alpha"))
         self.assertEqual(tracker.leakage_pct(), 0.0)
 
     def test_leakage_pct_empty(self):
@@ -191,7 +191,7 @@ class TestAttributionTracker(unittest.TestCase):
 
     def test_save_and_load_roundtrip(self):
         tracker = AttributionTracker()
-        tracker.record(self._make_rec(source="trix-openclaw", tokens_saved=999, cost_saved=0.123))
+        tracker.record(self._make_rec(source="agent-alpha", tokens_saved=999, cost_saved=0.123))
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             p = Path(f.name)
         tracker.save(path=p)
@@ -200,7 +200,7 @@ class TestAttributionTracker(unittest.TestCase):
         tracker2.load(path=p)
         self.assertEqual(len(tracker2.records), 1)
         loaded = tracker2.records[0]
-        self.assertEqual(loaded.source, "trix-openclaw")
+        self.assertEqual(loaded.source, "agent-alpha")
         self.assertEqual(loaded.tokens_saved, 999)
         p.unlink()
 
@@ -230,18 +230,18 @@ class TestFormatAttribution(unittest.TestCase):
         tracker = AttributionTracker()
         rec = AttributionRecord(
             request_id="r1", timestamp=time.time(),
-            source="trix-openclaw", model="claude-sonnet-4-6",
+            source="agent-alpha", model="claude-sonnet-4-6",
             tokens_saved=500, cost_saved=0.05, cache_hit=True,
         )
         tracker.record(rec)
         result = format_attribution(tracker, days=1)
-        self.assertIn("trix-openclaw", result)
+        self.assertIn("agent-alpha", result)
 
     def test_format_contains_model(self):
         tracker = AttributionTracker()
         rec = AttributionRecord(
             request_id="r1", timestamp=time.time(),
-            source="sue-openclaw", model="claude-opus-4-6",
+            source="agent-beta", model="claude-opus-4-6",
             tokens_saved=1000, cost_saved=0.5,
         )
         tracker.record(rec)

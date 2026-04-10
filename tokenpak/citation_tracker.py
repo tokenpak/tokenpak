@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Citation-Mapped Utility Scoring for TokenPak.
 
 Tracks which context blocks an LLM actually cites in its response.

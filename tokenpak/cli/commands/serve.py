@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Import string used by uvicorn when workers > 1.
 # Uvicorn calls create_ingest_app() in each worker process.
-_APP_FACTORY_IMPORT = "tokenpak._internal.ingest.api:create_ingest_app"
+_APP_FACTORY_IMPORT = "tokenpak.agent.ingest.api:create_ingest_app"
 
 
 def _default_workers() -> int:

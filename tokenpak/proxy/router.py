@@ -21,8 +21,17 @@ PROVIDER_URLS = {
     "google": "https://generativelanguage.googleapis.com",
 }
 
-# Hosts we intercept for logging/processing
+# Hosts we intercept for logging/processing.
+# Custom providers registered in config.yaml are added at startup by config.py.
 INTERCEPT_HOSTS = {"api.anthropic.com", "api.openai.com", "generativelanguage.googleapis.com"}
+
+
+def should_intercept(url: str) -> bool:
+    """Return True if the given URL targets a known LLM provider we should intercept."""
+    for host in INTERCEPT_HOSTS:
+        if host in url:
+            return True
+    return False
 
 
 # Model cost per million tokens (input/output)
@@ -118,7 +127,7 @@ class ProviderRouter:
                 provider=provider,
                 base_url=f"{parsed.scheme}://{parsed.netloc}",
                 full_url=path,
-                should_intercept=parsed.netloc in INTERCEPT_HOSTS,
+                should_intercept=should_intercept(path),
                 model=model,
                 auth_type=_oauth_ctx.auth_type,
                 is_codex=_oauth_ctx.is_codex,
@@ -287,7 +296,7 @@ def get_model_tier(model: str) -> str:
 # These functions provide cache-stable BM25 retrieval injection used by the
 # proxy to keep prompt structures byte-identical across repeated requests.
 
-from tokenpak.vault.search import (  # noqa: E402
+from tokenpak.agent.vault.search import (  # noqa: E402
     DEFAULT_MAX_TOKENS,
     RETRIEVED_CONTEXT_HEADER,
     inject_retrieved_context,

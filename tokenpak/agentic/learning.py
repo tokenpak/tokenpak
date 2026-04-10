@@ -837,10 +837,10 @@ def record_lesson(
     Returns:
         Lesson dataclass from memory_promoter.
     """
-    from tokenpak.agentic.memory_promoter import (
+    from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
     )
-    from tokenpak.agentic.memory_promoter import (
+    from tokenpak.agent.agentic.memory_promoter import (
         record_lesson as _record,
     )
 
@@ -869,7 +869,7 @@ def run_memory_promotion(
     Returns:
         Dict of {lesson_id: action_taken} for all modified lessons.
     """
-    from tokenpak.agentic.memory_promoter import (
+    from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
         promote_all,
     )
@@ -888,11 +888,74 @@ def get_durable_lessons(
     Returns:
         List of Lesson dataclasses.
     """
-    from tokenpak.agentic.memory_promoter import (
+    from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
     )
-    from tokenpak.agentic.memory_promoter import (
+    from tokenpak.agent.agentic.memory_promoter import (
         get_durable_lessons as _get_durable,
     )
 
     return _get_durable(memory_path=memory_path or DEFAULT_MEMORY_PATH)
+
+
+# ---------------------------------------------------------------------------
+# Integration: episode_distiller bridge
+# ---------------------------------------------------------------------------
+
+
+def on_episode_complete(
+    raw_episode: dict,
+    task_type: str = "TASK",
+    compression_mode: str = "unknown",
+    learning_path: str = DEFAULT_LEARNING_PATH,
+    memory_path: Optional[str] = None,
+    specificity_score: float = 0.5,
+    savings_pct: float = 0.0,
+) -> "object":
+    """Post-episode hook: distill raw episode data and record it in the learning store.
+
+    Call this after each agent work episode completes.  It will:
+      1. Distill the raw episode dict into a structured EpisodeRecord.
+      2. Record the episode's quality_per_token in the learning store.
+      3. Submit the episode to memory_promoter for durable candidacy scoring.
+
+    Args:
+        raw_episode:       Raw episode telemetry dict (see episode_distiller.distill_episode).
+        task_type:         Task type label for QPT attribution (e.g. "CODING", "QA").
+        compression_mode:  Active compression mode label.
+        learning_path:     Path to learning.json.
+        memory_path:       Override path to memory_promoter.json.
+        specificity_score: Lesson specificity for memory candidacy (0.0–1.0).
+        savings_pct:       Estimated savings pct for memory candidacy (0–100).
+
+    Returns:
+        The distilled EpisodeRecord.
+    """
+    from tokenpak.agentic.episode_distiller import (  # noqa: PLC0415
+        EpisodeRecord,
+        distill_episode,
+        submit_to_memory,
+    )
+
+    record: EpisodeRecord = distill_episode(raw_episode)
+
+    # Record quality_per_token in the learning store (no-op if tokens_spent == 0)
+    if record.tokens_spent > 0:
+        record_quality_per_token(
+            model=raw_episode.get("model", "unknown"),
+            task_type=task_type,
+            outcome_score=record.outcome_score(),
+            tokens_used=record.tokens_spent,
+            compression_mode=compression_mode,
+            learning_path=learning_path,
+        )
+
+    # Submit to memory promoter for candidacy scoring
+    submit_to_memory(
+        record=record,
+        specificity_score=specificity_score,
+        savings_pct=savings_pct,
+        memory_path=memory_path,
+    )
+
+    return record

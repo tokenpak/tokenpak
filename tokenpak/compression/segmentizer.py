@@ -9,7 +9,7 @@ self-contained (no tokenpak.telemetry references).
 
 Usage::
 
-    from tokenpak.compression.segmentizer import segmentize, SegmentType
+    from tokenpak.agent.compression.segmentizer import segmentize, SegmentType
 
     segments = segmentize(messages, tools=tools)
     for seg in segments:

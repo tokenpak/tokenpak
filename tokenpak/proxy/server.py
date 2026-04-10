@@ -1,1849 +1,1058 @@
 """
-tokenpak.proxy.server — ForwardProxyHandler HTTP request handler.
+TokenPak Proxy Server (LEGACY)
 
-Extracted from runtime/proxy.py (lines 1291-3809) as part of TPK-RESTRUCTURE-007.
-Decomposed in TPK-RESTRUCTURE-012:
-  - proxy/middleware.py  — auth, tunnel (do_CONNECT/_tunnel_connect), _send_json
-  - proxy/routes.py      — do_GET routes, _ingest*, _serve_api_docs/_serve_dashboard/_serve_openapi_yaml
+⚠️  DEPRECATED: This module is superseded by the canonical proxy.py, which has full
+    compression pipeline, cache poison removal, vault injection, tool schema
+    registry, circuit breakers, and Prometheus metrics.
+
+    Use `tokenpak start` (which now launches proxy.py) or run proxy.py
+    directly. This module is kept for backward compatibility.
+
+Core HTTP proxy server / request-handling layer. Wraps Python's built-in
+HTTPServer into a multi-threaded ProxyServer with compression pipeline hooks,
+session stats, and management endpoints.
+
+Env vars (all optional):
+    TOKENPAK_PORT          (default 8766)
+    TOKENPAK_MODE          (default hybrid) — strict|hybrid|aggressive
+    TOKENPAK_COMPACT       (default 1) — master on/off switch
+    TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
+    TOKENPAK_DB            (default .ocp/monitor.db)
+    NOTIFY_SOCKET          systemd sd_notify socket path (set by systemd, not TokenPak)
 """
+from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# stdlib imports needed by ForwardProxyHandler
-# ---------------------------------------------------------------------------
+import warnings as _warnings
+_warnings.warn(
+    "tokenpak.agent.proxy.server is deprecated — use proxy.py instead. "
+    "Run `tokenpak start` to launch the current proxy.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import gzip
+import http.client
 import json
 import os
+import re
+import signal
 import socket
-import time
+import ssl
+import sys
 import threading
+import time
 import uuid
+from collections import deque
+from contextlib import contextmanager
+from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
-import urllib3  # noqa: F401 — used in _proxy_to
 
-# _time_module alias — used in do_GET health cache check
-import time as _time_module  # noqa: F401
+import httpx
+
+from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
+
+from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
+from .streaming import extract_sse_tokens
+from .passthrough import (
+    forward_headers,
+    validate_auth,
+    PassthroughConfig,
+    CredentialPassthrough,
+    _classify_route,
+    CLAUDE_CODE_HEADER_ALLOWLIST,
+    LEGACY_HEADER_ALLOWLIST,
+)
+from .stats import CompressionStats
+from .degradation import get_degradation_tracker, DegradationEventType
+from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
+from .startup import run_startup_checks, format_startup_report
+from tokenpak import __version__ as _tokenpak_version
+from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
+from tokenpak.agent.adapters.registry import detect_platform
+from tokenpak.agent.config import get_stats_footer_enabled
+from tokenpak.agent.dashboard.export_api import ExportAPI
+from tokenpak.agent.dashboard.session_filter import (
+    SessionFilter,
+    FilterParams,
+    get_distinct_models,
+)
+from tokenpak.agent.telemetry.collector import RequestStats
+from tokenpak.agent.telemetry.footer import render_footer_oneline
+from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
+
 
 # ---------------------------------------------------------------------------
-# tokenpak.proxy.* imports (already present in runtime/proxy.py)
+# Systemd integration — read sd_notify socket path from environment
+# Transferred from monolith (TPK-CONSOLIDATION-A2a, lines 7577/7601)
 # ---------------------------------------------------------------------------
-from tokenpak.proxy.adapters.base import FormatAdapter  # noqa: F401
-from tokenpak.proxy.streaming import _extract_sse_tokens  # noqa: F401
-from tokenpak.proxy.cache_poison import (  # noqa: F401
-    _strip_cache_poisons,
-    _classify_cache_miss_reason,
-)
-from tokenpak.proxy.request_pipeline import (  # noqa: F401
-    _get_router,
-    _get_validation_gate,
-    _has_validation_gate,
-    _RouterResult,
-    _classify_intent,
-    _extract_user_text,
-    _run_router,
-    _router_health,
-    _health_cache,
-    _HEALTH_CACHE_TTL,
-    _get_route_engine,
-    _get_cached_route_rules,
-    _get_precond_gates,
-    _get_budget_controller,
-    PROTECTED_MARKERS,
-    is_protected_content,
-    classify_message_risk,
-    can_compress,
-)
-from tokenpak.proxy.tracing import (  # noqa: F401
-    _CompressionTimeout,
-    StageTrace,
-    PipelineTrace,
-    TraceStorage,
-    TRACE_STORAGE,
-)
-from tokenpak.proxy.config import (  # noqa: F401
-    ACTIVE_PROFILE,
-    PROXY_AUTH_KEY,
-    DASHBOARD_AUTH_ENABLED,
-    COMPILATION_MODE,
-    ENABLE_COMPACTION,
-    COMPACT_MAX_CHARS,
-    COMPACT_THRESHOLD_TOKENS,
-    COMPACT_MAX_TOKENS,
-    COMPACT_CACHE_SIZE,
-    ENABLE_CAPSULE_BUILDER,
-    CAPSULE_MIN_CHARS,
-    CAPSULE_HOT_WINDOW,
-    ROUTER_ENABLED,
-    SKELETON_ENABLED,
-    SHADOW_ENABLED,
-    BUDGET_TOTAL_TOKENS,
-    CHAT_FOOTER_ENABLED,
-    HTTP100_KEEPALIVE_ENABLED,
-    SEMANTIC_CACHE_ENABLED,
-    _get_sem_cache,
-    PREFIX_REGISTRY_ENABLED,
-    COMPRESSION_DICT_ENABLED,
-    TRACE_ENABLED,
-    ERROR_NORMALIZER_ENABLED,
-    BUDGET_CONTROLLER_ENABLED,
-    REQUEST_LOGGER_ENABLED,
-    SALIENCE_ROUTER_ENABLED,
-    CACHE_REGISTRY_ENABLED,
-    RETRIEVAL_WATCHDOG_ENABLED,
-    FAILURE_MEMORY_ENABLED,
-    FIDELITY_TIERS_ENABLED,
-    SESSION_CAPSULES_ENABLED,
-    PRECONDITION_GATES_ENABLED,
-    QUERY_REWRITER_ENABLED,
-    STABILITY_SCORER_ENABLED,
-    WS_PORT,
-    WS_MAX_CONNECTIONS,
-    _plugin_registry,
-    _cache_registry,
-    UPSTREAM_TIMEOUT,
-    STRICT_VALIDATION,
-    _POOL_MANAGER,
-    VALIDATION_GATE_ENABLED,
-    VALIDATION_GATE_BUDGET_CAP,
-    VALIDATION_GATE_SOFT,
-    INJECT_BUDGET,
-    INJECT_TOP_K,
-    INJECT_MIN_SCORE,
-    INJECT_SKIP_MODELS,
-    INJECT_MIN_PROMPT,
-    MAX_COMPRESSION_TIME_MS,
-    TERM_RESOLVER_ENABLED,
-    TERM_RESOLVER_TOP_K,
-    TERM_RESOLVER_MAX_BYTES,
-    _COMPACT_CACHE,
-    _COMPACT_CACHE_ORDER,
-    ADAPTER_REGISTRY,
-    UPSTREAM_ROUTES,
-)
-from tokenpak.proxy.fallback import (  # noqa: F401
-    _ANTHROPIC_KEY_POOL,
-    _reload_config_from_env,
-    _cool_down_key,
-    _get_next_key,
-    _strip_empty_text_blocks,
-    _cap_cache_control_blocks,
-    _resolve_upstream,
-    INTERCEPT_HOSTS,
-    OLLAMA_UPSTREAM,
-    OLLAMA_CONNECT_TIMEOUT,
-    _provider_for_url,
-    _circuit_check,
-    _circuit_record_failure,
-    _circuit_record_success,
-    _sanitize_headers,
-    _make_structured_error,
-    _enrich_upstream_error,
-    _rate_limit_check,
-    _KEY_COOLDOWN_429,
-    _KEY_COOLDOWN_401,
-    # circuit breaker state used directly by ForwardProxyHandler
-    _ollama_circuit,
-    _ollama_circuit_lock,
-    _provider_circuits,
-    _RATE_LIMIT_RPM,
-    _MAX_REQUEST_BYTES,
-)
+_SD_NOTIFY_SOCKET: str = os.environ.get("NOTIFY_SOCKET", "")
 
-from tokenpak.proxy.middleware import ProxyMiddlewareMixin  # noqa: E402
-from tokenpak.proxy.routes import ProxyRoutesMixin  # noqa: E402
+# ---------------------------------------------------------------------------
+# Pipeline trace types
+# ---------------------------------------------------------------------------
+
+@dataclass
+class StageTrace:
+    """Trace for a single pipeline stage."""
+    name: str
+    enabled: bool = True
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tokens_delta: int = 0
+    duration_ms: float = 0.0
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 
-class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPRequestHandler):
-    """HTTP request handler for the TokenPak proxy.
+@dataclass
+class PipelineTrace:
+    """Complete trace for a single request through the pipeline."""
+    request_id: str
+    timestamp: str
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tokens_saved: int = 0
+    cost_saved: float = 0.0
+    total_cost: float = 0.0
+    duration_ms: float = 0.0
+    stages: List[StageTrace] = field(default_factory=list)
+    status: str = "pending"
 
-    Mixins (MRO order):
-      ProxyRoutesMixin    — do_GET routes, ingest, static-file serve
-      ProxyMiddlewareMixin — auth, CONNECT tunnel, _send_json
-      BaseHTTPRequestHandler — stdlib HTTP handler
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["stages"] = [s.to_dict() if hasattr(s, "to_dict") else s for s in self.stages]
+        return d
+
+
+class TraceStorage:
+    """Thread-safe storage for recent pipeline traces."""
+
+    def __init__(self, max_traces: int = 10):
+        self._traces: deque = deque(maxlen=max_traces)
+        self._lock = threading.Lock()
+        self._by_id: Dict[str, PipelineTrace] = {}
+
+    def store(self, trace: PipelineTrace) -> None:
+        with self._lock:
+            self._traces.append(trace)
+            self._by_id[trace.request_id] = trace
+            if len(self._by_id) > len(self._traces) * 2:
+                valid_ids = {t.request_id for t in self._traces}
+                self._by_id = {k: v for k, v in self._by_id.items() if k in valid_ids}
+
+    def get_last(self) -> Optional[PipelineTrace]:
+        with self._lock:
+            return self._traces[-1] if self._traces else None
+
+    def get_by_id(self, request_id: str) -> Optional[PipelineTrace]:
+        with self._lock:
+            return self._by_id.get(request_id)
+
+    def get_all(self) -> List[PipelineTrace]:
+        with self._lock:
+            return list(self._traces)
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown manager
+# ---------------------------------------------------------------------------
+
+class GracefulShutdown:
+    """
+    Coordinates graceful shutdown for the proxy.
+
+    Lifecycle
+    ---------
+    1. ``begin()``          — signal that shutdown has started (new requests → 503)
+    2. ``track_request()``  — context manager: increment/decrement in-flight counter
+    3. ``wait_for_drain()`` — block until all in-flight requests finish or timeout
     """
 
-    def log_message(self, format, *args):
+    def __init__(self) -> None:
+        self._shutting_down: bool = False
+        self._in_flight: int = 0
+        self._lock = threading.Lock()
+        self._all_done = threading.Event()
+        self._all_done.set()  # starts "done" (no requests in flight)
+
+    @property
+    def is_shutting_down(self) -> bool:
+        return self._shutting_down
+
+    def begin(self) -> None:
+        """Mark the start of shutdown. New requests will receive 503."""
+        with self._lock:
+            self._shutting_down = True
+
+    @contextmanager
+    def track_request(self) -> Generator[None, None, None]:
+        """Context manager that increments/decrements the in-flight counter."""
+        with self._lock:
+            self._in_flight += 1
+            self._all_done.clear()
+        try:
+            yield
+        finally:
+            with self._lock:
+                self._in_flight -= 1
+                if self._in_flight == 0:
+                    self._all_done.set()
+
+    def in_flight_count(self) -> int:
+        with self._lock:
+            return self._in_flight
+
+    def wait_for_drain(self, timeout: float = 30.0) -> bool:
+        """
+        Block until all in-flight requests complete or *timeout* seconds elapse.
+
+        Returns True if drained cleanly, False if timed out.
+        """
+        return self._all_done.wait(timeout=timeout)
+
+
+# ---------------------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------------------
+
+def _new_session() -> Dict[str, Any]:
+    return {
+        "requests": 0,
+        "input_tokens": 0,
+        "sent_input_tokens": 0,
+        "saved_tokens": 0,
+        "protected_tokens": 0,
+        "output_tokens": 0,
+        "cost": 0.0,
+        "cost_saved": 0.0,
+        "errors": 0,
+        "start_time": time.time(),
+        # Anthropic prompt caching stats
+        "cache_read_tokens": 0,
+        "cache_creation_tokens": 0,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Request latency tracking (rolling window, used by /v1/messages/forecast)
+# ---------------------------------------------------------------------------
+_forecast_latencies: deque = deque(maxlen=100)
+_forecast_latency_lock = threading.Lock()
+
+
+# ---------------------------------------------------------------------------
+# Threaded HTTP server
+# ---------------------------------------------------------------------------
+
+class _ThreadedHTTPServer(HTTPServer):
+    """HTTP server that dispatches each request to a daemon thread."""
+
+    proxy_server: "ProxyServer"  # injected after construction
+
+    def process_request(self, request, client_address):
+        t = threading.Thread(target=self._handle, args=(request, client_address))
+        t.daemon = True
+        t.start()
+
+    def _handle(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+
+
+# ---------------------------------------------------------------------------
+# Request handler
+# ---------------------------------------------------------------------------
+
+class _ProxyHandler(BaseHTTPRequestHandler):
+    """
+    HTTP request handler for the TokenPak proxy.
+
+    Attributes injected by ProxyServer before serving:
+        server.proxy_server  — back-reference to the ProxyServer instance
+    """
+
+    @property
+    def _ps(self) -> "ProxyServer":
+        """Typed accessor for the back-reference to ProxyServer."""
+        return self.server.proxy_server  # type: ignore[attr-defined]
+
+    def log_message(self, format, *args):  # silence access log
         pass
 
-    def do_HEAD(self):
-        """Handle HEAD requests — same as GET but suppress response body.
+    # ------------------------------------------------------------------
+    # CONNECT tunnelling (HTTPS MITM passthrough)
+    # ------------------------------------------------------------------
 
-        Needed by K8s liveness probes, uptime monitors, and load balancers
-        that use HEAD /health instead of GET /health.
-        """
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-        else:
-            self.send_response(405)
-            self.send_header("Allow", "GET, POST, OPTIONS")
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
+    def do_CONNECT(self):
+        host, _, port_str = self.path.partition(":")
+        port = int(port_str) if port_str else 443
+        self._tunnel(host, port)
 
-    def do_OPTIONS(self):
-        """Handle CORS preflight requests.
-
-        Browser frontends send OPTIONS before POST /v1/messages. Without this,
-        all browser-based clients are blocked by CORS.
-        """
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-        self.send_header(
-            "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, x-api-key, anthropic-version",
-        )
-        self.send_header("Access-Control-Max-Age", "86400")
-        self.send_header("Content-Length", "0")
-        self.end_headers()
-
-    def do_POST(self):
-        # Security check: verify auth for non-localhost clients
-        if not self._check_auth():
-            self._send_json({"error": "Unauthorized — missing or invalid X-TokenPak-Key header"}, status=401)
-            return
-        
-        # Fix #7: Per-IP rate limiting
-        client_ip = self.client_address[0]
-        if not _rate_limit_check(client_ip):
-            self._send_json(
-                {
-                    "error": {
-                        "type": "rate_limit_exceeded",
-                        "message": f"Too many requests. Limit: {_RATE_LIMIT_RPM} req/min per IP.",
-                    }
-                },
-                status=429,
-            )
-            return
-        if self.path == "/config/reload":
-            # Localhost-only hot config reload (same effect as SIGHUP)
-            if client_ip not in ("127.0.0.1", "::1"):
-                self._send_json(
-                    {"error": {"type": "forbidden", "message": "Config reload only allowed from localhost"}},
-                    status=403,
-                )
-                return
-            msg = _reload_config_from_env()
-            self._send_json({"status": "ok", "message": msg}, status=200)
-            return
-        elif self.path.startswith("http"):
-            self._forward_request("POST")
-        elif self.path.startswith("/ollama-proxy/"):
-            self._ollama_proxy("POST")
-        elif self.path.startswith("/v1/") or self.path.startswith("/v1beta/"):
-            self._reverse_proxy("POST")
-        elif self.path == "/ingest" or self.path == "/ingest/batch":
-            self._ingest(self.path)
-        else:
-            # Fix #2: JSON 404 instead of HTML
-            self._send_json(
-                {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
-                status=404,
-            )
-
-    def do_PUT(self):
-        if self.path.startswith("http"):
-            self._forward_request("PUT")
-        else:
-            self._send_json(
-                {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
-                status=404,
-            )
-
-    def do_DELETE(self):
-        if self.path.startswith("http"):
-            self._forward_request("DELETE")
-        else:
-            self._send_json(
-                {"error": {"type": "not_found", "message": f"Unknown path: {self.path}"}},
-                status=404,
-            )
-
-    def _forward_request(self, method):
-        self._proxy_to(self.path, method)
-
-    def _ollama_proxy(self, method):
-        """Route /ollama-proxy/... to the real ollama server with compaction pipeline.
-
-        Circuit breaker: if upstream was unreachable within the last 120s,
-        return 503 immediately instead of hanging for minutes.
-        Connect timeout: 20s (configurable via TOKENPAK_OLLAMA_TIMEOUT).
-        """
-        from urllib.parse import urlparse
-
-        # Check circuit breaker -- fail fast if upstream recently unreachable
-        with _ollama_circuit_lock:
-            if _ollama_circuit["open"]:
-                elapsed = time.time() - _ollama_circuit["last_failure"]
-                if elapsed < _ollama_circuit["cooldown"]:
-                    err_msg = f"Ollama upstream {OLLAMA_UPSTREAM} unreachable (circuit open, retry in {int(_ollama_circuit['cooldown'] - elapsed)}s)"
-                    print(f"  \u26a1 {err_msg}")
-                    try:
-                        err = json.dumps(
-                            {"error": {"type": "circuit_open", "message": err_msg}}
-                        ).encode()
-                        self.send_response(503)
-                        self.send_header("Content-Type", "application/json")
-                        self.send_header("Content-Length", len(err))
-                        self.end_headers()
-                        self.wfile.write(err)
-                    except Exception:
-                        pass
-                    return
-                else:
-                    _ollama_circuit["open"] = False
-                    print("  \U0001f504 Ollama circuit breaker reset -- retrying upstream")
-
-        # Probe upstream connectivity with short timeout before committing
-        parsed = urlparse(OLLAMA_UPSTREAM)
-        host = parsed.hostname
-        port = parsed.port or 11434
+    def _tunnel(self, host: str, port: int) -> None:
         try:
-            probe = socket.create_connection((host, port), timeout=OLLAMA_CONNECT_TIMEOUT)
-            probe.close()
-        except (socket.timeout, OSError, ConnectionRefusedError) as e:
-            with _ollama_circuit_lock:
-                _ollama_circuit["open"] = True
-                _ollama_circuit["last_failure"] = time.time()
-            err_msg = (
-                f"Ollama upstream {host}:{port} unreachable after {OLLAMA_CONNECT_TIMEOUT}s: {e}"
-            )
-            print(f"  \u274c {err_msg}")
-            SESSION["errors"] += 1
+            remote = socket.create_connection((host, port), timeout=30)
+        except Exception as e:
+            self.send_error(502, f"Cannot connect to {host}:{port}: {e}")
+            return
+        self.send_response(200, "Connection Established")
+        self.end_headers()
+        self.connection.setblocking(False)
+        remote.setblocking(False)
+        last_activity = time.time()
+        while time.time() - last_activity < 120:
+            moved = False
+            for src, dst in ((self.connection, remote), (remote, self.connection)):
+                try:
+                    data = src.recv(65536)
+                    if data:
+                        dst.sendall(data)
+                        last_activity = time.time()
+                        moved = True
+                    elif data == b"":
+                        remote.close()
+                        return
+                except BlockingIOError:
+                    pass
+                except Exception:
+                    remote.close()
+                    return
+            if not moved:
+                time.sleep(0.01)
+        remote.close()
+
+    # ------------------------------------------------------------------
+    # HTTP verbs
+    # ------------------------------------------------------------------
+
+    def do_GET(self):
+        ps = self.server.proxy_server
+        path = self.path
+
+        # Always allow /health during shutdown (needed for health-check polling)
+        if path == "/health" or path.startswith("/health?"):
+            from urllib.parse import parse_qs, urlparse as _urlparse
+            parsed_path = _urlparse(path)
+            qs = parse_qs(parsed_path.query)
+            deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
+            self._send_json(ps.health(deep=deep))
+            return
+
+        if path == "/status":
+            self._send_json(ps.status())
+            return
+
+        # Reject new proxied requests while shutting down
+        if ps.shutdown.is_shutting_down and path.startswith("http"):
+            self._send_503_shutdown()
+            return
+        if path == "/metrics":
+            from tokenpak.monitoring.metrics import ProxyMetricsCollector
+            collector = ProxyMetricsCollector(proxy_server=ps)
+            body = collector.collect().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if path.startswith("/dashboard"):
+            # Serve dashboard UI files
+            from tokenpak.dashboard import serve_dashboard_file
+            import asyncio
+            
+            # Extract dashboard path
+            dashboard_path = path[10:]  # Remove '/dashboard' prefix
+            if not dashboard_path:
+                dashboard_path = '/'
+            
+            # Serve the file
+            result = asyncio.run(serve_dashboard_file(dashboard_path))
+            if result:
+                content, mime_type = result
+                body = content.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type + "; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_error(404)
+            return
+        if path == "/degradation":
+            from .degradation import get_degradation_tracker
+            self._send_json(get_degradation_tracker().summary())
+            return
+        if path == "/circuit-breakers":
+            registry = get_circuit_breaker_registry()
+            self._send_json({
+                "enabled": registry.enabled,
+                "circuit_breakers": registry.all_statuses(),
+            })
+            return
+        if path == "/stats":
+            self._send_json(ps.stats())
+            return
+        if path == "/stats/last":
+            self._send_json(ps.last_request_stats())
+            return
+        if path == "/stats/session":
+            self._send_json(ps.session_stats())
+            return
+        if path == "/cache-stats":
+            self._send_json(_get_cache_collector().summary())
+            return
+        if path == "/api/goals":
+            # Get all goals with progress
+            from tokenpak.goals import GoalManager
             try:
-                err = json.dumps(
-                    {"error": {"type": "upstream_unreachable", "message": err_msg}}
-                ).encode()
-                self.send_response(503)
+                manager = GoalManager()
+                goals = manager.list_goals()
+                response = {}
+                for goal in goals:
+                    progress = manager.get_progress(goal.goal_id)
+                    if progress:
+                        response[goal.goal_id] = {
+                            "goal": goal.to_dict(),
+                            "progress": progress.to_dict(),
+                        }
+                self._send_json(response)
+            except Exception as e:
+                self._send_json({"error": str(e)})
+            return
+        if path == "/traces":
+            traces = ps.trace_storage.get_all()
+            self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
+            return
+        if path == "/trace/last":
+            trace = ps.trace_storage.get_last()
+            if trace:
+                self._send_json(trace.to_dict())
+            else:
+                self._send_json({"error": "no_traces"})
+            return
+        if path.startswith("/trace/"):
+            rid = path.split("/trace/", 1)[1]
+            trace = ps.trace_storage.get_by_id(rid)
+            if trace:
+                self._send_json(trace.to_dict())
+            else:
+                self._send_json({"error": "not_found", "request_id": rid})
+            return
+        if path.startswith("/v1/sessions"):
+            # Session filter + pagination endpoint
+            # GET /v1/sessions?model=&from=&to=&status=&limit=&offset=
+            qs = ""
+            if "?" in path:
+                _, qs = path.split("?", 1)
+            ps = self.server.proxy_server
+            try:
+                params = FilterParams.from_query_string(qs)
+            except (ValueError, TypeError) as exc:
+                err = json.dumps({"error": "invalid_params", "detail": str(exc)}).encode()
+                self.send_response(400)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", len(err))
+                self.send_header("Content-Length", str(len(err)))
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(err)
-            except Exception:
-                pass
-            return
-
-        # Upstream reachable -- forward normally
-        real_path = self.path[len("/ollama-proxy") :]
-        target = OLLAMA_UPSTREAM + real_path
-        self._proxy_to(target, method, force_intercept=True)
-
-    def _reverse_proxy(self, method):
-        # Pre-flight: check for missing API credentials before touching upstream.
-        # If the client sent no auth header AND the environment has no key set,
-        # surface a clear auth_missing error immediately rather than forwarding a
-        # bare request that will just fail with a cryptic 401 from the provider.
-        _req_headers_lower = {k.lower(): v for k, v in self.headers.items()}
-        _has_client_auth = bool(
-            _req_headers_lower.get("x-api-key", "").strip()
-            or _req_headers_lower.get("authorization", "").strip()
-        )
-        if not _has_client_auth:
-            _env_key = (
-                os.environ.get("ANTHROPIC_API_KEY", "").strip()
-                or os.environ.get("OPENAI_API_KEY", "").strip()
-                or os.environ.get("GOOGLE_API_KEY", "").strip()
-                or os.environ.get("GEMINI_API_KEY", "").strip()
-            )
-            if not _env_key:
-                self._send_json(
-                    _make_structured_error(
-                        "auth_missing",
-                        "No API key provided and no key found in environment.",
-                        "Set your API key via the x-api-key header or environment variable. "
-                        "Example: export ANTHROPIC_API_KEY=<your-api-key>",
-                    ),
-                    status=401,
-                )
                 return
-
-        headers = _header_mapping(self.headers)
-        adapter = _detect_adapter(path=self.path, headers=headers, body_bytes=None)
-        try:
-            base = _resolve_upstream(adapter)
-        except ValueError as exc:
-            self._send_json(
-                {
-                    "error": {
-                        "type": "upstream_route_missing",
-                        "message": str(exc),
-                    }
-                },
-                status=502,
-            )
+            sf = ps.session_filter
+            result = sf.query(params)
+            models = sf.distinct_models()
+            result["models"] = models
+            self._send_json(result)
             return
-        self._proxy_to(base + self.path, method, adapter=adapter)
+        if path.startswith("http"):
+            self._proxy_to(path, "GET")
+        else:
+            self.send_error(404)
 
-    def _proxy_to(
-        self, target_url, method, force_intercept=False, adapter: Optional[FormatAdapter] = None
-    ):
-        t0 = time.time()
-        parsed = urlparse(target_url)
-        content_length = int(self.headers.get("Content-Length", 0))
-        # Body size cap — configurable via TOKENPAK_MAX_REQUEST_SIZE (default 10 MB)
-        if content_length > _MAX_REQUEST_BYTES:
-            self.send_response(413)
-            self.send_header("Content-Type", "application/json")
+    def do_POST(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and (
+            self.path.startswith("http") or self.path.startswith("/v1/")
+        ):
+            self._send_503_shutdown()
+            return
+        if self.path.startswith("http"):
+            self._proxy_to(self.path, "POST")
+        elif self.path == "/v1/export/csv":
+            # CSV export endpoint — reads body, returns downloadable CSV
+            ps = self.server.proxy_server
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            traces = [t.to_dict() for t in ps.trace_storage.get_all()]
+            stats = ps.session_stats()
+            body, status, headers = ExportAPI.handle(
+                raw_body=raw_body,
+                traces=traces,
+                session_stats=stats,
+            )
+            self.send_response(status)
+            for k, v in headers.items():
+                self.send_header(k, v)
             self.end_headers()
-            self.wfile.write(
-                json.dumps(
-                    {
-                        "error": {
-                            "type": "request_too_large",
-                            "message": f"Request body exceeds limit ({content_length} bytes > {_MAX_REQUEST_BYTES} bytes). "
-                            "Set TOKENPAK_MAX_REQUEST_SIZE to raise the limit.",
-                        }
-                    }
-                ).encode()
-            )
+            self.wfile.write(body)
+        elif self.path == "/ingest":
+            import json as _json
+            import uuid as _uuid
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length > 0 else b"{}"
+            try:
+                _payload = _json.loads(raw_body)
+            except Exception:
+                _payload = {}
+            _record_id = str(_uuid.uuid4())
+            _resp = _json.dumps({"status": "ok", "ids": [_record_id]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(_resp)))
+            self.end_headers()
+            self.wfile.write(_resp)
+        elif self.path.split("?")[0] == "/v1/messages/count_tokens":
+            self._handle_count_tokens()
+        elif self.path.split("?")[0] == "/v1/messages/forecast":
+            self._handle_cost_forecast()
+        elif self.path.startswith("/v1/messages/"):
+            # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
+            # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
+            ps = self.server.proxy_server
+            route = ps.router.route(self.path, dict(self.headers))
+            self._proxy_to(route.full_url, "POST")
+        elif self.path.startswith("/v1/"):
+            ps = self.server.proxy_server
+            route = ps.router.route(self.path, dict(self.headers))
+            self._proxy_to(route.full_url, "POST")
+        else:
+            self.send_error(404)
+
+    def do_PUT(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and self.path.startswith("http"):
+            self._send_503_shutdown()
             return
-        body = self.rfile.read(content_length) if content_length > 0 else None
-        active_adapter = adapter
-        if active_adapter is None and body is not None:
-            active_adapter = _detect_adapter(self.path, _header_mapping(self.headers), body)
+        if self.path.startswith("http"):
+            self._proxy_to(self.path, "PUT")
+        else:
+            self.send_error(404)
 
-        if active_adapter is None:
-            active_adapter = _detect_adapter(self.path, _header_mapping(self.headers), None)
+    def do_DELETE(self):
+        ps = self.server.proxy_server
+        if ps.shutdown.is_shutting_down and self.path.startswith("http"):
+            self._send_503_shutdown()
+            return
+        if self.path.startswith("http"):
+            self._proxy_to(self.path, "DELETE")
+        else:
+            self.send_error(404)
 
-        # X-TokenPak-Bypass: skip compression pipeline for this request
-        _bypass_header_val = self.headers.get("x-tokenpak-bypass", "").strip().lower()
-        _bypass_request: bool = _bypass_header_val in ("true", "1", "yes")
+    def _send_503_shutdown(self) -> None:
+        """Return 503 Service Unavailable during graceful shutdown drain."""
+        body = json.dumps({
+            "error": {
+                "type": "service_unavailable",
+                "message": (
+                    "TokenPak proxy is shutting down. "
+                    "Please retry your request against a new proxy instance."
+                ),
+            }
+        }).encode()
+        self.send_response(503)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Retry-After", "5")
+        self.end_headers()
+        self.wfile.write(body)
 
-        should_log = (
-            force_intercept
-            or active_adapter.source_format != "passthrough"
-            or any(h in target_url for h in INTERCEPT_HOSTS)
-        )
-        is_messages = True
-        pipeline_enabled = active_adapter.source_format != "passthrough" and not _bypass_request
+    # ------------------------------------------------------------------
+    # Core forwarding
+    # ------------------------------------------------------------------
+
+    def _proxy_to(self, target_url: str, method: str) -> None:
+        ps = self.server.proxy_server  # type: ignore[attr-defined]
+        with ps.shutdown.track_request():
+            self._proxy_to_inner(target_url, method)
+
+    def _proxy_to_inner(self, target_url: str, method: str) -> None:
+        t0 = time.time()
+        # Request ID: honour X-Request-ID from client, else generate UUID
+        _req_id = _new_request_id(dict(self.headers))
+        ps = self.server.proxy_server  # type: ignore[attr-defined]
+        parsed = urlparse(target_url)
+
+        should_log = any(h in target_url for h in INTERCEPT_HOSTS)
+        is_messages = "/messages" in target_url or "/chat/completions" in target_url
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
 
         model = "unknown"
         input_tokens = 0
         sent_input_tokens = 0
         protected_tokens = 0
-        injected_tokens = 0
-        injected_sources: List[str] = []
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
-        cache_poison_scrubbed = False
-        tools_schema_changed = False
-        raw_request_body_for_cache_reason = body
-        final_request_body_for_cache_reason = body
-        router_meta: Optional[dict] = None
 
-        # Pipeline trace
         trace: Optional[PipelineTrace] = None
-        _wf_id = None  # proxy workflow tracking (TOKENPAK_WORKFLOW_TRACKING=1)
         if should_log and is_messages:
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
             )
-            # Start workflow tracking (no-op when feature flag is OFF)
-            try:
-                from tokenpak.agentic.proxy_workflow import start_proxy_workflow
 
-                _wf_id = start_proxy_workflow(
-                    trace.request_id,
-                    metadata={"path": self.path, "method": method},
+        # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
+        _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
+        if _adapters_enabled and should_log and is_messages:
+            import logging as _logging
+            _adapter = detect_platform(dict(self.headers), dict(os.environ))
+            _logging.debug(
+                "tokenpak.proxy: detected platform=%s for request to %s",
+                _adapter.platform_name,
+                target_url[:60],
+            )
+
+        # ── DLP outbound secret scan ──────────────────────────────────────────
+        # Scans the raw request body for secrets before compression/forwarding.
+        # Default: TOKENPAK_DLP_ENABLED=1, TOKENPAK_DLP_MODE=warn (log only).
+        # Opt-out: TOKENPAK_DLP_ENABLED=0
+        if os.environ.get("TOKENPAK_DLP_ENABLED", "1") != "0" and should_log and is_messages and body:
+            try:
+                from tokenpak.security.dlp import DLPScanner
+                _dlp = DLPScanner()
+                _dlp_text = body.decode("utf-8", errors="replace")
+                if _dlp.mode == "warn":
+                    _dlp_findings = _dlp.scan(_dlp_text)
+                    if _dlp_findings:
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: %d secret(s) detected in outbound request: %s"
+                            " (set TOKENPAK_DLP_MODE=redact to auto-redact"
+                            " or TOKENPAK_DLP_ENABLED=0 to disable)",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                elif _dlp.mode == "redact":
+                    _dlp_redacted = _dlp.redact(_dlp_text)
+                    if _dlp_redacted != _dlp_text:
+                        body = _dlp_redacted.encode("utf-8")
+                elif _dlp.mode == "block":
+                    if not _dlp.block_check(_dlp_text):
+                        _dlp_findings = _dlp.scan(_dlp_text)
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: blocking request — %d secret(s) detected: %s",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                        _dlp_err = json.dumps({
+                            "error": {
+                                "type": "dlp_block",
+                                "message": (
+                                    f"Request blocked by DLP scanner: "
+                                    f"{len(_dlp_findings)} secret(s) detected in outbound "
+                                    "prompt. Remove secrets before retrying."
+                                ),
+                                "rule_ids": [f.rule_id for f in _dlp_findings],
+                            }
+                        }).encode()
+                        self.send_response(403)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(_dlp_err)))
+                        self.end_headers()
+                        self.wfile.write(_dlp_err)
+                        return
+            except ImportError:
+                pass
+            except Exception as _dlp_exc:
+                import logging as _dlp_log
+                _dlp_log.getLogger(__name__).debug(
+                    "tokenpak.dlp: scan error (passthrough): %s: %s",
+                    type(_dlp_exc).__name__, _dlp_exc,
                 )
+
+        # Run compression pipeline hook if registered
+        if should_log and is_messages and body:
+            try:
+                route = ps.router.route(target_url, dict(self.headers), body)
+                model = route.model
+            except Exception:
+                pass
+            input_tokens = _estimate_tokens_from_body(body)
+
+            # CCG-11: Cache invalidator detection (log-only).
+            # Skip transparent mode — transparent must remain side-effect-free.
+            # Runs on original (pre-compression) body so semantic fields are intact.
+            if ps.compilation_mode != "transparent":
+                try:
+                    from tokenpak.proxy.cache_invalidator import (
+                        _detect_cache_invalidators,
+                        _get_session_cache,
+                        _write_cache_invalidator_events,
+                    )
+                    from tokenpak.proxy.config import MONITOR_DB as _CI_DB
+                    from tokenpak.proxy.request_pipeline import _resolve_session_id
+                    _ci_session_id = _resolve_session_id(self.headers, model)
+                    _ci_cache = _get_session_cache()
+                    _ci_prev_body = _ci_cache.get(_ci_session_id)
+                    if _ci_prev_body is not None:
+                        _ci_events = _detect_cache_invalidators(_ci_prev_body, body)
+                        if _ci_events:
+                            _write_cache_invalidator_events(
+                                _CI_DB, None, _ci_session_id, _ci_events
+                            )
+                    _ci_cache.put(_ci_session_id, body)
+                except Exception:
+                    pass  # fail-open: never break a request over telemetry
+
+            try:
+                data = json.loads(body)
+                is_streaming = data.get("stream", False)
             except Exception:
                 pass
 
-        if _bypass_request and body:
-            # Bypass mode: skip entire compression pipeline, pass through unmodified
-            print(f"  ⏩ X-TokenPak-Bypass: passthrough (bypass header set)")
+            # Google streaming is signalled by URL, not body: path contains
+            # streamGenerateContent or query param ?alt=sse.
+            if not is_streaming and (
+                "streamGenerateContent" in target_url
+                or "alt=sse" in target_url
+            ):
+                is_streaming = True
 
-        if should_log and is_messages and body and not _bypass_request:
-            # Fix #5: Strict validation mode — reject malformed requests early
-            if STRICT_VALIDATION:
+            if ps.request_hook:
                 try:
-                    _val_data = json.loads(body)
-                    _val_errors = []
-                    if "messages" not in _val_data:
-                        _val_errors.append("missing required field: messages")
-                    if "model" not in _val_data:
-                        _val_errors.append("missing required field: model")
-                    msgs = _val_data.get("messages", [])
-                    if not isinstance(msgs, list) or len(msgs) == 0:
-                        _val_errors.append("messages must be a non-empty array")
-                    if _val_errors:
-                        _first_err = _val_errors[0]
-                        # Extract first missing field name for the hint
-                        _fld = None
-                        if "messages" in _first_err:
-                            _fld = "messages"
-                        elif "model" in _first_err:
-                            _fld = "model"
-                        _val_hint = "Fix the request body before retrying. See: https://docs.anthropic.com/en/api/messages"
-                        _val_payload: dict = {
-                            "error": {
-                                "type": "validation_error",
-                                "message": "; ".join(_val_errors),
-                                "hint": _val_hint,
-                            }
-                        }
-                        if _fld:
-                            _val_payload["error"]["field"] = _fld
-                        self._send_json(_val_payload, status=400)
-                        return
-                except json.JSONDecodeError as _je:
-                    self._send_json(
-                        {
-                            "error": {
-                                "type": "invalid_json",
-                                "message": str(_je),
-                                "hint": "The request body must be valid JSON. Check for missing quotes, trailing commas, or unescaped characters.",
-                            }
-                        },
-                        status=400,
+                    body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
+                        body, model, trace
                     )
-                    return
-
-            _original_body = body  # save for fallback
-            _t0_compression = time.monotonic()  # compression pipeline start time
-
-            def _compression_budget_exceeded() -> bool:
-                """Return True if we've blown the MAX_COMPRESSION_TIME_MS budget."""
-                if MAX_COMPRESSION_TIME_MS <= 0:
-                    return False
-                return (time.monotonic() - _t0_compression) * 1000 > MAX_COMPRESSION_TIME_MS
-
-            try:
-                model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
-                # PERF OPT: parse body JSON once here, reuse throughout pipeline
-                req_data = None
-                try:
-                    req_data = json.loads(body)
-                    is_streaming = req_data.get("stream", False)
-                except Exception:
-                    pass
-
-                # Phase -3: Request Logger — generate request ID and start logging
-                _request_log_id = None
-                if REQUEST_LOGGER_ENABLED:
-                    try:
-                        from tokenpak.monitoring.request_logger import RequestLogger
-
-                        _req_logger = RequestLogger.get_instance()
-                        _request_log_id = _req_logger.new_request_id(
-                            dict(self.headers) if self.headers else None
-                        )
-                        SESSION["request_logger_id"] = _request_log_id
-                    except Exception as _rl_err:
-                        SESSION["request_logger_error"] = str(_rl_err)
-                        pass  # fail-open
-
-                if pipeline_enabled:
-                    # Phase -2: Semantic Cache — short-circuit duplicate/similar queries
-                    if SEMANTIC_CACHE_ENABLED and body:
-                        try:
-                            _sem_cache = _get_sem_cache()
-                            if _sem_cache is None:
-                                raise ImportError("SemanticCache unavailable")
-                            _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
-                        except Exception as _sc_err:
-                            SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
-                            pass  # fail-open: never break a request over semantic cache
-
-                    # Phase -1: Tool Schema Registry — normalize tools to byte-identical JSON
-                    # Enables Anthropic cache hits on repeated tool schemas
-                    if TOOL_REGISTRY_AVAILABLE and body:
-                        try:
-                            _tool_reg = _get_tool_registry()
-                            if _tool_reg:
-                                body, _tools_changed = _tool_reg.normalize_request(body)
-                                tools_schema_changed = bool(_tools_changed)
-                                _tstats = _tool_reg.stats()
-                                SESSION["tool_schema_frozen_tools"] = _tstats.get("frozen_tools", 0)
-                                SESSION["tool_schema_bytes_saved"] = _tool_reg.bytes_saved
-                        except Exception as _treg_err:
-                            pass  # fail-open: never break a request over tool registry
-
-                    # Phase 0: Manual routing rules — rewrite model before any processing
-                    # PERF OPT: use singleton RouteEngine + cached rules + reuse req_data
-                    try:
-                        from tokenpak.routing.rules import (
-                            _count_tokens_approx,
-                            _extract_prompt_text,
-                        )
-
-                        _route_engine = _get_route_engine()
-                        if _route_engine is not None:
-                            # Reuse already-parsed req_data if available, else fallback
-                            _route_payload = (
-                                req_data
-                                if req_data is not None
-                                else (json.loads(body) if body else {})
-                            )
-                            _route_prompt = _extract_prompt_text(_route_payload)
-                            _route_tokens = _count_tokens_approx(_route_prompt)
-                            _cached_rules = _get_cached_route_rules()
-                            _matched_rule = _route_engine.match(
-                                model=model,
-                                prompt=_route_prompt,
-                                token_count=_route_tokens,
-                                rules=_cached_rules,
-                            )
-                            if _matched_rule:
-                                _route_payload = dict(_route_payload)  # copy before mutate
-                                _route_payload["model"] = _matched_rule.target
-                                body = json.dumps(_route_payload).encode()
-                                req_data = _route_payload  # keep req_data in sync
-                                model = _matched_rule.target
-                                print(
-                                    f"  🔀 Route rule [{_matched_rule.id}]: → {_matched_rule.target}"
-                                )
-                    except Exception as _route_err:
-                        print(f"  ⚠️ Routing rule error (skipping): {_route_err}")
-
-                    # Phase 0.1: Precondition Gates — reject requests likely to fail
-                    # PERF OPT: use singleton PreconditionGates (avoids per-request import + init)
-                    if PRECONDITION_GATES_ENABLED and body:
-                        try:
-                            _pg = _get_precond_gates()
-                            if _pg is not None:
-                                _pg_pass, _pg_reason = _pg.check(model)
-                                SESSION["precondition_gates_pass"] = _pg_pass
-                                if not _pg_pass:
-                                    SESSION["precondition_gates_blocked"] = _pg_reason
-                                    self._send_json(
-                                        {
-                                            "error": {
-                                                "type": "precondition_failed",
-                                                "message": f"Request blocked by precondition gate: {_pg_reason}",
-                                            }
-                                        },
-                                        status=422,
-                                    )
-                                    return
-                        except Exception as _pg_err:
-                            SESSION["precondition_gates_error"] = str(_pg_err)
-                            pass  # fail-open
-
-                    # Phase 0.2: Budget Controller — enforce token budget limits before processing
-                    # PERF OPT: use singleton BudgetController (avoids per-request import + init)
-                    if BUDGET_CONTROLLER_ENABLED and body:
-                        try:
-                            from tokenpak.budget_controller import ClassificationResult, IntentClass
-
-                            _bc = _get_budget_controller()
-                            _bc_tokens = input_tokens or 0
-                            _bc_class = ClassificationResult(
-                                intent=IntentClass.GEN_Q,
-                                complexity_score=min(_bc_tokens / 10000.0, 1.0),
-                            )
-                            _bc_decision = _bc.decide(_bc_class)
-                            SESSION["budget_controller_tier"] = str(_bc_class.intent.name)
-                            SESSION["budget_controller_action"] = (
-                                _bc_decision.action
-                                if hasattr(_bc_decision, "action")
-                                else str(_bc_decision)
-                            )
-                            if hasattr(_bc_decision, "reject") and _bc_decision.reject:
-                                self._send_json(
-                                    {
-                                        "error": {
-                                            "type": "budget_exceeded",
-                                            "message": f"Request exceeds token budget: {_bc_tokens} tokens",
-                                        }
-                                    },
-                                    status=429,
-                                )
-                                return
-                        except Exception as _bc_err:
-                            SESSION["budget_controller_error"] = str(_bc_err)
-                            pass  # fail-open
-
-                    # Phase 0.3: DeterministicRouter — intent classification + compression pipeline
-                    _intent_for_contract: str = "query"
-                    if ROUTER_ENABLED:
-                        try:
-                            _session_id_router = self.headers.get("X-OpenClaw-Session", model)
-                            body, _router_meta = _run_router(body, session_id=_session_id_router)
-                            router_meta = _router_meta
-                            if _router_meta and not _router_meta.get("fallback"):
-                                _intent_for_contract = _router_meta.get("intent", "query")
-                                print(
-                                    f"  🔀 Router: intent={_router_meta.get('intent','?')} recipe={_router_meta.get('recipe_used','?')} ({_router_meta.get('total_ms',0)}ms)"
-                                )
-                        except Exception as _router_err:
-                            print(f"  ⚠️ Router stage error (skipping): {_router_err}")
-
-                    # Phase 0.4: Context contract enforcement — quota + scope + omission
-                    try:
-                        from tokenpak.proxy.intent_policy import (
-                            resolve_policy as _resolve_policy,
-                        )
-
-                        _contract_policy = _resolve_policy(_intent_for_contract, {}, 1.0)
-                        _, _pre_contract_tokens = extract_request_tokens(
-                            body, adapter=active_adapter
-                        )
-                        if _pre_contract_tokens > _contract_policy.context_quota:
-                            # Soft-cap: log quota violation; hard truncation handled by compaction
-                            print(
-                                f"  📋 Contract: intent={_intent_for_contract} quota={_contract_policy.context_quota} tokens={_pre_contract_tokens} ceiling={_contract_policy.reasoning_ceiling}"
-                            )
-                    except Exception as _contract_err:
-                        pass  # fail-open: contract enforcement is advisory
-
-                    # Phase 0.5: Capsule builder — compress historical context blocks
-                    if CAPSULE_BUILDER is not None and ENABLE_CAPSULE_BUILDER:
-                        t_capsule = time.time()
-                        capsule_stage = StageTrace(
-                            name="capsule",
-                            enabled=True,
-                            input_tokens=input_tokens,
-                        )
-                        try:
-                            body, _cap_stats = CAPSULE_BUILDER.process(body)
-                            _cap_blocks = _cap_stats.get("blocks_capsulized", 0)
-                            _cap_ratio = _cap_stats.get("ratio", 1.0)
-                            _cap_chars_in = _cap_stats.get("chars_in", 0)
-                            _cap_chars_out = _cap_stats.get("chars_out", 0)
-                            capsule_stage.details["blocks_capsulized"] = _cap_blocks
-                            capsule_stage.details["compression_ratio"] = _cap_ratio
-                            capsule_stage.details["chars_in"] = _cap_chars_in
-                            capsule_stage.details["chars_out"] = _cap_chars_out
-                            capsule_stage.details["skip_reason"] = _cap_stats.get("skip_reason")
-                            if _cap_blocks > 0:
-                                # Recount tokens after capsulisation
-                                _, input_tokens = extract_request_tokens(
-                                    body, adapter=active_adapter
-                                )
-                                print(
-                                    f"  💊 Capsule: {_cap_blocks} block(s) compressed "
-                                    f"({_cap_chars_in}→{_cap_chars_out} chars, ratio={_cap_ratio})"
-                                )
-                            capsule_stage.output_tokens = input_tokens
-                            capsule_stage.tokens_delta = (
-                                capsule_stage.output_tokens - capsule_stage.input_tokens
-                            )
-                        except Exception as _cap_err:
-                            print(f"  ⚠️  Capsule builder error (skipping): {_cap_err}")
-                            capsule_stage.details["error"] = str(_cap_err)
-                            capsule_stage.output_tokens = input_tokens
-                        capsule_stage.duration_ms = (time.time() - t_capsule) * 1000
-                        if trace:
-                            trace.stages.append(capsule_stage)
-
-                    # Phase 0.6: Prefix Registry — track stable system message prefixes
-                    if PREFIX_REGISTRY_ENABLED and body:
-                        try:
-                            from tokenpak.cache.prefix_registry import StablePrefixRegistry
-
-                            _prefix_reg = StablePrefixRegistry()
-                            # PERF OPT: reuse req_data parsed earlier instead of re-parsing body
-                            _prefix_body = req_data if req_data is not None else json.loads(body)
-                            _sys_msgs = [
-                                m
-                                for m in _prefix_body.get("messages", [])
-                                if m.get("role") == "system"
-                            ]
-                            if _sys_msgs:
-                                _prefix_text = _sys_msgs[0].get("content", "")[
-                                    :200
-                                ]  # first 200 chars
-                                _prefix_hash = hash(_prefix_text)
-                                _prefix_meta = _prefix_reg.get_or_create(_prefix_hash, _prefix_text)
-                                SESSION["prefix_registry_registered"] = True
-                                SESSION["prefix_registry_hash"] = _prefix_hash
-                        except Exception as _pr_err:
-                            SESSION["prefix_registry_error"] = str(_pr_err)
-                            pass  # fail-open
-
-                    # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
-                    # Must run BEFORE stable cache control so the stable prefix stays bit-identical
-                    if body:
-                        _pre_poison_body = body
-                        body = _strip_cache_poisons(body)
-                        cache_poison_scrubbed = body != _pre_poison_body
-
-                    # Compression budget check — if capsule took too long, skip remaining pipeline
-                    if _compression_budget_exceeded():
-                        print(
-                            f"  ⏱️  Compression budget exceeded ({MAX_COMPRESSION_TIME_MS}ms) after capsule stage — "
-                            f"skipping vault+compaction, forwarding original body"
-                        )
-                        SESSION["compression_timeouts"] += 1
-                        body = _original_body
-                        raise _CompressionTimeout()
-
-                    # Phase 1: Vault context injection (BEFORE compaction)
-                    t_inject = time.time()
-                    # Vault index reload is handled by _vault_index_reload_timer (background timer)
-                    # No per-request thread spawn needed
-                    vault_stage = StageTrace(
-                        name="vault_injection",
-                        enabled=VAULT_INDEX.available,
-                        input_tokens=input_tokens,
+                except Exception as hook_err:
+                    # Graceful degradation: compression failed — forward original request unchanged.
+                    # The user still gets a response; we log and track the event.
+                    import logging as _logging
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak: compression failed (passthrough mode active): %s: %s — "
+                        "original request will be forwarded unchanged",
+                        type(hook_err).__name__, hook_err,
                     )
-                    if VAULT_INDEX.available:
-                        skip_injection = False
-                        if INJECT_SKIP_MODELS.strip():
-                            if any(
-                                skip.strip() and skip.strip().lower() in model.lower()
-                                for skip in INJECT_SKIP_MODELS.split(",")
-                            ):
-                                skip_injection = True
-                        if input_tokens < INJECT_MIN_PROMPT:
-                            skip_injection = True
-                        if skip_injection:
-                            SESSION["injection_skips"] += 1
-                            vault_stage.details["skipped"] = True
-                            vault_stage.details["reason"] = (
-                                "model_skip"
-                                if INJECT_SKIP_MODELS.strip()
-                                and any(
-                                    s.lower() in model.lower()
-                                    for s in INJECT_SKIP_MODELS.split(",")
-                                )
-                                else "prompt_too_short"
-                            )
-                            # Even when skipping vault injection, apply cache_control to stable prefix
-                            if PROMPT_BUILDER_AVAILABLE:
-                                body = _apply_stable_cache_control(body)
-                        else:
-                            body, injected_tokens, injected_sources = inject_vault_context(
-                                body, adapter=active_adapter
-                            )
-                            if injected_tokens > 0:
-                                # Recount tokens after injection
-                                _, input_tokens = extract_request_tokens(
-                                    body, adapter=active_adapter
-                                )
-                                vault_stage.tokens_delta = injected_tokens
-                                vault_stage.details["blocks_matched"] = len(injected_sources)
-                                vault_stage.details["block_names"] = injected_sources[:5]  # Top 5
-                                vault_stage.details["tokens_injected"] = injected_tokens
-                                # Enrich with sub-step timing from inject_vault_context
-                                vault_stage.details["sub_timing_ms"] = SESSION.get(
-                                    "vault_last_timing_ms", {}
-                                )
-                    vault_stage.output_tokens = input_tokens
-                    vault_stage.duration_ms = (time.time() - t_inject) * 1000
-                    if trace:
-                        trace.stages.append(vault_stage)
-
-                    # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
-                    if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
-                        try:
-                            from tokenpak._internal.regression.retrieval_watchdog import (
-                                QueryRetrievalRecord,
-                                RetrievalQualityWatchdog,
-                            )
-
-                            _rw = RetrievalQualityWatchdog()
-                            _rw_chunk_count = len(injected_sources) if injected_sources else 0
-                            _rw_record = QueryRetrievalRecord(
-                                query_id=model or "unknown",
-                                query_text=_extract_user_text(
-                                    body
-                                    if isinstance(body, bytes)
-                                    else body.encode("utf-8")
-                                    if isinstance(body, str)
-                                    else b""
-                                )[:200],
-                                chunk_count=_rw_chunk_count,
-                                unique_chunk_count=_rw_chunk_count,
-                                relevance_scores=[1.0] * _rw_chunk_count,
-                                source_ids=injected_sources if injected_sources else [],
-                                chunk_ids_ordered=[f"chunk_{i}" for i in range(_rw_chunk_count)],
-                            )
-                            _rw_alert = _rw.observe(_rw_record)
-                            if _rw_alert:
-                                SESSION["retrieval_watchdog_alert"] = str(_rw_alert)
-                        except Exception as _rw_err:
-                            SESSION["retrieval_watchdog_error"] = str(_rw_err)
-                            pass  # fail-open
-
-                    # Phase 1.5: CANON dedup (AFTER injection, BEFORE compaction)
-                    if CANON_AVAILABLE and injected_tokens > 0:
-                        t_canon = time.time()
-                        canon_stage = StageTrace(
-                            name="canon_dedup",
-                            enabled=True,
-                            input_tokens=input_tokens,
-                        )
-                        try:
-                            session_id = self.headers.get("X-OpenClaw-Session", model)
-                            body, canon_refs, canon_saved = apply_canon_refs(body, session_id)
-                            if canon_refs > 0:
-                                SESSION["canon_hits"] += canon_refs
-                                SESSION["canon_tokens_saved"] += canon_saved
-                                canon_stage.tokens_delta = -canon_saved
-                                canon_stage.details["blocks_referenced"] = canon_refs
-                                canon_stage.details["tokens_saved"] = canon_saved
-                                _, input_tokens = extract_request_tokens(
-                                    body, adapter=active_adapter
-                                )
-                        except Exception as _canon_err:
-                            canon_stage.details["error"] = str(_canon_err)
-                        canon_stage.output_tokens = input_tokens
-                        canon_stage.duration_ms = (time.time() - t_canon) * 1000
-                        if trace:
-                            trace.stages.append(canon_stage)
-
-                    # Phase 1.8: Salience Router — content-type-aware extraction before compaction
-                    if SALIENCE_ROUTER_ENABLED and body:
-                        try:
-                            from tokenpak.compression.salience.router import (
-                                detect_content_type,
-                            )
-                            from tokenpak.compression.salience.router import (
-                                extract as salience_extract,
-                            )
-
-                            _req_data = json.loads(body)
-                            _salience_applied = 0
-                            for _msg in _req_data.get("messages", []):
-                                _content = _msg.get("content", "")
-                                if isinstance(_content, str) and len(_content) > 500:
-                                    _ctype = detect_content_type(_content)
-                                    if _ctype.value != "unknown":
-                                        _result = salience_extract(_content, content_type=_ctype)
-                                        if _result.compressed and len(_result.compressed) < len(
-                                            _content
-                                        ):
-                                            _msg["content"] = _result.compressed
-                                            _salience_applied += 1
-                            if _salience_applied > 0:
-                                body = json.dumps(_req_data, separators=(",", ":"))
-                                SESSION["salience_router_applied"] = _salience_applied
-                        except Exception as _sr_err:
-                            SESSION["salience_router_error"] = str(_sr_err)
-                            pass  # fail-open
-
-                    # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
-                    if QUERY_REWRITER_ENABLED and body:
-                        try:
-                            from tokenpak.compression.query_rewriter import QueryRewriter
-
-                            _qr = QueryRewriter()
-                            _req_data = json.loads(body)
-                            _rewritten = _qr.rewrite_messages(_req_data.get("messages", []))
-                            if _rewritten and _rewritten != _req_data.get("messages", []):
-                                _req_data["messages"] = _rewritten
-                                body = json.dumps(_req_data, separators=(",", ":"))
-                                SESSION["query_rewriter_applied"] = len(_rewritten)
-                        except Exception as _qr_err:
-                            SESSION["query_rewriter_error"] = str(_qr_err)
-                            pass  # fail-open
-
-                    # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
-                    if FIDELITY_TIERS_ENABLED and body:
-                        try:
-                            from tokenpak.compression.fidelity_tiers import (
-                                TierSelector,
-                            )
-
-                            _ts = TierSelector()
-                            _complexity = min(
-                                1.0, (input_tokens or 0) / 10000.0
-                            )  # simple heuristic
-                            _budget_remaining = max(0.0, 1.0 - _complexity)
-                            _selected_tier = _ts.select(_complexity, _budget_remaining)
-                            SESSION["fidelity_tier"] = (
-                                _selected_tier.name
-                                if hasattr(_selected_tier, "name")
-                                else str(_selected_tier)
-                            )
-                        except Exception as _ft_err:
-                            SESSION["fidelity_tier_error"] = str(_ft_err)
-                            pass  # fail-open
-
-                    # Plugin system — run custom compressors first
-                    if _plugin_registry is not None and body:
-                        _plugin_context = {
-                            "mode": COMPILATION_MODE,
-                            "input_tokens": input_tokens,
-                            "request_id": SESSION.get("request_id", ""),
-                        }
-                        for _plugin in _plugin_registry.get_plugins():
-                            try:
-                                _req_data = json.loads(body)
-                                for _msg in _req_data.get("messages", []):
-                                    _content = _msg.get("content", "")
-                                    if isinstance(_content, str):
-                                        _plugin_result = _plugin.compress(_content, _plugin_context)
-                                        _msg["content"] = _plugin_result["text"]
-                                body = json.dumps(_req_data, separators=(",", ":"))
-                            except Exception as _plugin_run_err:
-                                import logging as _logging
-
-                                _logging.getLogger(__name__).warning(
-                                    "Plugin '%s' raised an error: %s — skipping",
-                                    getattr(_plugin, "name", repr(_plugin)),
-                                    _plugin_run_err,
-                                )
-
-                    # Compression budget check — if vault injection took too long, skip compaction
-                    if _compression_budget_exceeded():
-                        print(
-                            f"  ⏱️  Compression budget exceeded ({MAX_COMPRESSION_TIME_MS}ms) after vault injection — "
-                            f"skipping compaction, forwarding as-is"
-                        )
-                        SESSION["compression_timeouts"] += 1
-                        raise _CompressionTimeout()
-
-                    # Phase 2: Compaction (AFTER injection)
-                    t_compact = time.time()
-                    compaction_stage = StageTrace(
-                        name="compaction",
-                        enabled=ENABLE_COMPACTION,
-                        input_tokens=input_tokens,
+                    print(
+                        f"  ⚠ Compression failed ({type(hook_err).__name__}): {hook_err}\n"
+                        f"    → Forwarding original request (passthrough mode). "
+                        f"Run `tokenpak doctor` for diagnostics."
                     )
-                    if ENABLE_COMPACTION:
-                        body, sent_input_tokens, original_tokens, protected_tokens = (
-                            compact_request_body(
-                                body,
-                                adapter=active_adapter,
-                            )
-                        )
-                        if original_tokens > 0:
-                            input_tokens = original_tokens
-                        compaction_stage.output_tokens = sent_input_tokens
-                        compaction_stage.tokens_delta = (
-                            -(original_tokens - sent_input_tokens) if original_tokens else 0
-                        )
-                        compaction_stage.details["mode"] = COMPILATION_MODE
-                        compaction_stage.details["protected_tokens"] = protected_tokens
-                        compaction_stage.details["tokens_removed"] = (
-                            max(0, original_tokens - sent_input_tokens) if original_tokens else 0
-                        )
-                    else:
-                        sent_input_tokens = input_tokens
-                        compaction_stage.output_tokens = sent_input_tokens
-                    compaction_stage.duration_ms = (time.time() - t_compact) * 1000
-                    if trace:
-                        trace.stages.append(compaction_stage)
-                    # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body:
-                        try:
-                            from tokenpak.compression.dictionary import CompressionDictionary
-
-                            _dict = CompressionDictionary()
-                            _req_data = json.loads(body)
-                            if "messages" in _req_data:
-                                _dict_result = _dict.apply(_req_data["messages"])
-                                _req_data["messages"] = _dict_result.messages
-                                body = json.dumps(_req_data, separators=(",", ":"))
-                                SESSION["compression_dict_applied"] = True
-                        except Exception as _cd_err:
-                            SESSION["compression_dict_error"] = str(_cd_err)
-                            pass  # fail-open
-
-                    # Workflow: vault_inject done → compress done → begin forward
-                    if _wf_id:
-                        try:
-                            from tokenpak.agentic.proxy_workflow import advance_step
-
-                            advance_step(_wf_id, "vault_inject", "compress")
-                            advance_step(_wf_id, "compress", "forward")
-                        except Exception:
-                            pass
-                else:
+                    get_degradation_tracker().record_compression_failure(hook_err)
                     sent_input_tokens = input_tokens
-            except _CompressionTimeout:
-                # Budget exceeded — body already set to best available state; just re-sync tokens
-                model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
-                sent_input_tokens = input_tokens
-            except Exception as _pipeline_err:
-                print(f"  ⚠️ Pre-pipeline error (falling back to original body): {_pipeline_err}")
-                body = _original_body  # restore original body so request still forwards
-                model, input_tokens = extract_request_tokens(body, adapter=active_adapter)
-                sent_input_tokens = input_tokens
+                    # body is unchanged (assignment failed, original value retained)
 
-        final_request_body_for_cache_reason = body
-
-        # Final validation gate (pre-forward): budget, deterministic context, fingerprint, dry-run
-        if should_log and is_messages and body and active_adapter.source_format != "passthrough":
-            gate = _get_validation_gate()
-            if gate is not None:
-                try:
-                    gate_result = gate.validate_request(
-                        request_body=body,
-                        model=model,
-                        input_tokens=sent_input_tokens or input_tokens,
-                        router_meta=router_meta or {},
-                    )
-                    if gate_result.fingerprint:
-                        print(f"  🧾 Determinism fingerprint: {gate_result.fingerprint}")
-                    if not gate_result.valid:
-                        if VALIDATION_GATE_SOFT:
-                            # Soft mode: log warning but forward request anyway
-                            print(
-                                f"  ⚠️ Validation gate SOFT-BLOCK (forwarding): {gate_result.errors}"
-                            )
-                            SESSION["validation_gate_soft_block"] = gate_result.errors
-                        else:
-                            self._send_json(
-                                {
-                                    "error": {
-                                        "type": "validation_gate_failed",
-                                        "message": "Request blocked by validation gate",
-                                        "reasons": gate_result.errors,
-                                    },
-                                    "warnings": gate_result.warnings,
-                                    "fingerprint": gate_result.fingerprint,
-                                },
-                                status=422,
-                            )
-                            return
-                    if gate_result.dry_run:
-                        self._send_json(
-                            {
-                                "status": "dry_run",
-                                "message": "Validation gate accepted request; upstream forward skipped",
-                                "plan": gate_result.plan,
-                                "fingerprint": gate_result.fingerprint,
-                                "warnings": gate_result.warnings,
-                            },
-                            status=200,
-                        )
-                        return
-                except Exception as _gate_err:
-                    print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
-
-        fwd_headers = _sanitize_headers(self.headers)
-        fwd_headers["Host"] = parsed.netloc
         if sent_input_tokens == 0:
             sent_input_tokens = input_tokens
+
+        # ── Circuit breaker check ──────────────────────────────────────────
+        # Fast-fail immediately if the target provider's circuit is OPEN.
+        if should_log and is_messages:
+            _cb_provider = provider_from_url(target_url)
+            _cb_registry = get_circuit_breaker_registry()
+            if not _cb_registry.allow_request(_cb_provider):
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "tokenpak: circuit breaker OPEN for %s — fast-failing request",
+                    _cb_provider,
+                )
+                err = json.dumps({
+                    "error": {
+                        "type": "circuit_breaker_open",
+                        "message": (
+                            f"Provider '{_cb_provider}' is currently unavailable. "
+                            "The circuit breaker is open due to recent failures. "
+                            "Request will be retried automatically after a brief cooldown."
+                        ),
+                        "provider": _cb_provider,
+                        "hint": "Check GET /circuit-breakers for current state.",
+                    }
+                }).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.send_header("Retry-After", "30")
+                self.end_headers()
+                self.wfile.write(err)
+                return
+        else:
+            _cb_provider = None
+            _cb_registry = None
+
+        # Validate credentials for intercepted provider requests
+        # Client-supplied key takes precedence over any environment-level key.
+        if should_log and is_messages:
+            passthrough_cfg = PassthroughConfig(require_auth=True)
+            auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
+            if not auth_ok:
+                import json as _json
+                err_body = _json.dumps({
+                    "error": {
+                        "type": "authentication_error",
+                        "message": auth_err,
+                    }
+                }).encode()
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err_body)))
+                self.end_headers()
+                self.wfile.write(err_body)
+                return
+
+            # --- Request schema validation (strict/warn/off) ---
+            if body:
+                try:
+                    from tokenpak.validation.request_validator import (
+                        get_request_validator,
+                    )
+                    _rv = get_request_validator()
+                    if _rv.mode != "off":
+                        try:
+                            _route_for_validation = ps.router.route(
+                                target_url, dict(self.headers), body
+                            )
+                            _provider = _route_for_validation.provider
+                        except Exception:
+                            _provider = "unknown"
+                        _val_result = _rv.validate_bytes(body, target_url, _provider)
+                        if not _val_result.valid and _rv.mode == "strict":
+                            _err_payload = _val_result.to_error_response()
+                            _err_body = json.dumps(_err_payload).encode()
+                            self.send_response(400)
+                            self.send_header("Content-Type", "application/json")
+                            self.send_header("Content-Length", str(len(_err_body)))
+                            self.end_headers()
+                            self.wfile.write(_err_body)
+                            return
+                except Exception:
+                    pass  # validation errors must never break the proxy
+        else:
+            passthrough_cfg = PassthroughConfig(require_auth=False)
+
+        # Build forwarding headers (client-supplied auth forwarded unchanged)
+        # CCG-04: For Anthropic routes apply a per-route allowlist (mirroring
+        # the WS-path tuple).  All other providers keep the existing blocklist
+        # path (forward_headers) — their forwarding behavior is unchanged.
+        if provider_from_url(target_url) == "anthropic":
+            _route = _classify_route(self.path, self.headers)
+            _allowlist = (
+                CLAUDE_CODE_HEADER_ALLOWLIST
+                if _route == "claude-code"
+                else LEGACY_HEADER_ALLOWLIST
+            )
+            fwd_headers = {}
+            for _hk, _hv in self.headers.items():
+                if _hk.lower() in _allowlist:
+                    fwd_headers[_hk.lower()] = _hv
+        else:
+            fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
+        fwd_headers["Host"] = parsed.netloc
         if body is not None:
             fwd_headers["Content-Length"] = str(len(body))
 
-        _req_headers_lower = {k.lower(): v for k, v in self.headers.items()}
-        _client_has_auth = bool(
-            _req_headers_lower.get("x-api-key", "").strip()
-            or _req_headers_lower.get("authorization", "").strip()
-        )
-        _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        if not _client_has_auth and _ANTHROPIC_KEY_POOL and "anthropic.com" in target_url:
-            _pool_key, _current_key_idx = _get_next_key()
-            if _pool_key:
-                fwd_headers["x-api-key"] = _pool_key
-
-        # Fix #5: Check per-provider circuit breaker before attempting upstream
-        _cb_provider = _provider_for_url(target_url)
-        if _circuit_check(_cb_provider):
-            self._send_json(
-                {
-                    "error": {
-                        "type": "circuit_open",
-                        "message": f"Provider {_cb_provider} circuit is open — too many recent failures. Retry in 60s.",
-                    }
-                },
-                status=503,
-            )
-            return
-
         try:
-            path = parsed.path
-            if parsed.query:
-                path += "?" + parsed.query
-            # DEBUG: count cache_control blocks before cap
-            try:
-                _dbg_body = (
-                    json.loads(body)
-                    if isinstance(body, bytes)
-                    else json.loads(body.encode() if isinstance(body, str) else body)
-                )
-                _cc_locs = []
-                for _si, _sb in enumerate(_dbg_body.get("system", [])):
-                    if isinstance(_sb, dict) and "cache_control" in _sb:
-                        _cc_locs.append(f"system[{_si}]")
-                for _mi, _mm in enumerate(_dbg_body.get("messages", [])):
-                    _mc = _mm.get("content", [])
-                    if isinstance(_mc, list):
-                        for _ci, _cb in enumerate(_mc):
-                            if isinstance(_cb, dict) and "cache_control" in _cb:
-                                _cc_locs.append(f"msg[{_mi}].content[{_ci}]")
-                if _cc_locs:
-                    print(f"  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}")
-            except Exception as _e:
-                print(f"  🔍 debug error: {_e}")
-            body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
-            # Fix Content-Length after cache_control cap may have changed body size
-            if isinstance(body, str):
-                body = body.encode("utf-8")
-            if body is not None:
-                fwd_headers["Content-Length"] = str(len(body))
-            # DEBUG: count cache_control blocks
-            try:
-                _dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
-                _cc = 0
-                for _s in _dbody.get("system") or []:
-                    if isinstance(_s, dict) and "cache_control" in _s:
-                        _cc += 1
-                for _m in _dbody.get("messages") or []:
-                    for _c in (
-                        (_m.get("content") or []) if isinstance(_m.get("content"), list) else []
-                    ):
-                        if isinstance(_c, dict) and "cache_control" in _c:
-                            _cc += 1
-                if _cc > 0:
-                    print(f"  📦 cache_control blocks in request: {_cc}", flush=True)
-                if _cc > 4:
-                    print(
-                        f"  ⚠️ OVER LIMIT! Stripping {_cc - 4} earliest cache_control blocks",
-                        flush=True,
-                    )
-                    _locs = []
-                    for _i, _s in enumerate((_dbody.get("system") or [])):
-                        if isinstance(_s, dict) and "cache_control" in _s:
-                            _locs.append(("s", _i))
-                    for _mi, _m in enumerate((_dbody.get("messages") or [])):
-                        for _ci, _c in enumerate(
-                            (_m.get("content") or []) if isinstance(_m.get("content"), list) else []
-                        ):
-                            if isinstance(_c, dict) and "cache_control" in _c:
-                                _locs.append(("m", _mi, _ci))
-                    for _loc in _locs[: (_cc - 4)]:
-                        if _loc[0] == "s":
-                            _dbody["system"][_loc[1]].pop("cache_control", None)
-                        else:
-                            _dbody["messages"][_loc[1]]["content"][_loc[2]].pop(
-                                "cache_control", None
-                            )
-                    body = json.dumps(_dbody).encode()
-                    print(
-                        f'  ✅ Stripped. Now {sum(1 for s in (_dbody.get("system") or []) if isinstance(s,dict) and "cache_control" in s) + sum(1 for m in (_dbody.get("messages") or []) for c in (m.get("content") or []) if isinstance(c,dict) and "cache_control" in c)} blocks',
-                        flush=True,
-                    )
-            except Exception as _e:
-                print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
-            body = _strip_empty_text_blocks(body)
-            body = _cap_cache_control_blocks(body)
-            if isinstance(body, str):
-                body = body.encode("utf-8")
-            if body is not None:
-                fwd_headers["Content-Length"] = str(len(body))
-            # TEMP DEBUG: dump final body to file
-            try:
-                import json as _j2
+            pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
+            _cb_success = False  # track whether request succeeded for circuit breaker
 
-                _fb = _j2.loads(body) if isinstance(body, (bytes, str)) else body
-                _all_cc = 0
-                for _sk in ["system", "tools", "messages"]:
-                    items = _fb.get(_sk, [])
-                    if isinstance(items, list):
-                        for _it in items:
-                            if isinstance(_it, dict):
-                                if "cache_control" in _it:
-                                    _all_cc += 1
-                                for _cv in (
-                                    _it.get("content", [])
-                                    if isinstance(_it.get("content"), list)
-                                    else []
-                                ):
-                                    if isinstance(_cv, dict) and "cache_control" in _cv:
-                                        _all_cc += 1
-                print(
-                    f"  🎯 FINAL body has {_all_cc} cache_control blocks (system+tools+messages)",
-                    flush=True,
-                )
-                if _all_cc > 4:
-                    with open("/tmp/debug_body.json", "w") as _df:
-                        _j2.dump(_fb, _df, indent=2)
-                    print("  ❌ DUMPED to /tmp/debug_body.json", flush=True)
-            except Exception as _de:
-                print(f"  debug error: {_de}", flush=True)
-
-            # --- Early SSE keepalive ---
-            # Send HTTP 200 + SSE headers BEFORE the upstream call when streaming.
-            # This prevents OpenClaw from timing out during compression + upstream TTFB.
-            # SSE comments (lines starting with ":") are ignored by spec-compliant parsers.
-            _early_sse_sent = False
-            # Keepalive disabled — causes framing issues with OpenClaw SDK
-
-            _t0_conn = time.monotonic()
-            resp = _POOL_MANAGER.request(
-                method,
-                target_url,
-                headers=fwd_headers,
-                body=body,
-                timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
-                preload_content=False,
-            )
-            _conn_ms = int((time.monotonic() - _t0_conn) * 1000)
-            print(f"  🔌 upstream connect+send: {_conn_ms}ms (pool reuse enabled)", flush=True)
-            status = resp.status
-
-            # Key pool failover: retry with next key on 401/429 (only when we injected)
-            if (
-                status in (401, 429)
-                and _current_key_idx >= 0
-                and not _client_has_auth
-                and len(_ANTHROPIC_KEY_POOL) > 1
-            ):
-                _cooldown_dur = _KEY_COOLDOWN_401 if status == 401 else _KEY_COOLDOWN_429
-                _cool_down_key(_current_key_idx, _cooldown_dur, f"HTTP {status}")
-                _retry_key, _retry_idx = _get_next_key(exclude_idx=_current_key_idx)
-                if _retry_key:
-                    print(
-                        f"[key-pool] Key #{_current_key_idx} returned {status}, "
-                        f"retrying with key #{_retry_idx}",
-                        flush=True,
-                    )
-                    fwd_headers["x-api-key"] = _retry_key
-                    _current_key_idx = _retry_idx
-                    try:
-                        resp.drain_conn()
-                    except Exception:
-                        pass
-                    _t0_conn = time.monotonic()
-                    resp = _POOL_MANAGER.request(
-                        method,
-                        target_url,
-                        headers=fwd_headers,
-                        body=body,
-                        timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
-                        preload_content=False,
-                    )
-                    status = resp.status
-                    print(
-                        f"[key-pool] Retry key #{_retry_idx} → HTTP {status} "
-                        f"({int((time.monotonic() - _t0_conn) * 1000)}ms)",
-                        flush=True,
-                    )
-
-            # Fix #5: Record success/failure for circuit breaker
-            if status >= 500:
-                _circuit_record_failure(_cb_provider)
-            else:
-                _circuit_record_success(_cb_provider)
-            content_type = resp.getheader("Content-Type", "")
-            is_sse = "text/event-stream" in content_type
-
-            # If upstream errored but we already sent 200+SSE headers, emit SSE error event
-            if _early_sse_sent and status >= 400:
-                try:
-                    _err_body = resp.read()
-                    _err_event = json.dumps({
-                        "type": "error",
-                        "error": {"type": "upstream_error", "message": f"HTTP {status}: {_err_body[:500].decode('utf-8', errors='replace')}"}
-                    })
-                    self.wfile.write(f"event: error\ndata: {_err_event}\n\n".encode())
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
-                    pass
-                return
-
-            # Fix #4: Normalize upstream error responses to unified JSON shape
-            # Anthropic returns {"type":"error","error":{...},"request_id":"..."}
-            # We normalize all 4xx/5xx to {"error":{"type":...,"message":...}}
-            _resp_content_type = resp.getheader("Content-Type", "")
-            if status >= 400 and "application/json" in _resp_content_type and not is_sse:
-                try:
-                    _err_raw = resp.read()
-                    _err_data = json.loads(_err_raw)
-                    # Anthropic shape: {"type":"error","error":{"type":...,"message":...}}
-                    if (
-                        "type" in _err_data
-                        and _err_data.get("type") == "error"
-                        and "error" in _err_data
-                    ):
-                        _inner = _err_data["error"]
-                        _normalized = {
-                            "error": {
-                                "type": _inner.get("type", "upstream_error"),
-                                "message": _inner.get("message", ""),
-                                "request_id": _err_data.get("request_id", ""),
-                            }
-                        }
-                    # OpenAI shape: {"error":{"message":...,"type":...,"code":...}}
-                    elif "error" in _err_data and isinstance(_err_data["error"], dict):
-                        _normalized = _err_data  # already correct shape
-                    else:
-                        _normalized = {
-                            "error": {"type": "upstream_error", "message": str(_err_data)}
-                        }
-                    # Tier 2A: Error Normalizer — further standardize error message text
-                    if ERROR_NORMALIZER_ENABLED:
-                        try:
-                            from tokenpak.agentic.error_normalizer import ErrorNormalizer
-
-                            _en = ErrorNormalizer()
-                            _err_msg = _normalized.get("error", {}).get("message", "")
-                            if _err_msg:
-                                _normalized["error"]["message"] = _en.normalize(_err_msg)
-                                SESSION["error_normalizer_applied"] = True
-                        except Exception:
-                            pass  # fail-open
-                    # Tier 2C: Failure Memory — record error signature for future avoidance
-                    if FAILURE_MEMORY_ENABLED:
-                        try:
-                            from tokenpak._internal.agentic.failure_memory import (
-                                FailureMemoryDB,
-                                FailureSignature,
-                            )
-
-                            _fm = FailureMemoryDB()
-                            _fm_msg = _normalized.get("error", {}).get("message", "")
-                            _fm_type = _normalized.get("error", {}).get("type", "unknown")
-                            if _fm_msg and not _fm.match(_fm_msg):
-                                _fm.add(
-                                    FailureSignature(
-                                        error_type=_fm_type, pattern=_fm_msg[:200], model=model
-                                    )
-                                )
-                                SESSION["failure_memory_recorded"] = True
-                        except Exception:
-                            pass  # fail-open
-                    # Actionable error enrichment — add hint/retry_after for key error paths
-                    _retry_after_hdr = (
-                        resp.getheader("Retry-After", None) if hasattr(resp, "getheader") else None
-                    )
-                    _normalized = _enrich_upstream_error(_normalized, status, _retry_after_hdr)
-                    _err_body = json.dumps(_normalized, indent=2).encode()
-                    self.send_response(status)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", len(_err_body))
-                    # Forward Retry-After header for 429 responses
-                    if status == 429 and _retry_after_hdr:
-                        self.send_header("Retry-After", _retry_after_hdr)
-                    self.end_headers()
-                    self.wfile.write(_err_body)
-                    return
-                except Exception:
-                    resp = type(
-                        "FakeResp",
-                        (),
-                        {
-                            "read": lambda self: _err_raw,
-                            "getheaders": lambda self: [],
-                            "getheader": lambda self, k, d="": d,
-                        },
-                    )()
-
-            # HTTP 100 Continue keepalive — send BEFORE response headers if enabled + SSE
-            # This signals liveness during compression/upstream delay to prevent client timeouts
-            if HTTP100_KEEPALIVE_ENABLED and is_sse and status == 200 and not _early_sse_sent:
-                try:
-                    self.wfile.write(b"HTTP/1.1 100 Continue\r\n\r\n")
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError):
-                    pass  # Client disconnected — fail gracefully
-            
-            # Skip header sending if we already sent early SSE headers
-            if not _early_sse_sent:
-                self.send_response(status)
-                # urllib3 HTTPResponse uses .headers (HTTPHeaderDict) instead of .getheaders()
-                _resp_headers = resp.headers.items() if hasattr(resp, "headers") else resp.getheaders()
-                for h_key, h_val in _resp_headers:
-                    h_lower = h_key.lower()
-                    if h_lower in ("connection", "keep-alive", "transfer-encoding"):
-                        continue
-                    if h_lower == "content-length":
-                        continue
-                    self.send_header(h_key, h_val)
-                self.end_headers()
-
-            if is_sse:
-                output_tokens = 0
+            output_tokens = 0
+            if is_streaming:
+                # ── Streaming (SSE) path ──────────────────────────────────
+                # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
-                chunk_count = 0
-                early_break = False
-                _pending_chunk = b""
-                _footer_injected = False
-                import zlib as _zlib
-
-                _ce = resp.getheader("Content-Encoding", "")
-                _decomp = _zlib.decompressobj(_zlib.MAX_WBITS | 16) if "gzip" in _ce else None
-                while True:
-                    chunk = resp.read(4096)
-                    if not chunk:
-                        # Flush any pending chunk at end of stream
-                        if _pending_chunk:
-                            try:
-                                self.wfile.write(_pending_chunk)
-                                self.wfile.flush()
-                            except (BrokenPipeError, ConnectionResetError):
-                                pass
-                            if should_log and is_messages:
-                                sse_buffer += _pending_chunk
-                        break
-                    chunk_count += 1
-                    if _decomp:
-                        try:
-                            chunk = _decomp.decompress(chunk)
-                        except Exception:
-                            pass
-                    if not chunk:
-                        continue
-
-                    # Chat footer injection — buffer chunks to find message_stop
-                    if CHAT_FOOTER_ENABLED and not _footer_injected and should_log and is_messages:
-                        combined = _pending_chunk + chunk
-                        _pending_chunk = b""
-                        if (
-                            b'"type":"message_stop"' in combined
-                            or b'"type": "message_stop"' in combined
-                        ):
-                            try:
-                                # Find injection point — right before message_stop event
-                                stop_idx = combined.find(b"event: message_stop")
-                                if stop_idx == -1:
-                                    # Inline format — find the event: line before type:message_stop
-                                    ms_idx = combined.find(b'"type":"message_stop"')
-                                    if ms_idx == -1:
-                                        ms_idx = combined.find(b'"type": "message_stop"')
-                                    if ms_idx > 0:
-                                        search_back = combined[:ms_idx].rfind(b"event:")
-                                        stop_idx = search_back if search_back >= 0 else -1
-
-                                if stop_idx > 0:
-                                    before_stop = combined[:stop_idx]
-                                    after_stop = combined[stop_idx:]
-                                    self.wfile.write(before_stop)
-                                    self.wfile.flush()
-                                    sse_buffer += before_stop
-
-                                    # Build footer stats
-                                    _temp_usage = _extract_sse_tokens(sse_buffer)
-                                    _temp_output = _temp_usage.get("output_tokens", 0)
-                                    _temp_cache_r = _temp_usage.get("cache_read_input_tokens", 0)
-                                    _saved = max(0, input_tokens - sent_input_tokens)
-                                    _pct = (
-                                        int(100 * _saved / input_tokens) if input_tokens > 0 else 0
-                                    )
-                                    _cost = estimate_cost(
-                                        model, sent_input_tokens, _temp_output, _temp_cache_r, 0
-                                    )
-                                    _footer_text = f"\n\n───\n📊 {input_tokens:,}→{sent_input_tokens:,} tok (-{_pct}%) | ${_cost:.3f}"
-                                    if _temp_cache_r > 0:
-                                        _footer_text += f" | cache: {_temp_cache_r:,}r"
-                                    _footer_event = {
-                                        "type": "content_block_delta",
-                                        "index": 0,
-                                        "delta": {"type": "text_delta", "text": _footer_text},
-                                    }
-                                    _footer_sse = f"event: content_block_delta\ndata: {json.dumps(_footer_event)}\n\n".encode()
-                                    self.wfile.write(_footer_sse)
-                                    self.wfile.flush()
-                                    _footer_injected = True
-
-                                    self.wfile.write(after_stop)
-                                    self.wfile.flush()
-                                    sse_buffer += after_stop
-                                    continue
-                                else:
-                                    # Couldn't find injection point — write combined as-is
-                                    self.wfile.write(combined)
-                                    self.wfile.flush()
-                                    sse_buffer += combined
-                                    _footer_injected = True
-                                    continue
-                            except Exception:
-                                # Fail-open — write the chunk normally
-                                self.wfile.write(combined)
-                                self.wfile.flush()
-                                sse_buffer += combined
-                                _footer_injected = True
-                                continue
-                        else:
-                            # Buffer one chunk ahead to catch message_stop split across chunks
-                            if _pending_chunk:
-                                try:
-                                    self.wfile.write(_pending_chunk)
-                                    self.wfile.flush()
-                                except (BrokenPipeError, ConnectionResetError):
-                                    early_break = True
-                                    break
-                                if should_log and is_messages:
-                                    sse_buffer += _pending_chunk
-                            _pending_chunk = combined
+                with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
+                    self.send_response(resp.status_code)
+                    has_content_type = False
+                    has_cache_control = False
+                    for h_key, h_val in resp.headers.items():
+                        h_lower = h_key.lower()
+                        if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                             continue
+                        if h_lower == "content-type":
+                            has_content_type = True
+                        if h_lower == "cache-control":
+                            has_cache_control = True
+                        self.send_header(h_key, h_val)
+                    # SSE-required headers: enforce even if upstream omits them
+                    if not has_content_type:
+                        self.send_header("Content-Type", "text/event-stream")
+                    if not has_cache_control:
+                        self.send_header("Cache-Control", "no-cache")
+                    # Always disable nginx buffering for streaming
+                    self.send_header("X-Accel-Buffering", "no")
+                    # Propagate request ID to client for correlation
+                    self.send_header("X-Request-ID", _req_id)
+                    self.end_headers()
 
-                    try:
-                        self.wfile.write(chunk)
-                        self.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        early_break = True
-                        break
-                    if should_log and is_messages:
-                        sse_buffer += chunk
-                if should_log and is_messages:
-                    sse_usage = _extract_sse_tokens(sse_buffer)
-                    output_tokens = extract_response_tokens(
-                        sse_buffer, adapter=active_adapter, is_sse=True
-                    )
+                    for chunk in resp.iter_bytes(chunk_size=4096):
+                        if not chunk:
+                            continue
+                        try:
+                            self.wfile.write(chunk)
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            break
+                        if should_log and is_messages:
+                            sse_buffer += chunk
+
+                if should_log and is_messages and sse_buffer:
+                    sse_usage = extract_sse_tokens(sse_buffer)
+                    output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
-                resp_body = resp.read()
-                output_tokens = 0
-                # Chat footer — JSON (non-streaming) injection
-                if CHAT_FOOTER_ENABLED and should_log and is_messages and status == 200:
-                    try:
-                        body_for_parse = resp_body
-                        if "gzip" in resp.getheader("Content-Encoding", ""):
-                            body_for_parse = gzip.decompress(resp_body)
-                        resp_json = json.loads(body_for_parse)
-                        usage = resp_json.get("usage", {})
-                        _out_tok = usage.get("output_tokens", 0)
-                        _cache_r = usage.get("cache_read_input_tokens", 0)
-                        _pct = (
-                            round((input_tokens - sent_input_tokens) / input_tokens * 100, 1)
-                            if input_tokens
-                            else 0
-                        )
-                        _cost = estimate_cost(model, sent_input_tokens, _out_tok, _cache_r, 0)
-                        _footer_text = f"\n\n───\n📊 {input_tokens:,}→{sent_input_tokens:,} tok (-{_pct}%) | ${_cost:.3f}"
-                        if _cache_r > 0:
-                            _footer_text += f" | cache: {_cache_r:,}r"
-                        content = resp_json.get("content", [])
-                        if content and isinstance(content, list):
-                            for i in range(len(content) - 1, -1, -1):
-                                if content[i].get("type") == "text":
-                                    content[i]["text"] += _footer_text
-                                    break
-                            resp_json["content"] = content
-                            resp_body = json.dumps(resp_json).encode()
-                    except Exception:
-                        pass  # fail-open
+                # ── Non-streaming path ────────────────────────────────────
+                resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
-                # Phase 2.2: Session Capsules — compress and store session context
-                if SESSION_CAPSULES_ENABLED and body:
-                    try:
-                        from tokenpak._internal.memory.session_capsules import (
-                            build_session_capsule,
-                            serialize_capsule,
-                        )
+                self.send_response(resp.status_code)
+                for h_key, h_val in resp.headers.items():
+                    h_lower = h_key.lower()
+                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                        continue
+                    self.send_header(h_key, h_val)
+                # Debug header: stable prefix hash for cache determinism verification.
+                # Emitted for all messages requests (not just intercepted hosts)
+                # so integration tests and local stubs can verify determinism.
+                if is_messages:
+                    _ph = _compute_stable_prefix_hash(body)
+                    if _ph:
+                        self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
+                # Propagate request ID to client for correlation
+                self.send_header("X-Request-ID", _req_id)
+                self.end_headers()
 
-                        _session_id = self.headers.get("X-OpenClaw-Session", model)
-                        _capsule_text = body.decode("utf-8") if isinstance(body, bytes) else body
-                        _capsule = build_session_capsule(_capsule_text, source_path=_session_id)
-                        _capsule_str = serialize_capsule(_capsule)
-                        SESSION["session_capsule_built"] = True
-                        SESSION["session_capsule_size"] = len(_capsule_str)
-                    except Exception as _sc_err:
-                        SESSION["session_capsule_error"] = str(_sc_err)
-                        pass  # fail-open
-
+                resp_body = resp.content
                 self.wfile.write(resp_body)
                 self.wfile.flush()
+
                 if should_log and is_messages:
-                    resp_for_metrics = resp_body
-                    if "gzip" in resp.getheader("Content-Encoding", ""):
+                    body_for_metrics = resp_body
+                    if "gzip" in resp.headers.get("content-encoding", ""):
                         try:
-                            resp_for_metrics = gzip.decompress(resp_body)
+                            body_for_metrics = gzip.decompress(resp_body)
                         except Exception:
                             pass
-                    output_tokens = extract_response_tokens(
-                        resp_for_metrics, adapter=active_adapter
-                    )
+                    output_tokens = _extract_response_tokens(body_for_metrics)
                     try:
-                        usage = json.loads(resp_for_metrics).get("usage", {})
+                        usage = json.loads(body_for_metrics).get("usage", {})
                         cache_read_tokens = usage.get("cache_read_input_tokens", 0)
                         cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
                     except Exception:
                         pass
-
-            # conn.close()  # REMOVED: urllib3 pool manager, no conn object here
-
-            # Post-request: Store successful response in semantic cache
-            if SEMANTIC_CACHE_ENABLED and status == 200 and not SESSION.get("semantic_cache_hit"):
-                try:
-                    _sem_cache = _get_sem_cache()
-                    if _sem_cache is None:
-                        raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
-                        else _original_body
-                    )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
-                except Exception as _sc_store_err:
-                    SESSION["semantic_cache_store_error"] = str(_sc_store_err)
-                    pass  # fail-open
-
             latency_ms = int((time.time() - t0) * 1000)
+            with _forecast_latency_lock:
+                _forecast_latencies.append(latency_ms)
+            _cb_success = True  # reached here without exception → request succeeded
 
-            # Post-request: Stability Scorer — track response consistency over time
-            if STABILITY_SCORER_ENABLED:
-                try:
-                    from tokenpak._internal.regression.stability_scorer import (
-                        RunRecord,
-                        StabilityScorer,
-                    )
-
-                    _ss = StabilityScorer()
-                    _workflow_id = self.headers.get("X-OpenClaw-Session", model)
-                    _resp_text = ""
-                    try:
-                        _resp_text = (
-                            (
-                                resp_body[:500].decode("utf-8")
-                                if isinstance(resp_body, bytes)
-                                else str(resp_body)[:500]
-                            )
-                            if "resp_body" in locals()
-                            else ""
-                        )
-                    except Exception:
-                        pass
-                    _record = RunRecord(
-                        timestamp=str(int(time.time())),
-                        passed=status == 200,
-                        retried=False,
-                        token_count=(input_tokens or 0) + (output_tokens or 0),
-                        output_text=_resp_text,
-                        validation_passed=status == 200,
-                    )
-                    _ss.record_run(_workflow_id, _record)
-                    _score = _ss.score_workflow(_workflow_id)
-                    SESSION["stability_score"] = (
-                        _score.score if hasattr(_score, "score") else str(_score)
-                    )
-                except Exception as _ss_err:
-                    SESSION["stability_scorer_error"] = str(_ss_err)
-                    pass  # fail-open
-
-            # Post-request: Log completed request via Request Logger
-            if REQUEST_LOGGER_ENABLED and _request_log_id:
-                try:
-                    from tokenpak.monitoring.request_logger import RequestLogger
-
-                    _req_logger = RequestLogger.get_instance()
-                    _record = _req_logger.build_record(
-                        request_id=_request_log_id,
-                        method="POST",
-                        endpoint=target_url,
-                        request_body_size=len(body) if body else 0,
-                        response_status=status,
-                        compression_ratio=round(sent_input_tokens / input_tokens, 3)
-                        if input_tokens
-                        else None,
-                        latency_ms=latency_ms,
-                        model=model,
-                        provider=_cb_provider if "_cb_provider" in dir() else "",
-                    )
-                    _req_logger.log(_record)
-                    SESSION["request_logger_logged"] = True
-                except Exception as _rl_post_err:
-                    SESSION["request_logger_post_error"] = str(_rl_post_err)
-                    pass  # fail-open
+            # ── Request logging ───────────────────────────────────────────
+            try:
+                _resp_status = resp.status_code if "resp" in dir() else 0  # type: ignore
+                _req_body_sz = content_length
+                _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
+                _comp_ratio = None
+                if input_tokens > 0 and sent_input_tokens > 0:
+                    _comp_ratio = sent_input_tokens / input_tokens
+                _provider_name = ""
+                if "anthropic" in target_url:
+                    _provider_name = "anthropic"
+                elif "openai" in target_url:
+                    _provider_name = "openai"
+                elif "googleapis" in target_url:
+                    _provider_name = "google"
+                log_request(
+                    request_id=_req_id,
+                    client_ip=self.client_address[0] if self.client_address else "",
+                    method=method,
+                    endpoint=parsed.path,
+                    request_body_size=_req_body_sz,
+                    response_status=_resp_status,
+                    response_body_size=_resp_body_sz,
+                    compression_ratio=_comp_ratio,
+                    latency_ms=latency_ms,
+                    model=model,
+                    provider=_provider_name,
+                )
+            except Exception:
+                pass  # logging must never break the proxy
 
             if should_log and is_messages and input_tokens > 0:
-                cost = estimate_cost(
-                    model,
-                    sent_input_tokens,
-                    output_tokens,
-                    cache_read_tokens,
-                    cache_creation_tokens,
-                )
+                cost = estimate_cost(model, sent_input_tokens, output_tokens,
+                                     cache_read_tokens, cache_creation_tokens)
+                cost_without = estimate_cost(model, input_tokens, output_tokens,
+                                             cache_read_tokens, cache_creation_tokens)
                 saved = max(0, input_tokens - sent_input_tokens)
-                # Estimate cost saved (what it would have cost without compression)
-                cost_without_compression = estimate_cost(
-                    model, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
-                )
-                cost_saved = max(0.0, cost_without_compression - cost)
-                sources_str = ",".join(injected_sources) if injected_sources else ""
-                _log_compilation_mode = "bypass" if _bypass_request else COMPILATION_MODE
-                try:
-                    MONITOR.log(
-                        model,
-                        sent_input_tokens,
-                        output_tokens,
-                        cost,
-                        latency_ms,
-                        status,
-                        target_url,
-                        _log_compilation_mode,
-                        protected_tokens,
-                        saved,
-                        injected_tokens,
-                        sources_str,
-                        cache_read_tokens,
-                        cache_creation_tokens,
-                    )
-                except Exception as _monitor_err:
-                    print(
-                        f"  ⚠️ Monitor.log() failed (SQLite error, request unaffected): {_monitor_err}"
-                    )
-                try:
-                    from tokenpak.telemetry.anon_metrics import record_request
+                cost_saved = max(0.0, cost_without - cost)
 
-                    record_request(
+                with ps._session_lock:
+                    ps.session["requests"] += 1
+                    ps.session["input_tokens"] += input_tokens
+                    ps.session["sent_input_tokens"] += sent_input_tokens
+                    ps.session["saved_tokens"] += saved
+                    ps.session["protected_tokens"] += protected_tokens
+                    ps.session["output_tokens"] += output_tokens
+                    ps.session["cost"] += cost
+                    ps.session["cost_saved"] += cost_saved
+                    ps.session["cache_read_tokens"] += cache_read_tokens
+                    ps.session["cache_creation_tokens"] += cache_creation_tokens
+
+                # Record cache telemetry
+                try:
+                    _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
+                    _miss_reason: Optional[str] = None
+                    if cache_read_tokens == 0:
+                        # Heuristic miss-reason diagnosis (best-effort)
+                        try:
+                            _body_text = body.decode("utf-8", errors="ignore") if isinstance(body, (bytes, bytearray)) else ""
+                        except Exception:
+                            _body_text = ""
+                        import re as _re
+                        if _re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", _body_text):
+                            _miss_reason = "timestamp"
+                        elif "request_id" in _body_text.lower() or "uuid" in _body_text.lower():
+                            _miss_reason = "uuid"
+                    _get_cache_collector().record(CacheMetrics(
+                        request_id=trace.request_id if trace else str(uuid.uuid4()),
+                        stable_prefix_tokens=sent_input_tokens,
+                        stable_cached=(cache_read_tokens > 0),
+                        cache_miss_reason=_miss_reason,
+                        volatile_tail_tokens=max(0, input_tokens - sent_input_tokens),
+                        total_input_tokens=input_tokens,
+                        cache_read_tokens=cache_read_tokens,
+                        cache_creation_tokens=cache_creation_tokens,
+                        output_tokens=output_tokens,
+                    ))
+                except Exception:
+                    pass  # telemetry must never break request handling
+
+                # Track per-request compression ratio for rolling average
+                if input_tokens > 0:
+                    ratio = round(saved / input_tokens, 4)
+                    with ps._compression_lock:
+                        ps._compression_ratios.append(ratio)
+                    # Write compression telemetry event
+                    ps.compression_stats.record_compression(
+                        model=model,
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
-                        tokens_saved=saved,
+                        ratio=ratio,
                         latency_ms=latency_ms,
-                        model=model,
+                        status="ok",
                     )
-                except Exception:
-                    pass  # never break the proxy
-                # Record request latency for p50/p99 tracking
-                _req_elapsed_ms = (time.time() - t0) * 1000
-                with _latency_lock:
-                    _request_latencies.append(_req_elapsed_ms)
 
-                SESSION["requests"] += 1
-                SESSION["input_tokens"] += input_tokens
-                SESSION["sent_input_tokens"] += sent_input_tokens
-                SESSION["saved_tokens"] += saved
-                SESSION["protected_tokens"] += protected_tokens
-                SESSION["output_tokens"] += output_tokens
-                SESSION["cost"] += cost
-                SESSION["cost_saved"] += cost_saved
-                SESSION["injected_tokens"] += injected_tokens
-                SESSION["cache_read_tokens"] += cache_read_tokens
-                SESSION["cache_creation_tokens"] += cache_creation_tokens
-                if cache_read_tokens > 0:
-                    SESSION["cache_hits"] += 1
-                else:
-                    SESSION["cache_misses"] += 1
-                    miss_reason = _classify_cache_miss_reason(
-                        raw_request_body_for_cache_reason,
-                        cache_poison_scrubbed=cache_poison_scrubbed,
-                        tools_schema_changed=tools_schema_changed,
-                        final_body=final_request_body_for_cache_reason,
-                    )
-                    miss_map = SESSION.setdefault("cache_miss_reasons", {})
-                    miss_map[miss_reason] = int(miss_map.get(miss_reason, 0) or 0) + 1
-                if injected_tokens > 0:
-                    SESSION["injection_hits"] += 1
-
-                # Complete and store pipeline trace
                 if trace:
                     trace.model = model
                     trace.input_tokens = input_tokens
@@ -1853,105 +1062,1041 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     trace.total_cost = cost
                     trace.duration_ms = latency_ms
                     trace.status = "complete"
-                    TRACE_STORAGE.store(trace)
+                    ps.trace_storage.store(trace)
 
-                # Workflow tracking: mark forward done → log_metrics → complete
-                if _wf_id:
-                    try:
-                        from tokenpak.agentic.proxy_workflow import (
-                            advance_step,
-                            complete_workflow,
-                        )
+                with ps._last_lock:
+                    ps._last_request = {
+                        "request_id": trace.request_id if trace else "?",
+                        "timestamp": datetime.now().isoformat(),
+                        "model": model,
+                        "input_tokens_raw": input_tokens,
+                        "input_tokens_sent": sent_input_tokens,
+                        "output_tokens": output_tokens,
+                        "tokens_saved": saved,
+                        "cost_saved": round(cost_saved, 6),
+                        "percent_saved": round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
+                    }
 
-                        advance_step(_wf_id, "forward", "log_metrics")
-                        complete_workflow(_wf_id)
-                    except Exception:
-                        pass
+                # ── Stats footer ──────────────────────────────────────────
+                if get_stats_footer_enabled():
+                    req_stats = RequestStats(
+                        request_id=trace.request_id if trace else "?",
+                        timestamp=datetime.now(),
+                        input_tokens_raw=input_tokens,
+                        input_tokens_sent=sent_input_tokens,
+                        tokens_saved=saved,
+                        percent_saved=round(saved / input_tokens * 100, 1) if input_tokens else 0.0,
+                        cost_saved=round(cost_saved, 6),
+                    )
+                    print(render_footer_oneline(req_stats), file=sys.stderr)
 
-                # Update last request stats for /stats/last endpoint
-                request_id = trace.request_id if trace else str(uuid.uuid4())[:8]
-                update_last_request(
-                    request_id=request_id,
-                    model=model,
-                    input_raw=input_tokens,
-                    input_sent=sent_input_tokens,
-                    tokens_saved=saved,
-                    cost_saved=cost_saved,
-                    output_tokens=output_tokens,
-                )
+            # ── Circuit breaker: record outcome ───────────────────────────
+            if _cb_registry is not None and _cb_provider is not None:
+                if _cb_success:
+                    _cb_registry.record_success(_cb_provider)
+                # failure is recorded in except block
 
-                stream_tag = " [SSE]" if is_sse else ""
-                mode_tag = f" [{COMPILATION_MODE}]"
-                inject_tag = f" [+{injected_tokens} vault]" if injected_tokens > 0 else ""
-                # Cache status tag: show FRESH/CACHED with token counts for clarity
-                if cache_read_tokens > 0:
-                    _saved_k = f"{cache_read_tokens:,}"
-                    cache_tag = f" (CACHED: {_saved_k} tokens)"
-                elif cache_creation_tokens > 0:
-                    _written_k = f"{cache_creation_tokens:,}"
-                    cache_tag = f" (FRESH: {_written_k} written)"
-                else:
-                    cache_tag = " (FRESH)"
-                print(
-                    f"  📊 {model}{stream_tag}{mode_tag}{inject_tag}: {input_tokens:,} in → {sent_input_tokens:,} sent "
-                    f"(saved {saved:,}, protected {protected_tokens:,}) / {output_tokens:,} out | "
-                    f"~${cost:.4f}{cache_tag} | {latency_ms}ms"
-                )
+        except Exception as exc:
+            # ── Circuit breaker: record failure ───────────────────────────
+            if _cb_registry is not None and _cb_provider is not None:
+                _cb_registry.record_failure(_cb_provider)
 
-        except Exception as e:
-            SESSION["errors"] += 1
+            with ps._session_lock:
+                ps.session["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
-            import traceback as _tb
-
-            _tb.print_exc(file=__import__("sys").stderr)
-            print(f"  ❌ Proxy error: {type(e).__name__}: {e} | {latency_ms}ms")
-            # Workflow tracking: mark the in-progress step as failed (not whole workflow)
-            if _wf_id:
-                try:
-                    from tokenpak.agentic.proxy_workflow import fail_step as _wf_fail
-
-                    _wf_fail(_wf_id, "forward", error=f"{type(e).__name__}: {e}")
-                except Exception:
-                    pass
+            # Record error event in compression telemetry if this was an intercepted request
+            if should_log and is_messages and input_tokens > 0:
+                ps.compression_stats.record_compression(
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=0,
+                    ratio=0.0,
+                    latency_ms=latency_ms,
+                    status="error",
+                )
+            exc_type = type(exc).__name__
+            exc_msg = str(exc)
+            # Log the failed request
             try:
-                err = json.dumps({"error": {"type": "proxy_error", "message": str(e)}}).encode()
+                log_request(
+                    request_id=_req_id,
+                    client_ip=self.client_address[0] if self.client_address else "",
+                    method=method,
+                    endpoint=parsed.path,
+                    request_body_size=content_length,
+                    response_status=502,
+                    latency_ms=latency_ms,
+                    model=model,
+                    extra={"error": exc_type, "error_message": exc_msg[:200]},
+                )
+            except Exception:
+                pass  # logging must never break the proxy
+            # Build an actionable error message depending on the exception type
+            if "timeout" in exc_type.lower() or isinstance(exc, TimeoutError):
+                user_detail = (
+                    "The upstream LLM provider did not respond in time. "
+                    "Check your internet connection or try again in a moment."
+                )
+            elif "connection" in exc_type.lower() or "refused" in exc_msg.lower():
+                # Determine provider for a more useful message
+                _provider_hint = "the LLM provider"
+                if "anthropic" in target_url:
+                    _provider_hint = "api.anthropic.com"
+                elif "openai" in target_url:
+                    _provider_hint = "api.openai.com"
+                elif "googleapis" in target_url:
+                    _provider_hint = "generativelanguage.googleapis.com"
+                user_detail = (
+                    f"Cannot reach {_provider_hint}. "
+                    "Check your API key and internet connection. "
+                    "Run `tokenpak doctor` for diagnostics."
+                )
+            else:
+                user_detail = (
+                    f"Unexpected proxy error ({exc_type}). "
+                    "Check `tokenpak status` for recent errors or run `tokenpak doctor`."
+                )
+            print(
+                f"  ✖ Proxy error [{method} {target_url[:60]}]: {exc_type}: {exc_msg} | {latency_ms}ms\n"
+                f"    → {user_detail}"
+            )
+            try:
+                err = json.dumps({
+                    "error": {
+                        "type": "proxy_error",
+                        "message": user_detail,
+                        "detail": exc_msg,
+                        "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                    }
+                }).encode()
                 self.send_response(502)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", len(err))
+                self.send_header("Content-Length", str(len(err)))
                 self.end_headers()
                 self.wfile.write(err)
             except Exception:
                 pass
 
+    def _handle_count_tokens(self) -> None:
+        """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
+
+        Parses the Anthropic Messages body, sums token counts across system/messages/tools
+        via the local count_tokens() helper, and returns {"input_tokens": N}.
+        No upstream round-trip. Honors anthropic-version and anthropic-beta headers
+        (they do not affect local computation).
+        """
+        from tokenpak.proxy.token_cache import count_tokens as _count_tokens
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            err = json.dumps(
+                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}}
+            ).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err)))
+            self.end_headers()
+            self.wfile.write(err)
+            return
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            err = json.dumps(
+                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}}
+            ).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err)))
+            self.end_headers()
+            self.wfile.write(err)
+            return
+
+        total = 0
+
+        # system — string or list of content blocks
+        system = payload.get("system", "")
+        if isinstance(system, str):
+            total += _count_tokens(system)
+        elif isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total += _count_tokens(text)
+                elif isinstance(block, str):
+                    total += _count_tokens(block)
+
+        # messages[].content — string or list of content blocks
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += _count_tokens(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        text = block.get("text", "")
+                        if isinstance(text, str):
+                            total += _count_tokens(text)
+                    elif isinstance(block, str):
+                        total += _count_tokens(block)
+
+        # tools[] — name, description, and input_schema
+        for tool in payload.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
+            total += _count_tokens(tool.get("name", ""))
+            total += _count_tokens(tool.get("description", ""))
+            schema = tool.get("input_schema", {})
+            if isinstance(schema, dict):
+                total += _count_tokens(json.dumps(schema, separators=(",", ":")))
+
+        resp = json.dumps({"input_tokens": total}, separators=(",", ":")).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(resp)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(resp)
+
+    def _handle_cost_forecast(self) -> None:
+        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+
+        Accepts the same body shape as /v1/messages, runs count_tokens locally,
+        applies the model pricing config, and returns an estimated cost breakdown.
+        No API key required; no upstream round-trip.
+
+        Response shape:
+          {
+            estimated_cost_usd: float,
+            ttfb_estimate_ms: int,
+            cache_hit_likelihood: float,
+            breakdown: {
+              input_tokens: int,
+              output_estimate: int,
+              cache_hits_estimate: int,
+              cache_creates_estimate: int,
+            }
+          }
+        """
+        from tokenpak.proxy.token_cache import count_tokens as _count_tokens
+
+        def _send_err(msg: str) -> None:
+            body = json.dumps(
+                {"error": {"type": "invalid_request_error", "message": msg}}
+            ).encode()
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            _send_err(f"Request body is not valid JSON: {exc}")
+            return
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            _send_err("Request body must include a 'messages' array")
+            return
+
+        model = payload.get("model", "claude-sonnet-4-5") or "claude-sonnet-4-5"
+        if not isinstance(model, str):
+            model = "claude-sonnet-4-5"
+
+        # ── 1. Count input tokens (mirrors _handle_count_tokens logic) ──────────
+        total_input = 0
+
+        system = payload.get("system", "")
+        if isinstance(system, str):
+            total_input += _count_tokens(system)
+        elif isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total_input += _count_tokens(text)
+                elif isinstance(block, str):
+                    total_input += _count_tokens(block)
+
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total_input += _count_tokens(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        text = block.get("text", "")
+                        if isinstance(text, str):
+                            total_input += _count_tokens(text)
+                    elif isinstance(block, str):
+                        total_input += _count_tokens(block)
+
+        for tool in payload.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
+            total_input += _count_tokens(tool.get("name", ""))
+            total_input += _count_tokens(tool.get("description", ""))
+            schema = tool.get("input_schema", {})
+            if isinstance(schema, dict):
+                total_input += _count_tokens(json.dumps(schema, separators=(",", ":")))
+
+        # ── 2. Estimate cache creates from cache_control hints ─────────────────
+        cache_creates_estimate = 0
+        cache_hits_estimate = 0
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("cache_control"):
+                        block_text = block.get("text", "")
+                        if isinstance(block_text, str):
+                            cache_creates_estimate += _count_tokens(block_text)
+        if isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict) and block.get("cache_control"):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        cache_creates_estimate += _count_tokens(text)
+
+        # ── 3. Output estimate — default 500 unless max_tokens is small ────────
+        max_tokens = payload.get("max_tokens")
+        if isinstance(max_tokens, int) and 0 < max_tokens < 500:
+            output_estimate = max_tokens
+        else:
+            output_estimate = 500
+
+        # ── 4. Apply pricing config ────────────────────────────────────────────
+        estimated_cost_usd = estimate_cost(
+            model,
+            total_input,
+            output_estimate,
+            cache_read_tokens=cache_hits_estimate,
+            cache_creation_tokens=cache_creates_estimate,
+        )
+
+        # ── 5. TTFB estimate from rolling latency average ─────────────────────
+        with _forecast_latency_lock:
+            lats = list(_forecast_latencies)
+        if lats:
+            ttfb_estimate_ms = int(sum(lats) / len(lats))
+        else:
+            ttfb_estimate_ms = 800  # default when no prior requests
+
+        # ── 6. Cache hit likelihood — per-session if available, else 0.5 ───────
+        cache_hit_likelihood = 0.5
+        session_id = self.headers.get("x-claude-code-session-id", "").strip()
+        if session_id:
+            try:
+                import sqlite3 as _sqlite3
+                from tokenpak.proxy.config import MONITOR_DB as _DB
+                _conn = _sqlite3.connect(_DB, timeout=2)
+                try:
+                    _cur = _conn.execute(
+                        "SELECT cache_read_tokens FROM requests "
+                        "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 20",
+                        (session_id,),
+                    )
+                    rows = _cur.fetchall()
+                    if len(rows) >= 3:
+                        hits = sum(1 for r in rows if (r[0] or 0) > 0)
+                        cache_hit_likelihood = round(hits / len(rows), 4)
+                finally:
+                    _conn.close()
+            except Exception:
+                pass  # never break the forecast endpoint
+        else:
+            try:
+                ps = self.server.proxy_server
+                _s = ps.session
+                _cr = _s.get("cache_read_tokens", 0)
+                _total_reqs = _s.get("requests", 0)
+                if _total_reqs >= 5:
+                    cache_hit_likelihood = round(min(1.0, _cr / max(1, _total_reqs * 500)), 4)
+            except Exception:
+                pass
+
+        resp_body = json.dumps({
+            "estimated_cost_usd": round(estimated_cost_usd, 8),
+            "ttfb_estimate_ms": ttfb_estimate_ms,
+            "cache_hit_likelihood": cache_hit_likelihood,
+            "breakdown": {
+                "input_tokens": total_input,
+                "output_estimate": output_estimate,
+                "cache_hits_estimate": cache_hits_estimate,
+                "cache_creates_estimate": cache_creates_estimate,
+            },
+        }, separators=(",", ":")).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(resp_body)
+
+    def _send_json(self, data: dict) -> None:
+        body = json.dumps(data, indent=2).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+
 # ---------------------------------------------------------------------------
-# Globals from runtime/proxy.py used by ForwardProxyHandler.
-# Imported AFTER class definition to break circular import:
-# runtime/proxy.py → proxy/server.py (class defined) → runtime/proxy.py (already in sys.modules)
+# Token helpers (lightweight, no heavy deps)
 # ---------------------------------------------------------------------------
-from tokenpak.runtime.proxy import (  # noqa: E402,F401
-    SESSION,
-    MONITOR,
-    VAULT_INDEX,
-    CAPSULE_BUILDER,
-    LAST_REQUEST,
-    _LAST_REQUEST_LOCK,
-    TERM_RESOLVER,
-    CANON_AVAILABLE,
-    TOOL_REGISTRY_AVAILABLE,
-    _request_latencies,
-    _latency_lock,
-    estimate_cost,
-    compact_request_body,
-    inject_vault_context,
-    extract_request_tokens,
-    extract_response_tokens,
-    _build_cache_stats_payload,
-    _ingest_write_entry,
-    update_last_request,
-    apply_canon_refs,
-    _get_tool_registry,
-    MODEL_COSTS,
-    _detect_adapter,
-    _header_mapping,
-    count_tokens,
-)
+
+def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
+    """
+    Compute a short SHA-256 hash of the stable system prefix.
+
+    Used to populate X-Tokenpak-Cache-Prefix-Hash response header for
+    determinism verification in integration tests and debug tooling.
+
+    Returns a 16-char hex string, or "" if unavailable.
+    """
+    if not body:
+        return ""
+    try:
+        import hashlib
+        data = json.loads(body)
+        system = data.get("system")
+        if not system:
+            return ""
+        if isinstance(system, str):
+            stable_text = system.strip()
+        elif isinstance(system, list):
+            from .prompt_builder import classify_system_blocks
+            stable_blocks, _ = classify_system_blocks(system)
+            stable_text = "\n".join(
+                b.get("text", "")
+                for b in stable_blocks
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
+        else:
+            return ""
+        if not stable_text:
+            return ""
+        return hashlib.sha256(stable_text.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return ""
+
+
+def _estimate_tokens_from_body(body: bytes) -> int:
+    try:
+        data = json.loads(body)
+        messages = data.get("messages", [])
+        total = 0
+        for msg in messages:
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total += len(content) // 4
+            elif isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and "text" in part:
+                        total += len(part["text"]) // 4
+        return total
+    except Exception:
+        return len(body) // 4
+
+
+def _extract_response_tokens(body: bytes) -> int:
+    try:
+        data = json.loads(body)
+        usage = data.get("usage", {})
+        return (
+            usage.get("output_tokens") or
+            usage.get("completion_tokens") or
+            usage.get("total_tokens", 0)
+        )
+    except Exception:
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# ProxyServer — public API
+# ---------------------------------------------------------------------------
+
+def auto_detect_upstream(request_headers: dict) -> str:
+    """
+    Detect target upstream from request headers.
+    
+    Supports zero-config mode: when no explicit provider URL is configured,
+    this function uses request headers to identify the intended LLM provider
+    and route to the correct upstream.
+    
+    Header priority:
+    1. Authorization: Bearer sk-ant-* → Anthropic
+    2. Authorization: Bearer sk-* (non-Anthropic) → OpenAI
+    3. x-goog-api-key → Google
+    4. anthropic-* headers → Anthropic
+    5. Default → Anthropic (most common reverse-proxy use case)
+    
+    Args:
+        request_headers: Dictionary of HTTP request headers (case-insensitive lookup)
+    
+    Returns:
+        Upstream provider base URL
+        
+    Examples:
+        >>> auto_detect_upstream({"authorization": "Bearer sk-ant-abc123"})
+        'https://api.anthropic.com'
+        
+        >>> auto_detect_upstream({"authorization": "Bearer sk-openai-xyz"})
+        'https://api.openai.com'
+        
+        >>> auto_detect_upstream({"x-goog-api-key": "AIza..."})
+        'https://generativelanguage.googleapis.com'
+    """
+    # Case-insensitive header lookup
+    lower_headers = {k.lower(): v for k, v in request_headers.items()}
+    
+    # Check Authorization header
+    auth = lower_headers.get("authorization", "").lower()
+    
+    # Anthropic token pattern: sk-ant-*
+    if auth.startswith("bearer sk-ant-"):
+        return "https://api.anthropic.com"
+    
+    # OpenAI token pattern: sk-* (but not sk-ant-*)
+    if auth.startswith("bearer sk-"):
+        return "https://api.openai.com"
+    
+    # Google API key
+    if "x-goog-api-key" in lower_headers:
+        return "https://generativelanguage.googleapis.com"
+    
+    # Anthropic-specific headers (x-api-key, anthropic-version, etc)
+    if "x-api-key" in lower_headers or "anthropic-version" in lower_headers:
+        return "https://api.anthropic.com"
+    
+    # Default to Anthropic (most common reverse-proxy use case)
+    return "https://api.anthropic.com"
+
+
+class ProxyServer:
+    """
+    TokenPak HTTP proxy server.
+
+    Parameters
+    ----------
+    host : str
+        Bind host (default "0.0.0.0").
+    port : int
+        Bind port (default from TOKENPAK_PORT env var or 8766).
+    compilation_mode : str
+        "strict" | "hybrid" | "aggressive"
+    request_hook : callable, optional
+        Called for each intercepted request before forwarding.
+        Signature: (body: bytes, model: str, trace: PipelineTrace | None)
+                    -> (body, sent_tokens, raw_tokens, protected_tokens)
+    """
+
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: Optional[int] = None,
+        compilation_mode: Optional[str] = None,
+        request_hook: Optional[Callable] = None,
+        shutdown_timeout: Optional[float] = None,
+    ):
+        self.host = host
+        self.port = port or int(os.environ.get("TOKENPAK_PORT", "8766"))
+        self.compilation_mode = compilation_mode or os.environ.get("TOKENPAK_MODE", "hybrid")
+        self.shutdown_timeout: float = (
+            shutdown_timeout
+            if shutdown_timeout is not None
+            else float(os.environ.get("TOKENPAK_SHUTDOWN_TIMEOUT", "30"))
+        )
+        # Graceful shutdown coordinator
+        self.shutdown = GracefulShutdown()
+
+        # Connection pool — shared across all handler threads
+        self._connection_pool = ConnectionPool(PoolConfig.from_env())
+
+        # Auto-wire the capsule builder hook.  When TOKENPAK_CAPSULE_BUILDER=0
+        # (the default) the hook is a no-op, so this is safe for all deployments.
+        # If a caller supplies their own request_hook it is chained *after* the
+        # capsule stage so they still see the (potentially compressed) body.
+        try:
+            from .capsule_integration import get_capsule_request_hook
+            self.request_hook: Optional[Callable] = get_capsule_request_hook(
+                base_hook=request_hook
+            )
+        except Exception:  # pragma: no cover — import failure falls back gracefully
+            self.request_hook = request_hook
+
+        # Wire apply_stable_cache_control into the pipeline.
+        # Runs AFTER any capsule/compression processing, BEFORE forwarding to LLM.
+        # Ensures every Anthropic request with a system prompt gets a stable cache
+        # prefix marker — enabling prompt cache reuse across requests.
+        try:
+            from .prompt_builder import apply_stable_cache_control
+            _prior_hook = self.request_hook
+
+            def _stable_cache_hook(
+                body: bytes,
+                model: str,
+                trace=None,
+                *,
+                _hook=_prior_hook,
+                _scc=apply_stable_cache_control,
+            ):
+                if _hook is not None:
+                    body, sent, raw, protected = _hook(body, model, trace)
+                else:
+                    _tok = len(body) // 4
+                    body, sent, raw, protected = body, _tok, _tok, 0
+                body = _scc(body)
+                return body, sent, raw, protected
+
+            self.request_hook = _stable_cache_hook
+        except Exception:  # pragma: no cover — import failure gracefully degrades
+            pass
+
+        self.router = ProviderRouter()
+        self.trace_storage = TraceStorage(max_traces=50)
+        self.session_filter = SessionFilter()
+        self.session: Dict[str, Any] = _new_session()
+        self._session_lock = threading.Lock()
+        self._last_request: Optional[Dict[str, Any]] = None
+        self._last_lock = threading.Lock()
+        self._server: Optional[_ThreadedHTTPServer] = None
+        self._server_thread: Optional[threading.Thread] = None
+        # Rolling window of per-request compression ratios (last 100)
+        self._compression_ratios: deque = deque(maxlen=100)
+        self._compression_lock = threading.Lock()
+        # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
+        self.compression_stats = CompressionStats(start_time=self.session["start_time"])
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def start(self, blocking: bool = True) -> None:
+        """Start the proxy server."""
+        # --- Startup self-test ---
+        _all_ok, _warnings = run_startup_checks(self.port)
+        if _warnings:
+            report = format_startup_report(_warnings, _all_ok)
+            print(report)
+            # Track non-fatal startup warnings in the degradation log
+            for w in _warnings:
+                get_degradation_tracker().record(
+                    DegradationEventType.STARTUP_WARNING, w, recovered=_all_ok
+                )
+        # --------------------------
+
+        server = _ThreadedHTTPServer((self.host, self.port), _ProxyHandler)
+        server.proxy_server = self  # inject back-reference
+        self._server = server
+
+        if blocking:
+            # Install signal handlers only in the main thread (signal module restriction)
+            if threading.current_thread() is threading.main_thread():
+                signal.signal(signal.SIGTERM, self._handle_signal)
+                signal.signal(signal.SIGINT, self._handle_signal)
+
+            print(f"TokenPak proxy listening on {self.host}:{self.port} [{self.compilation_mode}]")
+            print("  ✓ Zero-config mode enabled (auto-detecting upstream from request headers)")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass  # SIGINT handled via _handle_signal → stop()
+            finally:
+                # Ensure stop is called even if serve_forever exits unexpectedly
+                if self._server is not None:
+                    self.stop()
+        else:
+            self._server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            self._server_thread.start()
+
+    def _handle_signal(self, signum: int, frame: Any) -> None:
+        """Signal handler for SIGTERM/SIGINT — triggers graceful shutdown."""
+        sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+        print(f"\nTokenPak: {sig_name} received — starting graceful shutdown "
+              f"(drain timeout: {self.shutdown_timeout:.0f}s)...", flush=True)
+        # Run stop() in a background thread so the signal handler returns quickly
+        t = threading.Thread(target=self.stop, daemon=True)
+        t.start()
+
+    def stop(self) -> None:
+        """
+        Gracefully shut down the proxy server.
+
+        Sequence:
+          1. Stop accepting new requests (return 503 for any new proxied calls)
+          2. Drain in-flight requests (up to ``shutdown_timeout`` seconds)
+          3. Flush telemetry buffer to disk
+          4. Close the HTTP connection pool
+          5. Stop the HTTP server
+        """
+        # Always close the pool, even if server wasn't started
+        if self._connection_pool is not None:
+            try:
+                self._connection_pool.close()
+            except Exception:
+                pass
+
+        if self._server is None:
+            return  # already stopped
+
+        # ── Step 1: Stop accepting new proxy requests ─────────────────────
+        self.shutdown.begin()
+        print("TokenPak: shutdown step 1/5 — rejecting new requests (503)", flush=True)
+
+        # ── Step 2: Drain in-flight requests ──────────────────────────────
+        in_flight = self.shutdown.in_flight_count()
+        if in_flight > 0:
+            print(
+                f"TokenPak: shutdown step 2/5 — draining {in_flight} in-flight request(s) "
+                f"(timeout: {self.shutdown_timeout:.0f}s)...",
+                flush=True,
+            )
+        else:
+            print("TokenPak: shutdown step 2/5 — no in-flight requests, proceeding", flush=True)
+
+        drained = self.shutdown.wait_for_drain(timeout=self.shutdown_timeout)
+        if not drained:
+            remaining = self.shutdown.in_flight_count()
+            print(
+                f"TokenPak: shutdown drain timed out after {self.shutdown_timeout:.0f}s "
+                f"({remaining} request(s) still active — forcing close)",
+                flush=True,
+            )
+        else:
+            print("TokenPak: shutdown step 2/5 — all requests drained ✓", flush=True)
+
+        # ── Step 3: Flush telemetry buffer to disk ─────────────────────────
+        print("TokenPak: shutdown step 3/5 — flushing telemetry...", flush=True)
+        try:
+            self._flush_telemetry()
+            print("TokenPak: shutdown step 3/5 — telemetry flushed ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 3/5 — telemetry flush error (non-fatal): {exc}",
+                  flush=True)
+
+        # ── Step 4: Close HTTP connection pool ────────────────────────────
+        print("TokenPak: shutdown step 4/5 — closing connection pool...", flush=True)
+        try:
+            self._connection_pool.close()
+            print("TokenPak: shutdown step 4/5 — connection pool closed ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 4/5 — pool close error (non-fatal): {exc}",
+                  flush=True)
+
+        # ── Step 5: Stop HTTP server ───────────────────────────────────────
+        print("TokenPak: shutdown step 5/5 — stopping HTTP server...", flush=True)
+        srv = self._server
+        self._server = None
+        try:
+            srv.shutdown()
+            print("TokenPak: shutdown step 5/5 — HTTP server stopped ✓", flush=True)
+        except Exception as exc:
+            print(f"TokenPak: shutdown step 5/5 — server stop error (non-fatal): {exc}",
+                  flush=True)
+
+        print("TokenPak: graceful shutdown complete.", flush=True)
+
+    def _flush_telemetry(self) -> None:
+        """
+        Flush any buffered telemetry to disk before process exit.
+
+        Writes a shutdown summary entry to the compression events JSONL file
+        so stats from the current session are preserved across restarts.
+        """
+        shutdown_record = {
+            "event": "shutdown",
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "session_requests": self.session.get("requests", 0),
+            "session_tokens_saved": self.session.get("saved_tokens", 0),
+            "session_cost_saved": round(self.session.get("cost_saved", 0.0), 6),
+            "session_cost_total": round(self.session.get("cost", 0.0), 6),
+            "session_errors": self.session.get("errors", 0),
+            "uptime_seconds": round(time.time() - self.session.get("start_time", time.time())),
+        }
+        # Delegate to the compression_stats recorder (writes to ~/.tokenpak/compression_events.jsonl)
+        self.compression_stats.flush_shutdown_record(shutdown_record)
+
+    def is_running(self) -> bool:
+        return self._server is not None
+
+    # ------------------------------------------------------------------
+    # Status endpoints (also used by handler GET routes)
+    # ------------------------------------------------------------------
+
+    def health(self, deep: bool = False) -> dict:
+        with self._session_lock:
+            uptime = round(time.time() - self.session["start_time"])
+            requests_total = self.session["requests"]
+            requests_errors = self.session["errors"]
+        with self._compression_lock:
+            ratios = list(self._compression_ratios)
+        compression_ratio_avg = round(sum(ratios) / len(ratios), 4) if ratios else 0.0
+        pool_metrics = self._connection_pool.metrics()
+        deg = get_degradation_tracker()
+        is_degraded = deg.is_degraded()
+        is_shutting_down = self.shutdown.is_shutting_down
+        # Circuit breaker summary
+        cb_registry = get_circuit_breaker_registry()
+        cb_statuses = cb_registry.all_statuses()
+        cb_any_open = any(
+            s.get("state") in ("open", "half_open")
+            for s in cb_statuses.values()
+        )
+        result = {
+            "status": "shutting_down" if is_shutting_down else ("degraded" if is_degraded else "ok"),
+            "uptime_seconds": uptime,
+            "version": _tokenpak_version,
+            "requests_total": requests_total,
+            "requests_errors": requests_errors,
+            "compression_ratio_avg": compression_ratio_avg,
+            "is_degraded": is_degraded,
+            "is_shutting_down": is_shutting_down,
+            "in_flight_requests": self.shutdown.in_flight_count(),
+            "timestamp": datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "connection_pool": {
+                "http2_enabled": self._connection_pool.http2_enabled,
+                "active_providers": self._connection_pool.active_providers,
+                **pool_metrics,
+            },
+            "circuit_breakers": {
+                "enabled": cb_registry.enabled,
+                "any_open": cb_any_open,
+                "providers": cb_statuses,
+            },
+        }
+        if deep:
+            import shutil
+            import psutil  # optional; fall back gracefully
+            # providers: list active providers with their circuit-breaker status
+            providers = [
+                {"name": name, "status": info.get("state", "unknown")}
+                for name, info in cb_statuses.items()
+            ]
+            # memory usage in MB
+            try:
+                proc = psutil.Process()
+                mem_mb = round(proc.memory_info().rss / (1024 * 1024), 1)
+            except Exception:
+                mem_mb = None
+            # disk available in GB
+            try:
+                disk = shutil.disk_usage("/")
+                disk_available_gb = round(disk.free / (1024 ** 3), 2)
+            except Exception:
+                disk_available_gb = None
+            result["providers"] = providers
+            result["memory"] = {"rss_mb": mem_mb}
+            result["disk"] = {"available_gb": disk_available_gb}
+        return result
+
+    def status(self) -> dict:
+        """Return a concise operational status snapshot for GET /status."""
+        with self._session_lock:
+            start_time = self.session["start_time"]
+        uptime = round(time.time() - start_time)
+        last_restart = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Provider health from circuit breakers; unknown when no circuit exists yet.
+        _known_providers = ("anthropic", "openai", "google")
+        cb_registry = get_circuit_breaker_registry()
+        cb_statuses = cb_registry.all_statuses()
+        providers: dict = {}
+        active_alerts = 0
+        for name in _known_providers:
+            if name in cb_statuses:
+                state = cb_statuses[name].get("state", "unknown")
+                if state in ("open", "half_open"):
+                    providers[name] = "error"
+                    active_alerts += 1
+                else:
+                    providers[name] = "ok"
+            else:
+                providers[name] = "unknown"
+        return {
+            "uptime_seconds": uptime,
+            "version": _tokenpak_version,
+            "last_restart": last_restart,
+            "active_alerts": active_alerts,
+            "providers": providers,
+        }
+
+    def stats(self) -> dict:
+        return {
+            "session": self.session,
+            "compilation_mode": self.compilation_mode,
+        }
+
+    def session_stats(self) -> dict:
+        s = self.session
+        uptime = round((time.time() - s["start_time"]) / 3600, 2)
+        return {
+            "session_requests": s["requests"],
+            "session_total_saved": round(s["cost_saved"], 4),
+            "tokens_saved": s["saved_tokens"],
+            "tokens_sent": s["sent_input_tokens"],
+            "tokens_raw": s["input_tokens"],
+            "output_tokens": s["output_tokens"],
+            "total_cost": round(s["cost"], 4),
+            "uptime_hours": uptime,
+            "errors": s["errors"],
+            "avg_savings_pct": (
+                round(s["saved_tokens"] / s["input_tokens"] * 100, 1)
+                if s["input_tokens"] > 0 else 0.0
+            ),
+        }
+
+    def last_request_stats(self) -> dict:
+        with self._last_lock:
+            if self._last_request is None:
+                return {"error": "no_requests", "message": "No requests captured yet."}
+            return dict(self._last_request)
+
+    def reset_session(self) -> None:
+        with self._session_lock:
+            t = self.session["start_time"]
+            self.session = _new_session()
+            self.session["start_time"] = t
+
+
+# ---------------------------------------------------------------------------
+# Convenience entry point
+# ---------------------------------------------------------------------------
+
+def start_proxy(
+    host: str = "0.0.0.0",
+    port: Optional[int] = None,
+    compilation_mode: Optional[str] = None,
+    request_hook: Optional[Callable] = None,
+    blocking: bool = True,
+    shutdown_timeout: Optional[float] = None,
+) -> ProxyServer:
+    """Create and start a ProxyServer. Returns the server instance."""
+    server = ProxyServer(
+        host=host,
+        port=port,
+        compilation_mode=compilation_mode,
+        request_hook=request_hook,
+        shutdown_timeout=shutdown_timeout,
+    )
+    server.start(blocking=blocking)
+    return server
+
+# Backward-compat alias
+ForwardProxyHandler = _ProxyHandler
+
+
+# ---------------------------------------------------------------------------
+# CLI entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    """
+    Entry point for ``python -m tokenpak.proxy.server``.
+
+    Parses CLI arguments, applies environment overrides, writes a PID file,
+    installs a SIGHUP handler for config hot-reload, prints a startup banner,
+    then blocks on the proxy server until SIGTERM/SIGINT.
+    """
+    import argparse
+    import logging
+
+    parser = argparse.ArgumentParser(
+        prog="python -m tokenpak.proxy.server",
+        description="TokenPak forward proxy — intercepts and optimises LLM API traffic.",
+    )
+    parser.add_argument(
+        "--port", type=int, default=None,
+        help="Bind port (env: TOKENPAK_PORT, default: 8766)",
+    )
+    parser.add_argument(
+        "--config", default=None, metavar="PATH",
+        help="Path to config YAML (env: TOKENPAK_CONFIG, default: ~/.tokenpak/config.yaml)",
+    )
+    parser.add_argument(
+        "--log-level", default=None,
+        choices=["debug", "info", "warning", "error", "critical"],
+        help="Python logging level (env: TOKENPAK_LOG_LEVEL, default: warning)",
+    )
+    parser.add_argument(
+        "--profile", default=None,
+        choices=["safe", "balanced", "aggressive", "agentic", "transparent"],
+        help="Named workflow profile (env: TOKENPAK_PROFILE, default: balanced)",
+    )
+    args = parser.parse_args()
+
+    # Apply CLI args to environment *before* constructing ProxyServer.
+    # ProxyServer reads TOKENPAK_PORT / TOKENPAK_MODE / TOKENPAK_BIND_ADDRESS
+    # from os.environ at __init__ time, so setting them here ensures the right
+    # values are used even after config.py's module-level evaluation has run.
+    if args.port is not None:
+        os.environ["TOKENPAK_PORT"] = str(args.port)
+    if args.profile is not None:
+        os.environ["TOKENPAK_PROFILE"] = args.profile
+    if args.config is not None:
+        os.environ["TOKENPAK_CONFIG"] = args.config
+
+    _log_level = (args.log_level or os.environ.get("TOKENPAK_LOG_LEVEL", "warning")).upper()
+    logging.basicConfig(level=_log_level, format="%(levelname)s %(name)s: %(message)s")
+
+    port = int(os.environ.get("TOKENPAK_PORT", "8766"))
+    host = os.environ.get("TOKENPAK_BIND_ADDRESS", "127.0.0.1")
+    mode = os.environ.get("TOKENPAK_MODE", "hybrid")
+    profile = os.environ.get("TOKENPAK_PROFILE", "balanced")
+
+    _mode_desc = {
+        "strict":     "100% lossless — no compression",
+        "hybrid":     "protected/code strict, narrative compressed",
+        "aggressive": "everything except protected gets compressed",
+    }
+
+    # Write PID file on startup; remove on clean shutdown.
+    _pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    _pid_path.parent.mkdir(parents=True, exist_ok=True)
+    _pid_path.write_text(str(os.getpid()))
+
+    from tokenpak.proxy.config import PROVIDER_DISPLAY as _provider_display
+    print(f"""
+╔══════════════════════════════════════════════════════════════════╗
+║  TokenPak Proxy  v{_tokenpak_version}
+╠══════════════════════════════════════════════════════════════════╣
+║  Listening:  http://{host}:{port}
+║  Profile:    {profile}
+║  Mode:       {mode} — {_mode_desc.get(mode, '?')}
+║  Providers:  {_provider_display}
+║  PID:        {os.getpid()}
+║  PID file:   {_pid_path}
+╚══════════════════════════════════════════════════════════════════╝
+""", flush=True)
+
+    ps = ProxyServer(host=host, port=port)
+
+    def _handle_sighup(signum: int, frame) -> None:  # type: ignore[type-arg]
+        """Hot-reload dynamic config from environment variables (no restart needed)."""
+        print("\n[tokenpak] SIGHUP received — reloading config from env", flush=True)
+        ps.compilation_mode = os.environ.get("TOKENPAK_MODE", ps.compilation_mode)
+        print(f"[tokenpak] config reloaded: mode={ps.compilation_mode}", flush=True)
+
+    signal.signal(signal.SIGHUP, _handle_sighup)
+
+    try:
+        ps.start(blocking=True)
+    finally:
+        _pid_path.unlink(missing_ok=True)
+        print("[tokenpak] PID file removed — clean exit.", flush=True)
+
+
+if __name__ == "__main__":
+    main()

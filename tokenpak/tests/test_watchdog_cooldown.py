@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.watchdog import CooldownManager
+from tokenpak.proxy_watchdog import CooldownManager
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ def test_multiple_clear_calls_idempotent(tmp_path):
 
 def test_check_auth_profiles_no_file(tmp_path, monkeypatch):
     """check_auth_profiles returns [] when auth-profiles.json doesn't exist."""
-    import tokenpak.watchdog as wd_module
+    import tokenpak.proxy_watchdog as wd_module
 
     monkeypatch.setattr(wd_module, "AUTH_PROFILES_FILE", tmp_path / "auth-profiles.json")
     mgr = make_manager(tmp_path)
@@ -188,7 +188,7 @@ def test_check_auth_profiles_no_file(tmp_path, monkeypatch):
 
 def test_check_auth_profiles_active_cooldown_warning(tmp_path, monkeypatch):
     """check_auth_profiles warns about active cooldowns but doesn't clear them."""
-    import tokenpak.watchdog as wd_module
+    import tokenpak.proxy_watchdog as wd_module
 
     ap = tmp_path / "auth-profiles.json"
     future = time.time() + 3600
@@ -204,7 +204,7 @@ def test_check_auth_profiles_active_cooldown_warning(tmp_path, monkeypatch):
 
 def test_check_auth_profiles_clears_expired(tmp_path, monkeypatch):
     """check_auth_profiles clears expired cooldowns in auth-profiles.json."""
-    import tokenpak.watchdog as wd_module
+    import tokenpak.proxy_watchdog as wd_module
 
     ap = tmp_path / "auth-profiles.json"
     past = time.time() - 60

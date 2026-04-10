@@ -2,7 +2,7 @@
 title: "llamaindex-tokenpak"
 description: "llamaindex-tokenpak"
 status: active
-owner: Kevin
+maintainer: tokenpak
 created: 2026-03-11
 tags: [project]
 ---

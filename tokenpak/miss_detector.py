@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Context Miss Detection for TokenPak.
 
 Detects when the LLM didn't have enough context — hallucinations, explicit

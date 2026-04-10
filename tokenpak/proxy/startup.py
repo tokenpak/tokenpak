@@ -129,3 +129,55 @@ def format_startup_report(warnings: List[str], all_ok: bool) -> str:
     for i, w in enumerate(warnings, 1):
         lines.append(f"  {i}. {w}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Config validation — transferred from monolith (TPK-CONSOLIDATION-A2a)
+# ---------------------------------------------------------------------------
+import os as _os
+
+
+def validate_tokenpak_config() -> bool:
+    """Validate and auto-correct TokenPak config at startup.
+
+    Checks that expected feature-flag env vars match their canonical values.
+    Prints a warning for any drift found and auto-corrects.
+
+    Returns:
+        True if all settings were already correct, False if any drift was corrected.
+    """
+    expected = {
+        "TOKENPAK_SEMANTIC_CACHE": "1",
+        "TOKENPAK_PREFIX_REGISTRY": "1",
+        "TOKENPAK_COMPRESSION_DICT": "1",
+        "TOKENPAK_TRACE": "1",
+        "TOKENPAK_BUDGET_CONTROLLER": "1",
+        "TOKENPAK_REQUEST_LOGGER": "1",
+        "TOKENPAK_ERROR_NORMALIZER": "1",
+        "TOKENPAK_SALIENCE_ROUTER": "1",
+        "TOKENPAK_CACHE_REGISTRY": "1",
+        "TOKENPAK_RETRIEVAL_WATCHDOG": "1",
+        "TOKENPAK_FAILURE_MEMORY": "1",
+        "TOKENPAK_FIDELITY_TIERS": "1",
+        "TOKENPAK_PRECONDITION_GATES": "1",
+        "TOKENPAK_QUERY_REWRITER": "1",
+        "TOKENPAK_SESSION_CAPSULES": "1",
+        "TOKENPAK_STABILITY_SCORER": "1",
+        "TOKENPAK_MODE": "hybrid",
+        "TOKENPAK_PORT": "8766",
+    }
+
+    drift_found = False
+    for key, expected_val in expected.items():
+        actual_val = _os.getenv(key, "")
+        if actual_val != expected_val:
+            print(f"⚠️  CONFIG DRIFT: {key}={actual_val}, expected {expected_val}")
+            _os.environ[key] = expected_val
+            drift_found = True
+
+    if drift_found:
+        print("🔧 TokenPak config auto-corrected")
+    else:
+        print("✅ TokenPak config validated - all settings correct")
+
+    return not drift_found

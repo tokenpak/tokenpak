@@ -1,8 +1,9 @@
-"""tokenpak._internal.debug — internal implementation module."""
+"""tokenpak.agent.debug — backward-compat shim.
 
-try:
-    from ._impl import *  # noqa: F401,F403
-except ImportError:
-    pass
+DebugLogger and DebugState have moved to tokenpak.infrastructure.debug.
+This module re-exports them for backward compatibility.
+"""
 
-__all__ = []
+from tokenpak.infrastructure.debug import DebugLogger, DebugState
+
+__all__ = ["DebugLogger", "DebugState"]

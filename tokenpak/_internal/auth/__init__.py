@@ -1,11 +1,8 @@
-"""tokenpak._internal.auth — authentication and API key management.
+"""tokenpak.agent.auth — backward-compat shim.
 
-Note: Full implementation requires tokenpak.infrastructure.cooldown.
+CooldownManager has moved to tokenpak.infrastructure.cooldown.
 """
 
-try:
-    from .cooldown_manager import CooldownManager
-    from .oauth_manager import OAuthManager
-    __all__ = ["CooldownManager", "OAuthManager"]
-except ImportError:
-    __all__ = []
+from tokenpak.infrastructure.cooldown import CooldownManager
+
+__all__ = ["CooldownManager"]

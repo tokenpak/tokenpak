@@ -20,7 +20,7 @@ Medium                          → L2 or L3
 
 Usage
 -----
->>> from tokenpak.compression.fidelity_tiers import (
+>>> from tokenpak.agent.compression.fidelity_tiers import (
 ...     FidelityTier, TierGenerator, TierSelector, TieredBlock,
 ... )
 >>> block = TierGenerator.generate("def foo(x):\n    '''Docs.'''\n    return x*2")

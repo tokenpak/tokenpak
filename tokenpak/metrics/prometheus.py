@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak Prometheus metrics exposition.
 
 Generates a Prometheus text format (0.0.4) metrics response without

@@ -21,7 +21,7 @@ class BaseAdapter(ABC):
     @property
     @abstractmethod
     def platform_name(self) -> str:
-        """Human-readable platform identifier (e.g. "openclaw", "claude_cli")."""
+        """Human-readable platform identifier (e.g. "legacy", "claude_cli")."""
 
     @classmethod
     @abstractmethod

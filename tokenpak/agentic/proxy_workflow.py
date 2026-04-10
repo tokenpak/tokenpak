@@ -1,4 +1,4 @@
-"""tokenpak.agentic.proxy_workflow — ProxyWorkflowAdapter
+"""tokenpak.agent.agentic.proxy_workflow — ProxyWorkflowAdapter
 
 Wires the WorkflowManager into the TokenPak proxy pipeline.
 
@@ -34,7 +34,7 @@ def _get_manager():
     """Return a singleton WorkflowManager, or None when tracking is disabled."""
     if not WORKFLOW_TRACKING_ENABLED:
         return None
-    from tokenpak.agentic.workflow import get_manager
+    from tokenpak.agent.agentic.workflow import get_manager
 
     return get_manager()
 
@@ -61,7 +61,7 @@ def start_proxy_workflow(
         return None
 
     try:
-        from tokenpak.agentic.workflow import template_steps
+        from tokenpak.agent.agentic.workflow import template_steps
 
         steps = template_steps("proxy")
         wf = mgr.create(

@@ -30,9 +30,47 @@ import sqlite3
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Cache cost multipliers — per-provider cache read/creation pricing
+# Transferred from monolith (TPK-CONSOLIDATION-A2a)
+# Source: Provider pricing docs (see CACHE-P4-002 task)
+# read = fraction of input cost for cached tokens
+# creation = multiplier on input cost for cache write (Anthropic only has surcharge)
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.runtime.providers import Provider as _Provider
+    CACHE_COST_MULTIPLIERS: Dict[object, Dict[str, float]] = {
+        _Provider.ANTHROPIC:   {"read": 0.10, "creation": 1.25},  # reads=10%, creation=125%
+        _Provider.OPENAI:      {"read": 0.50, "creation": 1.0},   # reads=50%, no creation surcharge
+        _Provider.AZURE_OPENAI: {"read": 0.50, "creation": 1.0},
+        _Provider.XAI:         {"read": 0.50, "creation": 1.0},
+        _Provider.GROQ:        {"read": 0.0,  "creation": 1.0},   # Free (volatile cache)
+        _Provider.FIREWORKS:   {"read": 0.0,  "creation": 1.0},   # No cache pricing surcharge
+        _Provider.TOGETHER:    {"read": 0.0,  "creation": 1.0},   # No cache pricing surcharge
+        _Provider.GEMINI:      {"read": 0.25, "creation": 1.0},   # 25% of input cost
+        _Provider.BEDROCK:     {"read": 0.10, "creation": 1.0},   # 10% of input cost
+        _Provider.CODEX:       {"read": 0.50, "creation": 1.0},   # Follows OpenAI pricing
+        _Provider.UNKNOWN:     {"read": 0.10, "creation": 1.25},  # Conservative default
+    }
+except (ImportError, AttributeError):
+    # Fallback to string-keyed dict if Provider enum is unavailable
+    CACHE_COST_MULTIPLIERS: Dict[str, Dict[str, float]] = {  # type: ignore[no-redef]
+        "anthropic":   {"read": 0.10, "creation": 1.25},
+        "openai":      {"read": 0.50, "creation": 1.0},
+        "azure_openai": {"read": 0.50, "creation": 1.0},
+        "xai":         {"read": 0.50, "creation": 1.0},
+        "groq":        {"read": 0.0,  "creation": 1.0},
+        "fireworks":   {"read": 0.0,  "creation": 1.0},
+        "together":    {"read": 0.0,  "creation": 1.0},
+        "gemini":      {"read": 0.25, "creation": 1.0},
+        "bedrock":     {"read": 0.10, "creation": 1.0},
+        "codex":       {"read": 0.50, "creation": 1.0},
+        "unknown":     {"read": 0.10, "creation": 1.25},
+    }
 
 # ---------------------------------------------------------------------------
 # Current pricing rates (USD per 1K input/output tokens)

@@ -1,4 +1,5 @@
 """No-op passthrough plugin — returns text unchanged."""
+
 from tokenpak.plugins.base import CompressorPlugin
 
 

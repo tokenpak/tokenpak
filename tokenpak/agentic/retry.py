@@ -1,5 +1,5 @@
 """
-tokenpak.agentic.retry
+tokenpak.agent.agentic.retry
 ─────────────────────────────
 Automatic retry with 5-level escalation:
 

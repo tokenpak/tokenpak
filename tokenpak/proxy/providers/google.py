@@ -108,10 +108,20 @@ class GoogleFormat:
         return total
 
     @staticmethod
-    def is_streaming(data: Dict[str, Any]) -> bool:
-        """Check if request is streaming (determined by URL, not body)."""
-        # Google uses ?alt=sse for streaming
-        return False  # Must be determined from URL
+    def is_streaming(data: Dict[str, Any], url: str = "") -> bool:
+        """Check if request is streaming.
+
+        Google streaming is signalled by the URL, not the body:
+        - Path contains ``streamGenerateContent``
+        - Query string contains ``alt=sse``
+
+        Falls back to the body-level ``stream`` field for compatibility.
+        """
+        if "streamGenerateContent" in url:
+            return True
+        if "alt=sse" in url:
+            return True
+        return bool(data.get("stream", False))
 
     @staticmethod
     def build_request(

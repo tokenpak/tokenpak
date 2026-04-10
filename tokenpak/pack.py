@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tokenpak/pack.py — High-level ContextPack API with compile reports.
 
 Provides the developer-facing compile() API with full transparency:

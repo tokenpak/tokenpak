@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 INGEST_URL = os.environ.get(
     "TOKENPAK_METRICS_URL",
-    "https://api.tokenpak.dev/v1/metrics/ingest",
+    "https://api.tokenpak.ai/v1/metrics/ingest",
 )
 MAX_RETRIES = 3
 BASE_BACKOFF_S = 2.0  # seconds; doubles each retry
@@ -145,7 +145,7 @@ def _run_daily_sync() -> None:
         if not _should_sync_today():
             return
         try:
-            from tokenpak._internal.config import get_metrics_enabled
+            from tokenpak.agent.config import get_metrics_enabled
 
             if not get_metrics_enabled():
                 return

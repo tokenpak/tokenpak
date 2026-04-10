@@ -59,7 +59,7 @@ class TestValidConfigDict:
         config = {
             "port": 8766,
             "mode": "strict",
-            "db": "~/.openclaw/monitor.db",
+            "db": "~/.tokenpak/data/monitor.db",
             "compression": {"enabled": True},
             "features": {"skeleton": True},
             "budget": {"total_tokens": 12000},
@@ -301,7 +301,7 @@ class TestRealWorldConfigs:
         config = {
             "port": 8766,
             "mode": "hybrid",
-            "db": "~/.openclaw/workspace/.ocp/monitor.db",
+            "db": "~/.tokenpak/data/monitor.db",
             "compression": {
                 "enabled": True,
                 "max_chars": 120,

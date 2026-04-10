@@ -75,7 +75,7 @@ class RequestValidationResult:
             f"errors={len(self.errors)})"
         )
 
-    def to_error_response(self, docs_base: str = "https://docs.tokenpak.dev/api") -> Dict[str, Any]:
+    def to_error_response(self, docs_base: str = "https://docs.tokenpak.ai/api") -> Dict[str, Any]:
         """Build a structured 400 error body (matches OpenAI/Anthropic style).
 
         Returns:

@@ -1,4 +1,5 @@
 """Base class for TokenPak compressor plugins."""
+
 from abc import ABC, abstractmethod
 
 
@@ -6,7 +7,7 @@ class CompressorPlugin(ABC):
     """Abstract base class for custom compressor plugins.
 
     Subclass this and implement ``compress()`` to create a plugin.
-    Register via ``TOKENPAK_PLUGINS`` env var or ``tokenpak.config.json``.
+    Register via ``TOKENPAK_PLUGINS`` env var or ``config.yaml`` ``plugins.enabled`` key.
     """
 
     name: str = ""

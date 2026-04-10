@@ -5,9 +5,11 @@ and startup initialization for vault retrieval, term resolver, and capsule build
 Extracted from runtime/proxy.py (L1177-1498) as part of TPK-RESTRUCTURE-004.
 """
 import json
+import logging
 import math
 import re
 import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -17,12 +19,16 @@ from .config import (
     VAULT_INDEX_PATH,
     VAULT_INDEX_RELOAD_INTERVAL,
     RETRIEVAL_BACKEND,
+    INJECT_BUDGET,
+    INJECT_TOP_K,
+    INJECT_MIN_SCORE,
+    SKELETON_ENABLED,
 )
 from .token_cache import count_tokens
 
-# Term resolver feature flags
+# Term resolver feature flags — enabled by default; opt out with TOKENPAK_TERM_RESOLVER_ENABLED=0
 TERM_RESOLVER_ENABLED: bool = _cfg(
-    "features.term_resolver", False, "TOKENPAK_TERM_RESOLVER_ENABLED", bool
+    "features.term_resolver", True, "TOKENPAK_TERM_RESOLVER_ENABLED", bool
 )
 TERM_RESOLVER_TOP_K: int = _cfg(
     "features.term_resolver_top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int
@@ -41,6 +47,23 @@ CAPSULE_MIN_CHARS: int = _cfg(
 CAPSULE_HOT_WINDOW: int = _cfg(
     "features.capsule_hot_window", 12, "TOKENPAK_CAPSULE_HOT_WINDOW", int
 )
+
+# Query expansion feature flag — enabled by default; opt out with TOKENPAK_QUERY_EXPANSION_ENABLED=0
+QUERY_EXPANSION_ENABLED: bool = _cfg(
+    "features.query_expansion", True, "TOKENPAK_QUERY_EXPANSION_ENABLED", bool
+)
+
+# ---------------------------------------------------------------------------
+# Query expansion — optional; falls back to plain re.findall when unavailable
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.vault.query_expansion import (
+        expand_query as _qe_expand,
+        tokenize as _qe_tokenize,
+    )
+    _QE_AVAILABLE = True
+except ImportError:
+    _QE_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # VaultIndex — BM25-searchable read-only index
@@ -175,7 +198,7 @@ class VaultIndex:
         self, query: str, top_k: int = 5, min_score: float = 2.0
     ) -> List[Tuple[dict, float]]:
         """BM25 search across vault blocks. Returns [(block_dict, score), ...]."""
-        query_terms = _bm25_tokenize(query)
+        query_terms = _bm25_tokenize_query(query)
         if not query_terms or not self.blocks:
             return []
 
@@ -307,6 +330,21 @@ def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r"[a-z0-9_]+", text.lower())
 
 
+@lru_cache(maxsize=512)
+def _bm25_tokenize_query(query: str) -> List[str]:
+    """Tokenize a search query with optional expansion (aliases + stems).
+
+    Uses query_expansion when QUERY_EXPANSION_ENABLED is True and the module is
+    available; falls back to plain tokenization otherwise.  Index-time tokenization
+    always uses _bm25_tokenize so the two paths stay consistent: expansion terms
+    that don't appear in the index score 0 and are harmlessly skipped.
+    """
+    if QUERY_EXPANSION_ENABLED and _QE_AVAILABLE:
+        tokens = list(_qe_tokenize(query, mode="query"))
+        return [t for t, _ in _qe_expand(tokens)]
+    return _bm25_tokenize(query)
+
+
 # ---------------------------------------------------------------------------
 # Global vault index instance — lazy-loaded on first access
 # ---------------------------------------------------------------------------
@@ -330,7 +368,7 @@ def _build_vault_index() -> object:
     """Create the correct VaultIndex backend (sqlite or json_blocks)."""
     if RETRIEVAL_BACKEND == "sqlite":
         try:
-            from tokenpak.vault.sqlite_backend import (
+            from tokenpak.agent.vault.sqlite_backend import (
                 SQLiteRetrievalBackend as _SQLiteBackend,
             )
 
@@ -461,3 +499,142 @@ class _LazyAlias:
 VAULT_INDEX = _LazyAlias(get_vault_index)  # type: ignore[assignment]
 TERM_RESOLVER = _LazyAlias(get_term_resolver)  # type: ignore[assignment]
 CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# inject_vault_context — vault search + injection entry point (A2b transfer)
+# ---------------------------------------------------------------------------
+
+
+def inject_vault_context(
+    body_bytes: bytes, adapter=None
+) -> "tuple[bytes, int, list[str]]":
+    """
+    Search vault index for relevant context and inject into the system prompt.
+    Optionally resolves glossary terms and injects term cards.
+    Returns (new_body_bytes, injected_tokens, source_refs).
+    """
+    # Lazy imports for proxy-layer dependencies (transferred to subpackages in A2c)
+    from tokenpak.proxy.adapters.utils import _detect_adapter, extract_query_signal
+    try:
+        from tokenpak.runtime.proxy import SESSION  # type: ignore[import]
+    except ImportError:
+        SESSION = {}  # type: ignore[assignment]
+    from tokenpak.vault.search import _compile_from_results, score_and_sort  # type: ignore[import]
+    from tokenpak.vault.chunk_shaping import _inject_skeleton_into_blocks  # type: ignore[import]
+
+    vault_idx = get_vault_index()
+    if not vault_idx.available:
+        return body_bytes, 0, []
+
+    active_adapter = adapter or _detect_adapter("", {}, body_bytes)
+
+    # --- Sub-step timing (surfaced in vault_stage.details via SESSION) ---
+    _t = time.perf_counter()
+
+    query = extract_query_signal(body_bytes, adapter=active_adapter)
+    _t_query_ms = (time.perf_counter() - _t) * 1000
+
+    if not query:
+        return body_bytes, 0, []
+
+    term_resolver = get_term_resolver()
+
+    # Resolve glossary terms (optional, feature-flagged)
+    glossary_injection = ""
+    glossary_tokens = 0
+    _t2 = time.perf_counter()
+    if term_resolver is not None and TERM_RESOLVER_ENABLED:
+        try:
+            resolution = term_resolver.resolve_terms(query)
+            if resolution.injection_text and resolution.canonical_ids:
+                glossary_injection = resolution.injection_text
+                glossary_tokens = resolution.tokens_estimate
+                # Adjust vault budget to account for glossary tokens
+                remaining_budget = max(1000, INJECT_BUDGET - glossary_tokens)
+            else:
+                remaining_budget = INJECT_BUDGET
+        except Exception:
+            remaining_budget = INJECT_BUDGET
+    else:
+        remaining_budget = INJECT_BUDGET
+    _t_resolver_ms = (time.perf_counter() - _t2) * 1000
+
+    _t3 = time.perf_counter()
+    semantic_scorer = None
+    try:
+        from tokenpak.runtime.proxy import SEMANTIC_SCORER as semantic_scorer  # type: ignore[import]
+    except Exception:
+        pass
+
+    # Augment mode: if a semantic scorer is configured, fuse BM25 + semantic scores
+    if semantic_scorer is not None:
+        try:
+            bm25_results = vault_idx.search(
+                query, top_k=INJECT_TOP_K * 2, min_score=INJECT_MIN_SCORE
+            )
+            if bm25_results:
+                block_ids = [b["block_id"] for b, _ in bm25_results]
+                semantic_scores = semantic_scorer.score(query, block_ids)
+                rescored = score_and_sort(
+                    bm25_results, query=query, semantic_scores=semantic_scores
+                )[:INJECT_TOP_K]
+                # Build injection from rescored results
+                injection_text, tokens_used, source_refs = _compile_from_results(
+                    rescored, remaining_budget
+                )
+            else:
+                injection_text, tokens_used, source_refs = "", 0, []
+        except Exception as _sem_err:
+            logging.warning("Semantic scorer failed, falling back to BM25: %s", _sem_err)
+            injection_text, tokens_used, source_refs = vault_idx.compile_injection(
+                query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+            )
+    else:
+        injection_text, tokens_used, source_refs = vault_idx.compile_injection(
+            query, budget=remaining_budget, top_k=INJECT_TOP_K, min_score=INJECT_MIN_SCORE
+        )
+    _t_bm25_ms = (time.perf_counter() - _t3) * 1000
+
+    # Combine glossary + vault injection if both present
+    combined_injection = ""
+    combined_tokens = 0
+    if glossary_injection and injection_text:
+        combined_injection = glossary_injection + "\n\n" + injection_text
+        combined_tokens = glossary_tokens + tokens_used
+    elif glossary_injection:
+        combined_injection = glossary_injection
+        combined_tokens = glossary_tokens
+    elif injection_text:
+        combined_injection = injection_text
+        combined_tokens = tokens_used
+
+    if not combined_injection:
+        return body_bytes, 0, []
+
+    # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
+    _t4 = time.perf_counter()
+    if SKELETON_ENABLED:
+        combined_injection = _inject_skeleton_into_blocks(combined_injection)
+        combined_tokens = count_tokens(combined_injection)
+    _t_skeleton_ms = (time.perf_counter() - _t4) * 1000
+
+    _t5 = time.perf_counter()
+    try:
+        new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
+    except Exception:
+        return body_bytes, 0, []
+    _t_inject_ms = (time.perf_counter() - _t5) * 1000
+
+    _total_ms = (time.perf_counter() - _t) * 1000
+    # Store sub-step breakdown in SESSION for /stats and trace enrichment
+    SESSION["vault_last_timing_ms"] = {
+        "query_signal": round(_t_query_ms, 1),
+        "term_resolver": round(_t_resolver_ms, 1),
+        "bm25_search": round(_t_bm25_ms, 1),
+        "skeleton": round(_t_skeleton_ms, 1),
+        "inject_body": round(_t_inject_ms, 1),
+        "total": round(_total_ms, 1),
+    }
+
+    return new_body, combined_tokens, source_refs

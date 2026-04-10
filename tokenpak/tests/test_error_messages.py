@@ -10,9 +10,10 @@ Tests that each error path:
 """
 
 import pytest
-from tokenpak.config_validator import ConfigValidator, ConfigValidationError
-from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
+
+from tokenpak.config_validator import ConfigValidator
 from tokenpak.integrations.litellm.formatter import compile_pack
+from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
 
 
 class TestConfigErrors:
@@ -23,47 +24,47 @@ class TestConfigErrors:
         validator = ConfigValidator()
         config = {"port": 8766}  # Missing api_keys
         errors = validator.validate(config)
-        
+
         assert len(errors) == 1
         assert errors[0].field == "api_keys"
         assert "required" in errors[0].message.lower()
         assert "add" in errors[0].suggestion.lower()
         assert "api_keys" in errors[0].suggestion
-    
+
     def test_invalid_port_type(self):
         """Port as string should say it needs to be int."""
         validator = ConfigValidator()
         config = {"api_keys": {}, "port": "8766"}
         errors = validator.validate(config)
-        
+
         port_error = next((e for e in errors if e.field == "port"), None)
         assert port_error is not None
         assert "integer" in port_error.message.lower()
         assert "8766" in port_error.suggestion
-    
+
     def test_invalid_port_range(self):
         """Port outside 1024-65535 should show valid range."""
         validator = ConfigValidator()
         config = {"api_keys": {}, "port": 100}  # Too low
         errors = validator.validate(config)
-        
+
         port_error = next((e for e in errors if e.field == "port"), None)
         assert port_error is not None
         assert "1024" in port_error.suggestion
         assert "65535" in port_error.suggestion
         assert "100" in port_error.suggestion  # Show current value
-    
+
     def test_negative_cache_ttl(self):
         """Negative cache_ttl should be actionable."""
         validator = ConfigValidator()
         config = {"api_keys": {}, "cache_ttl": -1}
         errors = validator.validate(config)
-        
+
         ttl_error = next((e for e in errors if e.field == "cache_ttl"), None)
         assert ttl_error is not None
         assert "positive" in ttl_error.message.lower()
         assert "3600" in ttl_error.suggestion or "seconds" in ttl_error.suggestion
-    
+
     def test_invalid_url_format(self):
         """Invalid URL should show valid example."""
         validator = ConfigValidator()
@@ -72,11 +73,11 @@ class TestConfigErrors:
             "provider_urls": {"openai": "not-a-url"},
         }
         errors = validator.validate(config)
-        
+
         url_error = next((e for e in errors if "url" in e.field.lower()), None)
         assert url_error is not None
         assert "https://" in url_error.suggestion or "url" in url_error.suggestion.lower()
-    
+
     def test_directory_not_found(self):
         """Directory error should suggest mkdir."""
         validator = ConfigValidator()
@@ -85,17 +86,17 @@ class TestConfigErrors:
             "log_dir": "/nonexistent/path/that/does/not/exist",
         }
         errors = validator.validate(config)
-        
+
         dir_error = next((e for e in errors if "log_dir" in e.field), None)
         assert dir_error is not None
         assert "mkdir" in dir_error.suggestion or "create" in dir_error.suggestion.lower()
-    
+
     def test_api_keys_wrong_type(self):
         """api_keys as list should show dict format."""
         validator = ConfigValidator()
         config = {"api_keys": ["anthropic", "openai"]}  # Should be dict
         errors = validator.validate(config)
-        
+
         assert len(errors) > 0
         api_error = next((e for e in errors if "api_keys" in e.field), None)
         assert api_error is not None
@@ -109,11 +110,11 @@ class TestMiddlewareErrors:
         """Invalid compaction value should list valid options."""
         with pytest.raises(ValueError) as exc_info:
             TokenPakMiddleware(compaction="invalid")
-        
+
         error_msg = str(exc_info.value)
         assert "invalid" in error_msg.lower() or "compaction" in error_msg.lower()
         # Valid strategy names may or may not be listed in the error
-    
+
     def test_valid_compaction_strategies(self):
         """Valid strategies should not raise."""
         for strategy in ["none", "balanced", "aggressive"]:
@@ -134,7 +135,7 @@ class TestFormatterErrors:
             error_msg = str(exc)
             # Should give helpful error about format if it fails
             assert any(x in error_msg.lower() for x in ["tokenpak", "compile", "format", "blocks"])
-    
+
     def test_budget_too_small(self):
         """Budget below minimum should either raise or return minimal result."""
         try:
@@ -144,7 +145,7 @@ class TestFormatterErrors:
         except (ValueError, TypeError) as e:
             error_msg = str(e)
             assert "budget" in error_msg.lower() or "token" in error_msg.lower()
-    
+
     def test_budget_negative(self):
         """Negative budget should be rejected or handled gracefully."""
         try:
@@ -153,8 +154,12 @@ class TestFormatterErrors:
             assert isinstance(result, (list, dict))
         except (ValueError, TypeError) as e:
             error_msg = str(e)
-            assert "budget" in error_msg.lower() or "negative" in error_msg.lower() or "positive" in error_msg.lower()
-    
+            assert (
+                "budget" in error_msg.lower()
+                or "negative" in error_msg.lower()
+                or "positive" in error_msg.lower()
+            )
+
     def test_empty_blocks_compileable(self):
         """Empty blocks list should compile (not error)."""
         result = compile_pack({"blocks": []}, budget=8000)
@@ -173,7 +178,7 @@ class TestCLIErrors:
         # assert result.exit_code == 1
         # assert "compress" in result.output.lower()
         pass
-    
+
     def test_unknown_command_shows_help(self):
         """Unknown command should show command help."""
         # This would be tested via CLI integration
@@ -190,7 +195,7 @@ class TestErrorMessageQuality:
         validator = ConfigValidator()
         config = {"api_keys": 123}  # Wrong type
         errors = validator.validate(config)
-        
+
         assert len(errors) > 0
         for error in errors:
             assert error.field, "Error must have field"
@@ -198,13 +203,13 @@ class TestErrorMessageQuality:
             assert error.actual is not None, "Error must have actual value"
             assert error.message, "Error must have message"
             assert error.suggestion, "Error must have suggestion"
-    
+
     def test_no_raw_exceptions_in_messages(self):
         """Error messages should not contain raw Python exception details."""
         validator = ConfigValidator()
         config = {"api_keys": 123}
         errors = validator.validate(config)
-        
+
         for error in errors:
             # Should not have Python traceback indicators
             assert "<" not in error.message
@@ -220,17 +225,17 @@ class TestProxyErrorWrapping:
     def test_json_error_format(self):
         """Proxy errors should return JSON with status and message."""
         from tokenpak.integrations.litellm.proxy import _json_error
-        
+
         result = _json_error(400, "Test error message")
         assert isinstance(result, dict)
         assert "error" in result
         assert result["error"]["status"] == 400
         assert result["error"]["message"] == "Test error message"
-    
+
     def test_missing_tokenpak_field_error(self):
         """Missing 'tokenpak' field should be clear."""
         from tokenpak.integrations.litellm.proxy import _json_error
-        
+
         result = _json_error(400, "Missing required field: 'tokenpak'")
         assert "tokenpak" in result["error"]["message"]
         assert "required" in result["error"]["message"].lower()

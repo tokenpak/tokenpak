@@ -1,4 +1,4 @@
-"""tokenpak.agentic.validation_framework — Post-Action Validation Framework.
+"""tokenpak.agent.agentic.validation_framework — Post-Action Validation Framework.
 
 Pluggable validation layer (Layer 7 of the deterministic architecture).
 Validators confirm that actions actually produced their intended effects.
@@ -6,7 +6,7 @@ Failed validations trigger automatic retry or escalation via RetryEngine.
 
 Usage
 -----
-    from tokenpak.agentic.validation_framework import (
+    from tokenpak.agent.agentic.validation_framework import (
         ValidationOrchestrator, ServiceHealthValidator, TestSuiteValidator,
         FileStateValidator, SchemaValidator,
     )

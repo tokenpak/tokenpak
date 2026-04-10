@@ -1,4 +1,10 @@
 """infrastructure — Cross-cutting concerns: debug, licensing, error handling, state."""
+import os as _os
+
+# Directory containing this package's source files.
+# Transferred from monolith (TPK-CONSOLIDATION-A2a, line 61).
+# Useful for path resolution relative to the installed package location.
+_SCRIPT_DIR: str = _os.path.dirname(_os.path.abspath(__file__))
 
 from .debug import DebugLogger, DebugState
 from .state_manager import StateManager

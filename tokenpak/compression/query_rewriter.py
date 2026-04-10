@@ -339,7 +339,7 @@ def rewrite_query(
 
     Example::
 
-        from tokenpak.compression.query_rewriter import rewrite_query
+        from tokenpak.agent.compression.query_rewriter import rewrite_query
 
         result = rewrite_query("Hey, can you please help me understand what a tensor is?")
         print(result.rewritten)

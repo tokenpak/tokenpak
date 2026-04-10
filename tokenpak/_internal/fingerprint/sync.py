@@ -4,7 +4,6 @@ TokenPak Fingerprint Sync Client — send fingerprints, receive directives.
 Features:
 - Syncs fingerprint to the intelligence server
 - Caches directives locally with configurable TTL (default 1h)
-- Requires Pro+ license
 - Offline fallback: cached directives → OSS recipes
 - Dry-run mode to preview what would be sent
 """
@@ -155,7 +154,7 @@ class FingerprintSync:
     """
     Syncs fingerprints to the intelligence server and caches returned directives.
 
-    Requires a Pro+ license. Falls back to cached or OSS directives when offline.
+    Falls back to cached or OSS directives when offline.
 
     Usage:
         sync = FingerprintSync()
@@ -183,21 +182,11 @@ class FingerprintSync:
         self.privacy_level = privacy_level
         self.timeout = timeout
 
-    # ── License gate ──────────────────────────────────────────────────────
+    # ── License gate (removed — OSS build) ─────────────────────────────
 
     def _assert_pro(self) -> None:
-        """Raise if not Pro+. Import guard so OSS installs skip cleanly."""
-        try:
-            from tokenpak._internal.license.activation import is_pro
-
-            if not is_pro():
-                raise PermissionError(
-                    "Fingerprint sync requires a Pro+ license. "
-                    "Run `tokenpak activate <key>` to unlock."
-                )
-        except ImportError:
-            # License module not available — allow (dev/test scenario)
-            logger.warning("License module unavailable; skipping Pro gate.")
+        """No-op in OSS build. Previously gated on Pro+ license."""
+        pass
 
     # ── Public API ────────────────────────────────────────────────────────
 

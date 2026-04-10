@@ -163,7 +163,7 @@ def get_block_store(store_path: str = ":memory:") -> BlockStore:
 
 
 class SliceStore:
-    """In-memory + optional JSON persistence for :class:`~tokenpak.vault.slicer.SliceRecord`.
+    """In-memory + optional JSON persistence for :class:`~tokenpak.agent.vault.slicer.SliceRecord`.
 
     Keeps an index keyed by ``slice_id`` and a secondary index from
     ``parent_block_id`` → list of slice IDs for efficient provenance lookup.
@@ -178,7 +178,7 @@ class SliceStore:
 
     def __init__(self, store_path: str = ":memory:"):
         # Import here to avoid circular-import at module load time
-        from tokenpak.vault.slicer import SliceRecord as _SR  # noqa: F401
+        from tokenpak.agent.vault.slicer import SliceRecord as _SR  # noqa: F401
 
         self._path = store_path
         self._slices: dict[str, Any] = {}  # slice_id → SliceRecord
@@ -276,7 +276,7 @@ class SliceStore:
     def _load(self) -> None:
         import json
 
-        from tokenpak.vault.slicer import SliceRecord
+        from tokenpak.agent.vault.slicer import SliceRecord
 
         path = Path(self._path).expanduser()
         if not path.exists():

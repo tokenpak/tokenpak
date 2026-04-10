@@ -1,4 +1,4 @@
-"""tokenpak.dashboard.session_filter — DB-backed session filtering.
+"""tokenpak.agent.dashboard.session_filter — DB-backed session filtering.
 
 Queries the SQLite requests table (monitor.db) with server-side filtering
 and pagination.
@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DB = Path.home() / ".openclaw" / "workspace" / ".ocp" / "monitor.db"
+_DEFAULT_DB = Path.home() / ".tokenpak" / "data" / "monitor.db"
 _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 500
 

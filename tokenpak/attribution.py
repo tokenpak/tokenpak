@@ -56,8 +56,8 @@ def detect_source(
 
     Priority:
     1. X-TokenPak-Source header (explicit)
-    2. X-OpenClaw-Skill header
-    3. X-OpenClaw-Session header (agent name)
+    2. X-TokenPak-Skill header
+    3. X-TokenPak-Session header (agent name)
     4. User-Agent hints
     5. Client IP → hostname mapping
     6. "unknown"
@@ -70,26 +70,26 @@ def detect_source(
         return src
 
     # 2. Skill header
-    skill = headers.get("X-OpenClaw-Skill", "")
+    skill = headers.get("X-TokenPak-Skill", "")
     if skill:
         return f"skill:{skill}"
 
     # 3. Session header (often contains agent name)
-    session = headers.get("X-OpenClaw-Session", "")
+    session = headers.get("X-TokenPak-Session", "")
     if session:
-        # Extract agent name from session patterns like "sue-main", "trix-heartbeat"
+        # Extract agent name from session patterns like "alpha-main", "beta-heartbeat"
         lower = session.lower()
-        for agent in ["sue", "trix", "cali"]:
+        for agent in ["alpha", "beta", "gamma"]:
             if agent in lower:
-                return f"{agent}-openclaw"
+                return f"agent-{agent}"
         return f"session:{session[:30]}"
 
     # 4. User-Agent hints
     ua = user_agent or headers.get("User-Agent", "")
     if ua:
         ua_lower = ua.lower()
-        if "openclaw" in ua_lower:
-            return "openclaw"
+        if "tokenpak" in ua_lower:
+            return "tokenpak"
         if "codex" in ua_lower or "coding" in ua_lower:
             return "coding-agent"
 

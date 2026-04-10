@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Reference Fetcher — fetches content for detected references.
 
 Handles GitHub issues/PRs via REST API and bare URLs via URLAdapter.

@@ -31,3 +31,28 @@ class CanonicalResponse:
     content: Any = None
     raw_extra: Dict[str, Any] = field(default_factory=dict)
     source_format: str = "unknown"
+
+
+@dataclass
+class CanonicalEmbeddingRequest:
+    """Provider-neutral embedding request structure used by embedding adapters."""
+
+    model: str
+    input: List[str] = field(default_factory=list)
+    dimensions: Optional[int] = None
+    encoding_format: str = "float"
+    input_type: Optional[str] = None
+    task: Optional[str] = None
+    truncate: bool = True
+    normalized: bool = False
+    raw_extra: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CanonicalEmbeddingResponse:
+    """Provider-neutral embedding response structure produced by embedding adapters."""
+
+    data: List[Dict[str, Any]] = field(default_factory=list)
+    model: str = "unknown"
+    usage: Dict[str, Any] = field(default_factory=dict)
+    tokenpak_meta: Dict[str, Any] = field(default_factory=dict)

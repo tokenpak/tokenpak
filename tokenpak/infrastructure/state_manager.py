@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """StateManager — compact session state that persists across turns.
 
 STATE_JSON keeps current task context in a concise, patchable format.

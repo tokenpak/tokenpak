@@ -7,7 +7,6 @@ GET  /health              — liveness probe (no auth)
 GET  /v1/status           — authenticated status / tier info
 POST /v1/compress         — compress a prompt payload
 POST /v1/budget           — estimate token budget
-POST /v1/license/validate — validate a license token (delegated to license_endpoint)
 
 Security
 ────────
@@ -49,8 +48,6 @@ from .auth import (
     RateLimiter,
     TokenPakAuthMiddleware,
 )
-from .license_endpoint import router as license_router
-
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────
@@ -224,18 +221,9 @@ def create_app(
         limiter=_limiter,
     )
 
-    # ── Cost intelligence router ──────────────────────────────────
-    from .cost_router import cost_router
-
-    app.include_router(cost_router, prefix="/v1")
-
-    # ── A/B Auto-Optimizer router ──────────────────────────────
-    from .ab_router import ab_router
-
-    app.include_router(ab_router, prefix="/v1")
-
-    # ── License router ─────────────────────────────────────────
-    app.include_router(license_router, prefix="/v1")
+    # ── Removed routers (Pro/Enterprise) ─────────────────────────
+    # cost_router, ab_router, and license_router have been moved
+    # to _pro_staging as they are Pro+ features.
 
     # ──────────────────────────────────────────────────────────
     # Routes

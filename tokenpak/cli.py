@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak CLI with parallel processing and optimized batch operations."""
 
 import argparse
@@ -39,7 +39,6 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
-        ("setup", "Configure your LLM client to use tokenpak (wizard)"),
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
@@ -57,7 +56,6 @@ _COMMAND_GROUPS = {
         ("recipe", "Manage compression recipes"),
         ("template", "Manage prompt templates"),
         ("budget", "Set API budget limits"),
-        ("mode", "Set per-session compilation mode"),
         ("goals", "Manage savings goals and track progress"),
         ("config", "Config sync, pull, validate (version control)"),
     ],
@@ -96,6 +94,7 @@ _COMMAND_GROUPS = {
         ("diff", "Show context changes (Pro)"),
         ("stats", "Show registry stats"),
         ("serve", "Start proxy/telemetry server (low-level)"),
+        ("retrieval", "Inspect and test hybrid retrieval (BM25 + vector)"),
     ],
 }
 
@@ -141,7 +140,7 @@ def _print_quick_help():
 def _print_full_help():
     """Print the power-user grouped help output (tier-aware)."""
     try:
-        from tokenpak.cli.commands.help import print_full_help
+        from tokenpak.agent.cli.commands.help import print_full_help
         print_full_help()
     except Exception:
         # Fallback to static help
@@ -158,7 +157,7 @@ def _print_full_help():
 def cmd_help(args):
     """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
     try:
-        from tokenpak.cli.commands.help import run as help_run
+        from tokenpak.agent.cli.commands.help import run as help_run
         
         # Build help_args list from parsed arguments
         help_args = []
@@ -182,21 +181,166 @@ def cmd_help(args):
 
 
 def cmd_setup(args):
-    """Configure LLM clients to use the TokenPak proxy (wizard)."""
-    from .agent.cli.commands.setup import run_setup_cmd
+    """Interactive wizard for first-time TokenPak configuration."""
+    from pathlib import Path
+    from .profiles import get_profile, apply_profile
+    import yaml
+    import subprocess
+    import time
+    import os
+    
+    config_dir = Path.home() / ".tokenpak"
+    config_file = config_dir / "config.yaml"
+    
+    # Check for existing config
+    if config_file.exists():
+        print(f"Configuration already exists at {config_file}")
+        response = input("Reconfigure? (yes/no) [no]: ").strip().lower()
+        if response not in ("yes", "y"):
+            print("Setup cancelled.")
+            return
+    
+    # Detect API keys from environment
+    print("\n🔍 Scanning for API keys...\n")
+    api_keys = {}
+    
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        print("✅ Found Anthropic API key")
+        api_keys["anthropic"] = os.environ["ANTHROPIC_API_KEY"]
+    
+    if os.environ.get("OPENAI_API_KEY"):
+        print("✅ Found OpenAI API key")
+        api_keys["openai"] = os.environ["OPENAI_API_KEY"]
+    
+    if os.environ.get("GOOGLE_API_KEY"):
+        print("✅ Found Google API key")
+        api_keys["google"] = os.environ["GOOGLE_API_KEY"]
+    
+    if not api_keys:
+        print("⚠️  No API keys detected in environment variables.")
+        print("   Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GOOGLE_API_KEY")
+        print("   Example: export ANTHROPIC_API_KEY='sk-...'")
+        return
+    
+    # Auto-detect primary provider
+    available_providers = list(api_keys.keys())
+    default_provider = available_providers[0] if available_providers else "anthropic"
+    
+    print(f"\nDetected providers: {', '.join(available_providers)}")
+    provider = input(f"Which provider to proxy? [{default_provider}]: ").strip()
+    if not provider:
+        provider = default_provider
+    
+    if provider not in api_keys:
+        print(f"Error: {provider} API key not found.")
+        return
+    
+    # Ask for port
+    port_input = input("Port number [8766]: ").strip()
+    port = int(port_input) if port_input else 8766
+    
+    # Ask for profile
+    print("\nChoose a compression profile:")
+    print("  [1] minimal    — compression only (safest, ~5% savings)")
+    print("  [2] balanced   — compression + caching + routing (recommended, ~30% savings)")
+    print("  [3] aggressive — all modules enabled (maximum savings, ~40%+)")
+    
+    profile_input = input("\nProfile [2]: ").strip()
+    profile_map = {"1": "minimal", "2": "balanced", "3": "aggressive"}
+    profile_name = profile_map.get(profile_input, "balanced")
+    
+    # Build base config
+    config = {
+        "proxy": {
+            "port": port,
+            "host": "localhost",
+            "provider": provider,
+        },
+        "modules": {},
+    }
+    
+    # Apply profile
+    profile = get_profile(profile_name)
+    config["modules"] = profile["features"]
+    config["profile"] = profile_name
+    
+    # Create config directory and write config
+    config_dir.mkdir(parents=True, exist_ok=True)
+    with open(config_file, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"\n✅ Configuration saved to {config_file}")
+    print(f"   Profile: {profile_name} — {profile['description']}")
+    
+    # Start the proxy
+    print("\n🚀 Starting proxy...\n")
+    
+    import subprocess
+    import sys
+    
+    # Find proxy.py
+    candidates = [
+        Path(__file__).resolve().parent / "runtime" / "proxy.py",
+        Path(__file__).resolve().parent.parent / "proxy.py",
+        Path.home() / "tokenpak" / "proxy.py",
+    ]
+    proxy_path = None
+    for c in candidates:
+        if c.exists():
+            proxy_path = c
+            break
 
-    run_setup_cmd(args)
+    if not proxy_path:
+        print("Warning: proxy.py not found. Skipping auto-start.")
+        return
 
-
-def cmd_install(args):
-    """One-shot installer: configure tokenpak for Claude Code."""
-    from .agent.cli.commands.install import run_install_cmd
-
-    run_install_cmd(args)
+    # Start proxy
+    env = os.environ.copy()
+    env["TOKENPAK_PORT"] = str(port)
+    proc = subprocess.Popen(
+        [sys.executable, str(proxy_path)],
+        env=env,
+        cwd=str(proxy_path.parent),
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    
+    pid_path = Path.home() / ".tokenpak" / "proxy.pid"
+    pid_path.parent.mkdir(parents=True, exist_ok=True)
+    pid_path.write_text(str(proc.pid))
+    
+    # Wait and verify
+    time.sleep(1.5)
+    
+    # Try health check
+    try:
+        import urllib.request
+        import json
+        health_resp = urllib.request.urlopen(f"http://localhost:{port}/health", timeout=2)
+        health_data = json.loads(health_resp.read().decode())
+        mode = health_data.get("compilation_mode", "hybrid")
+        
+        print(f"✅ Proxy running on http://localhost:{port} (mode: {mode})")
+    except Exception:
+        print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
+    
+    # Success message with next steps
+    print("\nNext steps:")
+    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
+    print(f"  2. Run: tokenpak status    (check health)")
+    print(f"  3. Run: tokenpak savings   (see your ROI)")
+    print()
+    print("💡 Quick commands:")
+    print("  tokenpak serve      — start the proxy")
+    print("  tokenpak stop       — stop the proxy")
+    print("  tokenpak status     — check proxy health")
+    print("  tokenpak savings    — view compression savings")
+    print()
 
 
 def cmd_start(args):
-    """Start the proxy on localhost:8766 (launches proxy_v4.py)."""
+    """Start the proxy on localhost:8766 (launches proxy.py)."""
     import subprocess
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -240,11 +384,11 @@ def cmd_start(args):
         except (ProcessLookupError, ValueError):
             pid_path.unlink(missing_ok=True)
 
-    # Find proxy_v4.py
+    # Find proxy.py
     candidates = [
-        Path(__file__).resolve().parent.parent / "proxy_v4.py",
-        Path.home() / "tokenpak" / "proxy_v4.py",
-        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
+        Path(__file__).resolve().parent / "runtime" / "proxy.py",
+        Path(__file__).resolve().parent.parent / "proxy.py",
+        Path.home() / "tokenpak" / "proxy.py",
     ]
     proxy_path = None
     for c in candidates:
@@ -253,13 +397,13 @@ def cmd_start(args):
             break
 
     if not proxy_path:
-        print("Error: proxy_v4.py not found. Falling back to legacy server.")
+        print("Error: proxy.py not found. Falling back to legacy server.")
         import types
         serve_args = types.SimpleNamespace(port=port, telemetry=False, ingest=False, workers=1)
         cmd_serve(serve_args)
         return
 
-    # Launch proxy_v4.py as a background process
+    # Launch proxy.py as a background process
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
     proc = subprocess.Popen(
@@ -445,7 +589,7 @@ def cmd_index(args):
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
-        from tokenpak.vault.watcher import VaultWatcher, WatcherConfig
+        from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
 
         # Run initial full index first
         _do_index(args)
@@ -659,7 +803,7 @@ def cmd_stats(args):
         proxy_data = None
 
     # Also read from the JSONL file for accurate rolling stats
-    from tokenpak.proxy.stats import CompressionStats
+    from tokenpak.agent.proxy.stats import CompressionStats
 
     cs = CompressionStats()
     file_stats = cs.stats_from_file(limit=100)
@@ -801,7 +945,7 @@ def cmd_serve(args):
 
         from .telemetry.server import create_app
 
-        str(Path.home() / ".openclaw" / "workspace" / "session.jsonl")
+        str(Path.home() / ".tokenpak" / "data" / "session.jsonl")
         app = create_app()
         # Phase 5A: register ingest router
         try:
@@ -839,7 +983,7 @@ def cmd_serve(args):
         print("  POST /ingest/batch")
         print("  GET  /health")
         uvicorn.run(
-            "tokenpak._internal.ingest.api:create_ingest_app",
+            "tokenpak.agent.ingest.api:create_ingest_app",
             host="127.0.0.1",
             port=port,
             workers=workers,
@@ -862,7 +1006,7 @@ def cmd_serve(args):
         try:
             import sys
 
-            proxy_path = str(Path.home() / ".openclaw" / "workspace" / ".ocp")
+            proxy_path = str(Path.home() / ".tokenpak" / "data")
             if proxy_path not in sys.path:
                 sys.path.insert(0, proxy_path)
             import proxy
@@ -1502,47 +1646,8 @@ def build_parser():
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
-    p_setup = sub.add_parser(
-        "setup",
-        help="Configure your LLM client to use tokenpak (wizard)",
-    )
-    p_setup.add_argument(
-        "--yes", "-y",
-        action="store_true",
-        help="Skip confirmation prompts (non-interactive / CI mode)",
-    )
+    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
     p_setup.set_defaults(func=cmd_setup)
-
-    p_install = sub.add_parser(
-        "install",
-        help="One-shot installer: configure tokenpak for Claude Code",
-    )
-    p_install.add_argument(
-        "--claude-code",
-        dest="claude_code",
-        action="store_true",
-        default=True,
-        help="Install for Claude Code (currently the only supported target)",
-    )
-    p_install.add_argument(
-        "--mode",
-        choices=["cli", "tui", "tmux", "sdk", "ide", "cron"],
-        default=None,
-        help="Consumption mode (default: auto-detect)",
-    )
-    p_install.add_argument(
-        "--no-systemd",
-        dest="no_systemd",
-        action="store_true",
-        help="Skip systemd user unit installation",
-    )
-    p_install.add_argument(
-        "--dry-run",
-        dest="dry_run",
-        action="store_true",
-        help="Preview what would change without writing anything",
-    )
-    p_install.set_defaults(func=cmd_install)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
     p_start.set_defaults(func=cmd_start)
@@ -1744,13 +1849,13 @@ def build_parser():
     _build_cost_parser(sub)
     _build_costs_parser(sub)
     _build_budget_parser(sub)
-    _build_mode_parser(sub)
     _build_forecast_parser(sub)
     _build_goals_parser(sub)
     _build_lock_parser(sub)
     _build_agent_parser(sub)
     _build_replay_parser(sub)
     _build_status_parser(sub)
+    _build_explain_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
     _build_compare_parser(sub)
@@ -1765,13 +1870,11 @@ def build_parser():
     _build_fingerprint_parser(sub)
     _build_learn_parser(sub)
     _build_user_template_parser(sub)
-    _build_audit_parser(sub)
-    _build_audit_log_parser(sub)
-    _build_compliance_parser(sub)
     _build_version_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
+    _build_retrieval_parser(sub)
 
     return parser
 
@@ -1821,6 +1924,8 @@ def cmd_status(args):
         print(f"  Requests:        {s.get('requests', 0):,}")
         print(f"  Errors:          {s.get('errors', 0)}")
         print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+        profile = health.get('active_profile', os.environ.get('TOKENPAK_PROFILE', 'balanced'))
+        print(f"  Profile:         {profile}")
         print()
 
         # Token savings
@@ -1842,6 +1947,21 @@ def cmd_status(args):
         if cost_saved > 0:
             print(f"  Cost saved:      ${cost_saved:.4f}")
         print()
+
+        # 💰 Savings summary line
+        _c_hits = cache.get("cache_hits", 0) if cache else 0
+        _c_miss = cache.get("cache_misses", 0) if cache else 0
+        _c_total = _c_hits + _c_miss
+        _cache_hr = (_c_hits / _c_total * 100) if _c_total > 0 else 0
+        _cache_read_tok = cache.get("cache_read_tokens", 0) if cache else 0
+        _total_saved_tokens = saved + _cache_read_tok
+        # Compute savings from token counts if cost_saved not tracked in stats
+        _cache_savings = _cache_read_tok * 2.70 / 1_000_000   # $2.70/MTok rate differential
+        _compression_savings = saved * 3.00 / 1_000_000        # $3.00/MTok input rate
+        _display_savings = cost_saved if cost_saved > 0 else (_cache_savings + _compression_savings)
+        if _total_saved_tokens > 0:
+            print(f"  💰 Saved ${_display_savings:.2f} this session ({_total_saved_tokens:,} tokens, {_cache_hr:.0f}% cache hit rate)")
+            print()
 
         # Cache
         if cache:
@@ -1881,9 +2001,48 @@ def cmd_status(args):
         vault = health.get("vault_index", {})
         if vault.get("available"):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
+
+        # ── Today's Savings ─────────────────────────────────────────────────
+        today = stats.get("today", {}) if stats else {}
+        if today:
+            print()
+            print("Today's Savings")
+            print("─" * 40)
+            t_req = today.get("requests", 0)
+            t_compressed = today.get("compressed_tokens", 0)
+            t_cache_read = today.get("cache_read_tokens", 0)
+            t_cost = today.get("total_cost", 0.0)
+            t_input = today.get("input_tokens", 0)
+
+            # Cache hit rate: approximate from session if today doesn't have it
+            sess = stats.get("session", {}) if stats else {}
+            s_hits = sess.get("cache_hits", 0)
+            s_misses = sess.get("cache_misses", 0)
+            s_total = s_hits + s_misses
+            cache_pct = f"{s_hits / s_total * 100:.0f}%" if s_total > 0 else "—"
+
+            # Estimated cost saved: (compressed + cache_read) tokens * avg input rate
+            INPUT_RATE = 3.00 / 1_000_000   # $3/MTok (conservative)
+            cost_saved_est = (t_compressed + t_cache_read) * INPUT_RATE
+
+            print(f"  Requests:        {t_req:,}")
+            if t_compressed > 0:
+                print(f"  Compressed:      {t_compressed:,} tokens saved")
+            if t_cache_read > 0:
+                print(f"  Cache served:    {t_cache_read:,} tokens ({cache_pct} hit rate)")
+            if t_cost > 0:
+                print(f"  Cost today:      ${t_cost:.4f}")
+            if cost_saved_est > 0:
+                print(f"  Est. saved:      ${cost_saved_est:.4f}")
+            vault_blocks = vault.get("blocks", 0) if vault else 0
+            if vault_blocks:
+                print(f"  Vault blocks:    {vault_blocks:,} loaded")
+            print()
+            print("  Run `tokenpak savings` for detailed breakdown.")
+
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak serve` or check if proxy_v4.py is running.")
+        print("  Run `tokenpak serve` or check if proxy.py is running.")
         print()
 
     # Budget tracking (local DB)
@@ -1903,6 +2062,105 @@ def cmd_status(args):
             print(fmt.kv(rows))
     except Exception:
         pass
+
+
+def cmd_explain(args):
+    """Explain TokenPak profiles and configuration."""
+    import os
+    
+    mode = resolve_mode(args)
+    fmt = OutputFormatter("Explain", mode=mode, minimal=False)
+    
+    profile_name = getattr(args, "profile", None)
+    
+    # Profile definitions
+    PROFILE_PRESETS = {
+        "safe": {
+            "COMPILATION_MODE": "strict",
+            "COMPACT_THRESHOLD_TOKENS": "8000",
+            "ENABLE_SKELETON": "false",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "balanced": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "4500",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "aggressive": {
+            "COMPILATION_MODE": "aggressive",
+            "COMPACT_THRESHOLD_TOKENS": "2000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "true",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+        "agentic": {
+            "COMPILATION_MODE": "hybrid",
+            "COMPACT_THRESHOLD_TOKENS": "3000",
+            "ENABLE_SKELETON": "true",
+            "ENABLE_CAPSULE_BUILDER": "false",
+            "ENABLE_SHADOW_READER": "true",
+            "BUDGET_CONTROLLER_ENABLED": "true",
+            "TRACE_ENABLED": "true",
+        },
+    }
+    
+    PROFILE_DESCRIPTIONS = {
+        "safe": "Production workloads where you want to be cautious. Low savings, high safety.",
+        "balanced": "Most workloads. Good savings with validation. (default)",
+        "aggressive": "High-volume batch work where you want maximum savings.",
+        "agentic": "Agent loops and multi-step workflows. Preserves tool schemas.",
+    }
+    
+    print(fmt.header())
+    print()
+    
+    if mode == OutputMode.RAW:
+        if profile_name and profile_name in PROFILE_PRESETS:
+            print(fmt.raw({
+                "profile": profile_name,
+                "description": PROFILE_DESCRIPTIONS.get(profile_name, ""),
+                "flags": PROFILE_PRESETS[profile_name],
+            }))
+        else:
+            print(fmt.raw({
+                "profiles": list(PROFILE_PRESETS.keys()),
+                "current": os.environ.get("TOKENPAK_PROFILE", "balanced"),
+            }))
+        return
+    
+    if profile_name:
+        if profile_name not in PROFILE_PRESETS:
+            print(f"❌ Unknown profile: {profile_name}")
+            print(f"   Available: {', '.join(PROFILE_PRESETS.keys())}")
+            return
+        
+        print(f"Profile: {profile_name}")
+        print(f"Description: {PROFILE_DESCRIPTIONS[profile_name]}")
+        print()
+        print("Configuration:")
+        for key, val in PROFILE_PRESETS[profile_name].items():
+            print(f"  {key} = {val}")
+    else:
+        current = os.environ.get("TOKENPAK_PROFILE", "balanced")
+        print(f"Current profile: {current}")
+        print()
+        print("Available profiles:")
+        print()
+        for name in PROFILE_PRESETS.keys():
+            desc = PROFILE_DESCRIPTIONS[name]
+            marker = " (active)" if name == current else ""
+            print(f"  {name}{marker}")
+            print(f"    {desc}")
+            print()
 
 
 def cmd_usage(args):
@@ -2109,6 +2367,12 @@ def _build_status_parser(sub):
     p_status.set_defaults(func=cmd_status)
 
 
+def _build_explain_parser(sub):
+    p_explain = sub.add_parser("explain", help="Explain TokenPak profiles and configuration")
+    p_explain.add_argument("--profile", type=str, help="Show details for a specific profile (safe/balanced/aggressive/agentic)")
+    p_explain.set_defaults(func=cmd_explain)
+
+
 def _build_usage_parser(sub):
     p_usage = sub.add_parser("usage", help="Show model usage summary")
     p_usage.add_argument("--days", type=int, default=30, help="Rolling window in days")
@@ -2271,341 +2535,11 @@ def _build_user_template_parser(sub):
     p_use.set_defaults(func=cmd_template_use)
 
 
-# ---------------------------------------------------------------------------
-# Enterprise Audit commands
-# ---------------------------------------------------------------------------
-
-
-def _build_audit_parser(sub):
-    p_audit = sub.add_parser("audit", help="Enterprise audit log management")
-    asub = p_audit.add_subparsers(dest="audit_cmd", required=True)
-
-    p_list = asub.add_parser("list", help="List audit log entries")
-    p_list.add_argument(
-        "--since",
-        default=None,
-        metavar="DATE",
-        help="Filter entries since date (ISO format, e.g. 2026-01-01)",
-    )
-    p_list.add_argument("--until", default=None, metavar="DATE", help="Filter entries until date")
-    p_list.add_argument("--user", dest="user_id", default=None, help="Filter by user ID")
-    p_list.add_argument("--action", default=None, help="Filter by action type")
-    p_list.add_argument("--model", default=None, help="Filter by model name")
-    p_list.add_argument("--outcome", default=None, help="Filter by outcome (ok/auth_failure/...)")
-    p_list.add_argument("--limit", type=int, default=50, help="Max results (default: 50)")
-    p_list.add_argument("--json", dest="as_json", action="store_true", help="Output as JSON")
-    p_list.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_list.set_defaults(func=cmd_audit_list)
-
-    p_export = asub.add_parser("export", help="Export audit log to file")
-    p_export.add_argument("output", help="Output file path")
-    p_export.add_argument(
-        "--format",
-        dest="fmt",
-        choices=["json", "csv"],
-        default="json",
-        help="Export format (default: json)",
-    )
-    p_export.add_argument("--since", default=None, metavar="DATE")
-    p_export.add_argument("--until", default=None, metavar="DATE")
-    p_export.add_argument("--user", dest="user_id", default=None)
-    p_export.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_export.set_defaults(func=cmd_audit_export)
-
-    p_verify = asub.add_parser("verify", help="Verify hash chain integrity")
-    p_verify.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_verify.set_defaults(func=cmd_audit_verify)
-
-    p_prune = asub.add_parser("prune", help="Remove entries older than retention window")
-    p_prune.add_argument(
-        "--days", type=int, default=90, help="Retention window in days (default: 90)"
-    )
-    p_prune.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_prune.set_defaults(func=cmd_audit_prune)
-
-    p_summary = asub.add_parser("summary", help="Show audit log summary stats")
-    p_summary.add_argument("--since", default=None, metavar="DATE")
-    p_summary.add_argument("--db", dest="audit_db", default=None)
-    p_summary.set_defaults(func=cmd_audit_summary)
-
-
-def _get_audit_db(args) -> str:
-    import os
-    from pathlib import Path
-
-    if hasattr(args, "audit_db") and args.audit_db:
-        return args.audit_db
-    home = Path(os.environ.get("TOKENPAK_HOME", Path.home() / ".tokenpak"))
-    return str(home / "audit.db")
-
-
-def _build_audit_log_parser(sub):
-    """Build audit-log subcommand (Pro feature usage tracking)."""
-    p = sub.add_parser("audit-log", help="Pro feature usage audit log")
-    asub = p.add_subparsers(dest="audit_log_cmd", required=True)
-
-    p_show = asub.add_parser("show", help="Show recent feature usage")
-    p_show.add_argument("--days", type=int, default=7, help="Rolling window in days (default: 7)")
-    p_show.add_argument("--feature", default=None, help="Filter by feature name")
-    p_show.add_argument("--adapter", default=None, help="Filter by adapter name")
-    p_show.set_defaults(func=cmd_audit_log_show)
-
-    p_stats = asub.add_parser("stats", help="Aggregate stats by feature/adapter")
-    p_stats.add_argument("--feature", default=None, help="Filter by feature name")
-    p_stats.add_argument("--adapter", default=None, help="Filter by adapter name")
-    p_stats.set_defaults(func=cmd_audit_log_stats)
-
-    p_export = asub.add_parser("export", help="Export all records as JSON to stdout")
-    p_export.set_defaults(func=cmd_audit_log_export)
-
-
-def cmd_audit_log_show(args):
-    """Show recent feature usage records."""
-    from .pro.audit_log import AuditLog
-
-    with AuditLog() as log:
-        rows = log.get_feature_usage(
-            feature=getattr(args, "feature", None),
-            adapter=getattr(args, "adapter", None),
-            days=getattr(args, "days", 7),
-        )
-    if not rows:
-        print("No usage records found.")
-        return
-    header = f"{'Time':<28} {'Adapter':<20} {'Model':<24} {'Feature':<20}"
-    print(header)
-    print("-" * len(header))
-    for r in rows:
-        print(
-            f"{r.get('ts', '')[:27]:<28} "
-            f"{r.get('adapter', ''):<20} "
-            f"{r.get('model', ''):<24} "
-            f"{r.get('feature', ''):<20}"
-        )
-    print(f"\n{len(rows)} record(s)")
-
-
-def cmd_audit_log_stats(args):
-    """Show aggregate stats by feature/adapter."""
-    from .pro.audit_log import AuditLog
-
-    with AuditLog() as log:
-        stats = log.get_stats(
-            feature=getattr(args, "feature", None),
-            adapter=getattr(args, "adapter", None),
-        )
-    print(f"Total events: {stats['total']}")
-    if stats["by_feature"]:
-        print("\nBy feature:")
-        for feat, count in sorted(stats["by_feature"].items(), key=lambda x: -x[1]):
-            print(f"  {feat:<24} {count}")
-    if stats["by_adapter"]:
-        print("\nBy adapter:")
-        for adpt, count in sorted(stats["by_adapter"].items(), key=lambda x: -x[1]):
-            print(f"  {adpt:<24} {count}")
-
-
-def cmd_audit_log_export(args):
-    """Export all audit log records as JSON to stdout."""
-    from .pro.audit_log import AuditLog
-
-    with AuditLog() as log:
-        print(log.export_json())
-
-
-def _require_enterprise_feature(feature_name: str):
-    """Require enterprise feature availability (from tokenpak-pro)."""
-    print(f"TOKENPAK  |  Enterprise Feature: {feature_name}")
-    print("────────────────────────────────────────")
-    print()
-    print("This feature requires an Enterprise license (tokenpak-pro).")
-    print("The module has been moved to tokenpak-pro for licensed users.")
-    print()
-    print("To use this feature:")
-    print("1. Install tokenpak-pro: pip install tokenpak-pro")
-    print("2. Activate your Enterprise license")
-    print()
-    print("Learn more: https://tokenpak.dev/enterprise")
-    sys.exit(2)
-
-
-def cmd_audit_list(args):
-    import json as _json
-
-    try:
-        from tokenpak.enterprise.audit import AuditLog
-    except ImportError:
-        _require_enterprise_feature("Audit Log")
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        rows = log.list(
-            since=getattr(args, "since", None),
-            until=getattr(args, "until", None),
-            user_id=getattr(args, "user_id", None),
-            action=getattr(args, "action", None),
-            model=getattr(args, "model", None),
-            outcome=getattr(args, "outcome", None),
-            limit=getattr(args, "limit", 50),
-        )
-    if getattr(args, "as_json", False):
-        print(_json.dumps(rows, indent=2, default=str))
-    else:
-        if not rows:
-            print("No audit entries found.")
-            return
-        # Pretty table
-        header = f"{'Time':<26} {'User':<16} {'Action':<24} {'Model':<28} {'Outcome':<10}"
-        print(header)
-        print("-" * len(header))
-        for r in rows:
-            print(
-                f"{r.get('ts_iso','')[:25]:<26} "
-                f"{(r.get('user_id','') or '-'):<16} "
-                f"{r.get('action',''):<24} "
-                f"{(r.get('model','') or '-'):<28} "
-                f"{r.get('outcome',''):<10}"
-            )
-        print(f"\n{len(rows)} entries")
-
-
-def cmd_audit_export(args):
-    try:
-        from tokenpak.enterprise.audit import AuditLog
-    except ImportError:
-        _require_enterprise_feature("Audit Export")
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        n = log.export(
-            args.output,
-            fmt=args.fmt,
-            since=getattr(args, "since", None),
-            until=getattr(args, "until", None),
-            user_id=getattr(args, "user_id", None),
-        )
-    print(f"Exported {n} entries → {args.output} ({args.fmt})")
-
-
-def cmd_audit_verify(args):
-    try:
-        from tokenpak.enterprise.audit import AuditLog
-    except ImportError:
-        _require_enterprise_feature("Audit Verification")
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        ok, errors = log.verify_chain()
-    if ok:
-        print("✅ Audit chain integrity: OK")
-    else:
-        print(f"❌ Audit chain integrity: FAILED ({len(errors)} violation(s))")
-        for e in errors:
-            print(f"  • {e}")
-        sys.exit(1)
-
-
-def cmd_audit_prune(args):
-    try:
-        from tokenpak.enterprise.audit import AuditLog
-    except ImportError:
-        _require_enterprise_feature("Audit Pruning")
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        n = log.prune(retention_days=args.days)
-    print(f"Pruned {n} entries older than {args.days} days from {db_path}")
-
-
-def cmd_audit_summary(args):
-    try:
-        from tokenpak.enterprise.audit import AuditLog
-    except ImportError:
-        _require_enterprise_feature("Audit Summary")
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        stats = log.summary(since=getattr(args, "since", None))
-    total = stats.get("total", 0)
-    print(f"Total audit entries: {total}")
-    if stats.get("by_action"):
-        print("\nBy action:")
-        for r in stats["by_action"][:10]:
-            action = r.get("action", "?") if isinstance(r, dict) else r[0]
-            n = r.get("n", 0) if isinstance(r, dict) else r[1]
-            print(f"  {action:<30} {n}")
-    if stats.get("by_outcome"):
-        print("\nBy outcome:")
-        for r in stats["by_outcome"]:
-            outcome = r.get("outcome", "?") if isinstance(r, dict) else r[0]
-            n = r.get("n", 0) if isinstance(r, dict) else r[1]
-            print(f"  {outcome:<20} {n}")
-
-
-# ---------------------------------------------------------------------------
-# Enterprise Compliance commands
-# ---------------------------------------------------------------------------
-
-
-def _build_compliance_parser(sub):
-    p_comp = sub.add_parser("compliance", help="Generate compliance reports (SOC2, GDPR, CCPA)")
-    csub = p_comp.add_subparsers(dest="compliance_cmd", required=True)
-
-    p_report = csub.add_parser("report", help="Generate a compliance report")
-    p_report.add_argument(
-        "--standard",
-        choices=["soc2", "gdpr", "ccpa"],
-        required=True,
-        help="Compliance standard to report against",
-    )
-    p_report.add_argument(
-        "--since", default=None, metavar="DATE", help="Report period start date (ISO)"
-    )
-    p_report.add_argument(
-        "--until", default=None, metavar="DATE", help="Report period end date (ISO)"
-    )
-    p_report.add_argument(
-        "--org", dest="organization", default=None, help="Organization name for the report"
-    )
-    p_report.add_argument(
-        "--output", default=None, metavar="FILE", help="Save report to file (.json or .txt)"
-    )
-    p_report.add_argument("--format", dest="fmt", choices=["json", "text"], default="text")
-    p_report.add_argument("--db", dest="audit_db", default=None, help="Audit DB path")
-    p_report.set_defaults(func=cmd_compliance_report)
-
-
-def cmd_compliance_report(args):
-    import os
-
-    try:
-        from tokenpak.enterprise.compliance import ComplianceReporter
-    except ImportError:
-        _require_enterprise_feature("Compliance Reporting")
-
-    org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
-    db_path = _get_audit_db(args)
-    reporter = ComplianceReporter(audit_db=db_path, organization=org)
-    report = reporter.generate(
-        standard=args.standard,
-        since=getattr(args, "since", None),
-        until=getattr(args, "until", None),
-    )
-    if getattr(args, "output", None):
-        report.save(args.output, fmt=args.fmt)
-        print(f"Report saved → {args.output}")
-    else:
-        if args.fmt == "json":
-            print(report.as_json())
-        else:
-            print(report.as_text())
-
-
 # ── Version Control Commands ──────────────────────────────────────────────────
 
-PROXY_VERSION = "0.4.0"
+PROXY_VERSION = "1.1.0"
 _LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
-_OPENCLAW_CFG = Path.home() / ".openclaw" / "openclaw.json"
+_TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
 _PROXY_URL = "http://localhost:8766"
 
 
@@ -2705,9 +2639,9 @@ def cmd_version(args):
         )
         print(f"Proxy config hash: {proxy_info.get('configHash', '?')}")
 
-    # openclaw.json meta
+    # config.json meta
     try:
-        cfg = json.loads(_OPENCLAW_CFG.read_text())
+        cfg = json.loads(_TOKENPAK_CFG.read_text())
         meta = cfg.get("meta", {})
         print(f"Config version   : {meta.get('configVersion', 'unknown')}")
         print(f"Config hash      : {meta.get('configHash', 'unknown')}")
@@ -2724,7 +2658,7 @@ def cmd_version(args):
         print(f"  Locked by      : {lock.get('lockedBy', '?')} at {lock.get('lockedAt', '?')}")
         # Drift check
         try:
-            cfg = json.loads(_OPENCLAW_CFG.read_text())
+            cfg = json.loads(_TOKENPAK_CFG.read_text())
             current_hash = _compute_config_hash(cfg)
             if lock.get("configHash") and lock["configHash"] != current_hash:
                 print("\n  ⚠️  Config drift detected!")
@@ -2814,7 +2748,7 @@ def cmd_update(args):
 
     # Update lock file
     try:
-        cfg = json.loads(_OPENCLAW_CFG.read_text())
+        cfg = json.loads(_TOKENPAK_CFG.read_text())
         import datetime as _dt
 
         lock = {
@@ -2861,7 +2795,7 @@ def cmd_config_sync(args):
         # Compare lock file with current config
         lock = _load_lock()
         try:
-            cfg = json.loads(_OPENCLAW_CFG.read_text())
+            cfg = json.loads(_TOKENPAK_CFG.read_text())
             current_hash = _compute_config_hash(cfg)
             lock_hash = lock.get("configHash", "")
             if lock_hash and lock_hash != current_hash:
@@ -2892,10 +2826,10 @@ def cmd_config_sync(args):
                 print("  (dry-run: not applying)")
             else:
                 # Merge: remote wins on conflicts, local additions preserved
-                cfg = json.loads(_OPENCLAW_CFG.read_text())
+                cfg = json.loads(_TOKENPAK_CFG.read_text())
                 merged = {**remote_cfg, **cfg}  # local wins (conservative)
                 merged["meta"] = remote_cfg.get("meta", {})
-                _OPENCLAW_CFG.write_text(json.dumps(merged, indent=2))
+                _TOKENPAK_CFG.write_text(json.dumps(merged, indent=2))
                 print("  ✓ Config merged (local additions preserved)")
         except Exception as e:
             print(f"  ✗ Failed to fetch config: {e}")
@@ -2904,11 +2838,11 @@ def cmd_config_sync(args):
 
 
 def cmd_config_validate(args):
-    """Validate openclaw.json config against expected schema."""
+    """Validate config.json against expected schema."""
     required_meta_fields = ["configVersion", "tokenpakVersion", "lastUpdated", "configHash"]
 
     try:
-        cfg = json.loads(_OPENCLAW_CFG.read_text())
+        cfg = json.loads(_TOKENPAK_CFG.read_text())
     except Exception as e:
         print(f"✗ Could not read config: {e}")
         return
@@ -3061,6 +2995,7 @@ def main():
         "aggregate",
         "requests",
         "audit-log",
+        "retrieval",
     }
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
@@ -3292,65 +3227,6 @@ def cmd_route_disable(args):
     print(f"✅ Rule {args.id} disabled." if ok else f"⚠️  Rule {args.id} not found.")
 
 
-# ── CCG-12: Per-session policy helpers ───────────────────────────────────────
-
-def _get_monitor_db() -> str:
-    """Return path to the proxy monitor database (session_policies table lives here)."""
-    import os
-    from pathlib import Path
-    env_path = os.environ.get("TOKENPAK_DB", "")
-    if env_path:
-        return env_path
-    # Default: same directory as proxy.py
-    proxy_dir = Path(__file__).parent.parent  # tokenpak/proxy.py
-    candidate = proxy_dir / "monitor.db"
-    if candidate.exists():
-        return str(candidate)
-    return str(Path.home() / ".tokenpak" / "monitor.db")
-
-
-def _session_policy_upsert(session_id: str, field: str, value) -> None:
-    """UPSERT a single field in session_policies, preserving other fields."""
-    import sqlite3 as _sqlite3
-    db_path = _get_monitor_db()
-    conn = _sqlite3.connect(db_path)
-    try:
-        conn.execute(
-            """
-            INSERT INTO session_policies (session_id, max_cost, mode, route_provider, updated_at)
-            VALUES (?, NULL, NULL, NULL, datetime('now'))
-            ON CONFLICT(session_id) DO UPDATE SET
-                updated_at = excluded.updated_at
-            """,
-            (session_id,),
-        )
-        conn.execute(
-            f"UPDATE session_policies SET {field} = ?, updated_at = datetime('now') WHERE session_id = ?",
-            (value, session_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def cmd_session_budget_set(args):
-    """Set per-session budget cap (CCG-12)."""
-    _session_policy_upsert(args.session, "max_cost", args.max_cost)
-    print(f"Set max_cost=${args.max_cost:.4f} for session {args.session}")
-
-
-def cmd_session_mode_set(args):
-    """Set per-session compilation mode (CCG-12)."""
-    _session_policy_upsert(args.session, "mode", args.mode)
-    print(f"Set mode={args.mode} for session {args.session}")
-
-
-def cmd_session_route_pin(args):
-    """Pin per-session provider routing (CCG-12)."""
-    _session_policy_upsert(args.session, "route_provider", args.provider)
-    print(f"Set route_provider={args.provider} for session {args.session}")
-
-
 def _build_route_parser(sub):
     p_route = sub.add_parser("route", help="Manage manual model routing rules")
     rsub = p_route.add_subparsers(dest="route_cmd", required=True)
@@ -3430,33 +3306,6 @@ def _build_route_parser(sub):
     p_dis.add_argument("id", help="Rule ID")
     p_dis.add_argument("--routes", default=None, help="Path to routes.yaml")
     p_dis.set_defaults(func=cmd_route_disable)
-
-    # route pin — CCG-12 per-session route pinning
-    p_pin = rsub.add_parser("pin", help="Pin a session to a specific provider")
-    p_pin.add_argument("--session", required=True, metavar="ID", help="Session ID")
-    p_pin.add_argument(
-        "--provider",
-        required=True,
-        choices=["anthropic", "openai", "google"],
-        help="Provider to pin for this session",
-    )
-    p_pin.set_defaults(func=cmd_session_route_pin)
-
-
-def _build_mode_parser(sub):
-    """CCG-12: mode set — per-session compilation mode override."""
-    p_mode = sub.add_parser("mode", help="Manage per-session compilation mode")
-    msub = p_mode.add_subparsers(dest="mode_cmd", required=True)
-
-    p_set = msub.add_parser("set", help="Set compilation mode for a session")
-    p_set.add_argument("--session", required=True, metavar="ID", help="Session ID")
-    p_set.add_argument(
-        "--mode",
-        required=True,
-        choices=["transparent", "safe", "aggressive"],
-        help="Compilation mode for this session",
-    )
-    p_set.set_defaults(func=cmd_session_mode_set)
 
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
@@ -3867,13 +3716,6 @@ def cmd_cost(args):
 
 
 def cmd_budget_set(args):
-    # CCG-12: per-session budget takes priority when --session is provided
-    _session = getattr(args, "session", None)
-    _max_cost = getattr(args, "max_cost", None)
-    if _session and _max_cost is not None:
-        cmd_session_budget_set(args)
-        return
-
     from .agent.telemetry.budget import load_budget_config, save_budget_config
 
     cfg = load_budget_config()
@@ -4477,9 +4319,6 @@ def _build_budget_parser(sub):
     p_set.add_argument(
         "--hard-stop", action="store_true", default=None, help="Block requests when limit exceeded"
     )
-    # CCG-12: per-session budget
-    p_set.add_argument("--session", metavar="ID", default=None, help="Session ID for per-session budget cap")
-    p_set.add_argument("--max-cost", dest="max_cost", type=float, metavar="USD", default=None, help="Max spend for this session in USD")
     p_set.set_defaults(func=cmd_budget_set)
 
     bsub.add_parser("status", help="Show current budget status").set_defaults(
@@ -5615,7 +5454,7 @@ def cmd_run_cancel(args):
 
 def cmd_diff(args):
     """Show context diff: removed, compressed, retained blocks."""
-    from tokenpak.cli.commands.diff import run_diff_cmd
+    from tokenpak.agent.cli.commands.diff import run_diff_cmd
     run_diff_cmd(args)
 
 
@@ -6444,6 +6283,174 @@ def _build_fleet_parser(sub):
     
     p_fleet.set_defaults(func=cmd_fleet)
     return p_fleet
+
+
+# ── Retrieval CLI ─────────────────────────────────────────────────────────────
+
+def cmd_retrieval_status(args):
+    """Show retrieval configuration and index stats."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig
+    from .retrieval.bm25 import BM25Retriever
+    from .retrieval.vector_local import LocalVectorRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    json_out = getattr(args, "json", False)
+
+    bm25 = BM25Retriever(vault_index_path=cfg.vault_index_path)
+    vec = LocalVectorRetriever(
+        model_name=cfg.vector_model,
+        index_path=cfg.vector_index_path,
+    )
+
+    status: dict = {
+        "config": {
+            "bm25_weight": cfg.bm25_weight,
+            "vector_weight": cfg.vector_weight,
+            "vector_model": cfg.vector_model,
+            "rrf_k": cfg.rrf_k,
+            "top_k": cfg.top_k,
+            "vault_index_path": cfg.vault_index_path,
+            "vector_index_path": cfg.vector_index_path,
+        },
+        "bm25": {
+            "available": bm25.is_available(),
+            "doc_count": asyncio.run(bm25.index([])) if False else _bm25_doc_count(bm25),
+        },
+        "vector": {
+            "available": vec.is_available(),
+            "doc_count": _vec_doc_count(vec),
+        },
+    }
+
+    if json_out:
+        import json as _json
+        print(_json.dumps(status, indent=2))
+        return
+
+    # Human output
+    print("🔍 TokenPak Retrieval Status")
+    print()
+    print("  Configuration:")
+    print(f"    BM25 weight:      {cfg.bm25_weight}")
+    print(f"    Vector weight:    {cfg.vector_weight}")
+    print(f"    Vector model:     {cfg.vector_model}")
+    print(f"    RRF k:            {cfg.rrf_k}")
+    print(f"    Top-K:            {cfg.top_k}")
+    if cfg.vault_index_path:
+        print(f"    Vault index:      {cfg.vault_index_path}")
+    if cfg.vector_index_path:
+        print(f"    Vector index:     {cfg.vector_index_path}")
+    print()
+    print("  Retrievers:")
+    bm25_ok = status["bm25"]["available"]
+    vec_ok = status["vector"]["available"]
+    print(f"    BM25:    {'✅ available' if bm25_ok else '❌ unavailable'}  ({status['bm25']['doc_count']} docs)")
+    print(f"    Vector:  {'✅ available' if vec_ok else '⚠️  unavailable (sentence-transformers not installed or no index)'}  ({status['vector']['doc_count']} docs)")
+    print()
+    if bm25_ok:
+        mode = "hybrid" if vec_ok else "bm25-only"
+    elif vec_ok:
+        mode = "vector-only"
+    else:
+        mode = "⛔ no retrievers available"
+    print(f"  Active mode: {mode}")
+
+
+def _bm25_doc_count(bm25) -> int:
+    """Get BM25 doc count without async."""
+    try:
+        return len(getattr(bm25, "_blocks", []))
+    except Exception:
+        return 0
+
+
+def _vec_doc_count(vec) -> int:
+    """Get vector index doc count."""
+    try:
+        idx = getattr(vec, "_index", None)
+        if idx is None:
+            return 0
+        return getattr(idx, "ntotal", len(getattr(idx, "_ids", [])))
+    except Exception:
+        return 0
+
+
+def cmd_retrieval_test(args):
+    """Test a query through all enabled retrievers."""
+    import asyncio
+    from .retrieval.base import HybridSearchConfig, RetrievalQuery
+    from .retrieval.hybrid import HybridRetriever
+
+    cfg = HybridSearchConfig.from_env()
+    query_text = args.query
+    top_k = getattr(args, "top_k", cfg.top_k)
+    json_out = getattr(args, "json", False)
+
+    retriever = HybridRetriever(cfg)
+
+    async def _run():
+        q = RetrievalQuery(text=query_text, top_k=top_k)
+        return await retriever.search(q)
+
+    import time
+    t0 = time.perf_counter()
+    results = asyncio.run(_run())
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+
+    if json_out:
+        import json as _json
+        out = {
+            "query": query_text,
+            "elapsed_ms": round(elapsed_ms, 2),
+            "results": [
+                {
+                    "doc_id": r.doc_id,
+                    "fused_score": r.fused_score,
+                    "sources": list(r.source_results.keys()),
+                    "content_preview": r.content[:200] if r.content else "",
+                }
+                for r in results
+            ],
+        }
+        print(_json.dumps(out, indent=2))
+        return
+
+    print(f"🔍 Query: {query_text!r}")
+    print(f"⏱  Elapsed: {elapsed_ms:.1f}ms  |  Results: {len(results)}")
+    print()
+    if not results:
+        print("  (no results)")
+        return
+    for i, r in enumerate(results, 1):
+        sources = ", ".join(r.source_results.keys()) if r.source_results else "bm25"
+        preview = (r.content[:120] + "…") if len(r.content) > 120 else r.content
+        print(f"  {i}. [{r.fused_score:.4f}] {r.doc_id}  ({sources})")
+        if preview:
+            print(f"     {preview}")
+        print()
+
+
+def _build_retrieval_parser(sub):
+    """Build the retrieval command parser."""
+    p_ret = sub.add_parser("retrieval", help="Inspect and test the hybrid retrieval system")
+    p_ret.add_argument("--json", action="store_true", help="Output as JSON")
+    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=True)
+
+    # retrieval status
+    p_status = rsub.add_parser("status", help="Show retrieval config and index stats")
+    p_status.add_argument("--json", action="store_true", help="Output as JSON")
+    p_status.set_defaults(func=cmd_retrieval_status)
+
+    # retrieval test
+    p_test = rsub.add_parser("test", help="Run a test query through all enabled retrievers")
+    p_test.add_argument("query", help="Query string to test")
+    p_test.add_argument("--top-k", type=int, default=5, dest="top_k", help="Number of results (default: 5)")
+    p_test.add_argument("--json", action="store_true", help="Output as JSON")
+    p_test.set_defaults(func=cmd_retrieval_test)
+
+    p_ret.set_defaults(func=lambda a: p_ret.print_help())
+    return p_ret
 
 
 if __name__ == "__main__":

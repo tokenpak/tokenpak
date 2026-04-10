@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
-from .telemetry.budget import BudgetTracker
+from .agent.telemetry.budget import BudgetTracker
 
 
 @dataclass
@@ -104,7 +104,7 @@ def get_burn_rate(
     # If no activities recorded, infer from agent field or use defaults
     if not by_activity:
         by_activity = {
-            "OpenClaw agent tasks": total_cost * 0.62,
+            "Agent tasks": total_cost * 0.62,
             "TokenPak CLI": total_cost * 0.16,
             "Cron jobs": total_cost * 0.09,
             "Other": total_cost * 0.13,

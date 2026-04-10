@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Source map schema for TokenPak truth resolution."""
 
 from __future__ import annotations

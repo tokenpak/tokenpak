@@ -196,68 +196,11 @@ def apply_stable_cache_control(body_bytes: bytes) -> bytes:
     return apply_deterministic_cache_breakpoints(body_bytes)
 
 
-def _request_has_extended_ttl_cache_control(data: Any) -> bool:
-    """Return True if the request body already contains any cache_control with an explicit `ttl` (e.g. "1h").
-
-    When the upstream client (e.g. Claude Code) is already managing extended-TTL cache breakpoints, we
-    must NOT add new default-TTL (5m) breakpoints in earlier positions — Anthropic rejects requests
-    where a longer-TTL block appears after a shorter-TTL block in document order. Returning True from
-    this guard makes `apply_deterministic_cache_breakpoints` a no-op, preserving the client's intent.
-
-    Hotfix added 2026-04-07 in response to a 400 error on Cali's cycle:
-        messages.0.content.2.cache_control.ttl: A ttl=1h cache_control block must not come after a
-        ttl=5m cache_control block.
-    """
-    def _block_has_ttl(block: Any) -> bool:
-        if not isinstance(block, dict):
-            return False
-        cc = block.get("cache_control")
-        return isinstance(cc, dict) and cc.get("ttl") is not None
-
-    # system blocks
-    sys_field = data.get("system")
-    if isinstance(sys_field, list):
-        for blk in sys_field:
-            if _block_has_ttl(blk):
-                return True
-
-    # tool definitions
-    tools_field = data.get("tools")
-    if isinstance(tools_field, list):
-        for tool in tools_field:
-            if _block_has_ttl(tool):
-                return True
-
-    # message content blocks
-    msgs_field = data.get("messages")
-    if isinstance(msgs_field, list):
-        for msg in msgs_field:
-            if not isinstance(msg, dict):
-                continue
-            content = msg.get("content")
-            if isinstance(content, list):
-                for blk in content:
-                    if _block_has_ttl(blk):
-                        return True
-    return False
-
-
 def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     """Apply deterministic multi-breakpoint cache markers to Anthropic requests."""
     try:
         data = json.loads(body_bytes)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return body_bytes
-
-    # Hotfix 2026-04-07: if the upstream client (Claude Code etc) is already managing
-    # extended-TTL cache breakpoints (e.g. ttl=1h), do not mutate. Adding default-TTL
-    # (5m) breakpoints in earlier positions would create the document-order violation
-    # "ttl=1h block must not come after ttl=5m block" and Anthropic returns 400.
-    if _request_has_extended_ttl_cache_control(data):
-        _stats.record_breakpoint("system_last", False)
-        _stats.record_breakpoint("tools_last", False)
-        _stats.record_breakpoint("conversation_midpoint", False)
-        _stats.record_breakpoint("assistant_second_last", False)
         return body_bytes
 
     changed = False

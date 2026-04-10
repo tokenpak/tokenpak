@@ -165,7 +165,7 @@ class TelemetryPipeline:
     def _stage_normalize(self, event: dict) -> dict:
         provider = event.get("_detected_provider", "unknown")
         usage = event.get("usage", {})
-        # OpenClaw session JSONL sometimes uses: input/output/cacheRead/cacheWrite
+        # Session JSONL sometimes uses: input/output/cacheRead/cacheWrite
         if "input" in usage and "prompt_tokens" not in usage:
             try:
                 usage = dict(usage)

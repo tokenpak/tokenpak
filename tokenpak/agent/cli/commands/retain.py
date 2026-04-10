@@ -167,17 +167,6 @@ def run_retain(
     remove: Optional[str] = None,
 ) -> None:
     """Dispatch retain subcommand."""
-    # Tier gate
-    try:
-        from tokenpak.agent.license.activation import is_pro
-
-        if not is_pro():
-            print("⛔ /tokenpak retain requires a Pro or higher license.")
-            print("   Upgrade at: https://tokenpak.io/pricing")
-            sys.exit(1)
-    except ImportError:
-        pass  # Allow in test/dev environments
-
     if list_pins:
         run_retain_list()
     elif remove:

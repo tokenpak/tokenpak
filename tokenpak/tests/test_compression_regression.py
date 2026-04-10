@@ -28,11 +28,11 @@ class CompressedData:
     def get_compression_ratio(self):
         return CompressionMetrics.calculate_ratio(self.data)"""
 
-FIXTURE_LONG_PATHS = """Files at /home/trix/vault/03_AGENT_PACKS/Trix/queue/p2-task.md
-and /home/trix/vault/03_AGENT_PACKS/Trix/archive/old-task.md
-stored on /home/trix/.openclaw/workspace/memory/
-backups at /home/sue/vault/06_RUNTIME/SYSTEM/backups/
-configs at /etc/openclaw/config/tokenpak/proxy.py
+FIXTURE_LONG_PATHS = """Files at /home/user/tokenpak/agents/alpha/queue/p2-task.md
+and /home/user/tokenpak/agents/alpha/archive/old-task.md
+stored on /home/user/.tokenpak/workspace/memory/
+backups at /tmp/backups/
+configs at /etc/tokenpak/config/proxy.py
 and /opt/tokenpak/lib/agent/compression/pipeline.py"""
 
 

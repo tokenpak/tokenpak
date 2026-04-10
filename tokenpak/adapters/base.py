@@ -39,7 +39,6 @@ from typing import Any
 
 # ── Canonical exception hierarchy ─────────────────────────────────────────
 
-
 class TokenPakAdapterError(Exception):
     """Base exception for all TokenPak adapter errors."""
 
@@ -62,7 +61,6 @@ class TokenPakAuthError(TokenPakAdapterError):
 
 
 # ── Base adapter ───────────────────────────────────────────────────────────
-
 
 class TokenPakAdapter(ABC):
     """Abstract base class for all TokenPak SDK/framework adapters.

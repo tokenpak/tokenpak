@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, Mock, patch, call
 
 import pytest
 
-from tokenpak.watchdog import ProxyWatchdog, CooldownManager
+from tokenpak.proxy_watchdog import ProxyWatchdog, CooldownManager
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ def tmp_watchdog_dir(tmp_path):
 @pytest.fixture
 def watchdog_with_mocks(tmp_watchdog_dir, monkeypatch):
     """Create a ProxyWatchdog with mocked paths and logging."""
-    import tokenpak.watchdog as wd_module
+    import tokenpak.proxy_watchdog as wd_module
 
     # Point config paths to temp dir
     monkeypatch.setattr(wd_module, "WATCHDOG_LOG", tmp_watchdog_dir / ".tokenpak" / "watchdog.log")
@@ -189,7 +189,7 @@ def test_restart_proxy_kills_and_starts_process(watchdog_with_mocks):
 
 def test_restart_proxy_fails_after_max_attempts(watchdog_with_mocks):
     """restart_proxy returns False when max restart attempts reached."""
-    from tokenpak.watchdog import MAX_RESTART_ATTEMPTS
+    from tokenpak.proxy_watchdog import MAX_RESTART_ATTEMPTS
     
     watchdog = watchdog_with_mocks
     watchdog.restart_count = MAX_RESTART_ATTEMPTS
@@ -411,7 +411,7 @@ def test_clear_cooldowns_logs_warnings(watchdog_with_mocks, caplog):
 
 def test_log_stats_logs_stats_after_interval(watchdog_with_mocks, caplog):
     """log_stats logs stats when STATS_INTERVAL has elapsed."""
-    from tokenpak.watchdog import STATS_INTERVAL
+    from tokenpak.proxy_watchdog import STATS_INTERVAL
     
     watchdog = watchdog_with_mocks
     watchdog.last_stats_log = time.time() - (STATS_INTERVAL + 1)  # Past interval
@@ -444,7 +444,7 @@ def test_log_stats_skips_if_not_interval(watchdog_with_mocks, caplog):
 
 def test_log_stats_handles_exception(watchdog_with_mocks):
     """log_stats handles exceptions gracefully."""
-    from tokenpak.watchdog import STATS_INTERVAL
+    from tokenpak.proxy_watchdog import STATS_INTERVAL
     
     watchdog = watchdog_with_mocks
     watchdog.last_stats_log = time.time() - (STATS_INTERVAL + 1)

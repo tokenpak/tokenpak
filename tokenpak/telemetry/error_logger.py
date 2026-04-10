@@ -8,18 +8,18 @@ This module provides a comprehensive error tracking system for production TokenP
 deployments, capturing exceptions with contextual metadata for post-mortem analysis.
 """
 
-import os
+import gzip
 import json
 import logging
-import threading
-import gzip
+import os
 import shutil
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Optional, Dict, Any
+import threading
 import traceback
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from functools import wraps
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 # Get logger
 logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ produce byte-identical prompt injections, maximising Anthropic prompt cache hits
 
 Usage::
 
-    from tokenpak.vault.retrieval import sort_retrieval_results, inject_retrieved_context
+    from tokenpak.agent.vault.retrieval import sort_retrieval_results, inject_retrieved_context
 
     results = vault_index.search(query, top_k=10)
     injection = inject_retrieved_context(results, max_tokens=4000)
@@ -21,10 +21,23 @@ Usage::
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from tokenpak._internal.ingest.schema_converter import should_serve_schema
 from tokenpak._internal.memory.session_capsules import capsule_retrieval_score
+
+# ---------------------------------------------------------------------------
+# Query expansion — optional; falls back to plain re.findall when unavailable
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.agent.vault.query_expansion import (
+        tokenize as _qe_tokenize,
+        expand_query as _qe_expand,
+    )
+    _QUERY_EXPANSION_AVAILABLE = True
+except ImportError:
+    _QUERY_EXPANSION_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -115,9 +128,27 @@ def inject_retrieved_context(
 
     prefer_schema = should_serve_schema(intent)
 
+    # Progressive disclosure middleware
+    _pd_total_saved = 0
+    try:
+        from tokenpak.vault.progressive_disclosure import disclose as _pd_disclose
+        _pd_available = True
+    except ImportError:
+        _pd_available = False
+
     for block, score in sorted_results:
         source_path = block.get("source_path", block.get("block_id", "unknown"))
         content = _select_block_content(block, prefer_schema=prefer_schema)
+
+        # Apply progressive disclosure when schema mode is not active
+        if _pd_available and not prefer_schema:
+            content, _pd_meta = _pd_disclose(
+                content,
+                request=intent or "",
+                source_path=source_path,
+                count_tokens_fn=count_tokens_fn,
+            )
+            _pd_total_saved += _pd_meta.get("saved_tokens", 0)
 
         block_text = f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}"
         block_tokens = count_tokens_fn(block_text)
@@ -141,6 +172,13 @@ def inject_retrieved_context(
 
     if not parts:
         return "", 0, []
+
+    if _pd_total_saved > 0:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(
+            "inject_retrieved_context: progressive_disclosure saved %d tokens total",
+            _pd_total_saved,
+        )
 
     injection_text = header + "\n\n".join(parts)
     # Final recount for accuracy
@@ -514,3 +552,78 @@ def score_and_sort(
             item[0].get("block_id", ""),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# BM25 query tokenizer with expansion (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def _bm25_tokenize_query(query: str) -> List[Tuple[str, float]]:
+    """Tokenize a search query with expansion (aliases + stems + weights).
+
+    Returns list of (term, weight) tuples. Original terms get weight 1.0,
+    aliases get 0.5, stems get 0.8.
+    """
+    if _QUERY_EXPANSION_AVAILABLE:
+        tokens = list(_qe_tokenize(query, mode="query"))
+        return _qe_expand(tokens)
+    # Fallback: all terms weighted equally at 1.0
+    terms = re.findall(r"[a-z0-9_]+", query.lower())
+    return [(t, 1.0) for t in terms]
+
+
+# ---------------------------------------------------------------------------
+# Injection text builder from pre-scored results (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def _compile_from_results(
+    results: List[Tuple[Dict[str, Any], float]], budget: int
+) -> Tuple[str, int, List[str]]:
+    """Build injection text from pre-scored results within a token budget.
+
+    Used by Augment mode after multi-signal rescoring to format injection
+    from score_and_sort() output without re-searching.
+    """
+    if not results:
+        return "", 0, []
+
+    try:
+        from tokenpak.tokens import count_tokens  # type: ignore
+    except ImportError:
+        def count_tokens(t: str) -> int:  # type: ignore[misc]
+            return max(1, len(t) // 4)
+
+    injection_parts: List[str] = []
+    tokens_used = 0
+    source_refs: List[str] = []
+
+    for block, score in results:
+        # Modular VaultIndex stores content directly in block dict
+        content = block.get("content", "")
+        block_tokens = block.get("raw_tokens", 0) or count_tokens(content)
+
+        remaining = budget - tokens_used
+        if remaining <= 100:
+            break
+
+        if block_tokens > remaining:
+            char_limit = remaining * 4
+            content = content[:char_limit].rsplit("\n", 1)[0]
+            block_tokens = count_tokens(content)
+            if block_tokens > remaining:
+                break
+
+        source_path = block.get("source_path", block.get("block_id", "unknown"))
+        injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
+        tokens_used += block_tokens
+        source_refs.append(source_path)
+
+    if not injection_parts:
+        return "", 0, []
+
+    header = "\n\n## Retrieved Context\n"
+    injection_text = header + "\n\n".join(injection_parts)
+    tokens_used = count_tokens(injection_text)
+    return injection_text, tokens_used, source_refs

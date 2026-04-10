@@ -400,7 +400,7 @@ class RecipeSDK:
             text = _default_sample_for_category(raw.get("category", "general"))
 
         # Pattern matching check
-        from tokenpak.compression.recipes import CompressionRecipe
+        from tokenpak.agent.compression.recipes import CompressionRecipe
 
         recipe_obj = CompressionRecipe.from_dict(raw, source=str(path))
         pattern_match = recipe_obj.matches(filename=filename_hint, content_sample=text[:2000])

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Allow `python -m tokenpak` to invoke the CLI."""
 
 # Import directly from _cli_core to bypass package namespace issues

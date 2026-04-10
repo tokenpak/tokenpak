@@ -52,7 +52,7 @@ class CompressionPipeline:
     Stages (all optional, enabled by default):
       1. dedup    — remove duplicate / near-duplicate message turns
       2. segment  — classify messages into typed Segment objects
-      3. directives — apply Pro-tier directives (stub; no-op in OSS)
+      3. directives — apply directive rules (extensible via DirectiveApplier)
 
     Custom compression hooks can be added via :meth:`add_hook`.
 

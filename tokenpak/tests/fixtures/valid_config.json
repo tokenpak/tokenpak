@@ -1,7 +1,7 @@
 {
   "port": 8766,
   "mode": "hybrid",
-  "db": "~/.openclaw/workspace/.ocp/monitor.db",
+  "db": "~/.tokenpak/data/monitor.db",
   "compression": {
     "enabled": true,
     "max_chars": 120,
@@ -41,7 +41,7 @@
   },
   "upstream": {
     "timeout": 300,
-    "ollama": "http://100.80.241.118:11434",
+    "ollama": "http://localhost:11434",
     "ollama_timeout": 20
   },
   "rate_limit_rpm": 60,

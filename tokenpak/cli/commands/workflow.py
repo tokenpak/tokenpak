@@ -7,7 +7,7 @@ from datetime import datetime
 
 import click
 
-from tokenpak.agentic.workflow import (
+from tokenpak.agent.agentic.workflow import (
     WORKFLOW_TEMPLATES,
     WorkflowStatus,
     WorkflowStep,

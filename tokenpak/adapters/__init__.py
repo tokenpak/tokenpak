@@ -32,21 +32,16 @@ from tokenpak.adapters.base import (
     TokenPakConfigError,
     TokenPakTimeoutError,
 )
-try:
-    from tokenpak.adapters.langchain.adapter import LangChainAdapter
-except ImportError:
-    from tokenpak.adapters.langchain import LangChainAdapter  # type: ignore[no-redef]
+from tokenpak.adapters.langchain import LangChainAdapter
 from tokenpak.adapters.litellm import LiteLLMAdapter
 from tokenpak.adapters.openai import OpenAIAdapter
 
 __all__ = [
-    # Base
     "TokenPakAdapter",
     "TokenPakAdapterError",
     "TokenPakAuthError",
     "TokenPakConfigError",
     "TokenPakTimeoutError",
-    # Concrete adapters
     "AnthropicAdapter",
     "OpenAIAdapter",
     "LangChainAdapter",

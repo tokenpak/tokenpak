@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Shadow Reader — Passive request observation for TokenPak Phase 3.
 
 Allows observing requests WITHOUT executing them. Useful for:

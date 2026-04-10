@@ -13,7 +13,7 @@ Different intents retrieve different chunk types at different granularity levels
 
 Usage::
 
-    from tokenpak.vault.chunk_shapes import (
+    from tokenpak.agent.vault.chunk_shapes import (
         CHUNK_SHAPES,
         reshape_chunks,
         get_shape_for_intent,
@@ -25,6 +25,8 @@ Usage::
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
@@ -371,3 +373,64 @@ def reshape_chunks(
         reshaped.append((new_block, score))
 
     return reshaped
+
+
+# ---------------------------------------------------------------------------
+# Skeleton extraction — strips function bodies from code blocks before injection
+# Reduces code-heavy vault blocks by 70-90% (signatures + docstrings only)
+# (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def _skeletonize_block(content: str, file_ext: str) -> str:
+    """Apply skeleton extraction to a code block if the language is supported."""
+    from tokenpak.proxy.config import SKELETON_ENABLED  # lazy import avoids circular dep
+
+    if not SKELETON_ENABLED:
+        return content
+    lang_map = {
+        ".py": "python",
+        ".ts": "typescript",
+        ".js": "javascript",
+        ".go": "go",
+        ".rs": "rust",
+    }
+    lang = lang_map.get(file_ext.lower(), "")
+    if not lang:
+        return content
+    try:
+        sys.path.insert(
+            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
+        )
+        from tokenpak.skeleton_extractor import extract_skeleton
+
+        return extract_skeleton(content, lang)
+    except Exception:
+        return content
+
+
+def _inject_skeleton_into_blocks(blocks_text: str) -> str:
+    """Walk a multi-block injection string and skeletonize code blocks."""
+    from tokenpak.proxy.config import SKELETON_ENABLED  # lazy import avoids circular dep
+
+    if not SKELETON_ENABLED or not blocks_text:
+        return blocks_text
+
+    def _replace_fence(m):
+        lang_hint = m.group(1).strip().lower()
+        ext_map = {
+            "python": ".py",
+            "py": ".py",
+            "typescript": ".ts",
+            "ts": ".ts",
+            "javascript": ".js",
+            "js": ".js",
+            "go": ".go",
+            "rust": ".rs",
+        }
+        ext = ext_map.get(lang_hint, "")
+        code = m.group(2)
+        skeletonized = _skeletonize_block(code, ext) if ext else code
+        return f"```{m.group(1)}\n{skeletonized}\n```"
+
+    return re.sub(r"```([^\n]*)\n(.*?)```", _replace_fence, blocks_text, flags=re.DOTALL)

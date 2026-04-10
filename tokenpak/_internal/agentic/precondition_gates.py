@@ -1,4 +1,4 @@
-"""tokenpak.agentic.precondition_gates — Automatic Precondition Gates.
+"""tokenpak.agent.agentic.precondition_gates — Automatic Precondition Gates.
 
 Learns from workflow step failures: when a recurring missing prerequisite is
 detected N times, it auto-registers a gate for that step so future runs skip
@@ -19,7 +19,7 @@ Failure patterns are stored in ``~/.tokenpak/precondition_failures.jsonl``.
 
 Usage
 -----
-    from tokenpak.agentic.precondition_gates import PreconditionGates
+    from tokenpak.agent.agentic.precondition_gates import PreconditionGates
 
     gates = PreconditionGates()
 

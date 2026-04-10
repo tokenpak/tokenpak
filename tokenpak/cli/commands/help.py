@@ -58,7 +58,7 @@ _TIER_LABELS = {
 }
 
 _UPSELL_MESSAGES = {
-    "oss": "Upgrade to PRO to unlock adaptive compression, smart routing, and real-time dashboards.",
+    "oss": "Open-source edition. All features available.",
     "pro": "Upgrade to TEAM to unlock multi-agent coordination, distributed workflows, and SLA management.",
     "team": "Upgrade to ENTERPRISE to unlock compliance reporting, audit logs, and encrypted vault storage.",
 }
@@ -86,14 +86,8 @@ def _load_registry() -> list[dict]:
 
 
 def _current_tier() -> str:
-    """Return current license tier string (oss/pro/team/enterprise). Never raises."""
-    try:
-        from tokenpak._internal.license.activation import get_plan
-
-        result = get_plan()
-        return result.tier.value
-    except Exception:
-        return "oss"
+    """Return current tier string. Always 'oss' in community edition."""
+    return "oss"
 
 
 def _tier_rank(tier: str) -> int:

@@ -1,4 +1,8 @@
-"""TokenPak Proxy Cache — LRU eviction with TTL support.
+"""TokenPak Proxy Cache — LRU eviction with TTL support + cache savings estimation.
+
+Extended in TPK-CONSOLIDATION-A2c with:
+- estimate_cache_savings() — USD saved from prompt-cache hits (was MISSING from modular tree)
+
 
 Provides a thread-safe in-memory cache with:
 - LRU eviction when max_size_mb is reached
@@ -8,11 +12,97 @@ Provides a thread-safe in-memory cache with:
 """
 
 import sys
-import time
 import threading
+import time
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Any, Optional, Dict
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
+
+# ---------------------------------------------------------------------------
+# Cache savings estimation
+# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 3287–3326)
+# CACHE_COST_MULTIPLIERS lives in telemetry/cost.py (added in A2a);
+# MODEL_COSTS is inlined here for zero-import savings estimation.
+# ---------------------------------------------------------------------------
+
+_MODEL_COSTS_LOCAL = {
+    "claude-opus-4-5": {"input": 15.0, "output": 75.0},
+    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "claude-haiku-3-5": {"input": 0.8, "output": 4.0},
+    "claude-haiku-4-5": {"input": 0.8, "output": 4.0},
+    "gpt-4o": {"input": 5.0, "output": 15.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
+    "gemini-2-flash": {"input": 0.1, "output": 0.4},
+    "gemini-3-pro-preview": {"input": 1.25, "output": 5.0},
+    "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
+}
+
+# Per-provider cache read multipliers (fraction of input cost charged for cached tokens)
+_CACHE_READ_MULTIPLIERS_LOCAL = {
+    "anthropic": 0.10,
+    "openai": 0.50,
+    "azure_openai": 0.50,
+    "xai": 0.50,
+    "groq": 0.0,
+    "fireworks": 0.0,
+    "together": 0.0,
+    "gemini": 0.25,
+    "bedrock": 0.10,
+    "codex": 0.50,
+    "unknown": 0.10,
+}
+
+
+def estimate_cache_savings(provider: Any, cache_read_tokens: int, model: str = "") -> float:
+    """Estimate USD saved from cache hits for a given provider.
+
+    Formula: cache_read_tokens * input_cost * (1.0 - read_multiplier)
+    Example: 1000 Anthropic cache reads at $3/MTok input → 1000 * 0.000003 * 0.90 = $0.0027 saved
+
+    Args:
+        provider: Provider enum value or string name.
+        cache_read_tokens: Number of tokens served from cache.
+        model: Model name string (used to look up input cost rate).
+
+    Returns:
+        Estimated USD savings (float ≥ 0.0).
+    """
+    if cache_read_tokens <= 0:
+        return 0.0
+
+    # Get input cost per token (USD per token)
+    input_cost_per_mtok = 3.0  # default ($3/MTok)
+    model_lower = (model or "").lower()
+    for key, costs in _MODEL_COSTS_LOCAL.items():
+        if key in model_lower:
+            input_cost_per_mtok = costs["input"]
+            break
+    input_cost_per_tok = input_cost_per_mtok / 1_000_000
+
+    # Resolve read multiplier — try Provider enum first, fall back to string name
+    read_mult = 0.10  # conservative default
+    try:
+        # Try telemetry/cost.py CACHE_COST_MULTIPLIERS (Provider-keyed)
+        from tokenpak.telemetry.cost import CACHE_COST_MULTIPLIERS as _CCM
+        entry = _CCM.get(provider)
+        if entry is None:
+            # Fall back to string key
+            provider_str = provider.value if hasattr(provider, "value") else str(provider)
+            entry = _CCM.get(provider_str)
+        if entry is not None:
+            read_mult = entry["read"]
+        else:
+            # Local fallback
+            provider_str = provider.value if hasattr(provider, "value") else str(provider)
+            read_mult = _CACHE_READ_MULTIPLIERS_LOCAL.get(provider_str, 0.10)
+    except Exception:
+        provider_str = provider.value if hasattr(provider, "value") else str(provider)
+        read_mult = _CACHE_READ_MULTIPLIERS_LOCAL.get(str(provider_str), 0.10)
+
+    # Savings = tokens * cost * (1 - discount)
+    return cache_read_tokens * input_cost_per_tok * (1.0 - read_mult)
 
 
 @dataclass

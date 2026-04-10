@@ -2,7 +2,7 @@
 title: "tokenpak-local"
 description: "tokenpak-local"
 status: active
-owner: Kevin
+maintainer: tokenpak
 created: 2026-03-11
 tags: [project]
 ---

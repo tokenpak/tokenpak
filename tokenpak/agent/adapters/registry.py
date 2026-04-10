@@ -2,7 +2,7 @@
 Adapter Registry — resolves the correct platform adapter for an incoming request.
 
 Priority order (first match wins):
-  1. OpenClawAdapter
+  1. LegacyAdapter
   2. ClaudeCLIAdapter
   3. GenericAdapter  (always matches)
 """
@@ -15,11 +15,11 @@ from typing import Dict, List, Optional, Type
 from .base import BaseAdapter
 from .claude_cli import ClaudeCLIAdapter
 from .generic import GenericAdapter
-from .openclaw import OpenClawAdapter
+from .legacy import LegacyAdapter
 
 # Ordered list of adapter classes — first match wins.
 _ADAPTER_PRIORITY: List[Type[BaseAdapter]] = [
-    OpenClawAdapter,
+    LegacyAdapter,
     ClaudeCLIAdapter,
     GenericAdapter,
 ]

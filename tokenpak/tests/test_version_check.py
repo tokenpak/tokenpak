@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for tokenpak.version_check module.
 
@@ -126,10 +126,10 @@ class TestLoadConfig:
     def test_load_valid_config(self):
         """Test loading a valid config file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            cfg_file = Path(tmpdir) / "openclaw.json"
+            cfg_file = Path(tmpdir) / "config.json"
             cfg_data = {"proxy": {"port": 8766}, "models": ["gpt-4"]}
             cfg_file.write_text(json.dumps(cfg_data))
-            with mock.patch.object(version_check, "OPENCLAW_CFG", cfg_file):
+            with mock.patch.object(version_check, "TOKENPAK_CFG", cfg_file):
                 result = version_check._load_config()
                 assert result == cfg_data
 
@@ -137,16 +137,16 @@ class TestLoadConfig:
         """Test handling missing config file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cfg_file = Path(tmpdir) / "nonexistent.json"
-            with mock.patch.object(version_check, "OPENCLAW_CFG", cfg_file):
+            with mock.patch.object(version_check, "TOKENPAK_CFG", cfg_file):
                 result = version_check._load_config()
                 assert result is None
 
     def test_load_invalid_config(self):
         """Test handling corrupted config file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            cfg_file = Path(tmpdir) / "openclaw.json"
+            cfg_file = Path(tmpdir) / "config.json"
             cfg_file.write_text("{ broken config")
-            with mock.patch.object(version_check, "OPENCLAW_CFG", cfg_file):
+            with mock.patch.object(version_check, "TOKENPAK_CFG", cfg_file):
                 result = version_check._load_config()
                 assert result is None
 

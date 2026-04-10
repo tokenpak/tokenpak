@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak pro-hooks stub.
 
 This module provides a lightweight plugin-registration API for the tokenpak-pro

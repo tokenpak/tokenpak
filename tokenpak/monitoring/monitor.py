@@ -57,7 +57,10 @@ def _init_db_write_queue() -> None:
                 daemon=True,
                 name="TokenPak-DB-Writer",
             )
-            _DB_BACKGROUND_THREAD.start()
+            # TOKENPAK_NO_THREADS: skip background threads in test environments
+            # to avoid "OSError: Bad file descriptor" in pytest fd-level capture.
+            if not os.environ.get("TOKENPAK_NO_THREADS"):
+                _DB_BACKGROUND_THREAD.start()
 
 
 def _db_writer_worker() -> None:
@@ -415,3 +418,67 @@ class Monitor:
         ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Last-request stats (module-level — updated by proxy request handler)
+# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 3220–3256)
+# ---------------------------------------------------------------------------
+
+LAST_REQUEST: Dict[str, Any] = {
+    "request_id": None,
+    "timestamp": None,
+    "model": None,
+    "input_tokens_raw": 0,
+    "input_tokens_sent": 0,
+    "tokens_saved": 0,
+    "percent_saved": 0.0,
+    "cost_saved": 0.0,
+    "output_tokens": 0,
+}
+_LAST_REQUEST_LOCK = threading.Lock()
+
+
+def update_last_request(
+    request_id: str,
+    model: str,
+    input_raw: int,
+    input_sent: int,
+    tokens_saved: int,
+    cost_saved: float,
+    output_tokens: int,
+) -> None:
+    """Thread-safe update of last request stats."""
+    import datetime as _dt_mod
+    with _LAST_REQUEST_LOCK:
+        LAST_REQUEST["request_id"] = request_id
+        LAST_REQUEST["timestamp"] = _dt_mod.datetime.now().isoformat()
+        LAST_REQUEST["model"] = model
+        LAST_REQUEST["input_tokens_raw"] = input_raw
+        LAST_REQUEST["input_tokens_sent"] = input_sent
+        LAST_REQUEST["tokens_saved"] = tokens_saved
+        LAST_REQUEST["percent_saved"] = (
+            round(tokens_saved / input_raw * 100, 1) if input_raw > 0 else 0.0
+        )
+        LAST_REQUEST["cost_saved"] = round(cost_saved, 6)
+        LAST_REQUEST["output_tokens"] = output_tokens
+
+
+# ---------------------------------------------------------------------------
+# CCG-02: mutation_audit housekeeping
+# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2718–2731)
+# ---------------------------------------------------------------------------
+
+def _prune_mutation_audit(conn: "sqlite3.Connection", ttl_days: int) -> int:
+    """Delete mutation_audit rows older than ttl_days. Returns number of rows deleted.
+
+    CCG-02: Should be called from the request-handling path or DB worker loop
+    on a periodic basis (e.g. once per N requests or on Monitor startup
+    alongside _init_db).
+    """
+    cur = conn.execute(
+        "DELETE FROM mutation_audit WHERE timestamp < datetime('now', '-' || ? || ' days')",
+        (ttl_days,),
+    )
+    conn.commit()
+    return cur.rowcount

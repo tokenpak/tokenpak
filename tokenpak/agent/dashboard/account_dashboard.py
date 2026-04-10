@@ -1,14 +1,10 @@
 """
-Account-scoped Dashboard — Per-license usage, savings, and ROI views.
+Account-scoped Dashboard — Per-user usage, savings, and ROI views.
 
 Routes:
   GET /dashboard/account/usage — Token usage over time (personal)
   GET /dashboard/account/savings — Compression savings breakdown
   GET /dashboard/account/roi — ROI calculator (savings in dollars)
-
-Requires:
-  - WS-1: Feature gates (Pro+ only)
-  - WS-5: Usage metering (keyed by license key_id)
 """
 
 from __future__ import annotations
@@ -26,61 +22,44 @@ from fastapi.templating import Jinja2Templates
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# License & Tier Detection
+# User Identity
 # ─────────────────────────────────────────────
 
 
-def _get_license_key_id() -> Optional[str]:
-    """Extract license key_id from environment or license file."""
-    # Priority:
-    # 1. TOKENPAK_LICENSE_KEY env var
-    # 2. ~/.tokenpak/license.key (parsed)
-    # 3. None (OSS / unlicensed)
+def _get_user_id() -> Optional[str]:
+    """Extract user identifier from environment.
 
-    env_key = os.environ.get("TOKENPAK_LICENSE_KEY", "").strip()
-    if env_key:
-        # Extract key_id from TPAK-... format or return as-is
-        return env_key
+    Returns a user ID string or None if not configured.
+    """
+    user_id = os.environ.get("TOKENPAK_USER_ID", "").strip()
+    if user_id:
+        return user_id
 
-    license_file = Path.home() / ".tokenpak" / "license.key"
-    if license_file.exists():
-        try:
-            from .activation import get_license_key
-
-            key = get_license_key()
-            return key  # Already parsed as key_id
-        except Exception as e:
-            logger.warning(f"Failed to load license key: {e}")
+    # Fall back to API key as user identifier
+    api_key = os.environ.get("TOKENPAK_API_KEY", "").strip()
+    if api_key:
+        return api_key
 
     return None
 
 
-def _check_pro_access(request: Request) -> Optional[str]:
-    """
-    Check if user has Pro+ access. Return key_id if yes, raise 403 if no.
+def _check_access(request: Request) -> str:
+    """Return user_id if configured, raise 403 if not.
 
-    Uses:
-      - License tier detection
-      - WS-1 feature gates (if available)
+    The account dashboard requires a configured user identity
+    so usage data can be scoped per-user.
     """
-    key_id = _get_license_key_id()
+    user_id = _get_user_id()
 
-    if not key_id:
-        # OSS user — no access to account dashboard
+    if not user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "message": "Account dashboard requires TokenPak Pro or higher",
-                "upgrade_url": "https://tokenpak.io/pricing",
-                "upgrade_cta": "Upgrade to Pro to unlock personal analytics",
+                "message": "Account dashboard requires a configured user identity",
             },
         )
 
-    # Placeholder: Check tier from license payload
-    # For now, assume any licensed user is Pro+
-    # Future: verify tier == "pro" | "team" | "enterprise"
-
-    return key_id
+    return user_id
 
 
 # ─────────────────────────────────────────────
@@ -88,9 +67,9 @@ def _check_pro_access(request: Request) -> Optional[str]:
 # ─────────────────────────────────────────────
 
 
-def _load_usage_data(key_id: str, start_date: str, end_date: str) -> list[dict]:
+def _load_usage_data(user_id: str, start_date: str, end_date: str) -> list[dict]:
     """
-    Load usage summary for given key_id and date range.
+    Load usage summary for given user_id and date range.
 
     Returns:
       [
@@ -109,7 +88,7 @@ def _load_usage_data(key_id: str, start_date: str, end_date: str) -> list[dict]:
         from tokenpak.metering import UsageMeterManager
 
         manager = UsageMeterManager()
-        meter = manager.get_meter(key_id)
+        meter = manager.get_meter(user_id)
 
         # Fetch daily summaries for the range
         start = datetime.fromisoformat(start_date)
@@ -197,12 +176,12 @@ def account_usage(request: Request, days: int = 7, model: Optional[str] = None):
       ?days=7 — last N days (default: 7)
       ?model=claude-sonnet — filter by model (optional)
     """
-    key_id = _check_pro_access(request)
+    user_id = _check_access(request)
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
+    data = _load_usage_data(user_id, start_date.isoformat(), end_date.isoformat())
 
     # Aggregate by day for chart
     daily_totals = {}
@@ -228,7 +207,7 @@ def account_usage(request: Request, days: int = 7, model: Optional[str] = None):
         request,
         "usage.html",
         {
-            "key_id": key_id,
+            "user_id": user_id,
             "days": days,
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
@@ -252,12 +231,12 @@ def account_savings(request: Request, days: int = 30, breakdown: str = "daily"):
       ?days=30 — lookback period (default: 30)
       ?breakdown=daily|weekly|monthly — aggregation (default: daily)
     """
-    key_id = _check_pro_access(request)
+    user_id = _check_access(request)
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
+    data = _load_usage_data(user_id, start_date.isoformat(), end_date.isoformat())
 
     # Aggregate by breakdown period
     period_totals = {}
@@ -320,7 +299,7 @@ def account_savings(request: Request, days: int = 30, breakdown: str = "daily"):
         request,
         "savings.html",
         {
-            "key_id": key_id,
+            "user_id": user_id,
             "days": days,
             "breakdown": breakdown,
             "savings_data": savings_data,
@@ -341,13 +320,13 @@ def account_roi(request: Request):
     """
     ROI calculator — shows estimated dollar savings from tokens saved.
     """
-    key_id = _check_pro_access(request)
+    user_id = _check_access(request)
 
     # Get all-time usage
     thirty_days_ago = (date.today() - timedelta(days=30)).isoformat()
     today = date.today().isoformat()
 
-    data = _load_usage_data(key_id, thirty_days_ago, today)
+    data = _load_usage_data(user_id, thirty_days_ago, today)
     total_saved = sum(row["saved_tokens"] for row in data)
 
     roi = _calculate_roi(total_saved)
@@ -356,7 +335,7 @@ def account_roi(request: Request):
         request,
         "roi.html",
         {
-            "key_id": key_id,
+            "user_id": user_id,
             "total_saved": total_saved,
             "estimated_savings_usd": roi["estimated_savings_usd"],
             "period": roi["period"],
@@ -372,16 +351,16 @@ def account_roi(request: Request):
 @router.get("/api/usage.json")
 def api_usage(request: Request, days: int = 7) -> JSONResponse:
     """Return usage data as JSON (for charting libraries)."""
-    key_id = _check_pro_access(request)
+    user_id = _check_access(request)
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
+    data = _load_usage_data(user_id, start_date.isoformat(), end_date.isoformat())
 
     return JSONResponse(
         {
-            "key_id": key_id,
+            "user_id": user_id,
             "period": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
@@ -394,19 +373,19 @@ def api_usage(request: Request, days: int = 7) -> JSONResponse:
 @router.get("/api/savings.json")
 def api_savings(request: Request, days: int = 30) -> JSONResponse:
     """Return savings data as JSON."""
-    key_id = _check_pro_access(request)
+    user_id = _check_access(request)
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days - 1)
 
-    data = _load_usage_data(key_id, start_date.isoformat(), end_date.isoformat())
+    data = _load_usage_data(user_id, start_date.isoformat(), end_date.isoformat())
 
     total_saved = sum(row["saved_tokens"] for row in data)
     roi = _calculate_roi(total_saved)
 
     return JSONResponse(
         {
-            "key_id": key_id,
+            "user_id": user_id,
             "period": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),

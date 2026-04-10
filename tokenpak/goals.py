@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak Savings Goals — Goal Management, Tracking, and Calculation
 
 Goal tracking system for TokenPak with support for:

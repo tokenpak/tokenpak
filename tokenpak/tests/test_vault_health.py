@@ -3,21 +3,15 @@ Tests for tokenpak.vault_health — Phase 1a
 """
 
 import json
-import tempfile
-import time
-from pathlib import Path
 
 import pytest
 
 from tokenpak.vault_health import (
-    HealthCheckResult,
     IndexStatus,
-    RepairResult,
     VaultHealth,
     _make_block_id,
     _parse_frontmatter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -186,7 +180,7 @@ class TestRepair:
 class TestHelpers:
     def test_make_block_id(self):
         assert _make_block_id("notes/README.md") == "notes.README.md"
-        assert _make_block_id("Agents/Trix/queue/task.md") == "Agents.Trix.queue.task.md"
+        assert _make_block_id("agents/alpha/queue/task.md") == "agents.alpha.queue.task.md"
 
     def test_parse_frontmatter_valid(self):
         content = "---\ntitle: My Note\nstatus: open\n---\n# Content"

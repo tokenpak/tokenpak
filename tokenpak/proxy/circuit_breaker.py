@@ -24,7 +24,7 @@ from .config import _cfg
 # ---------------------------------------------------------------------------
 
 OLLAMA_UPSTREAM: str = _cfg(
-    "upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
+    "upstream.ollama", "http://localhost:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
 )
 OLLAMA_CONNECT_TIMEOUT: int = _cfg("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
 
@@ -623,3 +623,194 @@ def _reset_registry_for_testing(
     with _registry_lock:
         _registry = CircuitBreakerRegistry(config=config)
     return _registry
+
+
+# ===========================================================================
+# Rate-limit (429) circuit breaker
+#
+# Tracks 429 responses per-provider in a rolling window.  When the count
+# exceeds the threshold the circuit opens and callers should return 503
+# instead of forwarding the request.  The circuit auto-closes after the
+# cooldown period.
+#
+# Configuration via env vars (applied at module import; override per-instance
+# via constructor kwargs for tests):
+#   TOKENPAK_RATE_LIMIT_WINDOW_SEC   — rolling window length in seconds (default: 60)
+#   TOKENPAK_RATE_LIMIT_THRESHOLD    — 429s in window before tripping   (default: 5)
+#   TOKENPAK_RATE_LIMIT_COOLDOWN_SEC — seconds to stay open before auto-close (default: 30)
+# ===========================================================================
+
+_RL_WINDOW_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_WINDOW_SEC", "60"))
+_RL_THRESHOLD: int = int(os.environ.get("TOKENPAK_RATE_LIMIT_THRESHOLD", "5"))
+_RL_COOLDOWN_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_COOLDOWN_SEC", "30"))
+
+
+class RateLimitCircuitBreaker:
+    """
+    Per-provider 429 circuit breaker.
+
+    Records 429 responses in a rolling window.  When the count reaches
+    *threshold* within *window_sec* seconds the circuit opens.  While open
+    ``is_open()`` returns True — callers should return HTTP 503 without
+    forwarding upstream.  After *cooldown_sec* seconds the circuit closes
+    automatically and normal forwarding resumes.
+
+    Configuration (env vars at module level, overrideable per-instance):
+      TOKENPAK_RATE_LIMIT_WINDOW_SEC   (default 60)
+      TOKENPAK_RATE_LIMIT_THRESHOLD    (default 5)
+      TOKENPAK_RATE_LIMIT_COOLDOWN_SEC (default 30)
+    """
+
+    def __init__(
+        self,
+        window_sec: Optional[float] = None,
+        threshold: Optional[int] = None,
+        cooldown_sec: Optional[float] = None,
+    ) -> None:
+        self._window_sec: float = window_sec if window_sec is not None else _RL_WINDOW_SEC
+        self._threshold: int = threshold if threshold is not None else _RL_THRESHOLD
+        self._cooldown_sec: float = cooldown_sec if cooldown_sec is not None else _RL_COOLDOWN_SEC
+        self._lock = threading.Lock()
+        self._429_times: deque = deque()
+        self._opened_at: float = 0.0
+        self._is_open: bool = False
+
+    # ------------------------------------------------------------------
+    # Write
+    # ------------------------------------------------------------------
+
+    def record_429(self) -> None:
+        """Record one 429 response.  Opens circuit when threshold is reached."""
+        with self._lock:
+            now = time.monotonic()
+            self._429_times.append(now)
+            # Expire entries outside the rolling window
+            cutoff = now - self._window_sec
+            while self._429_times and self._429_times[0] < cutoff:
+                self._429_times.popleft()
+            if not self._is_open and len(self._429_times) >= self._threshold:
+                self._is_open = True
+                self._opened_at = now
+
+    # ------------------------------------------------------------------
+    # Read
+    # ------------------------------------------------------------------
+
+    def is_open(self) -> bool:
+        """Return True if the circuit is open (caller should return 503)."""
+        with self._lock:
+            if not self._is_open:
+                return False
+            # Auto-close after cooldown
+            if time.monotonic() - self._opened_at >= self._cooldown_sec:
+                self._is_open = False
+                self._429_times.clear()
+                self._opened_at = 0.0
+                return False
+            return True
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def reset(self) -> None:
+        """Manually reset to closed state.  Use in tests only."""
+        with self._lock:
+            self._is_open = False
+            self._429_times.clear()
+            self._opened_at = 0.0
+
+    def status(self) -> Dict[str, Any]:
+        """Return a status dict suitable for health-check endpoints."""
+        with self._lock:
+            now = time.monotonic()
+            cooldown_remaining: Optional[float] = None
+            if self._is_open:
+                remaining = self._cooldown_sec - (now - self._opened_at)
+                cooldown_remaining = round(max(0.0, remaining), 1)
+            return {
+                "is_open": self._is_open,
+                "window_sec": self._window_sec,
+                "threshold": self._threshold,
+                "cooldown_sec": self._cooldown_sec,
+                "recent_429s_in_window": len(self._429_times),
+                "cooldown_remaining_sec": cooldown_remaining,
+            }
+
+
+class RateLimitCircuitBreakerRegistry:
+    """Thread-safe per-provider registry of :class:`RateLimitCircuitBreaker` instances."""
+
+    def __init__(
+        self,
+        window_sec: Optional[float] = None,
+        threshold: Optional[int] = None,
+        cooldown_sec: Optional[float] = None,
+    ) -> None:
+        self._window_sec = window_sec
+        self._threshold = threshold
+        self._cooldown_sec = cooldown_sec
+        self._breakers: Dict[str, RateLimitCircuitBreaker] = {}
+        self._lock = threading.Lock()
+
+    def _get_or_create(self, provider: str) -> RateLimitCircuitBreaker:
+        with self._lock:
+            if provider not in self._breakers:
+                self._breakers[provider] = RateLimitCircuitBreaker(
+                    window_sec=self._window_sec,
+                    threshold=self._threshold,
+                    cooldown_sec=self._cooldown_sec,
+                )
+            return self._breakers[provider]
+
+    def record_429(self, provider: str) -> None:
+        """Record a 429 for *provider*.  May open the circuit."""
+        self._get_or_create(provider).record_429()
+
+    def is_open(self, provider: str) -> bool:
+        """Return True if the rate-limit circuit is open for *provider*."""
+        return self._get_or_create(provider).is_open()
+
+    def reset(self, provider: str) -> None:
+        self._get_or_create(provider).reset()
+
+    def reset_all(self) -> None:
+        with self._lock:
+            breakers = list(self._breakers.values())
+        for b in breakers:
+            b.reset()
+
+    def all_statuses(self) -> Dict[str, Any]:
+        with self._lock:
+            items = list(self._breakers.items())
+        return {name: b.status() for name, b in items}
+
+
+# Module-level singleton for rate-limit circuit breakers
+_rl_registry: Optional[RateLimitCircuitBreakerRegistry] = None
+_rl_registry_lock = threading.Lock()
+
+
+def get_rate_limit_registry() -> RateLimitCircuitBreakerRegistry:
+    """Return the global rate-limit circuit breaker registry (created on first call)."""
+    global _rl_registry
+    with _rl_registry_lock:
+        if _rl_registry is None:
+            _rl_registry = RateLimitCircuitBreakerRegistry()
+    return _rl_registry
+
+
+def _reset_rl_registry_for_testing(
+    window_sec: Optional[float] = None,
+    threshold: Optional[int] = None,
+    cooldown_sec: Optional[float] = None,
+) -> RateLimitCircuitBreakerRegistry:
+    """Replace the global rate-limit registry with a fresh instance.  ONLY for tests."""
+    global _rl_registry
+    with _rl_registry_lock:
+        _rl_registry = RateLimitCircuitBreakerRegistry(
+            window_sec=window_sec,
+            threshold=threshold,
+            cooldown_sec=cooldown_sec,
+        )
+    return _rl_registry

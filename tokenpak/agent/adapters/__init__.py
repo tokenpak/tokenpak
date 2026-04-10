@@ -1,7 +1,7 @@
 """
 TokenPak Platform Adapters
 
-Detects which agent platform is making requests (OpenClaw, Claude CLI, or
+Detects which agent platform is making requests (Claude CLI, legacy, or
 generic) and exposes the appropriate compression/routing configuration.
 
 Usage::
@@ -23,12 +23,12 @@ _warnings.warn(
 from .base import BaseAdapter
 from .claude_cli import ClaudeCLIAdapter
 from .generic import GenericAdapter
-from .openclaw import OpenClawAdapter
+from .legacy import LegacyAdapter
 from .registry import detect_platform
 
 __all__ = [
     "BaseAdapter",
-    "OpenClawAdapter",
+    "LegacyAdapter",
     "ClaudeCLIAdapter",
     "GenericAdapter",
     "detect_platform",

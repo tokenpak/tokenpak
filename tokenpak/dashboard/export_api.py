@@ -1,4 +1,4 @@
-"""tokenpak.dashboard.export_api — HTTP handler for /v1/export/csv.
+"""tokenpak.agent.dashboard.export_api — HTTP handler for /v1/export/csv.
 
 Integrates with the proxy server's BaseHTTPRequestHandler style.
 Reads request body JSON, generates CSV via CSVExporter, and returns

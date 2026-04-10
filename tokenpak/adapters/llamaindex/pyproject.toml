@@ -33,7 +33,7 @@ dev = ["pytest>=7.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/tokenpak/llamaindex-tokenpak"
-"Documentation" = "https://tokenpak.dev/integrations/llamaindex"
+"Documentation" = "https://tokenpak.ai/integrations/llamaindex"
 "Repository" = "https://github.com/tokenpak/llamaindex-tokenpak.git"
 
 [tool.setuptools.packages.find]

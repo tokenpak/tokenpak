@@ -407,7 +407,7 @@ user_id: user-123
 ---
 session_id: tokenPak-work-2026-03-27
 timestamp: 2026-03-27T06:00:00Z
-agent: Cali
+agent: Alpha
 ---
 
 # Decisions Made
@@ -422,16 +422,16 @@ agent: Cali
 
 # Action Items
 - Push commits to vault
-- Wait for Sue's QA approval
+- Wait for QA approval
 - Monitor memory-promoter runs
 
 # Insights
-- Systemd timers are simpler alternative to OpenClaw cron when RPC fails
+- Systemd timers are simpler alternative to tokenpak cron when RPC fails
 - Documentation helps with onboarding and troubleshooting
 - Comprehensive test coverage prevents regressions
 
 # Raw Transcript Reference
-Full session log at vault/03_AGENT_PACKS/Cali/memory/2026-03-27.md
+Full session log at .tokenpak/agents/alpha/memory/2026-03-27.md
 """
 
         capsule = build_session_capsule(text, "2026-03-27-session.md")

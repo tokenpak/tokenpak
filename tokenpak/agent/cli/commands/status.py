@@ -120,8 +120,7 @@ def _get_db_path() -> str:
     for candidate in [
         os.environ.get("TOKENPAK_DB", ""),
         os.path.expanduser("~/tokenpak/monitor.db"),
-        os.path.expanduser("~/.openclaw/workspace/.tokenpak/monitor.db"),
-        os.path.expanduser("~/.openclaw/workspace/monitor.db"),
+        os.path.expanduser("~/.tokenpak/data/monitor.db"),
     ]:
         if candidate and Path(candidate).exists():
             return candidate

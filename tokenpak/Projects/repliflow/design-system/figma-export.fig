@@ -1,6 +1,0 @@
-Figma export placeholder for Repliflow DS v1.
-
-To complete:
-1) Create Figma local styles for colors (all 50-900 scales), text styles, effects.
-2) Publish component library (Buttons, Inputs, Cards with all states).
-3) Export .fig and replace this placeholder file.

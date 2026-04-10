@@ -27,9 +27,9 @@ from __future__ import annotations
 import sys as _sys
 import warnings as _warnings
 
-if _sys.modules.get("tokenpak.proxy") is None:
+if _sys.modules.get("tokenpak.agent.proxy") is None:
     _warnings.warn(
-        "tokenpak.proxy.server is deprecated — use proxy.py instead. "
+        "tokenpak.agent.proxy.server is deprecated — use proxy.py instead. "
         "Run `tokenpak serve` to launch the current proxy.",
         DeprecationWarning,
         stacklevel=2,
@@ -53,10 +53,10 @@ from typing import Any, Callable, Dict, Generator, List, Optional
 from urllib.parse import urlparse
 
 from tokenpak import __version__ as _tokenpak_version
-from tokenpak.adapters.registry import detect_platform
-from tokenpak._internal.config import get_stats_footer_enabled
-from tokenpak.dashboard.export_api import ExportAPI
-from tokenpak.dashboard.session_filter import (
+from tokenpak.agent.adapters.registry import detect_platform
+from tokenpak.agent.config import get_stats_footer_enabled
+from tokenpak.agent.dashboard.export_api import ExportAPI
+from tokenpak.agent.dashboard.session_filter import (
     FilterParams,
     SessionFilter,
 )
@@ -624,6 +624,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 is_streaming = data.get("stream", False)
             except Exception:
                 pass
+
+            # Google streaming is signalled by URL, not body: path contains
+            # streamGenerateContent or query param ?alt=sse.
+            if not is_streaming and (
+                "streamGenerateContent" in target_url
+                or "alt=sse" in target_url
+            ):
+                is_streaming = True
 
             if ps.request_hook:
                 try:
