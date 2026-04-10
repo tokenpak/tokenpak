@@ -582,6 +582,14 @@ class CircuitBreakerRegistry:
     def get_state(self, provider: str) -> CircuitState:
         return self._get_or_create(provider).state
 
+    def reload_config(self) -> None:
+        """Thread-safe config reload — re-reads env vars and propagates to all breakers."""
+        new_config = CircuitBreakerConfig.from_env()
+        with self._lock:
+            self._config = new_config
+            for breaker in self._breakers.values():
+                breaker._config = new_config
+
     def all_statuses(self) -> Dict[str, Any]:
         with self._lock:
             providers = list(self._breakers.items())
