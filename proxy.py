@@ -403,6 +403,7 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_CHAT_FOOTER": "true",
         "TOKENPAK_INLINE_SAVINGS": "true",
+        "TOKENPAK_TUI_SAVINGS_TAPE": "true",
         "TOKENPAK_TRACE": "true",
         "TOKENPAK_SEMANTIC_CACHE": "false",
     },
@@ -730,6 +731,8 @@ CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_F
 # CCI-10: Inline savings reporting — SSE event + IDE response header
 INLINE_SAVINGS_ENABLED: bool = _cfg("features.inline_savings", False, "TOKENPAK_INLINE_SAVINGS", bool)
 INLINE_SAVINGS_HEADER_ENABLED: bool = _cfg("features.inline_savings_header", False, "TOKENPAK_INLINE_SAVINGS_HEADER", bool)
+# CCI-14: TUI savings tape — single-line savings summary in chat footer (claude-code-tui only)
+TUI_SAVINGS_TAPE_ENABLED: bool = _cfg("features.tui_savings_tape", False, "TOKENPAK_TUI_SAVINGS_TAPE", bool)
 HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool)
 
 # CCI-08: Shadow A/B model comparison logging
@@ -4041,6 +4044,43 @@ def estimate_cache_savings(
     
     # Savings = tokens * cost * (1 - discount)
     return cache_read_tokens * input_cost_per_tok * (1.0 - read_mult)
+
+
+def _format_tui_savings_tape(
+    input_tokens: int,
+    sent_input_tokens: int,
+    cache_read_tokens: int,
+    vault_blocks: int,
+    model: str,
+    target_url: str,
+) -> "str | None":
+    """Format CCI-14 single-line savings tape for TUI chat footer.
+
+    Returns None when all savings metrics are zero — caller should suppress the footer.
+    Format: tokenpak: 4,500 → 2,350 tokens (47.8% saved, $0.31), cache 81%, +4 vault
+    Numeric formatting: thousands separators for tokens, 1 decimal for pct, 2 decimals for USD.
+    """
+    saved_tokens = max(0, input_tokens - sent_input_tokens)
+    if saved_tokens == 0 and cache_read_tokens == 0 and vault_blocks == 0:
+        return None
+    compression_usd = max(
+        0.0,
+        estimate_cost(model, input_tokens, 0, 0, 0)
+        - estimate_cost(model, sent_input_tokens, 0, 0, 0),
+    )
+    cache_usd = estimate_cache_savings(_provider_for_url(target_url), cache_read_tokens, model)
+    total_usd = compression_usd + cache_usd
+    pct = round(saved_tokens / input_tokens * 100, 1) if input_tokens > 0 else 0.0
+    tape = (
+        f"tokenpak: {input_tokens:,} \u2192 {sent_input_tokens:,} tokens"
+        f" ({pct:.1f}% saved, ${total_usd:.2f})"
+    )
+    if cache_read_tokens > 0 and sent_input_tokens > 0:
+        cache_pct = int(round(cache_read_tokens / sent_input_tokens * 100))
+        tape += f", cache {cache_pct}%"
+    if vault_blocks > 0:
+        tape += f", +{vault_blocks} vault"
+    return tape
 
 
 def estimate_cost(model, input_tokens, output_tokens, cache_read=0, cache_creation=0):
@@ -7534,6 +7574,21 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                         _footer_text += f"\n💰 saved: ${_compression_saved_usd + _cache_saved_usd:.3f} (cmp ${_compression_saved_usd:.3f} + cache ${_cache_saved_usd:.3f})"
                                         if _vault_blocks:
                                             _footer_text += f" | vault: {_vault_blocks}blk"
+                                    # CCI-14: TUI savings tape — replace footer with single-line format
+                                    if TUI_SAVINGS_TAPE_ENABLED:
+                                        _vault_blocks_14 = len(injected_sources)
+                                        _tape14 = _format_tui_savings_tape(
+                                            input_tokens, sent_input_tokens, _temp_cache_r,
+                                            _vault_blocks_14, model, target_url,
+                                        )
+                                        if _tape14 is None:
+                                            # Suppress footer — zero savings
+                                            self.wfile.write(after_stop)
+                                            self.wfile.flush()
+                                            sse_buffer += after_stop
+                                            _footer_injected = True
+                                            continue
+                                        _footer_text = f"\n{_tape14}"
                                     _footer_event = {
                                         "type": "content_block_delta",
                                         "index": 0,
@@ -7652,6 +7707,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             _footer_text += f"\n💰 saved: ${_compression_saved_usd + _cache_saved_usd:.3f} (cmp ${_compression_saved_usd:.3f} + cache ${_cache_saved_usd:.3f})"
                             if _vault_blocks:
                                 _footer_text += f" | vault: {_vault_blocks}blk"
+                        # CCI-14: TUI savings tape — single-line format for non-streaming
+                        if TUI_SAVINGS_TAPE_ENABLED:
+                            _vault_blocks_14 = len(injected_sources)
+                            _tape14 = _format_tui_savings_tape(
+                                input_tokens, sent_input_tokens, _cache_r,
+                                _vault_blocks_14, model, target_url,
+                            )
+                            _footer_text = f"\n{_tape14}" if _tape14 is not None else ""
                         content = resp_json.get("content", [])
                         if content and isinstance(content, list):
                             for i in range(len(content) - 1, -1, -1):
