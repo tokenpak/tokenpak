@@ -1,4 +1,5 @@
 """SQLite storage adapter for TokenPak telemetry.
+# TelemetryStorage is an alias for TelemetryDB (backward-compat name used by tests).
 
 Provides a lightweight, zero-dependency persistence layer that stores
 :class:`~tokenpak.telemetry.models.TelemetryEvent`,
@@ -1312,3 +1313,6 @@ class TelemetryDB:
         """
         cur.execute(sql, params)
         return [_row_to_dict(cur, r) for r in cur.fetchall()]
+
+# Alias for backward-compat
+TelemetryStorage = TelemetryDB

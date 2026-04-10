@@ -556,4 +556,9 @@ __all__ = [
     "InternalError",
     # Utility
     "format_error",
+    # Aliases
+    "TimeoutError",
 ]
+
+# TimeoutError alias — tests import this name from this module
+TimeoutError = RequestTimeoutError  # noqa: A001

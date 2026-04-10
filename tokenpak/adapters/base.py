@@ -210,3 +210,6 @@ class TokenPakAdapter(ABC):
             f"<{type(self).__name__} provider={self.provider_name!r}"
             f" base_url={self.base_url!r}>"
         )
+
+# BaseAdapter alias
+BaseAdapter = TokenPakAdapter

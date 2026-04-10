@@ -1,0 +1,41 @@
+"""tokenpak.adapters.registry — platform detection and adapter registry."""
+from __future__ import annotations
+
+import os
+import sys
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tokenpak.adapters.base import TokenPakAdapter
+
+
+def detect_platform() -> str:
+    """Detect the current Claude Code consumption platform.
+
+    Returns one of: 'openclaw', 'claude_cli', 'ide', 'cron', 'generic'.
+    """
+    if os.environ.get("OPENCLAW_GATEWAY_URL") or os.environ.get("OPENCLAW_HOST"):
+        return "openclaw"
+    if os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "cli":
+        return "claude_cli"
+    if os.environ.get("TERM_PROGRAM") in ("vscode", "cursor", "windsurf"):
+        return "ide"
+    if not sys.stdin.isatty():
+        return "cron"
+    return "generic"
+
+
+def get_adapter(platform: Optional[str] = None) -> "TokenPakAdapter":
+    """Return the appropriate adapter for the detected platform."""
+    p = platform or detect_platform()
+    if p == "openclaw":
+        from tokenpak.adapters.openclaw import OpenClawAdapter
+        return OpenClawAdapter()
+    if p == "claude_cli":
+        from tokenpak.adapters.claude_cli import ClaudeCLIAdapter
+        return ClaudeCLIAdapter()
+    from tokenpak.adapters.generic import GenericAdapter
+    return GenericAdapter()
+
+
+__all__ = ["detect_platform", "get_adapter"]
