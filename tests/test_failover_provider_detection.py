@@ -20,12 +20,12 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.agent.proxy.providers.detector import detect_provider
-from tokenpak.agent.proxy.providers.translator import (
+from tokenpak.proxy.providers.detector import detect_provider
+from tokenpak.proxy.providers.translator import (
     translate_request,
     translate_response,
 )
-from tokenpak.agent.proxy.failover import (
+from tokenpak.proxy.failover import (
     FailoverConfig,
     FailoverManager,
     ProviderEntry,

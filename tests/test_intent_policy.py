@@ -9,7 +9,7 @@ Verifies:
 """
 
 import pytest
-from tokenpak.agent.proxy.intent_policy import (
+from tokenpak.proxy.intent_policy import (
     decide,
     resolve_policy,
     known_intents,
@@ -18,7 +18,7 @@ from tokenpak.agent.proxy.intent_policy import (
     DecisionAction,
     RoutingDecision,
 )
-from tokenpak.agent.compression.slot_filler import SlotFiller
+from tokenpak.compression.slot_filler import SlotFiller
 
 
 class TestIntentPolicyBasics:
@@ -224,7 +224,7 @@ class TestResolvePolicy:
 
     def test_resolve_policy_returns_policy_result(self):
         """resolve_policy should return PolicyResult (old API)."""
-        from tokenpak.agent.proxy.intent_policy import PolicyResult
+        from tokenpak.proxy.intent_policy import PolicyResult
         result = resolve_policy("status", {}, 1.0)
         assert isinstance(result, PolicyResult)
         assert result.recipe_id == "status-report"

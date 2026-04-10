@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from tokenpak.agent.config import (
+from tokenpak._internal.config import (
     get_debug_enabled,
     set_debug_enabled,
     debug_log,
@@ -27,7 +27,7 @@ from tokenpak.agent.config import (
 def temp_config(tmp_path, monkeypatch):
     """Use a temp config file for tests."""
     config_path = tmp_path / "config.json"
-    monkeypatch.setattr("tokenpak.agent.config.CONFIG_PATH", config_path)
+    monkeypatch.setattr("tokenpak._internal.config.CONFIG_PATH", config_path)
     return config_path
 
 

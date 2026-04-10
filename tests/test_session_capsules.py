@@ -1,11 +1,11 @@
-from tokenpak.agent.memory.session_capsules import (
+from tokenpak._internal.memory.session_capsules import (
     REQUIRED_CAPSULE_SECTIONS,
     build_session_capsule,
     capsule_retrieval_score,
     score_capsule_sections,
     serialize_capsule,
 )
-from tokenpak.agent.vault.retrieval import sort_retrieval_results
+from tokenpak.vault.retrieval import sort_retrieval_results
 
 
 RAW_SESSION = """---

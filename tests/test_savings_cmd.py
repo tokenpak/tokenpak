@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.agent.cli.commands.savings import (
+from tokenpak.cli.commands.savings import (
     _query_by_model,
     _query_savings,
     run_savings_cmd,
@@ -76,7 +76,7 @@ def temp_db(tmp_path):
 
 def test_query_savings_shows_all_four_fields(temp_db):
     """AC2: summary must have raw avg, compressed avg, reduction %, and tokens saved (delta)."""
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         data = _query_savings(period="24h")
 
     assert "avg_raw_tokens" in data,       "raw avg missing"
@@ -100,7 +100,7 @@ def test_query_savings_shows_all_four_fields(temp_db):
 
 def test_period_flag_7d_includes_older_rows(temp_db):
     """AC3: --period 7d should include more rows than 24h."""
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         data_24h = _query_savings(period="24h")
         data_7d  = _query_savings(period="7d")
 
@@ -111,7 +111,7 @@ def test_period_flag_7d_includes_older_rows(temp_db):
 
 def test_period_flag_30d_includes_old_row(temp_db):
     """AC3: --period 30d captures the 10-day-old row."""
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         data_30d = _query_savings(period="30d")
 
     assert data_30d["requests"] == 4
@@ -124,7 +124,7 @@ def test_period_flag_30d_includes_old_row(temp_db):
 
 def test_query_by_model_returns_breakdown(temp_db):
     """AC4 (verbose): per-model rows returned with savings fields."""
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         rows = _query_by_model(period="24h")
 
     assert len(rows) == 2  # claude-sonnet-4-5 and gpt-4o
@@ -147,7 +147,7 @@ def test_query_by_model_returns_breakdown(temp_db):
 def test_json_output(temp_db, capsys):
     """AC5 (json flag): output must be valid JSON with summary key."""
     args = SimpleNamespace(period="24h", verbose=False, as_json=True)
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         run_savings_cmd(args)
 
     captured = capsys.readouterr()
@@ -167,7 +167,7 @@ def test_json_output(temp_db, capsys):
 def test_human_output_shows_four_values(temp_db, capsys):
     """AC2 via rendered output: raw/compressed/delta/% all present."""
     args = SimpleNamespace(period="24h", verbose=False, as_json=False)
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", temp_db):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", temp_db):
         run_savings_cmd(args)
 
     out = capsys.readouterr().out
@@ -186,7 +186,7 @@ def test_no_db_graceful(tmp_path, capsys):
     """Missing DB should print error, not crash."""
     missing = str(tmp_path / "nonexistent.db")
     args = SimpleNamespace(period="24h", verbose=False, as_json=False)
-    with patch("tokenpak.agent.cli.commands.savings._MONITOR_DB", missing):
+    with patch("tokenpak.cli.commands.savings._MONITOR_DB", missing):
         run_savings_cmd(args)
 
     out = capsys.readouterr().out

@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.agent.cli.commands.validate_config
+Tests for tokenpak.cli.commands.validate_config
 
 Tests the config validator CLI command and schema validation.
 """
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.cli.commands.validate_config import validate_file, load_schema
+from tokenpak.cli.commands.validate_config import validate_file, load_schema
 
 
 class TestSchemaLoading:

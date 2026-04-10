@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from tokenpak.agent.license.keys import verify_license  # noqa: E402 — keys.py has no infra deps
+from tokenpak._internal.license.keys import verify_license  # noqa: E402 — keys.py has no infra deps
 
 logger = logging.getLogger(__name__)
 

@@ -24,20 +24,35 @@ All options live in ``SemanticCacheConfig``::
     )
     sc = SemanticCache(cfg)
 
-Integration
+Integration (CCG-15: wire-format-aware)
 -----------
-Call ``lookup`` BEFORE the upstream LLM call.  Call ``store`` AFTER you
-receive the upstream response::
+Call ``lookup`` BEFORE the upstream LLM call, passing the expected response
+format.  Call ``store`` AFTER you receive the upstream response, passing the
+raw bytes and content-type::
 
-    entry = cache.lookup(query_text)
-    if entry:
-        return entry.response   # cache hit — no LLM call
+    entry = cache.lookup(query_text, expected_format="json")
+    if entry.hit:
+        # Serve entry.response bytes with entry.content_type header
+        return entry.entry.response, entry.entry.content_type
 
-    response = call_llm(query_text)
-    cache.store(query_text, response)
+    response_bytes, content_type = call_llm(query_text)
+    wire_format = "sse" if "text/event-stream" in content_type else "json"
+    cache.store(query_text, response_bytes, content_type, wire_format)
+
+Wire-format rules:
+  - JSON entries (wire_format="json") are only served to JSON clients.
+  - SSE entries (wire_format="sse") are only served to streaming clients.
+  - Cross-format lookups always return a cache miss — never serve JSON bytes
+    to an SSE parser or vice versa.
 
 Hit/miss details are returned as ``SemanticCacheLookup``; attach to trace
 metadata for observability.
+
+Schema migration note (CCG-15):
+  Pre-CCG-15 entries stored ``response`` as ``dict``.  On first call to
+  ``_evict_expired`` (triggered by any ``lookup``), old-schema entries are
+  detected and removed with a warning.  The cache then rebuilds from live
+  upstream traffic.
 """
 
 from __future__ import annotations
@@ -48,8 +63,8 @@ import re
 import threading
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Dict, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Literal, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +89,23 @@ _FILLER_RE = re.compile(
 
 @dataclass
 class SemanticCacheEntry:
-    """A single cached query/response pair."""
+    """A single cached query/response pair.
+
+    CCG-15: response is stored as raw bytes with an explicit wire_format and
+    content_type so the proxy can serve the entry back to the client with the
+    correct HTTP Content-Type header without any re-serialization.
+    """
 
     query_normalized: str
     query_hash: str
-    response: dict
+    response: bytes                         # raw upstream bytes (JSON or SSE)
+    content_type: str                       # e.g. "application/json" or "text/event-stream; charset=utf-8"
+    wire_format: Literal["json", "sse"]     # "json" | "sse" — never cross-serve
     created_at: float
     ttl_seconds: int = _DEFAULT_TTL
     hit_count: int = 0
-    similarity_score: float = 1.0  # 1.0 for exact matches
+    similarity_score: float = 1.0          # 1.0 for exact matches
+    key_features: dict = field(default_factory=dict)  # additional cache-key dimensions (model, etc.)
 
     @property
     def expires_at(self) -> float:
@@ -132,10 +155,16 @@ class SemanticCache:
 
     Thread-safe.  Uses an OrderedDict (LRU eviction by insertion order).
 
+    CCG-15: wire-format-aware — lookup requires ``expected_format`` and only
+    returns entries whose ``wire_format`` matches.  Store requires raw bytes +
+    content_type + wire_format.
+
+    >>> import json
     >>> cfg = SemanticCacheConfig(ttl_seconds=60, max_entries=10)
     >>> sc = SemanticCache(cfg)
-    >>> sc.store("What is the capital of France?", {"text": "Paris"})
-    >>> result = sc.lookup("What is the capital of France?")
+    >>> sc.store("What is the capital of France?", b'{"answer":"Paris"}', "application/json", "json")
+    SemanticCacheEntry(...)
+    >>> result = sc.lookup("What is the capital of France?", expected_format="json")
     >>> result.hit
     True
     >>> result.match_strategy
@@ -153,9 +182,17 @@ class SemanticCache:
     # Public API
     # ------------------------------------------------------------------
 
-    def lookup(self, query: str) -> SemanticCacheLookup:
+    def lookup(self, query: str, *, expected_format: str = "json") -> SemanticCacheLookup:
         """
-        Look up *query* in the cache.
+        Look up *query* in the cache, returning only entries matching *expected_format*.
+
+        Only returns entries whose ``wire_format`` matches *expected_format*.
+        Cross-format lookups always return a miss (never serve JSON bytes to
+        an SSE client or vice versa).
+
+        The internal store key is composite (``query_hash:wire_format``) so JSON
+        and SSE entries for the same query can coexist without overwriting each
+        other (``key_features`` dimension).
 
         Returns a ``SemanticCacheLookup`` with ``hit=True`` and the cached
         ``entry`` when a match is found, otherwise ``hit=False``.
@@ -169,7 +206,13 @@ class SemanticCache:
         query_hash = _hash(normalised)
 
         with self._lock:
-            entries = list(self._store.values())
+            # CCG-15: only consider entries matching the requested wire format.
+            # Store keys are composite (hash:wire_format) so this filter is O(n)
+            # but n is small (bounded by max_entries).
+            entries = [
+                e for e in self._store.values()
+                if e.wire_format == expected_format
+            ]
 
         # --- 1. Exact normalised match ---
         for entry in entries:
@@ -178,8 +221,9 @@ class SemanticCache:
                     entry.hit_count += 1
                 self._total_hits += 1
                 logger.debug(
-                    "[SemanticCache] HIT exact hash=%s hits=%d",
+                    "[SemanticCache] HIT exact hash=%s fmt=%s hits=%d",
                     query_hash[:8],
+                    expected_format,
                     entry.hit_count,
                 )
                 return SemanticCacheLookup(
@@ -207,9 +251,10 @@ class SemanticCache:
                 best.hit_count += 1
             self._total_hits += 1
             logger.debug(
-                "[SemanticCache] HIT jaccard=%.3f hash=%s",
+                "[SemanticCache] HIT jaccard=%.3f hash=%s fmt=%s",
                 best_score,
                 query_hash[:8],
+                expected_format,
             )
             return SemanticCacheLookup(
                 hit=True,
@@ -222,7 +267,7 @@ class SemanticCache:
 
         # --- Miss ---
         self._total_misses += 1
-        logger.debug("[SemanticCache] MISS hash=%s jaccard_best=%.3f", query_hash[:8], best_score)
+        logger.debug("[SemanticCache] MISS hash=%s fmt=%s jaccard_best=%.3f", query_hash[:8], expected_format, best_score)
         return SemanticCacheLookup(
             hit=False,
             query_hash=query_hash,
@@ -230,31 +275,49 @@ class SemanticCache:
             match_strategy="none",
         )
 
-    def store(self, query: str, response: dict) -> SemanticCacheEntry:
+    def store(
+        self,
+        query: str,
+        response_bytes: bytes,
+        content_type: str = "application/json",
+        wire_format: str = "json",
+    ) -> SemanticCacheEntry:
         """
-        Store *response* for *query*.  Evicts oldest entry when at capacity.
+        Store *response_bytes* for *query*.
+
+        CCG-15: accepts raw bytes + content_type + wire_format.  No JSON
+        parsing is performed.  Evicts the oldest entry when at capacity.
+
+        The internal store key is composite (``query_hash:wire_format``) so
+        JSON and SSE entries for the same query can coexist.
+
         Returns the new ``SemanticCacheEntry``.
         """
         normalised = _normalise(query)
         query_hash = _hash(normalised)
+        # CCG-15: composite key — wire_format is a key dimension so JSON and SSE
+        # entries for the same query can coexist without overwriting each other.
+        _store_key = f"{query_hash}:{wire_format}"
 
         entry = SemanticCacheEntry(
             query_normalized=normalised,
             query_hash=query_hash,
-            response=response,
+            response=response_bytes,
+            content_type=content_type,
+            wire_format=wire_format,
             created_at=time.monotonic(),
             ttl_seconds=self._cfg.ttl_seconds,
         )
 
         with self._lock:
-            # Overwrite if same hash exists
-            if query_hash in self._store:
-                del self._store[query_hash]
+            # Overwrite if same (query, wire_format) pair exists
+            if _store_key in self._store:
+                del self._store[_store_key]
             # Evict oldest if at capacity
             while len(self._store) >= self._cfg.max_entries:
                 evicted_key, _ = self._store.popitem(last=False)
-                logger.debug("[SemanticCache] evicted key=%s (capacity)", evicted_key[:8])
-            self._store[query_hash] = entry
+                logger.debug("[SemanticCache] evicted key=%s (capacity)", evicted_key[:16])
+            self._store[_store_key] = entry
 
         return entry
 
@@ -281,28 +344,44 @@ class SemanticCache:
         self._total_misses = 0
 
     def invalidate(self, query: str) -> bool:
-        """Remove the entry for *query*. Returns True if it was present."""
+        """Remove all entries for *query* (any wire format). Returns True if any was present."""
         normalised = _normalise(query)
         query_hash = _hash(normalised)
         with self._lock:
-            if query_hash in self._store:
-                del self._store[query_hash]
-                return True
-        return False
+            # CCG-15: composite keys — remove all formats for this query
+            removed_keys = [k for k in self._store if k.startswith(f"{query_hash}:")]
+            for k in removed_keys:
+                del self._store[k]
+            return bool(removed_keys)
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _evict_expired(self) -> int:
-        """Remove expired entries. Returns count removed."""
+        """Remove expired entries and old-schema (pre-CCG-15) entries.
+
+        CCG-15 migration: entries with ``response: dict`` (old schema) are
+        deleted and logged as warnings.  The cache rebuilds from fresh traffic.
+        Returns count of removed entries.
+        """
         with self._lock:
             expired = [k for k, e in self._store.items() if e.is_expired()]
             for k in expired:
                 del self._store[k]
+            # CCG-15: clean break — evict any entry whose response is not bytes
+            old_schema = [k for k, e in self._store.items() if not isinstance(e.response, bytes)]
+            for k in old_schema:
+                logger.warning(
+                    "[SemanticCache] CCG-15: evicting old-schema entry %s "
+                    "(response was dict, now requires bytes) — cache will rebuild",
+                    k[:8],
+                )
+                del self._store[k]
+        removed = len(expired) + len(old_schema)
         if expired:
             logger.debug("[SemanticCache] swept %d expired entries", len(expired))
-        return len(expired)
+        return removed
 
 
 # ---------------------------------------------------------------------------

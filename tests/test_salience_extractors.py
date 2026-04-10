@@ -13,7 +13,7 @@ Tests for the salience extractor suite:
 from __future__ import annotations
 
 import pytest
-from tokenpak.agent.compression.salience import (
+from tokenpak.compression.salience import (
     ContentType,
     CodeExtractor,
     DocExtractor,

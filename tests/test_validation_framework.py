@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.validation_framework.
+"""Tests for tokenpak.agentic.validation_framework.
 
 Covers:
   1. ABC interface enforcement
@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.agentic.validation_framework import (
+from tokenpak.agentic.validation_framework import (
     FileStateValidator,
     PostActionValidator,
     RetryPolicy,

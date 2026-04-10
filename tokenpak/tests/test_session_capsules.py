@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from tokenpak.agent.memory.session_capsules import (
+from tokenpak._internal.memory.session_capsules import (
     build_session_capsule,
     serialize_capsule,
     score_capsule_sections,

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""tokenpak.agent.agentic.state_collector — Structured pre-reasoning fact gathering.
+"""tokenpak.agentic.state_collector — Structured pre-reasoning fact gathering.
 
 Collects deterministic environment facts before any LLM reasoning begins.
 Output is a compact StructuredState object (<500 tokens) fed to workflow routing.

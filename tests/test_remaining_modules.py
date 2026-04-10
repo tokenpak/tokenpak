@@ -23,15 +23,15 @@ from pathlib import Path
 import pytest
 
 from tokenpak.infrastructure.cooldown import CooldownManager
-from tokenpak.agent.ingest.claim_indexer import extract_claims_from_document, ClaimEvidence, extract_claims_from_text
-from tokenpak.agent.fingerprint.privacy import apply_privacy, PrivacyLevel
-from tokenpak.agent.macros.premade_macros import PREMADE_MACROS, PremadeMacroRunner
-from tokenpak.agent.macros.script_hooks import fire_hook, list_hooks, get_hook_path
-from tokenpak.agent.proxy.providers.stream_translator import StreamingTranslator
-from tokenpak.agent.proxy.stats_api import StatsAPI, get_stats_storage
-from tokenpak.agent.config import get_config
+from tokenpak._internal.ingest.claim_indexer import extract_claims_from_document, ClaimEvidence, extract_claims_from_text
+from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
+from tokenpak._internal.macros.premade_macros import PREMADE_MACROS, PremadeMacroRunner
+from tokenpak._internal.macros.script_hooks import fire_hook, list_hooks, get_hook_path
+from tokenpak.proxy.providers.stream_translator import StreamingTranslator
+from tokenpak.proxy.stats_api import StatsAPI, get_stats_storage
+from tokenpak._internal.config import get_config
 from tokenpak.infrastructure.debug import DebugLogger
-from tokenpak.agent.agentic.capabilities import AgentCapabilities
+from tokenpak.agentic.capabilities import AgentCapabilities
 
 
 class TestCooldownManager:
@@ -401,25 +401,25 @@ class TestConfig:
 
     def test_get_debug_enabled_returns_bool(self):
         """Test debug enabled flag returns boolean."""
-        from tokenpak.agent.config import get_debug_enabled
+        from tokenpak._internal.config import get_debug_enabled
         debug = get_debug_enabled()
         assert isinstance(debug, bool)
 
     def test_get_metrics_enabled_returns_bool(self):
         """Test metrics enabled flag returns boolean."""
-        from tokenpak.agent.config import get_metrics_enabled
+        from tokenpak._internal.config import get_metrics_enabled
         metrics = get_metrics_enabled()
         assert isinstance(metrics, bool)
 
     def test_get_capsule_builder_enabled_returns_bool(self):
         """Test capsule builder enabled flag returns boolean."""
-        from tokenpak.agent.config import get_capsule_builder_enabled
+        from tokenpak._internal.config import get_capsule_builder_enabled
         capsule = get_capsule_builder_enabled()
         assert isinstance(capsule, bool)
 
     def test_get_stats_footer_enabled_returns_bool(self):
         """Test stats footer enabled flag returns boolean."""
-        from tokenpak.agent.config import get_stats_footer_enabled
+        from tokenpak._internal.config import get_stats_footer_enabled
         footer = get_stats_footer_enabled()
         assert isinstance(footer, bool)
 
@@ -506,36 +506,36 @@ class TestCapabilities:
 
     def test_agent_info_class_available(self):
         """Test AgentInfo class is available."""
-        from tokenpak.agent.agentic.capabilities import AgentInfo
+        from tokenpak.agentic.capabilities import AgentInfo
         assert AgentInfo is not None
         # Should be importable and usable
 
     def test_agent_registry_init(self):
         """Test AgentRegistry initialization."""
-        from tokenpak.agent.agentic.capabilities import AgentRegistry
+        from tokenpak.agentic.capabilities import AgentRegistry
         registry = AgentRegistry()
         assert isinstance(registry, AgentRegistry)
 
     def test_agent_registry_type(self):
         """Test AgentRegistry has correct type."""
-        from tokenpak.agent.agentic.capabilities import AgentRegistry
+        from tokenpak.agentic.capabilities import AgentRegistry
         registry = AgentRegistry()
         assert registry.__class__.__name__ == 'AgentRegistry'
 
     def test_capability_matcher_init(self):
         """Test CapabilityMatcher initialization."""
-        from tokenpak.agent.agentic.capabilities import CapabilityMatcher
+        from tokenpak.agentic.capabilities import CapabilityMatcher
         matcher = CapabilityMatcher()
         assert isinstance(matcher, CapabilityMatcher)
 
     def test_capability_matcher_type(self):
         """Test CapabilityMatcher has correct type."""
-        from tokenpak.agent.agentic.capabilities import CapabilityMatcher
+        from tokenpak.agentic.capabilities import CapabilityMatcher
         matcher = CapabilityMatcher()
         assert matcher.__class__.__name__ == 'CapabilityMatcher'
 
     def test_match_result_class_available(self):
         """Test MatchResult class is available."""
-        from tokenpak.agent.agentic.capabilities import MatchResult
+        from tokenpak.agentic.capabilities import MatchResult
         assert MatchResult is not None
         # Should be importable and usable

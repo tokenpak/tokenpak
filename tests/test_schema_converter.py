@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from tokenpak.agent.ingest.schema_converter import (
+from tokenpak._internal.ingest.schema_converter import (
     SCHEMAS,
     convert_document,
     detect_document_type,
     extract_schema,
     should_serve_schema,
 )
-from tokenpak.agent.vault.indexer import VaultIndexer
-from tokenpak.agent.vault.blocks import BlockStore
-from tokenpak.agent.vault.symbols import SymbolTable
-from tokenpak.agent.vault.retrieval import inject_retrieved_context
+from tokenpak.vault.indexer import VaultIndexer
+from tokenpak.vault.blocks import BlockStore
+from tokenpak.vault.symbols import SymbolTable
+from tokenpak.vault.retrieval import inject_retrieved_context
 
 
 def test_schemas_include_required_document_types() -> None:

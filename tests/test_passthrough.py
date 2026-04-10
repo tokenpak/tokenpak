@@ -21,7 +21,7 @@ import urllib.error
 
 import pytest
 
-from tokenpak.agent.proxy.passthrough import (
+from tokenpak.proxy.passthrough import (
     CredentialPassthrough,
     PassthroughConfig,
     forward_headers,

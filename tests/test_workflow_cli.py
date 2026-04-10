@@ -19,10 +19,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from tokenpak.agent.agentic.workflow import (
+from tokenpak._internal.agentic.workflow import (
     WorkflowManager, WorkflowStatus, StepStatus, WorkflowStep,
 )
-from tokenpak.agent.cli.commands.workflow import workflow_cmd
+from tokenpak.cli.commands.workflow import workflow_cmd
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ def runner():
 
 def invoke(runner, mgr, args):
     """Invoke workflow_cmd with manager patched to use tmp dir."""
-    import tokenpak.agent.cli.commands.workflow as wmod
+    import tokenpak.cli.commands.workflow as wmod
     orig = wmod.get_manager
     wmod.get_manager = lambda: mgr
     try:
@@ -156,7 +156,7 @@ def test_resume_shows_plan(runner, mgr):
         input="n\n",
         catch_exceptions=False,
     )
-    import tokenpak.agent.cli.commands.workflow as wmod
+    import tokenpak.cli.commands.workflow as wmod
     orig = wmod.get_manager
     wmod.get_manager = lambda: mgr
     try:

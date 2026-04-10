@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tokenpak.agent.cli.commands.budget import (
+from tokenpak.cli.commands.budget import (
     _calc_burn_rate,
     _calc_depletion_eta,
     _generate_suggestions,
@@ -40,7 +40,7 @@ def test_burn_rate_daily_avg():
     history_7d = _make_history(7, 1.00)  # $1/day → avg = $1
     history_30d = _make_history(30, 1.00)
     with patch(
-        "tokenpak.agent.cli.commands.budget._budget_history",
+        "tokenpak.cli.commands.budget._budget_history",
         side_effect=lambda days=30: history_7d if days == 7 else history_30d,
     ):
         burn = _calc_burn_rate()
@@ -60,7 +60,7 @@ def test_burn_rate_trend_increasing():
             rows.append({"day": d.isoformat(), "requests": 5, "cost_usd": cost})
         return rows
 
-    with patch("tokenpak.agent.cli.commands.budget._budget_history", side_effect=fake_history):
+    with patch("tokenpak.cli.commands.budget._budget_history", side_effect=fake_history):
         burn = _calc_burn_rate()
     assert burn["trend_7d_pct"] > 0, "Trend should be positive (increasing spend)"
 
@@ -77,7 +77,7 @@ def test_burn_rate_trend_decreasing():
             rows.append({"day": d.isoformat(), "requests": 5, "cost_usd": cost})
         return rows
 
-    with patch("tokenpak.agent.cli.commands.budget._budget_history", side_effect=fake_history):
+    with patch("tokenpak.cli.commands.budget._budget_history", side_effect=fake_history):
         burn = _calc_burn_rate()
     assert burn["trend_7d_pct"] < 0, "Trend should be negative (decreasing spend)"
 
@@ -98,7 +98,7 @@ def test_eta_calculation_correct():
         "today_usd": 2.0,
     }
     monthly_limit = 50.0
-    with patch("tokenpak.agent.cli.commands.budget._get_spent", return_value=10.0):
+    with patch("tokenpak.cli.commands.budget._get_spent", return_value=10.0):
         eta = _calc_depletion_eta(monthly_limit, burn)
     assert eta is not None
     # remaining = 40, daily = 2.0 → 20 days
@@ -116,7 +116,7 @@ def test_eta_returns_none_when_no_limit():
 def test_eta_zero_burn_rate():
     """Zero burn rate should not raise, should return days_remaining=None."""
     burn = {"daily_avg_7d": 0.0, "trend_7d_pct": 0.0}
-    with patch("tokenpak.agent.cli.commands.budget._get_spent", return_value=5.0):
+    with patch("tokenpak.cli.commands.budget._get_spent", return_value=5.0):
         eta = _calc_depletion_eta(50.0, burn)
     assert eta is not None
     assert eta["days_remaining"] is None
@@ -161,7 +161,7 @@ def test_suggestions_max_three():
 
 def test_intelligence_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and not show data."""
-    with patch("tokenpak.agent.license.activation.is_pro", return_value=False):
+    with patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False):
         print_budget_intelligence()
     captured = capsys.readouterr()
     assert "Pro" in captured.out or "license" in captured.out.lower()
@@ -179,12 +179,12 @@ def test_intelligence_json_output(capsys):
         "today_usd": 1.0,
     }
     with (
-        patch("tokenpak.agent.license.activation.is_pro", return_value=True),
-        patch("tokenpak.agent.cli.commands.budget._load_config", return_value={"monthly_limit_usd": 50}),
-        patch("tokenpak.agent.cli.commands.budget._get_spent", return_value=10.0),
-        patch("tokenpak.agent.cli.commands.budget._calc_burn_rate", return_value=burn),
-        patch("tokenpak.agent.cli.commands.budget._get_model_daily_avg", return_value=[]),
-        patch("tokenpak.agent.cli.commands.budget._generate_suggestions", return_value=["test suggestion"]),
+        patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True),
+        patch("tokenpak.cli.commands.budget._load_config", return_value={"monthly_limit_usd": 50}),
+        patch("tokenpak.cli.commands.budget._get_spent", return_value=10.0),
+        patch("tokenpak.cli.commands.budget._calc_burn_rate", return_value=burn),
+        patch("tokenpak.cli.commands.budget._get_model_daily_avg", return_value=[]),
+        patch("tokenpak.cli.commands.budget._generate_suggestions", return_value=["test suggestion"]),
     ):
         print_budget_intelligence(raw=True)
     captured = capsys.readouterr()

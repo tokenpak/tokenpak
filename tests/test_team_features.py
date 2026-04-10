@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 import pytest
 
-from tokenpak.agent.team.agent_registry import AgentRecord, AgentRegistry
-from tokenpak.agent.team.shared_vault import SharedVaultBlock, SharedVault
-from tokenpak.agent.team.templates import Template, TemplateStore, ROLE_ADMIN, ROLE_MEMBER
+from tokenpak._internal.team.agent_registry import AgentRecord, AgentRegistry
+from tokenpak._internal.team.shared_vault import SharedVaultBlock, SharedVault
+from tokenpak._internal.team.templates import Template, TemplateStore, ROLE_ADMIN, ROLE_MEMBER
 
 
 # ===========================================================================

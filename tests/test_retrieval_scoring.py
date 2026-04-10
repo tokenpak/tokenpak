@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.vault.scoring import (
+from tokenpak.vault.scoring import (
     CoverageScoreResult,
     ScoringSignals,
     check_must_hit_coverage,

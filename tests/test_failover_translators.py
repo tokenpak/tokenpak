@@ -16,8 +16,8 @@ from typing import Any, Dict, List
 
 import pytest
 
-from tokenpak.agent.proxy.providers.translator import translate_request, translate_response
-from tokenpak.agent.proxy.providers.stream_translator import (
+from tokenpak.proxy.providers.translator import translate_request, translate_response
+from tokenpak.proxy.providers.stream_translator import (
     StreamingTranslator,
     _sse_done,
     _parse_sse_line,

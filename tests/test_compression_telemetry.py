@@ -24,7 +24,7 @@ ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tokenpak.agent.proxy.stats import (
+from tokenpak.proxy.stats import (
     CompressionStats,
     get_compression_stats,
     reset_singleton,
@@ -309,13 +309,13 @@ class TestThreadSafety:
 
 class TestProxyServerIntegration:
     def test_proxy_server_has_compression_stats(self):
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         ps = ProxyServer()
         assert hasattr(ps, "compression_stats")
         assert isinstance(ps.compression_stats, CompressionStats)
 
     def test_compression_stats_uses_same_start_time(self):
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         ps = ProxyServer()
         # Start times should be within 1 second of each other
         cs_start = ps.compression_stats._start_time

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Tests for tokenpak.agent.regression.retrieval_watchdog."""
+"""Tests for tokenpak._internal.regression.retrieval_watchdog."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import List, Optional
 
 import pytest
 
-from tokenpak.agent.regression.retrieval_watchdog import (
+from tokenpak._internal.regression.retrieval_watchdog import (
     QueryRetrievalRecord,
     RetrievalAlert,
     RetrievalBaseline,

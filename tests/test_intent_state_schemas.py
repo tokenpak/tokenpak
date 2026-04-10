@@ -21,7 +21,7 @@ from tokenpak.infrastructure.state_manager import (
     MultiSchemaStateManager,
     select_state_manager,
 )
-from tokenpak.agent.state_schemas import (
+from tokenpak._internal.state_schemas import (
     INTENT_SCHEMA_MAP,
     SCHEMAS_DIR,
     get_schema_path,

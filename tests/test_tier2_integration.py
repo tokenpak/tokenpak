@@ -31,14 +31,14 @@ from dataclasses import dataclass, field
 import pytest
 
 # Direct module imports (per acceptance criteria)
-from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
-from tokenpak.agent.agentic.failure_memory import FailureMemoryDB, FailureSignature
+from tokenpak.agentic.error_normalizer import ErrorNormalizer
+from tokenpak._internal.agentic.failure_memory import FailureMemoryDB, FailureSignature
 from tokenpak.budget_controller import BudgetController, IntentClass, ClassificationResult
 from tokenpak.monitoring.request_logger import RequestLogger
 from tokenpak.cache.registry import CacheRegistry
-from tokenpak.agent.compression.salience.router import detect_content_type, extract as salience_extract
-from tokenpak.agent.compression.fidelity_tiers import TierSelector, FidelityTier
-from tokenpak.agent.regression.retrieval_watchdog import (
+from tokenpak.compression.salience.router import detect_content_type, extract as salience_extract
+from tokenpak.compression.fidelity_tiers import TierSelector, FidelityTier
+from tokenpak._internal.regression.retrieval_watchdog import (
     RetrievalQualityWatchdog,
     QueryRetrievalRecord,
 )

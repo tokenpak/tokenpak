@@ -1,7 +1,7 @@
-"""Tests for tokenpak.agent.fingerprint.privacy module."""
+"""Tests for tokenpak._internal.fingerprint.privacy module."""
 
 import pytest
-from tokenpak.agent.fingerprint.privacy import apply_privacy, PrivacyLevel
+from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
 
 
 class TestPrivacyLevel:

@@ -1370,6 +1370,22 @@ OLLAMA_UPSTREAM = _cfg(
 )
 OLLAMA_CONNECT_TIMEOUT = _cfg("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
 
+# CCI-06: Local-first routing — route sub-1k-token, no-tools turns to Ollama (zero cost)
+# Opt-in only; default OFF. User must set TOKENPAK_LOCAL_FIRST_FOR_SMALL_TURNS=1.
+LOCAL_FIRST_ENABLED: bool = _cfg(
+    "features.local_first", False, "TOKENPAK_LOCAL_FIRST_FOR_SMALL_TURNS", bool
+)
+LOCAL_FIRST_MAX_INPUT_TOKENS: int = _cfg(
+    "local_first.max_input_tokens", 1000, "TOKENPAK_LOCAL_MAX_INPUT_TOKENS", int
+)
+LOCAL_FIRST_MIN_RESPONSE_TOKENS: int = _cfg(
+    "local_first.min_response_tokens", 50, "TOKENPAK_LOCAL_MIN_RESPONSE_TOKENS", int
+)
+LOCAL_FIRST_MODEL: str = _cfg(
+    "local_first.model", "qwen2.5-coder:7b", "TOKENPAK_LOCAL_MODEL", str
+)
+LOCAL_FIRST_TIMEOUT: int = 30  # seconds; fall through to Anthropic if exceeded
+
 # Circuit breaker for ollama upstream -- avoids repeated 2-min TCP hangs
 _ollama_circuit = {
     "open": False,  # True = upstream known-dead, skip attempts
@@ -2464,6 +2480,145 @@ def _ollama_health_loop():
 _ollama_health_thread = threading.Thread(target=_ollama_health_loop, daemon=True)
 if not os.environ.get("TOKENPAK_NO_THREADS"):
     _ollama_health_thread.start()
+
+
+# ---------------------------------------------------------------------------
+# CCI-06: Local-first routing helpers
+# ---------------------------------------------------------------------------
+
+def _cci06_translate_to_ollama(body: bytes) -> Optional[dict]:
+    """
+    Translate an Anthropic Messages request body to an OpenAI-compatible
+    chat completions request for Ollama's /v1/chat/completions endpoint.
+
+    Returns the translated dict ready to POST, or None if translation fails.
+    """
+    try:
+        req = json.loads(body)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    messages: list = []
+
+    # Convert Anthropic system prompt → OpenAI system message
+    system = req.get("system")
+    if system:
+        if isinstance(system, str):
+            messages.append({"role": "system", "content": system})
+        elif isinstance(system, list):
+            # Array of content blocks — flatten text blocks to a single string
+            parts = [
+                b.get("text", "") for b in system
+                if isinstance(b, dict) and b.get("type") == "text"
+            ]
+            combined = "\n".join(p for p in parts if p)
+            if combined:
+                messages.append({"role": "system", "content": combined})
+
+    # Convert Anthropic messages → OpenAI messages
+    for msg in req.get("messages", []):
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            messages.append({"role": role, "content": content})
+        elif isinstance(content, list):
+            # Flatten text blocks to a single string
+            parts = [
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ]
+            messages.append({"role": role, "content": "\n".join(p for p in parts if p)})
+        else:
+            messages.append({"role": role, "content": str(content)})
+
+    payload: dict = {
+        "model": LOCAL_FIRST_MODEL,
+        "messages": messages,
+        "stream": False,
+    }
+    # Carry over optional generation params
+    for key in ("max_tokens", "temperature", "top_p", "top_k", "stop"):
+        if key in req:
+            payload[key] = req[key]
+
+    return payload
+
+
+def _cci06_count_response_tokens(text: str) -> int:
+    """Approximate token count for an Ollama response text."""
+    try:
+        return len(text) // 4  # fallback approx
+    except Exception:
+        return 0
+
+
+def _cci06_wrap_to_sse(
+    text: str, model: str, input_tokens: int, output_tokens: int
+) -> bytes:
+    """
+    Wrap a plain text Ollama response as Anthropic SSE (text/event-stream).
+    Produces the minimal event sequence that claude CLI expects.
+    """
+    msg_id = "msg_local_" + str(int(time.time() * 1000))[-8:]
+
+    def _line(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, separators=(',', ':'))}\n\n"
+
+    chunks = [
+        _line("message_start", {
+            "type": "message_start",
+            "message": {
+                "id": msg_id,
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": model,
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": input_tokens, "output_tokens": 0},
+            },
+        }),
+        _line("content_block_start", {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "text", "text": ""},
+        }),
+        "event: ping\ndata: {\"type\":\"ping\"}\n\n",
+        _line("content_block_delta", {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": text},
+        }),
+        _line("content_block_stop", {"type": "content_block_stop", "index": 0}),
+        _line("message_delta", {
+            "type": "message_delta",
+            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+            "usage": {"output_tokens": output_tokens},
+        }),
+        _line("message_stop", {"type": "message_stop"}),
+    ]
+    return "".join(chunks).encode("utf-8")
+
+
+def _cci06_wrap_to_json(
+    text: str, model: str, input_tokens: int, output_tokens: int
+) -> bytes:
+    """
+    Wrap a plain text Ollama response as an Anthropic Messages JSON response.
+    """
+    msg_id = "msg_local_" + str(int(time.time() * 1000))[-8:]
+    payload = {
+        "id": msg_id,
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "text", "text": text}],
+        "model": model,
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {"input_tokens": input_tokens, "output_tokens": output_tokens},
+    }
+    return json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
 
 # ---------------------------------------------------------------------------
 # Token counting
@@ -4547,6 +4702,9 @@ SESSION = {
     "ingest_entries": 0,
     "compression_timeouts": 0,
     "vault_last_timing_ms": {},
+    # CCI-06: Local-first routing counters
+    "local_first_routed": 0,      # requests served successfully by Ollama
+    "local_first_fallthrough": 0, # requests that fell through to Anthropic
 }
 
 # ---------------------------------------------------------------------------
@@ -6270,6 +6428,10 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "routing": {
                     "smart_routing_hit_rate": round(routing_hit_rate, 3),
                     "fallback_chain_usage": 0,  # Placeholder: implement
+                    # CCI-06: local-first routing counters
+                    "local_first_routed": SESSION.get("local_first_routed", 0),
+                    "local_first_fallthrough": SESSION.get("local_first_fallthrough", 0),
+                    "local_first_enabled": LOCAL_FIRST_ENABLED,
                 },
                 # Key Metric 5: Cache hit ratio
                 "cache": {
@@ -6544,6 +6706,141 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         real_path = self.path[len("/ollama-proxy") :]
         target = OLLAMA_UPSTREAM + real_path
         self._proxy_to(target, method, force_intercept=True)
+
+    def _local_first_check(self, body: bytes) -> bool:
+        """CCI-06: Pre-route check — attempt to serve simple turns via local Ollama.
+
+        Returns True if the request was fully handled (response sent), False to fall through.
+
+        Conditions for local routing:
+          1. TOKENPAK_LOCAL_FIRST_FOR_SMALL_TURNS=1 (feature flag)
+          2. Active profile is claude-code-* (set by CCI-04 or env)
+          3. Input token count < TOKENPAK_LOCAL_MAX_INPUT_TOKENS
+          4. Request body has no 'tools' block
+        """
+        if not LOCAL_FIRST_ENABLED:
+            return False
+
+        # Check profile
+        active_profile = SESSION.get("active_profile", ACTIVE_PROFILE)
+        if not str(active_profile).startswith("claude-code"):
+            return False
+
+        # Parse body to check tokens + tools + streaming flag
+        try:
+            req_data = json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            return False
+
+        is_streaming: bool = bool(req_data.get("stream", False))
+
+        # Condition 4: tools block triggers fallthrough
+        if req_data.get("tools"):
+            SESSION["local_first_fallthrough"] += 1
+            print("  [cci06] fallthrough: tools block present", flush=True)
+            return False
+
+        # Condition 3: count input tokens
+        try:
+            _, input_tok = extract_request_tokens(body)
+        except Exception:
+            input_tok = 0
+
+        if input_tok >= LOCAL_FIRST_MAX_INPUT_TOKENS:
+            SESSION["local_first_fallthrough"] += 1
+            print(
+                f"  [cci06] fallthrough: input_tokens={input_tok} >= limit={LOCAL_FIRST_MAX_INPUT_TOKENS}",
+                flush=True,
+            )
+            return False
+
+        # Translate request for Ollama
+        ollama_payload = _cci06_translate_to_ollama(body)
+        if ollama_payload is None:
+            SESSION["local_first_fallthrough"] += 1
+            return False
+
+        # Attempt Ollama call
+        parsed_upstream = urlparse(OLLAMA_UPSTREAM)
+        host = parsed_upstream.hostname or "localhost"
+        port = parsed_upstream.port or 11434
+
+        try:
+            ollama_body = json.dumps(ollama_payload).encode("utf-8")
+            ollama_resp = _POOL_MANAGER.request(
+                "POST",
+                f"{OLLAMA_UPSTREAM}/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(ollama_body)),
+                },
+                body=ollama_body,
+                timeout=urllib3.Timeout(connect=5.0, read=LOCAL_FIRST_TIMEOUT),
+                preload_content=True,
+            )
+        except Exception as exc:
+            SESSION["local_first_fallthrough"] += 1
+            print(f"  [cci06] fallthrough: Ollama error — {exc}", flush=True)
+            return False
+
+        if ollama_resp.status != 200:
+            SESSION["local_first_fallthrough"] += 1
+            print(
+                f"  [cci06] fallthrough: Ollama returned HTTP {ollama_resp.status}",
+                flush=True,
+            )
+            return False
+
+        # Parse Ollama OpenAI-compatible response
+        try:
+            ollama_data = json.loads(ollama_resp.data)
+            response_text = (
+                ollama_data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            ) or ""
+        except Exception as exc:
+            SESSION["local_first_fallthrough"] += 1
+            print(f"  [cci06] fallthrough: Ollama parse error — {exc}", flush=True)
+            return False
+
+        # Under-delivery check
+        output_tok = _cci06_count_response_tokens(response_text)
+        if output_tok < LOCAL_FIRST_MIN_RESPONSE_TOKENS:
+            SESSION["local_first_fallthrough"] += 1
+            print(
+                f"  [cci06] fallthrough: under-delivery output_tokens={output_tok} < min={LOCAL_FIRST_MIN_RESPONSE_TOKENS}",
+                flush=True,
+            )
+            return False
+
+        # Serve the response
+        SESSION["local_first_routed"] += 1
+        print(
+            f"  [cci06] local: served by ollama model={LOCAL_FIRST_MODEL} "
+            f"input_tok={input_tok} output_tok={output_tok}",
+            flush=True,
+        )
+
+        if is_streaming:
+            resp_bytes = _cci06_wrap_to_sse(response_text, LOCAL_FIRST_MODEL, input_tok, output_tok)
+            content_type = "text/event-stream"
+        else:
+            resp_bytes = _cci06_wrap_to_json(response_text, LOCAL_FIRST_MODEL, input_tok, output_tok)
+            content_type = "application/json"
+
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(resp_bytes)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("X-TokenPak-Local-First", "routed")
+            self.end_headers()
+            self.wfile.write(resp_bytes)
+        except Exception as exc:
+            print(f"  [cci06] response write error: {exc}", flush=True)
+
+        return True
 
     def _handle_count_tokens(self):
         """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
@@ -6855,6 +7152,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             SESSION["active_profile"] = _detected
             print(f"[tokenpak] active_profile: {_detected}")
 
+        # CCI-06: Local-first routing — try to serve small, no-tools turns via Ollama
+        # before touching the compression pipeline or upstream. Opt-in only.
+        if body and self._local_first_check(body):
+            return
+
         # X-TokenPak-Bypass: skip compression pipeline for this request
         _bypass_header_val = self.headers.get("x-tokenpak-bypass", "").strip().lower()
         _bypass_request: bool = _bypass_header_val in ("true", "1", "yes")
@@ -6874,6 +7176,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         injected_tokens = 0
         injected_sources: List[str] = []
         is_streaming = False
+        _sc_tee_buf = b""       # CCG-15: accumulator for SSE semantic cache (set in SSE loop)
+        _sc_tee_capped = False  # CCG-15: True when SSE response exceeded 256 KB cap
         cache_read_tokens = 0
         cache_creation_tokens = 0
         cache_poison_scrubbed = False
@@ -6916,6 +7220,65 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         if _bypass_request and body:
             # Bypass mode: skip entire compression pipeline, pass through unmodified
             print(f"  ⏩ X-TokenPak-Bypass: passthrough (bypass header set)")
+
+        # ── DLP outbound secret scan ──────────────────────────────────────────
+        # Scans the raw request body for secrets before compression/forwarding.
+        # Default: TOKENPAK_DLP_ENABLED=1, TOKENPAK_DLP_MODE=warn (log only).
+        # Opt-out: TOKENPAK_DLP_ENABLED=0
+        if os.environ.get("TOKENPAK_DLP_ENABLED", "1") != "0" and should_log and is_messages and body:
+            try:
+                from tokenpak.security.dlp import DLPScanner
+                _dlp = DLPScanner()
+                _dlp_text = body.decode("utf-8", errors="replace")
+                if _dlp.mode == "warn":
+                    _dlp_findings = _dlp.scan(_dlp_text)
+                    if _dlp_findings:
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: %d secret(s) detected in outbound request: %s"
+                            " (set TOKENPAK_DLP_MODE=redact to auto-redact"
+                            " or TOKENPAK_DLP_ENABLED=0 to disable)",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                elif _dlp.mode == "redact":
+                    _dlp_redacted = _dlp.redact(_dlp_text)
+                    if _dlp_redacted != _dlp_text:
+                        body = _dlp_redacted.encode("utf-8")
+                elif _dlp.mode == "block":
+                    if not _dlp.block_check(_dlp_text):
+                        _dlp_findings = _dlp.scan(_dlp_text)
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: blocking request — %d secret(s) detected: %s",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                        _dlp_err = json.dumps({
+                            "error": {
+                                "type": "dlp_block",
+                                "message": (
+                                    f"Request blocked by DLP scanner: "
+                                    f"{len(_dlp_findings)} secret(s) detected in outbound "
+                                    "prompt. Remove secrets before retrying."
+                                ),
+                                "rule_ids": [f.rule_id for f in _dlp_findings],
+                            }
+                        }).encode()
+                        self.send_response(403)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(_dlp_err)))
+                        self.end_headers()
+                        self.wfile.write(_dlp_err)
+                        return
+            except ImportError:
+                pass
+            except Exception as _dlp_exc:
+                import logging as _dlp_log
+                _dlp_log.getLogger(__name__).debug(
+                    "tokenpak.dlp: scan error (passthrough): %s: %s",
+                    type(_dlp_exc).__name__, _dlp_exc,
+                )
 
         if should_log and is_messages and body and not _bypass_request:
             # Fix #5: Strict validation mode — reject malformed requests early
@@ -7018,24 +7381,35 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             if _sem_cache is None:
                                 raise ImportError("SemanticCache unavailable")
                             _sem_query = body.decode("utf-8") if isinstance(body, bytes) else body
-                            _cache_result = _sem_cache.lookup(_sem_query)
-                            if (
-                                _cache_result is not None
-                                and _cache_result.hit
-                                and _cache_result.entry
-                            ):
-                                SESSION["semantic_cache_hit"] = True
-                                SESSION["phase_semantic_cache"] = "hit"
-                                # Return cached response — skip all processing
-                                _cached_resp = _cache_result.entry.response
-                                if isinstance(_cached_resp, dict):
-                                    self._send_json(_cached_resp)
-                                elif isinstance(_cached_resp, bytes):
-                                    self.wfile.write(_cached_resp)
-                                else:
-                                    self._send_json(json.loads(_cached_resp))
-                                return
-                            SESSION["phase_semantic_cache"] = "miss"
+                            # CCG-14 guard: bypass for Claude Code agent requests.
+                            # Replayed message_id/tool_use IDs break the agent loop — Tier 3 needed.
+                            _hdrs_lower = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
+                            _is_agent_req = bool(_hdrs_lower.get("x-claude-code-session-id")) or "claude-code" in (_hdrs_lower.get("user-agent") or "").lower()
+                            if _is_agent_req:
+                                SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                            else:
+                                # CCG-15: detect expected_format from is_streaming.
+                                # SSE clients (stream=true) need "sse" format; JSON clients need "json".
+                                _expected_format = "sse" if is_streaming else "json"
+                                _cache_result = _sem_cache.lookup(_sem_query, expected_format=_expected_format)
+                                if (
+                                    _cache_result is not None
+                                    and _cache_result.hit
+                                    and _cache_result.entry
+                                ):
+                                    SESSION["semantic_cache_hit"] = True
+                                    SESSION["phase_semantic_cache"] = "hit"
+                                    # CCG-15: serve raw bytes with original Content-Type header.
+                                    # Never use _send_json — it hard-codes application/json and
+                                    # would crash an SSE parser receiving JSON-shaped bytes.
+                                    _entry = _cache_result.entry
+                                    self.send_response(200)
+                                    self.send_header("Content-Type", _entry.content_type)
+                                    self.send_header("Access-Control-Allow-Origin", "*")
+                                    self.end_headers()
+                                    self.wfile.write(_entry.response)
+                                    return
+                                SESSION["phase_semantic_cache"] = "miss"
                         except Exception as _sc_err:
                             SESSION["phase_semantic_cache"] = f"error:{_sc_err}"
                             pass  # fail-open: never break a request over semantic cache
@@ -8311,6 +8685,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _footer_injected = False
                 import zlib as _zlib
 
+                # CCG-15: SSE tee buffer — accumulate chunks for semantic cache while streaming.
+                # Tee is parallel to forwarding: client still receives chunks in real time.
+                _SC_TEE_CAP = 256 * 1024  # 256 KB: bypass cache silently for oversized responses
+                _sc_tee_buf = b""
+                _sc_tee_capped = False
+
                 _ce = resp.getheader("Content-Encoding", "")
                 _decomp = _zlib.decompressobj(_zlib.MAX_WBITS | 16) if "gzip" in _ce else None
                 while True:
@@ -8449,6 +8829,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         break
                     if should_log and is_messages:
                         sse_buffer += chunk
+                    # CCG-15: tee into semantic cache buffer (bounded, parallel to forwarding)
+                    if SEMANTIC_CACHE_ENABLED and not _sc_tee_capped:
+                        _sc_tee_buf += chunk
+                        if len(_sc_tee_buf) > _SC_TEE_CAP:
+                            _sc_tee_capped = True
+                            _sc_tee_buf = b""  # free memory — response too large to cache
                 if should_log and is_messages:
                     sse_usage = _extract_sse_tokens(sse_buffer)
                     output_tokens = extract_response_tokens(
@@ -8615,23 +9001,39 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     _sem_cache = _get_sem_cache()
                     if _sem_cache is None:
                         raise ImportError("SemanticCache unavailable")
-                    _store_query = (
-                        _original_body.decode("utf-8")
-                        if isinstance(_original_body, bytes)
-                        else _original_body
-                    )
-                    _store_resp_raw = (
-                        resp_body
-                        if "resp_body" in locals()
-                        else json.dumps({"status": status}).encode()
-                    )
-                    _store_resp_dict = (
-                        json.loads(_store_resp_raw)
-                        if isinstance(_store_resp_raw, (bytes, str))
-                        else _store_resp_raw
-                    )
-                    _sem_cache.store(_store_query, _store_resp_dict)
-                    SESSION["semantic_cache_stored"] = True
+                    # CCG-14 guard: don't store Claude Code responses — IDs would poison cache.
+                    # (Tier 3 will synthesize fresh IDs on hit; until then, Claude Code bypassed.)
+                    _store_hdrs_lower = {k.lower(): v for k, v in (self.headers.items() if self.headers else [])}
+                    _is_agent_store = bool(_store_hdrs_lower.get("x-claude-code-session-id")) or "claude-code" in (_store_hdrs_lower.get("user-agent") or "").lower()
+                    if _is_agent_store:
+                        SESSION["phase_semantic_cache"] = "skipped:streaming-or-agent"
+                    else:
+                        _store_query = (
+                            _original_body.decode("utf-8")
+                            if isinstance(_original_body, bytes)
+                            else _original_body
+                        )
+                        # CCG-15: store raw bytes with content_type and wire_format.
+                        # SSE path: use tee buffer if captured and not capped.
+                        # JSON path: use resp_body from non-streaming branch.
+                        if is_sse and not _sc_tee_capped and _sc_tee_buf:
+                            _store_resp_bytes: bytes = _sc_tee_buf
+                            _store_wire_format = "sse"
+                            _store_content_type = content_type or "text/event-stream; charset=utf-8"
+                        elif not is_sse and "resp_body" in locals() and resp_body:
+                            _store_resp_bytes = resp_body if isinstance(resp_body, bytes) else resp_body.encode()
+                            _store_wire_format = "json"
+                            _store_content_type = content_type or "application/json"
+                        else:
+                            _store_resp_bytes = b""
+                        if _store_resp_bytes:
+                            _sem_cache.store(
+                                _store_query,
+                                _store_resp_bytes,
+                                content_type=_store_content_type,
+                                wire_format=_store_wire_format,
+                            )
+                            SESSION["semantic_cache_stored"] = True
                 except Exception as _sc_store_err:
                     SESSION["semantic_cache_store_error"] = str(_sc_store_err)
                     pass  # fail-open

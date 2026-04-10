@@ -12,7 +12,7 @@ Usage:
 import json
 import pytest
 from pathlib import Path
-from tokenpak.agent.compression import CompressionPipeline
+from tokenpak.compression import CompressionPipeline
 
 
 # Load baselines

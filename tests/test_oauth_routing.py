@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import pytest
 
-from tokenpak.agent.proxy.oauth import (
+from tokenpak.proxy.oauth import (
     detect_auth_type,
     detect_token_format,
     analyze_request,
@@ -27,7 +27,7 @@ from tokenpak.agent.proxy.oauth import (
     AUTH_TYPE_OAUTH,
     AUTH_TYPE_NONE,
 )
-from tokenpak.agent.proxy.router import ProviderRouter, RouteResult
+from tokenpak.proxy.router import ProviderRouter, RouteResult
 
 
 # ---------------------------------------------------------------------------

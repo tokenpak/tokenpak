@@ -41,7 +41,7 @@ def test_proxy_import():
 @pytest.mark.quick
 def test_proxy_server_import():
     """ProxyServer class imports cleanly."""
-    from tokenpak.agent.proxy.server import ProxyServer
+    from tokenpak.proxy.server import ProxyServer
     assert ProxyServer is not None
 
 
@@ -51,26 +51,26 @@ def test_proxy_server_import():
 
 @pytest.mark.quick
 def test_config_returns_dict():
-    from tokenpak.agent.config import get_config
+    from tokenpak._internal.config import get_config
     config = get_config()
     assert isinstance(config, dict)
 
 
 @pytest.mark.quick
 def test_config_debug_flag_is_bool():
-    from tokenpak.agent.config import get_debug_enabled
+    from tokenpak._internal.config import get_debug_enabled
     assert isinstance(get_debug_enabled(), bool)
 
 
 @pytest.mark.quick
 def test_config_metrics_flag_is_bool():
-    from tokenpak.agent.config import get_metrics_enabled
+    from tokenpak._internal.config import get_metrics_enabled
     assert isinstance(get_metrics_enabled(), bool)
 
 
 @pytest.mark.quick
 def test_config_consistent_across_calls():
-    from tokenpak.agent.config import get_config
+    from tokenpak._internal.config import get_config
     c1 = get_config()
     c2 = get_config()
     assert isinstance(c1, dict) and isinstance(c2, dict)
@@ -82,14 +82,14 @@ def test_config_consistent_across_calls():
 
 @pytest.mark.quick
 def test_stats_api_instantiates():
-    from tokenpak.agent.proxy.stats_api import StatsAPI
+    from tokenpak.proxy.stats_api import StatsAPI
     api = StatsAPI()
     assert api is not None
 
 
 @pytest.mark.quick
 def test_stats_api_two_instances():
-    from tokenpak.agent.proxy.stats_api import StatsAPI
+    from tokenpak.proxy.stats_api import StatsAPI
     a, b = StatsAPI(), StatsAPI()
     assert a is not None and b is not None
 
@@ -132,22 +132,22 @@ def test_credential_passthrough_missing_headers():
 
 @pytest.mark.quick
 def test_vault_indexer_import():
-    from tokenpak.agent.vault.indexer import VaultIndexer
+    from tokenpak.vault.indexer import VaultIndexer
     assert VaultIndexer is not None
 
 
 @pytest.mark.quick
 def test_vault_indexer_instantiates():
-    from tokenpak.agent.vault.blocks import BlockStore
-    from tokenpak.agent.vault.indexer import VaultIndexer
-    from tokenpak.agent.vault.symbols import SymbolTable
+    from tokenpak.vault.blocks import BlockStore
+    from tokenpak.vault.indexer import VaultIndexer
+    from tokenpak.vault.symbols import SymbolTable
     idx = VaultIndexer(block_store=BlockStore(":memory:"), symbol_table=SymbolTable())
     assert idx is not None
 
 
 @pytest.mark.quick
 def test_vault_block_store_in_memory():
-    from tokenpak.agent.vault.blocks import BlockStore
+    from tokenpak.vault.blocks import BlockStore
     bs = BlockStore(":memory:")
     assert bs is not None
 
@@ -196,7 +196,7 @@ def test_health_response_has_status_key():
 
 @pytest.mark.quick
 def test_savings_cmd_import():
-    from tokenpak.agent.cli.commands.savings import (
+    from tokenpak.cli.commands.savings import (
         _query_by_model,
         _query_savings,
         run_savings_cmd,
@@ -286,7 +286,7 @@ def test_credential_empty_string_fails():
 
 @pytest.mark.quick
 def test_config_debug_default_is_false_or_bool():
-    from tokenpak.agent.config import get_debug_enabled
+    from tokenpak._internal.config import get_debug_enabled
     val = get_debug_enabled()
     assert val in (True, False)
 

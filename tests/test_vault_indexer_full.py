@@ -1,9 +1,9 @@
 import pytest
 from pathlib import Path
 
-from tokenpak.agent.vault.blocks import BlockStore
-from tokenpak.agent.vault.indexer import VaultIndexer
-from tokenpak.agent.vault.symbols import SymbolTable
+from tokenpak.vault.blocks import BlockStore
+from tokenpak.vault.indexer import VaultIndexer
+from tokenpak.vault.symbols import SymbolTable
 
 
 def _make_indexer() -> VaultIndexer:

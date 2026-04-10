@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tokenpak.agent.proxy.prompt_builder import (
+from tokenpak.proxy.prompt_builder import (
     apply_stable_cache_control,
     inject_with_cache_boundary,
     classify_system_blocks,

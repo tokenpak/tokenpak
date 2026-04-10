@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from tokenpak.agent.teacher import build_teacher_pack
+from tokenpak._internal.teacher import build_teacher_pack
 
 
 def _write(path: Path, content: str) -> None:

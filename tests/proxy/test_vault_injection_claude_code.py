@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Try the agent.proxy path (production suewu/calibot); fall back to tokenpak.proxy (TrixBot dev)
 try:
-    from tokenpak.agent.proxy.prompt_builder import (
+    from tokenpak.proxy.prompt_builder import (
         inject_with_cache_boundary,
         apply_stable_cache_control,
     )

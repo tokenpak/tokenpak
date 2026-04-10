@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.cli.commands import savings, status
+from tokenpak.cli.commands import savings, status
 from tokenpak.pricing import estimate_savings, get_rates
 
 
@@ -94,7 +94,7 @@ class TestPricingModule:
 class TestStatusCommand:
     """Test the status command with savings display."""
 
-    @patch("tokenpak.agent.cli.commands.status._fetch")
+    @patch("tokenpak.cli.commands.status._fetch")
     def test_status_with_savings(self, mock_fetch):
         """Test status command includes savings summary."""
         # Mock the /health endpoint
@@ -151,7 +151,7 @@ class TestStatusCommand:
         assert "Tokens saved:" in output
         assert "Est. saved:" in output
 
-    @patch("tokenpak.agent.cli.commands.status._fetch")
+    @patch("tokenpak.cli.commands.status._fetch")
     def test_status_proxy_down(self, mock_fetch):
         """Test status gracefully handles when proxy is down."""
         mock_fetch.return_value = None
@@ -177,7 +177,7 @@ class TestStatusCommand:
 class TestSavingsCommand:
     """Test the savings command with before/after comparison."""
 
-    @patch("tokenpak.agent.cli.commands.savings._connect")
+    @patch("tokenpak.cli.commands.savings._connect")
     def test_savings_summary_with_before_after(self, mock_connect):
         """Test savings summary includes before/after comparison."""
         # Mock the database connection
@@ -209,7 +209,7 @@ class TestSavingsCommand:
         assert result["cost_with_tokenpak"] == pytest.approx(14.25, abs=0.1)
         assert result["cost_reduction_pct"] > 0
 
-    @patch("tokenpak.agent.cli.commands.savings._connect")
+    @patch("tokenpak.cli.commands.savings._connect")
     def test_savings_no_data(self, mock_connect):
         """Test savings gracefully handles no data."""
         mock_connect.return_value = None
@@ -219,7 +219,7 @@ class TestSavingsCommand:
         assert "error" in result
         assert result["error"] == "DB not found"
 
-    @patch("tokenpak.agent.cli.commands.savings._connect")
+    @patch("tokenpak.cli.commands.savings._connect")
     def test_savings_by_model(self, mock_connect):
         """Test per-model breakdown includes cost reduction."""
         mock_conn = MagicMock()

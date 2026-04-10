@@ -264,31 +264,31 @@ class TestOptInGate:
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TOKENPAK_METRICS_ENABLED", None)
             # Patch config file to empty
-            with mock.patch("tokenpak.agent.config._load", return_value={}):
-                from tokenpak.agent.config import get_metrics_enabled
+            with mock.patch("tokenpak._internal.config._load", return_value={}):
+                from tokenpak._internal.config import get_metrics_enabled
                 assert not get_metrics_enabled()
 
     def test_enabled_via_env_var(self):
         with mock.patch.dict(os.environ, {"TOKENPAK_METRICS_ENABLED": "true"}):
-            from tokenpak.agent.config import get_metrics_enabled
+            from tokenpak._internal.config import get_metrics_enabled
             assert get_metrics_enabled()
 
     def test_disabled_via_env_var(self):
         with mock.patch.dict(os.environ, {"TOKENPAK_METRICS_ENABLED": "false"}):
-            from tokenpak.agent.config import get_metrics_enabled
+            from tokenpak._internal.config import get_metrics_enabled
             assert not get_metrics_enabled()
 
     def test_enabled_via_config_file(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TOKENPAK_METRICS_ENABLED", None)
-            with mock.patch("tokenpak.agent.config._load", return_value={"metrics.enabled": True}):
-                from tokenpak.agent.config import get_metrics_enabled
+            with mock.patch("tokenpak._internal.config._load", return_value={"metrics.enabled": True}):
+                from tokenpak._internal.config import get_metrics_enabled
                 assert get_metrics_enabled()
 
     def test_record_request_no_op_when_disabled(self, tmp_path):
         """record_request must not write anything when metrics are disabled."""
         store = _make_store(tmp_path)
-        with mock.patch("tokenpak.agent.config.get_metrics_enabled", return_value=False), \
+        with mock.patch("tokenpak._internal.config.get_metrics_enabled", return_value=False), \
              mock.patch("tokenpak.telemetry.anon_metrics._store", store):
             from tokenpak.telemetry.anon_metrics import record_request
             record_request(
@@ -299,7 +299,7 @@ class TestOptInGate:
 
     def test_record_request_writes_when_enabled(self, tmp_path):
         store = _make_store(tmp_path)
-        with mock.patch("tokenpak.agent.config.get_metrics_enabled", return_value=True), \
+        with mock.patch("tokenpak._internal.config.get_metrics_enabled", return_value=True), \
              mock.patch("tokenpak.telemetry.anon_metrics._store", store):
             from tokenpak.telemetry.anon_metrics import record_request
             record_request(
@@ -314,7 +314,7 @@ class TestOptInGate:
 
     def test_record_request_never_raises(self):
         """record_request must silently swallow all exceptions."""
-        with mock.patch("tokenpak.agent.config.get_metrics_enabled", side_effect=RuntimeError("boom")):
+        with mock.patch("tokenpak._internal.config.get_metrics_enabled", side_effect=RuntimeError("boom")):
             from tokenpak.telemetry.anon_metrics import record_request
             record_request(
                 input_tokens=100, output_tokens=20, tokens_saved=10,

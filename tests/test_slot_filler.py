@@ -1,7 +1,7 @@
-"""Tests for tokenpak.agent.compression.slot_filler module."""
+"""Tests for tokenpak.compression.slot_filler module."""
 
 import pytest
-from tokenpak.agent.compression.slot_filler import (
+from tokenpak.compression.slot_filler import (
     SlotFiller,
     FilledSlots,
 )

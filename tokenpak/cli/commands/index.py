@@ -8,8 +8,8 @@ import sys
 
 def _get_indexer():
     """Lazy import to keep startup fast."""
-    from tokenpak.agent.vault import VaultIndexer
-    from tokenpak.agent.vault.blocks import BlockStore
+    from tokenpak.vault import VaultIndexer
+    from tokenpak.vault.blocks import BlockStore
 
     store_path = os.environ.get(
         "TOKENPAK_VAULT_INDEX",

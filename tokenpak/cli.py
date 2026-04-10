@@ -140,7 +140,7 @@ def _print_quick_help():
 def _print_full_help():
     """Print the power-user grouped help output (tier-aware)."""
     try:
-        from tokenpak.agent.cli.commands.help import print_full_help
+        from tokenpak.cli.commands.help import print_full_help
         print_full_help()
     except Exception:
         # Fallback to static help
@@ -157,7 +157,7 @@ def _print_full_help():
 def cmd_help(args):
     """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
     try:
-        from tokenpak.agent.cli.commands.help import run as help_run
+        from tokenpak.cli.commands.help import run as help_run
         
         # Build help_args list from parsed arguments
         help_args = []
@@ -444,7 +444,7 @@ def cmd_index(args):
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
-        from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
+        from tokenpak.vault.watcher import VaultWatcher, WatcherConfig
 
         # Run initial full index first
         _do_index(args)
@@ -658,7 +658,7 @@ def cmd_stats(args):
         proxy_data = None
 
     # Also read from the JSONL file for accurate rolling stats
-    from tokenpak.agent.proxy.stats import CompressionStats
+    from tokenpak.proxy.stats import CompressionStats
 
     cs = CompressionStats()
     file_stats = cs.stats_from_file(limit=100)
@@ -838,7 +838,7 @@ def cmd_serve(args):
         print("  POST /ingest/batch")
         print("  GET  /health")
         uvicorn.run(
-            "tokenpak.agent.ingest.api:create_ingest_app",
+            "tokenpak._internal.ingest.api:create_ingest_app",
             host="127.0.0.1",
             port=port,
             workers=workers,
@@ -5517,7 +5517,7 @@ def cmd_run_cancel(args):
 
 def cmd_diff(args):
     """Show context diff: removed, compressed, retained blocks."""
-    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+    from tokenpak.cli.commands.diff import run_diff_cmd
     run_diff_cmd(args)
 
 
@@ -5955,9 +5955,9 @@ def cmd_fingerprint_sync(args):
     import sys as _sys
     from pathlib import Path as _Path
 
-    from tokenpak.agent.fingerprint.generator import FingerprintGenerator
-    from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak._internal.fingerprint.generator import FingerprintGenerator
+    from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
+    from tokenpak._internal.fingerprint.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -6052,7 +6052,7 @@ def cmd_fingerprint_sync(args):
 def cmd_fingerprint_cache(args):
     import json as _json
 
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak._internal.fingerprint.sync import FingerprintSync
 
     client = FingerprintSync()
     status = client.cache_status()
@@ -6072,7 +6072,7 @@ def cmd_fingerprint_cache(args):
 def cmd_fingerprint_clear_cache(args):
     import sys as _sys
 
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak._internal.fingerprint.sync import FingerprintSync
 
     client = FingerprintSync()
 

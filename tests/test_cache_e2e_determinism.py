@@ -166,8 +166,8 @@ def proxy_against_stub(stub_backend):
     Start a real ProxyServer pointing at the stub backend.
     Returns the proxy port.
     """
-    from tokenpak.agent.proxy.server import ProxyServer
-    from tokenpak.agent.proxy.router import ProviderRouter
+    from tokenpak.proxy.server import ProxyServer
+    from tokenpak.proxy.router import ProviderRouter
 
     stub_host, stub_port, _ = stub_backend
     stub_base = f"http://{stub_host}:{stub_port}"
@@ -314,7 +314,7 @@ class TestStablePrefixHashComputation:
 
     def _get_helper(self):
         """Import the helper under test."""
-        from tokenpak.agent.proxy.server import _compute_stable_prefix_hash
+        from tokenpak.proxy.server import _compute_stable_prefix_hash
         return _compute_stable_prefix_hash
 
     def test_stable_prefix_hash_computation_determinism(self) -> None:
@@ -473,7 +473,7 @@ class TestCrossProcessPrefixHash:
     _SCRIPT = """\
 import sys, json
 sys.path.insert(0, "{project_root}")
-from tokenpak.agent.proxy.server import _compute_stable_prefix_hash
+from tokenpak.proxy.server import _compute_stable_prefix_hash
 body = json.dumps({{
     "model": "claude-sonnet-4-6",
     "max_tokens": 128,

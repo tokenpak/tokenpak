@@ -17,7 +17,7 @@ Three integration modes:
 
 Usage::
 
-    from tokenpak.agent.vault.backend_protocol import (
+    from tokenpak.vault.backend_protocol import (
         RetrievalBackend,
         SemanticScorer,
         RetrievalBackendBase,
@@ -180,7 +180,7 @@ class RetrievalBackendBase:
 
     Example::
 
-        from tokenpak.agent.vault.backend_protocol import RetrievalBackendBase
+        from tokenpak.vault.backend_protocol import RetrievalBackendBase
 
         class MyBackend(RetrievalBackendBase):
             def __init__(self, vault_path: str):

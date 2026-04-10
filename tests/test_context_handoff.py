@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.handoff — Context Handoff System.
+"""Tests for tokenpak.agentic.handoff — Context Handoff System.
 
 Covers:
   - Lifecycle: create → receive → apply
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.handoff import (
+from tokenpak.agentic.handoff import (
     ContextRef,
     Handoff,
     HandoffManager,

@@ -1,4 +1,4 @@
-from tokenpak.agent.regression.feature_detector import (
+from tokenpak._internal.regression.feature_detector import (
     build_targeted_repair_prompt,
     detect_feature_regressions,
 )

@@ -35,7 +35,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tokenpak.agent.compression.pipeline import CompressionPipeline  # noqa: E402
+from tokenpak.compression.pipeline import CompressionPipeline  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak.agent.macros.engine import (
+from tokenpak._internal.macros.engine import (
     MacroEngine,
     MacroDefinition,
     MacroStep,

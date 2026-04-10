@@ -36,7 +36,6 @@ from tokenpak.proxy.cache_poison import (  # noqa: F401
     _strip_cache_poisons,
     _classify_cache_miss_reason,
 )
-from tokenpak.proxy.stats import build_health_response, build_stats_response  # noqa: F401
 from tokenpak.proxy.request_pipeline import (  # noqa: F401
     _get_router,
     _get_validation_gate,
@@ -449,7 +448,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
             )
             # Start workflow tracking (no-op when feature flag is OFF)
             try:
-                from tokenpak.agent.agentic.proxy_workflow import start_proxy_workflow
+                from tokenpak.agentic.proxy_workflow import start_proxy_workflow
 
                 _wf_id = start_proxy_workflow(
                     trace.request_id,
@@ -855,7 +854,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Phase 1.2: Retrieval Watchdog — monitor vault injection quality
                     if RETRIEVAL_WATCHDOG_ENABLED and injected_tokens > 0:
                         try:
-                            from tokenpak.agent.regression.retrieval_watchdog import (
+                            from tokenpak._internal.regression.retrieval_watchdog import (
                                 QueryRetrievalRecord,
                                 RetrievalQualityWatchdog,
                             )
@@ -914,10 +913,10 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Phase 1.8: Salience Router — content-type-aware extraction before compaction
                     if SALIENCE_ROUTER_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 detect_content_type,
                             )
-                            from tokenpak.agent.compression.salience.router import (
+                            from tokenpak.compression.salience.router import (
                                 extract as salience_extract,
                             )
 
@@ -944,7 +943,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Phase 1.7: Query Rewriter — optimize messages for compression/clarity
                     if QUERY_REWRITER_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.query_rewriter import QueryRewriter
+                            from tokenpak.compression.query_rewriter import QueryRewriter
 
                             _qr = QueryRewriter()
                             _req_data = json.loads(body)
@@ -960,7 +959,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Phase 1.9: Fidelity Tiers — select compression level based on budget/complexity
                     if FIDELITY_TIERS_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.fidelity_tiers import (
+                            from tokenpak.compression.fidelity_tiers import (
                                 TierSelector,
                             )
 
@@ -1047,7 +1046,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
                     if COMPRESSION_DICT_ENABLED and body:
                         try:
-                            from tokenpak.agent.compression.dictionary import CompressionDictionary
+                            from tokenpak.compression.dictionary import CompressionDictionary
 
                             _dict = CompressionDictionary()
                             _req_data = json.loads(body)
@@ -1063,7 +1062,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Workflow: vault_inject done → compress done → begin forward
                     if _wf_id:
                         try:
-                            from tokenpak.agent.agentic.proxy_workflow import advance_step
+                            from tokenpak.agentic.proxy_workflow import advance_step
 
                             advance_step(_wf_id, "vault_inject", "compress")
                             advance_step(_wf_id, "compress", "forward")
@@ -1389,7 +1388,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Tier 2A: Error Normalizer — further standardize error message text
                     if ERROR_NORMALIZER_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer
+                            from tokenpak.agentic.error_normalizer import ErrorNormalizer
 
                             _en = ErrorNormalizer()
                             _err_msg = _normalized.get("error", {}).get("message", "")
@@ -1401,7 +1400,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                     # Tier 2C: Failure Memory — record error signature for future avoidance
                     if FAILURE_MEMORY_ENABLED:
                         try:
-                            from tokenpak.agent.agentic.failure_memory import (
+                            from tokenpak._internal.agentic.failure_memory import (
                                 FailureMemoryDB,
                                 FailureSignature,
                             )
@@ -1634,7 +1633,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                 # Phase 2.2: Session Capsules — compress and store session context
                 if SESSION_CAPSULES_ENABLED and body:
                     try:
-                        from tokenpak.agent.memory.session_capsules import (
+                        from tokenpak._internal.memory.session_capsules import (
                             build_session_capsule,
                             serialize_capsule,
                         )
@@ -1702,7 +1701,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
             # Post-request: Stability Scorer — track response consistency over time
             if STABILITY_SCORER_ENABLED:
                 try:
-                    from tokenpak.agent.regression.stability_scorer import (
+                    from tokenpak._internal.regression.stability_scorer import (
                         RunRecord,
                         StabilityScorer,
                     )
@@ -1859,7 +1858,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
                 # Workflow tracking: mark forward done → log_metrics → complete
                 if _wf_id:
                     try:
-                        from tokenpak.agent.agentic.proxy_workflow import (
+                        from tokenpak.agentic.proxy_workflow import (
                             advance_step,
                             complete_workflow,
                         )
@@ -1909,7 +1908,7 @@ class ForwardProxyHandler(ProxyRoutesMixin, ProxyMiddlewareMixin, BaseHTTPReques
             # Workflow tracking: mark the in-progress step as failed (not whole workflow)
             if _wf_id:
                 try:
-                    from tokenpak.agent.agentic.proxy_workflow import fail_step as _wf_fail
+                    from tokenpak.agentic.proxy_workflow import fail_step as _wf_fail
 
                     _wf_fail(_wf_id, "forward", error=f"{type(e).__name__}: {e}")
                 except Exception:

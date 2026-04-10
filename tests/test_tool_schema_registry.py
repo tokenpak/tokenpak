@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.agent.proxy.tool_schema_registry
+Unit tests for tokenpak.proxy.tool_schema_registry
 """
 
 import json
@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from tokenpak.agent.proxy.tool_schema_registry import (
+from tokenpak.proxy.tool_schema_registry import (
     ToolSchemaRegistry,
     get_registry,
     _normalize_tools,

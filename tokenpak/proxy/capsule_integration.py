@@ -60,7 +60,7 @@ def _is_capsule_enabled() -> bool:
 
     # Check config file
     try:
-        from tokenpak.agent.config import load_config
+        from tokenpak._internal.config import load_config
 
         config = load_config()
         capsule_cfg = config.get("capsule_builder", {})
@@ -122,7 +122,7 @@ def capsule_request_hook(
 <<<<<<<< HEAD:tokenpak/proxy/capsule_integration.py
             from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 ========
-            from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+            from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/capsule_integration.py
 
             body, _schema_changed = _get_registry().normalize_request(body)
@@ -186,7 +186,7 @@ def capsule_request_hook(
 <<<<<<<< HEAD:tokenpak/proxy/capsule_integration.py
         from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 ========
-        from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+        from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 >>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/capsule_integration.py
 
         body, _schema_changed = _get_registry().normalize_request(body)

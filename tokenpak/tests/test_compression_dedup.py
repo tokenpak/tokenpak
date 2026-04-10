@@ -6,7 +6,7 @@ threshold tuning, and edge cases.
 """
 
 import pytest
-from tokenpak.agent.compression.dedup import (
+from tokenpak.compression.dedup import (
     dedup_messages,
     count_duplicates,
     _content_to_str,

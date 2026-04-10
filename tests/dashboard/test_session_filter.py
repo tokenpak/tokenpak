@@ -35,7 +35,7 @@ import pytest
 # Import guard
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.dashboard.session_filter import (
+    from tokenpak.dashboard.session_filter import (
         FilterParams,
         SessionFilter,
         VALID_STATUSES,
@@ -374,21 +374,21 @@ class TestDistinctModels:
 
 class TestRegressions:
     def test_proxy_server_imports_cleanly(self):
-        from tokenpak.agent.proxy import ProxyServer, start_proxy
+        from tokenpak.proxy import ProxyServer, start_proxy
         assert ProxyServer is not None
 
     def test_session_filter_importable_from_dashboard(self):
-        from tokenpak.agent.dashboard.session_filter import SessionFilter, FilterParams
+        from tokenpak.dashboard.session_filter import SessionFilter, FilterParams
         assert SessionFilter is not None
         assert FilterParams is not None
 
     def test_export_api_still_works(self):
-        from tokenpak.agent.dashboard.export_api import ExportAPI
+        from tokenpak.dashboard.export_api import ExportAPI
         body, status, headers = ExportAPI.handle(raw_body=b"{}", traces=[])
         assert status == 200
 
     def test_server_module_has_session_filter(self):
-        import tokenpak.agent.proxy.server as srv
+        import tokenpak.proxy.server as srv
         assert hasattr(srv, "SessionFilter")
 
 

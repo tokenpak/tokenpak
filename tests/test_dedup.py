@@ -1,11 +1,11 @@
-"""test_dedup.py — Tests for tokenpak.agent.compression.dedup
+"""test_dedup.py — Tests for tokenpak.compression.dedup
 
 Tests deduplication logic for removing duplicate/near-duplicate messages.
 """
 
 import pytest
 
-from tokenpak.agent.compression.dedup import (
+from tokenpak.compression.dedup import (
     DEDUP_JACCARD_THRESHOLD,
     count_duplicates,
     dedup_messages,

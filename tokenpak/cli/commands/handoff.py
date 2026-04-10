@@ -79,7 +79,7 @@ def _print_handoff(h) -> None:
 
 def handoff_cmd(args) -> None:
     """Dispatch handoff subcommand."""
-    from tokenpak.agent.agentic.handoff import ContextRef, HandoffManager, HandoffStatus
+    from tokenpak.agentic.handoff import ContextRef, HandoffManager, HandoffStatus
 
     manager = HandoffManager()
     subcmd = getattr(args, "handoff_cmd", None)
@@ -176,7 +176,7 @@ def handoff_cmd(args) -> None:
         status_filter = None
         if getattr(args, "status", None):
             try:
-                from tokenpak.agent.agentic.handoff import HandoffStatus
+                from tokenpak.agentic.handoff import HandoffStatus
 
                 status_filter = HandoffStatus(args.status)
             except ValueError:

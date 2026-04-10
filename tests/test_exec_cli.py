@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from tokenpak.agent.cli.commands import exec as exec_mod
+from tokenpak.cli.commands import exec as exec_mod
 
 
 def test_builtin_operation_runs(monkeypatch):

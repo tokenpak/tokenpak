@@ -15,15 +15,15 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.vault.slicer import (
+from tokenpak.vault.slicer import (
     SliceRecord,
     detect_split_strategy,
     should_slice,
     slice_content,
 )
-from tokenpak.agent.vault.blocks import BlockStore, SliceStore
-from tokenpak.agent.vault.indexer import VaultIndexer
-from tokenpak.agent.vault.symbols import SymbolTable
+from tokenpak.vault.blocks import BlockStore, SliceStore
+from tokenpak.vault.indexer import VaultIndexer
+from tokenpak.vault.symbols import SymbolTable
 
 
 # ---------------------------------------------------------------------------

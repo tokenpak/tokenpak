@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tokenpak.agent.agentic.memory_promoter import (
+from tokenpak.agentic.memory_promoter import (
     Lesson,
     MemoryPromoter,
     PROMOTION_RULES,

@@ -8,7 +8,7 @@ import pytest
 import time
 from unittest.mock import patch, MagicMock
 
-from tokenpak.agent.proxy.capsule_integration import (
+from tokenpak.proxy.capsule_integration import (
     capsule_request_hook,
     get_capsule_request_hook,
     clear_cache,
@@ -91,7 +91,7 @@ class TestFeatureFlag:
 
     def test_env_var_takes_precedence_over_config(self):
         with patch.dict(os.environ, {"TOKENPAK_CAPSULE_BUILDER": "0"}):
-            with patch("tokenpak.agent.config.load_config") as mock_cfg:
+            with patch("tokenpak._internal.config.load_config") as mock_cfg:
                 mock_cfg.return_value = {"capsule_builder": {"enabled": True}}
                 clear_cache()
                 assert not _is_capsule_enabled()
@@ -322,14 +322,14 @@ class TestProxyServerWiring:
 
     def test_proxy_server_has_capsule_hook_by_default(self):
         """ProxyServer should have a request_hook installed even with no args."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         ps = ProxyServer()
         assert ps.request_hook is not None, "request_hook must be set on ProxyServer"
         assert callable(ps.request_hook), "request_hook must be callable"
 
     def test_proxy_server_hook_is_capsule_hook(self):
         """The default hook should invoke the capsule pipeline and return valid output."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         ps = ProxyServer()
         payload = json.dumps({"messages": [{"role": "user", "content": "hello"}]}).encode()
         result = ps.request_hook(payload, "gpt-4o")
@@ -345,7 +345,7 @@ class TestProxyServerWiring:
 
     def test_proxy_server_wraps_external_hook(self):
         """An external request_hook passed to ProxyServer should still be invoked."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         called_with = {}
 
         def my_hook(body, model, trace=None):
@@ -360,7 +360,7 @@ class TestProxyServerWiring:
 
     def test_capsule_hook_enabled_compresses_in_proxy(self):
         """When TOKENPAK_CAPSULE_BUILDER=1, ProxyServer hook should compress large blocks."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
         long_text = "This is a very long sentence that goes on and on. " * 20  # >400 chars
         # Place the large block outside the hot window (last 2 msgs) so it qualifies
         payload = json.dumps({

@@ -152,7 +152,7 @@ class PolicyEngine(PolicyEngineBase):
     def _try_load_enterprise(self) -> Optional[PolicyEngineBase]:
         """Attempt to load the real Enterprise policy engine."""
         try:
-            from tokenpak.agent.license.activation import is_enterprise
+            from tokenpak.infrastructure.license_activation import is_enterprise
 
             if not is_enterprise():
                 return None
@@ -165,7 +165,7 @@ class PolicyEngine(PolicyEngineBase):
 
     def _tier_name(self) -> str:
         try:
-            from tokenpak.agent.license.activation import get_plan
+            from tokenpak.infrastructure.license_activation import get_plan
 
             result = get_plan()
             return result.tier.value.upper()

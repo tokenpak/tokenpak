@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.macros.premade_macros module."""
+"""Tests for tokenpak._internal.macros.premade_macros module."""
 import pytest
-from tokenpak.agent.macros.premade_macros import PremadeMacroRunner, PREMADE_MACROS, format_macro_output
+from tokenpak._internal.macros.premade_macros import PremadeMacroRunner, PREMADE_MACROS, format_macro_output
 
 class TestPremadeMacrosStructure:
     def test_premade_macros_dict_exists(self):

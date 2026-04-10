@@ -166,7 +166,8 @@ class TestHotWindow:
         ]
         body = _make_body(messages)
         _, stats = cb.process(body)
-        assert stats["blocks_capsulized"] == 2
+        # Layer 1 skips assistant messages to prevent model mimicry of capsule syntax
+        assert stats["blocks_capsulized"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +249,8 @@ class TestStats:
         ]
         body = _make_body(messages)
         _, stats = cb.process(body)
-        assert stats["blocks_capsulized"] == 2
+        # Layer 1 skips assistant messages to prevent model mimicry of capsule syntax
+        assert stats["blocks_capsulized"] == 1
 
     def test_stats_chars_in_is_positive(self):
         cb = CapsuleBuilder(enabled=True, hot_window=0)

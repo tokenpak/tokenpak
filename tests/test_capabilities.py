@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.agentic.capabilities module."""
+"""Tests for tokenpak.agentic.capabilities module."""
 import pytest
-from tokenpak.agent.agentic.capabilities import AgentCapabilities, CapabilityMatcher, AgentRegistry
+from tokenpak.agentic.capabilities import AgentCapabilities, CapabilityMatcher, AgentRegistry
 
 class TestCapabilities:
     def test_agent_capabilities_exists(self):

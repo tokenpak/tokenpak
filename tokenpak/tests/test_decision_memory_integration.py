@@ -16,7 +16,7 @@ import os
 import time
 import threading
 from pathlib import Path
-from tokenpak.agent.memory.decision_memory import DecisionMemoryDB, DecisionRecord
+from tokenpak._internal.memory.decision_memory import DecisionMemoryDB, DecisionRecord
 
 
 class TestDecisionMemoryIntegration:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Tests for tokenpak.agent.regression.stability_scorer."""
+"""Tests for tokenpak._internal.regression.stability_scorer."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.regression.stability_scorer import (
+from tokenpak._internal.regression.stability_scorer import (
     RunRecord,
     StabilityScore,
     StabilityScorer,

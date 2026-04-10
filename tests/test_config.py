@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.config module."""
+"""Tests for tokenpak._internal.config module."""
 import pytest
-from tokenpak.agent.config import get_config, get_debug_enabled, get_metrics_enabled
+from tokenpak._internal.config import get_config, get_debug_enabled, get_metrics_enabled
 
 class TestConfig:
     @pytest.mark.quick

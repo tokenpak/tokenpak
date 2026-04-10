@@ -15,8 +15,8 @@ import pytest
 from pathlib import Path
 from click.testing import CliRunner
 
-from tokenpak.agent.triggers.store import TriggerStore
-from tokenpak.agent.cli.trigger_cmd import trigger_group
+from tokenpak._internal.triggers.store import TriggerStore
+from tokenpak.cli.trigger_cmd import trigger_group
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ def store(tmp_path) -> TriggerStore:
 @pytest.fixture
 def patched_group(store, monkeypatch):
     """Patch _store() so CLI commands use our temp store."""
-    import tokenpak.agent.cli.trigger_cmd as mod
+    import tokenpak.cli.trigger_cmd as mod
     monkeypatch.setattr(mod, "_store", lambda: store)
     return store
 

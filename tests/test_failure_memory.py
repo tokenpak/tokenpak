@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.failure_memory
+"""Tests for tokenpak._internal.agentic.failure_memory
 
 Coverage:
   T1 — Signature matching works (pattern found)
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.failure_memory import (
+from tokenpak._internal.agentic.failure_memory import (
     FailureMemoryDB,
     FailureSignature,
     N_VALIDATE_SUCCESSES,

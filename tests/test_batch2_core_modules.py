@@ -14,14 +14,14 @@ from pathlib import Path
 import pytest
 
 from tokenpak.infrastructure.cooldown import CooldownManager
-from tokenpak.agent.ingest.claim_indexer import extract_claims_from_text, extract_claims_from_document
-from tokenpak.agent.fingerprint.privacy import apply_privacy, PrivacyLevel
-from tokenpak.agent.macros.script_hooks import (
+from tokenpak._internal.ingest.claim_indexer import extract_claims_from_text, extract_claims_from_document
+from tokenpak._internal.fingerprint.privacy import apply_privacy, PrivacyLevel
+from tokenpak._internal.macros.script_hooks import (
     get_hook_path, hook_exists, list_hooks, install_hook, fire_hook
 )
-from tokenpak.agent.proxy.stats_api import StatsAPI
+from tokenpak.proxy.stats_api import StatsAPI
 from tokenpak.infrastructure.debug import DebugLogger
-from tokenpak.agent.proxy.providers.stream_translator import (
+from tokenpak.proxy.providers.stream_translator import (
     _AnthropicToOpenAIStream, _OpenAIToAnthropicStream, _parse_sse_line, _sse_line
 )
 
@@ -283,7 +283,7 @@ class TestScriptHooks:
         with tempfile.TemporaryDirectory() as tmpdir:
             hook_path = Path(tmpdir) / "test_hook.sh"
             # Just test that install_hook works by checking return type
-            from tokenpak.agent.macros.script_hooks import install_hook
+            from tokenpak._internal.macros.script_hooks import install_hook
             # This will use the default hooks dir, so we skip actual installation
             assert install_hook is not None
 

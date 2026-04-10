@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Tests for tokenpak.agent.ingest.cross_doc — Cross-Document Normalization."""
+"""Tests for tokenpak._internal.ingest.cross_doc — Cross-Document Normalization."""
 
 from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.ingest.cross_doc import (
+from tokenpak._internal.ingest.cross_doc import (
     AgreementMap,
     CrossDocAnalyzer,
     DocCard,
