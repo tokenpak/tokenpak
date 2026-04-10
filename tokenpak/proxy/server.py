@@ -1086,8 +1086,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Write compression telemetry event
                     ps.compression_stats.record_compression(
                         model=model,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
+                        tokens_in=input_tokens,
+                        tokens_out=output_tokens,
                         ratio=ratio,
                         latency_ms=latency_ms,
                         status="ok",
@@ -1148,8 +1148,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if should_log and is_messages and input_tokens > 0:
                 ps.compression_stats.record_compression(
                     model=model,
-                    input_tokens=input_tokens,
-                    output_tokens=0,
+                    tokens_in=input_tokens,
+                    tokens_out=0,
                     ratio=0.0,
                     latency_ms=latency_ms,
                     status="error",
@@ -1719,7 +1719,7 @@ class ProxyServer:
         self._compression_ratios: deque = deque(maxlen=100)
         self._compression_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
-        self.compression_stats = CompressionStats(start_time=self.session["start_time"])
+        self.compression_stats = CompressionStats()
 
     # ------------------------------------------------------------------
     # Lifecycle
