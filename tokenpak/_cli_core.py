@@ -2213,6 +2213,7 @@ def build_parser():
     _build_compress_parser(sub)
     _build_optimize_parser(sub)
     _build_last_parser(sub)
+    _build_prune_parser(sub)
     _build_retrieval_parser(sub)
 
     return parser
@@ -7023,6 +7024,49 @@ def _build_last_parser(sub):
         "Or: tokenpak dashboard for interactive monitoring."
     ))
     return p_last
+
+
+def _build_prune_parser(sub):
+    """Build the prune command parser."""
+    p_prune = sub.add_parser(
+        "prune",
+        help="Prune old audit log entries",
+        description=(
+            "Remove low-priority blocks from the compression store.\n"
+            "Blocks below the quality threshold are listed and optionally deleted.\n\n"
+            "Example:\n"
+            "  tokenpak prune                     # interactive review\n"
+            "  tokenpak prune --dry-run           # preview without changes\n"
+            "  tokenpak prune --auto              # prune without confirmation\n"
+            "  tokenpak prune --threshold 0.3     # custom quality threshold"
+        ),
+    )
+    p_prune.add_argument(
+        "--auto", action="store_true", help="Auto-prune without confirmation"
+    )
+    p_prune.add_argument(
+        "--dry-run", dest="dry_run", action="store_true",
+        help="Show what would be pruned (no changes made)"
+    )
+    p_prune.add_argument(
+        "--threshold", type=float, default=0.4,
+        help="Quality score below which blocks are pruned (default: 0.4)"
+    )
+    p_prune.add_argument(
+        "--json", dest="as_json", action="store_true", help="Output raw JSON"
+    )
+
+    def _cmd_prune(args):
+        from tokenpak.cli.commands.prune import run_prune
+        run_prune(
+            auto=args.auto,
+            dry_run=args.dry_run,
+            threshold=args.threshold,
+            as_json=args.as_json,
+        )
+
+    p_prune.set_defaults(func=_cmd_prune)
+    return p_prune
 
 
 # --- Merged from cli.py (2026-03-25) ---
