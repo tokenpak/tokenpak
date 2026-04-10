@@ -60,6 +60,8 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Onboarding:
+    - Day 1 → Day 30 Journey: onboarding.md
   - Guides:
     - Proxy Setup: guides/proxy-setup.md
     - Recipe Development: guides/recipes.md

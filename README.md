@@ -28,6 +28,20 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 
 ---
 
+## Getting Started
+
+New to TokenPak? The [Onboarding Guide](docs/onboarding.md) walks you from install to production in five milestones:
+
+- **Day 1** — Install, configure your LLM client, start the proxy, and see compression activate
+- **Day 3** — Review your first savings report with `tokenpak cost --week`
+- **Day 7** — Customize a compression recipe to fit your workload
+- **Day 14** — Set a monthly budget and configure Slack alerts
+- **Day 30** — Deploy as a systemd service or Docker container with monitoring
+
+[→ Full onboarding guide](docs/onboarding.md) | [→ Quick start (5 minutes)](docs/getting-started.md)
+
+---
+
 ## 3 Commands to Savings
 
 ```bash

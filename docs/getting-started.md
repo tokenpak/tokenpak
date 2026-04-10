@@ -1,6 +1,8 @@
-# Getting Started
+# Getting Started (Day 1 Quick Start)
 
 Get TokenPak running in under 5 minutes.
+
+> **Want the full journey?** This page covers Day 1 only. For Day 3 through Day 30 — savings reports, recipe customization, budgets, and production deployment — see the [full Onboarding Guide](onboarding.md).
 
 ---
 
@@ -180,6 +182,7 @@ tokenpak budget alert --at 80%        # warn at 80%
 
 ## Next Steps
 
+- [Onboarding Guide](onboarding.md) — Day 3 through Day 30: savings reports, custom recipes, budgets, production deployment
 - [Proxy Setup](guides/proxy-setup.md) — advanced proxy configuration, SSL, multi-provider
 - [CLI Reference](cli-reference.md) — full command reference
 - [Recipe Development](guides/recipes.md) — custom compression recipes
