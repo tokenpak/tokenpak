@@ -732,6 +732,12 @@ INLINE_SAVINGS_ENABLED: bool = _cfg("features.inline_savings", False, "TOKENPAK_
 INLINE_SAVINGS_HEADER_ENABLED: bool = _cfg("features.inline_savings_header", False, "TOKENPAK_INLINE_SAVINGS_HEADER", bool)
 HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool)
 
+# CCI-08: Shadow A/B model comparison logging
+SHADOW_AB_ENABLED: bool = _cfg("features.shadow_ab", False, "TOKENPAK_SHADOW_AB_ENABLED", bool)
+SHADOW_AB_PROVIDER: str = _cfg("shadow_ab.provider", "anthropic-haiku", "TOKENPAK_SHADOW_PROVIDER", str)
+SHADOW_AB_SAMPLE_RATE: int = min(max(int(_cfg("shadow_ab.sample_rate", 5, "TOKENPAK_SHADOW_AB_SAMPLE_RATE", int)), 0), 50)
+SHADOW_AB_STORE_CONTENT: bool = _cfg("shadow_ab.store_content", True, "TOKENPAK_SHADOW_AB_STORE_CONTENT", bool)
+
 # Tier 1 modules
 SEMANTIC_CACHE_ENABLED: bool = _cfg(
     "features.semantic_cache", False, "TOKENPAK_SEMANTIC_CACHE", bool
@@ -3320,6 +3326,151 @@ def _write_mutation_audit(
         pass  # fail-open: never break a request over audit write
 
 
+# ---------------------------------------------------------------------------
+# CCI-08: Shadow A/B model comparison logging helpers
+# ---------------------------------------------------------------------------
+
+def _extract_response_text(resp_body: bytes) -> str:
+    """Extract plain text from an Anthropic-format response body for similarity comparison."""
+    if not resp_body:
+        return ""
+    try:
+        data = json.loads(resp_body)
+        parts = []
+        for block in data.get("content", []):
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return " ".join(parts)
+    except Exception:
+        return resp_body.decode("utf-8", errors="replace")[:2000]
+
+
+def _compute_similarity(text1: str, text2: str) -> Optional[float]:
+    """Compute character-overlap similarity score [0.0, 1.0] using difflib.
+    Returns None if either text is empty (not comparable).
+    """
+    if not text1 or not text2:
+        return None
+    import difflib
+    ratio = difflib.SequenceMatcher(None, text1[:4000], text2[:4000]).ratio()
+    return round(ratio, 4)
+
+
+def _shadow_provider_model(shadow_provider: str) -> Tuple[str, str]:
+    """Map a shadow provider string to (upstream_url, model_name).
+
+    Returns ("", "") if the provider is unknown (fail-open: shadow silently skipped).
+    """
+    p = shadow_provider.lower().strip()
+    if p in ("anthropic-haiku", "haiku"):
+        return ("https://api.anthropic.com/v1/messages", "claude-haiku-4-5-20251001")
+    if p in ("anthropic-sonnet", "sonnet"):
+        return ("https://api.anthropic.com/v1/messages", "claude-sonnet-4-6")
+    if p in ("gemini-flash", "gemini-2-flash"):
+        return ("", "")  # Gemini not supported yet — skip silently
+    if p.startswith("ollama-"):
+        return ("", "")  # Ollama not supported yet — skip silently
+    return ("", "")
+
+
+def _run_shadow_request(
+    db_path: str,
+    request_id: str,
+    session_id: str,
+    primary_model: str,
+    primary_input_tokens: int,
+    primary_output_tokens: int,
+    primary_cost_usd: float,
+    request_body: bytes,
+    primary_response_text: str,
+    shadow_provider: str,
+    store_content: bool = True,
+) -> None:
+    """Background thread: fire request against shadow provider, log comparison row.
+
+    Must NEVER raise — all exceptions caught and silently dropped so the user
+    response path is completely unaffected.
+    """
+    try:
+        shadow_url, shadow_model = _shadow_provider_model(shadow_provider)
+        if not shadow_url:
+            return  # provider not supported — silent no-op
+
+        try:
+            req_data = json.loads(request_body)
+        except Exception:
+            return
+        req_data["model"] = shadow_model
+        req_data["stream"] = False
+        shadow_body = json.dumps(req_data).encode()
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        fwd_headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+        }
+        if api_key:
+            fwd_headers["x-api-key"] = api_key
+
+        import urllib.request as _urllib_req
+        import urllib.error as _urllib_err
+
+        req = _urllib_req.Request(
+            shadow_url, data=shadow_body, headers=fwd_headers, method="POST",
+        )
+        shadow_response_text = ""
+        shadow_input_tokens = 0
+        shadow_output_tokens = 0
+        shadow_cost_usd = 0.0
+
+        try:
+            with _urllib_req.urlopen(req, timeout=30) as resp:
+                shadow_resp_body = resp.read()
+            shadow_data = json.loads(shadow_resp_body)
+            usage = shadow_data.get("usage", {})
+            shadow_input_tokens = usage.get("input_tokens", 0)
+            shadow_output_tokens = usage.get("output_tokens", 0)
+            shadow_cost_usd = estimate_cost(shadow_model, shadow_input_tokens, shadow_output_tokens)
+            shadow_response_text = _extract_response_text(shadow_resp_body)
+        except (_urllib_err.URLError, Exception):
+            pass
+
+        similarity = _compute_similarity(primary_response_text, shadow_response_text)
+
+        if store_content:
+            p_text = primary_response_text
+            s_text = shadow_response_text
+        else:
+            import hashlib as _hl
+            p_text = _hl.sha256(primary_response_text.encode()).hexdigest() if primary_response_text else ""
+            s_text = _hl.sha256(shadow_response_text.encode()).hexdigest() if shadow_response_text else ""
+
+        try:
+            conn = sqlite3.connect(str(db_path), check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute(
+                """INSERT INTO shadow_comparisons
+                   (request_id, session_id, primary_model, shadow_model,
+                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
+                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
+                    semantic_similarity_score, primary_response_text, shadow_response_text,
+                    timestamp)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+                (
+                    request_id, session_id, primary_model, shadow_model,
+                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
+                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
+                    similarity, p_text, s_text,
+                ),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 class Monitor:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -3428,6 +3579,30 @@ class Monitor:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)")
+        conn.commit()
+
+        # CCI-08: Shadow A/B comparison table — pure telemetry, never returned to user
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS shadow_comparisons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT,
+                session_id TEXT,
+                primary_model TEXT NOT NULL,
+                shadow_model TEXT NOT NULL,
+                primary_input_tokens INTEGER DEFAULT 0,
+                primary_output_tokens INTEGER DEFAULT 0,
+                primary_cost_usd REAL DEFAULT 0.0,
+                shadow_input_tokens INTEGER DEFAULT 0,
+                shadow_output_tokens INTEGER DEFAULT 0,
+                shadow_cost_usd REAL DEFAULT 0.0,
+                semantic_similarity_score REAL,
+                primary_response_text TEXT,
+                shadow_response_text TEXT,
+                timestamp TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_ts ON shadow_comparisons(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_session ON shadow_comparisons(session_id)")
         conn.commit()
 
         # Run migrations to bring DB schema up to current version
@@ -5228,6 +5403,59 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 "chain": _FALLBACK_CHAIN,
                 "chain_enabled": len(_FALLBACK_CHAIN) > 1,
             })
+            return
+        if self.path == "/dashboard/shadow-ab":
+            # CCI-08: Shadow A/B comparison dashboard panel
+            try:
+                conn = sqlite3.connect(str(MONITOR_DB), check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """SELECT request_id, session_id, primary_model, shadow_model,
+                              primary_input_tokens, primary_output_tokens, primary_cost_usd,
+                              shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
+                              semantic_similarity_score, timestamp
+                       FROM shadow_comparisons
+                       ORDER BY timestamp DESC LIMIT 100"""
+                ).fetchall()
+                stats = conn.execute(
+                    """SELECT COUNT(*) as total,
+                              AVG(semantic_similarity_score) as avg_similarity,
+                              SUM(primary_cost_usd) as total_primary_cost,
+                              SUM(shadow_cost_usd) as total_shadow_cost,
+                              SUM(CASE WHEN semantic_similarity_score >= 0.9 THEN 1 ELSE 0 END) as high_sim_count
+                       FROM shadow_comparisons"""
+                ).fetchone()
+                conn.close()
+                total = stats["total"] or 0
+                high_sim = stats["high_sim_count"] or 0
+                self._send_json({
+                    "enabled": SHADOW_AB_ENABLED,
+                    "provider": SHADOW_AB_PROVIDER,
+                    "sample_rate_pct": SHADOW_AB_SAMPLE_RATE,
+                    "total_comparisons": total,
+                    "avg_similarity": round(stats["avg_similarity"] or 0.0, 4),
+                    "high_similarity_pct": round(100 * high_sim / total, 1) if total > 0 else 0.0,
+                    "total_primary_cost_usd": round(stats["total_primary_cost"] or 0.0, 6),
+                    "total_shadow_cost_usd": round(stats["total_shadow_cost"] or 0.0, 6),
+                    "potential_savings_usd": round(
+                        (stats["total_primary_cost"] or 0.0) - (stats["total_shadow_cost"] or 0.0), 6
+                    ) if total > 0 else 0.0,
+                    "recent": [dict(r) for r in rows],
+                })
+            except Exception as e:
+                self._send_json({
+                    "enabled": SHADOW_AB_ENABLED,
+                    "provider": SHADOW_AB_PROVIDER,
+                    "sample_rate_pct": SHADOW_AB_SAMPLE_RATE,
+                    "total_comparisons": 0,
+                    "avg_similarity": 0.0,
+                    "high_similarity_pct": 0.0,
+                    "total_primary_cost_usd": 0.0,
+                    "total_shadow_cost_usd": 0.0,
+                    "potential_savings_usd": 0.0,
+                    "recent": [],
+                    "error": str(e),
+                })
             return
         if self.path == "/trace/last":
             trace = TRACE_STORAGE.get_last()
@@ -7663,6 +7891,44 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass  # fail-open: never break a request over audit write
+
+                # CCI-08: Shadow A/B sampling — spawn background thread, never affects user response
+                if SHADOW_AB_ENABLED and status == 200 and body and not is_sse:
+                    try:
+                        import random as _shadow_rng
+                        _sample_pct = min(max(int(SHADOW_AB_SAMPLE_RATE), 0), 50)
+                        if _sample_pct > 0 and _shadow_rng.random() * 100 < _sample_pct:
+                            _shadow_req_id = trace.request_id if trace else str(uuid.uuid4())[:8]
+                            _shadow_session = _resolve_session_id(self.headers, model)
+                            _primary_text = _extract_response_text(
+                                resp_body if "resp_body" in locals() else b""
+                            )
+                            _shadow_cost = estimate_cost(
+                                model, sent_input_tokens, output_tokens,
+                                cache_read_tokens, cache_creation_tokens,
+                            )
+                            _shadow_t = threading.Thread(
+                                target=_run_shadow_request,
+                                args=(
+                                    MONITOR_DB,
+                                    _shadow_req_id,
+                                    _shadow_session,
+                                    model,
+                                    sent_input_tokens,
+                                    output_tokens,
+                                    _shadow_cost,
+                                    body,
+                                    _primary_text,
+                                    SHADOW_AB_PROVIDER,
+                                    SHADOW_AB_STORE_CONTENT,
+                                ),
+                                daemon=True,
+                                name=f"ShadowAB-{_shadow_req_id}",
+                            )
+                            _shadow_t.start()
+                    except Exception:
+                        pass  # fail-open: never break the request path
+
                 try:
                     from tokenpak.telemetry.anon_metrics import record_request
 
