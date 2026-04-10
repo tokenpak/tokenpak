@@ -46,6 +46,37 @@ _PROVIDER_UPSTREAM_DEFAULTS: Dict[str, str] = {
     "cohere": "https://api.cohere.com",
 }
 
+# Maps provider name → API key environment variable name used to check availability.
+_PROVIDER_KEY_ENV: Dict[str, str] = {
+    "voyage": "VOYAGE_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "cohere": "CO_API_KEY",
+    "gemini": "GEMINI_API_KEY",
+    "jina": "JINA_API_KEY",
+    "ollama": "TOKENPAK_OLLAMA_URL",
+}
+
+# Default embedding model per provider.
+_PROVIDER_DEFAULT_MODEL: Dict[str, str] = {
+    "voyage": "voyage-3.5",
+    "openai": "text-embedding-3-small",
+    "cohere": "embed-english-v3.0",
+    "gemini": "gemini-embedding-001",
+    "jina": "jina-embeddings-v3",
+    "ollama": "nomic-embed-text",
+}
+
+# Supported output dimension counts per provider.
+# None means the provider accepts arbitrary dimensions — skip negotiation.
+SUPPORTED_DIMENSIONS: Dict[str, Optional[List[int]]] = {
+    "voyage": [256, 512, 1024, 2048],
+    "openai": [256, 512, 1024, 1536, 3072],
+    "gemini": [128, 256, 512, 768, 1024, 2048, 3072],
+    "jina": [32, 64, 128, 256, 512, 768, 1024],
+    "ollama": [768],  # nomic-embed-text fixed dimensions
+    "cohere": None,  # accepts arbitrary dimensions
+}
+
 # Cost per 1M tokens in USD.  Mirrors EMBEDDING_COST_PER_1M in anon_metrics.
 _COST_PER_1M: Dict[str, float] = {
     "voyage": 0.06,
@@ -61,6 +92,22 @@ def _calc_embedding_cost(provider: str, input_tokens: int) -> float:
     """Return estimated USD cost for an embedding request."""
     rate = _COST_PER_1M.get(provider, 0.0)
     return round(rate * input_tokens / 1_000_000, 8)
+
+
+def negotiate_dimensions(requested: int, supported: List[int]) -> int:
+    """Return the closest supported dimension value to *requested*.
+
+    Ties (equal absolute difference) are broken by selecting the smaller value.
+
+    Args:
+        requested: Dimension count requested by the client.
+        supported: List of dimension counts supported by the provider.
+
+    Returns:
+        The value in *supported* with the smallest absolute difference from
+        *requested*.
+    """
+    return min(supported, key=lambda x: (abs(x - requested), x))
 
 
 # ---------------------------------------------------------------------------
@@ -294,8 +341,13 @@ class EmbeddingRouter:
                 )
                 continue
 
+            # Negotiate dimensions before sending upstream
+            normalized_body, requested_dims, actual_dims = self._normalize_request(
+                provider, request_body
+            )
+
             # Attempt the call (with one retry for 5xx)
-            status, headers, body = self._attempt(provider, upstream, request_body, tried)
+            status, headers, body = self._attempt(provider, upstream, normalized_body, tried)
 
             if status is None:
                 # Network error — already logged; try next provider
@@ -317,6 +369,8 @@ class EmbeddingRouter:
                     latency_ms=latency_ms,
                     cached=cache_hit,
                     fallback_used=fallback_used,
+                    requested_dims=requested_dims,
+                    actual_dims=actual_dims,
                 )
                 self._emit_telemetry(
                     provider=provider,
@@ -386,6 +440,36 @@ class EmbeddingRouter:
                 }
         return result
 
+    def get_providers_status(self) -> List[Dict]:
+        """Return status of all configured providers.
+
+        Each entry contains: name, available, healthy, default_model, key_set, cooldown_until.
+        - available/key_set: True if the provider's API key env var is set.
+        - healthy: True if the provider is not in a cooldown period.
+        - cooldown_until: ISO timestamp if in cooldown, else null.
+        """
+        health = self.get_health_status()
+        result: List[Dict] = []
+        for provider in self._providers:
+            key_env = _PROVIDER_KEY_ENV.get(provider)
+            key_set = bool(os.environ.get(key_env, "").strip()) if key_env else False
+            h = health.get(provider, {})
+            healthy = h.get("healthy", True)
+            cooldown_raw = h.get("cooldown_until", 0.0)
+            cooldown_until = (
+                None if (not cooldown_raw or cooldown_raw <= time.time())
+                else cooldown_raw
+            )
+            result.append({
+                "name": provider,
+                "available": key_set,
+                "healthy": healthy,
+                "default_model": _PROVIDER_DEFAULT_MODEL.get(provider),
+                "key_set": key_set,
+                "cooldown_until": cooldown_until,
+            })
+        return result
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -438,6 +522,49 @@ class EmbeddingRouter:
         return None, {}, b""  # pragma: no cover
 
     # ------------------------------------------------------------------
+    # Dimension negotiation
+    # ------------------------------------------------------------------
+
+    def _normalize_request(
+        self,
+        provider: str,
+        body: bytes,
+    ) -> Tuple[bytes, Optional[int], Optional[int]]:
+        """Adjust the dimensions field in a request body to the closest supported value.
+
+        Returns:
+            (normalized_body, requested_dims, actual_dims).
+            Both dim values are None when no dimensions field was present or when
+            the provider accepts arbitrary dimensions (SUPPORTED_DIMENSIONS entry is None).
+            actual_dims == requested_dims means no adjustment was needed.
+        """
+        supported = SUPPORTED_DIMENSIONS.get(provider)
+        if not supported:
+            return body, None, None
+
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            return body, None, None
+
+        requested = parsed.get("dimensions")
+        if not isinstance(requested, int):
+            return body, None, None
+
+        actual = negotiate_dimensions(requested, supported)
+        if actual == requested:
+            return body, requested, actual
+
+        parsed["dimensions"] = actual
+        logger.info(
+            "embedding_router: provider=%s dimension adjusted %d → %d",
+            provider,
+            requested,
+            actual,
+        )
+        return json.dumps(parsed).encode(), requested, actual
+
+    # ------------------------------------------------------------------
     # Telemetry and _tokenpak injection helpers
     # ------------------------------------------------------------------
 
@@ -448,6 +575,8 @@ class EmbeddingRouter:
         latency_ms: float,
         cached: bool,
         fallback_used: bool,
+        requested_dims: Optional[int] = None,
+        actual_dims: Optional[int] = None,
     ) -> bytes:
         """Inject _tokenpak metadata block into a successful JSON response body.
 
@@ -460,13 +589,19 @@ class EmbeddingRouter:
             if isinstance(parsed, dict):
                 # OpenAI-compatible response has 'model' at top level
                 upstream_model = parsed.get("model", "")
-            parsed["_tokenpak"] = {
+            tokenpak_meta: Dict[str, Any] = {
                 "provider": provider,
                 "upstream_model": upstream_model,
                 "latency_ms": round(latency_ms, 1),
                 "cached": cached,
                 "fallback_used": fallback_used,
             }
+            if requested_dims is not None and actual_dims is not None and requested_dims != actual_dims:
+                tokenpak_meta["dim_adjustment"] = {
+                    "requested_dims": requested_dims,
+                    "actual_dims": actual_dims,
+                }
+            parsed["_tokenpak"] = tokenpak_meta
             return json.dumps(parsed).encode()
         except Exception:
             return body  # fail-open: never corrupt a response

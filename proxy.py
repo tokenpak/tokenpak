@@ -88,6 +88,16 @@ from tokenpak.proxy.adapters import build_default_registry
 from tokenpak.proxy.adapters.base import FormatAdapter
 from tokenpak.runtime.providers import Provider, detect_provider
 
+# ---------------------------------------------------------------------------
+# Feature imports — EmbeddingRouter
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.proxy.adapters.embedding_router import EmbeddingRouter as _EmbeddingRouter
+    _EMBEDDING_ROUTER_AVAILABLE = True
+except Exception:
+    _EmbeddingRouter = None  # type: ignore[assignment,misc]
+    _EMBEDDING_ROUTER_AVAILABLE = False
+
 # CACHE-P4-001: CacheSpec normalized config schema
 try:
     from tokenpak.runtime.cache_spec import (
@@ -936,6 +946,7 @@ _COMPACT_CACHE = {}
 _COMPACT_CACHE_ORDER = []
 
 ADAPTER_REGISTRY = build_default_registry()
+_EMBEDDING_ROUTER = _EmbeddingRouter() if _EMBEDDING_ROUTER_AVAILABLE else None
 
 
 def _load_openclaw_upstream_overrides() -> Dict[str, str]:
@@ -3946,6 +3957,73 @@ def _run_shadow_request(
         pass
 
 
+# ---------------------------------------------------------------------------
+# TRIX-08: Proxy-level compliance audit write (audit_events in monitor.db)
+# ---------------------------------------------------------------------------
+
+_PROXY_AUDIT_LOG = None
+_PROXY_AUDIT_LOG_LOCK = threading.Lock()
+
+
+def _get_proxy_audit_log(db_path: str):
+    """Lazily initialise the ProxyAuditLog singleton (fail-open on import error)."""
+    global _PROXY_AUDIT_LOG
+    if _PROXY_AUDIT_LOG is None:
+        with _PROXY_AUDIT_LOG_LOCK:
+            if _PROXY_AUDIT_LOG is None:
+                try:
+                    from tokenpak.pro.audit_log import ProxyAuditLog
+                    _PROXY_AUDIT_LOG = ProxyAuditLog.get_instance(db_path)
+                except Exception:
+                    pass  # fail-open: import error should never break the proxy
+    return _PROXY_AUDIT_LOG
+
+
+def _write_proxy_audit_event(
+    db_path: str,
+    request_id: str,
+    user_id,
+    client_ip: str,
+    endpoint: str,
+    model: str,
+    tokens_in: int,
+    tokens_out: int,
+    cost_usd: float,
+    cache_read_tokens: int,
+    cache_creation_tokens: int,
+) -> None:
+    """Fire a background thread to write one audit_events row.
+
+    Failure to write NEVER fails the request — errors are swallowed.
+    The write is dispatched to a daemon thread so it does not block
+    the response path.
+    """
+    def _do_write():
+        try:
+            log = _get_proxy_audit_log(db_path)
+            if log is None:
+                return
+            log.write_event(
+                request_id=request_id,
+                user_id=user_id,
+                client_ip=client_ip,
+                endpoint=endpoint,
+                model=model,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_usd=cost_usd,
+                cache_read_tokens=cache_read_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+                adapter=None,
+                feature="proxy_request",
+            )
+        except Exception:
+            pass  # fail-open
+
+    t = threading.Thread(target=_do_write, daemon=True, name="TokenPak-AuditEvent")
+    t.start()
+
+
 class Monitor:
     def __init__(self, db_path):
         self.db_path = db_path
@@ -6208,6 +6286,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._serve_api_docs()
         elif self.path == "/openapi.yaml":
             self._serve_openapi_yaml()
+        elif self.path == "/v1/embeddings/providers":
+            self._handle_embedding_providers_status()
         elif self.path.startswith("/ollama-proxy/"):
             self._ollama_proxy("GET")
         else:
@@ -8750,6 +8830,36 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     f"~${cost:.4f}{cache_tag} | {latency_ms}ms"
                 )
 
+            # TRIX-08: Write compliance audit row for every proxied request (async).
+            # Fires unconditionally — even when input_tokens==0. Fails silently.
+            try:
+                import hashlib as _hl
+                _audit_client_ip = self.client_address[0]
+                _audit_raw_token = self.headers.get("X-TokenPak-Key", "") or ""
+                _audit_user_id = (
+                    None
+                    if _audit_client_ip in ("127.0.0.1", "::1") or not _audit_raw_token
+                    else _hl.sha256(_audit_raw_token.encode()).hexdigest()[:16]
+                )
+                _audit_cost = estimate_cost(
+                    model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+                )
+                _write_proxy_audit_event(
+                    db_path=MONITOR_DB,
+                    request_id=str(uuid.uuid4()),
+                    user_id=_audit_user_id,
+                    client_ip=_audit_client_ip,
+                    endpoint=self.path,
+                    model=model,
+                    tokens_in=sent_input_tokens,
+                    tokens_out=output_tokens,
+                    cost_usd=_audit_cost,
+                    cache_read_tokens=cache_read_tokens,
+                    cache_creation_tokens=cache_creation_tokens,
+                )
+            except Exception:
+                pass  # fail-open: never break the proxy over audit write
+
         except Exception as e:
             SESSION["errors"] += 1
             latency_ms = int((time.time() - t0) * 1000)
@@ -9382,6 +9492,20 @@ setInterval(refresh, REFRESH);
             self.wfile.write(body)
         except Exception as e:
             self._send_json({"error": {"type": "server_error", "message": str(e)}}, status=500)
+
+    def _handle_embedding_providers_status(self):
+        """Return status of all embedding providers as JSON.
+
+        Response: {providers: [{name, available, healthy, default_model, key_set, cooldown_until}]}
+        Always returns 200; reports unavailability via the available/key_set fields.
+        """
+        if _EMBEDDING_ROUTER is None:
+            self._send_json({
+                "providers": [],
+                "error": "EmbeddingRouter not available — install embedding adapters",
+            })
+            return
+        self._send_json({"providers": _EMBEDDING_ROUTER.get_providers_status()})
 
     def _send_json(self, data, status=200):
         body = json.dumps(data, separators=(",", ":")).encode()  # compact JSON: faster + smaller

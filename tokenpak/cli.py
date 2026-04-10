@@ -187,6 +187,13 @@ def cmd_setup(args):
     run_setup_cmd(args)
 
 
+def cmd_install(args):
+    """One-shot installer: configure tokenpak for Claude Code."""
+    from .agent.cli.commands.install import run_install_cmd
+
+    run_install_cmd(args)
+
+
 def cmd_start(args):
     """Start the proxy on localhost:8766 (launches proxy_v4.py)."""
     import subprocess
@@ -1504,6 +1511,37 @@ def build_parser():
         help="Skip confirmation prompts (non-interactive / CI mode)",
     )
     p_setup.set_defaults(func=cmd_setup)
+
+    p_install = sub.add_parser(
+        "install",
+        help="One-shot installer: configure tokenpak for Claude Code",
+    )
+    p_install.add_argument(
+        "--claude-code",
+        dest="claude_code",
+        action="store_true",
+        default=True,
+        help="Install for Claude Code (currently the only supported target)",
+    )
+    p_install.add_argument(
+        "--mode",
+        choices=["cli", "tui", "tmux", "sdk", "ide", "cron"],
+        default=None,
+        help="Consumption mode (default: auto-detect)",
+    )
+    p_install.add_argument(
+        "--no-systemd",
+        dest="no_systemd",
+        action="store_true",
+        help="Skip systemd user unit installation",
+    )
+    p_install.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="Preview what would change without writing anything",
+    )
+    p_install.set_defaults(func=cmd_install)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
     p_start.set_defaults(func=cmd_start)
