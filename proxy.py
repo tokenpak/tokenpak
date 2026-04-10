@@ -2269,6 +2269,36 @@ def _resolve_session_id(headers, model: str) -> str:
     return model
 
 
+def _lookup_session_policy(session_id: str) -> dict:
+    """CCG-12: Look up per-session policy row. Returns {} if not found or on error."""
+    try:
+        conn = sqlite3.connect(MONITOR_DB, check_same_thread=False)
+        row = conn.execute(
+            "SELECT max_cost, mode, route_provider FROM session_policies WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        conn.close()
+        if row:
+            return {"max_cost": row[0], "mode": row[1], "route_provider": row[2]}
+    except Exception:
+        pass
+    return {}
+
+
+def _get_session_spend(session_id: str) -> float:
+    """CCG-12: Sum estimated_cost for all requests in this session."""
+    try:
+        conn = sqlite3.connect(MONITOR_DB, check_same_thread=False)
+        row = conn.execute(
+            "SELECT COALESCE(SUM(estimated_cost), 0.0) FROM requests WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        conn.close()
+        return float(row[0]) if row else 0.0
+    except Exception:
+        return 0.0
+
+
 def _suggest_model(requested: str) -> Optional[str]:
     """Return the closest known model name for a given (possibly wrong) model string."""
     import sys as _sys
@@ -4377,6 +4407,18 @@ class Monitor:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_ts ON shadow_comparisons(timestamp)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_shadow_session ON shadow_comparisons(session_id)")
+        conn.commit()
+
+        # CCG-12: Per-session policy table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_policies (
+                session_id TEXT PRIMARY KEY,
+                max_cost REAL,
+                mode TEXT,
+                route_provider TEXT,
+                updated_at TEXT
+            )
+        """)
         conn.commit()
 
         # Run migrations to bring DB schema up to current version
@@ -7197,6 +7239,48 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         _safe_mode: bool = COMPILATION_MODE == "safe" or STABLE_CACHE_CONTROL_AUTO
         _stable_hash: str = ""
         _volatile_hash: str = ""
+
+        # CCG-12: Per-session policy — lookup and apply mode override, budget cap, route pin
+        _ccg12_session_id = _resolve_session_id(self.headers, "")
+        _ccg12_policy = _lookup_session_policy(_ccg12_session_id) if _ccg12_session_id else {}
+        if _ccg12_policy:
+            _pol_mode = _ccg12_policy.get("mode")
+            if _pol_mode:
+                _transparent_mode = _pol_mode == "transparent"
+                _safe_mode = _pol_mode == "safe"
+                print(f"  [CCG-12] session={_ccg12_session_id} mode override → {_pol_mode}")
+            _pol_max_cost = _ccg12_policy.get("max_cost")
+            if _pol_max_cost is not None:
+                _session_spend = _get_session_spend(_ccg12_session_id)
+                if _session_spend >= _pol_max_cost:
+                    self._send_json(
+                        {
+                            "error": {
+                                "type": "budget_exceeded",
+                                "message": (
+                                    f"Session {_ccg12_session_id} has exceeded its budget of "
+                                    f"${_pol_max_cost:.4f} (spent: ${_session_spend:.4f})"
+                                ),
+                            }
+                        },
+                        status=429,
+                    )
+                    return
+            _pol_route_provider = _ccg12_policy.get("route_provider")
+            if _pol_route_provider:
+                _PROVIDER_BASE_MAP = {
+                    "anthropic": "https://api.anthropic.com",
+                    "openai": "https://api.openai.com",
+                    "google": "https://generativelanguage.googleapis.com",
+                }
+                _pinned_base = _PROVIDER_BASE_MAP.get(_pol_route_provider.lower())
+                if _pinned_base:
+                    _parsed_target = urlparse(target_url)
+                    target_url = _pinned_base + _parsed_target.path
+                    if _parsed_target.query:
+                        target_url += "?" + _parsed_target.query
+                    parsed = urlparse(target_url)
+                    print(f"  [CCG-12] session={_ccg12_session_id} route pin → {_pol_route_provider}")
 
         # Pipeline trace
         trace: Optional[PipelineTrace] = None

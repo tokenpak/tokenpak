@@ -57,6 +57,7 @@ _COMMAND_GROUPS = {
         ("recipe", "Manage compression recipes"),
         ("template", "Manage prompt templates"),
         ("budget", "Set API budget limits"),
+        ("mode", "Set per-session compilation mode"),
         ("goals", "Manage savings goals and track progress"),
         ("config", "Config sync, pull, validate (version control)"),
     ],
@@ -1743,6 +1744,7 @@ def build_parser():
     _build_cost_parser(sub)
     _build_costs_parser(sub)
     _build_budget_parser(sub)
+    _build_mode_parser(sub)
     _build_forecast_parser(sub)
     _build_goals_parser(sub)
     _build_lock_parser(sub)
@@ -3290,6 +3292,65 @@ def cmd_route_disable(args):
     print(f"✅ Rule {args.id} disabled." if ok else f"⚠️  Rule {args.id} not found.")
 
 
+# ── CCG-12: Per-session policy helpers ───────────────────────────────────────
+
+def _get_monitor_db() -> str:
+    """Return path to the proxy monitor database (session_policies table lives here)."""
+    import os
+    from pathlib import Path
+    env_path = os.environ.get("TOKENPAK_DB", "")
+    if env_path:
+        return env_path
+    # Default: same directory as proxy.py
+    proxy_dir = Path(__file__).parent.parent  # tokenpak/proxy.py
+    candidate = proxy_dir / "monitor.db"
+    if candidate.exists():
+        return str(candidate)
+    return str(Path.home() / ".tokenpak" / "monitor.db")
+
+
+def _session_policy_upsert(session_id: str, field: str, value) -> None:
+    """UPSERT a single field in session_policies, preserving other fields."""
+    import sqlite3 as _sqlite3
+    db_path = _get_monitor_db()
+    conn = _sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO session_policies (session_id, max_cost, mode, route_provider, updated_at)
+            VALUES (?, NULL, NULL, NULL, datetime('now'))
+            ON CONFLICT(session_id) DO UPDATE SET
+                updated_at = excluded.updated_at
+            """,
+            (session_id,),
+        )
+        conn.execute(
+            f"UPDATE session_policies SET {field} = ?, updated_at = datetime('now') WHERE session_id = ?",
+            (value, session_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def cmd_session_budget_set(args):
+    """Set per-session budget cap (CCG-12)."""
+    _session_policy_upsert(args.session, "max_cost", args.max_cost)
+    print(f"Set max_cost=${args.max_cost:.4f} for session {args.session}")
+
+
+def cmd_session_mode_set(args):
+    """Set per-session compilation mode (CCG-12)."""
+    _session_policy_upsert(args.session, "mode", args.mode)
+    print(f"Set mode={args.mode} for session {args.session}")
+
+
+def cmd_session_route_pin(args):
+    """Pin per-session provider routing (CCG-12)."""
+    _session_policy_upsert(args.session, "route_provider", args.provider)
+    print(f"Set route_provider={args.provider} for session {args.session}")
+
+
 def _build_route_parser(sub):
     p_route = sub.add_parser("route", help="Manage manual model routing rules")
     rsub = p_route.add_subparsers(dest="route_cmd", required=True)
@@ -3369,6 +3430,33 @@ def _build_route_parser(sub):
     p_dis.add_argument("id", help="Rule ID")
     p_dis.add_argument("--routes", default=None, help="Path to routes.yaml")
     p_dis.set_defaults(func=cmd_route_disable)
+
+    # route pin — CCG-12 per-session route pinning
+    p_pin = rsub.add_parser("pin", help="Pin a session to a specific provider")
+    p_pin.add_argument("--session", required=True, metavar="ID", help="Session ID")
+    p_pin.add_argument(
+        "--provider",
+        required=True,
+        choices=["anthropic", "openai", "google"],
+        help="Provider to pin for this session",
+    )
+    p_pin.set_defaults(func=cmd_session_route_pin)
+
+
+def _build_mode_parser(sub):
+    """CCG-12: mode set — per-session compilation mode override."""
+    p_mode = sub.add_parser("mode", help="Manage per-session compilation mode")
+    msub = p_mode.add_subparsers(dest="mode_cmd", required=True)
+
+    p_set = msub.add_parser("set", help="Set compilation mode for a session")
+    p_set.add_argument("--session", required=True, metavar="ID", help="Session ID")
+    p_set.add_argument(
+        "--mode",
+        required=True,
+        choices=["transparent", "safe", "aggressive"],
+        help="Compilation mode for this session",
+    )
+    p_set.set_defaults(func=cmd_session_mode_set)
 
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
@@ -3779,6 +3867,13 @@ def cmd_cost(args):
 
 
 def cmd_budget_set(args):
+    # CCG-12: per-session budget takes priority when --session is provided
+    _session = getattr(args, "session", None)
+    _max_cost = getattr(args, "max_cost", None)
+    if _session and _max_cost is not None:
+        cmd_session_budget_set(args)
+        return
+
     from .agent.telemetry.budget import load_budget_config, save_budget_config
 
     cfg = load_budget_config()
@@ -4382,6 +4477,9 @@ def _build_budget_parser(sub):
     p_set.add_argument(
         "--hard-stop", action="store_true", default=None, help="Block requests when limit exceeded"
     )
+    # CCG-12: per-session budget
+    p_set.add_argument("--session", metavar="ID", default=None, help="Session ID for per-session budget cap")
+    p_set.add_argument("--max-cost", dest="max_cost", type=float, metavar="USD", default=None, help="Max spend for this session in USD")
     p_set.set_defaults(func=cmd_budget_set)
 
     bsub.add_parser("status", help="Show current budget status").set_defaults(
