@@ -1,6 +1,8 @@
-# Getting Started
+# Getting Started (Day 1 Quick Start)
 
 Get TokenPak running in under 5 minutes.
+
+> **Want the full journey?** This page covers Day 1 only. For Day 3 through Day 30 — savings reports, recipe customization, budgets, and production deployment — see the [full Onboarding Guide](onboarding.md).
 
 ---
 
@@ -53,9 +55,7 @@ config file automatically — no manual editing required.
 - **Google AI SDK**: prints the one-line export command
 
 !!! tip "Non-interactive / CI"
-    ```bash
-    tokenpak setup --yes   # skip all confirmation prompts
-    ```
+    Run `tokenpak setup` and answer the prompts, or set the proxy URL manually using the instructions in the [manual alternative](#connect-your-llm-client-manual-alternative) section below.
 
 The wizard never reads or writes API keys — only proxy URLs.
 
@@ -71,7 +71,7 @@ The proxy starts on `http://localhost:8766` and is ready to accept requests imme
 
 !!! tip "Run in background"
     ```bash
-    tokenpak serve --port 8766 --daemon
+    tokenpak serve --port 8766 &
     # Stop with:
     tokenpak stop
     ```
@@ -136,7 +136,7 @@ Expected output:
 Make a test request through your client, then:
 
 ```bash
-tokenpak cost --today
+tokenpak cost
 # Cost today: $0.002 | Tokens saved: 1,847 (38%)
 ```
 
@@ -180,6 +180,7 @@ tokenpak budget alert --at 80%        # warn at 80%
 
 ## Next Steps
 
+- [Onboarding Guide](onboarding.md) — Day 3 through Day 30: savings reports, custom recipes, budgets, production deployment
 - [Proxy Setup](guides/proxy-setup.md) — advanced proxy configuration, SSL, multi-provider
 - [CLI Reference](cli-reference.md) — full command reference
 - [Recipe Development](guides/recipes.md) — custom compression recipes

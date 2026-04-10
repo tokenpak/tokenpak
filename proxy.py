@@ -413,6 +413,7 @@ _PROFILE_PRESETS: dict[str, dict[str, str]] = {
         "TOKENPAK_BUDGET_CONTROLLER": "true",
         "TOKENPAK_CHAT_FOOTER": "true",
         "TOKENPAK_INLINE_SAVINGS": "true",
+        "TOKENPAK_TUI_SAVINGS_TAPE": "true",
         "TOKENPAK_TRACE": "true",
         "TOKENPAK_SEMANTIC_CACHE": "false",
     },
@@ -740,6 +741,8 @@ CHAT_FOOTER_ENABLED: bool = _cfg("features.chat_footer", False, "TOKENPAK_CHAT_F
 # CCI-10: Inline savings reporting — SSE event + IDE response header
 INLINE_SAVINGS_ENABLED: bool = _cfg("features.inline_savings", False, "TOKENPAK_INLINE_SAVINGS", bool)
 INLINE_SAVINGS_HEADER_ENABLED: bool = _cfg("features.inline_savings_header", False, "TOKENPAK_INLINE_SAVINGS_HEADER", bool)
+# CCI-14: TUI savings tape — single-line savings summary in chat footer (claude-code-tui only)
+TUI_SAVINGS_TAPE_ENABLED: bool = _cfg("features.tui_savings_tape", False, "TOKENPAK_TUI_SAVINGS_TAPE", bool)
 HTTP100_KEEPALIVE_ENABLED: bool = _cfg("features.http100_keepalive", False, "TOKENPAK_HTTP100_KEEPALIVE", bool)
 
 # CCI-08: Shadow A/B model comparison logging
@@ -1463,6 +1466,27 @@ _VERTEX_BASE_URL: str = os.environ.get(
 # Vertex project ID — required if vertex is in the chain
 _VERTEX_PROJECT: str = os.environ.get("TOKENPAK_VERTEX_PROJECT", "")
 
+# ---------------------------------------------------------------------------
+# CCI-07: Compliance routing — Bedrock transparent translation
+# ---------------------------------------------------------------------------
+# When set to "bedrock", ALL /v1/messages requests are routed to Bedrock
+# instead of api.anthropic.com.  Default empty = off (opt-in).
+_COMPLIANCE_PROVIDER: str = os.environ.get("TOKENPAK_COMPLIANCE_PROVIDER", "").lower().strip()
+# Region for Bedrock endpoint URL construction (reuses AWS_DEFAULT_REGION or AWS_REGION)
+_BEDROCK_REGION: str = os.environ.get("AWS_DEFAULT_REGION", os.environ.get("AWS_REGION", "us-east-1"))
+# Bedrock requires this field in every request body (different from api.anthropic.com header)
+_BEDROCK_ANTHROPIC_VERSION: str = "bedrock-2023-05-31"
+# Bedrock SSE event names → Anthropic SSE event names (camelCase → snake_case)
+_BEDROCK_SSE_EVENT_MAP: Dict[str, str] = {
+    "messageStart": "message_start",
+    "contentBlockStart": "content_block_start",
+    "contentBlockDelta": "content_block_delta",
+    "contentBlockStop": "content_block_stop",
+    "messageStop": "message_stop",
+    "messageDelta": "message_delta",
+    "ping": "ping",
+}
+
 # SQLite queue for the "queue" fallback provider
 _FAILOVER_QUEUE_DB: str = os.environ.get(
     "TOKENPAK_FAILOVER_QUEUE_DB",
@@ -1657,6 +1681,457 @@ def _write_failover_queue(body: Optional[bytes], model: str, profile: str) -> st
     except Exception as _qe:
         print(f"[failover] queue write failed: {_qe}", flush=True)
         return "0"
+
+
+# ===========================================================================
+# CCI-07: Compliance routing helper functions
+# ===========================================================================
+
+def _cci07_sigv4_sign(
+    method: str,
+    url: str,
+    headers: Dict[str, str],
+    body: Optional[bytes],
+    service: str = "bedrock",
+    region: Optional[str] = None,
+) -> Dict[str, str]:
+    """
+    Sign an HTTP request with AWS SigV4 using stdlib hmac + hashlib.
+    Returns updated headers dict with Authorization + X-Amz-Date added.
+    If AWS credentials are absent from env, returns headers unmodified
+    (the request will 403 at Bedrock — surfaced to the caller as an upstream error).
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
+    session_token = os.environ.get("AWS_SESSION_TOKEN", "").strip()
+    region = region or _BEDROCK_REGION
+
+    if not access_key or not secret_key:
+        print("[compliance] WARNING: AWS credentials not found — request will fail with 403", flush=True)
+        return dict(headers)
+
+    parsed_url = urlparse(url)
+    host = parsed_url.netloc
+    canonical_uri = parsed_url.path or "/"
+    canonical_querystring = parsed_url.query or ""
+
+    from datetime import datetime as _dt
+    t = _dt.utcnow()
+    amzdate = t.strftime("%Y%m%dT%H%M%SZ")
+    datestamp = t.strftime("%Y%m%d")
+
+    signed_map: Dict[str, str] = {
+        "content-type": "application/json",
+        "host": host,
+        "x-amz-date": amzdate,
+    }
+    if session_token:
+        signed_map["x-amz-security-token"] = session_token
+
+    signed_keys = sorted(signed_map.keys())
+    canonical_headers = "".join(f"{k}:{signed_map[k]}\n" for k in signed_keys)
+    signed_headers_str = ";".join(signed_keys)
+    payload_hash = _hashlib.sha256(body or b"").hexdigest()
+
+    canonical_request = "\n".join([
+        method.upper(),
+        canonical_uri,
+        canonical_querystring,
+        canonical_headers,
+        signed_headers_str,
+        payload_hash,
+    ])
+
+    credential_scope = f"{datestamp}/{region}/{service}/aws4_request"
+    string_to_sign = "\n".join([
+        "AWS4-HMAC-SHA256",
+        amzdate,
+        credential_scope,
+        _hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+    ])
+
+    def _sign(key: bytes, msg: str) -> bytes:
+        return _hmac.new(key, msg.encode("utf-8"), _hashlib.sha256).digest()
+
+    signing_key = _sign(
+        _sign(
+            _sign(
+                _sign(f"AWS4{secret_key}".encode("utf-8"), datestamp),
+                region,
+            ),
+            service,
+        ),
+        "aws4_request",
+    )
+    signature = _hmac.new(signing_key, string_to_sign.encode("utf-8"), _hashlib.sha256).hexdigest()
+    auth_header = (
+        f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
+        f"SignedHeaders={signed_headers_str}, "
+        f"Signature={signature}"
+    )
+
+    result = dict(headers)
+    result["Authorization"] = auth_header
+    result["X-Amz-Date"] = amzdate
+    result["Content-Type"] = "application/json"
+    result["Host"] = host
+    if session_token:
+        result["X-Amz-Security-Token"] = session_token
+    return result
+
+
+def _cci07_translate_request(body: bytes) -> Tuple[bytes, str]:
+    """
+    Translate Anthropic /v1/messages request → Bedrock Claude Messages API format.
+
+    Field mapping (Anthropic → Bedrock):
+      model           → removed (goes in URL path)
+      max_tokens      → max_tokens          (identical)
+      system          → system              (identical)
+      messages        → messages            (identical)
+      tools           → tools               (identical)
+      tool_choice     → tool_choice         (identical)
+      temperature     → temperature         (identical)
+      top_p           → top_p              (identical)
+      top_k           → top_k              (identical)
+      stop_sequences  → stop_sequences     (identical)
+      stream          → stream             (identical)
+      metadata        → metadata           (identical)
+      [new]           → anthropic_version  = "bedrock-2023-05-31" (Bedrock-required)
+
+    Returns:
+        (bedrock_body_bytes, original_model_id)
+    """
+    data = json.loads(body)
+    model_id: str = data.pop("model", "")
+    data["anthropic_version"] = _BEDROCK_ANTHROPIC_VERSION
+    return json.dumps(data, ensure_ascii=False).encode("utf-8"), model_id
+
+
+def _cci07_translate_response(body: bytes, original_model_id: str = "") -> bytes:
+    """
+    Translate Bedrock Claude non-streaming response → Anthropic /v1/messages response.
+
+    Bedrock response schema is near-identical to Anthropic's.  The only difference
+    is that the 'model' field may contain the Bedrock model ID (anthropic.claude-...).
+    We restore the original Anthropic model ID for transparency.
+    """
+    try:
+        data = json.loads(body)
+        if original_model_id:
+            data["model"] = original_model_id
+        return json.dumps(data, ensure_ascii=False).encode("utf-8")
+    except (json.JSONDecodeError, ValueError):
+        return body
+
+
+def _cci07_translate_sse_line(line: str) -> str:
+    """
+    Translate a single Bedrock SSE line to Anthropic SSE format.
+
+    Bedrock emits camelCase event names; Anthropic uses snake_case:
+      event: messageStart       → event: message_start
+      event: contentBlockDelta  → event: content_block_delta
+      (etc.)
+
+    Data lines (data: {...}) and blank lines are passed through unchanged.
+    """
+    if not line.startswith("event: "):
+        return line
+    bedrock_name = line[len("event: "):].strip()
+    anthropic_name = _BEDROCK_SSE_EVENT_MAP.get(bedrock_name, bedrock_name)
+    return f"event: {anthropic_name}"
+
+
+def _cci07_decode_eventstream_frames(data: bytes):
+    """
+    Generator: decode Amazon binary EventStream frames from raw bytes.
+
+    Frame layout:
+      [4: total_length][4: headers_length][4: prelude_crc32]
+      [headers_length bytes][payload][4: message_crc32]
+
+    Header entry layout:
+      [1: name_len][name_bytes][1: type (7=string)][2: value_len][value_bytes]
+
+    Yields: (event_type: str, payload: bytes)
+    """
+    import struct as _struct
+    pos = 0
+    while pos < len(data):
+        if pos + 12 > len(data):
+            break
+        total_len, headers_len = _struct.unpack_from(">II", data, pos)
+        if total_len < 16 or pos + total_len > len(data):
+            break
+        headers_end = pos + 12 + headers_len
+        payload_end = pos + total_len - 4
+        headers_raw = data[pos + 12: headers_end]
+        payload = data[headers_end: payload_end]
+
+        event_type = ""
+        h_pos = 0
+        while h_pos < len(headers_raw):
+            if h_pos + 1 > len(headers_raw):
+                break
+            name_len = headers_raw[h_pos]
+            h_pos += 1
+            if h_pos + name_len > len(headers_raw):
+                break
+            name = headers_raw[h_pos: h_pos + name_len].decode("utf-8", errors="replace")
+            h_pos += name_len
+            if h_pos + 3 > len(headers_raw):
+                break
+            h_pos += 1
+            val_len = _struct.unpack_from(">H", headers_raw, h_pos)[0]
+            h_pos += 2
+            val = headers_raw[h_pos: h_pos + val_len].decode("utf-8", errors="replace")
+            h_pos += val_len
+            if name == ":event-type":
+                event_type = val
+
+        yield event_type, payload
+        pos += total_len
+
+
+def _cci07_build_bedrock_url(model_id: str, is_streaming: bool) -> str:
+    """
+    Build the Bedrock endpoint URL for a Claude model.
+    Non-streaming:  .../model/{modelId}/invoke
+    Streaming:      .../model/{modelId}/invoke-with-response-stream
+    """
+    suffix = "invoke-with-response-stream" if is_streaming else "invoke"
+    return f"{_BEDROCK_BASE_URL}/model/{model_id}/{suffix}"
+
+
+# ===========================================================================
+# CCI-07: Compliance routing helper functions
+# ===========================================================================
+
+def _cci07_sigv4_sign(
+    method: str,
+    url: str,
+    headers: Dict[str, str],
+    body: Optional[bytes],
+    service: str = "bedrock",
+    region: Optional[str] = None,
+) -> Dict[str, str]:
+    """
+    Sign an HTTP request with AWS SigV4 using stdlib hmac + hashlib.
+    Returns updated headers dict with Authorization + X-Amz-Date added.
+    If AWS credentials are absent from env, returns headers unmodified
+    (the request will 403 at Bedrock — surfaced to the caller as an upstream error).
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID", "").strip()
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "").strip()
+    session_token = os.environ.get("AWS_SESSION_TOKEN", "").strip()
+    region = region or _BEDROCK_REGION
+
+    if not access_key or not secret_key:
+        print("[compliance] WARNING: AWS credentials not found — request will fail with 403", flush=True)
+        return dict(headers)
+
+    parsed_url = urlparse(url)
+    host = parsed_url.netloc
+    canonical_uri = parsed_url.path or "/"
+    canonical_querystring = parsed_url.query or ""
+
+    from datetime import datetime as _dt
+    t = _dt.utcnow()
+    amzdate = t.strftime("%Y%m%dT%H%M%SZ")
+    datestamp = t.strftime("%Y%m%d")
+
+    # Build canonical headers dict (sorted lowercase keys)
+    signed_map: Dict[str, str] = {
+        "content-type": "application/json",
+        "host": host,
+        "x-amz-date": amzdate,
+    }
+    if session_token:
+        signed_map["x-amz-security-token"] = session_token
+
+    signed_keys = sorted(signed_map.keys())
+    canonical_headers = "".join(f"{k}:{signed_map[k]}\n" for k in signed_keys)
+    signed_headers_str = ";".join(signed_keys)
+    payload_hash = _hashlib.sha256(body or b"").hexdigest()
+
+    canonical_request = "\n".join([
+        method.upper(),
+        canonical_uri,
+        canonical_querystring,
+        canonical_headers,
+        signed_headers_str,
+        payload_hash,
+    ])
+
+    credential_scope = f"{datestamp}/{region}/{service}/aws4_request"
+    string_to_sign = "\n".join([
+        "AWS4-HMAC-SHA256",
+        amzdate,
+        credential_scope,
+        _hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+    ])
+
+    def _sign(key: bytes, msg: str) -> bytes:
+        return _hmac.new(key, msg.encode("utf-8"), _hashlib.sha256).digest()
+
+    signing_key = _sign(
+        _sign(
+            _sign(
+                _sign(f"AWS4{secret_key}".encode("utf-8"), datestamp),
+                region,
+            ),
+            service,
+        ),
+        "aws4_request",
+    )
+    signature = _hmac.new(signing_key, string_to_sign.encode("utf-8"), _hashlib.sha256).hexdigest()
+    auth_header = (
+        f"AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, "
+        f"SignedHeaders={signed_headers_str}, "
+        f"Signature={signature}"
+    )
+
+    result = dict(headers)
+    result["Authorization"] = auth_header
+    result["X-Amz-Date"] = amzdate
+    result["Content-Type"] = "application/json"
+    result["Host"] = host
+    if session_token:
+        result["X-Amz-Security-Token"] = session_token
+    return result
+
+
+def _cci07_translate_request(body: bytes) -> Tuple[bytes, str]:
+    """
+    Translate Anthropic /v1/messages request → Bedrock Claude Messages API format.
+
+    Field mapping (Anthropic → Bedrock):
+      model           → removed (goes in URL path)
+      max_tokens      → max_tokens          (identical)
+      system          → system              (identical)
+      messages        → messages            (identical)
+      tools           → tools               (identical)
+      tool_choice     → tool_choice         (identical)
+      temperature     → temperature         (identical)
+      top_p           → top_p              (identical)
+      top_k           → top_k              (identical)
+      stop_sequences  → stop_sequences     (identical)
+      stream          → stream             (identical)
+      metadata        → metadata           (identical)
+      [new]           → anthropic_version  = "bedrock-2023-05-31" (Bedrock-required)
+
+    Returns:
+        (bedrock_body_bytes, original_model_id)
+    """
+    data = json.loads(body)
+    model_id: str = data.pop("model", "")
+    data["anthropic_version"] = _BEDROCK_ANTHROPIC_VERSION
+    return json.dumps(data, ensure_ascii=False).encode("utf-8"), model_id
+
+
+def _cci07_translate_response(body: bytes, original_model_id: str = "") -> bytes:
+    """
+    Translate Bedrock Claude non-streaming response → Anthropic /v1/messages response.
+
+    Bedrock response schema is near-identical to Anthropic's.  The only difference
+    is that the 'model' field may contain the Bedrock model ID (anthropic.claude-...).
+    We restore the original Anthropic model ID for transparency.
+    """
+    try:
+        data = json.loads(body)
+        if original_model_id:
+            data["model"] = original_model_id
+        return json.dumps(data, ensure_ascii=False).encode("utf-8")
+    except (json.JSONDecodeError, ValueError):
+        return body  # pass through unparseable bodies unchanged
+
+
+def _cci07_translate_sse_line(line: str) -> str:
+    """
+    Translate a single Bedrock SSE line to Anthropic SSE format.
+
+    Bedrock emits camelCase event names; Anthropic uses snake_case:
+      event: messageStart       → event: message_start
+      event: contentBlockDelta  → event: content_block_delta
+      (etc.)
+
+    Data lines (data: {...}) and blank lines are passed through unchanged.
+    """
+    if not line.startswith("event: "):
+        return line
+    bedrock_name = line[len("event: "):].strip()
+    anthropic_name = _BEDROCK_SSE_EVENT_MAP.get(bedrock_name, bedrock_name)
+    return f"event: {anthropic_name}"
+
+
+def _cci07_decode_eventstream_frames(data: bytes):
+    """
+    Generator: decode Amazon binary EventStream frames from raw bytes.
+
+    Frame layout:
+      [4: total_length][4: headers_length][4: prelude_crc32]
+      [headers_length bytes][payload][4: message_crc32]
+
+    Header entry layout:
+      [1: name_len][name_bytes][1: type (7=string)][2: value_len][value_bytes]
+
+    Yields: (event_type: str, payload: bytes)
+    """
+    import struct as _struct
+    pos = 0
+    while pos < len(data):
+        if pos + 12 > len(data):
+            break  # incomplete prelude — wait for more data
+        total_len, headers_len = _struct.unpack_from(">II", data, pos)
+        if total_len < 16 or pos + total_len > len(data):
+            break  # incomplete frame
+        headers_end = pos + 12 + headers_len
+        payload_end = pos + total_len - 4  # exclude 4-byte trailing CRC
+        headers_raw = data[pos + 12: headers_end]
+        payload = data[headers_end: payload_end]
+
+        # Parse event-type from frame headers
+        event_type = ""
+        h_pos = 0
+        while h_pos < len(headers_raw):
+            if h_pos + 1 > len(headers_raw):
+                break
+            name_len = headers_raw[h_pos]
+            h_pos += 1
+            if h_pos + name_len > len(headers_raw):
+                break
+            name = headers_raw[h_pos: h_pos + name_len].decode("utf-8", errors="replace")
+            h_pos += name_len
+            if h_pos + 3 > len(headers_raw):
+                break
+            h_pos += 1  # skip header type byte
+            val_len = _struct.unpack_from(">H", headers_raw, h_pos)[0]
+            h_pos += 2
+            val = headers_raw[h_pos: h_pos + val_len].decode("utf-8", errors="replace")
+            h_pos += val_len
+            if name == ":event-type":
+                event_type = val
+
+        yield event_type, payload
+        pos += total_len
+
+
+def _cci07_build_bedrock_url(model_id: str, is_streaming: bool) -> str:
+    """
+    Build the Bedrock endpoint URL for a Claude model.
+    Non-streaming:  .../model/{modelId}/invoke
+    Streaming:      .../model/{modelId}/invoke-with-response-stream
+    """
+    suffix = "invoke-with-response-stream" if is_streaming else "invoke"
+    return f"{_BEDROCK_BASE_URL}/model/{model_id}/{suffix}"
+
 
 
 # Per-IP rate limiting — token bucket, 60 req/min per IP by default
@@ -3338,6 +3813,151 @@ def _write_mutation_audit(
 
 
 # ---------------------------------------------------------------------------
+# CCI-08: Shadow A/B model comparison logging helpers
+# ---------------------------------------------------------------------------
+
+def _extract_response_text(resp_body: bytes) -> str:
+    """Extract plain text from an Anthropic-format response body for similarity comparison."""
+    if not resp_body:
+        return ""
+    try:
+        data = json.loads(resp_body)
+        parts = []
+        for block in data.get("content", []):
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return " ".join(parts)
+    except Exception:
+        return resp_body.decode("utf-8", errors="replace")[:2000]
+
+
+def _compute_similarity(text1: str, text2: str) -> Optional[float]:
+    """Compute character-overlap similarity score [0.0, 1.0] using difflib.
+    Returns None if either text is empty (not comparable).
+    """
+    if not text1 or not text2:
+        return None
+    import difflib
+    ratio = difflib.SequenceMatcher(None, text1[:4000], text2[:4000]).ratio()
+    return round(ratio, 4)
+
+
+def _shadow_provider_model(shadow_provider: str) -> Tuple[str, str]:
+    """Map a shadow provider string to (upstream_url, model_name).
+
+    Returns ("", "") if the provider is unknown (fail-open: shadow silently skipped).
+    """
+    p = shadow_provider.lower().strip()
+    if p in ("anthropic-haiku", "haiku"):
+        return ("https://api.anthropic.com/v1/messages", "claude-haiku-4-5-20251001")
+    if p in ("anthropic-sonnet", "sonnet"):
+        return ("https://api.anthropic.com/v1/messages", "claude-sonnet-4-6")
+    if p in ("gemini-flash", "gemini-2-flash"):
+        return ("", "")  # Gemini not supported yet — skip silently
+    if p.startswith("ollama-"):
+        return ("", "")  # Ollama not supported yet — skip silently
+    return ("", "")
+
+
+def _run_shadow_request(
+    db_path: str,
+    request_id: str,
+    session_id: str,
+    primary_model: str,
+    primary_input_tokens: int,
+    primary_output_tokens: int,
+    primary_cost_usd: float,
+    request_body: bytes,
+    primary_response_text: str,
+    shadow_provider: str,
+    store_content: bool = True,
+) -> None:
+    """Background thread: fire request against shadow provider, log comparison row.
+
+    Must NEVER raise — all exceptions caught and silently dropped so the user
+    response path is completely unaffected.
+    """
+    try:
+        shadow_url, shadow_model = _shadow_provider_model(shadow_provider)
+        if not shadow_url:
+            return  # provider not supported — silent no-op
+
+        try:
+            req_data = json.loads(request_body)
+        except Exception:
+            return
+        req_data["model"] = shadow_model
+        req_data["stream"] = False
+        shadow_body = json.dumps(req_data).encode()
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        fwd_headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+        }
+        if api_key:
+            fwd_headers["x-api-key"] = api_key
+
+        import urllib.request as _urllib_req
+        import urllib.error as _urllib_err
+
+        req = _urllib_req.Request(
+            shadow_url, data=shadow_body, headers=fwd_headers, method="POST",
+        )
+        shadow_response_text = ""
+        shadow_input_tokens = 0
+        shadow_output_tokens = 0
+        shadow_cost_usd = 0.0
+
+        try:
+            with _urllib_req.urlopen(req, timeout=30) as resp:
+                shadow_resp_body = resp.read()
+            shadow_data = json.loads(shadow_resp_body)
+            usage = shadow_data.get("usage", {})
+            shadow_input_tokens = usage.get("input_tokens", 0)
+            shadow_output_tokens = usage.get("output_tokens", 0)
+            shadow_cost_usd = estimate_cost(shadow_model, shadow_input_tokens, shadow_output_tokens)
+            shadow_response_text = _extract_response_text(shadow_resp_body)
+        except (_urllib_err.URLError, Exception):
+            pass
+
+        similarity = _compute_similarity(primary_response_text, shadow_response_text)
+
+        if store_content:
+            p_text = primary_response_text
+            s_text = shadow_response_text
+        else:
+            import hashlib as _hl
+            p_text = _hl.sha256(primary_response_text.encode()).hexdigest() if primary_response_text else ""
+            s_text = _hl.sha256(shadow_response_text.encode()).hexdigest() if shadow_response_text else ""
+
+        try:
+            conn = sqlite3.connect(str(db_path), check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute(
+                """INSERT INTO shadow_comparisons
+                   (request_id, session_id, primary_model, shadow_model,
+                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
+                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
+                    semantic_similarity_score, primary_response_text, shadow_response_text,
+                    timestamp)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))""",
+                (
+                    request_id, session_id, primary_model, shadow_model,
+                    primary_input_tokens, primary_output_tokens, primary_cost_usd,
+                    shadow_input_tokens, shadow_output_tokens, shadow_cost_usd,
+                    similarity, p_text, s_text,
+                ),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # TRIX-08: Proxy-level compliance audit write (audit_events in monitor.db)
 # ---------------------------------------------------------------------------
 
@@ -4119,6 +4739,43 @@ def estimate_cache_savings(
     
     # Savings = tokens * cost * (1 - discount)
     return cache_read_tokens * input_cost_per_tok * (1.0 - read_mult)
+
+
+def _format_tui_savings_tape(
+    input_tokens: int,
+    sent_input_tokens: int,
+    cache_read_tokens: int,
+    vault_blocks: int,
+    model: str,
+    target_url: str,
+) -> "str | None":
+    """Format CCI-14 single-line savings tape for TUI chat footer.
+
+    Returns None when all savings metrics are zero — caller should suppress the footer.
+    Format: tokenpak: 4,500 → 2,350 tokens (47.8% saved, $0.31), cache 81%, +4 vault
+    Numeric formatting: thousands separators for tokens, 1 decimal for pct, 2 decimals for USD.
+    """
+    saved_tokens = max(0, input_tokens - sent_input_tokens)
+    if saved_tokens == 0 and cache_read_tokens == 0 and vault_blocks == 0:
+        return None
+    compression_usd = max(
+        0.0,
+        estimate_cost(model, input_tokens, 0, 0, 0)
+        - estimate_cost(model, sent_input_tokens, 0, 0, 0),
+    )
+    cache_usd = estimate_cache_savings(_provider_for_url(target_url), cache_read_tokens, model)
+    total_usd = compression_usd + cache_usd
+    pct = round(saved_tokens / input_tokens * 100, 1) if input_tokens > 0 else 0.0
+    tape = (
+        f"tokenpak: {input_tokens:,} \u2192 {sent_input_tokens:,} tokens"
+        f" ({pct:.1f}% saved, ${total_usd:.2f})"
+    )
+    if cache_read_tokens > 0 and sent_input_tokens > 0:
+        cache_pct = int(round(cache_read_tokens / sent_input_tokens * 100))
+        tape += f", cache {cache_pct}%"
+    if vault_blocks > 0:
+        tape += f", +{vault_blocks} vault"
+    return tape
 
 
 def estimate_cost(model, input_tokens, output_tokens, cache_read=0, cache_creation=0):
@@ -5186,7 +5843,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json(welcome)
             return
         # Fix: POST-only paths return 405 instead of 404 on wrong method
-        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/ingest"}
+        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/messages/forecast", "/v1/chat/completions", "/ingest"}
         if self.path.split("?")[0] in _POST_ONLY_PATHS:
             self.send_response(405)
             self.send_header("Allow", "POST, OPTIONS")
@@ -5855,6 +6512,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._ollama_proxy("POST")
         elif self.path.split("?")[0] == "/v1/messages/count_tokens":
             self._handle_count_tokens()
+        elif self.path.split("?")[0] == "/v1/messages/forecast":
+            self._handle_cost_forecast()
         elif self.path.startswith("/v1/messages/"):
             # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
@@ -6028,6 +6687,147 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
         self._send_json({"input_tokens": total})
 
+    def _handle_cost_forecast(self):
+        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+
+        Accepts the same body shape as /v1/messages, runs count_tokens locally,
+        applies the model pricing config, and returns an estimated cost breakdown.
+        No API key required; no upstream round-trip.
+        """
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}},
+                status=400,
+            )
+            return
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}},
+                status=400,
+            )
+            return
+
+        model = payload.get("model", "claude-sonnet-4-5") or "claude-sonnet-4-5"
+        if not isinstance(model, str):
+            model = "claude-sonnet-4-5"
+
+        # 1. Count input tokens
+        total_input = 0
+        system = payload.get("system", "")
+        if isinstance(system, str):
+            total_input += count_tokens(system)
+        elif isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total_input += count_tokens(text)
+                elif isinstance(block, str):
+                    total_input += count_tokens(block)
+
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total_input += count_tokens(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        text = block.get("text", "")
+                        if isinstance(text, str):
+                            total_input += count_tokens(text)
+                    elif isinstance(block, str):
+                        total_input += count_tokens(block)
+
+        for tool in payload.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
+            total_input += count_tokens(tool.get("name", ""))
+            total_input += count_tokens(tool.get("description", ""))
+            schema = tool.get("input_schema", {})
+            if isinstance(schema, dict):
+                total_input += count_tokens(json.dumps(schema, separators=(",", ":")))
+
+        # 2. Cache creates from cache_control hints
+        cache_creates_estimate = 0
+        cache_hits_estimate = 0
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("cache_control"):
+                        block_text = block.get("text", "")
+                        if isinstance(block_text, str):
+                            cache_creates_estimate += count_tokens(block_text)
+        if isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict) and block.get("cache_control"):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        cache_creates_estimate += count_tokens(text)
+
+        # 3. Output estimate — default 500
+        max_tokens = payload.get("max_tokens")
+        if isinstance(max_tokens, int) and 0 < max_tokens < 500:
+            output_estimate = max_tokens
+        else:
+            output_estimate = 500
+
+        # 4. Cost via pricing config
+        estimated_cost_usd = estimate_cost(
+            model, total_input, output_estimate, cache_creates_estimate, cache_hits_estimate
+        )
+
+        # 5. TTFB estimate from rolling average
+        with _latency_lock:
+            lats = list(_request_latencies)
+        ttfb_estimate_ms = int(sum(lats) / len(lats)) if lats else 800
+
+        # 6. Cache hit likelihood — per-session if available, else global
+        session_id = self.headers.get("x-claude-code-session-id", "").strip()
+        cache_hit_likelihood = 0.5
+        if session_id:
+            try:
+                _conn = sqlite3.connect(MONITOR_DB, timeout=2)
+                try:
+                    _cur = _conn.execute(
+                        "SELECT cache_read_tokens FROM requests "
+                        "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 20",
+                        (session_id,),
+                    )
+                    rows = _cur.fetchall()
+                    if len(rows) >= 3:
+                        hits = sum(1 for r in rows if (r[0] or 0) > 0)
+                        cache_hit_likelihood = round(hits / len(rows), 4)
+                finally:
+                    _conn.close()
+            except Exception:
+                pass
+        else:
+            _cache_total = SESSION.get("cache_hits", 0) + SESSION.get("cache_misses", 0)
+            if _cache_total >= 5:
+                cache_hit_likelihood = round(SESSION.get("cache_hits", 0) / _cache_total, 4)
+
+        self._send_json({
+            "estimated_cost_usd": round(estimated_cost_usd, 8),
+            "ttfb_estimate_ms": ttfb_estimate_ms,
+            "cache_hit_likelihood": cache_hit_likelihood,
+            "breakdown": {
+                "input_tokens": total_input,
+                "output_estimate": output_estimate,
+                "cache_hits_estimate": cache_hits_estimate,
+                "cache_creates_estimate": cache_creates_estimate,
+            },
+        })
+
     def _reverse_proxy(self, method):
         # Pre-flight: check for missing API credentials before touching upstream.
         # If the client sent no auth header AND the environment has no key set,
@@ -6060,6 +6860,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     status=401,
                 )
                 return
+
+        # CCI-07: Compliance routing — override destination to Bedrock if configured.
+        # Honoured via env var (global) OR per-request X-TokenPak-Compliance header.
+        _cci07_compliance = (
+            self.headers.get("X-TokenPak-Compliance", "").lower().strip()
+            or _COMPLIANCE_PROVIDER
+        )
+        if _cci07_compliance == "bedrock":
+            self._cci07_compliance_proxy(method)
+            return
 
         headers = _header_mapping(self.headers)
         adapter = _detect_adapter(path=self.path, headers=headers, body_bytes=None)
@@ -7614,6 +8424,21 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                         _footer_text += f"\n💰 saved: ${_compression_saved_usd + _cache_saved_usd:.3f} (cmp ${_compression_saved_usd:.3f} + cache ${_cache_saved_usd:.3f})"
                                         if _vault_blocks:
                                             _footer_text += f" | vault: {_vault_blocks}blk"
+                                    # CCI-14: TUI savings tape — replace footer with single-line format
+                                    if TUI_SAVINGS_TAPE_ENABLED:
+                                        _vault_blocks_14 = len(injected_sources)
+                                        _tape14 = _format_tui_savings_tape(
+                                            input_tokens, sent_input_tokens, _temp_cache_r,
+                                            _vault_blocks_14, model, target_url,
+                                        )
+                                        if _tape14 is None:
+                                            # Suppress footer — zero savings
+                                            self.wfile.write(after_stop)
+                                            self.wfile.flush()
+                                            sse_buffer += after_stop
+                                            _footer_injected = True
+                                            continue
+                                        _footer_text = f"\n{_tape14}"
                                     _footer_event = {
                                         "type": "content_block_delta",
                                         "index": 0,
@@ -7732,6 +8557,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             _footer_text += f"\n💰 saved: ${_compression_saved_usd + _cache_saved_usd:.3f} (cmp ${_compression_saved_usd:.3f} + cache ${_cache_saved_usd:.3f})"
                             if _vault_blocks:
                                 _footer_text += f" | vault: {_vault_blocks}blk"
+                        # CCI-14: TUI savings tape — single-line format for non-streaming
+                        if TUI_SAVINGS_TAPE_ENABLED:
+                            _vault_blocks_14 = len(injected_sources)
+                            _tape14 = _format_tui_savings_tape(
+                                input_tokens, sent_input_tokens, _cache_r,
+                                _vault_blocks_14, model, target_url,
+                            )
+                            _footer_text = f"\n{_tape14}" if _tape14 is not None else ""
                         content = resp_json.get("content", [])
                         if content and isinstance(content, list):
                             for i in range(len(content) - 1, -1, -1):
@@ -8196,6 +9029,197 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 self.wfile.write(err)
             except Exception:
                 pass
+
+    def _cci07_compliance_proxy(self, method: str) -> None:
+        """
+        CCI-07: Transparent Bedrock compliance proxy.
+
+        Full request lifecycle:
+          1. Read body; translate Anthropic → Bedrock format
+          2. Translate Anthropic model ID → Bedrock model ID
+          3. Build Bedrock endpoint URL (invoke or invoke-with-response-stream)
+          4. Sign request with AWS SigV4 (stdlib only, no boto3)
+          5. Forward to Bedrock over HTTPS
+          6. Non-streaming: translate response body back, forward to client
+          7. Streaming: translate SSE event names (camelCase→snake_case) mid-stream;
+             for binary EventStream, decode frames and re-encode as Anthropic SSE
+        """
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > _MAX_REQUEST_BYTES:
+            self._send_json(
+                {
+                    "error": {
+                        "type": "request_too_large",
+                        "message": f"Request body exceeds limit ({content_length} bytes)",
+                    }
+                },
+                status=413,
+            )
+            return
+
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+
+        # Translate request body: Anthropic → Bedrock
+        try:
+            bedrock_body, original_model = _cci07_translate_request(body)
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._send_json(
+                {"error": {"type": "bad_request", "message": f"Could not parse request body: {exc}"}},
+                status=400,
+            )
+            return
+
+        # Determine streaming flag from translated body
+        try:
+            is_streaming = json.loads(bedrock_body).get("stream", False)
+        except (json.JSONDecodeError, ValueError):
+            is_streaming = False
+
+        # Translate model ID: Anthropic ID → Bedrock ID (e.g. claude-3-5-sonnet-... → anthropic.claude-...)
+        bedrock_model_id = _translate_model(original_model, "bedrock")
+        bedrock_url = _cci07_build_bedrock_url(bedrock_model_id, is_streaming)
+        print(
+            f"[compliance] bedrock route: model={bedrock_model_id} stream={is_streaming} url={bedrock_url}",
+            flush=True,
+        )
+
+        # Build forwarding headers (strip Anthropic auth; add Bedrock Content-Type)
+        fwd_headers: Dict[str, str] = {}
+        _strip = frozenset({
+            "host", "proxy-connection", "proxy-authorization", "connection", "keep-alive",
+            "transfer-encoding", "te", "trailer", "upgrade", "content-length",
+            "accept-encoding", "x-api-key", "anthropic-version", "anthropic-beta",
+        })
+        for key in self.headers:
+            if key.lower() not in _strip:
+                fwd_headers[key] = self.headers[key]
+
+        fwd_headers["Content-Type"] = "application/json"
+        if is_streaming:
+            fwd_headers["Accept"] = "application/vnd.amazon.eventstream"
+        fwd_headers["X-TokenPak-Compliance"] = "bedrock"
+
+        # Sign with SigV4
+        fwd_headers = _cci07_sigv4_sign(method, bedrock_url, fwd_headers, bedrock_body)
+        fwd_headers["Content-Length"] = str(len(bedrock_body))
+
+        # Forward to Bedrock
+        parsed_up = urlparse(bedrock_url)
+        try:
+            if parsed_up.scheme == "https":
+                import ssl as _ssl
+                _ctx = _ssl.create_default_context()
+                conn = http.client.HTTPSConnection(parsed_up.netloc, timeout=300, context=_ctx)
+            else:
+                conn = http.client.HTTPConnection(parsed_up.netloc, timeout=300)
+            up_path = parsed_up.path + ("?" + parsed_up.query if parsed_up.query else "")
+            conn.request(method, up_path, body=bedrock_body, headers=fwd_headers)
+            resp = conn.getresponse()
+            status = resp.status
+        except Exception as exc:
+            self._send_json(
+                {"error": {"type": "upstream_error", "message": f"Bedrock unreachable: {exc}"}},
+                status=502,
+            )
+            return
+
+        content_type = resp.getheader("Content-Type", "")
+        print(f"[compliance] Bedrock HTTP {status} Content-Type={content_type!r}", flush=True)
+
+        # --- Error passthrough ---
+        if status >= 400:
+            err_body = resp.read()
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err_body)))
+            self.end_headers()
+            self.wfile.write(err_body)
+            return
+
+        # --- Streaming path ---
+        if is_streaming:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+
+            is_binary = "vnd.amazon.eventstream" in content_type
+            buf = b""
+
+            while True:
+                chunk = resp.read(4096)
+                if not chunk:
+                    break
+                buf += chunk
+
+                if is_binary:
+                    # Binary EventStream: decode frames, extract base64-encoded Anthropic SSE
+                    import struct as _struct
+                    consumed = 0
+                    while consumed + 12 <= len(buf):
+                        total_len = _struct.unpack_from(">I", buf, consumed)[0]
+                        if total_len < 16 or consumed + total_len > len(buf):
+                            break
+                        for evt_type, payload in _cci07_decode_eventstream_frames(
+                            buf[consumed: consumed + total_len]
+                        ):
+                            if evt_type == "chunk":
+                                try:
+                                    chunk_data = json.loads(payload)
+                                    import base64 as _b64
+                                    inner = _b64.b64decode(chunk_data.get("bytes", "")).decode(
+                                        "utf-8", errors="replace"
+                                    )
+                                    # inner is an Anthropic SSE event line set (may have Bedrock event names)
+                                    for ln in inner.splitlines():
+                                        tln = _cci07_translate_sse_line(ln)
+                                        try:
+                                            self.wfile.write((tln + "\n").encode("utf-8"))
+                                        except (BrokenPipeError, ConnectionResetError):
+                                            return
+                                    try:
+                                        self.wfile.write(b"\n")
+                                        self.wfile.flush()
+                                    except (BrokenPipeError, ConnectionResetError):
+                                        return
+                                except Exception:
+                                    pass
+                        consumed += total_len
+                    buf = buf[consumed:]
+                else:
+                    # SSE with camelCase event names — translate line-by-line
+                    while b"\n" in buf:
+                        line_b, buf = buf.split(b"\n", 1)
+                        ln = line_b.decode("utf-8", errors="replace")
+                        tln = _cci07_translate_sse_line(ln)
+                        try:
+                            self.wfile.write((tln + "\n").encode("utf-8"))
+                        except (BrokenPipeError, ConnectionResetError):
+                            return
+                    try:
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+
+            # Flush remaining buffer (partial last line)
+            if buf:
+                ln = buf.decode("utf-8", errors="replace")
+                tln = _cci07_translate_sse_line(ln)
+                try:
+                    self.wfile.write(tln.encode("utf-8"))
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+
+        else:
+            # --- Non-streaming path ---
+            response_body = resp.read()
+            translated = _cci07_translate_response(response_body, original_model)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(translated)))
+            self.end_headers()
+            self.wfile.write(translated)
 
     def _ingest(self, path):
         """Handle /ingest and /ingest/batch POST requests."""

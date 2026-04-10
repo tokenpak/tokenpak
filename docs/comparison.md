@@ -77,4 +77,39 @@ TokenPak supports multi-provider routing, but if you need instant access to 200+
 
 ---
 
-*See also: [FAQ](faq.md) · [Getting Started](getting-started.md) · [Compression deep-dive](compression.md)*
+*See also: [FAQ](faq.md) · [Getting Started](getting-started.md) · [Compression deep-dive](compression.md) · [Claude Code Integration Guide](claude-code-integration.md)*
+
+---
+
+## For Claude Code Users Specifically
+
+**Last updated: 2026-04-09**
+
+None of the alternatives in the table above were designed around Claude Code's consumption model. The table below maps TokenPak's Claude Code-specific features against each competitor.
+
+| Feature | **TokenPak** | Helicone | LangSmith | LiteLLM | Portkey | Langfuse | OpenRouter |
+|---|---|---|---|---|---|---|---|
+| **Per-mode profiles** (CLI / TUI / tmux / SDK / IDE / cron auto-detected) | ✅ 6 profiles, auto-detected via session headers | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Vault context injection post-cache-boundary** | ✅ Yes — injected before upstream call, respects `cache_control` boundary | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Multi-provider failover presenting as Anthropic-compatible** | ✅ Yes — Bedrock / Vertex / OpenAI behind a single `ANTHROPIC_BASE_URL` | ⚠️ Routing only (changes base URL) | ❌ No | ⚠️ Routing only (changes SDK target) | ⚠️ Routing only (changes SDK target) | ❌ No | ⚠️ Routing only (changes SDK target) |
+| **One-command Claude Code installer** (`tokenpak install --claude-code`) | ✅ Yes (CCI-15) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **`tokenpak doctor --claude-code` health check** | ✅ Yes (CCI-12) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Inline savings reporting** (TUI footer / IDE header / SSE event) | ✅ Yes — 3 surfaces, per-turn | ❌ No (dashboard only) | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Per-host config drift detection** | ✅ Yes — flags when profile or vault config diverges across hosts | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+
+*Competitor claims reflect publicly available documentation as of April 2026. If a competitor has shipped a matching feature, [open an issue](https://github.com/tokenpak/tokenpak/issues) and we will update the table.*
+
+### Why These Three Points Matter Most
+
+**1. The only proxy that ships profile auto-detection per Claude Code consumption mode.**
+Claude Code runs in fundamentally different contexts — an interactive TUI session has different latency tolerances, compression needs, and output surfaces than a cron job or an IDE extension. TokenPak detects which mode is active via session headers and applies the right profile automatically. No other proxy in this list has a concept of Claude Code modes at all.
+
+**2. Vault injection that respects Anthropic's prompt cache.**
+TokenPak injects vault context (notes, docs, code snippets) into requests *before* they leave your machine, and it places that injection *after* the stable cache boundary. This means your system prompt — the part Anthropic caches — stays stable across turns, so you get full cache hit rates. A naive injection that prepends vault content to the system prompt invalidates the cache on every vault change. TokenPak's `cache_control`-aware injection (see the April 2026 hotfix) avoids this entirely.
+
+**3. Cross-provider routing that presents as Anthropic-compatible.**
+When TokenPak routes a request to AWS Bedrock or Google Vertex, it translates the request and response so Claude Code sees a standard Anthropic API response — same JSON shape, same streaming format, same error codes. Claude Code never knows it hit a different provider. Other routers (LiteLLM, Portkey, OpenRouter) require you to change your base URL *and* your model string, which breaks Claude Code's built-in model targeting.
+
+---
+
+*For a complete Claude Code setup walkthrough, see the [Claude Code Integration Guide](claude-code-integration.md).*

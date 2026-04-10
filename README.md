@@ -2,7 +2,7 @@
 
 
 
-![Python](https://img.shields.io/badge/python-3.8+-blue)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 
@@ -25,6 +25,20 @@ TokenPak is an open-source LLM proxy agent that compresses context, routes reque
 [![Downloads](https://static.pepy.tech/badge/tokenpak/month)](https://pepy.tech/project/tokenpak)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![codecov](https://codecov.io/gh/tokenpak/tokenpak/branch/main/graph/badge.svg)](https://codecov.io/gh/tokenpak/tokenpak)
+
+---
+
+## Getting Started
+
+New to TokenPak? The [Onboarding Guide](docs/onboarding.md) walks you from install to production in five milestones:
+
+- **Day 1** — Install, configure your LLM client, start the proxy, and see compression activate
+- **Day 3** — Review your first savings report with `tokenpak cost --week`
+- **Day 7** — Customize a compression recipe to fit your workload
+- **Day 14** — Set a monthly budget and configure Slack alerts
+- **Day 30** — Deploy as a systemd service or Docker container with monitoring
+
+[→ Full onboarding guide](docs/onboarding.md) | [→ Quick start (5 minutes)](docs/getting-started.md)
 
 ---
 
@@ -301,10 +315,10 @@ Result: same semantic content, 20–60% fewer tokens.
 ### Core
 
 ```bash
-tokenpak serve --port 8766 [--workers N]  # start proxy (default: cpu_count//2 workers)
-tokenpak status [--full]       # proxy health
+tokenpak serve --port 8766 [--workers N]  # start proxy (default: 1 worker)
+tokenpak status                # proxy health
 tokenpak cost [--week|--month] # cost report
-tokenpak savings [--lifetime]  # token savings summary
+tokenpak savings [--days N]    # token savings summary (rolling window)
 ```
 
 ### Compression & Debug

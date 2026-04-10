@@ -2099,6 +2099,11 @@ def _build_debug_parser(sub):
     dsub.add_parser("on", help="Enable debug mode").set_defaults(func=cmd_debug_on)
     dsub.add_parser("off", help="Disable debug mode").set_defaults(func=cmd_debug_off)
     dsub.add_parser("status", help="Show debug mode state").set_defaults(func=cmd_debug_status)
+    dsub.add_parser("list", help="List captured debug blobs").set_defaults(func=cmd_debug_list)
+
+    p_export = dsub.add_parser("export", help="Decrypt and print a captured debug blob")
+    p_export.add_argument("trace_id", help="Trace ID to export")
+    p_export.set_defaults(func=cmd_debug_export)
 
 
 def cmd_debug_on(args):
@@ -2135,6 +2140,35 @@ def cmd_debug_status(args):
         print(f"  Source: TOKENPAK_DEBUG env var = {env_override}")
     else:
         print(f"  Source: {CONFIG_PATH}")
+
+
+def cmd_debug_list(args):
+    """List captured debug blobs in ~/.tokenpak/debug/."""
+    from .debug.capture import list_captures
+
+    entries = list_captures()
+    if not entries:
+        print("No debug captures found. Set TOKENPAK_DEBUG_CAPTURE=encrypted or hash_only.")
+        return
+    print(f"{'TRACE ID':<40} {'MODE':<12} {'CAPTURED'}")
+    print("-" * 72)
+    for e in entries:
+        print(f"{e['trace_id']:<40} {e['mode']:<12} {e['mtime']}")
+
+
+def cmd_debug_export(args):
+    """Decrypt and print a captured debug blob."""
+    from .debug.capture import export_capture
+
+    try:
+        payload = export_capture(args.trace_id)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}")
+        raise SystemExit(1)
+    except ValueError as exc:
+        print(f"Decryption error: {exc}")
+        raise SystemExit(1)
+    print(json.dumps(payload, indent=2))
 
 
 def _build_learn_parser(sub):
