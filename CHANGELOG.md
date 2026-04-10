@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Failover iterator thread safety** (`tokenpak/proxy/failover.py`) — `FailoverManager.iter_providers()` now snapshots the provider chain under a lock before iterating, preventing `RuntimeError: dictionary changed size during iteration` when `reload_config()` races with an in-flight iteration (TRIX-MTC-07 #1)
+- **Circuit breaker config reload synchronization** (`tokenpak/proxy/circuit_breaker.py`) — Added `CircuitBreakerRegistry.reload_config()` which re-reads env vars and propagates the new config to all existing breakers under the registry lock, preventing stale-config races (TRIX-MTC-07 #2)
+- **Streaming handler cross-chunk SSE buffering** (`tokenpak/proxy/streaming.py`) — `StreamHandler.process_chunk()` now accumulates text in a line buffer and flushes only complete lines into the byte buffer, preventing parse failures when a `data: {...}` SSE event spans two `recv()` calls (TRIX-MTC-07 #3)
+- **Cost tracking failure audit trail** (`tokenpak/proxy/proxy.py`) — When `cost_tracker.record_request()` raises, the failure is now logged at `ERROR` level with a structured `COST_TRACKING_FAILURE model=... tokens=...` message instead of a bare `WARNING`, so ops dashboards can detect cost data loss (TRIX-MTC-07 #4)
+- **Router Content-Length validation** (`tokenpak/proxy/router.py`) — `ProviderRouter.route()` now raises `ValueError` when the `Content-Length` header doesn't match the actual body size or is non-numeric, preventing truncated bodies from being silently forwarded upstream (TRIX-MTC-07 #5)
+- **Passthrough config post-deserialization validation** (`tokenpak/proxy/passthrough.py`) — `PassthroughConfig.__post_init__()` now raises `ValueError` if any header name appears in both `strip_headers` and `safe_to_log`, catching contradictory configs at construction time rather than producing undefined forwarding behavior at runtime (TRIX-MTC-07 #6)
+
 ### Added
 - **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags
 - **CLI surface consistency test** — `tests/cli/test_help_surface_consistency.py` asserts every command in `tokenpak --help` exits 0 on `<cmd> --help`
