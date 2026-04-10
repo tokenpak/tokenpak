@@ -1,0 +1,13 @@
+{"version":2,"width":220,"height":50,"timestamp":1744300120,"title":"TokenPak tmux multi-instance demo (PLACEHOLDER — see tmux.sh to record)","env":{"SHELL":"/bin/bash","TERM":"xterm-256color"}}
+[0.0, "o", "# PLACEHOLDER: run docs/demo/claude-code/tmux.sh inside 'asciinema rec tmux.cast' to replace\r\n"]
+[0.5, "o", "$ tmux new-session -d -s project-a 'ANTHROPIC_BASE_URL=http://localhost:8766 claude'\r\n"]
+[1.0, "o", "$ tmux new-session -d -s project-b 'ANTHROPIC_BASE_URL=http://localhost:8766 claude'\r\n"]
+[1.5, "o", "$ tmux new-session -d -s research  'ANTHROPIC_BASE_URL=http://localhost:8766 claude'\r\n"]
+[2.0, "o", "\r\n[tokenpak] 3 active sessions detected → profile=claude-code-tmux\r\n"]
+[3.0, "o", "\r\n$ curl -s http://localhost:8766/dashboard/sessions | python3 -m json.tool\r\n"]
+[3.8, "o", "Sessions active: 3\r\n"]
+[4.0, "o", "  project-a   2,840 tokens   $0.014\r\n"]
+[4.2, "o", "  project-b   1,180 tokens   $0.006\r\n"]
+[4.4, "o", "  research    4,200 tokens   $0.021\r\n"]
+[4.6, "o", "─────────────────────────────────────────\r\n"]
+[4.8, "o", "  Total        8,220 tokens   $0.041   (saved $0.019 via cross-session cache)\r\n"]
