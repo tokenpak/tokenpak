@@ -1,13 +1,18 @@
 # CLI Reference
 
-_Auto-generated from `tokenpak/cli.py` — do not edit by hand._
-_To update: edit `tokenpak/cli.py` then run `python scripts/generate-cli-docs.py`._
+_Verified against live `tokenpak --help` output. Last audit: 2026-04-10._
+_To update: run `python3 -m tokenpak <cmd> --help` for each command and cross-check this file._
+
+**Stability labels:**
+- `[stable]` — production-ready, no breaking changes expected
+- `[experimental]` — shipped but subject to change
+- `[planned]` — not yet available in the current release
 
 ---
 
 ## Group: Getting Started
 
-### `tokenpak setup`
+### `tokenpak setup` [stable]
 
 Configure your LLM client to use tokenpak (wizard)
 
@@ -15,19 +20,25 @@ Configure your LLM client to use tokenpak (wizard)
 
 - `--yes`, `-y` — Skip confirmation prompts (non-interactive / CI mode)
 
-### `tokenpak start`
+### `tokenpak start` [stable]
 
 Start the proxy (localhost:8766)
 
-### `tokenpak stop`
+**Flags:**
+
+- `--port PORT` — Port to listen on (default: 8766)
+- `--workers WORKERS` — Number of worker processes (default: 2)
+- `--log-level {debug,info,warning,error}` — Logging level (default: info)
+
+### `tokenpak stop` [stable]
 
 Stop the running proxy
 
-### `tokenpak restart`
+### `tokenpak restart` [stable]
 
 Restart the proxy
 
-### `tokenpak demo`
+### `tokenpak demo` [stable]
 
 See compression in action
 
@@ -38,11 +49,11 @@ See compression in action
 - `--recipe` — Show details for a specific recipe by name
 - `--file` — Show which recipes match a given file path
 - `--seed` — Populate dashboard with 500 realistic demo events (24h window)
-- `--seed-count` — Number of demo events to generate (default: 500) (default: 500)
-- `--seed-hours` — Time window in hours (default: 24) (default: 24)
+- `--seed-count N` — Number of demo events to generate (default: 500)
+- `--seed-hours H` — Time window in hours (default: 24)
 - `--clear` — Remove all demo data from telemetry storage
 
-### `tokenpak cost`
+### `tokenpak cost` [stable]
 
 View your API spend
 
@@ -53,27 +64,35 @@ View your API spend
 - `--by-model` — Break down by model
 - `--export-csv` — Export as CSV
 
-### `tokenpak status`
+**Subcommands:**
+
+- `show-budget` — Show budget status and alerts
+
+### `tokenpak status` [stable]
 
 Check proxy health
 
 **Flags:**
 
-- `--limit` — Max retry events to show (default: 20)
+- `--limit LIMIT` — Max retry events to show (default: 20)
+- `--full` — Show full technical output (legacy)
+- `--minimal` — One-line savings summary
+- `--json` — Full JSON data dump
+- `--no-meme` — Suppress tagline
 
-### `tokenpak logs`
+### `tokenpak logs` [stable]
 
 Show recent proxy logs
 
 **Flags:**
 
-- `--lines`, `-n` — Number of log lines to show (default: 50) (default: 50)
+- `--lines LINES`, `-n LINES` — Number of log lines to show (default: 50)
 
 ---
 
 ## Group: Indexing
 
-### `tokenpak index`
+### `tokenpak index` [stable]
 
 Index a directory for context retrieval
 
@@ -81,33 +100,33 @@ Index a directory for context retrieval
 
 - `DIRECTORY` — Directory to index
 - `--status` — Show indexed file count by type
-- `--budget` — default: 8000
-- `--workers`, `-w` — Parallel workers (default: 4) (default: 4)
+- `--budget BUDGET` — Token budget (default: 8000)
+- `--workers WORKERS`, `-w WORKERS` — Parallel workers (default: 4)
 - `--auto-workers` — Use hybrid calibration (static baseline + dynamic adjustment)
 - `--recalibrate` — Run static calibration before indexing
-- `--calibration-rounds` — Calibration rounds per candidate worker count (default: 2)
-- `--max-workers` — Upper worker cap for auto/recalibration (default: 8)
+- `--calibration-rounds CALIBRATION_ROUNDS` — Calibration rounds per candidate worker count (default: 2)
+- `--max-workers MAX_WORKERS` — Upper worker cap for auto/recalibration (default: 8)
 - `--watch` — Watch directory and auto-reindex on file changes
-- `--debounce` — Debounce delay in ms for watch mode (default: 500) (default: 500)
+- `--debounce DEBOUNCE` — Debounce delay in ms for watch mode (default: 500)
 - `--no-treesitter` — Force regex-based code processing (skip tree-sitter)
 
-### `tokenpak search`
+### `tokenpak search` [stable]
 
 Search indexed content
 
 **Flags:**
 
 - `QUERY` — Search query
-- `--budget` — default: 8000
-- `--top-k` — default: 10
-- `--gaps` — Path to gaps.json for miss-based retrieval expansion (default: /home/cali/.tokenpak/gaps.jsonl)
+- `--budget BUDGET` — Token budget (default: 8000)
+- `--top-k TOP_K` — Number of results to return (default: 10)
+- `--gaps GAPS` — Path to gaps.json for miss-based retrieval expansion
 - `--inject-refs` — Enable compile-time reference injection (GitHub, URLs)
 
 ---
 
 ## Group: Configuration
 
-### `tokenpak route`
+### `tokenpak route` [stable]
 
 Manage model routing rules
 
@@ -121,15 +140,15 @@ Manage model routing rules
   - `--min-tokens` — Minimum token count (inclusive)
   - `--max-tokens` — Maximum token count (inclusive)
   - `--target` — Target model/provider (e.g. 'anthropic/claude-3-haiku-20240307')
-  - `--priority` — Rule priority (lower = higher priority, default 100) (default: 100)
-  - `--description` — Optional description (default: )
+  - `--priority` — Rule priority (lower = higher priority, default 100)
+  - `--description` — Optional description
   - `--routes` — Path to routes.yaml
 - `remove`
   - `ID` — Rule ID to remove
   - `--routes` — Path to routes.yaml
 - `test`
-  - `PROMPT` — Prompt text to test (default: )
-  - `--model` — Model name to test against (default: )
+  - `PROMPT` — Prompt text to test
+  - `--model` — Model name to test against
   - `--tokens` — Token count override (default: auto-estimated)
   - `--verbose`, `-v` — Show all rules and their match status
   - `--routes` — Path to routes.yaml
@@ -140,7 +159,7 @@ Manage model routing rules
   - `ID` — Rule ID
   - `--routes` — Path to routes.yaml
 
-### `tokenpak recipe`
+### `tokenpak recipe` [stable]
 
 Manage compression recipes
 
@@ -148,11 +167,11 @@ Manage compression recipes
 
 - `create`
   - `NAME` — Recipe name (e.g. my-legal-cleanup)
-  - `--output-dir` — Directory to write the recipe file (default: current dir) (default: .)
+  - `--output-dir` — Directory to write the recipe file (default: current dir)
   - `--category` — Recipe category: python, markdown, legal, medical, etc. (default: general)
-  - `--description` — Short description (default: )
+  - `--description` — Short description
   - `--match-mode` — Pattern match mode: any|extension|filename|content|path_pattern (default: extension)
-  - `--ext` — File extension hint (for extension match mode) (default: txt)
+  - `--ext` — File extension hint (for extension match mode, default: txt)
   - `--domain-example` — Use a domain-specific template: legal | medical
 - `validate`
   - `FILE` — Path to recipe YAML file
@@ -160,13 +179,13 @@ Manage compression recipes
   - `FILE` — Path to recipe YAML file
   - `--input-text` — Raw text to test against
   - `--input-file` — Path to a file to use as test input
-  - `--filename-hint` — Filename to check pattern matching against (e.g. script.py) (default: )
+  - `--filename-hint` — Filename to check pattern matching against (e.g. script.py)
 - `benchmark`
   - `FILE` — Path to recipe YAML file
   - `--samples-file` — JSON file with list of sample strings (default: auto-generated)
-  - `--runs` — Repetitions per sample for timing (default: 5) (default: 5)
+  - `--runs` — Repetitions per sample for timing (default: 5)
 
-### `tokenpak template`
+### `tokenpak template` [stable]
 
 Manage prompt templates
 
@@ -182,9 +201,9 @@ Manage prompt templates
   - `NAME` — Template name
 - `use`
   - `NAME` — Template name
-  - `--var` — Variable substitution (repeatable) (default: [])
+  - `--var` — Variable substitution (repeatable)
 
-### `tokenpak budget`
+### `tokenpak budget` [stable]
 
 Set API budget limits
 
@@ -193,15 +212,15 @@ Set API budget limits
 - `set`
   - `--daily` — Daily spend limit in USD
   - `--monthly` — Monthly spend limit in USD
-  - `--alert-at` — Alert threshold %% (default 80)
+  - `--alert-at` — Alert threshold % (default 80)
   - `--hard-stop` — Block requests when limit exceeded
-- `status`
-- `show`
+- `status` — Show current budget status
+- `show` — Alias for status
 - `history`
-  - `--limit` — default: 20
+  - `--limit` — Number of records to show (default: 20)
   - `--month` — Show this month
 
-### `tokenpak goals`
+### `tokenpak goals` [stable]
 
 Manage savings goals and track progress
 
@@ -235,7 +254,7 @@ Manage savings goals and track progress
 - `history`
 - `compare`
 
-### `tokenpak config`
+### `tokenpak config` [stable]
 
 Config sync, pull, validate (version control)
 
@@ -246,7 +265,7 @@ Config sync, pull, validate (version control)
   - `--url` — URL for source=url
   - `--dry-run`
 - `pull`
-  - `--source` — default: git — choices: `git`, `url`
+  - `--source` — choices: `git`, `url` (default: git)
   - `--url` — URL for source=url
   - `--dry-run`
   - `--merge` — Merge strategy (default: merge) — choices: `replace`, `merge`, `diff`
@@ -256,16 +275,17 @@ Config sync, pull, validate (version control)
 - `init`
   - `--force` — Overwrite existing config
 - `path`
+- `migrate` — Migrate legacy config.json settings into config.yaml
 
 ---
 
 ## Group: Versioning
 
-### `tokenpak version`
+### `tokenpak version` [stable]
 
 Show current versions (proxy, config, cli)
 
-### `tokenpak update`
+### `tokenpak update` [stable]
 
 Update TokenPak to latest from git/pypi
 
@@ -280,7 +300,7 @@ Update TokenPak to latest from git/pypi
 
 ## Group: Operations
 
-### `tokenpak benchmark`
+### `tokenpak benchmark` [stable]
 
 Run compression benchmarks
 
@@ -291,30 +311,33 @@ Run compression benchmarks
 - `--samples` — Use built-in sample data (default when no file/directory given)
 - `--json` — Output results as JSON
 - `--latency` — Run latency/indexing benchmark instead of compression benchmark
-- `--iterations` — Iterations for latency benchmark (default: 3) (default: 3)
+- `--iterations` — Iterations for latency benchmark (default: 3)
 - `--compare` — Compare baseline vs optimized (latency mode only)
 
-### `tokenpak calibrate`
+### `tokenpak calibrate` [stable]
 
 Calibrate worker count for this host
 
 **Flags:**
 
 - `DIRECTORY` — Directory to sample for calibration
-- `--max-workers` — default: 8
-- `--rounds` — default: 2
+- `--max-workers MAX_WORKERS` — Upper worker count ceiling (default: 8)
+- `--rounds ROUNDS` — Calibration rounds per candidate count (default: 2)
 
-### `tokenpak doctor`
+### `tokenpak doctor` [stable]
 
 Run diagnostics
 
 **Flags:**
 
 - `--fix` — Auto-fix issues where possible
+- `--json` — Output results as machine-readable JSON
 - `--fleet` — Check all agents in ~/.tokenpak/fleet.yaml
 - `--deploy` — Push latest doctor to all agents (use with --fleet)
+- `--verbose`, `-v` — Show extra detail for each check
+- `--claude-code` — Run Claude Code integration checks (ENABLE_TOOL_SEARCH, mode, IDE detection)
 
-### `tokenpak dashboard`
+### `tokenpak dashboard` [stable]
 
 Real-time health dashboard (TUI)
 
@@ -326,28 +349,28 @@ Real-time health dashboard (TUI)
 - `--show-token` — Display current dashboard token
 - `--new-token` — Regenerate dashboard token
 
-### `tokenpak timeline`
+### `tokenpak timeline` [stable]
 
 View savings trend over 7/30 days
 
 **Flags:**
 
-- `--days` — Number of days (default 7) (default: 7)
+- `--days DAYS` — Number of days (default: 7)
 - `--chart` — Show ASCII sparkline chart
 - `--json` — JSON output
 
-### `tokenpak attribution`
+### `tokenpak attribution` [stable]
 
 View savings by agent/skill/model
 
 **Flags:**
 
-- `--days` — Number of days (default 7) (default: 7)
-- `--agent` — Filter by agent name
-- `--model` — Filter by model
+- `--days DAYS` — Number of days (default: 7)
+- `--agent AGENT` — Filter by agent name
+- `--model MODEL` — Filter by model
 - `--json` — JSON output
 
-### `tokenpak models`
+### `tokenpak models` [stable]
 
 Show per-model usage and efficiency breakdown
 
@@ -356,43 +379,45 @@ Show per-model usage and efficiency breakdown
 - `MODEL` — Show details for a specific model (partial match, e.g. 'sonnet', 'gpt-4')
 - `--raw` — Output as JSON
 
-### `tokenpak forecast`
+### `tokenpak forecast` [stable]
 
 Cost burn rate & projections
 
 **Flags:**
 
-- `--period` — Analysis window (default: 7d) (default: 7d) — choices: `7d`, `30d`, `90d`
-- `--alert` — Alert if monthly projection exceeds this USD amount
+- `--period {7d,30d,90d}` — Analysis window (default: 7d)
+- `--alert USD` — Alert if monthly projection exceeds this USD amount
 
-### `tokenpak debug`
+### `tokenpak debug` [stable]
 
 Toggle verbose debug logging
 
 **Subcommands:**
 
-- `on`
-- `off`
-- `status`
+- `on` — Enable debug mode
+- `off` — Disable debug mode
+- `status` — Show debug mode state
+- `list` — List captured debug traces
+- `export` — Decrypt and print a captured trace
 
-### `tokenpak learn`
+### `tokenpak learn` [stable]
 
 View/reset learned patterns
 
 **Subcommands:**
 
-- `status`
-- `reset`
+- `status` — Show learned patterns summary
+- `reset` — Clear all learned data
 
-### `tokenpak vault-health`
+### `tokenpak vault-health` [stable]
 
-Vault index health diagnostic and repair
+Vault index health diagnostic and repair (legacy alias; prefer `tokenpak vault`)
 
 **Subcommands:**
 
-- `repair`
+- `repair` — Check and rebuild stale vault index entries
 
-### `tokenpak fleet`
+### `tokenpak fleet` [stable]
 
 Multi-machine proxy fleet status
 
@@ -403,18 +428,18 @@ Multi-machine proxy fleet status
 
 **Subcommands:**
 
-- `init`
+- `init` — Interactively configure fleet
 
-### `tokenpak aggregate`
+### `tokenpak aggregate` [stable]
 
 Aggregate request ledger across machines
 
 **Flags:**
 
-- `--since` — Time window, e.g. 7d, 24h, 30m, or ISO date (default: 7d)
+- `--since SINCE` — Time window, e.g. 7d, 24h, 30m, or ISO date (default: 7d)
 - `--json` — JSON output
 
-### `tokenpak requests`
+### `tokenpak requests` [stable]
 
 Live request explorer
 
@@ -425,11 +450,61 @@ Live request explorer
 - `--limit`, `-n` — Number of rows to show (default: 10)
 - `--once` — Print once and exit
 
+### `tokenpak monitor` [experimental]
+
+Background proxy monitor. No additional options.
+
+### `tokenpak diagnose` [experimental]
+
+Run a quick diagnostic check (streamlined alternative to `doctor`)
+
+**Flags:**
+
+- `--json` — Output as JSON
+- `--verbose` — Verbose output
+
+### `tokenpak explain` [stable]
+
+Explain compression profiles and their tradeoffs
+
+**Flags:**
+
+- `--profile PROFILE` — Profile name (safe|balanced|aggressive|agentic); omit to show all
+
+### `tokenpak alerts` [stable]
+
+Manage alert delivery
+
+**Subcommands:**
+
+- `test` — Send a test alert to a delivery channel
+
+### `tokenpak validate-config` [stable]
+
+Validate a proxy config file (YAML or JSON)
+
+**Flags:**
+
+- `FILE` — Path to config file (YAML or JSON)
+
+### `tokenpak retrieval` [experimental]
+
+Manage and test the retrieval pipeline
+
+**Flags:**
+
+- `--json` — Output as JSON
+
+**Subcommands:**
+
+- `status` — Show retrieval config and index stats
+- `test` — Run a test query through all enabled retrievers
+
 ---
 
 ## Group: Advanced
 
-### `tokenpak trigger`
+### `tokenpak trigger` [stable]
 
 Manage event triggers
 
@@ -448,16 +523,16 @@ Manage event triggers
   - `--event` — Event string to test
   - `--json` — Output raw JSON
 - `log`
-  - `--limit` — default: 20
+  - `--limit` — Number of entries to show (default: 20)
   - `--json` — Output raw JSON
-- `daemon`
+- `daemon` — Start background trigger daemon
 - `fire`
   - `EVENT` — Event string to fire (e.g. git:push, agent:finished:cali)
-- `hook`
+- `hook` — Install/uninstall git hooks for trigger events
 - `watch`
   - `PATHS` — Paths to watch (default: .)
 
-### `tokenpak macro`
+### `tokenpak macro` [stable]
 
 Manage and run macros
 
@@ -466,7 +541,7 @@ Manage and run macros
 - `list`
 - `create`
   - `--name` — Macro name (e.g., my-deploy)
-  - `--description` — Short description (default: )
+  - `--description` — Short description
   - `--step` — Add a step (repeatable). Format: 'Label:command'
   - `--var` — Default variable (repeatable). Format: KEY=VALUE
   - `--continue-on-error` — Keep running if a step fails (default: fail-fast)
@@ -486,9 +561,9 @@ Manage and run macros
   - `--yes`, `-y` — Skip confirmation prompt
 - `install`
   - `NAME` — Macro name (morning-standup, pre-deploy, weekly-report)
-- `hooks`
+- `hooks` — Manage proxy lifecycle script hooks
 
-### `tokenpak fingerprint`
+### `tokenpak fingerprint` [stable]
 
 Fingerprint sync and cache management
 
@@ -499,8 +574,8 @@ Fingerprint sync and cache management
   - `--file`, `-f` — Read prompt from file
   - `--messages` — OpenAI messages JSON file
   - `--dry-run` — Show what would be sent without transmitting
-  - `--privacy` — default: standard — choices: `minimal`, `standard`, `full`
-  - `--ttl` — Cache TTL in seconds (default 3600) (default: 3600)
+  - `--privacy {minimal,standard,full}` — Privacy level (default: standard)
+  - `--ttl TTL` — Cache TTL in seconds (default: 3600)
   - `--skip-cache`
   - `--json`
 - `cache`
@@ -509,7 +584,7 @@ Fingerprint sync and cache management
   - `--id` — Clear only this fingerprint ID (default: all)
   - `--yes`, `-y` — Skip confirmation prompt
 
-### `tokenpak agent`
+### `tokenpak agent` [stable]
 
 Agent coordination (locks, registry)
 
@@ -517,7 +592,7 @@ Agent coordination (locks, registry)
 
 - `lock`
   - `PATH` — File path to lock
-  - `--timeout` — Lock TTL in seconds (default 600) (default: 600)
+  - `--timeout` — Lock TTL in seconds (default: 600)
   - `--agent` — Agent id override
 - `unlock`
   - `PATH` — File path to unlock
@@ -532,8 +607,8 @@ Agent coordination (locks, registry)
   - `--hostname` — Hostname (default: auto-detect)
   - `--gpu` — Has GPU
   - `--memory` — Memory in GB (default: 4.0)
-  - `--specialties` — Specialties (e.g., code research) (default: [])
-  - `--providers` — Provider access (default: ['anthropic'])
+  - `--specialties` — Specialties (e.g., code research)
+  - `--providers` — Provider access (default: anthropic)
   - `--json` — JSON output
 - `deregister`
   - `AGENT_ID` — Agent ID to remove
@@ -544,13 +619,13 @@ Agent coordination (locks, registry)
 - `match`
   - `--gpu` — Require GPU
   - `--memory` — Minimum memory GB
-  - `--specialty` — Required specialties (default: [])
-  - `--provider` — Required providers (default: [])
+  - `--specialty` — Required specialties
+  - `--provider` — Required providers
   - `--json` — JSON output
-- `prune`
-- `handoff`
+- `prune` — Remove stale agents
+- `handoff` — Context handoff between agents
 
-### `tokenpak lock`
+### `tokenpak lock` [stable]
 
 File lock management
 
@@ -558,22 +633,22 @@ File lock management
 
 - `claim`
   - `PATH` — File or directory path to lock
-  - `--timeout` — Lock TTL in seconds (default 1800 = 30 min) (default: 1800)
+  - `--timeout` — Lock TTL in seconds (default: 1800 = 30 min)
   - `--agent` — Agent id override
 - `release`
   - `PATH` — File or directory path to release
   - `--agent` — Agent id override
 - `query`
   - `PATH` — File or directory path to query
-  - `--agent` — Agent id override (for manager context)
+  - `--agent` — Agent id override
 - `list`
-  - `--agent` — Filter by agent id (display context only)
+  - `--agent` — Filter by agent id
 - `renew`
   - `PATH` — File or directory path to renew
-  - `--timeout` — New TTL in seconds (default 1800 = 30 min) (default: 1800)
+  - `--timeout` — New TTL in seconds (default: 1800 = 30 min)
   - `--agent` — Agent id override
 
-### `tokenpak run`
+### `tokenpak run` [stable]
 
 Schedule and manage macro runs
 
@@ -582,23 +657,23 @@ Schedule and manage macro runs
 - `cron`
   - `NAME` — Macro name
   - `--cron` — Cron expression e.g. "0 9 * * 1-5"
-  - `--description` — Optional description (default: )
+  - `--description` — Optional description
 - `at`
   - `NAME` — Macro name
   - `--at` — Time string e.g. "2026-03-06 09:00" or "now + 1 hour"
-  - `--description` — Optional description (default: )
+  - `--description` — Optional description
 - `list`
 - `cancel`
   - `ID` — Schedule ID to cancel
 
-### `tokenpak replay`
+### `tokenpak replay` [stable]
 
 Inspect and re-run captured sessions
 
 **Subcommands:**
 
 - `list`
-  - `--limit` — Max entries to show (default 20) (default: 20)
+  - `--limit` — Max entries to show (default: 20)
   - `--provider` — Filter by provider
 - `show`
   - `ID` — Replay entry ID
@@ -611,106 +686,15 @@ Inspect and re-run captured sessions
   - `--diff` — Show unified diff of original vs compressed messages
 - `clear`
 
-### `tokenpak audit`
-
-Enterprise audit log management
-
-**Subcommands:**
-
-- `list`
-  - `--since` — Filter entries since date (ISO format, e.g. 2026-01-01)
-  - `--until` — Filter entries until date
-  - `--user` — Filter by user ID
-  - `--action` — Filter by action type
-  - `--model` — Filter by model name
-  - `--outcome` — Filter by outcome (ok/auth_failure/...)
-  - `--limit` — Max results (default: 50) (default: 50)
-  - `--json` — Output as JSON
-  - `--db` — Audit DB path
-- `export`
-  - `OUTPUT` — Output file path
-  - `--format` — Export format (default: json) (default: json) — choices: `json`, `csv`
-  - `--since`
-  - `--until`
-  - `--user`
-  - `--db` — Audit DB path
-- `verify`
-  - `--db` — Audit DB path
-- `prune`
-  - `--days` — Retention window in days (default: 90) (default: 90)
-  - `--db` — Audit DB path
-- `summary`
-  - `--since`
-  - `--db`
-
-### `tokenpak compliance`
-
-Generate compliance reports
-
-**Subcommands:**
-
-- `report`
-  - `--standard` — Compliance standard to report against — choices: `soc2`, `gdpr`, `ccpa`
-  - `--since` — Report period start date (ISO)
-  - `--until` — Report period end date (ISO)
-  - `--org` — Organization name for the report
-  - `--output` — Save report to file (.json or .txt)
-  - `--format` — default: text — choices: `json`, `text`
-  - `--db` — Audit DB path
-
-### `tokenpak validate`
-
-Validate a TokenPak JSON file
-
-**Flags:**
-
-- `FILE` — Path to the .json TokenPak file
-- `--verbose`, `-v` — Show quality hints in addition to errors/warnings
-- `--json` — Output validation result as JSON
-
-### `tokenpak config-check`
-
-Validate proxy config file
-
-**Flags:**
-
-- `FILE` — Path to config file (JSON)
-
-### `tokenpak diff`
-
-Show context changes (Pro)
-
-**Flags:**
-
-- `--verbose`, `-v` — Show token counts per block
-- `--json` — Output as JSON
-- `--since` — Diff from specific time
-
-### `tokenpak stats`
-
-Show registry stats
-
-### `tokenpak serve`
-
-Start proxy/telemetry server (low-level)
-
-**Flags:**
-
-- `--port` — default: 8766
-- `--telemetry` — Start telemetry ingest server
-- `--ingest` — Start Phase 5A ingest API server
-- `--workers` — Number of uvicorn workers
-- `--shutdown-timeout` — Seconds to wait for in-flight requests to complete before forcing shutdown (default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)
-
 ---
 
 ## Additional Commands
 
-### `tokenpak check-alerts`
+### `tokenpak check-alerts` [stable]
 
 Evaluate alert rules and return exit code 1 if any fired.
 
-### `tokenpak compare`
+### `tokenpak compare` [stable]
 
 Show before/after cost comparison for last N requests.
 
@@ -718,7 +702,27 @@ Show before/after cost comparison for last N requests.
 
 - `--last` — Show last N requests (default: 1)
 
-### `tokenpak help`
+### `tokenpak compress` [stable]
+
+Compress a piece of text, JSON, or code.
+
+**Flags:**
+
+- `--file FILE`, `-f FILE` — Input file path (reads from stdin if omitted)
+- `--verbose`, `-v` — Show compression blocks
+- `--json` — Output as machine-readable JSON
+
+### `tokenpak diff` [stable]
+
+Show context changes (Pro feature)
+
+**Flags:**
+
+- `--verbose`, `-v` — Show token counts per block
+- `--json` — Output as JSON
+- `--since TIMESTAMP` — Diff from specific time
+
+### `tokenpak help` [stable]
 
 Show tier-aware help. Pass a command name for details, or --minimal for compact list.
 
@@ -729,7 +733,21 @@ Show tier-aware help. Pass a command name for details, or --minimal for compact 
 - `--all` — Show all commands
 - `--minimal` — Show compact one-line command list
 
-### `tokenpak leaderboard`
+### `tokenpak init` [experimental]
+
+Initialize tokenpak in the current directory. No additional options.
+
+### `tokenpak last` [stable]
+
+Show details of last compressed request(s).
+
+**Flags:**
+
+- `--limit LIMIT` — Show last N requests (default: 1)
+- `--json` — Output as JSON
+- `--verbose`, `-v` — Show full request/response bodies
+
+### `tokenpak leaderboard` [stable]
 
 Show per-model efficiency ranking.
 
@@ -737,26 +755,29 @@ Show per-model efficiency ranking.
 
 - `--days` — Rolling window in days (default: today)
 
-### `tokenpak preview`
+### `tokenpak optimize` [stable]
+
+Analyze and optimize a prompt for better compression efficiency.
+
+**Flags:**
+
+- `--file FILE`, `-f FILE` — Input file path (reads from stdin if omitted)
+- `--strategy {conservative,balanced,aggressive}` — Optimization aggressiveness (default: balanced)
+- `--show-diff` — Show before/after token counts
+
+### `tokenpak preview` [stable]
 
 Preview compression result for input text (dry-run).
 
 **Flags:**
 
 - `INPUT` — Input text to preview (or reads from stdin)
-- `--file` — Read input from file instead of command line
+- `--file FILE` — Read input from file instead of command line
 - `--raw` — Show raw compression output (no formatting)
 - `--verbose` — Show detailed block breakdown
 - `--json` — Output as JSON (machine-readable)
 
-### `tokenpak prune`
-
-**Flags:**
-
-- `--days` — Retention window in days (default: 90) (default: 90)
-- `--db` — Audit DB path
-
-### `tokenpak report`
+### `tokenpak report` [stable]
 
 Generate and display daily savings report.
 
@@ -765,21 +786,80 @@ Generate and display daily savings report.
 - `--markdown` — Output markdown format (for messaging)
 - `--json` — Output JSON format
 
-### `tokenpak savings`
+### `tokenpak savings` [stable]
 
 Show compression savings summary.
 
 **Flags:**
 
-- `--days` — Rolling window in days (default: 30)
+- `--days DAYS` — Rolling window in days (default: 30)
 
-### `tokenpak usage`
+### `tokenpak serve` [stable]
+
+Start proxy/telemetry server (low-level alias for `start`)
+
+**Flags:**
+
+- `--port PORT` — Port to listen on (default: 8766)
+- `--telemetry` — Start telemetry ingest server
+- `--ingest` — Start Phase 5A ingest API server
+- `--workers WORKERS` — Number of uvicorn workers
+- `--shutdown-timeout SECONDS` — Seconds to wait for in-flight requests to complete before forcing shutdown (default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)
+
+### `tokenpak stats` [stable]
+
+Show registry stats. No additional options.
+
+### `tokenpak usage` [stable]
 
 Show model token usage summary.
 
 **Flags:**
 
-- `--days` — Rolling window in days (default: 30)
+- `--days DAYS` — Rolling window in days (default: 30)
+
+### `tokenpak validate` [stable]
+
+Validate a TokenPak JSON file
+
+**Flags:**
+
+- `FILE` — Path to the .json TokenPak file
+- `--verbose`, `-v` — Show quality hints in addition to errors/warnings
+- `--json` — Output validation result as JSON
+
+### `tokenpak vault` [stable]
+
+Vault index health diagnostic and repair
+
+**Subcommands:**
+
+- `repair` — Check and rebuild stale vault index entries
+
+### `tokenpak config-check` [stable]
+
+Validate proxy config file (JSON). See also `validate-config` for YAML support.
+
+**Flags:**
+
+- `FILE` — Path to config file (JSON)
 
 ---
 
+## Planned Commands
+
+The following commands are documented but **not yet available** in the current release:
+
+### `tokenpak audit` [planned]
+
+Enterprise audit log management (coming in a future release)
+
+**Planned subcommands:** `list`, `export`, `verify`, `prune`, `summary`
+
+### `tokenpak compliance` [planned]
+
+Generate compliance reports against SOC2/GDPR/CCPA (coming in a future release)
+
+**Planned subcommands:** `report`
+
+---
