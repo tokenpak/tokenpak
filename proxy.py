@@ -6917,6 +6917,65 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Bypass mode: skip entire compression pipeline, pass through unmodified
             print(f"  ⏩ X-TokenPak-Bypass: passthrough (bypass header set)")
 
+        # ── DLP outbound secret scan ──────────────────────────────────────────
+        # Scans the raw request body for secrets before compression/forwarding.
+        # Default: TOKENPAK_DLP_ENABLED=1, TOKENPAK_DLP_MODE=warn (log only).
+        # Opt-out: TOKENPAK_DLP_ENABLED=0
+        if os.environ.get("TOKENPAK_DLP_ENABLED", "1") != "0" and should_log and is_messages and body:
+            try:
+                from tokenpak.security.dlp import DLPScanner
+                _dlp = DLPScanner()
+                _dlp_text = body.decode("utf-8", errors="replace")
+                if _dlp.mode == "warn":
+                    _dlp_findings = _dlp.scan(_dlp_text)
+                    if _dlp_findings:
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: %d secret(s) detected in outbound request: %s"
+                            " (set TOKENPAK_DLP_MODE=redact to auto-redact"
+                            " or TOKENPAK_DLP_ENABLED=0 to disable)",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                elif _dlp.mode == "redact":
+                    _dlp_redacted = _dlp.redact(_dlp_text)
+                    if _dlp_redacted != _dlp_text:
+                        body = _dlp_redacted.encode("utf-8")
+                elif _dlp.mode == "block":
+                    if not _dlp.block_check(_dlp_text):
+                        _dlp_findings = _dlp.scan(_dlp_text)
+                        import logging as _dlp_log
+                        _dlp_log.getLogger(__name__).warning(
+                            "tokenpak.dlp: blocking request — %d secret(s) detected: %s",
+                            len(_dlp_findings),
+                            ", ".join(f.rule_id for f in _dlp_findings),
+                        )
+                        _dlp_err = json.dumps({
+                            "error": {
+                                "type": "dlp_block",
+                                "message": (
+                                    f"Request blocked by DLP scanner: "
+                                    f"{len(_dlp_findings)} secret(s) detected in outbound "
+                                    "prompt. Remove secrets before retrying."
+                                ),
+                                "rule_ids": [f.rule_id for f in _dlp_findings],
+                            }
+                        }).encode()
+                        self.send_response(403)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(_dlp_err)))
+                        self.end_headers()
+                        self.wfile.write(_dlp_err)
+                        return
+            except ImportError:
+                pass
+            except Exception as _dlp_exc:
+                import logging as _dlp_log
+                _dlp_log.getLogger(__name__).debug(
+                    "tokenpak.dlp: scan error (passthrough): %s: %s",
+                    type(_dlp_exc).__name__, _dlp_exc,
+                )
+
         if should_log and is_messages and body and not _bypass_request:
             # Fix #5: Strict validation mode — reject malformed requests early
             if STRICT_VALIDATION:
