@@ -752,7 +752,7 @@ def run_doctor(
     if claude_code:
         if not output_json:
             print()
-            print("── Claude Code checks ─────────────────")
+            print("── Claude Code checks (CCP-09) ─────────────────")
 
         # CCP-09: ENABLE_TOOL_SEARCH check
         # Required for MCP tool-use when ANTHROPIC_BASE_URL points at a non-first-party gateway.
@@ -893,6 +893,36 @@ def run_doctor(
                 "TMUX session        not detected",
                 detail="TMUX env var not set; no concurrent-access advisory needed.",
             )
+
+        # === CCI-12: 8-point Claude Code operational health checks ================
+        if not output_json:
+            print()
+            print("── Claude Code operational checks (CCI-12) ─────")
+        from .doctor_claude_code import run_claude_code_checks
+        cc_fail_count, cc_results = run_claude_code_checks(output_json=output_json, verbose=verbose)
+        for result in cc_results:
+            if result["status"] == "pass":
+                if not output_json:
+                    print(Colors.ok(result["message"]))
+            else:
+                if not output_json:
+                    print(Colors.fail(result["message"]))
+                    if result.get("remediation"):
+                        print(f"         → {result['remediation']}")
+                counts["fail"] += 1
+            if verbose and result.get("detail") and not output_json:
+                for line in result["detail"].splitlines():
+                    print(f"         {line}")
+            if output_json:
+                checks.append({
+                    "check": result["check"],
+                    "status": result["status"],
+                    "message": result["message"],
+                    "detail": result.get("detail", ""),
+                })
+        if not output_json:
+            print()
+            print(f"{cc_fail_count} of 8 checks failed.")
 
     # === JSON output ============================================================
     if output_json:
