@@ -447,11 +447,67 @@ When a vault document changes and invalidates a cached context block, tokenpak w
 
 The `/forecast` endpoint will estimate cost for a pending request before it is sent. Currently, cost reporting is post-hoc only.
 
-### Multi-Provider Routing
+### Compliance Routing (Bedrock)
 
-**Status: coming soon (CCI-05, CCI-06, CCI-07)**
+**Status: shipped (CCI-07)**
 
-Automatic failover to OpenAI, Gemini, or AWS Bedrock when Anthropic's API is unavailable or rate-limited. Currently, tokenpak routes all traffic to the single upstream configured in `ANTHROPIC_BASE_URL`.
+For teams in regulated industries (HIPAA, FedRAMP, SOC 2), tokenpak can route all Claude Code traffic through AWS Bedrock instead of `api.anthropic.com`. Claude Code never knows — the wire format is translated transparently in both directions.
+
+**Global opt-in (all requests):**
+
+```bash
+export TOKENPAK_COMPLIANCE_PROVIDER=bedrock
+export AWS_ACCESS_KEY_ID=<your-key>
+export AWS_SECRET_ACCESS_KEY=<your-secret>
+export AWS_DEFAULT_REGION=us-east-1   # default; change to your Bedrock region
+
+# Now all claude invocations route to Bedrock automatically
+claude "explain this function" < src/main.py
+```
+
+**Per-request opt-in (some sessions via Bedrock, others direct):**
+
+```bash
+# Set header for a single call — overrides TOKENPAK_COMPLIANCE_PROVIDER
+ANTHROPIC_CUSTOM_HEADERS='{"X-TokenPak-Compliance": "bedrock"}' \
+  claude "sensitive query here"
+```
+
+**What happens under the hood:**
+
+1. tokenpak reads `TOKENPAK_COMPLIANCE_PROVIDER=bedrock` (or `X-TokenPak-Compliance: bedrock` header).
+2. Request body is translated: `model` field removed (moved to URL), `anthropic_version: bedrock-2023-05-31` added.
+3. Model ID is translated: `claude-3-5-sonnet-20241022` → `anthropic.claude-3-5-sonnet-20241022-v2:0`.
+4. Request is signed with AWS SigV4 using your env credentials — no boto3 required.
+5. Bedrock responds; tokenpak restores the original model ID and forwards as a standard Anthropic response.
+6. Streaming: Bedrock's camelCase event names (`messageStart`, `contentBlockDelta`) are translated to Anthropic snake_case (`message_start`, `content_block_delta`) mid-stream.
+
+**Supported models:**
+
+| Claude Code model alias | Bedrock model ID |
+|-------------------------|-----------------|
+| `claude-3-5-sonnet-20241022` | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+| `claude-3-5-haiku-20241022` | `anthropic.claude-3-5-haiku-20241022-v1:0` |
+| `claude-3-opus-20240229` | `anthropic.claude-3-opus-20240229-v1:0` |
+| `claude-sonnet-4-5` | `anthropic.claude-sonnet-4-5-20251101-v1:0` |
+| `claude-sonnet-4-6` | `anthropic.claude-sonnet-4-6-20260101-v1:0` |
+
+Unknown model IDs pass through unchanged (forward-compatible).
+
+**Troubleshooting:**
+
+| Problem | Fix |
+|---------|-----|
+| `403 Forbidden` from Bedrock | AWS credentials missing or invalid; check `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` |
+| `ValidationException: The model is not supported` | Model not enabled in your Bedrock account; enable it in the AWS console under Bedrock → Model access |
+| Wrong region | Set `AWS_DEFAULT_REGION` to the region where your Bedrock quota is provisioned |
+| Streaming stops mid-response | Your Bedrock endpoint may emit binary EventStream; tokenpak handles this automatically but verify `Content-Type: application/vnd.amazon.eventstream` is not being stripped by a network proxy |
+
+### Multi-Provider Failover
+
+**Status: coming soon (CCI-05, CCI-06)**
+
+Automatic failover to AWS Bedrock or local Ollama when Anthropic's API is unavailable or rate-limited. Currently, tokenpak routes all traffic to the single upstream configured in `ANTHROPIC_BASE_URL`.
 
 ---
 
