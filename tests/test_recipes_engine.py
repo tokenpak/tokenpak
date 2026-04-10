@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.compression.recipes import (
+from tokenpak.compression.recipes import (
     CompressionRuleEngine,
     ContentSegment,
     RecipeType,

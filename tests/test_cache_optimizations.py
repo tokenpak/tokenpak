@@ -18,7 +18,7 @@ import json
 import pytest
 
 from tokenpak.cache.telemetry import CacheMetrics, CacheTelemetryCollector
-from tokenpak.agent.proxy.prompt_builder import (
+from tokenpak.proxy.prompt_builder import (
     build_stable_prefix,
     build_volatile_tail,
     apply_stable_cache_control,

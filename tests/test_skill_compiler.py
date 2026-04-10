@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.skill_compiler."""
+"""Tests for tokenpak._internal.agentic.skill_compiler."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.skill_compiler import (
+from tokenpak._internal.agentic.skill_compiler import (
     ExtractedSkill,
     PROMOTION_MIN_SUCCESSFUL_EPISODES,
     SkillCompiler,
     SkillEpisode,
     SkillStore,
 )
-from tokenpak.agent.macros.engine import MacroDefinition, MacroEngine, MacroStep
+from tokenpak._internal.macros.engine import MacroDefinition, MacroEngine, MacroStep
 
 
 @pytest.fixture

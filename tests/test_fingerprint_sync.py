@@ -15,9 +15,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.fingerprint.generator import FingerprintGenerator, Fingerprint, Segment
-from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
-from tokenpak.agent.fingerprint.sync import (
+from tokenpak._internal.fingerprint.generator import FingerprintGenerator, Fingerprint, Segment
+from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
+from tokenpak._internal.fingerprint.sync import (
     Directive,
     FingerprintSync,
     SyncResult,
@@ -212,7 +212,7 @@ class TestMockServerSync:
         mock_resp.__exit__ = MagicMock(return_value=False)
         return mock_resp
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen")
     def test_sync_from_server(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
         server_directives = [
@@ -228,7 +228,7 @@ class TestMockServerSync:
         assert len(result.directives) == 1
         assert result.directives[0].directive_id == "srv-001"
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen")
     def test_sync_uses_cache_on_second_call(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
         server_directives = [
@@ -245,7 +245,7 @@ class TestMockServerSync:
         assert result2.source == "cache"
         mock_urlopen.assert_not_called()
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen", side_effect=Exception("connection refused"))
     def test_offline_fallback_to_oss(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
         client = FingerprintSync(cache_dir=tmp_cache, server_url="http://mock-server")
@@ -256,7 +256,7 @@ class TestMockServerSync:
         assert len(result.directives) > 0
         assert result.error is not None
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen", side_effect=Exception("connection refused"))
     def test_offline_fallback_to_stale_cache(self, mock_urlopen, mock_is_pro, tmp_cache,
                                               sample_fingerprint, sample_directives):
@@ -271,7 +271,7 @@ class TestMockServerSync:
         assert result.source == "cache"
         assert len(result.directives) == len(sample_directives)
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     def test_dry_run_does_not_call_server(self, mock_is_pro, tmp_cache, sample_fingerprint):
         with patch("urllib.request.urlopen") as mock_urlopen:
             client = FingerprintSync(cache_dir=tmp_cache)
@@ -287,13 +287,13 @@ class TestMockServerSync:
 # ─────────────────────────────────────────────
 
 class TestLicenseGate:
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=False)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False)
     def test_sync_blocked_for_oss(self, mock_is_pro, tmp_cache, sample_fingerprint):
         client = FingerprintSync(cache_dir=tmp_cache)
         with pytest.raises(PermissionError, match="Pro\\+"):
             client.sync(sample_fingerprint)
 
-    @patch("tokenpak.agent.license.activation.is_pro", return_value=True)
+    @patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True)
     @patch("urllib.request.urlopen")
     def test_sync_allowed_for_pro(self, mock_urlopen, mock_is_pro, tmp_cache, sample_fingerprint):
         mock_resp = MagicMock()

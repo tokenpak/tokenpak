@@ -20,7 +20,7 @@ import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 
-from tokenpak.agent.dashboard.account_dashboard import (
+from tokenpak.dashboard.account_dashboard import (
     _get_license_key_id,
     _check_pro_access,
     _load_usage_data,
@@ -65,7 +65,7 @@ class TestLicenseDetection:
 class TestAccessGating:
     def test_pro_access_allowed_with_license(self):
         """User with license can access account dashboard."""
-        with patch("tokenpak.agent.dashboard.account_dashboard._get_license_key_id") as mock_get:
+        with patch("tokenpak.dashboard.account_dashboard._get_license_key_id") as mock_get:
             mock_get.return_value = "TPAK-PRO-123"
             request = MagicMock()
             key_id = _check_pro_access(request)
@@ -73,7 +73,7 @@ class TestAccessGating:
 
     def test_pro_access_forbidden_without_license(self):
         """OSS user (no license) gets 403."""
-        with patch("tokenpak.agent.dashboard.account_dashboard._get_license_key_id") as mock_get:
+        with patch("tokenpak.dashboard.account_dashboard._get_license_key_id") as mock_get:
             mock_get.return_value = None
             request = MagicMock()
             
@@ -194,8 +194,8 @@ def client():
 
 
 class TestAccountDashboardRoutes:
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
-    @patch("tokenpak.agent.dashboard.account_dashboard._load_usage_data")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._load_usage_data")
     def test_usage_route_renders_html(self, mock_load, mock_check, client):
         """GET /dashboard/account/usage returns HTML."""
         mock_check.return_value = "TPAK-TEST-123"
@@ -216,7 +216,7 @@ class TestAccountDashboardRoutes:
         assert "text/html" in response.headers["content-type"]
         assert "Token Usage" in response.text
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
     def test_usage_route_pro_gate_blocks_oss(self, mock_check, client):
         """GET /dashboard/account/usage returns 403 for OSS users."""
         from fastapi import HTTPException
@@ -230,8 +230,8 @@ class TestAccountDashboardRoutes:
         
         assert response.status_code == 403
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
-    @patch("tokenpak.agent.dashboard.account_dashboard._load_usage_data")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._load_usage_data")
     def test_savings_route_renders_html(self, mock_load, mock_check, client):
         """GET /dashboard/account/savings returns HTML."""
         mock_check.return_value = "TPAK-TEST-123"
@@ -250,9 +250,9 @@ class TestAccountDashboardRoutes:
         assert "text/html" in response.headers["content-type"]
         assert "Compression Savings" in response.text
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
-    @patch("tokenpak.agent.dashboard.account_dashboard._calculate_roi")
-    @patch("tokenpak.agent.dashboard.account_dashboard._load_usage_data")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._calculate_roi")
+    @patch("tokenpak.dashboard.account_dashboard._load_usage_data")
     def test_roi_route_renders_html(self, mock_load, mock_roi, mock_check, client):
         """GET /dashboard/account/roi returns HTML."""
         mock_check.return_value = "TPAK-TEST-123"
@@ -274,8 +274,8 @@ class TestAccountDashboardRoutes:
         assert "text/html" in response.headers["content-type"]
         assert "Return on Investment" in response.text
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
-    @patch("tokenpak.agent.dashboard.account_dashboard._load_usage_data")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._load_usage_data")
     def test_api_usage_json(self, mock_load, mock_check, client):
         """GET /dashboard/account/api/usage.json returns JSON."""
         mock_check.return_value = "TPAK-TEST-123"
@@ -297,9 +297,9 @@ class TestAccountDashboardRoutes:
         assert len(data["data"]) == 1
         assert data["data"][0]["input_tokens"] == 5000
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._check_pro_access")
-    @patch("tokenpak.agent.dashboard.account_dashboard._load_usage_data")
-    @patch("tokenpak.agent.dashboard.account_dashboard._calculate_roi")
+    @patch("tokenpak.dashboard.account_dashboard._check_pro_access")
+    @patch("tokenpak.dashboard.account_dashboard._load_usage_data")
+    @patch("tokenpak.dashboard.account_dashboard._calculate_roi")
     def test_api_savings_json(self, mock_roi, mock_load, mock_check, client):
         """GET /dashboard/account/api/savings.json returns JSON."""
         mock_check.return_value = "TPAK-TEST-123"
@@ -328,7 +328,7 @@ class TestAccountDashboardRoutes:
 
 
 class TestIntegration:
-    @patch("tokenpak.agent.dashboard.account_dashboard._get_license_key_id")
+    @patch("tokenpak.dashboard.account_dashboard._get_license_key_id")
     @patch("tokenpak.metering.UsageMeterManager")
     def test_end_to_end_usage_page(self, mock_manager_class, mock_get_key, client):
         """Full flow: detect license, load data, render usage page."""
@@ -352,7 +352,7 @@ class TestIntegration:
         assert "Token Usage" in response.text
         assert "10,000" in response.text or "10000" in response.text
 
-    @patch("tokenpak.agent.dashboard.account_dashboard._get_license_key_id")
+    @patch("tokenpak.dashboard.account_dashboard._get_license_key_id")
     def test_oss_user_blocked_from_account_pages(self, mock_get_key, client):
         """OSS user (no license) can't access account-scoped pages."""
         mock_get_key.return_value = None  # No license

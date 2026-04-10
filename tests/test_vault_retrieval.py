@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.agent.vault.retrieval import (
+from tokenpak.vault.retrieval import (
     inject_retrieved_context,
     sort_retrieval_results,
     compute_final_score,

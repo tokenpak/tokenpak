@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tokenpak.agent.cli.commands.diff import (
+from tokenpak.cli.commands.diff import (
     DiffBlock,
     ContextDiff,
     _classify_segment,
@@ -194,7 +194,7 @@ def test_print_diff_json_output(capsys):
 def test_diff_gated_non_pro(capsys):
     """Non-Pro license should print an upgrade prompt and exit."""
     import pytest
-    with patch("tokenpak.agent.license.activation.is_pro", return_value=False):
+    with patch("tokenpak.infrastructure.license_activation.is_pro", return_value=False):
         args = MagicMock()
         args.verbose = False
         args.raw = False
@@ -209,8 +209,8 @@ def test_diff_gated_non_pro(capsys):
 def test_diff_empty_when_no_trace(capsys):
     """No trace in DB → clean empty diff output."""
     with (
-        patch("tokenpak.agent.license.activation.is_pro", return_value=True),
-        patch("tokenpak.agent.cli.commands.diff._get_recent_trace", return_value=None),
+        patch("tokenpak.infrastructure.license_activation.is_pro", return_value=True),
+        patch("tokenpak.cli.commands.diff._get_recent_trace", return_value=None),
     ):
         args = MagicMock()
         args.verbose = False

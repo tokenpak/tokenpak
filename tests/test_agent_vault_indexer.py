@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.vault.indexer (VaultIndexer)."""
+"""Tests for tokenpak.vault.indexer (VaultIndexer)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.vault.blocks import BlockRecord, BlockStore, SliceStore
-from tokenpak.agent.vault.indexer import VaultIndexer
-from tokenpak.agent.vault.symbols import SymbolTable
+from tokenpak.vault.blocks import BlockRecord, BlockStore, SliceStore
+from tokenpak.vault.indexer import VaultIndexer
+from tokenpak.vault.symbols import SymbolTable
 
 
 # ---------------------------------------------------------------------------

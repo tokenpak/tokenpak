@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from tokenpak.agent.proxy.example_selector import IntentExampleSelector
+from tokenpak.proxy.example_selector import IntentExampleSelector
 
 
 def _write_example(root: Path, intent: str, name: str, text: str) -> None:

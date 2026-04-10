@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.agent.proxy.streaming import (
+from tokenpak.proxy.streaming import (
     StreamHandler,
     StreamUsage,
     extract_sse_tokens,
@@ -311,9 +311,9 @@ class TestProxyStreamingEndToEnd:
         module-level name. Patching only `router.INTERCEPT_HOSTS` is insufficient;
         we must also patch `server.INTERCEPT_HOSTS`.
         """
-        import tokenpak.agent.proxy.router as _router_mod
-        import tokenpak.agent.proxy.server as _server_mod
-        from tokenpak.agent.proxy.server import ProxyServer
+        import tokenpak.proxy.router as _router_mod
+        import tokenpak.proxy.server as _server_mod
+        from tokenpak.proxy.server import ProxyServer
 
         self.upstream_port = _free_port()
         self.proxy_port = _free_port()

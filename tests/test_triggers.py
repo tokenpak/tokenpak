@@ -20,7 +20,7 @@ from unittest.mock import patch, MagicMock
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak.agent.macros.hooks import (
+from tokenpak._internal.macros.hooks import (
     TriggerRegistry,
     Trigger,
     EventType,
@@ -307,7 +307,7 @@ class TestCLIIntegration:
     @pytest.fixture
     def tmp_store(self, tmp_path):
         """Patch the trigger store to use a temp directory."""
-        from tokenpak.agent.triggers.store import TriggerStore
+        from tokenpak._internal.triggers.store import TriggerStore
         store = TriggerStore(config_path=tmp_path / "triggers.yaml")
         with patch('tokenpak.cli._trigger_store', return_value=store):
             yield store
@@ -376,7 +376,7 @@ class TestFileWatcher:
     
     def test_watcher_not_running_initially(self):
         """Watcher should not be running by default."""
-        from tokenpak.agent.macros.hooks import is_file_watcher_running
+        from tokenpak._internal.macros.hooks import is_file_watcher_running
         
         # May already be running from other tests, so just check it returns bool
         result = is_file_watcher_running()
@@ -384,7 +384,7 @@ class TestFileWatcher:
     
     def test_start_stop_watcher(self):
         """Should start and stop file watcher."""
-        from tokenpak.agent.macros.hooks import (
+        from tokenpak._internal.macros.hooks import (
             start_file_watcher,
             stop_file_watcher,
             is_file_watcher_running

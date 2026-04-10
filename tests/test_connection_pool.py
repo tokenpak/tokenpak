@@ -32,7 +32,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.agent.proxy.connection_pool import (
+from tokenpak.proxy.connection_pool import (
     ConnectionPool,
     PoolConfig,
     PoolMetrics,
@@ -40,7 +40,7 @@ from tokenpak.agent.proxy.connection_pool import (
     get_global_pool,
     reset_global_pool,
 )
-from tokenpak.agent.proxy.server import ProxyServer
+from tokenpak.proxy.server import ProxyServer
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ def test_pool_constructs():
 
 def test_pool_http2_enabled_when_h2_available():
     """When h2 is installed, http2_enabled follows config."""
-    from tokenpak.agent.proxy.connection_pool import _H2_AVAILABLE
+    from tokenpak.proxy.connection_pool import _H2_AVAILABLE
     pool = ConnectionPool(PoolConfig(http2=True))
     assert pool.http2_enabled == _H2_AVAILABLE
     pool.close()

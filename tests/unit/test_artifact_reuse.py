@@ -1,4 +1,4 @@
-from tokenpak.agent.regression.artifact_reuse import (
+from tokenpak._internal.regression.artifact_reuse import (
     merge_artifact_components,
     plan_artifact_reuse,
     validate_merged_artifact,

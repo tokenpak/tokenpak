@@ -188,7 +188,7 @@ def test_handoff_wire_metadata():
 
 def test_crewai_prepare_receive_wire(tmp_path):
     from crewai_tokenpak import TokenPakHandoff
-    from tokenpak.agent.agentic.handoff import HandoffManager
+    from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf")
     h = TokenPakHandoff(budget=1000, manager=mgr)
     wire = h.prepare_handoff(
@@ -216,7 +216,7 @@ def test_crewai_legacy_dict_api():
 def test_crewai_unknown_agents_no_crash(tmp_path):
     """Unknown agents: wire still produced, HandoffManager just skips."""
     from crewai_tokenpak import TokenPakHandoff
-    from tokenpak.agent.agentic.handoff import HandoffManager
+    from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf2")
     h = TokenPakHandoff(budget=1000, manager=mgr)
     wire = h.prepare_handoff(
@@ -264,7 +264,7 @@ def test_autogen_receive_and_compress():
 )
 def test_autogen_prepare_apply_handoff(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
-    from tokenpak.agent.agentic.handoff import HandoffManager
+    from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf3")
     alice = TokenPakAssistant(name="cali", budget=2000, manager=mgr)
     bob   = TokenPakAssistant(name="sue",  budget=2000, manager=mgr)
@@ -292,7 +292,7 @@ def test_autogen_prepare_apply_handoff(tmp_path):
 def test_autogen_handoff_wire_round_trip(tmp_path):
     from autogen_tokenpak import TokenPakAssistant
     from tokenpak import HandoffBlock, Handoff
-    from tokenpak.agent.agentic.handoff import HandoffManager
+    from tokenpak.agentic.handoff import HandoffManager
     mgr = HandoffManager(handoff_dir=tmp_path / "hf4")
     a = TokenPakAssistant(name="cali", budget=2000, manager=mgr)
     extra = [HandoffBlock(type="evidence", id="ev1", content="key finding")]

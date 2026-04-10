@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 
 import pytest
 
-from tokenpak.agent.cli.commands.help import (
+from tokenpak.cli.commands.help import (
     run,
     print_essential_help,
     print_intermediate_help,

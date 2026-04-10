@@ -68,7 +68,7 @@ def test_governance_engine_imports():
 def _mock_non_enterprise():
     """Context manager: patch is_enterprise() to return False."""
     return patch(
-        "tokenpak.agent.license.activation.is_enterprise",
+        "tokenpak.infrastructure.license_activation.is_enterprise",
         return_value=False,
     )
 
@@ -79,7 +79,7 @@ def _mock_tier(tier: str = "OSS"):
     mock_result = MagicMock()
     mock_result.tier.value = tier.lower()
     return patch(
-        "tokenpak.agent.license.activation.get_plan",
+        "tokenpak.infrastructure.license_activation.get_plan",
         return_value=mock_result,
     )
 
@@ -160,24 +160,24 @@ def test_governance_engine_oss_tier_classify(capsys):
 
 
 def test_cli_policy_module_importable():
-    from tokenpak.agent.cli.commands import policy
+    from tokenpak.cli.commands import policy
     assert callable(getattr(policy, "run", None))
 
 
 def test_cli_sla_module_importable():
-    from tokenpak.agent.cli.commands import sla
+    from tokenpak.cli.commands import sla
     assert callable(getattr(sla, "run", None))
 
 
 def test_cli_compliance_module_importable():
-    from tokenpak.agent.cli.commands import compliance
+    from tokenpak.cli.commands import compliance
     assert callable(getattr(compliance, "run", None))
 
 
 def test_cli_policy_show_no_license(capsys):
     """tokenpak policy show on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
-        from tokenpak.agent.cli.commands.policy import run
+        from tokenpak.cli.commands.policy import run
         with pytest.raises(SystemExit) as exc_info:
             run(["show"])
         assert exc_info.value.code == 2
@@ -189,7 +189,7 @@ def test_cli_policy_show_no_license(capsys):
 def test_cli_sla_status_no_license(capsys):
     """tokenpak sla status on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
-        from tokenpak.agent.cli.commands.sla import run
+        from tokenpak.cli.commands.sla import run
         with pytest.raises(SystemExit) as exc_info:
             run(["status"])
         assert exc_info.value.code == 2
@@ -201,7 +201,7 @@ def test_cli_sla_status_no_license(capsys):
 def test_cli_compliance_report_no_license(capsys):
     """tokenpak compliance report soc2 on OSS prints upgrade and exits."""
     with _mock_non_enterprise(), _mock_tier("oss"):
-        from tokenpak.agent.cli.commands.compliance import run
+        from tokenpak.cli.commands.compliance import run
         with pytest.raises(SystemExit) as exc_info:
             run(["report", "soc2"])
         assert exc_info.value.code == 2

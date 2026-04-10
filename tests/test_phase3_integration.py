@@ -17,21 +17,21 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.precondition_gates import (
+from tokenpak._internal.agentic.precondition_gates import (
     PreconditionGates,
     Gate,
 )
-from tokenpak.agent.compression.query_rewriter import (
+from tokenpak.compression.query_rewriter import (
     QueryRewriter,
     RewriteResult,
 )
-from tokenpak.agent.memory.session_capsules import (
+from tokenpak._internal.memory.session_capsules import (
     build_session_capsule,
     serialize_capsule,
     score_capsule_sections,
     capsule_retrieval_score,
 )
-from tokenpak.agent.regression.stability_scorer import (
+from tokenpak._internal.regression.stability_scorer import (
     StabilityScorer,
     RunRecord,
     compute_stability,

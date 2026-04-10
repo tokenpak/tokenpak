@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.agent.telemetry.export.TelemetryExporter
+Tests for tokenpak.telemetry.export.TelemetryExporter
 
 Covers:
 - CSV export (headers, row data, encoding)
@@ -21,9 +21,9 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.agent.telemetry.collector import RequestStats
-from tokenpak.agent.telemetry.export import MAX_EXPORT_ROWS, TelemetryExporter, _parse_date
-from tokenpak.agent.telemetry.storage import TelemetryStorage
+from tokenpak.telemetry.collector import RequestStats
+from tokenpak.telemetry.export import MAX_EXPORT_ROWS, TelemetryExporter, _parse_date
+from tokenpak.telemetry.storage import TelemetryStorage
 
 
 # ---------------------------------------------------------------------------
@@ -295,10 +295,10 @@ class TestMaxRows:
         storage = _make_storage(*rows_data)
         exp = TelemetryExporter(storage)
         # Monkey-patch limit to 3 for test
-        with patch("tokenpak.agent.telemetry.export.MAX_EXPORT_ROWS", 3):
+        with patch("tokenpak.telemetry.export.MAX_EXPORT_ROWS", 3):
             # Re-import to pick up patched constant
             from importlib import reload
-            import tokenpak.agent.telemetry.export as mod
+            import tokenpak.telemetry.export as mod
             original = mod.MAX_EXPORT_ROWS
             mod.MAX_EXPORT_ROWS = 3
             try:

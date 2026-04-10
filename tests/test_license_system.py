@@ -24,7 +24,7 @@ try:
 except ImportError:
     CRYPTO_AVAILABLE = False
 
-from tokenpak.agent.license.keys import (
+from tokenpak._internal.license.keys import (
     generate_keypair,
     sign_license,
     verify_license,

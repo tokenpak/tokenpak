@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import pytest
 
-from tokenpak.agent.agentic.workflow_budget import (
+from tokenpak.agentic.workflow_budget import (
     WorkflowBudget,
     BudgetEvent,
     BudgetEventKind,

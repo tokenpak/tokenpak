@@ -5,9 +5,9 @@ import time
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from tokenpak.agent.triggers.store import TriggerStore, Trigger
-from tokenpak.agent.triggers.matcher import match_event
-from tokenpak.agent.triggers.daemon import _parse_interval_seconds
+from tokenpak._internal.triggers.store import TriggerStore, Trigger
+from tokenpak._internal.triggers.matcher import match_event
+from tokenpak._internal.triggers.daemon import _parse_interval_seconds
 
 
 # ── Store CRUD ────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 tests.test_query_rewriter
 ==========================
 
-Tests for tokenpak.agent.compression.query_rewriter:
+Tests for tokenpak.compression.query_rewriter:
   - QueryRewriter class
   - rewrite_query convenience function
   - rewrite_messages for multi-turn workflows
@@ -11,7 +11,7 @@ Tests for tokenpak.agent.compression.query_rewriter:
 from __future__ import annotations
 
 import pytest
-from tokenpak.agent.compression.query_rewriter import (
+from tokenpak.compression.query_rewriter import (
     QueryRewriter,
     RewriteResult,
     rewrite_query,

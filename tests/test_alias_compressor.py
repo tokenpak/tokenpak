@@ -12,8 +12,8 @@ Covers:
 """
 
 import pytest
-from tokenpak.agent.compression.alias_compressor import AliasCompressor, AliasResult
-from tokenpak.agent.compression.pipeline import CompressionPipeline
+from tokenpak.compression.alias_compressor import AliasCompressor, AliasResult
+from tokenpak.compression.pipeline import CompressionPipeline
 
 
 # ---------------------------------------------------------------------------

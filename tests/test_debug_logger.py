@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.debug.logger module."""
+"""Tests for tokenpak._internal.debug.logger module."""
 import pytest
 from tokenpak.infrastructure.debug import DebugLogger
 

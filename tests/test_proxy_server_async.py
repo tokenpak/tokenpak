@@ -29,7 +29,7 @@ import pytest
 # Helpers under test (pure functions — no I/O needed)
 # ---------------------------------------------------------------------------
 
-from tokenpak.agent.proxy.server_async import (
+from tokenpak.proxy.server_async import (
     _estimate_tokens,
     _extract_response_tokens,
     _is_messages_endpoint,
@@ -394,7 +394,7 @@ class TestCreateAsyncApp(unittest.TestCase):
         from starlette.testclient import TestClient
         ps = self._make_proxy_server()
         app = create_async_app(ps)
-        with patch("tokenpak.agent.proxy.server_async.handle_degradation") as mock_handler:
+        with patch("tokenpak.proxy.server_async.handle_degradation") as mock_handler:
             from starlette.responses import JSONResponse
             mock_handler.return_value = JSONResponse({"ok": True})
             # Just verify route exists — degradation requires real module
@@ -439,9 +439,9 @@ class TestRecordTelemetry(unittest.TestCase):
 
     def test_increments_session_counters(self):
         ps = self._make_ps()
-        with patch("tokenpak.agent.proxy.server_async._record_telemetry",
+        with patch("tokenpak.proxy.server_async._record_telemetry",
                    wraps=_record_telemetry):
-            with patch("tokenpak.agent.proxy.router.estimate_cost", return_value=0.01):
+            with patch("tokenpak.proxy.router.estimate_cost", return_value=0.01):
                 _record_telemetry(ps, None, "claude-sonnet-4-6", 1000, 800, 100, 50, 0, 0, 200)
         self.assertEqual(ps.session["requests"], 1)
         self.assertEqual(ps.session["input_tokens"], 1000)
@@ -451,7 +451,7 @@ class TestRecordTelemetry(unittest.TestCase):
 
     def test_compression_ratio_appended(self):
         ps = self._make_ps()
-        with patch("tokenpak.agent.proxy.router.estimate_cost", return_value=0.01):
+        with patch("tokenpak.proxy.router.estimate_cost", return_value=0.01):
             _record_telemetry(ps, None, "claude-sonnet-4-6", 1000, 600, 100, 0, 0, 0, 150)
         self.assertEqual(len(ps._compression_ratios), 1)
         # saved = 1000 - 600 = 400; ratio = 400/1000 = 0.4
@@ -461,7 +461,7 @@ class TestRecordTelemetry(unittest.TestCase):
         ps = self._make_ps()
         trace = MagicMock()
         trace.request_id = "test-123"
-        with patch("tokenpak.agent.proxy.router.estimate_cost", return_value=0.005):
+        with patch("tokenpak.proxy.router.estimate_cost", return_value=0.005):
             _record_telemetry(ps, trace, "claude", 500, 400, 50, 10, 0, 0, 300)
         self.assertEqual(trace.model, "claude")
         self.assertEqual(trace.input_tokens, 500)
@@ -472,7 +472,7 @@ class TestRecordTelemetry(unittest.TestCase):
 
     def test_last_request_updated(self):
         ps = self._make_ps()
-        with patch("tokenpak.agent.proxy.router.estimate_cost", return_value=0.002):
+        with patch("tokenpak.proxy.router.estimate_cost", return_value=0.002):
             _record_telemetry(ps, None, "claude", 400, 300, 80, 0, 0, 0, 250)
         self.assertEqual(ps._last_request["model"], "claude")
         self.assertEqual(ps._last_request["input_tokens_raw"], 400)
@@ -530,7 +530,7 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
         return Request(scope, receive)
 
     async def test_non_streaming_passthrough(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
         import httpx
 
         ps = self._make_ps()
@@ -550,14 +550,14 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
             body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}).encode()
         )
 
-        with patch("tokenpak.agent.proxy.server_async._should_intercept", return_value=False):
-            from tokenpak.agent.proxy.server_async import _forward_request
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=False):
+            from tokenpak.proxy.server_async import _forward_request
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertEqual(response.status_code, 200)
 
     async def test_upstream_error_returns_502(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
         import httpx
 
         ps = self._make_ps()
@@ -569,8 +569,8 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
 
         request = await self._make_request()
 
-        with patch("tokenpak.agent.proxy.server_async._should_intercept", return_value=False):
-            from tokenpak.agent.proxy.server_async import _forward_request
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=False):
+            from tokenpak.proxy.server_async import _forward_request
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertEqual(response.status_code, 502)
@@ -578,7 +578,7 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["error"]["type"], "proxy_error")
 
     async def test_gzip_response_decoded(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
 
         ps = self._make_ps()
         module._proxy_server_ref = ps
@@ -599,10 +599,10 @@ class TestForwardRequest(unittest.IsolatedAsyncioTestCase):
             body=json.dumps({"messages": [{"role": "user", "content": "hi"}], "stream": False}).encode(),
         )
 
-        with patch("tokenpak.agent.proxy.server_async._should_intercept", return_value=True), \
-             patch("tokenpak.agent.proxy.server_async._is_messages_endpoint", return_value=True), \
-             patch("tokenpak.agent.proxy.server_async._record_telemetry"):
-            from tokenpak.agent.proxy.server_async import _forward_request
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=True), \
+             patch("tokenpak.proxy.server_async._is_messages_endpoint", return_value=True), \
+             patch("tokenpak.proxy.server_async._record_telemetry"):
+            from tokenpak.proxy.server_async import _forward_request
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertEqual(response.status_code, 200)
@@ -635,7 +635,7 @@ class TestAsyncProxyThread(unittest.TestCase):
         shutdown = threading.Event()
         ps = self._make_ps()
 
-        with patch("tokenpak.agent.proxy.server_async.run_async_proxy", new_callable=AsyncMock) as mock_run:
+        with patch("tokenpak.proxy.server_async.run_async_proxy", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = None
             t = start_async_proxy_in_thread(ps, host="127.0.0.1", port=19900, shutdown_event=shutdown)
             self.assertIsInstance(t, threading.Thread)
@@ -648,7 +648,7 @@ class TestAsyncProxyThread(unittest.TestCase):
         ps = self._make_ps()
         shutdown.set()  # stop immediately
 
-        with patch("tokenpak.agent.proxy.server_async.run_async_proxy", new_callable=AsyncMock):
+        with patch("tokenpak.proxy.server_async.run_async_proxy", new_callable=AsyncMock):
             t = start_async_proxy_in_thread(ps, host="127.0.0.1", port=19901, shutdown_event=shutdown)
             self.assertTrue(t.daemon)
             t.join(timeout=2)
@@ -661,7 +661,7 @@ class TestAsyncProxyThread(unittest.TestCase):
 class TestAsyncTCPProxy(unittest.IsolatedAsyncioTestCase):
 
     async def test_start_and_stop(self):
-        from tokenpak.agent.proxy.server_async import _AsyncTCPProxy
+        from tokenpak.proxy.server_async import _AsyncTCPProxy
         proxy = _AsyncTCPProxy("127.0.0.1", 0, 0)
         await proxy.start()
         self.assertIsNotNone(proxy._server)
@@ -669,7 +669,7 @@ class TestAsyncTCPProxy(unittest.IsolatedAsyncioTestCase):
 
     async def test_connect_request_handled(self):
         """CONNECT request should invoke the tunnel handler (mocked)."""
-        from tokenpak.agent.proxy.server_async import _AsyncTCPProxy
+        from tokenpak.proxy.server_async import _AsyncTCPProxy
 
         proxy = _AsyncTCPProxy("127.0.0.1", 0, 19800)
         await proxy.start()
@@ -682,7 +682,7 @@ class TestAsyncTCPProxy(unittest.IsolatedAsyncioTestCase):
             tunnel_called.set()
             writer.close()
 
-        with patch("tokenpak.agent.proxy.server_async._handle_connect_tunnel", side_effect=fake_tunnel):
+        with patch("tokenpak.proxy.server_async._handle_connect_tunnel", side_effect=fake_tunnel):
             try:
                 reader, writer = await asyncio.wait_for(
                     asyncio.open_connection("127.0.0.1", port), timeout=2
@@ -709,7 +709,7 @@ class TestAsyncTCPProxy(unittest.IsolatedAsyncioTestCase):
 class TestProxyServerRefGuard(unittest.TestCase):
 
     def test_ps_raises_when_not_initialised(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
         orig = module._proxy_server_ref
         try:
             module._proxy_server_ref = None
@@ -719,7 +719,7 @@ class TestProxyServerRefGuard(unittest.TestCase):
             module._proxy_server_ref = orig
 
     def test_client_raises_when_not_initialised(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
         orig = module._async_client
         try:
             module._async_client = None
@@ -736,7 +736,7 @@ class TestProxyServerRefGuard(unittest.TestCase):
 class TestRunPipelineSync(unittest.TestCase):
 
     def test_no_hook_passthrough(self):
-        from tokenpak.agent.proxy.server_async import _run_pipeline_sync
+        from tokenpak.proxy.server_async import _run_pipeline_sync
         ps = MagicMock()
         ps.request_hook = None
         body = b'{"messages":[{"role":"user","content":"hi there"}]}'
@@ -747,7 +747,7 @@ class TestRunPipelineSync(unittest.TestCase):
         self.assertEqual(protected, 0)
 
     def test_hook_called(self):
-        from tokenpak.agent.proxy.server_async import _run_pipeline_sync
+        from tokenpak.proxy.server_async import _run_pipeline_sync
         ps = MagicMock()
         ps.request_hook = Mock(return_value=(b"compressed", 100, 200, 10))
         result = _run_pipeline_sync(ps, b"original body", "claude", None)
@@ -755,7 +755,7 @@ class TestRunPipelineSync(unittest.TestCase):
         ps.request_hook.assert_called_once()
 
     def test_hook_exception_falls_back_to_passthrough(self):
-        from tokenpak.agent.proxy.server_async import _run_pipeline_sync
+        from tokenpak.proxy.server_async import _run_pipeline_sync
         ps = MagicMock()
         ps.request_hook = Mock(side_effect=RuntimeError("pipeline boom"))
         body = b'{"messages":[{"role":"user","content":"test"}]}'
@@ -801,7 +801,7 @@ class TestForwardRequestStreaming(unittest.IsolatedAsyncioTestCase):
         return Request(scope, receive)
 
     async def test_streaming_response_returned(self):
-        from tokenpak.agent.proxy import server_async as module
+        from tokenpak.proxy import server_async as module
         from starlette.responses import StreamingResponse
 
         ps = self._make_ps()
@@ -840,14 +840,14 @@ class TestForwardRequestStreaming(unittest.IsolatedAsyncioTestCase):
         # but still test the streaming branch (stream=True in body, no intercept)
         # Actually with no intercept, is_streaming will be False since we only
         # parse it in the intercept branch. So we need intercept=True with mocks.
-        with patch("tokenpak.agent.proxy.server_async._should_intercept", return_value=True), \
-             patch("tokenpak.agent.proxy.server_async._is_messages_endpoint", return_value=True), \
-             patch("tokenpak.agent.proxy.server_async._record_telemetry"), \
-             patch("tokenpak.agent.proxy.router.ProviderRouter") as MockRouter:
+        with patch("tokenpak.proxy.server_async._should_intercept", return_value=True), \
+             patch("tokenpak.proxy.server_async._is_messages_endpoint", return_value=True), \
+             patch("tokenpak.proxy.server_async._record_telemetry"), \
+             patch("tokenpak.proxy.router.ProviderRouter") as MockRouter:
             route = MagicMock()
             route.model = "claude"
             MockRouter.return_value.route.return_value = route
-            from tokenpak.agent.proxy.server_async import _forward_request
+            from tokenpak.proxy.server_async import _forward_request
             response = await _forward_request(request, "https://api.anthropic.com/v1/messages")
 
         self.assertIsInstance(response, StreamingResponse)
@@ -886,13 +886,13 @@ class TestAdditionalEndpoints(unittest.TestCase):
         sf.distinct_models.return_value = []
         ps.session_filter = sf
         app = create_async_app(ps)
-        with patch("tokenpak.agent.proxy.server_async.handle_sessions") as mock_handler:
+        with patch("tokenpak.proxy.server_async.handle_sessions") as mock_handler:
             from starlette.responses import JSONResponse
             mock_handler.return_value = JSONResponse({"sessions": [], "total": 0})
             client = TestClient(app, raise_server_exceptions=False)
             # Route exists — we're just checking it doesn't 404
         client = TestClient(app, raise_server_exceptions=False)
-        with patch("tokenpak.agent.dashboard.session_filter.FilterParams") as MockFP:
+        with patch("tokenpak.dashboard.session_filter.FilterParams") as MockFP:
             MockFP.from_query_string.return_value = MagicMock()
             resp = client.get("/v1/sessions")
         # 200 or 500 — just not 404
@@ -902,7 +902,7 @@ class TestAdditionalEndpoints(unittest.TestCase):
         from starlette.testclient import TestClient
         ps = self._make_ps()
         app = create_async_app(ps)
-        with patch("tokenpak.agent.proxy.server_async.handle_export_csv") as mock_handler:
+        with patch("tokenpak.proxy.server_async.handle_export_csv") as mock_handler:
             from starlette.responses import Response
             mock_handler.return_value = Response(content=b"col1,col2\n1,2", status_code=200)
             # Just check route exists
@@ -930,7 +930,7 @@ class TestHandleConnectTunnel(unittest.IsolatedAsyncioTestCase):
 
     async def test_bad_host_returns_502(self):
         """Connect to unreachable host → client should get 502."""
-        from tokenpak.agent.proxy.server_async import _handle_connect_tunnel
+        from tokenpak.proxy.server_async import _handle_connect_tunnel
 
         received = bytearray()
 
@@ -948,7 +948,7 @@ class TestHandleConnectTunnel(unittest.IsolatedAsyncioTestCase):
 
     async def test_successful_tunnel_bridges(self):
         """Successful CONNECT → relay is established."""
-        from tokenpak.agent.proxy.server_async import _handle_connect_tunnel
+        from tokenpak.proxy.server_async import _handle_connect_tunnel
 
         # Two-sided pipe simulation
         client_data_to_send = [b"hello from client", b""]
@@ -983,7 +983,7 @@ class TestAsyncTCPProxyHTTP(unittest.IsolatedAsyncioTestCase):
 
     async def test_non_connect_forwarded_to_uvicorn(self):
         """Plain HTTP requests should be relayed to uvicorn internal port."""
-        from tokenpak.agent.proxy.server_async import _AsyncTCPProxy
+        from tokenpak.proxy.server_async import _AsyncTCPProxy
 
         proxy = _AsyncTCPProxy("127.0.0.1", 0, 19900)
 
@@ -1014,13 +1014,13 @@ class TestProxyHandlers(unittest.IsolatedAsyncioTestCase):
         return Request(scope, receive)
 
     async def test_handle_v1_proxy_forwards(self):
-        from tokenpak.agent.proxy.server_async import handle_v1_proxy
+        from tokenpak.proxy.server_async import handle_v1_proxy
         request = await self._make_request("/v1/messages")
 
-        with patch("tokenpak.agent.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
+        with patch("tokenpak.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
             from starlette.responses import JSONResponse
             mock_fwd.return_value = JSONResponse({"ok": True})
-            with patch("tokenpak.agent.proxy.router.ProviderRouter") as MockRouter:
+            with patch("tokenpak.proxy.router.ProviderRouter") as MockRouter:
                 route = MagicMock()
                 route.full_url = "https://api.anthropic.com/v1/messages"
                 MockRouter.return_value.route.return_value = route
@@ -1031,11 +1031,11 @@ class TestProxyHandlers(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_v1_proxy_router_fallback(self):
         """When router raises, falls back to Anthropic URL."""
-        from tokenpak.agent.proxy.server_async import handle_v1_proxy
+        from tokenpak.proxy.server_async import handle_v1_proxy
         request = await self._make_request("/v1/messages")
 
-        with patch("tokenpak.agent.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd, \
-             patch("tokenpak.agent.proxy.router.ProviderRouter") as MockRouter:
+        with patch("tokenpak.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd, \
+             patch("tokenpak.proxy.router.ProviderRouter") as MockRouter:
             MockRouter.return_value.route.side_effect = RuntimeError("no route")
             from starlette.responses import JSONResponse
             mock_fwd.return_value = JSONResponse({"ok": True})
@@ -1047,10 +1047,10 @@ class TestProxyHandlers(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_proxy_full_url(self):
         """handle_proxy extracts full URL from path."""
-        from tokenpak.agent.proxy.server_async import handle_proxy
+        from tokenpak.proxy.server_async import handle_proxy
         request = await self._make_request("/http://example.com/test")
 
-        with patch("tokenpak.agent.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
+        with patch("tokenpak.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
             from starlette.responses import JSONResponse
             mock_fwd.return_value = JSONResponse({"ok": True})
             response = await handle_proxy(request)
@@ -1059,10 +1059,10 @@ class TestProxyHandlers(unittest.IsolatedAsyncioTestCase):
 
     async def test_handle_proxy_with_query(self):
         """handle_proxy appends query string."""
-        from tokenpak.agent.proxy.server_async import handle_proxy
+        from tokenpak.proxy.server_async import handle_proxy
         request = await self._make_request("/https://api.anthropic.com/test", query="key=val")
 
-        with patch("tokenpak.agent.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
+        with patch("tokenpak.proxy.server_async._forward_request", new_callable=AsyncMock) as mock_fwd:
             from starlette.responses import JSONResponse
             mock_fwd.return_value = JSONResponse({"ok": True})
             response = await handle_proxy(request)
@@ -1100,7 +1100,7 @@ class TestSessionsEndpointErrors(unittest.TestCase):
         ps = self._make_ps()
         app = create_async_app(ps)
 
-        with patch("tokenpak.agent.dashboard.session_filter.FilterParams.from_query_string",
+        with patch("tokenpak.dashboard.session_filter.FilterParams.from_query_string",
                    side_effect=ValueError("bad param")):
             client = TestClient(app, raise_server_exceptions=False)
             resp = client.get("/v1/sessions?bad=param")

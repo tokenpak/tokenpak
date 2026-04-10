@@ -1,14 +1,14 @@
 """
-Tests for tokenpak.agent.adapters — platform detection and configuration.
+Tests for tokenpak.adapters — platform detection and configuration.
 """
 
 import pytest
 
-from tokenpak.agent.adapters.base import BaseAdapter
-from tokenpak.agent.adapters.openclaw import OpenClawAdapter
-from tokenpak.agent.adapters.claude_cli import ClaudeCLIAdapter
-from tokenpak.agent.adapters.generic import GenericAdapter
-from tokenpak.agent.adapters.registry import detect_platform
+from tokenpak.adapters.base import BaseAdapter
+from tokenpak.adapters.openclaw import OpenClawAdapter
+from tokenpak.adapters.claude_cli import ClaudeCLIAdapter
+from tokenpak.adapters.generic import GenericAdapter
+from tokenpak.adapters.registry import detect_platform
 
 
 # ---------------------------------------------------------------------------

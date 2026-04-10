@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 """tests/test_document_parser.py
 
-Tests for tokenpak.agent.ingest.document_parser (Phase 5E).
+Tests for tokenpak._internal.ingest.document_parser (Phase 5E).
 
 Covers:
   1. Markdown heading hierarchy parsed correctly
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.ingest.document_parser import (
+from tokenpak._internal.ingest.document_parser import (
     DocumentParser,
     DocumentSection,
     DocumentStructure,

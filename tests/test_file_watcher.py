@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak.agent.vault.watcher import (
+from tokenpak.vault.watcher import (
     VaultWatcher,
     WatcherConfig,
     WatcherStats,

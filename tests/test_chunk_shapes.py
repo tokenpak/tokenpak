@@ -1,9 +1,9 @@
-"""Tests for tokenpak.agent.vault.chunk_shapes."""
+"""Tests for tokenpak.vault.chunk_shapes."""
 
 from __future__ import annotations
 
 import pytest
-from tokenpak.agent.vault.chunk_shapes import (
+from tokenpak.vault.chunk_shapes import (
     CHUNK_SHAPES,
     apply_shape,
     get_shape_for_intent,

@@ -1,4 +1,4 @@
-"""Tests for quality_per_token metric in tokenpak.agent.agentic.learning.
+"""Tests for quality_per_token metric in tokenpak.agentic.learning.
 
 Covers:
   - _extract_quality_per_token() from routing_ledger
@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.learning import (
+from tokenpak.agentic.learning import (
     _empty_store,
     _extract_quality_per_token,
     _load,

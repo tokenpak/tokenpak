@@ -88,7 +88,7 @@ class TestProxyLifecycle:
 
     def test_proxy_config_corruption_startup_fails_clearly(self, tmp_path):
         """Proxy startup with invalid config JSON produces a clear error, not a crash."""
-        from tokenpak.agent.proxy.startup import run_startup_checks
+        from tokenpak.proxy.startup import run_startup_checks
 
         # Write a corrupt config file where the proxy would read it
         config_dir = tmp_path / ".tokenpak"
@@ -96,7 +96,7 @@ class TestProxyLifecycle:
         (config_dir / "config.yaml").write_text("{invalid yaml: [unclosed bracket")
 
         # Startup checks should complete without raising
-        with patch("tokenpak.agent.proxy.startup.Path.home", return_value=tmp_path):
+        with patch("tokenpak.proxy.startup.Path.home", return_value=tmp_path):
             ok, warnings = run_startup_checks(port=_next_port())
             # Should return structured result, not crash
             assert isinstance(ok, bool)
@@ -104,7 +104,7 @@ class TestProxyLifecycle:
 
     def test_port_stolen_produces_clear_startup_failure(self):
         """When port is already taken, startup_checks reports it clearly."""
-        from tokenpak.agent.proxy.startup import run_startup_checks
+        from tokenpak.proxy.startup import run_startup_checks
 
         # Steal a port
         stolen_port = _next_port()
@@ -125,7 +125,7 @@ class TestProxyLifecycle:
 
     def test_proxy_startup_checks_pass_on_free_port(self):
         """Startup checks succeed when port is free and deps are installed."""
-        from tokenpak.agent.proxy.startup import run_startup_checks
+        from tokenpak.proxy.startup import run_startup_checks
 
         free_port = _next_port()
         # Ensure port is actually free
@@ -137,7 +137,7 @@ class TestProxyLifecycle:
 
     def test_server_stop_is_idempotent(self):
         """Calling stop() twice on ProxyServer does not raise."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
 
         server = ProxyServer(host="127.0.0.1", port=_next_port())
         # stop without start should not crash
@@ -146,7 +146,7 @@ class TestProxyLifecycle:
 
     def test_proxy_start_blocking_false_returns_immediately(self):
         """ProxyServer.start(blocking=False) returns quickly and server is reachable."""
-        from tokenpak.agent.proxy.server import ProxyServer
+        from tokenpak.proxy.server import ProxyServer
 
         port = _next_port()
         while not _port_is_free(port):
@@ -243,7 +243,7 @@ class TestNetworkPartitionChaos:
 
     def test_connection_refused_classified_as_server_error(self):
         """Connection refused to provider is classified as server_error."""
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         exc = ConnectionRefusedError("Connection refused")
         classified = classify_error(exception=exc)
@@ -254,7 +254,7 @@ class TestNetworkPartitionChaos:
 
     def test_timeout_error_classified_correctly(self):
         """Socket timeout is classified as timeout error (warrants provider switch)."""
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         exc = TimeoutError("timed out")
         classified = classify_error(exception=exc)
@@ -262,7 +262,7 @@ class TestNetworkPartitionChaos:
 
     def test_rate_limit_error_classified_correctly(self):
         """HTTP 429 response error is classified as rate_limit."""
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         classified = classify_error(http_status=429)
         assert classified.is_rate_limit is True
@@ -270,7 +270,7 @@ class TestNetworkPartitionChaos:
 
     def test_auth_error_does_not_trigger_provider_switch(self):
         """HTTP 401/403 is classified as auth error — should NOT trigger switch."""
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         for status in (401, 403):
             classified = classify_error(http_status=status)
@@ -281,7 +281,7 @@ class TestNetworkPartitionChaos:
 
     def test_server_error_triggers_provider_switch(self):
         """HTTP 500+ errors trigger immediate provider switch."""
-        from tokenpak.agent.proxy.failover_engine import classify_error
+        from tokenpak.proxy.failover_engine import classify_error
 
         for status in (500, 502, 503):
             classified = classify_error(http_status=status)
@@ -291,7 +291,7 @@ class TestNetworkPartitionChaos:
 
     def test_failover_chain_skips_empty_credential_env(self, tmp_path, monkeypatch):
         """Providers whose credential env var is unset are skipped in failover chain."""
-        from tokenpak.agent.proxy.failover import FailoverManager, ProviderEntry, FailoverConfig
+        from tokenpak.proxy.failover import FailoverManager, ProviderEntry, FailoverConfig
 
         # Unset all relevant env vars
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -329,7 +329,7 @@ class TestDiskChaos:
 
     def test_stats_write_failure_does_not_crash_proxy(self, tmp_path):
         """DegradationTracker handles record calls robustly even if internals fail."""
-        from tokenpak.agent.proxy.degradation import DegradationTracker
+        from tokenpak.proxy.degradation import DegradationTracker
 
         tracker = DegradationTracker()
 
@@ -370,7 +370,7 @@ class TestDiskChaos:
 
     def test_telemetry_degraded_on_write_failure(self):
         """Telemetry system enters degraded mode when writes fail."""
-        from tokenpak.agent.proxy.degradation import DegradationTracker, DegradationEventType
+        from tokenpak.proxy.degradation import DegradationTracker, DegradationEventType
 
         tracker = DegradationTracker()
         # Simulate a config fallback (what happens when config can't be written)
@@ -408,7 +408,7 @@ class TestMemoryPressure:
 
     def test_degradation_deque_has_bounded_size(self):
         """DegradationTracker uses a bounded deque — no unbounded memory growth."""
-        from tokenpak.agent.proxy.degradation import DegradationTracker
+        from tokenpak.proxy.degradation import DegradationTracker
 
         tracker = DegradationTracker()
         # Record many events
@@ -424,7 +424,7 @@ class TestMemoryPressure:
     def test_failover_event_log_is_bounded(self):
         """FailoverEventLog uses bounded deque — no memory leak on high error rates."""
         from datetime import datetime, timezone
-        from tokenpak.agent.proxy.failover_engine import FailoverEventLog, FailoverEvent
+        from tokenpak.proxy.failover_engine import FailoverEventLog, FailoverEvent
 
         log = FailoverEventLog()
         for i in range(500):

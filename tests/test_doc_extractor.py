@@ -1,7 +1,7 @@
-"""Tests for tokenpak.agent.compression.salience.doc_extractor module."""
+"""Tests for tokenpak.compression.salience.doc_extractor module."""
 
 import pytest
-from tokenpak.agent.compression.salience.doc_extractor import (
+from tokenpak.compression.salience.doc_extractor import (
     DocExtractor,
     DocExtractionResult,
 )

@@ -183,7 +183,7 @@ def test_corrupt_license_file_falls_back_to_oss(tmp_path, monkeypatch):
 
 def test_expired_license_falls_back_to_oss(tmp_path, monkeypatch):
     """A license that is past expiry + grace period must fall back to OSS."""
-    from tokenpak.agent.license.keys import (
+    from tokenpak._internal.license.keys import (
         generate_keypair, sign_license, LicensePayload, format_license_key
     )
 
@@ -248,7 +248,7 @@ def test_fixture_enterprise_features(monkeypatch):
 
 def test_replay_blocked_on_oss():
     """tokenpak replay commands must raise TierRequiredError on OSS."""
-    from tokenpak.agent.cli.commands.replay import cmd_replay_list
+    from tokenpak.cli.commands.replay import cmd_replay_list
 
     reset_for_testing(LicenseTier.OSS)
     import argparse
@@ -262,7 +262,7 @@ def test_replay_blocked_on_oss():
 
 def test_replay_cta_contains_portal_url():
     """The CTA message must contain the portal trial URL."""
-    from tokenpak.agent.cli.commands.replay import cmd_replay_list
+    from tokenpak.cli.commands.replay import cmd_replay_list
 
     reset_for_testing(LicenseTier.OSS)
     import argparse
@@ -327,7 +327,7 @@ def test_budget_alert_allowed_on_pro():
 
 def test_advanced_recipes_blocked_on_oss():
     """CompressionRecipeEngine.advanced_recipes_for_file() must raise TierRequiredError on OSS."""
-    from tokenpak.agent.compression.recipes import CompressionRecipeEngine
+    from tokenpak.compression.recipes import CompressionRecipeEngine
 
     reset_for_testing(LicenseTier.OSS)
     engine = CompressionRecipeEngine()
@@ -340,7 +340,7 @@ def test_advanced_recipes_blocked_on_oss():
 
 def test_advanced_recipes_allowed_on_pro():
     """CompressionRecipeEngine.advanced_recipes_for_file() must return a list on Pro."""
-    from tokenpak.agent.compression.recipes import CompressionRecipeEngine
+    from tokenpak.compression.recipes import CompressionRecipeEngine
 
     reset_for_testing(LicenseTier.PRO)
     engine = CompressionRecipeEngine()

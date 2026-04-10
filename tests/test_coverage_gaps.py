@@ -26,7 +26,7 @@ class TestDoctorColors:
     """Colors is 0% covered — simple pure functions, high value."""
 
     def setup_method(self):
-        from tokenpak.agent.cli.commands.doctor import Colors
+        from tokenpak.cli.commands.doctor import Colors
         self.Colors = Colors
 
     def test_ok_wraps_green(self):
@@ -59,14 +59,14 @@ class TestRunDoctor:
 
     def test_run_doctor_returns_int(self, tmp_path):
         """run_doctor should return 0 (all pass/warn) or 1 (fail) — always int."""
-        from tokenpak.agent.cli.commands.doctor import run_doctor
+        from tokenpak.cli.commands.doctor import run_doctor
         with patch("pathlib.Path.home", return_value=tmp_path):
             rc = run_doctor(fix=False)
         assert isinstance(rc, int)
         assert rc in (0, 1)
 
     def test_run_doctor_fix_mode_returns_int(self, tmp_path):
-        from tokenpak.agent.cli.commands.doctor import run_doctor
+        from tokenpak.cli.commands.doctor import run_doctor
         with patch("pathlib.Path.home", return_value=tmp_path):
             rc = run_doctor(fix=True)
         assert isinstance(rc, int)
@@ -80,19 +80,19 @@ class TestDashboardHelpers:
     """dashboard.py helpers are 0% covered — test pure functions."""
 
     def test_uptime_str_none_returns_unknown(self):
-        from tokenpak.agent.cli.commands.dashboard import _uptime_str
+        from tokenpak.cli.commands.dashboard import _uptime_str
         result = _uptime_str(None)
         assert "unknown" in result.lower() or result == "–"
 
     def test_uptime_str_recent_start(self):
-        from tokenpak.agent.cli.commands.dashboard import _uptime_str
+        from tokenpak.cli.commands.dashboard import _uptime_str
         # Started 65 seconds ago
         start = time.time() - 65
         result = _uptime_str(start)
         assert result  # non-empty
 
     def test_uptime_str_long_running(self):
-        from tokenpak.agent.cli.commands.dashboard import _uptime_str
+        from tokenpak.cli.commands.dashboard import _uptime_str
         # Started 2 hours ago
         start = time.time() - 7200
         result = _uptime_str(start)
@@ -100,15 +100,15 @@ class TestDashboardHelpers:
 
     def test_collect_local_data_returns_dict(self):
         """collect_local_data should return a dict even when proxy is down."""
-        from tokenpak.agent.cli.commands.dashboard import collect_local_data
-        with patch("tokenpak.agent.cli.commands.dashboard._http_get", return_value=None):
+        from tokenpak.cli.commands.dashboard import collect_local_data
+        with patch("tokenpak.cli.commands.dashboard._http_get", return_value=None):
             data = collect_local_data()
         assert isinstance(data, dict)
 
     def test_load_auth_profiles_missing_file(self, tmp_path):
         """_load_auth_profiles returns {} when file absent."""
-        from tokenpak.agent.cli.commands.dashboard import _load_auth_profiles
-        with patch("tokenpak.agent.cli.commands.dashboard.AUTH_PROFILES_FILE",
+        from tokenpak.cli.commands.dashboard import _load_auth_profiles
+        with patch("tokenpak.cli.commands.dashboard.AUTH_PROFILES_FILE",
                    tmp_path / "nonexistent.json"):
             result = _load_auth_profiles()
         assert isinstance(result, dict)

@@ -1,4 +1,4 @@
-from tokenpak.agent.agentic.prefetcher import PredictivePrefetcher
+from tokenpak.agentic.prefetcher import PredictivePrefetcher
 
 
 def test_transition_learning_recommends_highest_frequency_artifacts():

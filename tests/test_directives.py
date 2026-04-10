@@ -1,7 +1,7 @@
 """Tests for agent/compression/directives.py"""
 
 import pytest
-from tokenpak.agent.compression.directives import (
+from tokenpak.compression.directives import (
     parse_directives,
     apply_compression_directives,
     apply_context_plan,
@@ -451,7 +451,7 @@ class TestNewDirectivesInKnownActions:
 # DirectiveCache
 # ---------------------------------------------------------------------------
 
-from tokenpak.agent.compression.directives import DirectiveCache
+from tokenpak.compression.directives import DirectiveCache
 
 
 class TestDirectiveCache:

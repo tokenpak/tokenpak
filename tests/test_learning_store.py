@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.learning — Agent Learning Store.
+"""Tests for tokenpak.agentic.learning — Agent Learning Store.
 
 Covers:
   - Empty store initialisation
@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.learning import (
+from tokenpak.agentic.learning import (
     DEFAULT_LEARNING_PATH,
     _empty_store,
     _extract_block_utility,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from tokenpak.agent.agentic.error_normalizer import ErrorNormalizer, FailureSignatureDB
+from tokenpak.agentic.error_normalizer import ErrorNormalizer, FailureSignatureDB
 
 
 def test_default_port_bind_synonyms_normalize_to_single_signature():

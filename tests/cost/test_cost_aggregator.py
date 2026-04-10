@@ -8,7 +8,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from tokenpak.agent.telemetry.cost_tracker import CostTracker
+from tokenpak.telemetry.cost_tracker import CostTracker
 from tokenpak.cost.cost_aggregator import (
     BurnRateAlarm,
     CostAggregator,

@@ -1,7 +1,7 @@
 """Tests for TokenPak Claim/Evidence Indexer."""
 
 import pytest
-from tokenpak.agent.ingest.claim_indexer import (
+from tokenpak._internal.ingest.claim_indexer import (
     ClaimEvidence,
     extract_claims_from_text,
     extract_claims_from_document,

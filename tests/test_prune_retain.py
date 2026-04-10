@@ -88,10 +88,10 @@ def pins_path(tmp_path):
 def _patch_paths(store_path, pins_path):
     """Context manager to override module-level paths."""
     return [
-        patch("tokenpak.agent.cli.commands.prune._BLOCK_STORE_PATH", str(store_path)),
-        patch("tokenpak.agent.cli.commands.prune._PINS_PATH", str(pins_path)),
-        patch("tokenpak.agent.cli.commands.retain._BLOCK_STORE_PATH", str(store_path)),
-        patch("tokenpak.agent.cli.commands.retain._PINS_PATH", str(pins_path)),
+        patch("tokenpak.cli.commands.prune._BLOCK_STORE_PATH", str(store_path)),
+        patch("tokenpak.cli.commands.prune._PINS_PATH", str(pins_path)),
+        patch("tokenpak.cli.commands.retain._BLOCK_STORE_PATH", str(store_path)),
+        patch("tokenpak.cli.commands.retain._PINS_PATH", str(pins_path)),
     ]
 
 
@@ -102,7 +102,7 @@ def _patch_paths(store_path, pins_path):
 
 def test_prune_identifies_candidates(block_store, pins_path):
     """Low-score blocks are flagged as candidates; high-score are kept."""
-    from tokenpak.agent.cli.commands.prune import _load_blocks, _load_pins, _prune_candidates
+    from tokenpak.cli.commands.prune import _load_blocks, _load_pins, _prune_candidates
 
     patches = _patch_paths(block_store, pins_path)
     for p in patches:
@@ -130,7 +130,7 @@ def test_prune_identifies_candidates(block_store, pins_path):
 
 def test_prune_dry_run_no_changes(block_store, pins_path, capsys):
     """Dry-run shows candidates but doesn't remove any blocks."""
-    from tokenpak.agent.cli.commands.prune import run_prune
+    from tokenpak.cli.commands.prune import run_prune
 
     store_content_before = block_store.read_text()
 
@@ -138,15 +138,15 @@ def test_prune_dry_run_no_changes(block_store, pins_path, capsys):
     for p in patches:
         p.start()
     try:
-        with patch("tokenpak.agent.cli.commands.prune.is_pro", return_value=True, create=True):
+        with patch("tokenpak.cli.commands.prune.is_pro", return_value=True, create=True):
             # Patch the tier gate away
             with patch(
-                "tokenpak.agent.cli.commands.prune.run_prune.__module__",
+                "tokenpak.cli.commands.prune.run_prune.__module__",
                 create=False
             ):
                 pass
         # Call directly with tier gate bypassed via import mock
-        with patch.dict(sys.modules, {"tokenpak.agent.license.activation": None}):
+        with patch.dict(sys.modules, {"tokenpak.infrastructure.license_activation": None}):
             run_prune(dry_run=True, threshold=0.4)
     finally:
         for p in patches:
@@ -167,7 +167,7 @@ def test_prune_dry_run_no_changes(block_store, pins_path, capsys):
 
 def test_retain_pins_persist(block_store, pins_path):
     """Pinning a block writes to disk and survives a fresh load."""
-    from tokenpak.agent.cli.commands.retain import load_pins, pin_block, unpin_block
+    from tokenpak.cli.commands.retain import load_pins, pin_block, unpin_block
 
     patches = _patch_paths(block_store, pins_path)
     for p in patches:
@@ -203,8 +203,8 @@ def test_retain_pins_persist(block_store, pins_path):
 
 def test_pinned_blocks_skipped_by_prune(block_store, pins_path):
     """A pinned block with low quality_score is NOT a prune candidate."""
-    from tokenpak.agent.cli.commands.prune import _load_blocks, _prune_candidates
-    from tokenpak.agent.cli.commands.retain import pin_block
+    from tokenpak.cli.commands.prune import _load_blocks, _prune_candidates
+    from tokenpak.cli.commands.retain import pin_block
 
     patches = _patch_paths(block_store, pins_path)
     for p in patches:
@@ -238,13 +238,13 @@ def test_pinned_blocks_skipped_by_prune(block_store, pins_path):
 
 def test_prune_auto_respects_threshold(block_store, pins_path):
     """Auto-prune removes exactly the blocks below the threshold."""
-    from tokenpak.agent.cli.commands.prune import run_prune
+    from tokenpak.cli.commands.prune import run_prune
 
     patches = _patch_paths(block_store, pins_path)
     for p in patches:
         p.start()
     try:
-        with patch.dict(sys.modules, {"tokenpak.agent.license.activation": None}):
+        with patch.dict(sys.modules, {"tokenpak.infrastructure.license_activation": None}):
             run_prune(auto=True, threshold=0.4)
 
         # Read updated store
@@ -268,7 +268,7 @@ def test_prune_auto_respects_threshold(block_store, pins_path):
 
 def test_retain_list_shows_pins(block_store, pins_path, capsys):
     """retain --list displays all currently pinned blocks."""
-    from tokenpak.agent.cli.commands.retain import pin_block, run_retain_list
+    from tokenpak.cli.commands.retain import pin_block, run_retain_list
 
     patches = _patch_paths(block_store, pins_path)
     for p in patches:

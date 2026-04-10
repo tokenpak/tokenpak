@@ -23,7 +23,7 @@ import urllib.request
 
 import pytest
 
-from tokenpak.agent.proxy.circuit_breaker import (
+from tokenpak.proxy.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
@@ -31,7 +31,7 @@ from tokenpak.agent.proxy.circuit_breaker import (
     provider_from_url,
     _reset_registry_for_testing,
 )
-from tokenpak.agent.proxy.server import ProxyServer
+from tokenpak.proxy.server import ProxyServer
 
 
 # ---------------------------------------------------------------------------

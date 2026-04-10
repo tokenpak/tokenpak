@@ -39,7 +39,7 @@ _BASE = f"http://127.0.0.1:{ASYNC_PORT}"
 @pytest.fixture(scope="module")
 def async_proxy():
     """Start the async proxy and yield; tear down after module tests complete."""
-    from tokenpak.agent.proxy.server import ProxyServer
+    from tokenpak.proxy.server import ProxyServer
 
     server = ProxyServer(host="127.0.0.1", port=ASYNC_PORT)
     server.start(blocking=False)
@@ -238,7 +238,7 @@ def test_async_backpressure_503(async_proxy):
     We test this by temporarily monkey-patching the semaphore value.
     """
     import starlette.testclient
-    from tokenpak.agent.proxy.server_async import create_async_app, ConcurrencyLimiterMiddleware
+    from tokenpak.proxy.server_async import create_async_app, ConcurrencyLimiterMiddleware
 
     # Create a test app with max_concurrency=1
     app = create_async_app(async_proxy)
@@ -247,7 +247,7 @@ def test_async_backpressure_503(async_proxy):
     from starlette.testclient import TestClient
 
     # Create a fresh app with very low concurrency to trigger 503
-    from tokenpak.agent.proxy.server_async import _proxy_server_ref
+    from tokenpak.proxy.server_async import _proxy_server_ref
     tight_app = create_async_app(async_proxy)
 
     # Replace the middleware's semaphore with a depleted one
@@ -267,7 +267,7 @@ def test_async_backpressure_503(async_proxy):
 @pytest.mark.skip(reason="Async backend (server_async.py) exists but integration into ProxyServer.start() not yet implemented. Sync backend (BaseHTTPRequestHandler) is working correctly.")
 def test_start_proxy_uses_async_backend():
     """start_proxy() must be usable and return a ProxyServer with async backend."""
-    from tokenpak.agent.proxy.server import start_proxy
+    from tokenpak.proxy.server import start_proxy
 
     TEMP_PORT = 19867
     ps = start_proxy(host="127.0.0.1", port=TEMP_PORT, blocking=False)
@@ -350,7 +350,7 @@ def test_async_404_on_unknown_route(async_proxy):
 # ---------------------------------------------------------------------------
 
 def test_async_proxy_start_stop_cycle():
-    from tokenpak.agent.proxy.server import ProxyServer
+    from tokenpak.proxy.server import ProxyServer
 
     CYCLE_PORT = 19868
     ps = ProxyServer(host="127.0.0.1", port=CYCLE_PORT)

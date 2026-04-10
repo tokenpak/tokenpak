@@ -1,6 +1,6 @@
-"""Tests for tokenpak.agent.proxy.providers.stream_translator module."""
+"""Tests for tokenpak.proxy.providers.stream_translator module."""
 import pytest
-from tokenpak.agent.proxy.providers.stream_translator import StreamingTranslator
+from tokenpak.proxy.providers.stream_translator import StreamingTranslator
 
 
 class TestStreamingTranslator:

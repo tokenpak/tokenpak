@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timedelta
-from tokenpak.agent.telemetry.replay import ReplayEntry, ReplayStore, get_replay_store
+from tokenpak.telemetry.replay import ReplayEntry, ReplayStore, get_replay_store
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ class TestGetReplayStore:
             assert s1 is s2
         finally:
             # reset singleton back to memory
-            from tokenpak.agent.telemetry import replay as _r
+            from tokenpak.telemetry import replay as _r
             _r._store = None
             _r._store_path = ":memory:"
             os.unlink(path)

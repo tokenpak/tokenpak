@@ -1,4 +1,4 @@
-"""Tests for tokenpak.agent.agentic.runbook_generator
+"""Tests for tokenpak.agentic.runbook_generator
 
 Coverage:
   T1 — Runbook generated from successful episode (all fields populated)
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agent.agentic.runbook_generator import (
+from tokenpak.agentic.runbook_generator import (
     Episode,
     RunbookDB,
     RunbookEntry,

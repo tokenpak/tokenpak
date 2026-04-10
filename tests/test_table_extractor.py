@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 """tests/test_table_extractor.py
 
-Tests for tokenpak.agent.ingest.table_extractor (Phase 5D).
+Tests for tokenpak._internal.ingest.table_extractor (Phase 5D).
 
 Covers:
   - Markdown table extraction + normalization
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.agent.ingest.table_extractor import (
+from tokenpak._internal.ingest.table_extractor import (
     NormalizedTable,
     TableExtractor,
     _detect_numeric_columns,

@@ -27,7 +27,7 @@ from unittest import mock
 
 import pytest
 
-from tokenpak.agent.cli.commands.install import (
+from tokenpak.cli.commands.install import (
     PROXY_URL,
     MODE_PROFILE_MAP,
     _atomic_write_settings,
@@ -209,7 +209,7 @@ def test_dry_run_full_command(tmp_home, claude_dir):
     with (
         mock.patch("shutil.which", return_value="/usr/local/bin/claude"),
         mock.patch(
-            "tokenpak.agent.cli.commands.install.run_smoke_test", return_value=True
+            "tokenpak.cli.commands.install.run_smoke_test", return_value=True
         ),
     ):
         args = _fake_args(dry_run=True, no_systemd=True, mode="cli")
@@ -266,7 +266,7 @@ def test_smoke_fail_restores_backup(tmp_home, claude_settings, capsys):
     with (
         mock.patch("shutil.which", return_value="/usr/local/bin/claude"),
         mock.patch(
-            "tokenpak.agent.cli.commands.install.run_smoke_test", return_value=False
+            "tokenpak.cli.commands.install.run_smoke_test", return_value=False
         ),
     ):
         args = _fake_args(no_systemd=True, mode="cli")
@@ -289,7 +289,7 @@ def test_idempotent_second_run(tmp_home, claude_settings):
     with (
         mock.patch("shutil.which", return_value="/usr/local/bin/claude"),
         mock.patch(
-            "tokenpak.agent.cli.commands.install.run_smoke_test", return_value=True
+            "tokenpak.cli.commands.install.run_smoke_test", return_value=True
         ),
     ):
         args = _fake_args(no_systemd=True, mode="cli")
@@ -352,7 +352,7 @@ def test_no_systemd_skips_unit(tmp_home, claude_dir, capsys):
     with (
         mock.patch("shutil.which", return_value="/usr/local/bin/claude"),
         mock.patch(
-            "tokenpak.agent.cli.commands.install.run_smoke_test", return_value=True
+            "tokenpak.cli.commands.install.run_smoke_test", return_value=True
         ),
     ):
         args = _fake_args(no_systemd=True, mode="cli")
@@ -415,7 +415,7 @@ def test_no_claude_code_exits(tmp_home, capsys):
     with (
         mock.patch("shutil.which", return_value=None),
         mock.patch(
-            "tokenpak.agent.cli.commands.install.detect_claude_dir", return_value=False
+            "tokenpak.cli.commands.install.detect_claude_dir", return_value=False
         ),
     ):
         args = _fake_args(no_systemd=True, mode="cli")
