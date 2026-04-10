@@ -5620,7 +5620,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._send_json(welcome)
             return
         # Fix: POST-only paths return 405 instead of 404 on wrong method
-        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/ingest"}
+        _POST_ONLY_PATHS = {"/v1/messages", "/v1/messages/count_tokens", "/v1/messages/forecast", "/v1/chat/completions", "/ingest"}
         if self.path.split("?")[0] in _POST_ONLY_PATHS:
             self.send_response(405)
             self.send_header("Allow", "POST, OPTIONS")
@@ -6287,6 +6287,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._ollama_proxy("POST")
         elif self.path.split("?")[0] == "/v1/messages/count_tokens":
             self._handle_count_tokens()
+        elif self.path.split("?")[0] == "/v1/messages/forecast":
+            self._handle_cost_forecast()
         elif self.path.startswith("/v1/messages/"):
             # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
@@ -6459,6 +6461,147 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 total += count_tokens(json.dumps(schema, separators=(",", ":")))
 
         self._send_json({"input_tokens": total})
+
+    def _handle_cost_forecast(self):
+        """CCI-11: Handle POST /v1/messages/forecast — local cost forecast, no upstream call.
+
+        Accepts the same body shape as /v1/messages, runs count_tokens locally,
+        applies the model pricing config, and returns an estimated cost breakdown.
+        No API key required; no upstream round-trip.
+        """
+        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            payload = json.loads(body_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": f"Request body is not valid JSON: {exc}"}},
+                status=400,
+            )
+            return
+
+        if not isinstance(payload, dict) or not isinstance(payload.get("messages"), list):
+            self._send_json(
+                {"error": {"type": "invalid_request_error", "message": "Request body must include a 'messages' array"}},
+                status=400,
+            )
+            return
+
+        model = payload.get("model", "claude-sonnet-4-5") or "claude-sonnet-4-5"
+        if not isinstance(model, str):
+            model = "claude-sonnet-4-5"
+
+        # 1. Count input tokens
+        total_input = 0
+        system = payload.get("system", "")
+        if isinstance(system, str):
+            total_input += count_tokens(system)
+        elif isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total_input += count_tokens(text)
+                elif isinstance(block, str):
+                    total_input += count_tokens(block)
+
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                total_input += count_tokens(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        text = block.get("text", "")
+                        if isinstance(text, str):
+                            total_input += count_tokens(text)
+                    elif isinstance(block, str):
+                        total_input += count_tokens(block)
+
+        for tool in payload.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
+            total_input += count_tokens(tool.get("name", ""))
+            total_input += count_tokens(tool.get("description", ""))
+            schema = tool.get("input_schema", {})
+            if isinstance(schema, dict):
+                total_input += count_tokens(json.dumps(schema, separators=(",", ":")))
+
+        # 2. Cache creates from cache_control hints
+        cache_creates_estimate = 0
+        cache_hits_estimate = 0
+        for msg in payload["messages"]:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("cache_control"):
+                        block_text = block.get("text", "")
+                        if isinstance(block_text, str):
+                            cache_creates_estimate += count_tokens(block_text)
+        if isinstance(system, list):
+            for block in system:
+                if isinstance(block, dict) and block.get("cache_control"):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        cache_creates_estimate += count_tokens(text)
+
+        # 3. Output estimate — default 500
+        max_tokens = payload.get("max_tokens")
+        if isinstance(max_tokens, int) and 0 < max_tokens < 500:
+            output_estimate = max_tokens
+        else:
+            output_estimate = 500
+
+        # 4. Cost via pricing config
+        estimated_cost_usd = estimate_cost(
+            model, total_input, output_estimate, cache_creates_estimate, cache_hits_estimate
+        )
+
+        # 5. TTFB estimate from rolling average
+        with _latency_lock:
+            lats = list(_request_latencies)
+        ttfb_estimate_ms = int(sum(lats) / len(lats)) if lats else 800
+
+        # 6. Cache hit likelihood — per-session if available, else global
+        session_id = self.headers.get("x-claude-code-session-id", "").strip()
+        cache_hit_likelihood = 0.5
+        if session_id:
+            try:
+                _conn = sqlite3.connect(MONITOR_DB, timeout=2)
+                try:
+                    _cur = _conn.execute(
+                        "SELECT cache_read_tokens FROM requests "
+                        "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 20",
+                        (session_id,),
+                    )
+                    rows = _cur.fetchall()
+                    if len(rows) >= 3:
+                        hits = sum(1 for r in rows if (r[0] or 0) > 0)
+                        cache_hit_likelihood = round(hits / len(rows), 4)
+                finally:
+                    _conn.close()
+            except Exception:
+                pass
+        else:
+            _cache_total = SESSION.get("cache_hits", 0) + SESSION.get("cache_misses", 0)
+            if _cache_total >= 5:
+                cache_hit_likelihood = round(SESSION.get("cache_hits", 0) / _cache_total, 4)
+
+        self._send_json({
+            "estimated_cost_usd": round(estimated_cost_usd, 8),
+            "ttfb_estimate_ms": ttfb_estimate_ms,
+            "cache_hit_likelihood": cache_hit_likelihood,
+            "breakdown": {
+                "input_tokens": total_input,
+                "output_estimate": output_estimate,
+                "cache_hits_estimate": cache_hits_estimate,
+                "cache_creates_estimate": cache_creates_estimate,
+            },
+        })
 
     def _reverse_proxy(self, method):
         # Pre-flight: check for missing API credentials before touching upstream.
