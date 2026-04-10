@@ -119,11 +119,7 @@ def capsule_request_hook(
 
         # ── Tool schema normalization (even when capsule builder is disabled) ──
         try:
-<<<<<<<< HEAD:tokenpak/proxy/capsule_integration.py
             from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
-========
-            from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/capsule_integration.py
 
             body, _schema_changed = _get_registry().normalize_request(body)
         except Exception as _exc:
@@ -183,11 +179,7 @@ def capsule_request_hook(
     # Normalize tool schemas to bit-for-byte identical bytes on every request.
     # This prevents cache misses caused by non-deterministic tool schema ordering.
     try:
-<<<<<<<< HEAD:tokenpak/proxy/capsule_integration.py
         from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
-========
-        from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/capsule_integration.py
 
         body, _schema_changed = _get_registry().normalize_request(body)
         if _schema_changed:

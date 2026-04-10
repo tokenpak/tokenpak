@@ -104,7 +104,7 @@ def parse_filter(filter_str: Optional[str]) -> dict[str, str]:
 
 
 class TelemetryEvent(BaseModel):
-    """A single inbound telemetry event from the OpenClaw plugin."""
+    """A single inbound telemetry event from the TokenPak plugin."""
 
     model_config = ConfigDict(extra="allow")
     provider: Optional[str] = None
@@ -159,7 +159,7 @@ def create_app(
         pipeline: Optional pre-constructed TelemetryPipeline instance (for testing).
         rollups: Optional pre-constructed RollupEngine instance (for testing).
     """
-    app = FastAPI(title="TokenPak Telemetry", version="1.0.0")
+    app = FastAPI(title="TokenPak Telemetry", version="1.1.0")
     _storage = storage or TelemetryDB(db_path)
     _pipeline = pipeline or TelemetryPipeline(storage=_storage)
     app.state.storage = _storage

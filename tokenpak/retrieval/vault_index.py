@@ -25,6 +25,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+try:
+    from tokenpak.tokens import count_tokens
+except ImportError:
+    try:
+        from ..tokens import count_tokens  # type: ignore[no-redef]
+    except ImportError:
+        def count_tokens(text: str) -> int:  # type: ignore[misc]
+            return max(1, len(text) // 4)
+
 # Constants (mirror proxy.py defaults; override via env vars)
 VAULT_INDEX_RELOAD_INTERVAL: int = int(os.environ.get("TOKENPAK_VAULT_INDEX_RELOAD_INTERVAL", 300))
 VAULT_CACHE_MAX_BYTES: int = int(os.environ.get("TOKENPAK_VAULT_MEMORY_MAX", 256 * 1024 * 1024))

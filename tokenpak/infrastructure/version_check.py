@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """
 # TOKENPAK CORE — DO NOT MODIFY
 TokenPak agent startup version validation.
@@ -25,8 +25,8 @@ from typing import List, Optional
 
 PROXY_URL = "http://localhost:8766"
 LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
-OPENCLAW_CFG = Path.home() / ".openclaw" / "openclaw.json"
-MEMORY_DIR = Path.home() / ".openclaw" / "workspace" / "memory"
+TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
+MEMORY_DIR = Path.home() / ".tokenpak" / "data" / "memory"
 
 # Fields that were removed in past versions
 DEPRECATED_CONFIG_FIELDS = {
@@ -59,9 +59,9 @@ def _load_lock() -> dict:
 
 
 def _load_config() -> Optional[dict]:
-    if OPENCLAW_CFG.exists():
+    if TOKENPAK_CFG.exists():
         try:
-            return json.loads(OPENCLAW_CFG.read_text())
+            return json.loads(TOKENPAK_CFG.read_text())
         except Exception:
             return None
     return None

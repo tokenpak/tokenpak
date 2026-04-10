@@ -66,7 +66,7 @@ class ProxyRoutesMixin:
                     "docs": "/docs",
                     "proxy": "/v1/messages (POST), /v1/chat/completions (POST)",
                 },
-                "docs": "https://github.com/kaywhy331/tokenpak",
+                "docs": "https://github.com/tokenpak/tokenpak",
             }
             self._send_json(welcome)
             return
@@ -174,7 +174,7 @@ class ProxyRoutesMixin:
         from tokenpak.proxy.config import (
             COMPILATION_MODE, ROUTER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED,
             BUDGET_TOTAL_TOKENS, TERM_RESOLVER_ENABLED, TERM_RESOLVER_TOP_K,
-            TERM_RESOLVER_MAX_BYTES, STRICT_VALIDATION, UPSTREAM_TIMEOUT,
+            TERM_RESOLVER_MAX_BYTES, QUERY_EXPANSION_ENABLED, UPSTREAM_TIMEOUT,
         )
         from tokenpak.proxy.fallback import _provider_circuits
         from tokenpak.runtime.proxy import (
@@ -217,7 +217,7 @@ class ProxyRoutesMixin:
             term_resolver_available=TERM_RESOLVER is not None,
             term_resolver_top_k=TERM_RESOLVER_TOP_K,
             term_resolver_max_bytes=TERM_RESOLVER_MAX_BYTES,
-            strict_validation=STRICT_VALIDATION,
+            query_expansion_enabled=QUERY_EXPANSION_ENABLED,
             upstream_timeout=UPSTREAM_TIMEOUT,
             provider_circuits=_provider_circuits,
             request_latencies=list(_request_latencies),

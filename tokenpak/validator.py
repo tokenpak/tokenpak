@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak Protocol v1.0 Validator.
 
 Validates TokenPak JSON files against the v1.0 schema and protocol rules.

@@ -82,6 +82,36 @@ class OpenAIChatAdapter(FormatAdapter):
 
         return json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
+    def extract_input_tokens(self, body: bytes) -> int:
+        """Extract prompt token count from OpenAI usage field.
+
+        Returns prompt_tokens when present in the usage dict.
+        Returns 0 when usage is absent; caller should fall back to heuristic.
+        """
+        try:
+            data = json.loads(body)
+        except Exception:
+            return 0
+        usage = data.get("usage", {})
+        if "prompt_tokens" in usage:
+            return int(usage["prompt_tokens"])
+        return 0
+
+    def extract_total_tokens(self, body: bytes) -> int:
+        """Extract total token count from OpenAI usage field.
+
+        Returns total_tokens when present in the usage dict.
+        Returns 0 when usage is absent.
+        """
+        try:
+            data = json.loads(body)
+        except Exception:
+            return 0
+        usage = data.get("usage", {})
+        if "total_tokens" in usage:
+            return int(usage["total_tokens"])
+        return 0
+
     def get_default_upstream(self) -> str:
         return "https://api.openai.com"
 

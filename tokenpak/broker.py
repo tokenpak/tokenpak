@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Autonomous Broker — Active Routing for TokenPak Phase 3.2.
 
 Once statistical confidence is met (≥MIN_SAMPLES per task_type), the broker

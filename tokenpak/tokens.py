@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Token counting utilities with caching, lazy loading, and robust truncation."""
 
 from functools import lru_cache

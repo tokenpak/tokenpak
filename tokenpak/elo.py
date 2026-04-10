@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Elo Rating System for TokenPak Shadow Mode.
 
 Maintains per-model Elo ratings per task_type. Updated on each logged

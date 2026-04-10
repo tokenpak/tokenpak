@@ -35,7 +35,7 @@ all = ["ollama>=0.2.0", "openai>=1.0.0"]
 
 [project.urls]
 "Homepage" = "https://github.com/tokenpak/tokenpak-local"
-"Documentation" = "https://tokenpak.dev/integrations/local-llm"
+"Documentation" = "https://tokenpak.ai/integrations/local-llm"
 "Repository" = "https://github.com/tokenpak/tokenpak-local.git"
 "Bug Tracker" = "https://github.com/tokenpak/tokenpak-local/issues"
 

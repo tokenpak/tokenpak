@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Benchmarking for TokenPak: compression performance and latency."""
 
 import hashlib
@@ -208,7 +208,7 @@ Please follow the existing code style and add tests for new features.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Apache-2.0 License — see [LICENSE](LICENSE) for details.
 """,
     },
     {
@@ -231,7 +231,7 @@ MIT License — see [LICENSE](LICENSE) for details.
   },
   "keywords": ["demo", "typescript", "nodejs"],
   "author": "Jane Doe <jane@example.com>",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "express": "^4.18.2",
     "lodash": "^4.17.21",

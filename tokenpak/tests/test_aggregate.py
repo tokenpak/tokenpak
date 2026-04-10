@@ -145,11 +145,11 @@ class TestAggregateRecords:
         records = [
             {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0}
         ]
-        rows, totals = aggregate_records(records, "host-1")
+        rows, totals = aggregate_records(records, "agent-3")
         
         assert len(rows) == 1
         assert rows[0].agent == "cali"
-        assert rows[0].machine == "host-1"
+        assert rows[0].machine == "agent-3"
         assert rows[0].model == "claude-sonnet"
         assert rows[0].requests == 1
         assert rows[0].tokens == 150
@@ -163,7 +163,7 @@ class TestAggregateRecords:
             {"agent": "cali", "model": "claude-sonnet", "input_tokens": 100, "output_tokens": 50, "cost": 0.001, "saved_cost": 0.0},
             {"agent": "cali", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0001},
         ]
-        rows, totals = aggregate_records(records, "host-1")
+        rows, totals = aggregate_records(records, "agent-3")
         
         assert len(rows) == 1
         assert rows[0].requests == 2
@@ -178,7 +178,7 @@ class TestAggregateRecords:
             {"agent": "cali", "model": "claude-haiku", "input_tokens": 50, "output_tokens": 25, "cost": 0.0001, "saved_cost": 0.00005},
             {"agent": "trix", "model": "claude-sonnet", "input_tokens": 200, "output_tokens": 100, "cost": 0.002, "saved_cost": 0.0},
         ]
-        rows, totals = aggregate_records(records, "host-1")
+        rows, totals = aggregate_records(records, "agent-3")
         
         assert len(rows) == 3
         assert totals["requests"] == 3
@@ -190,7 +190,7 @@ class TestAggregateRecords:
         records = [
             {"agent": "cali", "model": "claude-sonnet"},  # missing tokens and cost
         ]
-        rows, totals = aggregate_records(records, "host-1")
+        rows, totals = aggregate_records(records, "agent-3")
         
         assert len(rows) == 1
         assert rows[0].tokens == 0
@@ -198,7 +198,7 @@ class TestAggregateRecords:
 
     def test_aggregate_empty_records(self):
         """Test aggregating empty record list."""
-        rows, totals = aggregate_records([], "host-1")
+        rows, totals = aggregate_records([], "agent-3")
         
         assert len(rows) == 0
         assert totals["requests"] == 0
@@ -212,7 +212,7 @@ class TestAggregateRecords:
             {"agent": "trix", "model": "expensive", "input_tokens": 100, "output_tokens": 50, "cost": 0.005, "saved_cost": 0.0},
             {"agent": "sue", "model": "medium", "input_tokens": 50, "output_tokens": 25, "cost": 0.001, "saved_cost": 0.0},
         ]
-        rows, totals = aggregate_records(records, "host-1")
+        rows, totals = aggregate_records(records, "agent-3")
         
         assert len(rows) == 3
         assert rows[0].cost == 0.005

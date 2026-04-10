@@ -34,6 +34,54 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
 # ---------------------------------------------------------------------------
+# CCG-04: Per-route HTTP header forwarding allowlists
+# ---------------------------------------------------------------------------
+# These mirror the WS-path allowlist tuple onto the HTTP path as a per-route
+# allowlist.  LEGACY_HEADER_ALLOWLIST must never gain new entries — legacy
+# traffic must produce exactly the same forwarded headers as today (bit-for-bit).
+# CLAUDE_CODE_HEADER_ALLOWLIST extends it with Claude Code-specific headers.
+
+LEGACY_HEADER_ALLOWLIST: tuple = (
+    "x-api-key",
+    "authorization",
+    "anthropic-version",
+    "anthropic-beta",
+)
+
+CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
+    "x-api-key",
+    "authorization",
+    "anthropic-version",
+    "anthropic-beta",
+    "anthropic-dangerous-direct-browser-access",
+    "x-claude-code-session-id",
+    "user-agent",
+)
+
+
+def _classify_route(path: str, headers) -> str:
+    """Classify an incoming HTTP request as 'claude-code' or 'tokenpak'.
+
+    Inspects headers only — no DB access, no network round-trips.
+    Claude Code wins when both X-Claude-Code-Session-Id and X-TokenPak-Session
+    are present (matching CCG-03's resolver priority order).
+
+    Returns:
+        "claude-code"  if X-Claude-Code-Session-Id is present (case-insensitive)
+        "tokenpak"     otherwise
+    """
+    if hasattr(headers, "items"):
+        for k, _ in headers.items():
+            if k.lower() == "x-claude-code-session-id":
+                return "claude-code"
+    elif hasattr(headers, "get"):
+        for variant in ("X-Claude-Code-Session-Id", "x-claude-code-session-id"):
+            if headers.get(variant):
+                return "claude-code"
+    return "tokenpak"
+
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 

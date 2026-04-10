@@ -47,3 +47,13 @@ async def serve_dashboard_file(path: str) -> tuple[str, str] | None:
     mime_type = mime_types.get(ext, "text/plain")
 
     return content, mime_type
+
+
+# Python API exports (from agent/dashboard/)
+try:
+    from .export_api import ExportAPI
+    from .export_csv import CSVExporter, ExportDataType, ExportFormat
+    from .session_filter import SessionFilter
+    __all__ = ["get_dashboard_files", "serve_dashboard_file", "ExportAPI", "CSVExporter", "ExportDataType", "ExportFormat", "SessionFilter"]
+except ImportError:
+    __all__ = ["get_dashboard_files", "serve_dashboard_file"]

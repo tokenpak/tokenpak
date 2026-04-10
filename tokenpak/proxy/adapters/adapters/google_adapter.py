@@ -4,10 +4,29 @@ from __future__ import annotations
 
 import copy
 import json
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional
 
 from .base import FormatAdapter
 from .canonical import CanonicalRequest
+
+# JSON Schema type names → Google UPPERCASE equivalents
+_GOOGLE_TYPE_MAP: Dict[str, str] = {
+    "string": "STRING",
+    "number": "NUMBER",
+    "integer": "INTEGER",
+    "boolean": "BOOLEAN",
+    "array": "ARRAY",
+    "object": "OBJECT",
+}
+
+# JSON Schema keywords not supported by Google functionDeclarations
+_GOOGLE_UNSUPPORTED_SCHEMA_KEYS: FrozenSet[str] = frozenset({
+    "$schema", "$ref", "$defs", "$id", "$comment", "definitions",
+    "additionalProperties", "patternProperties",
+    "oneOf", "anyOf", "allOf", "not",
+    "if", "then", "else",
+    "examples", "default", "title", "format",
+})
 
 
 class GoogleGenerativeAIAdapter(FormatAdapter):
@@ -60,9 +79,6 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         )
 
     def denormalize(self, canonical: CanonicalRequest) -> bytes:
-        if canonical.tools is not None and canonical.tools:
-            self._validate_tool_support()
-
         payload: Dict[str, Any] = {
             "contents": self._to_google_contents(canonical.messages),
             "stream": canonical.stream,
@@ -73,8 +89,8 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         if canonical.system not in (None, "", []):
             payload["systemInstruction"] = {"parts": self._to_google_parts(canonical.system)}
 
-        if canonical.tools is not None:
-            payload["tools"] = copy.deepcopy(canonical.tools)
+        if canonical.tools is not None and canonical.tools:
+            payload["tools"] = self._translate_tools_to_function_declarations(canonical.tools)
 
         if "generationConfig" in canonical.generation:
             payload["generationConfig"] = copy.deepcopy(canonical.generation["generationConfig"])
@@ -101,13 +117,108 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
     def get_sse_format(self) -> str:
         return "google-ndjson"
 
-    def _validate_tool_support(self) -> None:
-        """Raise NotImplementedError for function calling — not yet supported by this adapter."""
-        raise NotImplementedError(
-            "Google adapter does not support function calling. "
-            "Use TokenPak with the OpenAI or Anthropic adapter instead. "
-            "See docs/provider-gaps.md for details and ETA."
-        )
+    def _freeze_schema_for_google(self, schema: Any) -> Any:
+        """Recursively sanitize a JSON Schema dict for Google's functionDeclarations format.
+
+        - Converts type names to UPPERCASE (e.g. "string" → "STRING").
+        - Removes keywords unsupported by Google (e.g. $schema, additionalProperties).
+        - Handles type arrays: picks first non-null type; sets nullable=True if null present.
+        - Recurses into properties and items.
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        result: Dict[str, Any] = {}
+        for key, value in schema.items():
+            if key in _GOOGLE_UNSUPPORTED_SCHEMA_KEYS:
+                continue
+            if key == "type":
+                if isinstance(value, list):
+                    non_null = [t for t in value if t != "null"]
+                    chosen = non_null[0] if non_null else "string"
+                    result["type"] = _GOOGLE_TYPE_MAP.get(chosen.lower(), chosen.upper())
+                    if "null" in value:
+                        result["nullable"] = True
+                elif isinstance(value, str):
+                    result["type"] = _GOOGLE_TYPE_MAP.get(value.lower(), value.upper())
+                else:
+                    result["type"] = value
+            elif key == "properties":
+                if isinstance(value, dict):
+                    result["properties"] = {
+                        k: self._freeze_schema_for_google(v) for k, v in value.items()
+                    }
+            elif key == "items":
+                result["items"] = self._freeze_schema_for_google(value)
+            else:
+                result[key] = copy.deepcopy(value)
+        return result
+
+    def _translate_tools_to_function_declarations(
+        self, tools: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Translate OpenAI or Anthropic tools array to Google functionDeclarations format.
+
+        Formats handled:
+          - OpenAI:    tools[].type == "function" with tools[].function.{name, description, parameters}
+          - Anthropic: tools[].{name, description, input_schema}
+          - Google:    tools[].functionDeclarations already present — passed through unchanged
+          - Generic:   tools[].{name, description?, parameters?} — treated as pre-normalized
+
+        Returns a list in Google format: [{"functionDeclarations": [...]}]
+
+        Raises ValueError when a tool's format cannot be identified or 'name' is missing.
+        """
+        # If the first tool already uses Google's native format, pass all through unchanged.
+        if tools and isinstance(tools[0], dict) and "functionDeclarations" in tools[0]:
+            return copy.deepcopy(tools)
+
+        declarations: List[Dict[str, Any]] = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+
+            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+                # OpenAI format
+                fn = tool["function"]
+                name = fn.get("name", "")
+                description = fn.get("description", "")
+                parameters = fn.get("parameters")
+            elif "input_schema" in tool:
+                # Anthropic format
+                name = tool.get("name", "")
+                description = tool.get("description", "")
+                parameters = tool.get("input_schema")
+            elif "name" in tool:
+                # Generic / pre-normalized format
+                name = tool.get("name", "")
+                description = tool.get("description", "")
+                parameters = tool.get("parameters")
+            else:
+                raise ValueError(
+                    "Cannot translate tool to Google functionDeclarations: "
+                    f"unrecognized format (keys: {sorted(tool.keys())}). "
+                    "Expected OpenAI (type='function'), Anthropic (input_schema), "
+                    "or Google (functionDeclarations) format."
+                )
+
+            if not name:
+                raise ValueError(
+                    "Cannot translate tool to Google functionDeclarations: "
+                    "'name' field is required but was missing or empty."
+                )
+
+            decl: Dict[str, Any] = {"name": name}
+            if description:
+                decl["description"] = description
+            if parameters is not None:
+                frozen = self._freeze_schema_for_google(parameters)
+                if frozen:
+                    decl["parameters"] = frozen
+
+            declarations.append(decl)
+
+        return [{"functionDeclarations": declarations}]
 
     def _to_google_contents(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         contents: List[Dict[str, Any]] = []

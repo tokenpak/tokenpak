@@ -28,14 +28,16 @@ logger = logging.getLogger(__name__)
 
 class AlertLevel(Enum):
     """Alert severity levels"""
-    WARNING = 80      # 80% of limit
-    CRITICAL = 100    # At/over daily limit
-    OVERAGE = 110     # 10%+ over limit
+
+    WARNING = 80  # 80% of limit
+    CRITICAL = 100  # At/over daily limit
+    OVERAGE = 110  # 10%+ over limit
 
 
 @dataclass
 class BudgetAlert:
     """Alert fired when spending reaches a threshold"""
+
     level: AlertLevel
     threshold_pct: int
     current_spend: float
@@ -62,6 +64,7 @@ class BudgetAlert:
 @dataclass
 class BudgetConfig:
     """Budget configuration"""
+
     daily_limit: Optional[float] = None
     weekly_limit: Optional[float] = None
     enabled: bool = True
@@ -187,9 +190,7 @@ class BudgetTracker:
             "daily_limit": self.config.daily_limit,
             "weekly_limit": self.config.weekly_limit,
             "alert_cooldown_minutes": self.alert_cooldown.total_seconds() / 60,
-            "last_alerts": {
-                k: v.isoformat() for k, v in self.alert_history.items()
-            },
+            "last_alerts": {k: v.isoformat() for k, v in self.alert_history.items()},
         }
 
     def format_budget_display(
@@ -213,8 +214,7 @@ class BudgetTracker:
         bar = "█" * filled + "░" * empty
 
         return (
-            f"[{bar}] {pct:.0f}% of {limit_type} budget "
-            f"(${current_spend:.2f} / ${limit:.2f})"
+            f"[{bar}] {pct:.0f}% of {limit_type} budget " f"(${current_spend:.2f} / ${limit:.2f})"
         )
 
     def reset_alert_history(self) -> None:

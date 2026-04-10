@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak CLI package — compatibility shim.
 
 Re-exports everything from _cli_core so that `import tokenpak.cli as cli`

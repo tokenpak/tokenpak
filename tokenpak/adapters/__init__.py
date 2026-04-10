@@ -37,13 +37,11 @@ from tokenpak.adapters.litellm import LiteLLMAdapter
 from tokenpak.adapters.openai import OpenAIAdapter
 
 __all__ = [
-    # Base
     "TokenPakAdapter",
     "TokenPakAdapterError",
     "TokenPakAuthError",
     "TokenPakConfigError",
     "TokenPakTimeoutError",
-    # Concrete adapters
     "AnthropicAdapter",
     "OpenAIAdapter",
     "LangChainAdapter",

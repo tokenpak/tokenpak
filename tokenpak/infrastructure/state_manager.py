@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """StateManager — compact session state that persists across turns.
 
 STATE_JSON keeps current task context in a concise, patchable format.
@@ -293,7 +293,7 @@ class IntentStateManager:
         """Load the JSON schema file for this intent (if it exists)."""
         schemas_dir = _get_schemas_dir()
         try:
-            from tokenpak.agent.state_schemas import INTENT_SCHEMA_MAP
+            from tokenpak._internal.state_schemas import INTENT_SCHEMA_MAP
 
             filename = INTENT_SCHEMA_MAP.get(self.intent)
             if filename:

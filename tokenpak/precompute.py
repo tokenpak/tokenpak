@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tokenpak/precompute.py — Intent-specific precomputation pipeline.
 
 At index time, detects document types and generates intent-ready artifacts

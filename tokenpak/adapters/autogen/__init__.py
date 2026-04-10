@@ -4,28 +4,30 @@ This package provides automatic context compression for AutoGen conversations,
 reducing token usage in multi-agent systems while preserving conversation quality.
 
 Example:
-    >>> from tokenpak.adapters.autogen import TokenPakConversationHook
+    >>> from autogen_tokenpak import TokenPakConversationHook
+    >>> from autogen import UserProxyAgent, AssistantAgent
+    >>>
     >>> hook = TokenPakConversationHook()
-    >>> # Patch an AutoGen agent (requires pyautogen installed):
-    >>> # hook.compress_agent(assistant)
+    >>>
+    >>> user = UserProxyAgent("user")
+    >>> assistant = AssistantAgent("assistant", llm_config={...})
+    >>>
+    >>> hook.compress_agent(assistant)
+    >>>
+    >>> user.initiate_chat(assistant, message="Hello!")
 """
 
 from .context import (
+    TokenPakAssistant,
     TokenPakConversationHook,
     TokenPakCompressionReport,
     AgentContextConfig,
 )
-from .message import TokenPakMessage, compress_messages
-from .assistant import TokenPakAssistant
-from .groupchat import TokenPakGroupChat
 
 __version__ = "0.1.0"
 __all__ = [
     "TokenPakConversationHook",
+    "TokenPakAssistant",
     "TokenPakCompressionReport",
     "AgentContextConfig",
-    "TokenPakMessage",
-    "compress_messages",
-    "TokenPakAssistant",
-    "TokenPakGroupChat",
 ]

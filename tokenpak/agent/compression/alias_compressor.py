@@ -7,7 +7,7 @@ U1 for URLs; C1 for class/function names; E1 for env vars).
 
 A compact symbol table is prepended to the first message content:
 
-    [ALIASES: F1=/home/trix/tokenpak/pipeline.py | S1=openclaw-gateway]
+    [ALIASES: F1=/opt/tokenpak/pipeline.py | S1=api-gateway]
 
 Runs AFTER dedup, BEFORE final prompt assembly.
 """

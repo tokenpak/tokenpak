@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import sys
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -23,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple
 PROXY_BASE = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 _MONITOR_DB = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+    os.path.expanduser("~/.tokenpak/data/monitor.db"),
 )
 SEP = "────────────────────────────────────────"
 
@@ -494,18 +493,6 @@ def _apply_recommendations(recs: List[Dict[str, Any]]) -> None:
 
 def run_optimize(verbose: bool = False, as_json: bool = False, apply: bool = False) -> None:
     """Run the full optimization analysis."""
-    # Pro+ gate
-    try:
-        from tokenpak._internal.license.activation import is_pro
-
-        if not is_pro():
-            print("⚠  /tokenpak optimize requires a Pro (or higher) license.")
-            print("   Get a license: https://tokenpak.io/pricing")
-            print("   Run: tokenpak activate <key>")
-            sys.exit(1)
-    except ImportError:
-        pass  # license module not available in all installs — proceed
-
     # Fetch session stats
     session = _proxy_get("/stats/session") or {}
 

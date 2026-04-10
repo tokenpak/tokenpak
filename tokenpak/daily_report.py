@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """TokenPak Daily Savings Report Generator
 
 Generates formatted daily summaries for TokenPak usage and savings.

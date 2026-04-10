@@ -1,4 +1,5 @@
 """Plugin registry — discovery, registration, and ordered retrieval."""
+
 import importlib
 import json
 import logging
@@ -73,16 +74,39 @@ class PluginRegistry:
             self._load_plugin_path(path)
 
     def _discover_from_config(self) -> None:
-        """Load plugins listed in ``tokenpak.config.json`` ``plugins`` key."""
-        config_path = Path("tokenpak.config.json")
-        if not config_path.exists():
-            return
+        """Load plugins from config.yaml ``plugins.enabled`` (or legacy ``tokenpak.config.json``).
+
+        Resolution order:
+          1. config.yaml ``plugins.enabled`` list (canonical)
+          2. Legacy ``tokenpak.config.json`` ``plugins`` key in CWD (backward compat)
+        """
+        from tokenpak.config_loader import get as config_get
+
+        # 1. Canonical: config.yaml
         try:
-            data = json.loads(config_path.read_text())
-            for path in data.get("plugins", []):
-                self._load_plugin_path(path)
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.warning("Could not read tokenpak.config.json: %s — skipping", exc)
+            plugin_list = config_get("plugins.enabled", [], None, list)
+            if plugin_list:
+                for path in plugin_list:
+                    self._load_plugin_path(path)
+                return
+        except Exception as exc:
+            logger.debug("Could not read plugins.enabled from config.yaml: %s", exc)
+
+        # 2. Legacy fallback: tokenpak.config.json in CWD (migration support)
+        legacy_path = Path("tokenpak.config.json")
+        if legacy_path.exists():
+            try:
+                data = json.loads(legacy_path.read_text())
+                plugin_list = data.get("plugins", [])
+                if plugin_list:
+                    logger.warning(
+                        "tokenpak.config.json is deprecated — move plugins list to "
+                        "config.yaml under 'plugins.enabled' key"
+                    )
+                    for path in plugin_list:
+                        self._load_plugin_path(path)
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("Could not read tokenpak.config.json: %s — skipping", exc)
 
     # ------------------------------------------------------------------
     # Retrieval

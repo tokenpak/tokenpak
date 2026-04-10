@@ -294,3 +294,24 @@ class FallbackChain:
     def __repr__(self) -> str:
         return f"FallbackChain(pool_size={self.pool_size})"
 
+
+# ---------------------------------------------------------------------------
+# Exponential backoff — transferred from monolith (TPK-CONSOLIDATION-A2a)
+# ---------------------------------------------------------------------------
+import logging as _logging
+import random as _random_module
+
+_BACKOFF_BASE: float = float(os.environ.get("TOKENPAK_BACKOFF_BASE", "1.0"))
+_BACKOFF_CAP: float = float(os.environ.get("TOKENPAK_BACKOFF_CAP", "32.0"))
+_MAX_RETRIES: int = int(os.environ.get("TOKENPAK_MAX_RETRIES", "3"))
+
+_backoff_logger = _logging.getLogger(__name__)
+
+
+def _backoff_wait(attempt: int, base: float = _BACKOFF_BASE, cap: float = _BACKOFF_CAP) -> None:
+    """Exponential backoff: base * 2^attempt with 25% jitter, capped at cap seconds."""
+    wait = min(base * (2 ** attempt), cap)
+    wait *= (1.0 + _random_module.uniform(0, 0.25))
+    _backoff_logger.info("Rate limited — backoff %.1fs (attempt %d)", wait, attempt)
+    time.sleep(wait)
+

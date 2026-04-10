@@ -264,7 +264,7 @@ assert "cache_control" not in blocks[1]
 All tests located in `test_prompt_pack.py`:
 
 ```bash
-cd /home/trix/Projects/tokenpak
+cd /path/to/tokenpak
 python3 -m pytest tokenpak/agent/proxy/test_prompt_pack.py -v
 ```
 

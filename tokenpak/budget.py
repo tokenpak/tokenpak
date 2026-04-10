@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Budget allocation using quadratic importance weighting."""
 
 from dataclasses import dataclass

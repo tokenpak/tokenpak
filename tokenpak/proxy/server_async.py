@@ -306,11 +306,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     if should_log and is_messages:
         # Import here to avoid circular imports
         try:
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
             from tokenpak.proxy.server import PipelineTrace
-========
-            from tokenpak.agent.proxy.server import PipelineTrace
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
@@ -322,11 +318,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     # Route detection
     if should_log and is_messages and body:
         try:
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
             from tokenpak.proxy.router import ProviderRouter
-========
-            from tokenpak.agent.proxy.router import ProviderRouter
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
             _router = ProviderRouter()
             route = _router.route(target_url, dict(request.headers), body)
@@ -340,6 +332,14 @@ async def _forward_request(request: Request, target_url: str) -> Response:
             is_streaming = json.loads(body).get("stream", False)
         except Exception:
             pass
+
+        # Google streaming is signalled by URL, not body: path contains
+        # streamGenerateContent or query param ?alt=sse.
+        if not is_streaming and (
+            "streamGenerateContent" in target_url
+            or "alt=sse" in target_url
+        ):
+            is_streaming = True
 
         # Run pipeline in thread pool (sync code, must not block event loop)
         (
@@ -528,11 +528,7 @@ def _record_telemetry(
     if input_tokens == 0:
         return
     try:
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
         from tokenpak.proxy.router import estimate_cost
-========
-        from tokenpak.agent.proxy.router import estimate_cost
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
         cost = estimate_cost(
             model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
@@ -640,21 +636,13 @@ async def handle_trace_by_id(request: Request) -> JSONResponse:
 
 
 async def handle_degradation(request: Request) -> JSONResponse:
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.degradation import get_degradation_tracker
-========
-    from tokenpak.agent.proxy.degradation import get_degradation_tracker
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     return JSONResponse(get_degradation_tracker().summary())
 
 
 async def handle_circuit_breakers(request: Request) -> JSONResponse:
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
-========
-    from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     registry = get_circuit_breaker_registry()
     return JSONResponse(
@@ -714,11 +702,7 @@ async def handle_proxy(request: Request) -> Response:
 
 async def handle_v1_proxy(request: Request) -> Response:
     """Handle /v1/* paths — reverse proxy to the appropriate provider."""
-<<<<<<<< HEAD:tokenpak/proxy/server_async.py
     from tokenpak.proxy.router import ProviderRouter
-========
-    from tokenpak.agent.proxy.router import ProviderRouter
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/proxy/server_async.py
 
     router = ProviderRouter()
     path = request.url.path

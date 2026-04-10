@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """tokenpak/cache_report.py
 
 Cache report formatting for telemetry trace detail endpoint.

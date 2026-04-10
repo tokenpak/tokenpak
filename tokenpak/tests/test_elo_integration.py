@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Integration tests — verify the Broker reads and updates Elo ratings during routing.
 
 These tests confirm:

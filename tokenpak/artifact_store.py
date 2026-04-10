@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Artifact store for TokenPak dynamic context."""
 
 from __future__ import annotations

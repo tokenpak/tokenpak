@@ -17,7 +17,7 @@ from typing import Optional
 
 _MONITOR_DB = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+    os.path.expanduser("~/.tokenpak/data/monitor.db"),
 )
 
 SEP = "────────────────────────────────────────"

@@ -13,7 +13,6 @@ RBAC integration added (2026-03-18):
 import os
 
 from flask import Flask, jsonify, request
-
 from tokenpak_operational_health import HealthChecker
 from tokenpak_operational_metrics import METRICS
 from tokenpak_operational_pruning import PruneJob, load_retention_config
@@ -28,9 +27,9 @@ app = Flask(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-DB_PATH = "~/.openclaw/workspace/.tokenpak/monitor.db"
-RBAC_DB_PATH = "~/.openclaw/workspace/.tokenpak/rbac.db"
-CONFIG_PATH = "~/.openclaw/workspace/tokenpak.telemetry.json"
+DB_PATH = "~/.tokenpak/data/monitor.db"
+RBAC_DB_PATH = "~/.tokenpak/data/rbac.db"
+CONFIG_PATH = "~/.tokenpak/config/telemetry.json"
 
 # Override via environment variables if needed
 DB_PATH = os.environ.get("TOKENPAK_DB_PATH", DB_PATH)

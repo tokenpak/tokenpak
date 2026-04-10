@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """
 Unit tests for tokenpak shadow mode modules (shadow_hook.py and shadow_reader.py).
 """

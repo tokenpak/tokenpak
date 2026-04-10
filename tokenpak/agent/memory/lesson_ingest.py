@@ -9,8 +9,8 @@ Usage:
     from decision_memory import DecisionMemoryDB
     
     db = DecisionMemoryDB()
-    lessons = extract_lessons("~/vault/03_AGENT_PACKS/Sue/memory/2026-03-27.md")
-    count = ingest_from_vault("~/vault", db)
+    lessons = extract_lessons("~/.tokenpak/memory/2026-03-27.md")
+    count = ingest_from_vault("~/.tokenpak", db)
 """
 
 import os
@@ -131,7 +131,7 @@ def ingest_from_vault(vault_dir: str, db: DecisionMemoryDB) -> int:
     """
     Walk vault daily logs and ingest all lessons into the DecisionMemoryDB.
     
-    Scans all files matching ~/vault/03_AGENT_PACKS/*/memory/YYYY-MM-DD.md
+    Scans all files matching <vault_dir>/agents/*/memory/YYYY-MM-DD.md
     and extracts lessons, populating the database.
     
     Args:

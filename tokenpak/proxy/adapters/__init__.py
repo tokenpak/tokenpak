@@ -3,20 +3,25 @@
 from .anthropic_adapter import AnthropicAdapter
 from .base import FormatAdapter
 from .canonical import CanonicalRequest, CanonicalResponse
+from .embedding_router import EmbeddingRouter
+from .gemini_embedding_adapter import GeminiEmbeddingAdapter
 from .google_adapter import GoogleGenerativeAIAdapter
 from .grok_adapter import GrokAdapter
+from .jina_embedding_adapter import JinaEmbeddingAdapter
+from .ollama_embedding_adapter import OllamaEmbeddingAdapter
 from .openai_chat_adapter import OpenAIChatAdapter
 from .openai_codex_responses_adapter import OpenAICodexResponsesAdapter
+from .openai_embedding_adapter import OpenAIEmbeddingAdapter
 from .openai_responses_adapter import OpenAIResponsesAdapter
 from .passthrough_adapter import PassthroughAdapter
 from .registry import AdapterRegistry
+from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 
 def build_default_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
     registry.register(AnthropicAdapter(), priority=300)
-    # Codex must be checked before standard OpenAI Responses so
-    # /codex/responses paths route to chatgpt.com/backend-api, not api.openai.com.
+    # Codex adapter higher priority than standard Responses — JWT requests match first
     registry.register(OpenAICodexResponsesAdapter(), priority=270)
     registry.register(OpenAIResponsesAdapter(), priority=260)
     registry.register(OpenAIChatAdapter(), priority=250)
@@ -28,17 +33,33 @@ def build_default_registry() -> AdapterRegistry:
     return registry
 
 
+def build_embedding_registry() -> EmbeddingRouter:
+    """Create and return an EmbeddingRouter with all embedding adapters registered.
+
+    Provider availability is determined at construction time by scanning env vars.
+    Priority order: Voyage > OpenAI > Gemini > Jina > Ollama.
+    """
+    return EmbeddingRouter()
+
+
 __all__ = [
     "AdapterRegistry",
     "AnthropicAdapter",
     "CanonicalRequest",
     "CanonicalResponse",
+    "EmbeddingRouter",
     "FormatAdapter",
+    "GeminiEmbeddingAdapter",
     "GoogleGenerativeAIAdapter",
     "GrokAdapter",
+    "JinaEmbeddingAdapter",
+    "OllamaEmbeddingAdapter",
     "OpenAIChatAdapter",
     "OpenAICodexResponsesAdapter",
+    "OpenAIEmbeddingAdapter",
     "OpenAIResponsesAdapter",
     "PassthroughAdapter",
+    "VoyageEmbeddingAdapter",
     "build_default_registry",
+    "build_embedding_registry",
 ]

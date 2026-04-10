@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import threading
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Dict, Optional
+
+# ---------------------------------------------------------------------------
+# Vault ingest entries directory (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 
 from tokenpak._internal.ingest.schema_converter import convert_document
 from tokenpak.extraction import EntityExtractor
@@ -200,3 +210,97 @@ class VaultIndexer:
             "by_type": dict(by_type),
             "by_extension": dict(sorted(by_ext.items())),
         }
+
+
+# ---------------------------------------------------------------------------
+# Vault index background reload timer (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def _vault_index_reload_timer() -> None:
+    """Single background timer for periodic vault index reload — replaces per-request thread spawns."""
+    from tokenpak.proxy.vault_bridge import get_vault_index  # lazy import
+    from tokenpak.proxy.config import VAULT_INDEX_RELOAD_INTERVAL  # lazy import
+
+    get_vault_index().maybe_reload()
+    t = threading.Timer(VAULT_INDEX_RELOAD_INTERVAL, _vault_index_reload_timer)
+    t.daemon = True
+    t.start()
+
+
+# ---------------------------------------------------------------------------
+# Ingest write entry — append to JSONL file (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def _ingest_write_entry(entry: Dict[str, Any]) -> str:
+    """Append a single entry to the JSONL file, return its id."""
+    entry_id = entry.setdefault("id", str(uuid.uuid4()))
+    date_str = None
+
+    # Use timestamp date if provided, else today
+    ts = entry.get("timestamp")
+    if ts:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+
+    if date_str is None:
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Create entries directory
+    INGEST_ENTRIES_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Append to JSONL file
+    entries_file = INGEST_ENTRIES_DIR / f"{date_str}.jsonl"
+    with open(entries_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+    return entry_id
+
+
+# ---------------------------------------------------------------------------
+# Vault sync — write stats snapshot to vault filesystem (A2b transfer from monolith)
+# ---------------------------------------------------------------------------
+
+
+def sync_to_vault() -> None:
+    """Write current tokenpak stats to ~/vault/System/tokenpak-stats.json."""
+    from tokenpak.proxy.config import COMPILATION_MODE, ACTIVE_PROFILE  # lazy import
+
+    vault_path = Path.home() / "vault" / "System" / "tokenpak-stats.json"
+    if vault_path.parent.exists():
+        try:
+            from tokenpak.runtime.proxy import MONITOR, SESSION  # type: ignore[import]
+
+            stats = MONITOR.get_stats()
+            stats["by_model"] = MONITOR.get_by_model()
+            stats["last_sync"] = datetime.now().isoformat()
+            stats["compilation_mode"] = COMPILATION_MODE
+            stats["active_profile"] = ACTIVE_PROFILE
+            stats["session"] = {
+                "requests": SESSION["requests"],
+                "protected_tokens": SESSION["protected_tokens"],
+                "injected_tokens": SESSION["injected_tokens"],
+                "injection_hits": SESSION["injection_hits"],
+                "uptime_hours": round((time.time() - SESSION["start_time"]) / 3600, 2),
+            }
+            vault_path.write_text(json.dumps(stats, indent=2))
+        except Exception:
+            pass
+
+
+def sync_loop() -> None:
+    """Periodically sync stats to vault filesystem."""
+    from tokenpak.proxy.config import VAULT_SYNC_INTERVAL  # lazy import
+
+    while True:
+        time.sleep(VAULT_SYNC_INTERVAL)
+        try:
+            sync_to_vault()
+        except Exception as e:
+            print(f"  ⚠️ Vault sync failed: {e}")

@@ -146,49 +146,6 @@ def set_debug_enabled(enabled: bool) -> None:
     set_config("debug", enabled)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Mode / Profile helpers (CCI-21 — telemetry context)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def get_active_profile() -> str:
-    """Return the active workflow profile name (anonymous categorical string).
-
-    Resolution order:
-      1. TOKENPAK_PROFILE env var
-      2. ~/.tokenpak/config.json "profile" key
-      3. Default: "balanced"
-    """
-    env_val = os.environ.get("TOKENPAK_PROFILE", "").strip().lower()
-    if env_val:
-        return env_val
-    data = _load()
-    return str(data.get("profile", "balanced")).lower()
-
-
-def get_consumption_mode() -> str:
-    """Best-effort detection of the current consumption mode.
-
-    Returns one of: cli, tui, tmux, sdk, ide, cron, or empty string.
-    Mirrors the shell heuristic in tokenpak-status/check.sh (CCI-09).
-    Never raises.
-    """
-    try:
-        if os.environ.get("CRON_INVOCATION"):
-            return "cron"
-        term_program = os.environ.get("TERM_PROGRAM", "")
-        if term_program in ("cursor", "Windsurf", "vscode"):
-            return "ide"
-        if os.environ.get("TMUX"):
-            return "tmux"
-        import sys
-        if not sys.stdin.isatty():
-            return "sdk"
-        return "cli"
-    except Exception:
-        return ""
-
-
 def debug_log(message: str, **context: Any) -> None:
     """Log a debug message if debug mode is enabled.
 

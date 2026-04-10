@@ -1,6 +1,6 @@
 {
   "_comment": "TokenPak Core Manifest — lists all core-managed files and their checksums. Generated on build/release. Used by `tokenpak update` to identify which files are safe to replace.",
-  "version": "0.4.0",
+  "version": "1.1.0",
   "generatedAt": "2026-03-07T20:00:00Z",
   "protected_paths": [
     "user/",

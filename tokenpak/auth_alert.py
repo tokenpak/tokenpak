@@ -35,10 +35,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import subprocess
 import urllib.request
 from typing import Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Telegram delivery config (optional direct-API fallback)
+# ---------------------------------------------------------------------------
+TELEGRAM_BOT_TOKEN: str = os.environ.get("TOKENPAK_TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID: str = os.environ.get("TOKENPAK_TELEGRAM_CHAT_ID", "")
+
 
 # ---------------------------------------------------------------------------
 # Public hook protocol
@@ -143,12 +151,79 @@ def _build_alert_message(provider: str, details: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Telegram delivery helper
+# ---------------------------------------------------------------------------
+
+
+def _send_telegram(text: str, chat_id: Optional[str] = None) -> bool:
+    """Send a Telegram message via direct Bot API.
+
+    Returns True on success, False on failure.
+
+    Args:
+        text: Message text to send.
+        chat_id: Optional Telegram chat ID. Falls back to TOKENPAK_TELEGRAM_CHAT_ID env var.
+    """
+    target_chat = chat_id or TELEGRAM_CHAT_ID
+
+    bot_token = TELEGRAM_BOT_TOKEN
+    if not bot_token:
+        logger.warning("auth_alert: no Telegram bot token configured (TOKENPAK_TELEGRAM_BOT_TOKEN)")
+        return False
+
+    if not target_chat:
+        logger.warning("auth_alert: no Telegram chat ID configured (TOKENPAK_TELEGRAM_CHAT_ID)")
+        return False
+
+    try:
+        payload = json.dumps({"chat_id": target_chat, "text": text}).encode()
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.loads(resp.read())
+            if body.get("ok"):
+                logger.info("auth_alert: Telegram alert sent via direct API")
+                return True
+            logger.warning("auth_alert: Telegram API returned ok=false: %s", body)
+            return False
+    except Exception as exc:
+        logger.error("auth_alert: Telegram direct API delivery failed: %s", exc)
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Built-in Telegram auth-failure handler
+# ---------------------------------------------------------------------------
+
+
+def _on_auth_failure(provider: str, event: str, details: dict) -> None:
+    """Default handler: sends a Telegram alert when auth-failure-detected fires.
+
+    Registered automatically by register_auth_alert_hook().
+    Only acts on event == "auth-failure-detected"; all other events are ignored.
+    """
+    if event != "auth-failure-detected":
+        return
+    message = _build_alert_message(provider, details)
+    _send_telegram(message)
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
 
-def register_auth_alert_hook(hook: NotificationHook) -> None:
+def register_auth_alert_hook(hook: Optional[NotificationHook] = None) -> None:
     """Register a notification hook with the global AUTH_GUARD singleton.
+
+    When called with no arguments, registers the built-in ``_on_auth_failure``
+    Telegram handler. Pass a custom *hook* callable to register a different
+    handler instead.
 
     The hook is called whenever AuthGuard detects an auth failure threshold
     breach. Multiple hooks can be registered; all are called in order.
@@ -156,19 +231,25 @@ def register_auth_alert_hook(hook: NotificationHook) -> None:
     Args:
         hook: Any callable with signature (provider, event, details) -> None,
               or an instance of WebhookNotificationHook / NullNotificationHook.
+              Defaults to the built-in ``_on_auth_failure`` Telegram handler.
 
     Example::
 
         from tokenpak.auth_alert import register_auth_alert_hook, WebhookNotificationHook
 
+        # Register built-in Telegram handler:
+        register_auth_alert_hook()
+
+        # Register a custom webhook handler:
         register_auth_alert_hook(WebhookNotificationHook(
             url="https://your-endpoint.com/tokenpak-alerts",
         ))
     """
     from tokenpak.auth_guard import AUTH_GUARD  # noqa: PLC0415 (lazy import — avoids circular)
 
-    AUTH_GUARD.on_auth_failure(hook)
-    logger.info("auth_alert: registered notification hook: %s", type(hook).__name__)
+    effective_hook = hook if hook is not None else _on_auth_failure
+    AUTH_GUARD.on_auth_failure(effective_hook)
+    logger.info("auth_alert: registered notification hook: %s", getattr(effective_hook, "__name__", type(effective_hook).__name__))
 
 
 def _auto_register_from_env() -> None:

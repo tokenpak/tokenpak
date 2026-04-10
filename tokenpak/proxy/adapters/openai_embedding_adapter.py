@@ -1,0 +1,87 @@
+"""OpenAI embedding adapter."""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Dict, Mapping, Optional, Tuple
+
+from .canonical import CanonicalEmbeddingRequest
+from .embedding_base import EmbeddingAdapter
+
+
+class OpenAIEmbeddingAdapter(EmbeddingAdapter):
+    """Embedding adapter for OpenAI.
+
+    OpenAI IS the canonical format, so normalize_request is near-identity
+    and normalize_response is a passthrough.
+
+    Upstream: https://api.openai.com/v1/embeddings
+    Auth:     Authorization: Bearer $OPENAI_API_KEY
+    """
+
+    source_format = "openai-embeddings"
+
+    def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
+        """Return True if the request targets an OpenAI embedding model (starts with 'text-embedding-')."""
+        if body:
+            try:
+                data = json.loads(body)
+                model = str(data.get("model", ""))
+                return model.startswith("text-embedding-")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+        return False
+
+    def normalize_request(
+        self, canonical: CanonicalEmbeddingRequest
+    ) -> Tuple[str, Dict[str, str], bytes]:
+        """Convert a canonical embedding request to OpenAI wire format.
+
+        Near-identity transform: canonical IS OpenAI format.
+        Ensures input is a list; drops provider-specific fields
+        (input_type, task, normalized) that OpenAI does not accept.
+
+        Returns:
+            (url, headers, body) ready to forward to https://api.openai.com/v1/embeddings.
+        """
+        # Ensure input is always a list
+        input_value = canonical.input if isinstance(canonical.input, list) else [canonical.input]
+
+        payload: Dict = {
+            "model": canonical.model,
+            "input": input_value,
+            "encoding_format": canonical.encoding_format,
+        }
+
+        # dimensions is only supported on text-embedding-3-* models; include when set
+        if canonical.dimensions is not None:
+            payload["dimensions"] = canonical.dimensions
+
+        # Preserve any unknown extra fields, but do not override core keys
+        for k, v in canonical.raw_extra.items():
+            if k not in ("input_type", "task", "normalized"):
+                payload.setdefault(k, v)
+
+        api_key = os.environ.get(self.get_env_key_name(), "")
+        out_headers: Dict[str, str] = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        url = f"{self.get_default_upstream()}/v1/embeddings"
+        out_body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+        return url, out_headers, out_body
+
+    def normalize_response(self, status: int, headers: Dict[str, str], body: bytes) -> bytes:
+        """Return the response body unchanged — OpenAI response is already canonical format."""
+        return body
+
+    def get_env_key_name(self) -> str:
+        return "OPENAI_API_KEY"
+
+    def get_default_model(self) -> str:
+        return "text-embedding-3-small"
+
+    def get_default_upstream(self) -> str:
+        return "https://api.openai.com"

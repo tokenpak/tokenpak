@@ -283,16 +283,6 @@ def print_diff_json(diff: ContextDiff) -> None:
 
 def run_diff_cmd(args) -> None:
     """Main dispatcher for 'tokenpak diff' subcommand."""
-    from tokenpak._internal.license.activation import is_pro
-
-    if not is_pro():
-        print("⚠ Context Diff required: Pro (or higher) license.")
-        print("  Get a license: https://tokenpak.io/pricing")
-        print("  Run: tokenpak license activate <key>")
-        import sys as _sys_diff
-
-        _sys_diff.exit(1)
-
     verbose = getattr(args, "verbose", False)
     raw = getattr(args, "json", False) or getattr(args, "raw", False)
     since = getattr(args, "since", None)

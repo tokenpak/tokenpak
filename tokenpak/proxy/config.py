@@ -39,7 +39,10 @@ except ImportError:
 # ---------------------------------------------------------------------------
 _PROFILE_PRESETS: dict[str, dict[str, str]] = {
     "safe": {
-        "TOKENPAK_MODE": "strict",
+        # CCG-10: safe profile uses TOKENPAK_MODE=safe (Phase 2 Mode B).
+        # Stable cache control fires unconditionally; no body compression.
+        "TOKENPAK_MODE": "safe",
+        "TOKENPAK_STABLE_CACHE_CONTROL_AUTO": "true",
         "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "8000",
         "TOKENPAK_SKELETON_ENABLED": "false",
         "TOKENPAK_CAPSULE_BUILDER": "false",
@@ -92,6 +95,8 @@ DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOA
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
+# CCG-02: mutation_audit TTL — prune rows older than this many days
+MUTATION_AUDIT_TTL_DAYS: int = int(os.environ.get("TOKENPAK_MUTATION_AUDIT_TTL_DAYS", "30"))
 VAULT_SYNC_INTERVAL = 60
 ENABLE_COMPACTION = _cfg("compression.enabled", True, "TOKENPAK_COMPACT", bool)
 COMPACT_MAX_CHARS = _cfg("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
@@ -99,13 +104,17 @@ COMPACT_THRESHOLD_TOKENS = _cfg(
     "compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int
 )
 # Skip compression for very large payloads — compression savings are marginal (<3%) but
-# synchronous processing adds 10-25s of silence before first SSE chunk, causing OpenClaw timeouts.
+# synchronous processing adds 10-25s of silence before first SSE chunk, causing client timeouts.
 # Default: skip compression above 50,000 tokens (~200KB). Set to 0 to disable this cap.
 COMPACT_MAX_TOKENS = _cfg(
     "compression.max_tokens", 50000, "TOKENPAK_COMPACT_MAX_TOKENS", int
 )
 COMPACT_CACHE_SIZE = _cfg("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
 COMPILATION_MODE = _cfg("mode", "hybrid", "TOKENPAK_MODE", str).lower()
+# CCG-10: Auto-apply stable cache control in safe mode (TOKENPAK_MODE=safe)
+STABLE_CACHE_CONTROL_AUTO: bool = _cfg(
+    "features.stable_cache_control_auto", False, "TOKENPAK_STABLE_CACHE_CONTROL_AUTO", bool
+)
 
 # Capsule Builder
 ENABLE_CAPSULE_BUILDER = _cfg("features.capsule_builder", False, "TOKENPAK_CAPSULE_BUILDER", bool)
@@ -227,7 +236,10 @@ if CACHE_REGISTRY_ENABLED:
 
 # Upstream
 UPSTREAM_TIMEOUT: int = _cfg("upstream.timeout", 90, "TOKENPAK_UPSTREAM_TIMEOUT", int)
-STRICT_VALIDATION: bool = _cfg("features.strict_mode", False, "TOKENPAK_STRICT_MODE", bool)
+# Query expansion — enabled by default; opt out with TOKENPAK_QUERY_EXPANSION_ENABLED=0
+QUERY_EXPANSION_ENABLED: bool = _cfg(
+    "features.query_expansion", True, "TOKENPAK_QUERY_EXPANSION_ENABLED", bool
+)
 
 # Connection pool manager — one pool per upstream host, reused across requests
 # Replaces per-request http.client.HTTPSConnection in _proxy_to() for ~100-150ms savings
@@ -275,9 +287,9 @@ RETRIEVAL_BACKEND = _cfg(
     "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
 ).lower()
 
-# Term-Card Resolver
+# Term-Card Resolver — enabled by default; opt out with TOKENPAK_TERM_RESOLVER_ENABLED=0
 TERM_RESOLVER_ENABLED: bool = _cfg(
-    "features.term_resolver", False, "TOKENPAK_TERM_RESOLVER_ENABLED", bool
+    "features.term_resolver", True, "TOKENPAK_TERM_RESOLVER_ENABLED", bool
 )
 TERM_RESOLVER_TOP_K: int = _cfg("term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int)
 TERM_RESOLVER_MAX_BYTES: int = _cfg(
@@ -290,12 +302,12 @@ _COMPACT_CACHE_ORDER: list = []
 ADAPTER_REGISTRY = build_default_registry()
 
 
-def _load_openclaw_upstream_overrides() -> Dict[str, str]:
+def _load_tokenpak_upstream_overrides() -> Dict[str, str]:
     """
-    Auto-discover upstream routes from openclaw.json tokenpak-* provider mirrors.
-    Supports current OpenClaw shape at `models.providers` and legacy root `providers`.
+    Auto-discover upstream routes from config.json tokenpak-* provider mirrors.
+    Supports current shape at `models.providers` and legacy root `providers`.
     """
-    cfg_path = Path.home() / ".openclaw" / "openclaw.json"
+    cfg_path = Path.home() / ".tokenpak" / "config.json"
     if not cfg_path.exists():
         return {}
 
@@ -377,12 +389,45 @@ def _build_upstream_routes() -> Dict[str, str]:
         adapter.source_format: adapter.get_default_upstream()
         for adapter in ADAPTER_REGISTRY.adapters()
     }
-    routes.update(_load_openclaw_upstream_overrides())
+    routes.update(_load_tokenpak_upstream_overrides())
     routes.update(_load_env_upstream_overrides())
     return routes
 
 
 UPSTREAM_ROUTES = _build_upstream_routes()
+
+
+# ---------------------------------------------------------------------------
+# Custom providers — user-registered endpoints from config.yaml `providers:`
+# ---------------------------------------------------------------------------
+from tokenpak.proxy.custom_providers import (
+    load_custom_providers,
+    build_custom_adapters,
+    get_provider_display_list,
+)
+
+CUSTOM_PROVIDERS = load_custom_providers()
+
+if CUSTOM_PROVIDERS:
+    # Register adapter instances (modifies ADAPTER_REGISTRY in-place)
+    _custom_adapters = build_custom_adapters(CUSTOM_PROVIDERS, ADAPTER_REGISTRY)
+
+    # Add custom provider hostnames to the router intercept list
+    from tokenpak.proxy.router import INTERCEPT_HOSTS as _INTERCEPT_HOSTS
+
+    for _cp in CUSTOM_PROVIDERS:
+        _INTERCEPT_HOSTS.add(_cp.hostname)
+
+    # Add upstream routes for custom adapters
+    for _cp in CUSTOM_PROVIDERS:
+        _route_key = f"custom-{_cp.name}"
+        UPSTREAM_ROUTES[_route_key] = _cp.endpoint
+
+    _custom_names = ", ".join(cp.name for cp in CUSTOM_PROVIDERS)
+    print(f"  🔗 Custom providers: {_custom_names}")
+
+# Build the display string for startup banners
+PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)
 
 
 # ---------------------------------------------------------------------------
@@ -413,6 +458,8 @@ class ProxyConfig:
         self.router_enabled: bool = ROUTER_ENABLED
         self.enable_capsule_builder: bool = ENABLE_CAPSULE_BUILDER
         self.adapter_registry = ADAPTER_REGISTRY
+        self.custom_providers = CUSTOM_PROVIDERS
+        self.provider_display: str = PROVIDER_DISPLAY
 
     def __repr__(self) -> str:
         return (

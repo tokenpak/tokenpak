@@ -378,10 +378,10 @@
           "type": "string",
           "title": "Ollama Upstream URL",
           "description": "URL for local Ollama instance (if using Ollama backend).",
-          "default": "http://100.80.241.118:11434",
+          "default": "http://localhost:11434",
           "examples": [
             "http://localhost:11434",
-            "http://100.80.241.118:11434",
+            "http://localhost:11434",
             "https://ollama.example.com"
           ]
         },

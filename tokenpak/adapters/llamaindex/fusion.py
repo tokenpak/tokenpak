@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from .converters import (
     LlamaBlock,
     llamaindex_nodes_to_blocks,
-    _estimate_tokens,
 )
 from .synthesizer import TokenPakSynthesizer
 
@@ -155,9 +154,7 @@ class MultiIndexFusion:
     # Query execution
     # ------------------------------------------------------------------
 
-    def _query_all_sync(
-        self, query_str: str, **kwargs
-    ) -> List[Tuple[str, List[Any]]]:
+    def _query_all_sync(self, query_str: str, **kwargs) -> List[Tuple[str, List[Any]]]:
         """Query all indexes synchronously, return [(name, nodes), ...]."""
         results = []
         for name, engine in self.indexes.items():
@@ -165,7 +162,7 @@ class MultiIndexFusion:
                 response = engine.query(query_str, **kwargs)
                 nodes = self._extract_nodes(response, name)
                 results.append((name, nodes))
-            except Exception as e:
+            except Exception:
                 results.append((name, []))
         return results
 
@@ -173,6 +170,7 @@ class MultiIndexFusion:
         self, query_str: str, **kwargs
     ) -> List[Tuple[str, List[Any]]]:
         """Query all indexes in parallel using asyncio."""
+
         async def _query_one(name: str, engine: Any) -> Tuple[str, List[Any]]:
             try:
                 if hasattr(engine, "aquery"):
@@ -197,16 +195,24 @@ class MultiIndexFusion:
             raw_nodes = response
         else:
             # Synthetic node from response text
-            raw_nodes = [{
-                "id": f"{source_name}_response",
-                "text": str(response),
-                "metadata": {"source": source_name},
-                "score": 1.0,
-            }]
+            raw_nodes = [
+                {
+                    "id": f"{source_name}_response",
+                    "text": str(response),
+                    "metadata": {"source": source_name},
+                    "score": 1.0,
+                }
+            ]
 
         for node in raw_nodes:
             if isinstance(node, dict):
-                node = {**node, "metadata": {**node.get("metadata", {}), "_fusion_source": source_name}}
+                node = {
+                    **node,
+                    "metadata": {
+                        **node.get("metadata", {}),
+                        "_fusion_source": source_name,
+                    },
+                }
             elif hasattr(node, "node"):
                 # NodeWithScore
                 if hasattr(node.node, "metadata"):
@@ -247,7 +253,12 @@ class MultiIndexFusion:
                 "context": "",
                 "blocks": [],
                 "sources": sources,
-                "tokens": {"input": 0, "output": 0, "budget": self.budget, "ratio": 1.0},
+                "tokens": {
+                    "input": 0,
+                    "output": 0,
+                    "budget": self.budget,
+                    "ratio": 1.0,
+                },
             }
 
         # Apply fusion strategy
@@ -287,7 +298,7 @@ class MultiIndexFusion:
 
     @staticmethod
     def _fuse_round_robin(
-        indexed_nodes: List[Tuple[str, List[Any]]]
+        indexed_nodes: List[Tuple[str, List[Any]]],
     ) -> List[LlamaBlock]:
         """Interleave results from each index (round-robin)."""
         all_index_blocks = []

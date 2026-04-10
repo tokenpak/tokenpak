@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """ContextAssembler — TPK Phase 1: CANON references + STATE_JSON.
 
 Builds the wire-format context payload for LLM requests. Deduplicates

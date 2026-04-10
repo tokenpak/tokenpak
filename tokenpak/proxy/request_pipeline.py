@@ -3,6 +3,8 @@ tokenpak.proxy.request_pipeline — Router wiring, route engine singletons,
 intent classification, and style contract (protected content detection).
 
 Extracted from runtime/proxy.py (L1589-2144) as part of TPK-RESTRUCTURE-005.
+Extended in TPK-CONSOLIDATION-A2c with: _resolve_session_id (CCG-03),
+_apply_budget, _shadow_validate.
 """
 
 import json
@@ -566,10 +568,115 @@ def classify_message_risk(msg: dict) -> str:
 
 
 def can_compress(risk_class: str, mode: str) -> bool:
-    if mode == "strict":
+    if mode in ("strict", "safe"):  # CCG-10: safe mode disables compression
         return False
     if risk_class == "protected":
         return False
     if mode == "hybrid":
         return risk_class == "narrative"
     return True
+
+
+# ---------------------------------------------------------------------------
+# CCG-10: Stable/volatile partition + fingerprinting (TOKENPAK_MODE=safe)
+# ---------------------------------------------------------------------------
+
+def _partition_stable_volatile(body: bytes) -> tuple:
+    """Partition request body into (stable_bytes, volatile_bytes) for sha256 fingerprinting.
+
+    Spec Component 8 partition rules:
+      Stable region  — tools array + system array + all messages except the newest turn.
+                       These fields are byte-equal across consecutive turns when the user
+                       has not changed tools/system/persistent instructions.
+      Volatile region — newest user turn (messages[-1]).
+                        Changes every request; not suitable for cache-prefix preservation.
+
+    Both regions are serialized as deterministic JSON (sort_keys=True, utf-8) so the
+    sha256 digest is reproducible independent of dict insertion order.
+
+    Returns:
+        (stable_bytes, volatile_bytes) — both are bytes objects ready for sha256().
+        If the body cannot be parsed as JSON, returns (b"", body) so volatile_hash
+        is non-empty and stable_hash is empty — callers record both as-is.
+    """
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+        return b"", body
+
+    messages = data.get("messages", [])
+    tools = data.get("tools", [])
+    system = data.get("system", [])
+
+    # Stable: tools + system + settled turns (all messages except the newest turn)
+    stable_messages = messages[:-1] if len(messages) > 1 else []
+    stable_part = {
+        "tools": tools,
+        "system": system,
+        "messages": stable_messages,
+    }
+
+    # Volatile: newest turn (the user message or most recent content)
+    volatile_messages = messages[-1:] if messages else []
+    volatile_part = {
+        "messages": volatile_messages,
+    }
+
+    stable_bytes = json.dumps(stable_part, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    volatile_bytes = json.dumps(volatile_part, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return stable_bytes, volatile_bytes
+
+
+# ---------------------------------------------------------------------------
+# CCG-03: Session ID resolution
+# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 1189–1212)
+# ---------------------------------------------------------------------------
+
+def _resolve_session_id(headers: Any, model: str) -> str:
+    """Resolve session id with Claude Code priority.
+
+    Order: X-Claude-Code-Session-Id (Claude Code) -> X-TokenPak-Session
+    -> model name (last-resort fallback).
+    """
+    # Case-insensitive header lookup
+    def _h(name: str) -> Optional[str]:
+        if hasattr(headers, "get"):
+            # Try common cases first; many header collections are
+            # case-insensitive but some test contexts use plain dicts.
+            for variant in (name, name.lower(), name.title()):
+                v = headers.get(variant)
+                if v:
+                    return v
+        return None
+
+    cc_id = _h("X-Claude-Code-Session-Id")
+    if cc_id:
+        return cc_id
+    oc_id = _h("X-TokenPak-Session")
+    if oc_id:
+        return oc_id
+    return model
+
+
+# ---------------------------------------------------------------------------
+# Budget controller — enforce per-bucket token limits
+# Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 2070–2082)
+# ---------------------------------------------------------------------------
+
+def _apply_budget(components: Dict[str, Any], total_tokens: Optional[int] = None) -> Dict[str, Any]:
+    """Apply Budgeter allocation policy to context components."""
+    try:
+        from .config import _cfg
+        budget_total = total_tokens or int(_cfg.get("budget_total_tokens", 100_000))
+    except Exception:
+        budget_total = total_tokens or 100_000
+    try:
+        sys.path.insert(
+            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
+        )
+        from tokenpak.budgeter import Budgeter
+
+        b = Budgeter()
+        return b.allocate(components, total_tokens=budget_total)
+    except Exception:
+        return components  # fail-open

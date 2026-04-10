@@ -114,17 +114,6 @@ def run_prune(
     as_json: bool = False,
 ) -> None:
     """Core prune logic — callable from tests or CLI."""
-    # Tier gate
-    try:
-        from tokenpak._internal.license.activation import is_pro
-
-        if not is_pro():
-            print("⛔ /tokenpak prune requires a Pro or higher license.")
-            print("   Upgrade at: https://tokenpak.io/pricing")
-            sys.exit(1)
-    except ImportError:
-        pass  # Allow in test/dev environments without license module
-
     pins = _load_pins()
     all_blocks = _load_blocks()
 

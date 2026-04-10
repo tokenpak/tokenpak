@@ -625,6 +625,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # Google streaming is signalled by URL, not body: path contains
+            # streamGenerateContent or query param ?alt=sse.
+            if not is_streaming and (
+                "streamGenerateContent" in target_url
+                or "alt=sse" in target_url
+            ):
+                is_streaming = True
+
             if ps.request_hook:
                 try:
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(

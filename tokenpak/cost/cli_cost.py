@@ -5,8 +5,6 @@ Provides `tokenpak cost show-budget` for displaying budget status.
 """
 
 import json
-from pathlib import Path
-from typing import Optional
 
 from tokenpak.cost.budget_tracker import BudgetTracker
 

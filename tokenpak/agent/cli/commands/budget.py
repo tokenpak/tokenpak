@@ -14,7 +14,7 @@ SEP = "────────────────────────�
 # Reuse monitor DB for spend queries
 _MONITOR_DB = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.openclaw/workspace/.ocp/monitor.db"),
+    os.path.expanduser("~/.tokenpak/data/monitor.db"),
 )
 _BUDGET_CONFIG = Path("~/.tokenpak/budget_config.yaml").expanduser()
 
@@ -618,15 +618,7 @@ def _generate_suggestions(burn: dict, model_breakdown: list[dict]) -> list[str]:
 
 
 def print_budget_intelligence(raw: bool = False) -> None:
-    """Show Pro-tier budget intelligence: burn rate, ETA, trend, suggestions."""
-    from tokenpak.agent.license.activation import is_pro
-
-    if not is_pro():
-        print("⚠ Budget Intelligence requires a Pro (or higher) license.")
-        print("  Get a license: https://tokenpak.io/pricing")
-        print("  Run: tokenpak license activate <key>")
-        return
-
+    """Show budget intelligence: burn rate, ETA, trend, suggestions."""
     cfg = _load_config()
     monthly_limit = cfg.get("monthly_limit_usd")
     monthly_limit_f = float(monthly_limit) if monthly_limit else None

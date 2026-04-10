@@ -18,7 +18,7 @@ Usage (in your proxy's response handler)::
         # Graceful degradation: cost tracking failure never crashes the proxy
         print(f"[cost_tracker] warning: {e}")
 
-This is already wired into ~/.openclaw/workspace/.tokenpak/proxy.py.
+This is already wired into ~/.tokenpak/proxy.py.
 """
 
 from __future__ import annotations
@@ -38,9 +38,15 @@ def record_proxy_request(
     prompt_tokens: int,
     completion_tokens: int,
     *,
+    http_status: int = 200,
     session_id: str = "",
 ) -> float:
     """Record a proxy request in the cost tracker.
+
+    Args:
+        http_status: HTTP response status from the upstream provider.
+            Non-200 responses (e.g. 429, 401, 403) are logged with cost=0
+            because no tokens were actually generated.
 
     Returns:
         Estimated cost in USD, or 0.0 on failure (graceful degradation).
@@ -51,12 +57,15 @@ def record_proxy_request(
         from tokenpak.telemetry.cost_tracker import get_cost_tracker
 
         tracker = get_cost_tracker()
-        return tracker.record_request(
+        cost = tracker.record_request(
             model=model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            http_status=http_status,
             session_id=session_id,
         )
     except Exception as exc:
         logger.warning("cost_tracker.record_request failed (request unaffected): %s", exc)
-        return 0.0
+        cost = 0.0
+
+    return cost

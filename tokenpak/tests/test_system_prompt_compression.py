@@ -83,12 +83,12 @@ def _compress_system_prompt_sections(system_text, mode):
 
 def test_sensitive_section_detection():
     """Only truly personal file paths are detected as sensitive."""
-    assert _is_sensitive_section("## /home/cali/.openclaw/workspace/SOUL.md"), "SOUL.md should be sensitive"
-    assert _is_sensitive_section("## /home/cali/.openclaw/workspace/USER.md"), "USER.md should be sensitive"
-    assert _is_sensitive_section("## /home/cali/.openclaw/workspace/MEMORY.md"), "MEMORY.md should be sensitive"
-    assert not _is_sensitive_section("## /home/cali/.openclaw/workspace/AGENTS.md"), "AGENTS.md is operational, not sensitive"
-    assert not _is_sensitive_section("## /home/cali/.openclaw/workspace/TOOLS.md"), "TOOLS.md is operational, not sensitive"
-    assert not _is_sensitive_section("## /home/cali/.openclaw/workspace/HEARTBEAT.md"), "HEARTBEAT.md is operational, not sensitive"
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/SOUL.md"), "SOUL.md should be sensitive"
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/USER.md"), "USER.md should be sensitive"
+    assert _is_sensitive_section("## /home/user/.tokenpak/workspace/MEMORY.md"), "MEMORY.md should be sensitive"
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/AGENTS.md"), "AGENTS.md is operational, not sensitive"
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/TOOLS.md"), "TOOLS.md is operational, not sensitive"
+    assert not _is_sensitive_section("## /home/user/.tokenpak/workspace/HEARTBEAT.md"), "HEARTBEAT.md is operational, not sensitive"
     assert not _is_sensitive_section("## Tooling"), "Tooling section not sensitive"
     assert not _is_sensitive_section("## Safety"), "Safety section not sensitive"
     assert not _is_sensitive_section("## Runtime"), "Runtime section not sensitive"
@@ -104,21 +104,21 @@ Tool availability:
 - read: Read file contents
 
 
-## /home/cali/.openclaw/workspace/SOUL.md
+## /home/user/.tokenpak/workspace/SOUL.md
 # SOUL.md - Who You Are
-Kevin's personality: deep thinker, builder mindset.
+User personality: deep thinker, builder mindset.
 
-## /home/cali/.openclaw/workspace/USER.md
-# USER.md - About Kevin
-Kevin Yang. Telegram ID: 461720084. Wife: Tiffany.
+## /home/user/.tokenpak/workspace/USER.md
+# USER.md - About the User
+John Doe. Account ID: 12345. Contact: Jane.
 
 ## Runtime
 Runtime: agent=main | model=claude
 """
     compressed, protected, saved = _compress_system_prompt_sections(prompt, "hybrid")
-    assert "Kevin's personality: deep thinker" in compressed, "SOUL.md content must be preserved"
-    assert "461720084" in compressed, "Personal Telegram ID must be preserved"
-    assert "Wife: Tiffany" in compressed, "Personal family info must be preserved"
+    assert "User personality: deep thinker" in compressed, "SOUL.md content must be preserved"
+    assert "12345" in compressed, "Personal account ID must be preserved"
+    assert "Contact: Jane" in compressed, "Personal contact info must be preserved"
     assert "Tool availability" in compressed, "Safe section content must be preserved"
     assert "Runtime: agent=main" in compressed, "Runtime section content must be preserved"
     print("PASS: test_content_preservation")
@@ -136,15 +136,15 @@ Nothing personal here. Just tool names and descriptions.
 Safety rules go here. Not personal.
 
 
-## /home/cali/.openclaw/workspace/SOUL.md
+## /home/user/.tokenpak/workspace/SOUL.md
 # SOUL.md - Who You Are
 This is personal soul content about the user's personality and values.
 
-## /home/cali/.openclaw/workspace/USER.md
-# USER.md - About Kevin
-Kevin Yang personal info here.
+## /home/user/.tokenpak/workspace/USER.md
+# USER.md - About the User
+John Doe personal info here.
 
-## /home/cali/.openclaw/workspace/AGENTS.md
+## /home/user/.tokenpak/workspace/AGENTS.md
 # AGENTS.md
 Agent operational procedures and protocols.
 
@@ -158,7 +158,7 @@ Runtime info here.
     # SOUL.md + USER.md should be protected, AGENTS.md should NOT be
     assert protected_pct < 50, f"Protected should be <50% but got {protected_pct:.1f}%"
     assert "personal soul content" in compressed, "SOUL.md preserved"
-    assert "Kevin Yang personal info" in compressed, "USER.md preserved"
+    assert "John Doe personal info" in compressed, "USER.md preserved"
     assert "Agent operational procedures" in compressed, "AGENTS.md (operational) preserved and not protected"
     print(f"PASS: test_protected_ratio_reduction (protected: {protected_pct:.1f}%)")
 
@@ -204,13 +204,13 @@ def test_empty_and_edge_cases():
 
 def test_projected_impact_realistic():
     """Simulate realistic system prompt and verify projected compression."""
-    # Build a realistic system prompt (rough approximation of OpenClaw's)
+    # Build a realistic system prompt (rough approximation of a typical agent's)
     sections = {
         "safe": [
             ("## Tooling", "A" * 3200),          # 800 tokens of tool descriptions
             ("## Tool Call Style", "B" * 1200),   # 300 tokens
             ("## Safety", "C" * 800),             # 200 tokens
-            ("## OpenClaw CLI", "D" * 800),       # 200 tokens
+            ("## TokenPak CLI", "D" * 800),        # 200 tokens
             ("## Skills", "E" * 2400),            # 600 tokens
             ("## Memory Recall", "F" * 600),      # 150 tokens
             ("## Model Aliases", "G" * 1200),     # 300 tokens

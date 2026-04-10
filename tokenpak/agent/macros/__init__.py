@@ -1,5 +1,13 @@
 """Macro and hook systems for event-driven automation."""
 
+import warnings as _warnings
+_warnings.warn(
+    "tokenpak.agent.macros is deprecated, use tokenpak._internal.macros instead. "
+    "This will be removed in v2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from .engine import (
     MacroDefinition,
     MacroEngine,

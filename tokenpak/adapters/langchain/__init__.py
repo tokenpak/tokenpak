@@ -1,16 +1,8 @@
 """langchain-tokenpak: TokenPak integration for LangChain."""
 
-from .converters import Block, doc_to_block, block_to_doc
-from .retrievers import TokenPakRetriever
-from .memory import TokenPakMemory
-from .context import TokenPakContextManager
+from .adapter import LangChainAdapter, _normalise_messages
 
 __all__ = [
-    "Block",
-    "doc_to_block",
-    "block_to_doc",
-    "TokenPakRetriever",
-    "TokenPakMemory",
-    "TokenPakContextManager",
+    "LangChainAdapter",
+    "_normalise_messages",
 ]
-__version__ = "0.1.0"

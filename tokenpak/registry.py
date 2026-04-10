@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Block Registry — SQLite-backed content versioning with optimized I/O.
 
 Hardened for stability:

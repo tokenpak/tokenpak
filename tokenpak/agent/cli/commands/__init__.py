@@ -13,11 +13,9 @@ __all__ = [
     "route",
     "config",
     "maintenance",
-    "license",
     "last",
     "workflow",
     "replay",
-    "teacher",
     "exec",
     "savings",
 ]

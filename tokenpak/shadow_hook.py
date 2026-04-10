@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Shadow Mode proxy hook for TokenPak.
 
 Lightweight integration point for the forward proxy. The proxy calls

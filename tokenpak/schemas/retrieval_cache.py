@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 """Retrieval cache schema for TokenPak."""
 
 from __future__ import annotations

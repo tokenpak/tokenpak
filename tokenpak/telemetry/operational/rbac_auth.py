@@ -192,7 +192,7 @@ class RBACStore:
                 )
                 print(f"\n{'='*50}")
                 print("TokenPak RBAC — First-run admin account created")
-                print(f"  Username : admin")
+                print("  Username : admin")
                 print(f"  Password : {password}")
                 print("  Change this password immediately!")
                 print(f"{'='*50}\n")
@@ -504,7 +504,7 @@ def init_rbac(app, db_path: str) -> RBACStore:
 
     Usage::
 
-        store = init_rbac(app, "~/.openclaw/workspace/.tokenpak/rbac.db")
+        store = init_rbac(app, "~/.tokenpak/data/rbac.db")
     """
     store = RBACStore(db_path)
 

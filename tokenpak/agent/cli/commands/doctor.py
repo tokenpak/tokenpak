@@ -537,14 +537,6 @@ def run_doctor(
             "may cause auth conflicts"
         )
 
-    # Check for OPENCLAW_CACHE_TRACE leaking into proxy
-    cache_trace = os.environ.get("OPENCLAW_CACHE_TRACE", "")
-    if cache_trace and cache_trace not in ("0", ""):
-        env_issues.append(
-            f"OPENCLAW_CACHE_TRACE={cache_trace} (OpenClaw internal — "
-            "may affect tracing output)"
-        )
-
     # Check for conflicting upstream overrides
     if os.environ.get("TOKENPAK_BASE_URL") and os.environ.get("ANTHROPIC_BASE_URL"):
         env_issues.append(

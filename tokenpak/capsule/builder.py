@@ -70,13 +70,6 @@ _MAX_PARA_CHARS: int = 200
 # Pre-compiled patterns (module-level for reuse across calls)
 _RE_MULTI_BLANK = re.compile(r"\n{3,}")
 _RE_SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
-
-# Pattern to match capsule envelope tags in model output (Layer 2: response stripping).
-# Matches both the header tag and the closing tag, with optional content between.
-_RE_CAPSULE_HEADER = re.compile(
-    r"\[CAPSULE\s+id=[0-9a-f]+\s+ratio=[0-9.]+\s+chars_in=\d+\s+chars_out=\d+\]\s*\n?"
-)
-_RE_CAPSULE_CLOSE = re.compile(r"\[/CAPSULE\]\s*\n?")
 _RE_MULTI_SPACE = re.compile(r"[ \t]{2,}")
 
 
@@ -195,90 +188,6 @@ def _wrap_capsule(original: str, compressed: str) -> str:
     return f"{header}\n{compressed}\n[/CAPSULE]"
 
 
-def strip_capsule_tags(text: str) -> str:
-    """
-    Remove capsule envelope tags from text (Layer 2: response-side stripping).
-
-    If the model echoes or generates capsule tags in its output, this function
-    strips the ``[CAPSULE ...]`` header and ``[/CAPSULE]`` footer while
-    preserving the content between them.
-
-    This is safe to call on any text — if no capsule tags are present the
-    original string is returned unchanged (fast path: substring check).
-
-    Parameters
-    ----------
-    text : str
-        Text that may contain capsule envelope tags.
-
-    Returns
-    -------
-    str
-        Text with capsule tags removed, content preserved.
-    """
-    if "[CAPSULE" not in text:
-        return text
-    text = _RE_CAPSULE_HEADER.sub("", text)
-    text = _RE_CAPSULE_CLOSE.sub("", text)
-    return text.strip()
-
-
-def strip_capsule_tags_from_response(body_bytes: bytes) -> bytes:
-    """
-    Strip capsule tags from an API response body (Layer 2).
-
-    Handles both Anthropic (``content[].text``) and OpenAI (``choices[].message.content``)
-    response formats.  Returns the original bytes unchanged if no capsule tags
-    are found or if parsing fails (fail-open).
-
-    Parameters
-    ----------
-    body_bytes : bytes
-        Raw JSON response body from the upstream API.
-
-    Returns
-    -------
-    bytes
-        Response body with capsule tags stripped from assistant text.
-    """
-    # Fast path: no capsule tags anywhere in the raw bytes
-    if b"[CAPSULE" not in body_bytes:
-        return body_bytes
-
-    try:
-        data = json.loads(body_bytes)
-    except (json.JSONDecodeError, ValueError):
-        return body_bytes
-
-    modified = False
-
-    # Anthropic format: data.content[].text
-    content = data.get("content")
-    if isinstance(content, list):
-        for part in content:
-            if isinstance(part, dict) and isinstance(part.get("text"), str):
-                cleaned = strip_capsule_tags(part["text"])
-                if cleaned != part["text"]:
-                    part["text"] = cleaned
-                    modified = True
-
-    # OpenAI format: data.choices[].message.content
-    choices = data.get("choices")
-    if isinstance(choices, list):
-        for choice in choices:
-            msg = choice.get("message", {})
-            if isinstance(msg.get("content"), str):
-                cleaned = strip_capsule_tags(msg["content"])
-                if cleaned != msg["content"]:
-                    msg["content"] = cleaned
-                    modified = True
-
-    if not modified:
-        return body_bytes
-
-    return json.dumps(data, ensure_ascii=False).encode("utf-8")
-
-
 # ---------------------------------------------------------------------------
 # CapsuleBuilder
 # ---------------------------------------------------------------------------
@@ -375,13 +284,6 @@ class CapsuleBuilder:
                 # Inside hot window — never touch
                 continue
             if not isinstance(msg, dict):
-                continue
-
-            # Layer 1: Never compress assistant messages.
-            # If the model sees capsule tags in its own prior replies it will
-            # learn the pattern and start wrapping NEW responses in capsule
-            # envelopes — leaking raw tags to the user surface.
-            if msg.get("role") == "assistant":
                 continue
 
             content = msg.get("content")

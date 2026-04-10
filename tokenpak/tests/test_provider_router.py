@@ -14,17 +14,17 @@ import pytest
 # ---------------------------------------------------------------------------
 # Patch the broken ingest module BEFORE importing anything from tokenpak.agent
 # ---------------------------------------------------------------------------
-_fake_ingest = types.ModuleType("tokenpak.agent.ingest")
+_fake_ingest = types.ModuleType("tokenpak._internal.ingest")
 _fake_ingest.create_ingest_app = MagicMock()
 _fake_ingest.ingest_router = MagicMock()
-_fake_ingest.schema_converter = types.ModuleType("tokenpak.agent.ingest.schema_converter")
+_fake_ingest.schema_converter = types.ModuleType("tokenpak._internal.ingest.schema_converter")
 _fake_ingest.schema_converter.should_serve_schema = lambda intent: False
 _fake_ingest.schema_converter.convert_document = MagicMock(return_value={})
-sys.modules.setdefault("tokenpak.agent.ingest", _fake_ingest)
-sys.modules.setdefault("tokenpak.agent.ingest.schema_converter", _fake_ingest.schema_converter)
-sys.modules.setdefault("tokenpak.agent.ingest.api", MagicMock())
+sys.modules.setdefault("tokenpak._internal.ingest", _fake_ingest)
+sys.modules.setdefault("tokenpak._internal.ingest.schema_converter", _fake_ingest.schema_converter)
+sys.modules.setdefault("tokenpak._internal.ingest.api", MagicMock())
 
-from tokenpak.agent.proxy.router import (  # noqa: E402
+from tokenpak.proxy.router import (  # noqa: E402
     ProviderRouter,
     RouteResult,
     estimate_cost,

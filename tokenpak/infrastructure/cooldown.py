@@ -1,11 +1,8 @@
-"""tokenpak.agent.auth.cooldown_manager — backward-compat shim.
-
-CooldownManager and BackgroundCooldownClearer have moved to tokenpak.infrastructure.cooldown.
 """
+TokenPak CooldownManager — Auth cooldown tracking and background auto-clear.
 
-from tokenpak.infrastructure.cooldown import CooldownManager, BackgroundCooldownClearer, HIGH_ERROR_THRESHOLD
+Deliverable 3 of Phase 3 UX Overhaul.
 
-<<<<<<<< HEAD:tokenpak/infrastructure/cooldown.py
 Manages expired auth cooldowns from two sources:
   1. ~/.tokenpak/cooldowns.json — per-profile cooldown timestamps
   2. ~/.tokenpak/auth-profiles.json — profile-level cooldownUntil fields
@@ -249,6 +246,3 @@ class BackgroundCooldownClearer:
                 self._task.cancel()
             self._task = None
         logger.info("[tokenpak] BackgroundCooldownClearer stopped")
-========
-__all__ = ["CooldownManager", "BackgroundCooldownClearer", "HIGH_ERROR_THRESHOLD"]
->>>>>>>> trix-remote/oss-launch/P4-T4-repo-hygiene:tokenpak/agent/auth/cooldown_manager.py
