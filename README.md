@@ -2,7 +2,7 @@
 
 
 
-![Python](https://img.shields.io/badge/python-3.8+-blue)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 
@@ -315,10 +315,10 @@ Result: same semantic content, 20–60% fewer tokens.
 ### Core
 
 ```bash
-tokenpak serve --port 8766 [--workers N]  # start proxy (default: cpu_count//2 workers)
-tokenpak status [--full]       # proxy health
+tokenpak serve --port 8766 [--workers N]  # start proxy (default: 1 worker)
+tokenpak status                # proxy health
 tokenpak cost [--week|--month] # cost report
-tokenpak savings [--lifetime]  # token savings summary
+tokenpak savings [--days N]    # token savings summary (rolling window)
 ```
 
 ### Compression & Debug

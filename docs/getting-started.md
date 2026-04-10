@@ -55,9 +55,7 @@ config file automatically — no manual editing required.
 - **Google AI SDK**: prints the one-line export command
 
 !!! tip "Non-interactive / CI"
-    ```bash
-    tokenpak setup --yes   # skip all confirmation prompts
-    ```
+    Run `tokenpak setup` and answer the prompts, or set the proxy URL manually using the instructions in the [manual alternative](#connect-your-llm-client-manual-alternative) section below.
 
 The wizard never reads or writes API keys — only proxy URLs.
 
@@ -73,7 +71,7 @@ The proxy starts on `http://localhost:8766` and is ready to accept requests imme
 
 !!! tip "Run in background"
     ```bash
-    tokenpak serve --port 8766 --daemon
+    tokenpak serve --port 8766 &
     # Stop with:
     tokenpak stop
     ```
@@ -138,7 +136,7 @@ Expected output:
 Make a test request through your client, then:
 
 ```bash
-tokenpak cost --today
+tokenpak cost
 # Cost today: $0.002 | Tokens saved: 1,847 (38%)
 ```
 

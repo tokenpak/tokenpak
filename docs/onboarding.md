@@ -40,7 +40,7 @@ What it does per client:
 
 The wizard never reads or writes API keys — only proxy URLs.
 
-> **Non-interactive / CI:** `tokenpak setup --yes` skips all confirmation prompts.
+> **Non-interactive / CI:** Run `tokenpak setup` and answer the prompts, or configure the proxy URL manually by editing your LLM client config directly.
 
 ### Start the Proxy
 
@@ -51,7 +51,7 @@ tokenpak serve --port 8766
 You'll see startup output confirming the port and worker count. Leave this terminal open, or run it in the background:
 
 ```bash
-tokenpak serve --port 8766 --daemon
+tokenpak serve --port 8766 &
 ```
 
 ### Send a Request
@@ -76,7 +76,7 @@ Expected output:
 Then check your first savings:
 
 ```bash
-tokenpak cost --today
+tokenpak cost
 # Cost today: $0.002 | Tokens saved: 1,847 (38%)
 ```
 
@@ -88,7 +88,7 @@ If you see token savings above zero, compression is working.
 - [ ] `tokenpak setup` ran without errors
 - [ ] `tokenpak serve` started on port 8766
 - [ ] `tokenpak status` shows proxy running and compression enabled
-- [ ] `tokenpak cost --today` shows at least one request processed
+- [ ] `tokenpak cost` shows at least one request processed
 
 ---
 
@@ -105,7 +105,7 @@ tokenpak cost --week
 This shows a breakdown by day and model — you can see which models and use cases save the most tokens.
 
 ```bash
-tokenpak savings --lifetime
+tokenpak savings
 ```
 
 This shows your cumulative savings since install: total tokens saved, estimated dollar savings, and a compression ratio per session.
@@ -132,7 +132,7 @@ The benchmark runs against the `tests/benchmarks/fixtures/` payloads, which repr
 ### Day 3 Checklist
 
 - [ ] `tokenpak cost --week` shows data for at least 2 days
-- [ ] `tokenpak savings --lifetime` shows a compression ratio
+- [ ] `tokenpak savings` shows a compression ratio
 - [ ] You understand where to find the `compression.level` setting
 
 ---
@@ -251,7 +251,7 @@ Then restart the proxy:
 
 ```bash
 tokenpak stop
-tokenpak serve --port 8766 --daemon
+tokenpak serve --port 8766 &
 ```
 
 ### Verify the Alert Fires
