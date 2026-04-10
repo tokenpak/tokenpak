@@ -186,6 +186,14 @@ class Monitor:
         """)
         conn.commit()
 
+        # CCG-02: session_id on requests + mutation_audit table
+        try:
+            from tokenpak.proxy.db import ensure_schema as _ccg02_ensure_schema
+            _ccg02_ensure_schema(conn)
+            conn.commit()
+        except Exception as e:
+            print(f"⚠️  CCG-02 schema migration error (non-fatal): {e}")
+
         # Run migrations to bring DB schema up to current version
         try:
             if MIGRATION_AVAILABLE:
