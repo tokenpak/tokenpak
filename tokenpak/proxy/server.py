@@ -68,7 +68,7 @@ from .passthrough import (
 )
 from .stats import CompressionStats
 from .degradation import get_degradation_tracker, DegradationEventType
-from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
+from .circuit_breaker import get_circuit_breaker_registry, get_rate_limit_registry, provider_from_url
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
 from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
@@ -794,6 +794,36 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_provider = None
             _cb_registry = None
 
+        # ── Rate-limit circuit breaker check ──────────────────────────────
+        # Fast-fail with 503 if the provider's rate-limit circuit is open
+        # (too many 429s in the rolling window).
+        if should_log and is_messages and _cb_provider:
+            if get_rate_limit_registry().is_open(_cb_provider):
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "tokenpak: rate-limit circuit open for %s — returning 503",
+                    _cb_provider,
+                )
+                err = json.dumps({
+                    "error": {
+                        "type": "rate_limit_circuit_open",
+                        "message": (
+                            f"Provider '{_cb_provider}' is rate-limiting requests. "
+                            "The rate-limit circuit is open due to repeated 429 responses. "
+                            "Request blocked to prevent further upstream hammering."
+                        ),
+                        "provider": _cb_provider,
+                        "hint": "Check GET /circuit-breakers for current state.",
+                    }
+                }).encode()
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.send_header("Retry-After", "30")
+                self.end_headers()
+                self.wfile.write(err)
+                return
+
         # Validate credentials for intercepted provider requests
         # Client-supplied key takes precedence over any environment-level key.
         if should_log and is_messages:
@@ -990,10 +1020,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass  # logging must never break the proxy
 
             if should_log and is_messages and input_tokens > 0:
-                cost = estimate_cost(model, sent_input_tokens, output_tokens,
-                                     cache_read_tokens, cache_creation_tokens)
-                cost_without = estimate_cost(model, input_tokens, output_tokens,
-                                             cache_read_tokens, cache_creation_tokens)
+                if _resp_status != 200:
+                    # Non-200 responses generate no tokens; log cost=0 to avoid
+                    # phantom cost entries.  Fix per telemetry-gap-2026-03-07.md lines 77-78.
+                    cost = 0.0
+                    cost_without = 0.0
+                    # Record 429 in the rate-limit circuit breaker so repeated
+                    # rate-limit bursts trip the circuit and stop upstream hammering.
+                    if _resp_status == 429 and _cb_provider:
+                        get_rate_limit_registry().record_429(_cb_provider)
+                else:
+                    cost = estimate_cost(model, sent_input_tokens, output_tokens,
+                                         cache_read_tokens, cache_creation_tokens)
+                    cost_without = estimate_cost(model, input_tokens, output_tokens,
+                                                 cache_read_tokens, cache_creation_tokens)
                 saved = max(0, input_tokens - sent_input_tokens)
                 cost_saved = max(0.0, cost_without - cost)
 
