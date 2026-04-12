@@ -18,6 +18,7 @@ from .registry import AdapterRegistry
 from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 
+# Higher priority values are checked first when matching requests to adapters.
 def build_default_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
     registry.register(AnthropicAdapter(), priority=300)
