@@ -6,6 +6,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Infrastructure
+- **Consolidation Stage 2 complete (2026-04-09)** — Modular tree (`tokenpak/tokenpak/`) is now runnable via `python -m tokenpak.proxy.server`. Entry point (`main()`, `ThreadedHTTPServer`, signal handlers, PID management) wired by Trix in TPK-CONSOLIDATION-A3 (commits `16984ce2f`, `94da85528`). Monolith remains on the fleet until cutover proposal is approved. All new development targets the modular tree; monolith is frozen hotfix-only per TPK-CONSOLIDATION-001.
+
 ### Added
 - **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags
 - **CLI surface consistency test** — `tests/cli/test_help_surface_consistency.py` asserts every command in `tokenpak --help` exits 0 on `<cmd> --help`
