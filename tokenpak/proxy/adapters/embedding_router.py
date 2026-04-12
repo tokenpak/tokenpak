@@ -74,7 +74,7 @@ class EmbeddingRouter:
             logger.warning(
                 "EmbeddingRouter: no embedding providers available — "
                 "set VOYAGE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, "
-                "JINA_API_KEY, or TOKENPAK_OLLAMA_URL to enable a provider"
+                "JINA_API_KEY, or OLLAMA_HOST to enable a provider"
             )
         return available
 
@@ -95,7 +95,7 @@ class EmbeddingRouter:
             raise RuntimeError(
                 "No embedding providers are available. "
                 "Set at least one of VOYAGE_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, "
-                "JINA_API_KEY, or TOKENPAK_OLLAMA_URL."
+                "JINA_API_KEY, or OLLAMA_HOST."
             )
 
         if requested_model == "auto":
