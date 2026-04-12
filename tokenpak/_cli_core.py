@@ -890,9 +890,9 @@ def cmd_index(args):
         return
 
     if not args.directory:
-        import argparse
-
-        raise argparse.ArgumentError(None, "directory is required when --status is not set")
+        print("error: directory is required when --status is not set", file=sys.stderr)
+        print("Usage: tokenpak index <directory> [--recursive] [--status]", file=sys.stderr)
+        sys.exit(1)
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
