@@ -17,6 +17,8 @@ import json
 import requests
 from pathlib import Path
 
+pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_webhook]
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # FIXTURES

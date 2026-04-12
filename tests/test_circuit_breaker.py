@@ -425,6 +425,8 @@ def _get(port: int, path: str) -> tuple[int, dict]:
 
 
 class TestHealthEndpointCircuitBreakers:
+    pytestmark = pytest.mark.needs_proxy
+
     def test_health_has_circuit_breakers_key(self, proxy_with_cb):
         _, data = _get(19877, "/health")
         assert "circuit_breakers" in data
@@ -459,6 +461,8 @@ class TestHealthEndpointCircuitBreakers:
 # ===========================================================================
 
 class TestCircuitBreakersEndpoint:
+    pytestmark = pytest.mark.needs_proxy
+
     def test_circuit_breakers_endpoint_returns_200(self, proxy_with_cb):
         status, _ = _get(19877, "/circuit-breakers")
         assert status == 200

@@ -31,10 +31,13 @@ except ImportError:
     LicenseTier = None  # type: ignore[assignment,misc]
     _ALERTS_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(
-    not _ALERTS_AVAILABLE,
-    reason="tokenpak.alerts modules not available in this environment (tokenpak._internal.alerts missing)",
-)
+pytestmark = [
+    pytest.mark.needs_internal_alerts,
+    pytest.mark.skipif(
+        not _ALERTS_AVAILABLE,
+        reason="tokenpak.alerts modules not available in this environment (tokenpak._internal.alerts missing)",
+    ),
+]
 
 
 @pytest.fixture(autouse=True)

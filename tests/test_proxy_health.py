@@ -20,6 +20,8 @@ from collections import deque
 
 import pytest
 
+pytestmark = pytest.mark.needs_proxy
+
 from tokenpak.proxy.server import ProxyServer
 
 

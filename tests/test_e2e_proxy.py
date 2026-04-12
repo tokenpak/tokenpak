@@ -24,6 +24,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytestmark = pytest.mark.needs_proxy
+
 from tokenpak.proxy.server import ProxyServer
 
 

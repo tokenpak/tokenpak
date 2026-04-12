@@ -170,6 +170,7 @@ def _get(port: int, path: str, timeout: float = 5.0):
 
 class TestShutdownRejects503:
     """New requests return 503 while draining."""
+    pytestmark = pytest.mark.needs_proxy
 
     def test_503_after_shutdown_begin(self):
         """Directly begin shutdown and verify management of 503 state."""
@@ -216,6 +217,7 @@ class TestShutdownRejects503:
 
 class TestInFlightCompletion:
     """In-flight requests are tracked and allowed to complete."""
+    pytestmark = pytest.mark.needs_proxy
 
     def test_track_request_increments_inflight(self, proxy):
         """Verify in-flight counter increments during request."""
@@ -278,6 +280,7 @@ class TestTelemetryFlush:
         assert parsed["session_requests"] == 42
         assert parsed["session_tokens_saved"] == 1234
 
+    @pytest.mark.needs_proxy
     def test_proxy_stop_flushes_to_disk(self, tmp_path):
         """ProxyServer.stop() writes a shutdown record to the log file."""
         log_path = tmp_path / "events.jsonl"
@@ -329,6 +332,7 @@ class TestConfigurableTimeout:
         srv = ProxyServer(host="127.0.0.1", port=18875, shutdown_timeout=10.0)
         assert srv.shutdown_timeout == 10.0
 
+    @pytest.mark.needs_proxy
     def test_drain_timeout_actually_used(self):
         """Drain times out at shutdown_timeout, not earlier or much later."""
         srv = ProxyServer(host="127.0.0.1", port=18876, shutdown_timeout=0.3)
@@ -359,6 +363,7 @@ class TestConfigurableTimeout:
 
 class TestSignalHandling:
     """SIGTERM/SIGINT trigger graceful shutdown."""
+    pytestmark = pytest.mark.needs_proxy
 
     def test_signal_handler_installed_in_main_thread(self):
         """
@@ -398,6 +403,7 @@ class TestSignalHandling:
 
 class TestHealthDuringShutdown:
     """Health endpoint reflects shutdown state."""
+    pytestmark = pytest.mark.needs_proxy
 
     def test_health_shows_shutting_down_status(self, proxy):
         # Proxy fixture is not in shutdown — verify baseline

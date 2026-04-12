@@ -23,6 +23,8 @@ from typing import Optional
 
 import pytest
 
+pytestmark = pytest.mark.needs_proxy
+
 # Force async backend for all tests in this module
 os.environ.setdefault("TOKENPAK_ASYNC_PROXY", "1")
 os.environ.setdefault("TOKENPAK_CONCURRENCY", "200")

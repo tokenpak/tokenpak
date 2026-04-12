@@ -22,6 +22,8 @@ from typing import List, Tuple
 
 import pytest
 
+pytestmark = [pytest.mark.needs_proxy, pytest.mark.needs_fast_host]
+
 from tokenpak.proxy.server import ProxyServer
 
 

@@ -46,6 +46,8 @@ from unittest.mock import patch
 
 import pytest
 
+pytestmark = pytest.mark.needs_cali_env
+
 # ---------------------------------------------------------------------------
 # Bootstrap: import proxy.py from the project root
 # ---------------------------------------------------------------------------

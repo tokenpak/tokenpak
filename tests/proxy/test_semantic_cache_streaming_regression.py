@@ -36,6 +36,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytestmark = pytest.mark.needs_cali_env
+
 # ---------------------------------------------------------------------------
 # Bootstrap: import the top-level proxy.py
 # ---------------------------------------------------------------------------

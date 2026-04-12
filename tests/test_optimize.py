@@ -7,6 +7,10 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytestmark = pytest.mark.needs_cali_env
+
 # Ensure tokenpak is importable
 sys.path.insert(0, "/home/cali/tokenpak")
 

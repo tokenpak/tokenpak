@@ -9,6 +9,8 @@ import zlib
 
 import pytest
 
+pytestmark = pytest.mark.needs_fast_host
+
 
 def _proxy_reachable() -> bool:
     """Return True if tokenpak proxy is reachable on localhost."""

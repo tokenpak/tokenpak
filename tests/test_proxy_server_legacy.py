@@ -28,6 +28,8 @@ from typing import Any, Dict, Optional
 
 import pytest
 
+pytestmark = pytest.mark.needs_proxy
+
 from tokenpak.proxy.server import (
     GracefulShutdown,
     PipelineTrace,

@@ -135,11 +135,13 @@ class TestStartup:
         assert proxy_v4._proxy_ready is False
         proxy_v4._proxy_ready = original
 
+    @pytest.mark.needs_proxy
     def test_ready_true_after_server_starts(self, live_proxy):
         """After live_proxy fixture sets _proxy_ready, flag should be True."""
         _, _ = live_proxy
         assert proxy_v4._proxy_ready is True
 
+    @pytest.mark.needs_proxy
     def test_ready_endpoint_200_after_start(self, live_proxy):
         """GET /ready → 200 after startup."""
         server, port = live_proxy
@@ -155,6 +157,7 @@ class TestStartup:
 class TestShutdown:
     """Validate SIGTERM/SIGINT handling and in-flight drain."""
 
+    @pytest.mark.needs_proxy
     def test_shutdown_event_clears_ready_flag(self, live_proxy):
         """Simulating shutdown: _proxy_ready → False, _shutdown_event set."""
         server, port = live_proxy
@@ -170,6 +173,7 @@ class TestShutdown:
             proxy_v4._proxy_ready = True
             proxy_v4._shutdown_event.clear()
 
+    @pytest.mark.needs_proxy
     def test_ready_503_during_shutdown(self, live_proxy):
         """GET /ready → 503 during shutdown."""
         server, port = live_proxy
@@ -182,6 +186,7 @@ class TestShutdown:
             proxy_v4._proxy_ready = True
             proxy_v4._shutdown_event.clear()
 
+    @pytest.mark.needs_proxy
     def test_active_request_counter_increments(self, live_proxy):
         """ThreadedHTTPServer must track _active_request_count."""
         server, port = live_proxy
@@ -202,6 +207,7 @@ class TestShutdown:
             timeout = int(os.getenv("TOKENPAK_SHUTDOWN_TIMEOUT", "30"))
         assert timeout == 5
 
+    @pytest.mark.needs_proxy
     def test_no_orphan_after_shutdown(self, proxy_port):
         """After server.shutdown(), nothing should be listening on the port."""
         server = HTTPServer(("127.0.0.1", proxy_port), proxy_v4.ForwardProxyHandler)

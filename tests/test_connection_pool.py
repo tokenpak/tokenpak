@@ -409,6 +409,7 @@ def test_proxy_server_has_connection_pool():
 # Test 22 — ProxyServer.health() includes connection_pool section
 # ---------------------------------------------------------------------------
 
+@pytest.mark.needs_proxy
 def test_proxy_server_health_includes_pool_metrics():
     server = ProxyServer(host="127.0.0.1", port=28800)
     server.start(blocking=False)
