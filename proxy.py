@@ -2208,6 +2208,17 @@ CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
     "anthropic-dangerous-direct-browser-access",
     "x-claude-code-session-id",
     "user-agent",
+    # Claude Code native headers — required for proper quota routing
+    "accept",
+    "x-app",
+    "x-stainless-arch",
+    "x-stainless-lang",
+    "x-stainless-os",
+    "x-stainless-package-version",
+    "x-stainless-retry-count",
+    "x-stainless-runtime",
+    "x-stainless-runtime-version",
+    "x-stainless-timeout",
 )
 
 
@@ -7774,7 +7785,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     #
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
-                    if body and not _transparent_mode:
+                    if body and not _transparent_mode and not _client_has_auth:
                         _pre_poison_body = body
                         body = _strip_cache_poisons(body)
                         cache_poison_scrubbed = body != _pre_poison_body
@@ -7800,7 +7811,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=VAULT_INDEX.available,
                         input_tokens=input_tokens,
                     )
-                    if VAULT_INDEX.available and not _transparent_mode:
+                    if VAULT_INDEX.available and not _transparent_mode and not _client_has_auth:
                         skip_injection = False
                         if INJECT_SKIP_MODELS.strip():
                             if any(
@@ -7824,7 +7835,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             )
                             # Even when skipping vault injection, apply cache_control to stable prefix
                             # Guard: only Anthropic supports cache_control markers
-                            if PROMPT_BUILDER_AVAILABLE and detect_provider(target_url) is Provider.ANTHROPIC:
+                            # Skip for client-auth pass-through — client manages its own cache ordering.
+                            if PROMPT_BUILDER_AVAILABLE and not _client_has_auth and detect_provider(target_url) is Provider.ANTHROPIC:
                                 body = _apply_stable_cache_control(body)
                                 _audit_rules.append("cache_control_stamp")
                                 if _audit_cache_risk == "none":
@@ -7859,9 +7871,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # _apply_stable_cache_control fires regardless of vault injection outcome.
                     # apply_stable_cache_control is idempotent (won't double-mark).
                     # Guard: only Anthropic supports cache_control markers; transparent is unchanged.
+                    # Skip when client already has auth (Claude Code pass-through) — the client
+                    # manages its own cache_control ordering; adding proxy markers breaks TTL order.
                     if (
                         _safe_mode
                         and not _transparent_mode
+                        and not _client_has_auth
                         and PROMPT_BUILDER_AVAILABLE
                         and detect_provider(target_url) is Provider.ANTHROPIC
                         and "cache_control_stamp" not in _audit_rules
@@ -8042,7 +8057,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=ENABLE_COMPACTION,
                         input_tokens=input_tokens,
                     )
-                    if ENABLE_COMPACTION and not _transparent_mode:
+                    if ENABLE_COMPACTION and not _transparent_mode and not _client_has_auth:
                         body, sent_input_tokens, original_tokens, protected_tokens = (
                             compact_request_body(
                                 body,
@@ -8070,7 +8085,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(compaction_stage)
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode:
+                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode and not _client_has_auth:
                         try:
                             from tokenpak.compression.dictionary import CompressionDictionary
 
@@ -8261,7 +8276,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     print(f"  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}")
             except Exception as _e:
                 print(f"  🔍 debug error: {_e}")
-            body = _strip_empty_text_blocks(body)
+            if not _client_has_auth:
+                body = _strip_empty_text_blocks(body)
             # CACHE-P4-001: CacheSpec unified mode resolution (replaces ad-hoc provider guards)
             _detected_provider = detect_provider(target_url)
             _cache_hint: Optional[str] = None
@@ -8288,8 +8304,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 else None
             )
 
-            # Dispatch based on resolved mode
-            if _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT:
+            # Dispatch based on resolved mode.
+            # Skip ALL cache_control modifications for client-auth pass-through — the client
+            # (e.g., Claude Code CLI) manages its own cache_control ordering and TTL values.
+            if _client_has_auth:
+                pass  # pass-through: do not touch cache_control
+            elif _CACHE_SPEC_AVAILABLE and _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT:
                 if _detected_provider is Provider.ANTHROPIC:
                     try:
                         _ac_body = json.loads(body)
@@ -8387,8 +8407,9 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             except Exception as _e:
                 print(f"  ⚠️ cache_control debug error: {_e}", flush=True)
             body = _strip_empty_text_blocks(body)
-            # Safety net: second cap for EXPLICIT mode in case injection re-added blocks
-            if _detected_provider is Provider.ANTHROPIC and (
+            # Safety net: second cap for EXPLICIT mode in case injection re-added blocks.
+            # Skip for client-auth pass-through — client manages its own cache_control.
+            if _detected_provider is Provider.ANTHROPIC and not _client_has_auth and (
                 not _CACHE_SPEC_AVAILABLE
                 or _effective_mode is _CacheSpecMode.BLOCK_EXPLICIT
             ):
@@ -8398,39 +8419,41 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # Anthropic rejects when a cache_control block with ttl="1h" appears AFTER
             # a default-ttl (5m) block in document order. Strip all default-ttl blocks
             # that appear BEFORE the LAST explicit-ttl block.
-            try:
-                _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
-                _hf_locs = []
-                for _hs in (_hf_dbody.get("system") or []):
-                    if isinstance(_hs, dict):
-                        _hf_locs.append(_hs)
-                for _ht in (_hf_dbody.get("tools") or []):
-                    if isinstance(_ht, dict):
-                        _hf_locs.append(_ht)
-                for _hm in (_hf_dbody.get("messages") or []):
-                    _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
-                    if isinstance(_hcontent, list):
-                        for _hc in _hcontent:
-                            if isinstance(_hc, dict):
-                                _hf_locs.append(_hc)
-                _last_ext_ttl = None
-                for _hi, _hb in enumerate(_hf_locs):
-                    _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                    if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
-                        _last_ext_ttl = _hi
-                if _last_ext_ttl is not None:
-                    _hf_stripped = 0
-                    for _hi in range(_last_ext_ttl):
-                        _hb = _hf_locs[_hi]
+            # Skip for client-auth pass-through — client has correct ordering already.
+            if not _client_has_auth:
+                try:
+                    _hf_dbody = json.loads(body) if isinstance(body, (bytes, str)) else body
+                    _hf_locs = []
+                    for _hs in (_hf_dbody.get("system") or []):
+                        if isinstance(_hs, dict):
+                            _hf_locs.append(_hs)
+                    for _ht in (_hf_dbody.get("tools") or []):
+                        if isinstance(_ht, dict):
+                            _hf_locs.append(_ht)
+                    for _hm in (_hf_dbody.get("messages") or []):
+                        _hcontent = _hm.get("content") if isinstance(_hm, dict) else None
+                        if isinstance(_hcontent, list):
+                            for _hc in _hcontent:
+                                if isinstance(_hc, dict):
+                                    _hf_locs.append(_hc)
+                    _last_ext_ttl = None
+                    for _hi, _hb in enumerate(_hf_locs):
                         _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
-                        if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
-                            _hb.pop("cache_control", None)
-                            _hf_stripped += 1
-                    if _hf_stripped > 0:
-                        print(f"  🧹 TTL ordering hotfix v2: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
-                        body = json.dumps(_hf_dbody).encode()
-            except Exception as _e_hf:
-                print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
+                        if isinstance(_hcc, dict) and _hcc.get("ttl") is not None:
+                            _last_ext_ttl = _hi
+                    if _last_ext_ttl is not None:
+                        _hf_stripped = 0
+                        for _hi in range(_last_ext_ttl):
+                            _hb = _hf_locs[_hi]
+                            _hcc = _hb.get("cache_control") if isinstance(_hb, dict) else None
+                            if isinstance(_hcc, dict) and _hcc.get("ttl") is None:
+                                _hb.pop("cache_control", None)
+                                _hf_stripped += 1
+                        if _hf_stripped > 0:
+                            print(f"  🧹 TTL ordering hotfix v2: stripped {_hf_stripped} default-ttl blocks before last explicit-ttl block", flush=True)
+                            body = json.dumps(_hf_dbody).encode()
+                except Exception as _e_hf:
+                    print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
