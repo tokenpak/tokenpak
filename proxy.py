@@ -2204,6 +2204,7 @@ OPENCLAW_HEADER_ALLOWLIST: tuple = (
 CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
     "x-api-key",
     "authorization",
+    "content-type",
     "anthropic-version",
     "anthropic-beta",
     "anthropic-dangerous-direct-browser-access",
@@ -8482,11 +8483,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             body = json.dumps(_hf_dbody).encode()
                 except Exception as _e_hf:
                     print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
-            # Restore original cache_control state for client-auth pass-through.
-            # The pipeline may have modified cache_control blocks (e.g., added default
-            # ephemeral markers, stripped TTL fields). Restore the client's original
-            # values to preserve TTL ordering.
-            if _saved_cache_controls and body:
+            # For client-auth pass-through: restore the ORIGINAL body bytes.
+            # The pipeline may have re-serialized JSON (changing formatting, key order,
+            # body size) which causes Anthropic to route the request through a different
+            # billing path. Forwarding the exact original bytes preserves the request
+            # identity that Claude Code's OAuth quota expects.
+            if _pre_client_has_auth and _original_body:
+                body = _original_body
+            elif _saved_cache_controls and body:
                 try:
                     _restore_body = json.loads(body) if isinstance(body, (bytes, str)) else body
                     _restored = 0
