@@ -7,6 +7,9 @@ _To update: run `python3 -m tokenpak <cmd> --help` for each command and cross-ch
 - `[stable]` — production-ready, no breaking changes expected
 - `[experimental]` — shipped but subject to change
 - `[planned]` — not yet available in the current release
+- `[advanced]` — intentionally omitted from `tokenpak --help`; accessible via `tokenpak help` or direct invocation
+
+> **Discoverability note:** `tokenpak --help` shows a curated subset for new users. Run `tokenpak help` to see all commands grouped by category, including advanced ones.
 
 ---
 
@@ -110,9 +113,9 @@ Index a directory for context retrieval
 - `--debounce DEBOUNCE` — Debounce delay in ms for watch mode (default: 500)
 - `--no-treesitter` — Force regex-based code processing (skip tree-sitter)
 
-### `tokenpak search` [stable]
+### `tokenpak search` [stable] [advanced]
 
-Search indexed content
+Search indexed content. Not shown in `tokenpak --help`; run `tokenpak help` or invoke directly.
 
 **Flags:**
 
@@ -126,9 +129,9 @@ Search indexed content
 
 ## Group: Configuration
 
-### `tokenpak route` [stable]
+### `tokenpak route` [stable] [advanced]
 
-Manage model routing rules
+Manage model routing rules. Not shown in `tokenpak --help`; run `tokenpak help` or invoke directly.
 
 **Subcommands:**
 
@@ -666,9 +669,9 @@ Schedule and manage macro runs
 - `cancel`
   - `ID` — Schedule ID to cancel
 
-### `tokenpak replay` [stable]
+### `tokenpak replay` [stable] [advanced]
 
-Inspect and re-run captured sessions
+Inspect and re-run captured sessions. Not shown in `tokenpak --help`; run `tokenpak help` or invoke directly.
 
 **Subcommands:**
 
