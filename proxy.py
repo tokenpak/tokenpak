@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-TokenPak Forward Proxy v4 — Two-Tier Context Injection
+TokenPak Forward Proxy v4 — Two-Tier Context Injection (Monolith)
+
+⚠️  MIGRATION IN PROGRESS: This monolith is being decomposed into the modular
+    tree at tokenpak/proxy/. New route classification and pipeline behavior
+    are defined in tokenpak/proxy/route_policy.py. See the MTC initiative
+    (TASK-018..023) for the decomposition plan.
+
+    This file remains runnable for production use during the transition.
 
 Changes from v3:
 - Two-Tier Index: loads BOTH workspace + vault indexes
