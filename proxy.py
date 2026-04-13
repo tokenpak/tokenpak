@@ -6645,6 +6645,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             self._handle_count_tokens()
         elif self.path.split("?")[0] == "/v1/messages/forecast":
             self._handle_cost_forecast()
+        elif self.path.split("?")[0] == "/v1/embeddings":
+            self._handle_embeddings()
         elif self.path.startswith("/v1/messages/"):
             # CCG-05: Default passthrough for unrecognised /v1/messages/* subpaths.
             # Forwards body + headers to upstream untouched (guards future Anthropic API additions).
@@ -8196,9 +8198,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             if not _pool_key:
                 _pool_key = _load_claude_cli_token()
             if _pool_key:
-                fwd_headers["x-api-key"] = _pool_key
-                for _k in ("Authorization", "authorization"):
-                    fwd_headers.pop(_k, None)
+                if _pool_key.startswith("sk-ant-oat"):
+                    # Claude CLI OAuth subscription token — must use Authorization Bearer.
+                    # Sending oat tokens via x-api-key routes through Anthropic's "extra
+                    # usage" quota path rather than the subscription quota, causing spurious
+                    # YOU_RE_OUT_OF_EXTRA_USAGE errors even when the subscription has headroom.
+                    fwd_headers["Authorization"] = f"Bearer {_pool_key}"
+                    fwd_headers.pop("x-api-key", None)
+                    fwd_headers.pop("X-Api-Key", None)
+                else:
+                    # Regular API key (sk-ant-api…) — use x-api-key as normal.
+                    fwd_headers["x-api-key"] = _pool_key
+                    for _k in ("Authorization", "authorization"):
+                        fwd_headers.pop(_k, None)
 
         # ChatGPT Codex OAuth injection
         if detect_provider(target_url) is Provider.CODEX:
@@ -8493,7 +8505,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         f"retrying with key #{_retry_idx}",
                         flush=True,
                     )
-                    fwd_headers["x-api-key"] = _retry_key
+                    if _retry_key.startswith("sk-ant-oat"):
+                        fwd_headers["Authorization"] = f"Bearer {_retry_key}"
+                        fwd_headers.pop("x-api-key", None)
+                    else:
+                        fwd_headers["x-api-key"] = _retry_key
                     _current_key_idx = _retry_idx
                     try:
                         resp.drain_conn()
@@ -10099,6 +10115,152 @@ setInterval(refresh, REFRESH);
             })
             return
         self._send_json({"providers": _EMBEDDING_ROUTER.get_providers_status()})
+
+    def _handle_embeddings(self):
+        """Handle POST /v1/embeddings via EmbeddingRouter."""
+        if _EMBEDDING_ROUTER is None:
+            self._send_json(
+                {
+                    "error": {
+                        "type": "service_unavailable",
+                        "message": "EmbeddingRouter not available — install embedding adapters",
+                    }
+                },
+                status=503,
+            )
+            return
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > _MAX_REQUEST_BYTES:
+            self._send_json(
+                {
+                    "error": {
+                        "type": "request_too_large",
+                        "message": (
+                            f"Request body exceeds limit ({content_length} bytes > {_MAX_REQUEST_BYTES} bytes). "
+                            "Set TOKENPAK_MAX_REQUEST_SIZE to raise the limit."
+                        ),
+                    }
+                },
+                status=413,
+            )
+            return
+
+        body = self.rfile.read(content_length) if content_length > 0 else b""
+
+        try:
+            request_data = json.loads(body or b"{}")
+            requested_model = str(request_data.get("model", "auto")) or "auto"
+            raw_input = request_data.get("input", [])
+            input_texts = [str(item) for item in raw_input] if isinstance(raw_input, list) else [str(raw_input)]
+        except (json.JSONDecodeError, ValueError) as exc:
+            self._send_json(
+                {"error": {"type": "invalid_json", "message": f"Invalid JSON in embedding request: {exc}"}},
+                status=400,
+            )
+            return
+
+        try:
+            target_url, forward_headers, forward_body = _EMBEDDING_ROUTER.handle_request(
+                self.path.split("?")[0],
+                _header_mapping(self.headers),
+                body,
+            )
+            _, adapter = _EMBEDDING_ROUTER.resolve_model(requested_model, input_texts)
+        except RuntimeError as exc:
+            self._send_json(
+                {"error": {"type": "service_unavailable", "message": str(exc)}},
+                status=503,
+            )
+            return
+        except ValueError as exc:
+            self._send_json(
+                {"error": {"type": "invalid_request", "message": str(exc)}},
+                status=400,
+            )
+            return
+
+        try:
+            resp = _POOL_MANAGER.request(
+                "POST",
+                target_url,
+                headers=forward_headers,
+                body=forward_body,
+                timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
+                preload_content=True,
+            )
+        except Exception as exc:
+            self._send_json(
+                {"error": {"type": "upstream_unreachable", "message": f"Embedding upstream request failed: {exc}"}},
+                status=502,
+            )
+            return
+
+        status = resp.status
+        response_body = resp.data or b""
+        content_type = resp.getheader("Content-Type", "")
+
+        if status >= 400:
+            if "application/json" in content_type:
+                try:
+                    err_data = json.loads(response_body)
+                    if err_data.get("type") == "error" and isinstance(err_data.get("error"), dict):
+                        inner = err_data["error"]
+                        normalized = {
+                            "error": {
+                                "type": inner.get("type", "upstream_error"),
+                                "message": inner.get("message", ""),
+                                "request_id": err_data.get("request_id", ""),
+                            }
+                        }
+                    elif isinstance(err_data.get("error"), dict):
+                        normalized = err_data
+                    else:
+                        normalized = {
+                            "error": {"type": "upstream_error", "message": str(err_data)}
+                        }
+                    retry_after = resp.getheader("Retry-After", None)
+                    normalized = _enrich_upstream_error(normalized, status, retry_after)
+                    normalized_body = json.dumps(normalized).encode()
+                    self.send_response(status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(normalized_body)))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    if status == 429 and retry_after:
+                        self.send_header("Retry-After", retry_after)
+                    self.end_headers()
+                    self.wfile.write(normalized_body)
+                    return
+                except Exception:
+                    pass
+
+            self._send_json(
+                {
+                    "error": {
+                        "type": "upstream_error",
+                        "message": response_body[:500].decode("utf-8", errors="replace")
+                        or f"Embedding upstream returned HTTP {status}",
+                    }
+                },
+                status=status,
+            )
+            return
+
+        try:
+            normalized_body = adapter.normalize_response(status, dict(resp.headers.items()), response_body)
+        except Exception as exc:
+            self._send_json(
+                {"error": {"type": "server_error", "message": f"Failed to normalize embedding response: {exc}"}},
+                status=502,
+            )
+            return
+
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(normalized_body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(normalized_body)
 
     def _send_json(self, data, status=200):
         body = json.dumps(data, separators=(",", ":")).encode()  # compact JSON: faster + smaller
