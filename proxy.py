@@ -7788,7 +7788,12 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     # The pipeline (vault injection, compaction) may modify text content,
                     # but we must preserve the client's cache_control ordering (TTL values).
                     _saved_cache_controls = None
-                    if _client_has_auth and body:
+                    _pre_req_headers = {k.lower(): v for k, v in self.headers.items()}
+                    _pre_client_has_auth = bool(
+                        _pre_req_headers.get("x-api-key", "").strip()
+                        or _pre_req_headers.get("authorization", "").strip()
+                    )
+                    if _pre_client_has_auth and body:
                         try:
                             _scc_body = json.loads(body) if isinstance(body, (bytes, str)) else body
                             _saved_cache_controls = {}
@@ -7869,14 +7874,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             body, injected_tokens, injected_sources = inject_vault_context(
                                 body, adapter=active_adapter
                             )
-                            # DEBUG: check cache_control after injection
-                            try:
-                                _pi = json.loads(body) if isinstance(body, (bytes, str)) else body
-                                _pi_sys = _pi.get("system", [])
-                                _pi_cc = [(i, s.get("cache_control")) for i, s in enumerate(_pi_sys) if isinstance(s, dict) and "cache_control" in s]
-                                print(f"  [POST-INJECT] system blocks: {len(_pi_sys)}, cache_control: {_pi_cc}", flush=True)
-                            except Exception:
-                                pass
                             if injected_tokens > 0:
                                 # Recount tokens after injection
                                 _, input_tokens = extract_request_tokens(
@@ -8297,19 +8294,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _cc_locs = []
                 for _si, _sb in enumerate(_dbg_body.get("system", [])):
                     if isinstance(_sb, dict) and "cache_control" in _sb:
-                        _ttl = _sb["cache_control"].get("ttl", "default(5m)")
-                        _cc_locs.append(f"system[{_si}]:ttl={_ttl}")
-                for _ti, _tb in enumerate(_dbg_body.get("tools", [])):
-                    if isinstance(_tb, dict) and "cache_control" in _tb:
-                        _ttl = _tb["cache_control"].get("ttl", "default(5m)")
-                        _cc_locs.append(f"tools[{_ti}]:ttl={_ttl}")
+                        _cc_locs.append(f"system[{_si}]")
                 for _mi, _mm in enumerate(_dbg_body.get("messages", [])):
                     _mc = _mm.get("content", [])
                     if isinstance(_mc, list):
                         for _ci, _cb in enumerate(_mc):
                             if isinstance(_cb, dict) and "cache_control" in _cb:
-                                _ttl = _cb["cache_control"].get("ttl", "default(5m)")
-                                _cc_locs.append(f"msg[{_mi}].content[{_ci}]:ttl={_ttl}")
+                                _cc_locs.append(f"msg[{_mi}].content[{_ci}]")
                 if _cc_locs:
                     print(f"  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}")
             except Exception as _e:
