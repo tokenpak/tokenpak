@@ -1,0 +1,44 @@
+{
+  "name": "tokenpak-claude-code",
+  "version": "0.1.0",
+  "description": "Corpus-aware context packing, skills, and safety hooks for tokenpak users. Adds five MCP tools, five workflow skills, and four protective hooks to Claude Code.",
+  "author": "tokenpak",
+  "repository": "https://github.com/tokenpak/registry",
+  "license": "MIT",
+  "engines": {
+    "claude-code": ">=1.0.0"
+  },
+  "userConfig": {
+    "tokenpak_proxy_url": {
+      "type": "string",
+      "description": "URL of the tokenpak proxy daemon (e.g. http://localhost:8766). Leave empty to run the plugin without the proxy — all MCP tools fall back to no-corpus mode.",
+      "required": false,
+      "default": ""
+    },
+    "vault_root": {
+      "type": "string",
+      "description": "Absolute path to your tokenpak vault root (e.g. /home/user/vault). Required for corpus-aware MCP tools; omit to use no-corpus fallback mode.",
+      "required": false,
+      "default": ""
+    },
+    "enable_telemetry_hook": {
+      "type": "boolean",
+      "description": "Write per-tool-call telemetry entries to ${CLAUDE_PLUGIN_DATA}/telemetry/YYYY-MM-DD.jsonl on every tool call. Default on; set false to disable.",
+      "required": false,
+      "default": true
+    },
+    "enable_validation_hook": {
+      "type": "boolean",
+      "description": "Run per-extension file validators after Edit/Write tool calls (post-edit-validation hook). Default off — enable only after confirming your validators run under 2 seconds on typical file sizes.",
+      "required": false,
+      "default": false
+    },
+    "license_key": {
+      "type": "string",
+      "description": "tokenpak Pro license key. Activates Pro-tier skills, hooks, and subagents at install time. Stored in the system keychain — never written to settings.json in plaintext.",
+      "required": false,
+      "sensitive": true,
+      "default": ""
+    }
+  }
+}
