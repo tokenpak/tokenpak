@@ -8623,8 +8623,17 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 # body bytes without JSON re-serialization. Uses a reduced injection
                 # budget (TOKENPAK_CC_INJECT_MAX_CHARS) to avoid exceeding Claude Max
                 # extra usage quota. Default 2000 chars (~500 tokens).
+                # Relevance gate: skip injection for trivial prompts (< 50 chars of
+                # user content) to avoid wasting quota on irrelevant vault matches.
                 _max_inject_chars = int(os.environ.get("TOKENPAK_CC_INJECT_MAX_CHARS", "2000"))
+                _min_query_len = int(os.environ.get("TOKENPAK_CC_INJECT_MIN_QUERY", "50"))
+                _query_signal = ""
                 if _vault_injection_text and _max_inject_chars > 0:
+                    try:
+                        _query_signal = extract_query_signal(_original_body, adapter=active_adapter)
+                    except Exception:
+                        pass
+                if _vault_injection_text and _max_inject_chars > 0 and len(_query_signal) >= _min_query_len:
                     _trimmed = _vault_injection_text[:_max_inject_chars]
                     body = _byte_inject_system_block(_original_body, _trimmed)
                 else:
