@@ -66,43 +66,62 @@ class AnthropicAdapter(FormatAdapter):
           - STABLE prefix (original system blocks) → gets cache_control: ephemeral
           - VOLATILE injection (retrieval/vault content) → NO cache_control
 
-        Placing cache_control on the volatile block causes cache churn (0% hit rate)
-        because the volatile content changes every request.  The cache_control must
-        anchor the STABLE prefix so Anthropic can cache up to that boundary.
+        When the request already has cache_control blocks with explicit TTL values
+        (e.g., Claude Code CLI), we skip adding any new cache_control markers to
+        avoid breaking the TTL ordering that the client set up.
         """
         canonical = self.normalize(body)
         # Volatile injection block — intentionally NO cache_control
         volatile_block: dict = {"type": "text", "text": injection_text}
 
+        # Check if the request already has cache_control with explicit TTL anywhere.
+        # If so, don't add new cache_control markers — the client manages ordering.
+        has_explicit_ttl = self._body_has_explicit_ttl(canonical)
+
         if isinstance(canonical.system, str):
             if canonical.system:
-                # String system → convert to list; stable block gets the cache marker
-                canonical.system = [
-                    {
-                        "type": "text",
-                        "text": canonical.system,
-                        "cache_control": {"type": "ephemeral"},
-                    },
-                    volatile_block,  # volatile: no cache_control
-                ]
+                stable_block: dict = {"type": "text", "text": canonical.system}
+                if not has_explicit_ttl:
+                    stable_block["cache_control"] = {"type": "ephemeral"}
+                canonical.system = [stable_block, volatile_block]
             else:
-                # Empty system — just store raw text (no stable prefix to mark)
                 canonical.system = injection_text
         elif isinstance(canonical.system, list):
-            # Mark the LAST EXISTING block (stable prefix anchor)
-            if canonical.system:
+            if canonical.system and not has_explicit_ttl:
                 marked = list(canonical.system)
                 for i in range(len(marked) - 1, -1, -1):
                     blk = marked[i]
                     if isinstance(blk, dict) and blk.get("type") == "text":
-                        if blk.get("cache_control") != {"type": "ephemeral"}:
+                        if not blk.get("cache_control"):
                             marked[i] = dict(blk, cache_control={"type": "ephemeral"})
                         break
                 canonical.system = marked
-            canonical.system.append(volatile_block)  # volatile: no cache_control
+            elif canonical.system:
+                canonical.system = list(canonical.system)
+            canonical.system.append(volatile_block)
         else:
             canonical.system = injection_text
         return self.denormalize(canonical)
+
+    @staticmethod
+    def _body_has_explicit_ttl(canonical) -> bool:
+        """Check if any block in the request has cache_control with an explicit ttl."""
+        for section in [canonical.system or [], canonical.messages or []]:
+            items = section if isinstance(section, list) else []
+            for item in items:
+                if isinstance(item, dict):
+                    cc = item.get("cache_control")
+                    if isinstance(cc, dict) and cc.get("ttl"):
+                        return True
+                    # Check nested content blocks in messages
+                    content = item.get("content")
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict):
+                                cc = block.get("cache_control")
+                                if isinstance(cc, dict) and cc.get("ttl"):
+                                    return True
+        return False
 
     def get_default_upstream(self) -> str:
         return "https://api.anthropic.com"

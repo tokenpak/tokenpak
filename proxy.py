@@ -45,6 +45,7 @@ Env vars:
 """
 
 import asyncio
+import copy
 import gzip
 import http.client
 import json
@@ -7783,9 +7784,32 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     #   Phase 2   : Compaction — compact_request_body iterates by index, in-place
                     #   Phase 2.1 : Compression Dictionary — apply() returns new list in original order
                     #
+                    # Save original cache_control state when client has auth.
+                    # The pipeline (vault injection, compaction) may modify text content,
+                    # but we must preserve the client's cache_control ordering (TTL values).
+                    _saved_cache_controls = None
+                    if _client_has_auth and body:
+                        try:
+                            _scc_body = json.loads(body) if isinstance(body, (bytes, str)) else body
+                            _saved_cache_controls = {}
+                            for _scc_section in ("system", "tools", "messages"):
+                                items = _scc_body.get(_scc_section, [])
+                                if not isinstance(items, list):
+                                    continue
+                                for _scc_i, _scc_item in enumerate(items):
+                                    if isinstance(_scc_item, dict) and "cache_control" in _scc_item:
+                                        _saved_cache_controls[(_scc_section, _scc_i)] = copy.deepcopy(_scc_item["cache_control"])
+                                    content = _scc_item.get("content") if isinstance(_scc_item, dict) else None
+                                    if isinstance(content, list):
+                                        for _scc_j, _scc_block in enumerate(content):
+                                            if isinstance(_scc_block, dict) and "cache_control" in _scc_block:
+                                                _saved_cache_controls[(_scc_section, _scc_i, _scc_j)] = copy.deepcopy(_scc_block["cache_control"])
+                        except Exception:
+                            _saved_cache_controls = None
+
                     # Phase 0.9: Cache Poison Removal — strip dynamic UUIDs, timestamps, heartbeat counters
                     # Must run BEFORE stable cache control so the stable prefix stays bit-identical
-                    if body and not _transparent_mode and not _client_has_auth:
+                    if body and not _transparent_mode:
                         _pre_poison_body = body
                         body = _strip_cache_poisons(body)
                         cache_poison_scrubbed = body != _pre_poison_body
@@ -7811,7 +7835,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=VAULT_INDEX.available,
                         input_tokens=input_tokens,
                     )
-                    if VAULT_INDEX.available and not _transparent_mode and not _client_has_auth:
+                    if VAULT_INDEX.available and not _transparent_mode:
                         skip_injection = False
                         if INJECT_SKIP_MODELS.strip():
                             if any(
@@ -7845,6 +7869,14 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             body, injected_tokens, injected_sources = inject_vault_context(
                                 body, adapter=active_adapter
                             )
+                            # DEBUG: check cache_control after injection
+                            try:
+                                _pi = json.loads(body) if isinstance(body, (bytes, str)) else body
+                                _pi_sys = _pi.get("system", [])
+                                _pi_cc = [(i, s.get("cache_control")) for i, s in enumerate(_pi_sys) if isinstance(s, dict) and "cache_control" in s]
+                                print(f"  [POST-INJECT] system blocks: {len(_pi_sys)}, cache_control: {_pi_cc}", flush=True)
+                            except Exception:
+                                pass
                             if injected_tokens > 0:
                                 # Recount tokens after injection
                                 _, input_tokens = extract_request_tokens(
@@ -8057,7 +8089,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         enabled=ENABLE_COMPACTION,
                         input_tokens=input_tokens,
                     )
-                    if ENABLE_COMPACTION and not _transparent_mode and not _client_has_auth:
+                    if ENABLE_COMPACTION and not _transparent_mode:
                         body, sent_input_tokens, original_tokens, protected_tokens = (
                             compact_request_body(
                                 body,
@@ -8085,7 +8117,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                     if trace:
                         trace.stages.append(compaction_stage)
                     # Phase 2.1: Compression Dictionary — apply learned compression terms post-standard-compaction
-                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode and not _client_has_auth:
+                    if COMPRESSION_DICT_ENABLED and body and not _transparent_mode:
                         try:
                             from tokenpak.compression.dictionary import CompressionDictionary
 
@@ -8265,19 +8297,24 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 _cc_locs = []
                 for _si, _sb in enumerate(_dbg_body.get("system", [])):
                     if isinstance(_sb, dict) and "cache_control" in _sb:
-                        _cc_locs.append(f"system[{_si}]")
+                        _ttl = _sb["cache_control"].get("ttl", "default(5m)")
+                        _cc_locs.append(f"system[{_si}]:ttl={_ttl}")
+                for _ti, _tb in enumerate(_dbg_body.get("tools", [])):
+                    if isinstance(_tb, dict) and "cache_control" in _tb:
+                        _ttl = _tb["cache_control"].get("ttl", "default(5m)")
+                        _cc_locs.append(f"tools[{_ti}]:ttl={_ttl}")
                 for _mi, _mm in enumerate(_dbg_body.get("messages", [])):
                     _mc = _mm.get("content", [])
                     if isinstance(_mc, list):
                         for _ci, _cb in enumerate(_mc):
                             if isinstance(_cb, dict) and "cache_control" in _cb:
-                                _cc_locs.append(f"msg[{_mi}].content[{_ci}]")
+                                _ttl = _cb["cache_control"].get("ttl", "default(5m)")
+                                _cc_locs.append(f"msg[{_mi}].content[{_ci}]:ttl={_ttl}")
                 if _cc_locs:
                     print(f"  🔍 cache_control blocks BEFORE cap: {len(_cc_locs)} at {_cc_locs}")
             except Exception as _e:
                 print(f"  🔍 debug error: {_e}")
-            if not _client_has_auth:
-                body = _strip_empty_text_blocks(body)
+            body = _strip_empty_text_blocks(body)
             # CACHE-P4-001: CacheSpec unified mode resolution (replaces ad-hoc provider guards)
             _detected_provider = detect_provider(target_url)
             _cache_hint: Optional[str] = None
@@ -8454,6 +8491,43 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             body = json.dumps(_hf_dbody).encode()
                 except Exception as _e_hf:
                     print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
+            # Restore original cache_control state for client-auth pass-through.
+            # The pipeline may have modified cache_control blocks (e.g., added default
+            # ephemeral markers, stripped TTL fields). Restore the client's original
+            # values to preserve TTL ordering.
+            if _saved_cache_controls and body:
+                try:
+                    _restore_body = json.loads(body) if isinstance(body, (bytes, str)) else body
+                    _restored = 0
+                    for _rkey, _rval in _saved_cache_controls.items():
+                        if len(_rkey) == 2:
+                            _rsection, _ridx = _rkey
+                            items = _restore_body.get(_rsection, [])
+                            if isinstance(items, list) and _ridx < len(items) and isinstance(items[_ridx], dict):
+                                items[_ridx]["cache_control"] = _rval
+                                _restored += 1
+                        elif len(_rkey) == 3:
+                            _rsection, _rmidx, _rcidx = _rkey
+                            items = _restore_body.get(_rsection, [])
+                            if isinstance(items, list) and _rmidx < len(items):
+                                content = items[_rmidx].get("content", []) if isinstance(items[_rmidx], dict) else []
+                                if isinstance(content, list) and _rcidx < len(content) and isinstance(content[_rcidx], dict):
+                                    content[_rcidx]["cache_control"] = _rval
+                                    _restored += 1
+                    # Also strip any NEW cache_control blocks added by the pipeline
+                    # (blocks that weren't in the original)
+                    for _rsection in ("system", "tools"):
+                        items = _restore_body.get(_rsection, [])
+                        if isinstance(items, list):
+                            for _ridx, _ritem in enumerate(items):
+                                if isinstance(_ritem, dict) and "cache_control" in _ritem:
+                                    if (_rsection, _ridx) not in _saved_cache_controls:
+                                        _ritem.pop("cache_control", None)
+                                        _restored += 1
+                    body = json.dumps(_restore_body, ensure_ascii=False).encode("utf-8")
+                except Exception:
+                    pass  # fail-open: use pipeline-modified body
+
             if isinstance(body, str):
                 body = body.encode("utf-8")
             if body is not None:
