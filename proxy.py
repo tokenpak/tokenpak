@@ -7117,7 +7117,8 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 or os.environ.get("GOOGLE_API_KEY", "").strip()
                 or os.environ.get("GEMINI_API_KEY", "").strip()
             )
-            if not _env_key:
+            _cli_token = _load_claude_cli_token() if not _env_key else ""
+            if not _env_key and not _cli_token:
                 self._send_json(
                     _make_structured_error(
                         "auth_missing",
@@ -8188,19 +8189,25 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             or _req_headers_lower.get("authorization", "").strip()
         )
         _current_key_idx: int = -1  # tracks which key is injected (for failover)
-        # Anthropic auth injection — single-tenant proxy: always override
-        # client auth for Anthropic targets. Source priority:
-        # 1. Env key pool  2. Claude CLI token (~/.claude/.credentials.json)
+        # Anthropic auth injection — pass-through first, inject only as fallback.
+        # If the client already sent valid auth (Claude Code CLI, etc.), honour it
+        # so the request inherits the client's own quota / model access.
+        # Only inject proxy-side credentials when the client has none (OpenClaw, etc.).
         if detect_provider(target_url) is Provider.ANTHROPIC:
-            _pool_key = ""
-            if _ANTHROPIC_KEY_POOL:
-                _pool_key, _current_key_idx = _get_next_key()
-            if not _pool_key:
-                _pool_key = _load_claude_cli_token()
-            if _pool_key:
-                fwd_headers["x-api-key"] = _pool_key
-                for _k in ("Authorization", "authorization"):
-                    fwd_headers.pop(_k, None)
+            if _client_has_auth:
+                # Client provided its own credentials — pass through as-is.
+                _pool_key = ""
+            else:
+                # No client auth — inject from pool or Claude CLI token.
+                _pool_key = ""
+                if _ANTHROPIC_KEY_POOL:
+                    _pool_key, _current_key_idx = _get_next_key()
+                if not _pool_key:
+                    _pool_key = _load_claude_cli_token()
+                if _pool_key:
+                    fwd_headers["x-api-key"] = _pool_key
+                    for _k in ("Authorization", "authorization"):
+                        fwd_headers.pop(_k, None)
 
         # ChatGPT Codex OAuth injection
         if detect_provider(target_url) is Provider.CODEX:
