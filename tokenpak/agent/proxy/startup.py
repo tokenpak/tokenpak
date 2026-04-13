@@ -109,6 +109,20 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
             warnings.append(msg)
 
     # ------------------------------------------------------------------ #
+    # 5. Eager OSS recipe pre-load — TRIX-01 / pmgtm initiative           #
+    # Warms the compression recipe engine before the first request arrives #
+    # so cold-start latency is not paid by the first user.                 #
+    # ------------------------------------------------------------------ #
+    try:
+        from tokenpak.compression.recipes import get_oss_engine as _get_oss_engine
+        _get_oss_engine()
+        logger.info("startup: OSS compression recipes pre-loaded")
+    except Exception as _recipe_exc:
+        msg = f"Compression recipe pre-load skipped (non-fatal): {_recipe_exc}"
+        logger.warning("startup: %s", msg)
+        warnings.append(msg)
+
+    # ------------------------------------------------------------------ #
     # Summary                                                              #
     # ------------------------------------------------------------------ #
     if not warnings:

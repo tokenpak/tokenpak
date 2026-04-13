@@ -281,8 +281,7 @@ def compact_request_body(body_bytes: bytes, adapter=None) -> Tuple[bytes, int, i
     from tokenpak.proxy.token_cache import count_tokens  # lazy import
     from tokenpak.proxy.request_pipeline import classify_message_risk, can_compress  # lazy import
 
-    # _detect_adapter and extract_request_tokens are A2c items; import from runtime copy
-    from tokenpak.runtime.proxy import (  # type: ignore[import]
+    from tokenpak.proxy.adapters.utils import (
         _detect_adapter,
         extract_request_tokens,
     )

@@ -6,10 +6,52 @@ legacy test files can still be collected.
 """
 from __future__ import annotations
 
+import os
 import threading
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Dict
+
+
+# ---------------------------------------------------------------------------
+# Helpers for reading booleans/ints from env vars (same logic as config.py)
+# ---------------------------------------------------------------------------
+
+def _bool_env(key: str, default: bool) -> bool:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes", "on")
+
+
+def _int_env(key: str, default: int) -> int:
+    val = os.environ.get(key)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+# ---------------------------------------------------------------------------
+# Compression defaults — Flipped 2026-04-13 — see TRIX-01 / pmgtm initiative
+# ---------------------------------------------------------------------------
+ENABLE_COMPACTION: bool = _bool_env("TOKENPAK_COMPACT", True)          # was False pre-flip
+COMPACT_THRESHOLD_TOKENS: int = _int_env("TOKENPAK_COMPACT_THRESHOLD_TOKENS", 1500)  # was 4500 pre-flip
+BUDGET_CONTROLLER_ENABLED: bool = _bool_env("TOKENPAK_BUDGET_CONTROLLER", True)  # was False pre-flip
+VALIDATION_GATE_ENABLED: bool = _bool_env("TOKENPAK_VALIDATION_GATE", True)
+
+# ---------------------------------------------------------------------------
+# Compression pipeline re-exports (used by tests and legacy callers)
+# ---------------------------------------------------------------------------
+try:
+    from tokenpak.proxy.adapters.utils import _detect_adapter
+    from tokenpak.compression.pipeline import compact_request_body
+except ImportError:
+    # Non-fatal — these functions are optional; tests that need them
+    # will fail with AttributeError, which is the correct signal.
+    pass
 
 # ---------------------------------------------------------------------------
 # Global state (mirrored from legacy proxy_v4 monolith)

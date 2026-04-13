@@ -6,6 +6,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Compression now enabled by default** — `ENABLE_COMPACTION`, `BUDGET_CONTROLLER_ENABLED` default to `True`; `COMPACT_THRESHOLD_TOKENS` defaults to `1500` (was `4500`). To restore the legacy passthrough behavior, use `tokenpak serve --safe`. (TRIX-01 / pmgtm)
+
 ### Added
 - **Claude Code client-auth pass-through** (`proxy.py`) — When Claude Code sends its own OAuth credentials (`Authorization: Bearer` + `anthropic-beta: oauth-2025-04-20`), the proxy preserves the original request bytes while applying response-side features (cost tracking, logging, budget enforcement). Byte preservation is required because JSON re-serialization changes the request signature, causing Anthropic's billing to route to the wrong quota pool (`YOU_RE_OUT_OF_EXTRA_USAGE`).
 - **Byte-level vault injection** (`proxy.py`: `_find_system_array_close()`, `_byte_inject_system_block()`) — Splices vault context directly into the JSON system array at a byte offset without `json.loads`/`json.dumps` round-trip. Preserves all original bytes except the insertion point. Configurable via `TOKENPAK_CC_INJECT_MAX_CHARS` (default 2000) and relevance-gated via `TOKENPAK_CC_INJECT_MIN_QUERY` (default 50 chars).

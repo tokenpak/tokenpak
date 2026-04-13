@@ -39,8 +39,46 @@ def _default_workers() -> int:
     return max(1, cpu // 2)
 
 
+def _apply_safe_defaults() -> None:
+    """Restore pre-1.1 passthrough defaults atomically (--safe flag).
+
+    Sets the four compression-related env vars to their old values BEFORE
+    any proxy modules are imported so that all downstream config reads see
+    the legacy behavior.
+    """
+    os.environ["TOKENPAK_COMPACT"] = "0"
+    os.environ["TOKENPAK_COMPACT_THRESHOLD_TOKENS"] = "4500"
+    os.environ["TOKENPAK_BUDGET_CONTROLLER"] = "0"
+    # TOKENPAK_VALIDATION_GATE was True in both old and new defaults — no change.
+
+
+def _maybe_show_compression_notice(safe: bool) -> None:
+    """Emit first-run compression default notice to stderr (once per install)."""
+    if safe:
+        return
+    import pathlib
+    _marker = pathlib.Path.home() / ".tokenpak" / ".compression-default-notice-shown"
+    if not _marker.exists():
+        print(
+            "tokenpak now compresses by default — disable with 'tokenpak serve --safe'",
+            file=sys.stderr,
+        )
+        try:
+            _marker.parent.mkdir(parents=True, exist_ok=True)
+            _marker.touch()
+        except OSError:
+            pass  # non-fatal — notice will repeat on next start
+
+
 def run_serve_cmd(args) -> None:
     """Start the TokenPak ingest API server."""
+    # --safe: restore legacy passthrough defaults BEFORE any proxy imports
+    if getattr(args, "safe", False):
+        _apply_safe_defaults()
+
+    # First-run compression notice (stderr only, once per install)
+    _maybe_show_compression_notice(safe=getattr(args, "safe", False))
+
     try:
         import uvicorn
     except ImportError:

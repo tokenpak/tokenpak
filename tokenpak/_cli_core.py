@@ -1290,8 +1290,42 @@ def cmd_models(args):
     )
 
 
+def _apply_safe_mode_defaults() -> None:
+    """Restore pre-1.1 passthrough defaults atomically (--safe flag)."""
+    import os as _os
+    _os.environ["TOKENPAK_COMPACT"] = "0"                    # disable compaction
+    _os.environ["TOKENPAK_COMPACT_THRESHOLD_TOKENS"] = "4500"  # old threshold
+    _os.environ["TOKENPAK_BUDGET_CONTROLLER"] = "0"          # disable budget controller
+    # TOKENPAK_VALIDATION_GATE: already True in both old and new defaults, no change
+
+
+def _maybe_show_compression_notice(safe: bool) -> None:
+    """Print one-time first-run notice to stderr when compression is active."""
+    if safe:
+        return
+    import sys as _sys
+    _marker = Path.home() / ".tokenpak" / ".compression-default-notice-shown"
+    if not _marker.exists():
+        print(
+            "tokenpak now compresses by default — disable with 'tokenpak serve --safe'",
+            file=_sys.stderr,
+        )
+        try:
+            _marker.parent.mkdir(parents=True, exist_ok=True)
+            _marker.touch()
+        except OSError:
+            pass  # non-fatal — notice will repeat on next start
+
+
 def cmd_serve(args):
     """Start monitoring proxy or telemetry server (if available)."""
+    # --safe: restore old passthrough defaults BEFORE any proxy modules are imported
+    if getattr(args, "safe", False):
+        _apply_safe_mode_defaults()
+
+    # First-run compression notice (stderr only, once per install)
+    _maybe_show_compression_notice(safe=getattr(args, "safe", False))
+
     if getattr(args, "telemetry", False):
         import uvicorn
 
@@ -2037,6 +2071,15 @@ def build_parser():
         help=(
             "Seconds to wait for in-flight requests to complete before forcing shutdown "
             "(default: 30, or TOKENPAK_SHUTDOWN_TIMEOUT env var)"
+        ),
+    )
+    p_serve.add_argument(
+        "--safe",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable compression defaults (restore pre-1.1 passthrough behavior). "
+            "Equivalent to TOKENPAK_COMPACT=0."
         ),
     )
     p_serve.set_defaults(func=cmd_serve)
