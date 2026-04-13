@@ -45,6 +45,16 @@ from .circuit_breaker import (  # noqa: F401
 )
 
 
+from .request import (  # noqa: F401
+    ProxyRequest,
+    ProxyResponse,
+    HTTPProxy,
+    ROUTE_CLAUDE_CODE,
+    ROUTE_OPENCLAW,
+    ROUTE_SDK,
+)
+
+
 class ProxyStats:
     """Stats/metrics container — resets on each new instance (restart)."""
 

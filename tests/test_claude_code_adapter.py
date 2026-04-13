@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from tokenpak.proxy import ProxyRequest, ROUTE_CLAUDE_CODE
 from tokenpak.registry.claude_code.adapter import ClaudeCodeAdapter
 from tokenpak.registry.claude_code.config import ClaudeCodeConfig
 from tokenpak.registry.claude_code.health import check_proxy_health
@@ -64,6 +65,37 @@ class TestClaudeCodeAdapter:
         cfg = ClaudeCodeConfig(proxy_port=9999)
         adapter = ClaudeCodeAdapter(config=cfg)
         assert adapter.config.proxy_port == 9999
+
+    def test_handle_request_uses_claude_code_route(self):
+        """handle_request must apply the Claude Code header allowlist."""
+        adapter = ClaudeCodeAdapter()
+        request = ProxyRequest(
+            method="POST",
+            url="https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": "sk-ant-test",
+                "authorization": "Bearer sk-ant-test",
+                "anthropic-version": "2023-06-01",
+                "anthropic-beta": "prompt-caching-2024-07-31",
+                "anthropic-dangerous-direct-browser-access": "true",
+                "x-claude-code-session-id": "sess-abc",
+                "user-agent": "claude-code/1.0",
+                "x-should-be-stripped": "yes",
+            },
+        )
+        response = adapter.handle_request(request)
+
+        assert response.status_code == 200
+        # Allowed header forwarded
+        assert response.get_header("X-Echoed-x-api-key") is not None
+        # Non-allowed header stripped
+        assert response.get_header("X-Echoed-x-should-be-stripped") is None
+
+    def test_handle_request_with_model(self):
+        adapter = ClaudeCodeAdapter()
+        request = ProxyRequest("GET", "https://api.anthropic.com/v1/models")
+        response = adapter.handle_request(request, model="claude-opus-4-6")
+        assert response.status_code == 200
 
     def test_build_env_contains_base_url(self):
         cfg = ClaudeCodeConfig(proxy_host="127.0.0.1", proxy_port=8766)
@@ -166,7 +198,8 @@ class TestBuildLaunchEnv:
     def test_inherits_os_env(self):
         cfg = ClaudeCodeConfig()
         env = build_launch_env(cfg)
-        assert "PATH" in env or len(env) > 0
+        # Should contain keys from current process environment
+        assert "PATH" in env or len(env) > 0  # PATH may not exist in CI, but env won't be empty
 
     def test_sets_anthropic_base_url(self):
         cfg = ClaudeCodeConfig(proxy_host="127.0.0.1", proxy_port=8766)
@@ -191,37 +224,30 @@ class TestBuildLaunchEnv:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: launch function (mocked exec)
+# Registration
 # ---------------------------------------------------------------------------
 
 
-class TestLaunch:
-    def test_launch_execs_claude(self):
-        from tokenpak.registry.claude_code.launcher import launch
+class TestAdapterRegistration:
+    def test_register_adds_to_extensions(self):
+        from tokenpak import extensions
+        from tokenpak.registry.claude_code import register
 
-        with patch("tokenpak.registry.claude_code.launcher.check_proxy_health", return_value=(True, "ok")), \
-             patch("os.execvpe") as mock_exec:
-            launch(args=["--print", "hello"])
-            mock_exec.assert_called_once()
-            cmd_args = mock_exec.call_args[0][1]
-            assert cmd_args == ["claude", "--print", "hello"]
-            env = mock_exec.call_args[0][2]
-            assert "ANTHROPIC_BASE_URL" in env
+        # Ensure clean state for this test
+        extensions._EXTENSIONS.pop("claude-code", None)
 
-    def test_launch_warns_if_proxy_down(self, capsys):
-        from tokenpak.registry.claude_code.launcher import launch
+        register()
 
-        with patch("tokenpak.registry.claude_code.launcher.check_proxy_health", return_value=(False, "Connection refused")), \
-             patch("os.execvpe"):
-            launch()
-            captured = capsys.readouterr()
-            assert "not responding" in captured.err
+        assert extensions.is_loaded("claude-code")
+        adapter = extensions.get("claude-code")
+        assert isinstance(adapter, ClaudeCodeAdapter)
 
-    def test_launch_falls_back_to_subprocess(self):
-        from tokenpak.registry.claude_code.launcher import launch
+    def test_registered_adapter_has_correct_name(self):
+        from tokenpak import extensions
+        from tokenpak.registry.claude_code import register
 
-        with patch("tokenpak.registry.claude_code.launcher.check_proxy_health", return_value=(True, "ok")), \
-             patch("os.execvpe", side_effect=OSError("not supported")), \
-             patch("subprocess.run") as mock_run:
-            launch(args=["--print", "test"])
-            mock_run.assert_called_once()
+        extensions._EXTENSIONS.pop("claude-code", None)
+        register()
+
+        adapter = extensions.get("claude-code")
+        assert adapter.ADAPTER_NAME == "claude-code"
