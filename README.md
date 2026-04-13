@@ -324,9 +324,8 @@ tokenpak savings [--days N]    # token savings summary (rolling window)
 ### Compression & Debug
 
 ```bash
-tokenpak compress <file>       # dry-run compression
+tokenpak compress --file <file> # dry-run compression
 tokenpak demo [--verbose]      # see pipeline on real data
-tokenpak trace [--id <id>]     # trace a pipeline run
 tokenpak debug on              # capture raw/compressed pairs
 ```
 
@@ -334,14 +333,14 @@ tokenpak debug on              # capture raw/compressed pairs
 
 ```bash
 tokenpak index [<path>]        # index a directory
-tokenpak vault search "query"  # semantic search (zero tokens)
+tokenpak search "query"        # semantic search (zero tokens)
 tokenpak calibrate ~/vault     # auto-tune workers for this host
 ```
 
 ### Model Routing
 
 ```bash
-tokenpak route add --model 'gpt-4*' --target anthropic/claude-3-haiku-20240307
+tokenpak route add "gpt-4*" anthropic/claude-3-haiku-20240307
 tokenpak route list
 tokenpak route test "write unit tests"
 ```
@@ -352,7 +351,7 @@ tokenpak route test "write unit tests"
 tokenpak template list
 tokenpak template use my-tpl
 tokenpak replay list
-tokenpak replay <id> --diff
+tokenpak replay show <id>
 ```
 
 ---
