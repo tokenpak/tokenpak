@@ -53,6 +53,14 @@ from .request import (  # noqa: F401
     ROUTE_OPENCLAW,
     ROUTE_SDK,
 )
+from .route_policy import (  # noqa: F401
+    get_policy,
+    is_byte_preserved,
+    is_auth_passthrough,
+    is_compaction_enabled,
+    platform_tag,
+    ROUTE_POLICIES,
+)
 
 
 class ProxyStats:
