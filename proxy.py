@@ -8331,15 +8331,26 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         # (_sanitize_headers) — their forwarding behavior is unchanged.
         if detect_provider(target_url) is Provider.ANTHROPIC:
             _route = _classify_route(self.path, self.headers)
-            _allowlist = (
-                CLAUDE_CODE_HEADER_ALLOWLIST
-                if _route == "claude-code"
-                else OPENCLAW_HEADER_ALLOWLIST
-            )
-            fwd_headers = {}
-            for _hk, _hv in self.headers.items():
-                if _hk.lower() in _allowlist:
-                    fwd_headers[_hk.lower()] = _hv
+            if _route == "claude-code" and _pre_client_has_auth:
+                # Client-auth pass-through: forward ALL headers (like a pure relay).
+                # The allowlist strips headers that Anthropic uses for request identity
+                # and billing routing. Forwarding everything preserves the exact
+                # request signature that Claude Code's OAuth quota expects.
+                _skip = {'host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'}
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() not in _skip:
+                        fwd_headers[_hk] = _hv
+            elif _route == "claude-code":
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() in CLAUDE_CODE_HEADER_ALLOWLIST:
+                        fwd_headers[_hk.lower()] = _hv
+            else:
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() in OPENCLAW_HEADER_ALLOWLIST:
+                        fwd_headers[_hk.lower()] = _hv
         else:
             fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
@@ -8608,15 +8619,16 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             # This preserves the exact byte structure that Anthropic's billing expects
             # while still injecting tokenpak vault context.
             if _pre_client_has_auth and _original_body:
-                if _vault_injection_text:
-                    body = _byte_inject_system_block(_original_body, _vault_injection_text)
-                    print(f"  [PASSTHRU] byte-inject: original={len(_original_body)}, injected={len(body)}, text={len(_vault_injection_text)} chars", flush=True)
+                # Byte-level vault injection: splice vault context into the original
+                # body bytes without JSON re-serialization. Uses a reduced injection
+                # budget (TOKENPAK_CC_INJECT_MAX_CHARS) to avoid exceeding Claude Max
+                # extra usage quota. Default 2000 chars (~500 tokens).
+                _max_inject_chars = int(os.environ.get("TOKENPAK_CC_INJECT_MAX_CHARS", "2000"))
+                if _vault_injection_text and _max_inject_chars > 0:
+                    _trimmed = _vault_injection_text[:_max_inject_chars]
+                    body = _byte_inject_system_block(_original_body, _trimmed)
                 else:
                     body = _original_body
-                    print(f"  [PASSTHRU] restore original: {len(_original_body)} bytes", flush=True)
-            else:
-                if not _pre_client_has_auth:
-                    print(f"  [PASSTHRU] skip: no client auth", flush=True)
             elif _saved_cache_controls and body:
                 try:
                     _restore_body = json.loads(body) if isinstance(body, (bytes, str)) else body
