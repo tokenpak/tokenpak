@@ -34,6 +34,7 @@ def __getattr__(name: str):
         # Sub-packages
         "connectors": lambda: __import__("tokenpak.connectors", fromlist=[""]),
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
+        "watchdog": lambda: __import__("tokenpak.proxy_watchdog", fromlist=[""]),
         # Budgeting
         "Budgeter": lambda: __import__("tokenpak.budgeter", fromlist=["Budgeter"]).Budgeter,
         "BudgetBlock": lambda: __import__("tokenpak.budget", fromlist=["BudgetBlock"]).BudgetBlock,
@@ -91,48 +92,4 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Public API declaration
 # ---------------------------------------------------------------------------
-__all__ = [
-    # Metadata
-    "__version__",
-    "__author__",
-    "__license__",
-    "__description__",
-    # Telemetry
-    "TelemetryCollector",
-    "CompletionTracker",
-    # Cache
-    "CacheManager",
-    # Compression
-    "CompressionEngine",
-    "HeuristicEngine",
-    "get_engine",
-    # Content Blocks
-    "Block",
-    "BlockRegistry",
-    # Budgeting
-    "Budgeter",
-    "BudgetBlock",
-    # Compile Reports
-    "Action",
-    "CompileReport",
-    "Decision",
-    "ContextPack",
-    "PackBlock",
-    "CompiledResult",
-    # Incremental adoption helpers
-    "count_tokens",
-    "pack_prompt",
-    # Agent Handoff Protocol
-    "HandoffBlock",
-    "HandoffManager",
-    "HandoffStatus",
-    "Handoff",
-    "HandoffWire",
-    "ContextRef",
-    "TokenPak",
-    # CLI
-    "main",
-    # Sub-packages
-    "connectors",
-    "proxy",
-]
+__all__ = ['__version__', '__author__', '__license__', '__description__', 'TelemetryCollector', 'CompletionTracker', 'CacheManager', 'CompressionEngine', 'HeuristicEngine', 'get_engine', 'Block', 'BlockRegistry', 'Budgeter', 'BudgetBlock', 'Action', 'CompileReport', 'Decision', 'ContextPack', 'PackBlock', 'CompiledResult', 'count_tokens', 'pack_prompt', 'HandoffBlock', 'HandoffManager', 'HandoffStatus', 'Handoff', 'HandoffWire', 'ContextRef', 'TokenPak', 'main', 'connectors', 'proxy', 'watchdog', 'adapters', 'agent', 'agentic', 'aggregate', 'alerts', 'api', 'artifact_store', 'assembler', 'attribution', 'auth_alert', 'auth_guard', 'benchmark', 'broker', 'budget', 'budget_controller', 'budgeter', 'cache', 'cache_manager', 'cache_report', 'cache_store', 'calibration', 'calibrator', 'capsule', 'citation_tracker', 'cli', 'cli', 'cli_config_check', 'cli_diagnose', 'cli_doctor', 'cli_validate_config', 'compaction', 'compiler', 'complexity', 'compression', 'config_loader', 'config_schema_validator', 'config_validator', 'context_composer', 'core', 'cost', 'daily_report', 'dashboard', 'debug', 'demo', 'elo', 'engines', 'errors', 'escalation', 'evidence_pack', 'exceptions', 'extraction', 'fleet', 'forecast', 'formatting', 'goals', 'handlers', 'infrastructure', 'integrations', 'intelligence', 'intent_classifier', 'logging_config', 'metering', 'metrics', 'middleware', 'miss_detector', 'models', 'monitoring', 'network_utils', 'pack', 'plugins', 'post_run', 'precompute', 'pricing', 'processors', 'profiles', 'proxy_watchdog', 'reference_fetcher', 'reference_scanner', 'registry', 'report', 'request_audit', 'request_explorer', 'request_ledger', 'retrieval', 'route_selector', 'router', 'routing', 'routing_ledger', 'runtime', 'schemas', 'security', 'security', 'semantic', 'server', 'shadow_hook', 'shadow_reader', 'span_extractor', 'startup_validator', 'state_manager', 'telemetry', 'tests', 'timeline', 'token_manager', 'tokens', 'trace', 'user_templates', 'validation', 'validation_gate', 'validator', 'vault', 'vault_health', 'vendor_classifier', 'version_check', 'walker', 'wire', 'workflow_performance']

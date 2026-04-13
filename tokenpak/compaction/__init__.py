@@ -43,12 +43,4 @@ from .modes import CompactionMode, compact
 from .policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
 from .topic_aware import TopicBoundaryDetector, TopicSegment
 
-__all__ = [
-    "CompactionMode",
-    "CompactionPolicy",
-    "BlockPolicy",
-    "compact",
-    "TopicAwarePolicy",
-    "TopicBoundaryDetector",
-    "TopicSegment",
-]
+__all__ = ['CompactionMode', 'CompactionPolicy', 'BlockPolicy', 'compact', 'TopicAwarePolicy', 'TopicBoundaryDetector', 'TopicSegment', 'modes', 'policy', 'topic_aware']

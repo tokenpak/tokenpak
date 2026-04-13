@@ -17,12 +17,15 @@ from typing import Optional
 # Column order for mutation_audit (mirrors CREATE TABLE below)
 MUTATION_AUDIT_COLUMNS: tuple[str, ...] = (
     "id",
-    "timestamp",
-    "session_id",
     "request_id",
-    "mutation_type",
-    "file_path",
-    "diff_summary",
+    "session_id",
+    "timestamp",
+    "pre_hash",
+    "post_hash",
+    "rules_applied",
+    "cache_risk",
+    "rollback_possible",
+    "mode",
 )
 
 
@@ -50,20 +53,36 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         # Column already exists — expected on any DB that has run this before
         pass
 
-    # ── mutation_audit table ──────────────────────────────────────────────
+    # ── mutation_audit table (CCG-06 10-column schema) ────────────────────
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS mutation_audit (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp     TEXT    NOT NULL,
-            session_id    TEXT,
-            request_id    TEXT,
-            mutation_type TEXT,
-            file_path     TEXT,
-            diff_summary  TEXT
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id        INTEGER,
+            session_id        TEXT,
+            timestamp         TEXT    NOT NULL,
+            pre_hash          TEXT,
+            post_hash         TEXT,
+            rules_applied     TEXT,
+            cache_risk        TEXT,
+            rollback_possible INTEGER,
+            mode              TEXT
         )
         """
     )
+    # Migration: add new columns to existing tables that have the old schema
+    for col_def in (
+        "pre_hash TEXT",
+        "post_hash TEXT",
+        "rules_applied TEXT",
+        "cache_risk TEXT",
+        "rollback_possible INTEGER",
+        "mode TEXT",
+    ):
+        try:
+            conn.execute(f"ALTER TABLE mutation_audit ADD COLUMN {col_def}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_ma_session_id  ON mutation_audit(session_id)"
     )
@@ -75,20 +94,25 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
 def insert_mutation_audit(
     conn: sqlite3.Connection,
     *,
-    timestamp: str,
+    request_id: Optional[int] = None,
     session_id: Optional[str] = None,
-    request_id: Optional[str] = None,
-    mutation_type: Optional[str] = None,
-    file_path: Optional[str] = None,
-    diff_summary: Optional[str] = None,
+    timestamp: str,
+    pre_hash: Optional[str] = None,
+    post_hash: Optional[str] = None,
+    rules_applied: Optional[str] = None,
+    cache_risk: Optional[str] = None,
+    rollback_possible: Optional[int] = None,
+    mode: Optional[str] = None,
 ) -> int:
     """Insert one row into mutation_audit; return the new rowid."""
     cur = conn.execute(
         """
         INSERT INTO mutation_audit
-            (timestamp, session_id, request_id, mutation_type, file_path, diff_summary)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (request_id, session_id, timestamp, pre_hash, post_hash,
+             rules_applied, cache_risk, rollback_possible, mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (timestamp, session_id, request_id, mutation_type, file_path, diff_summary),
+        (request_id, session_id, timestamp, pre_hash, post_hash,
+         rules_applied, cache_risk, rollback_possible, mode),
     )
     return cur.lastrowid

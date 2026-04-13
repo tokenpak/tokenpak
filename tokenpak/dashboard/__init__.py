@@ -54,6 +54,6 @@ try:
     from .export_api import ExportAPI
     from .export_csv import CSVExporter, ExportDataType, ExportFormat
     from .session_filter import SessionFilter
-    __all__ = ["get_dashboard_files", "serve_dashboard_file", "ExportAPI", "CSVExporter", "ExportDataType", "ExportFormat", "SessionFilter"]
+    __all__ = ['get_dashboard_files', 'serve_dashboard_file', 'ExportAPI', 'CSVExporter', 'ExportDataType', 'ExportFormat', 'SessionFilter', 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']
 except ImportError:
-    __all__ = ["get_dashboard_files", "serve_dashboard_file"]
+    __all__ = ["get_dashboard_files", "serve_dashboard_file", 'account_dashboard', 'app', 'export_api', 'export_csv', 'session_filter']

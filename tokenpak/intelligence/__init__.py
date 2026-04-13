@@ -7,3 +7,5 @@ except ImportError as e:
         "tokenpak.intelligence requires the [server] extra. "
         "Install with: pip install tokenpak[server]"
     ) from e
+
+__all__ = ['auth', 'deep_health', 'server']

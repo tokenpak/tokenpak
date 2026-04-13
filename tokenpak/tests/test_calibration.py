@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from ..calibration import (
+from tokenpak.calibration import (
     _candidate_workers,
     _host_key,
     _run_index_once,

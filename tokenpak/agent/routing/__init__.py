@@ -6,3 +6,5 @@ _warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
+
+__all__ = ['fallback']

@@ -11,12 +11,4 @@ from .generator import Fingerprint, FingerprintGenerator, Segment
 from .privacy import PrivacyLevel, apply_privacy
 from .sync import FingerprintSync, SyncResult
 
-__all__ = [
-    "FingerprintGenerator",
-    "Fingerprint",
-    "Segment",
-    "PrivacyLevel",
-    "apply_privacy",
-    "FingerprintSync",
-    "SyncResult",
-]
+__all__ = ['FingerprintGenerator', 'Fingerprint', 'Segment', 'PrivacyLevel', 'apply_privacy', 'FingerprintSync', 'SyncResult', 'generator', 'privacy', 'sync']

@@ -7,13 +7,4 @@ from .context import TokenPakContextManager
 # Re-export from langchain.py module for tests that import LangChainAdapter from this package
 from tokenpak.adapters.langchain_adapter import LangChainAdapter, _normalise_messages  # noqa: F401
 
-__all__ = [
-    "Block",
-    "doc_to_block",
-    "block_to_doc",
-    "TokenPakRetriever",
-    "TokenPakMemory",
-    "TokenPakContextManager",
-    "LangChainAdapter",
-    "_normalise_messages",
-]
+__all__ = ['Block', 'doc_to_block', 'block_to_doc', 'TokenPakRetriever', 'TokenPakMemory', 'TokenPakContextManager', 'LangChainAdapter', '_normalise_messages', 'adapter', 'context', 'converters', 'examples', 'langgraph', 'memory', 'retrievers', 'tests']

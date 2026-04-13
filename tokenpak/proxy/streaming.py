@@ -131,12 +131,20 @@ class StreamHandler:
         self._buffer = io.BytesIO()
         self._chunk_count = 0
         self._decompressor = None
+        # Line-level buffer: accumulates partial text until a newline arrives.
+        # Prevents cross-chunk SSE parse failures when a data: line is split
+        # across two recv() calls.
+        self._line_buffer: str = ""
 
         if "gzip" in content_encoding:
             self._decompressor = zlib.decompressobj(zlib.MAX_WBITS | 16)
 
     def process_chunk(self, chunk: bytes) -> bytes:
-        """Process a chunk: decompress if needed, buffer for later analysis."""
+        """Process a chunk: decompress if needed, buffer for later analysis.
+
+        Cross-chunk SSE lines are held in self._line_buffer until a newline
+        arrives, then flushed into self._buffer as a complete line.
+        """
         self._chunk_count += 1
         if self._decompressor:
             try:
@@ -144,11 +152,19 @@ class StreamHandler:
             except Exception:
                 pass
         if chunk:
-            self._buffer.write(chunk)
+            text = chunk.decode("utf-8", errors="replace")
+            self._line_buffer += text
+            # Flush all complete lines into the byte buffer; keep the remainder.
+            while "\n" in self._line_buffer:
+                line, self._line_buffer = self._line_buffer.split("\n", 1)
+                self._buffer.write((line + "\n").encode("utf-8"))
         return chunk
 
     def get_buffer(self) -> bytes:
-        """Get all buffered data."""
+        """Get all buffered data, flushing any partial line held in the line buffer."""
+        if self._line_buffer:
+            self._buffer.write(self._line_buffer.encode("utf-8"))
+            self._line_buffer = ""
         return self._buffer.getvalue()
 
     def extract_usage(self) -> Dict[str, int]:

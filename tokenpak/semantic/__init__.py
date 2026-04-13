@@ -20,12 +20,7 @@ Usage::
 from .loader import SemanticMapError, SemanticMapLoader
 from .resolver import ResolveResult, SemanticResolver
 
-__all__ = [
-    "SemanticMapLoader",
-    "SemanticMapError",
-    "SemanticResolver",
-    "ResolveResult",
-]
+__all__ = ['SemanticMapLoader', 'SemanticMapError', 'SemanticResolver', 'ResolveResult', 'loader', 'resolver', 'term_card_builder', 'term_card_resolver', 'term_resolver']
 
 
 # Term card features (from agent/semantic/)

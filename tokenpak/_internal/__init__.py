@@ -21,3 +21,5 @@ Subdirectories:
     team/       — Multi-agent team coordination
     triggers/   — Event triggers
 """
+
+__all__ = ['agentic', 'auth', 'config', 'debug', 'fingerprint', 'ingest', 'macros', 'memory', 'query', 'regression', 'state_schemas', 'teacher', 'team', 'triggers']

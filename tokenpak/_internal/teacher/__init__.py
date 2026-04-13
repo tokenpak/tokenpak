@@ -2,4 +2,4 @@
 
 from .builder import TeacherPackBuilder, TeacherPackResult, build_teacher_pack
 
-__all__ = ["TeacherPackBuilder", "TeacherPackResult", "build_teacher_pack"]
+__all__ = ['TeacherPackBuilder', 'TeacherPackResult', 'build_teacher_pack', 'builder']

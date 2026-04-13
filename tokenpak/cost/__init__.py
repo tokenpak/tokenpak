@@ -9,4 +9,4 @@ Provides:
 
 from .budget_tracker import AlertLevel, BudgetAlert, BudgetTracker
 
-__all__ = ["BudgetTracker", "BudgetAlert", "AlertLevel"]
+__all__ = ['BudgetTracker', 'BudgetAlert', 'AlertLevel', 'budget_tracker', 'cli_cost']

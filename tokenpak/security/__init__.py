@@ -128,4 +128,4 @@ def ensure_config_permissions(path: Path) -> bool:
     return True
 
 
-__all__ = ["DLPScanner", "DLPMatch", "DLPBlockError", "secure_write_config", "sanitize_model_name", "ensure_config_permissions", "redact_pii", "safe_temp_file", "sanitize_cli_arg"]
+__all__ = ['DLPScanner', 'DLPMatch', 'DLPBlockError', 'secure_write_config', 'sanitize_model_name', 'ensure_config_permissions', 'redact_pii', 'safe_temp_file', 'sanitize_cli_arg', 'dlp']

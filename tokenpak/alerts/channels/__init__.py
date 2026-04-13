@@ -156,3 +156,5 @@ def dispatch(event: str, severity: str, message: str, **extra: Any) -> None:
 
     t = threading.Thread(target=_deliver_all, daemon=True, name="tokenpak-alert-dispatch")
     t.start()
+
+__all__ = ['email', 'slack', 'telegram', 'webhook']

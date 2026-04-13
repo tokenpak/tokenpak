@@ -45,3 +45,5 @@ def get_processor(file_type: str, no_treesitter: bool = False):
     if file_type == "code" and no_treesitter:
         return _code_processor_no_ts
     return PROCESSORS.get(file_type)
+
+__all__ = ['code', 'code_treesitter', 'data', 'image', 'text']

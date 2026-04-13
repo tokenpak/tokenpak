@@ -23,12 +23,4 @@ from .code_extractor import CodeExtractor
 from .doc_extractor import DocExtractor
 from .router import SalientResult, extract
 
-__all__ = [
-    "ContentType",
-    "detect_content_type",
-    "LogExtractor",
-    "CodeExtractor",
-    "DocExtractor",
-    "SalientResult",
-    "extract",
-]
+__all__ = ['ContentType', 'detect_content_type', 'LogExtractor', 'CodeExtractor', 'DocExtractor', 'SalientResult', 'extract', 'code_extractor', 'detect', 'doc_extractor', 'log_extractor', 'router']

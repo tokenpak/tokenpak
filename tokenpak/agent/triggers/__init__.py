@@ -12,4 +12,4 @@ from .daemon import TriggerDaemon
 from .matcher import match_event
 from .store import Trigger, TriggerStore
 
-__all__ = ["TriggerStore", "Trigger", "match_event", "TriggerDaemon"]
+__all__ = ['TriggerStore', 'Trigger', 'match_event', 'TriggerDaemon', 'daemon', 'matcher', 'store']

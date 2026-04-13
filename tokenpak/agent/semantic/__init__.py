@@ -27,19 +27,4 @@ from .term_resolver import (
     resolve_terms,
 )
 
-__all__ = [
-    "build",
-    "detect_alias_conflicts",
-    "enforce_caps",
-    "lazy_add",
-    "load_cards",
-    "save_cards",
-    "sort_cards",
-    "validate_card",
-    "validation_report",
-    "TermResolver",
-    "TermResolverConfig",
-    "resolve_terms",
-    "TermCardSnippet",
-    "TermResolution",
-]
+__all__ = ['build', 'detect_alias_conflicts', 'enforce_caps', 'lazy_add', 'load_cards', 'save_cards', 'sort_cards', 'validate_card', 'validation_report', 'TermResolver', 'TermResolverConfig', 'resolve_terms', 'TermCardSnippet', 'TermResolution', 'term_card_builder', 'term_card_resolver', 'term_resolver']

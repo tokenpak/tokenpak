@@ -18,6 +18,7 @@ from .registry import AdapterRegistry
 from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 
+# Higher priority values are checked first when matching requests to adapters.
 def build_default_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
     registry.register(AnthropicAdapter(), priority=300)
@@ -42,24 +43,4 @@ def build_embedding_registry() -> EmbeddingRouter:
     return EmbeddingRouter()
 
 
-__all__ = [
-    "AdapterRegistry",
-    "AnthropicAdapter",
-    "CanonicalRequest",
-    "CanonicalResponse",
-    "EmbeddingRouter",
-    "FormatAdapter",
-    "GeminiEmbeddingAdapter",
-    "GoogleGenerativeAIAdapter",
-    "GrokAdapter",
-    "JinaEmbeddingAdapter",
-    "OllamaEmbeddingAdapter",
-    "OpenAIChatAdapter",
-    "OpenAICodexResponsesAdapter",
-    "OpenAIEmbeddingAdapter",
-    "OpenAIResponsesAdapter",
-    "PassthroughAdapter",
-    "VoyageEmbeddingAdapter",
-    "build_default_registry",
-    "build_embedding_registry",
-]
+__all__ = ['AdapterRegistry', 'AnthropicAdapter', 'CanonicalRequest', 'CanonicalResponse', 'EmbeddingRouter', 'FormatAdapter', 'GeminiEmbeddingAdapter', 'GoogleGenerativeAIAdapter', 'GrokAdapter', 'JinaEmbeddingAdapter', 'OllamaEmbeddingAdapter', 'OpenAIChatAdapter', 'OpenAICodexResponsesAdapter', 'OpenAIEmbeddingAdapter', 'OpenAIResponsesAdapter', 'PassthroughAdapter', 'VoyageEmbeddingAdapter', 'build_default_registry', 'build_embedding_registry', 'adapters', 'anthropic_adapter', 'base', 'canonical', 'embedding_base', 'embedding_router', 'embedding_voyage', 'gemini_embedding_adapter', 'google_adapter', 'grok_adapter', 'jina_embedding', 'jina_embedding_adapter', 'ollama_embedding_adapter', 'openai_chat_adapter', 'openai_codex_responses_adapter', 'openai_embedding', 'openai_embedding_adapter', 'openai_responses_adapter', 'passthrough_adapter', 'registry', 'utils', 'voyage_embedding_adapter']

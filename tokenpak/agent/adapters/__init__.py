@@ -26,10 +26,4 @@ from .generic import GenericAdapter
 from .legacy import LegacyAdapter
 from .registry import detect_platform
 
-__all__ = [
-    "BaseAdapter",
-    "LegacyAdapter",
-    "ClaudeCLIAdapter",
-    "GenericAdapter",
-    "detect_platform",
-]
+__all__ = ['BaseAdapter', 'LegacyAdapter', 'ClaudeCLIAdapter', 'GenericAdapter', 'detect_platform', 'base', 'claude_cli', 'generic', 'legacy', 'registry']

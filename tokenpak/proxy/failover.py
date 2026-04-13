@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
@@ -183,6 +184,13 @@ class FailoverManager:
 
     def __init__(self, config: Optional[FailoverConfig] = None):
         self._config = config or load_failover_config()
+        self._lock = threading.Lock()
+
+    def reload_config(self, path: Optional[Path] = None) -> None:
+        """Thread-safe config reload. Safe to call while iter_providers() is running."""
+        new_config = load_failover_config(path)
+        with self._lock:
+            self._config = new_config
 
     @property
     def enabled(self) -> bool:
@@ -220,7 +228,9 @@ class FailoverManager:
         if not self._config.enabled:
             return
 
-        available = self._config.available_chain()
+        # Snapshot the chain under lock to prevent race with reload_config()
+        with self._lock:
+            available = self._config.available_chain()
         if not available:
             return
 

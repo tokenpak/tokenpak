@@ -313,3 +313,5 @@ def check_alerts() -> list[tuple[AlertRule, Optional[float]]]:
             pass  # Never let channel errors affect alert evaluation
 
     return fired
+
+__all__ = ['channels']

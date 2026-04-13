@@ -26,3 +26,5 @@ def get_engine(name: str = "heuristic") -> CompactionEngine:
     """Get a compaction engine by name."""
     engine_class = ENGINES.get(name, HeuristicEngine)
     return engine_class()
+
+__all__ = ['base', 'heuristic', 'llmlingua']

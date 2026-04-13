@@ -65,7 +65,14 @@ def record_proxy_request(
             session_id=session_id,
         )
     except Exception as exc:
-        logger.warning("cost_tracker.record_request failed (request unaffected): %s", exc)
+        # Emit a structured ERROR so failed tracking attempts leave an audit trail.
+        # WARNING level was insufficient — ops needs to know cost data is missing.
+        logger.error(
+            "COST_TRACKING_FAILURE model=%s tokens=%d error=%s",
+            model,
+            prompt_tokens + completion_tokens,
+            exc,
+        )
         cost = 0.0
 
     return cost

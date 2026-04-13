@@ -15,3 +15,5 @@ try:
     from tokenpak.agent.vault.backend_protocol import RetrievalBackend, SemanticScorer
 except ImportError:
     pass
+
+__all__ = ['ast_parser', 'backend_protocol', 'blocks', 'chunk_shapes', 'chunk_shaping', 'health', 'indexer', 'progressive_disclosure', 'query_expansion', 'retrieval', 'scoring', 'search', 'slicer', 'sqlite_backend', 'symbol_extraction', 'symbols', 'watcher']
