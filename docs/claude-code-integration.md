@@ -2,7 +2,7 @@
 
 TokenPak sits transparently between Claude Code and the Anthropic API, injecting vault context, tracking spend, and routing to the right provider — with zero changes to how you use Claude Code. This guide covers all six consumption modes. Pick your mode and you'll be running in under five minutes.
 
-**Six modes covered:** [CLI](#cli-one-shot-scripts-batch) · [TUI](#tui-interactive-dev) · [tmux / multi-instance](#tmux-multi-instance-fleet) · [SDK / Agent SDK](#sdk--claude-agent-sdk) · [IDE](#ide-vscode-jetbrains-cursor-windsurf) · [Cron / CI / agent worker](#cron--ci--agent-worker)
+**Six modes covered:** [CLI](#cli-one-shot-scripts-batch) · [TUI](#tui-interactive-dev) · [tmux / multi-instance](#tmux-multi-instance-fleet) · [SDK / Agent SDK](#sdk-claude-agent-sdk) · [IDE](#ide-vscode-jetbrains-cursor-windsurf) · [Cron / CI / agent worker](#cron-ci-agent-worker)
 
 ---
 
