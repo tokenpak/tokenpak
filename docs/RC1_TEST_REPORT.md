@@ -152,12 +152,12 @@ gap is highest priority since it's in the getting-started flow.
 | Item | Status |
 |------|--------|
 | Python 3.12.3 | ✅ Tested on TrixBot |
-| Python 3.9 (pyproject target-version py310+) | ⚠️ Not tested (no 3.9 env available); pyproject.toml specifies py310 minimum |
+| Python &lt;3.10 | ❌ Not supported; `pyproject.toml` sets `python_requires = ">=3.10"` |
 | Linux (Ubuntu 24.04, TrixBot) | ✅ |
 | Windows / macOS | ❌ Not tested in this run |
 | Installed version matches source | ✅ 1.0.0-rc1 |
 
-**Note:** `pyproject.toml` sets `python_requires = ">=3.10"` — docs say "Python 3.11+" which is inconsistent. Recommend aligning.
+**Note:** `pyproject.toml` sets `python_requires = ">=3.10"` — docs have since been aligned to declare `>=3.10`. (B5 resolved.)
 
 ---
 
@@ -187,7 +187,7 @@ curl http://localhost:8766/v1/messages -d '...'
 | B2 | Medium | 5 additional CLI commands in docs don't exist (`health`, `logs`, `compress`, `audit`, `serve --daemon/--mode`) | Audit cli-reference.md |
 | B3 | Low | `datetime.utcfromtimestamp()` deprecation warning in telemetry/server.py:146 | Replace with `datetime.fromtimestamp(ts, datetime.UTC)` |
 | B4 | Low | `engine.compact(None)` returns `None` silently | Document behavior or add type guard |
-| B5 | Low | `pyproject.toml` requires py3.10 but docs say "Python 3.11+" | Align (recommend py3.10) |
+| B5 | Low | `pyproject.toml` requires py3.10 but docs said ">=3.10" | **FIXED** — all docs now declare `>=3.10` |
 | B6 | Info | Shell scripts get 0% compression | Add shell script recipe in v1.0.1 |
 
 ---

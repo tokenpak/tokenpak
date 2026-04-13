@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This guide covers how to get set up
 
 ## Prerequisites
 
-- Python 3.10, 3.11, or 3.12
+- Python 3.10, 3.11, 3.12, or 3.13
 - `git`
 - A GitHub account with fork access to `kaywhy331/tokenpak`
 
@@ -61,8 +61,8 @@ CI runs automatically on every push and pull request targeting `main` or `oss-la
 
 1. **Lint** — `ruff` checks all source and test files (zero-tolerance, exits non-zero on any error)
 2. **Type Check** — `mypy` validates type annotations in the `tokenpak/` package
-3. **Test Matrix** — `pytest` runs across Python 3.10, 3.11, and 3.12 with `--cov-fail-under=70`
-4. **Coverage Upload** — Coverage report uploaded to Codecov from the Python 3.12 run
+3. **Test Matrix** — `pytest` runs across Python 3.10, 3.11, 3.12, and 3.13 with `--cov-fail-under=70`
+4. **Coverage Upload** — Coverage report uploaded to Codecov from the Python 3.11 run
 
 CI badge: [![CI](https://github.com/kaywhy331/tokenpak/actions/workflows/ci.yml/badge.svg)](https://github.com/kaywhy331/tokenpak/actions)
 

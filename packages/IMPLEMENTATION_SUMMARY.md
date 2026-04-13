@@ -132,7 +132,7 @@ Each package has proper PyPI metadata:
 - **Name:** e.g., `langchain-tokenpak`
 - **Version:** 0.1.0 (unified across all packages for MVP)
 - **Keywords:** Framework-specific keywords for discoverability
-- **Classifiers:** Python 3.10-3.12, MIT License, Artificial Intelligence
+- **Classifiers:** Python 3.10-3.13, MIT License, Artificial Intelligence
 - **URLs:** GitHub, documentation, bug tracker
 - **Dependencies:** Minimal (tokenpak-sdk + framework)
 
@@ -143,7 +143,7 @@ Each package has proper PyPI metadata:
 **Workflows created in `.github/workflows/`:**
 
 1. **test.yml** — Run tests on all packages
-   - Runs on: Python 3.10, 3.11, 3.12
+   - Runs on: Python 3.10, 3.11, 3.12, 3.13
    - Tests all 4 packages independently
    - Triggered on push/PR to main
 

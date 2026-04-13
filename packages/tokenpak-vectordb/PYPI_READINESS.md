@@ -41,7 +41,7 @@
 | `authors` | ✅ | TokenPak Team |
 | `dependencies` | ✅ | `tokenpak-sdk>=0.1.0` |
 | `keywords` | ✅ | 8 keywords listed (tokenpak, pinecone, weaviate, qdrant, chroma, vectordb, rag, compression) |
-| `classifiers` | ✅ | 7 classifiers (Python 3.10-3.12, MIT, Developers, AI) |
+| `classifiers` | ✅ | 8 classifiers (Python 3.10-3.13, MIT, Developers, AI) |
 | `optional-dependencies` | ✅ | 5 groups (pinecone, weaviate, qdrant, chroma, all, dev) |
 | `project.urls` | ✅ | Homepage, Documentation, Repository |
 | `build-system` | ✅ | setuptools with `build_meta` backend |
