@@ -15,6 +15,10 @@ We follow a 90‑day disclosure timeline:
 - v0.9.x — critical fixes only
 - Earlier — unsupported
 
+## Service Status & Incidents
+
+For operational status and past incident reports, see [STATUS.md](STATUS.md).
+
 ## Best Practices
 
 ### For Users
