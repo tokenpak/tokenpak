@@ -8198,9 +8198,19 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             if not _pool_key:
                 _pool_key = _load_claude_cli_token()
             if _pool_key:
-                fwd_headers["x-api-key"] = _pool_key
-                for _k in ("Authorization", "authorization"):
-                    fwd_headers.pop(_k, None)
+                if _pool_key.startswith("sk-ant-oat"):
+                    # Claude CLI OAuth subscription token — must use Authorization Bearer.
+                    # Sending oat tokens via x-api-key routes through Anthropic's "extra
+                    # usage" quota path rather than the subscription quota, causing spurious
+                    # YOU_RE_OUT_OF_EXTRA_USAGE errors even when the subscription has headroom.
+                    fwd_headers["Authorization"] = f"Bearer {_pool_key}"
+                    fwd_headers.pop("x-api-key", None)
+                    fwd_headers.pop("X-Api-Key", None)
+                else:
+                    # Regular API key (sk-ant-api…) — use x-api-key as normal.
+                    fwd_headers["x-api-key"] = _pool_key
+                    for _k in ("Authorization", "authorization"):
+                        fwd_headers.pop(_k, None)
 
         # ChatGPT Codex OAuth injection
         if detect_provider(target_url) is Provider.CODEX:
@@ -8495,7 +8505,11 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         f"retrying with key #{_retry_idx}",
                         flush=True,
                     )
-                    fwd_headers["x-api-key"] = _retry_key
+                    if _retry_key.startswith("sk-ant-oat"):
+                        fwd_headers["Authorization"] = f"Bearer {_retry_key}"
+                        fwd_headers.pop("x-api-key", None)
+                    else:
+                        fwd_headers["x-api-key"] = _retry_key
                     _current_key_idx = _retry_idx
                     try:
                         resp.drain_conn()
