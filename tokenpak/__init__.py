@@ -34,6 +34,7 @@ def __getattr__(name: str):
         # Sub-packages
         "connectors": lambda: __import__("tokenpak.connectors", fromlist=[""]),
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
+        "watchdog": lambda: __import__("tokenpak.proxy_watchdog", fromlist=[""]),
         # Budgeting
         "Budgeter": lambda: __import__("tokenpak.budgeter", fromlist=["Budgeter"]).Budgeter,
         "BudgetBlock": lambda: __import__("tokenpak.budget", fromlist=["BudgetBlock"]).BudgetBlock,
@@ -135,4 +136,5 @@ __all__ = [
     # Sub-packages
     "connectors",
     "proxy",
+    "watchdog",
 ]
