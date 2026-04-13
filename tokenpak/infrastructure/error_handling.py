@@ -57,6 +57,25 @@ class TokenPakError(Exception):
         self.detail = detail
         self.error_type = error_type or self.__class__.__name__
 
+    @property
+    def code(self) -> Optional[str]:
+        """Structured error code (TP-Exxx), derived from class error_code."""
+        return getattr(self.__class__, "error_code", None)
+
+    @property
+    def suggestion(self) -> str:
+        """User-facing suggestion for resolving the error."""
+        if isinstance(self.detail, dict):
+            return self.detail.get("suggestion", "Check TokenPak logs for details.")
+        return "Check TokenPak logs for details."
+
+    @property
+    def context(self) -> Optional[str]:
+        """Optional context string for debugging."""
+        if isinstance(self.detail, dict):
+            return self.detail.get("context")
+        return None
+
     def to_dict(self) -> dict:
         """Return structured error response dict for API responses."""
         result: dict = {
@@ -413,6 +432,15 @@ class ProviderError(TokenPakError):
         super().__init__(msg, detail={"provider": provider, "status_code": status_code})
 
 
+class ProviderUnknownError(TokenPakError):
+    """Provider name is not recognized by TokenPak. (TP-E502)"""
+
+    error_code = "TP-E502"
+
+    def __init__(self, provider: str) -> None:
+        super().__init__(f"Unknown provider: {provider}")
+
+
 # ---------------------------------------------------------------------------
 # License errors
 # ---------------------------------------------------------------------------
@@ -492,6 +520,19 @@ class InternalError(TokenPakError):
     error_code = "TP-E601"
 
 
+class TokenPakNotImplementedError(InternalError):
+    """Feature is not yet implemented. (TP-E602)"""
+
+    error_code = "TP-E602"
+
+    def __init__(self, feature: str) -> None:
+        sug = f"Enable {feature} support or use a supported alternative."
+        super().__init__(f"{feature} is not yet implemented", detail={"suggestion": sug})
+
+
+NotImplementedError = TokenPakNotImplementedError  # noqa: A001
+
+
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
@@ -545,6 +586,7 @@ __all__ = [
     "ValidationError",
     # Provider
     "ProviderError",
+    "ProviderUnknownError",
     # License
     "LicenseError",
     # Integration
@@ -554,10 +596,12 @@ __all__ = [
     "UnknownCommandError",
     # Internal
     "InternalError",
+    "TokenPakNotImplementedError",
     # Utility
     "format_error",
     # Aliases
     "TimeoutError",
+    "NotImplementedError",
 ]
 
 # TimeoutError alias — tests import this name from this module
