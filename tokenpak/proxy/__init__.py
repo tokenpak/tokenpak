@@ -61,6 +61,17 @@ from .route_policy import (  # noqa: F401
     platform_tag,
     ROUTE_POLICIES,
 )
+from .headers import (  # noqa: F401
+    forward_headers,
+    sanitize_headers,
+    OPENCLAW_HEADER_ALLOWLIST,
+    CLAUDE_CODE_HEADER_ALLOWLIST,
+)
+from .pipeline import (  # noqa: F401
+    process_request,
+    PipelineResult,
+    StageResult,
+)
 
 
 class ProxyStats:
