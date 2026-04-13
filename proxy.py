@@ -4993,14 +4993,16 @@ def extract_query_signal(body_bytes: bytes, adapter: Optional[FormatAdapter] = N
 
 def inject_vault_context(
     body_bytes: bytes, adapter: Optional[FormatAdapter] = None
-) -> Tuple[bytes, int, List[str]]:
+) -> Tuple[bytes, int, List[str], str]:
     """
     Search vault index for relevant context and inject into the system prompt.
     Optionally resolves glossary terms and injects term cards.
-    Returns (new_body_bytes, injected_tokens, source_refs).
+    Returns (new_body_bytes, injected_tokens, source_refs, raw_injection_text).
+    The 4th element is the raw injection text before insertion — used by
+    byte-level injection for client-auth pass-through.
     """
     if not VAULT_INDEX.available:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     active_adapter = adapter or _detect_adapter("", {}, body_bytes)
 
@@ -5011,7 +5013,7 @@ def inject_vault_context(
     _t_query_ms = (time.perf_counter() - _t) * 1000
 
     if not query:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     # Resolve glossary terms (optional, feature-flagged)
     glossary_injection = ""
@@ -5079,7 +5081,7 @@ def inject_vault_context(
         combined_tokens = tokens_used
 
     if not combined_injection:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], ""
 
     # Apply skeleton extraction to code blocks in injection text (70-90% reduction on code)
     _t4 = time.perf_counter()
@@ -5092,7 +5094,7 @@ def inject_vault_context(
     try:
         new_body = active_adapter.inject_system_context(body_bytes, combined_injection)
     except Exception:
-        return body_bytes, 0, []
+        return body_bytes, 0, [], combined_injection
     _t_inject_ms = (time.perf_counter() - _t5) * 1000
 
     _total_ms = (time.perf_counter() - _t) * 1000
@@ -5106,7 +5108,124 @@ def inject_vault_context(
         "total": round(_total_ms, 1),
     }
 
-    return new_body, combined_tokens, source_refs
+    return new_body, combined_tokens, source_refs, combined_injection
+
+
+# ---------------------------------------------------------------------------
+# Byte-level system array injection (for client-auth pass-through)
+# ---------------------------------------------------------------------------
+def _find_system_array_close(body: bytes) -> int:
+    """Find the byte offset of the closing ] of the top-level "system" array.
+
+    Scans through raw JSON bytes tracking string state and nesting depth.
+    Returns the offset of the ] character, or -1 if the system key is not
+    found, is not an array, or the JSON is malformed.
+    """
+    n = len(body)
+    i = 0
+    in_string = False
+    depth = 0  # brace depth (top-level object is depth 1)
+    system_key = b'"system"'
+    system_key_len = len(system_key)
+
+    while i < n:
+        c = body[i]
+        if in_string:
+            if c == ord("\\"):
+                i += 2  # skip escaped character
+                continue
+            if c == ord('"'):
+                in_string = False
+            i += 1
+            continue
+
+        if c == ord('"'):
+            # Check if this starts "system" at depth 1 (top-level key)
+            if depth == 1 and body[i : i + system_key_len] == system_key:
+                # Found the key — skip past it and the colon
+                j = i + system_key_len
+                while j < n and body[j] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+                    j += 1
+                if j < n and body[j] == ord(":"):
+                    j += 1
+                    while j < n and body[j] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+                        j += 1
+                    if j < n and body[j] == ord("["):
+                        # Found start of system array — bracket-match to find close
+                        bracket_depth = 1
+                        k = j + 1
+                        in_str = False
+                        while k < n and bracket_depth > 0:
+                            ck = body[k]
+                            if in_str:
+                                if ck == ord("\\"):
+                                    k += 2
+                                    continue
+                                if ck == ord('"'):
+                                    in_str = False
+                            else:
+                                if ck == ord('"'):
+                                    in_str = True
+                                elif ck == ord("["):
+                                    bracket_depth += 1
+                                elif ck == ord("]"):
+                                    bracket_depth -= 1
+                                    if bracket_depth == 0:
+                                        return k
+                            k += 1
+                        return -1  # malformed — never closed
+                    else:
+                        return -1  # system value is not an array
+            in_string = True
+            i += 1
+            continue
+
+        if c == ord("{"):
+            depth += 1
+        elif c == ord("}"):
+            depth -= 1
+        elif c == ord("["):
+            pass  # don't track array depth at top level
+        elif c == ord("]"):
+            pass
+        i += 1
+
+    return -1  # "system" key not found
+
+
+def _byte_inject_system_block(body: bytes, injection_text: str) -> bytes:
+    """Inject a text block into the system array via byte splicing.
+
+    Finds the closing ] of the "system" array and inserts a new block
+    just before it. Does NOT re-serialize the rest of the JSON body,
+    preserving the original byte representation exactly.
+
+    Returns the original body unchanged if injection fails for any reason.
+    """
+    if not injection_text:
+        return body
+
+    close_pos = _find_system_array_close(body)
+    if close_pos < 0:
+        return body  # fail-open: no system array found
+
+    # JSON-escape the injection text
+    escaped_text = json.dumps(injection_text, ensure_ascii=False)
+
+    # Build the fragment: {"type": "text", "text": <escaped>}
+    fragment_str = '{"type": "text", "text": ' + escaped_text + "}"
+
+    # Check if the array is empty (no leading comma needed)
+    scan = close_pos - 1
+    while scan >= 0 and body[scan] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+        scan -= 1
+    if scan >= 0 and body[scan] == ord("["):
+        # Empty array — no comma
+        fragment = fragment_str.encode("utf-8")
+    else:
+        fragment = (", " + fragment_str).encode("utf-8")
+
+    return body[:close_pos] + fragment + body[close_pos:]
 
 
 # ---------------------------------------------------------------------------
@@ -7233,6 +7352,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         protected_tokens = 0
         injected_tokens = 0
         injected_sources: List[str] = []
+        _vault_injection_text = ""
         is_streaming = False
         _sc_tee_buf = b""       # CCG-15: accumulator for SSE semantic cache (set in SSE loop)
         _sc_tee_capped = False  # CCG-15: True when SSE response exceeded 256 KB cap
@@ -7872,7 +7992,7 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                 if _audit_cache_risk == "none":
                                     _audit_cache_risk = "low"
                         else:
-                            body, injected_tokens, injected_sources = inject_vault_context(
+                            body, injected_tokens, injected_sources, _vault_injection_text = inject_vault_context(
                                 body, adapter=active_adapter
                             )
                             if injected_tokens > 0:
@@ -8211,15 +8331,26 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         # (_sanitize_headers) — their forwarding behavior is unchanged.
         if detect_provider(target_url) is Provider.ANTHROPIC:
             _route = _classify_route(self.path, self.headers)
-            _allowlist = (
-                CLAUDE_CODE_HEADER_ALLOWLIST
-                if _route == "claude-code"
-                else OPENCLAW_HEADER_ALLOWLIST
-            )
-            fwd_headers = {}
-            for _hk, _hv in self.headers.items():
-                if _hk.lower() in _allowlist:
-                    fwd_headers[_hk.lower()] = _hv
+            if _route == "claude-code" and _pre_client_has_auth:
+                # Client-auth pass-through: forward ALL headers (like a pure relay).
+                # The allowlist strips headers that Anthropic uses for request identity
+                # and billing routing. Forwarding everything preserves the exact
+                # request signature that Claude Code's OAuth quota expects.
+                _skip = {'host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'}
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() not in _skip:
+                        fwd_headers[_hk] = _hv
+            elif _route == "claude-code":
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() in CLAUDE_CODE_HEADER_ALLOWLIST:
+                        fwd_headers[_hk.lower()] = _hv
+            else:
+                fwd_headers = {}
+                for _hk, _hv in self.headers.items():
+                    if _hk.lower() in OPENCLAW_HEADER_ALLOWLIST:
+                        fwd_headers[_hk.lower()] = _hv
         else:
             fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
@@ -8483,13 +8614,21 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                             body = json.dumps(_hf_dbody).encode()
                 except Exception as _e_hf:
                     print(f"  ⚠️ ttl ordering hotfix error: {_e_hf}", flush=True)
-            # For client-auth pass-through: restore the ORIGINAL body bytes.
-            # The pipeline may have re-serialized JSON (changing formatting, key order,
-            # body size) which causes Anthropic to route the request through a different
-            # billing path. Forwarding the exact original bytes preserves the request
-            # identity that Claude Code's OAuth quota expects.
+            # For client-auth pass-through: restore the ORIGINAL body bytes,
+            # then apply vault injection via byte splicing (no JSON re-serialization).
+            # This preserves the exact byte structure that Anthropic's billing expects
+            # while still injecting tokenpak vault context.
             if _pre_client_has_auth and _original_body:
-                body = _original_body
+                # Byte-level vault injection: splice vault context into the original
+                # body bytes without JSON re-serialization. Uses a reduced injection
+                # budget (TOKENPAK_CC_INJECT_MAX_CHARS) to avoid exceeding Claude Max
+                # extra usage quota. Default 2000 chars (~500 tokens).
+                _max_inject_chars = int(os.environ.get("TOKENPAK_CC_INJECT_MAX_CHARS", "2000"))
+                if _vault_injection_text and _max_inject_chars > 0:
+                    _trimmed = _vault_injection_text[:_max_inject_chars]
+                    body = _byte_inject_system_block(_original_body, _trimmed)
+                else:
+                    body = _original_body
             elif _saved_cache_controls and body:
                 try:
                     _restore_body = json.loads(body) if isinstance(body, (bytes, str)) else body
