@@ -2204,6 +2204,7 @@ OPENCLAW_HEADER_ALLOWLIST: tuple = (
 CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
     "x-api-key",
     "authorization",
+    "content-type",
     "anthropic-version",
     "anthropic-beta",
     "anthropic-dangerous-direct-browser-access",
