@@ -50,6 +50,23 @@ echo ""
 
 chmod +x "$PROBE_DIR/hook_probe.sh"
 
+# Pre-flight: verify MCP server responds to initialize
+echo -n "Pre-flight: MCP server... "
+MCP_TEST=$(echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"preflight","version":"1.0"}}}' \
+  | timeout 3 python3 "$PROBE_DIR/mcp_probe_server.py" 2>/dev/null | head -1)
+if echo "$MCP_TEST" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['result']['serverInfo']['name']" 2>/dev/null; then
+    STARTUP_MS=$(cat "$MCP_LOG" | grep "startup took" | grep -oP '\d+ms' || echo "?ms")
+    echo "OK ($STARTUP_MS)"
+else
+    echo "FAILED"
+    echo "MCP server did not respond correctly. Aborting."
+    exit 1
+fi
+
+# Reset logs for the real session
+: > "$LOG"
+: > "$MCP_LOG"
+
 exec claude \
     --mcp-config "$PROBE_DIR/mcp_config.json" \
     --append-system-prompt-file "$PROBE_DIR/companion_prompt.md" \
