@@ -255,6 +255,8 @@ def _calculate_fleet_savings(
     total_compression_savings = 0.0
     total_requests = 0
 
+    total_claude_code_savings = 0.0
+
     for row in rows:
         model_name = row["model"]
         rates = get_rates(model_name)
@@ -269,12 +271,22 @@ def _calculate_fleet_savings(
         cache_create = row["cache_creation_tokens"]
         compressed_tok = row["compressed_tokens"]  # tokens removed by compression
 
-        # Separate proxy-managed cache reads (tokenpak caused these) from
-        # client-managed reads (Claude Code caused these — tokenpak just observed).
-        client_managed_cr = row["client_managed_cache_read"] if "client_managed_cache_read" in row.keys() else 0
+        # Attribution: separate proxy-managed cache reads (tokenpak caused) from
+        # client-managed reads (Claude Code caused — tokenpak just observed).
+        #
+        # When the DB has a 'route' column, rows tagged 'claude-code' are
+        # client-managed.  When the column is missing (legacy DB), ALL traffic
+        # flowed through the byte-preserved passthrough proxy, meaning Claude
+        # Code's own cache_control headers caused the cache hits — not tokenpak.
+        # In that case, conservatively attribute all cache reads to Claude Code.
+        if has_route:
+            client_managed_cr = row["client_managed_cache_read"] if "client_managed_cache_read" in row.keys() else 0
+        else:
+            # No route column → assume all cache is client-managed (Claude Code)
+            client_managed_cr = cache_read
         proxy_managed_cr = max(0, cache_read - client_managed_cr)
 
-        # "Without TokenPak" cost:
+        # "Without TokenPak" cost: what you'd pay if tokenpak hadn't compressed.
         # - Compressed tokens would have been sent at full input rate
         # - Proxy-managed cache reads would have been full-price input (tokenpak caused the discount)
         # - Client-managed cache reads stay at cached rate (Claude Code does this regardless)
@@ -302,6 +314,9 @@ def _calculate_fleet_savings(
         cache_saving = (proxy_managed_cr / 1_000_000) * (input_rate - cached_rate)
         compression_saving = (compressed_tok / 1_000_000) * input_rate
 
+        # Claude Code cache savings (observability — not tokenpak's doing)
+        claude_code_cache_saving = (client_managed_cr / 1_000_000) * (input_rate - cached_rate)
+
         # Cache hit rate: all cache_read / total input handled (observability, not attribution)
         total_input_handled = cache_read + input_tok
         cache_hit_rate = (cache_read / total_input_handled * 100) if total_input_handled > 0 else 0.0
@@ -316,6 +331,7 @@ def _calculate_fleet_savings(
             "cache_hit_rate": round(cache_hit_rate, 1),
             "cache_savings": round(cache_saving, 2),
             "compression_savings": round(compression_saving, 2),
+            "claude_code_cache_savings": round(claude_code_cache_saving, 2),
             "input_tokens": input_tok,
             "output_tokens": output_tok,
             "cache_read_tokens": cache_read,
@@ -328,6 +344,7 @@ def _calculate_fleet_savings(
         total_with += with_cost
         total_cache_savings += cache_saving
         total_compression_savings += compression_saving
+        total_claude_code_savings += claude_code_cache_saving
         total_requests += req_count
 
     total_saved = total_without - total_with
@@ -348,6 +365,7 @@ def _calculate_fleet_savings(
             "cache_savings": round(total_cache_savings, 2),
             "compression_savings": round(total_compression_savings, 2),
             "routing_savings": round(routing_savings, 2),
+            "claude_code_cache_savings": round(total_claude_code_savings, 2),
         },
         "db_rows": total_rows,
     }
@@ -476,28 +494,35 @@ def run(
     print(SEP)
 
     # === SAVINGS SECTION ===
+    tokenpak_sav = totals["cache_savings"] + totals["compression_savings"] + totals["routing_savings"]
+    cc_sav = totals.get("claude_code_cache_savings", 0)
+    total_sav = tokenpak_sav + cc_sav
+
     print()
-    print("💰 SAVINGS (Last 24h)")
-    print(f"  Without TokenPak:    {_fmt_cost(totals['without_cost']):>10}")
-    print(f"  With TokenPak:       {_fmt_cost(totals['with_cost']):>10}")
+    print("💰 TOTAL SAVINGS (Last 24h)")
+    print(f"  Actual cost:         {_fmt_cost(totals['with_cost']):>10}")
+    print(f"  Without optimization:{_fmt_cost(totals['with_cost'] + total_sav):>10}")
     print(f"  {SEP_INNER}")
-    print(f"  Total saved:         {_fmt_cost(totals['saved']):>10}  ({_fmt_pct(totals['savings_pct'])})")
+    print(f"  Total saved:         {_fmt_cost(total_sav):>10}")
 
-    # === HOW IT SAVED BREAKDOWN ===
+    # === ATTRIBUTION BREAKDOWN ===
     print()
-    print("📊 HOW IT SAVED")
-    cache_sav = totals["cache_savings"]
+    print("📊 SAVINGS BREAKDOWN")
     comp_sav = totals["compression_savings"]
+    cache_sav = totals["cache_savings"]
     route_sav = totals["routing_savings"]
-    total_sav = totals["saved"]
 
-    cache_pct = (cache_sav / total_sav * 100) if total_sav > 0 else 0.0
-    comp_pct = (comp_sav / total_sav * 100) if total_sav > 0 else 0.0
-    route_pct = (route_sav / total_sav * 100) if total_sav > 0 else 0.0
+    # TokenPak's own savings (what the proxy actually changed)
+    print(f"  TokenPak compression:  {_fmt_cost(comp_sav):>10}", end="")
+    if cache_sav > 0:
+        print(f"  + cache mgmt: {_fmt_cost(cache_sav)}", end="")
+    if route_sav > 0:
+        print(f"  + routing: {_fmt_cost(route_sav)}", end="")
+    print()
 
-    print(f"  Cache optimization:    {_fmt_cost(cache_sav):>10}  ({cache_pct:4.1f}%)")
-    print(f"  Token compression:     {_fmt_cost(comp_sav):>10}  ({comp_pct:4.1f}%)")
-    print(f"  Smart routing:         {_fmt_cost(route_sav):>10}  ({route_pct:4.1f}%)")
+    # Claude Code's native Anthropic prompt caching
+    if cc_sav > 0:
+        print(f"  Claude Code caching:   {_fmt_cost(cc_sav):>10}  (Anthropic prompt cache)")
 
     # === PER-MODEL TABLE ===
     print()
@@ -505,14 +530,14 @@ def run(
     for m in model_rows:
         name = _shorten_model(m["model"])
         reqs = m["requests"]
-        saved = m["saved"]
+        tp_saved = m["compression_savings"] + m["cache_savings"]
+        cc_saved = m.get("claude_code_cache_savings", 0)
         cache_hr = m["cache_hit_rate"]
-        sav_pct = m["savings_pct"]
         print(
             f"  {name:<24} {reqs:>5} reqs"
-            f"    {_fmt_cost(saved):>10}"
+            f"    tp: {_fmt_cost(tp_saved):>8}"
+            f"    cc: {_fmt_cost(cc_saved):>8}"
             f"    {cache_hr:3.0f}% cache"
-            f"    {sav_pct:3.0f}% saved"
         )
 
     # === PERFORMANCE SECTION ===
