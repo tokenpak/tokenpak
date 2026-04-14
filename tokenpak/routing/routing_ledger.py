@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from .complexity import score_complexity
+from tokenpak.compression.complexity import score_complexity
 
 DEFAULT_LEDGER_PATH = ".tokenpak/routing_ledger.db"
 

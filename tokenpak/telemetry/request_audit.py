@@ -11,7 +11,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from tokenpak.telemetry.pricing import get_rates
+from tokenpak.telemetry.pricing_rates import get_rates
 
 # Cache read cost = 10% of input cost (Anthropic standard)
 CACHE_READ_DISCOUNT = 0.1

@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Optional
 
-from ..cache.semantic_cache import (
+from tokenpak.cache.semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,
     SemanticCacheLookup,

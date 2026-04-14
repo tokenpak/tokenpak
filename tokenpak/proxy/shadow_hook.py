@@ -20,7 +20,7 @@ import threading
 import time
 from typing import Optional
 
-from .routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
+from tokenpak.routing.routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
 
 
 class ShadowHook:

@@ -949,7 +949,7 @@ def cmd_serve(args):
         app = create_app()
         # Phase 5A: register ingest router
         try:
-            from .agent.ingest.api import router as ingest_router
+            from tokenpak.vault.ingest.api import router as ingest_router
 
             app.include_router(ingest_router)
         except Exception as _ingest_err:
@@ -961,7 +961,7 @@ def cmd_serve(args):
     if getattr(args, "ingest", False):
         import uvicorn
 
-        from .agent.ingest.api import create_ingest_app
+        from tokenpak.vault.ingest.api import create_ingest_app
 
         app = create_ingest_app()
         port = args.port
@@ -975,7 +975,7 @@ def cmd_serve(args):
     workers = getattr(args, "workers", 1) or 1
     if workers > 1:
         import uvicorn
-        from .agent.ingest.api import create_ingest_app
+        from tokenpak.vault.ingest.api import create_ingest_app
         port = args.port
         print(f"TokenPak Ingest API — http://127.0.0.1:{port}")
         print(f"  Workers: {workers}")
@@ -993,7 +993,7 @@ def cmd_serve(args):
     # Default (single-worker): start the TokenPak proxy server
     shutdown_timeout = getattr(args, "shutdown_timeout", None)
     try:
-        from .agent.proxy.server import start_proxy
+        from tokenpak.proxy.server import start_proxy
 
         start_proxy(
             host="127.0.0.1",
@@ -1367,7 +1367,7 @@ def cmd_dashboard(args):
 
     # Default: TUI dashboard
 
-    from .agent.cli.commands.dashboard import run_dashboard
+    from tokenpak.cli.commands.dashboard import run_dashboard
     run_dashboard(
         fleet=getattr(args, "fleet", False),
         json_export=getattr(args, "json_export", False),
@@ -1423,7 +1423,7 @@ def _cmd_dashboard_public(args):
 def cmd_doctor(args):
     """Run comprehensive diagnostics on TokenPak installation."""
     if getattr(args, "fleet", False):
-        from .agent.cli.commands.doctor import run_fleet_doctor
+        from tokenpak.cli.commands.doctor import run_fleet_doctor
         rc = run_fleet_doctor(fix=getattr(args, "fix", False), deploy=getattr(args, "deploy", False))
         sys.exit(rc)
     print("\nTOKENPAK  |  Doctor")
@@ -2427,7 +2427,7 @@ def _build_debug_parser(sub):
 
 def cmd_debug_on(args):
     """Enable debug mode."""
-    from .agent.config import set_debug_enabled
+    from tokenpak.core.config import set_debug_enabled
 
     set_debug_enabled(True)
     print("✅ Debug mode enabled")
@@ -2437,7 +2437,7 @@ def cmd_debug_on(args):
 
 def cmd_debug_off(args):
     """Disable debug mode."""
-    from .agent.config import set_debug_enabled
+    from tokenpak.core.config import set_debug_enabled
 
     set_debug_enabled(False)
     print("✅ Debug mode disabled")
@@ -2447,7 +2447,7 @@ def cmd_debug_status(args):
     """Show debug mode state."""
     import os
 
-    from .agent.config import CONFIG_PATH, get_debug_enabled
+    from tokenpak.core.config import CONFIG_PATH, get_debug_enabled
 
     enabled = get_debug_enabled()
     env_override = os.environ.get("TOKENPAK_DEBUG")
@@ -2473,8 +2473,8 @@ def _build_learn_parser(sub):
 
 def cmd_learn_status(args):
     """Show learned patterns from routing, compression, and context data."""
-    from .agent.agentic.learning import cmd_learn_status as _learn_status
-    from .agent.agentic.learning import learn
+    from tokenpak.orchestration.learning import cmd_learn_status as _learn_status
+    from tokenpak.orchestration.learning import learn
 
     learn()
     _learn_status()
@@ -2482,7 +2482,7 @@ def cmd_learn_status(args):
 
 def cmd_learn_reset(args):
     """Clear all learned data."""
-    from .agent.agentic.learning import reset
+    from tokenpak.orchestration.learning import reset
 
     reset()
     print("✓ Learning store cleared.")
@@ -3312,7 +3312,7 @@ def _build_route_parser(sub):
 
 
 def _trigger_store():
-    from .agent.triggers.store import TriggerStore
+    from tokenpak.orchestration.triggers.store import TriggerStore
 
     return TriggerStore()
 
@@ -3389,7 +3389,7 @@ def cmd_trigger_test(args):
     """Dry-run: show which registered triggers would fire for a given event."""
     import json as _json
 
-    from .agent.triggers.matcher import match_event
+    from tokenpak.orchestration.triggers.matcher import match_event
 
     store = _trigger_store()
     event = args.event
@@ -3443,7 +3443,7 @@ def cmd_trigger_log(args):
 
 
 def cmd_trigger_daemon(args):
-    from .agent.triggers.daemon import TriggerDaemon
+    from tokenpak.orchestration.triggers.daemon import TriggerDaemon
 
     store = _trigger_store()
     daemon = TriggerDaemon(store=store)
@@ -3454,7 +3454,7 @@ def cmd_trigger_fire(args):
     """Fire an event string immediately — executes all matching enabled triggers."""
     import subprocess
 
-    from .agent.triggers.matcher import match_event
+    from tokenpak.orchestration.triggers.matcher import match_event
 
     store = _trigger_store()
     event = args.event
@@ -3618,7 +3618,7 @@ def cmd_trigger_watch(args):
     """Start file watcher for file:changed events."""
     import signal
 
-    from .agent.macros.hooks import is_file_watcher_running, start_file_watcher, stop_file_watcher
+    from tokenpak.orchestration.macros.hooks import is_file_watcher_running, start_file_watcher, stop_file_watcher
 
     paths = args.paths if args.paths else ["."]
 
@@ -3650,7 +3650,7 @@ def cmd_trigger_watch(args):
 
 
 def _budget_tracker():
-    from .agent.telemetry.budget import get_budget_tracker
+    from tokenpak.telemetry.budget import get_budget_tracker
 
     return get_budget_tracker()
 
@@ -3716,7 +3716,7 @@ def cmd_cost(args):
 
 
 def cmd_budget_set(args):
-    from .agent.telemetry.budget import load_budget_config, save_budget_config
+    from tokenpak.telemetry.budget import load_budget_config, save_budget_config
 
     cfg = load_budget_config()
     changed = False
@@ -4358,7 +4358,7 @@ def cmd_lock_claim(args):
     import time as _time
     import json as _json
 
-    from .agent.agentic.locks import FileLockManager, LockConflictError
+    from tokenpak.orchestration.locks import FileLockManager, LockConflictError
 
     mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
     try:
@@ -4373,7 +4373,7 @@ def cmd_lock_claim(args):
 
 
 def cmd_lock_release(args):
-    from .agent.agentic.locks import FileLockManager
+    from tokenpak.orchestration.locks import FileLockManager
 
     mgr = FileLockManager(agent_id=args.agent or None)
     released = mgr.release(args.path)
@@ -4387,7 +4387,7 @@ def cmd_lock_query(args):
     import time as _time
     import json as _json
 
-    from .agent.agentic.locks import FileLockManager
+    from tokenpak.orchestration.locks import FileLockManager
 
     mgr = FileLockManager(agent_id=args.agent or None)
     record = mgr.query(args.path)
@@ -4405,7 +4405,7 @@ def cmd_lock_list(args):
     import time as _time
     import json as _json
 
-    from .agent.agentic.locks import FileLockManager
+    from tokenpak.orchestration.locks import FileLockManager
 
     mgr = FileLockManager(agent_id=args.agent or None)
     mgr.prune_expired()
@@ -4428,7 +4428,7 @@ def cmd_lock_renew(args):
     import time as _time
     import json as _json
 
-    from .agent.agentic.locks import FileLockManager, LockConflictError, LockExpiredError
+    from tokenpak.orchestration.locks import FileLockManager, LockConflictError, LockExpiredError
 
     mgr = FileLockManager(agent_id=args.agent or None, timeout_s=args.timeout)
     try:
@@ -4497,7 +4497,7 @@ def _build_lock_parser(sub):
 
 
 def cmd_agent_lock(args):
-    from .agent.agentic.locks import FileLockManager, LockConflictError
+    from tokenpak.orchestration.locks import FileLockManager, LockConflictError
 
     mgr = FileLockManager(agent_id=args.agent or None)
     try:
@@ -4513,7 +4513,7 @@ def cmd_agent_lock(args):
 
 
 def cmd_agent_unlock(args):
-    from .agent.agentic.locks import FileLockManager
+    from tokenpak.orchestration.locks import FileLockManager
 
     mgr = FileLockManager(agent_id=args.agent or None)
     released = mgr.release(args.path)
@@ -4526,7 +4526,7 @@ def cmd_agent_unlock(args):
 def cmd_agent_locks(args):
     import time
 
-    from .agent.agentic.locks import FileLockManager
+    from tokenpak.orchestration.locks import FileLockManager
 
     mgr = FileLockManager(agent_id=args.agent or None)
     mgr.prune_expired()
@@ -4549,7 +4549,7 @@ def cmd_agent_list(args):
     """List registered agents."""
     import json as json_mod
 
-    from .agent.agentic.registry import AgentRegistry
+    from tokenpak.orchestration.registry import AgentRegistry
 
     registry = AgentRegistry()
     if args.all:
@@ -4584,7 +4584,7 @@ def cmd_agent_register(args):
     import json as json_mod
     import socket
 
-    from .agent.agentic.registry import AgentRegistry
+    from tokenpak.orchestration.registry import AgentRegistry
 
     hostname = args.hostname or socket.gethostname()
     capabilities = {
@@ -4607,7 +4607,7 @@ def cmd_agent_register(args):
 
 def cmd_agent_deregister(args):
     """Remove agent from registry."""
-    from .agent.agentic.registry import AgentRegistry
+    from tokenpak.orchestration.registry import AgentRegistry
 
     registry = AgentRegistry()
     if registry.deregister(args.agent_id):
@@ -4618,7 +4618,7 @@ def cmd_agent_deregister(args):
 
 def cmd_agent_heartbeat(args):
     """Send heartbeat for agent."""
-    from .agent.agentic.registry import AgentRegistry
+    from tokenpak.orchestration.registry import AgentRegistry
 
     registry = AgentRegistry()
     if registry.heartbeat(args.agent_id, status=args.status, current_task=args.task):
@@ -4631,7 +4631,7 @@ def cmd_agent_match(args):
     """Find agents matching requirements."""
     import json as json_mod
 
-    from .agent.agentic.capabilities import CapabilityMatcher, TaskRequirements
+    from tokenpak.orchestration.capabilities import CapabilityMatcher, TaskRequirements
 
     requirements = TaskRequirements(
         requires_gpu=True if args.gpu else None,
@@ -4660,7 +4660,7 @@ def cmd_agent_match(args):
 
 def cmd_agent_prune(args):
     """Remove stale agents."""
-    from .agent.agentic.registry import AgentRegistry
+    from tokenpak.orchestration.registry import AgentRegistry
 
     registry = AgentRegistry()
     count = registry.prune_stale()
@@ -4672,7 +4672,7 @@ def cmd_agent_prune(args):
 
 def cmd_agent_handoff(args):
     """Dispatch to handoff command handler."""
-    from .agent.cli.commands.handoff import handoff_cmd
+    from tokenpak.cli.commands.handoff import handoff_cmd
 
     handoff_cmd(args)
 
@@ -4793,7 +4793,7 @@ def _replay_store_path() -> str:
 
 
 def _get_replay_store():
-    from .agent.telemetry.replay import get_replay_store
+    from tokenpak.telemetry.replay import get_replay_store
 
     return get_replay_store(_replay_store_path())
 
@@ -5179,13 +5179,13 @@ Question: How does TokenPak save tokens and money?"""
 
 def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
-    from .agent.compression.recipes import get_oss_engine
+    from tokenpak.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
 
     # ── Demo data seeding
     if args.seed:
-        from .agent.telemetry.demo import seed_demo_data
+        from tokenpak.telemetry.demo import seed_demo_data
         result = seed_demo_data(count=args.seed_count, hours=args.seed_hours)
         print(f"✅ Seeded {result['events']} demo events")
         print(f"   Cache hit rate: {result['cache_hit_rate']*100:.1f}%")
@@ -5197,7 +5197,7 @@ def cmd_demo(args):
 
     if args.clear:
         """Clear all demo data from telemetry storage."""
-        from .agent.telemetry.demo import clear_demo_data
+        from tokenpak.telemetry.demo import clear_demo_data
         result = clear_demo_data()
         print(f"✅ Cleared {result['deleted_events']} demo events")
         print(f"   Remaining events: {result['remaining_events']}")
@@ -5269,7 +5269,7 @@ def cmd_demo(args):
 
 def cmd_recipe_create(args):
     """Scaffold a new custom recipe file."""
-    from .agent.recipe_sdk import RecipeSDK
+    from tokenpak.compression.recipe_sdk import RecipeSDK
 
     sdk = RecipeSDK()
     out = sdk.create(
@@ -5288,7 +5288,7 @@ def cmd_recipe_create(args):
 
 def cmd_recipe_validate(args):
     """Validate a recipe YAML file against the schema."""
-    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    from tokenpak.compression.recipe_sdk import RecipeSDK, RecipeValidationError
 
     sdk = RecipeSDK()
     try:
@@ -5306,7 +5306,7 @@ def cmd_recipe_validate(args):
 
 def cmd_recipe_test(args):
     """Test a recipe against sample input and show compression result."""
-    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    from tokenpak.compression.recipe_sdk import RecipeSDK, RecipeValidationError
 
     sdk = RecipeSDK()
     try:
@@ -5345,7 +5345,7 @@ def cmd_recipe_test(args):
 
 def cmd_recipe_benchmark(args):
     """Benchmark a recipe's compression ratio and throughput."""
-    from .agent.recipe_sdk import RecipeSDK, RecipeValidationError
+    from tokenpak.compression.recipe_sdk import RecipeSDK, RecipeValidationError
 
     sdk = RecipeSDK()
 
@@ -5398,7 +5398,7 @@ def cmd_recipe_benchmark(args):
 
 def cmd_run_cron(args):
     """Schedule a macro to run on a cron expression."""
-    from .agent.macros.scheduler import schedule_cron
+    from tokenpak.orchestration.macros.scheduler import schedule_cron
 
     scheduled = schedule_cron(
         name=args.name,
@@ -5412,7 +5412,7 @@ def cmd_run_cron(args):
 
 def cmd_run_at(args):
     """Schedule a macro to run once at a given time."""
-    from .agent.macros.scheduler import schedule_at
+    from tokenpak.orchestration.macros.scheduler import schedule_at
 
     scheduled = schedule_at(
         name=args.name,
@@ -5426,7 +5426,7 @@ def cmd_run_at(args):
 
 def cmd_run_list_scheduled(args):
     """List all scheduled macro runs."""
-    from .agent.macros.scheduler import list_scheduled
+    from tokenpak.orchestration.macros.scheduler import list_scheduled
 
     schedules = list_scheduled()
     if not schedules:
@@ -5440,7 +5440,7 @@ def cmd_run_list_scheduled(args):
 
 def cmd_run_cancel(args):
     """Cancel a scheduled macro run."""
-    from .agent.macros.scheduler import cancel_schedule
+    from tokenpak.orchestration.macros.scheduler import cancel_schedule
 
     ok = cancel_schedule(args.id)
     if ok:
@@ -5509,7 +5509,7 @@ def _build_run_parser(sub):
 
 def cmd_macro_install(args):
     """Install a premade macro."""
-    from .agent.macros.premade_macros import install_macro
+    from tokenpak.orchestration.macros.premade_macros import install_macro
 
     try:
         path = install_macro(args.name)
@@ -5522,8 +5522,8 @@ def cmd_macro_run(args):
     """Run a user-defined YAML macro or a premade macro."""
     import json as _json
 
-    from .agent.macros.engine import MacroEngine
-    from .agent.macros.premade_macros import PREMADE_MACROS, format_macro_output, run_macro
+    from tokenpak.orchestration.macros.engine import MacroEngine
+    from tokenpak.orchestration.macros.premade_macros import PREMADE_MACROS, format_macro_output, run_macro
 
     name = args.name
     dry_run = getattr(args, "dry_run", False)
@@ -5581,8 +5581,8 @@ def cmd_macro_run(args):
 
 def cmd_macro_list(args):
     """List all available macros (premade + user-defined YAML)."""
-    from .agent.macros.engine import MacroEngine
-    from .agent.macros.premade_macros import list_macros
+    from tokenpak.orchestration.macros.engine import MacroEngine
+    from tokenpak.orchestration.macros.premade_macros import list_macros
 
     print(f"{'NAME':<25} {'TYPE':<10} DESCRIPTION")
     print("-" * 75)
@@ -5605,7 +5605,7 @@ def cmd_macro_create(args):
     """Create a user-defined YAML macro."""
     from pathlib import Path as _Path
 
-    from .agent.macros.engine import MacroEngine
+    from tokenpak.orchestration.macros.engine import MacroEngine
 
     engine = MacroEngine()
 
@@ -5666,8 +5666,8 @@ def cmd_macro_show(args):
     """Show a macro definition."""
     import json as _json
 
-    from .agent.macros.engine import MacroEngine
-    from .agent.macros.premade_macros import PREMADE_MACROS
+    from tokenpak.orchestration.macros.engine import MacroEngine
+    from tokenpak.orchestration.macros.premade_macros import PREMADE_MACROS
 
     name = args.name
     engine = MacroEngine()
@@ -5710,7 +5710,7 @@ def cmd_macro_show(args):
 
 def cmd_macro_delete(args):
     """Delete a user-defined YAML macro."""
-    from .agent.macros.engine import MacroEngine
+    from tokenpak.orchestration.macros.engine import MacroEngine
 
     name = args.name
     engine = MacroEngine()
@@ -5733,7 +5733,7 @@ def cmd_macro_delete(args):
 
 def cmd_macro_hooks(args):
     """List, install, or check hook scripts."""
-    from .agent.macros.script_hooks import install_hook, list_hooks
+    from tokenpak.orchestration.macros.script_hooks import install_hook, list_hooks
 
     if args.hook_action == "list":
         hooks = list_hooks()

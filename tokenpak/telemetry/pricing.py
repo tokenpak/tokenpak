@@ -1,408 +1,419 @@
-"""pricing.py — Model pricing rates and savings calculations.
+"""Versioned pricing catalog and cost computation for TokenPak telemetry.
 
-Provides hardcoded rates for major AI models and utilities to compute
-compression + cache savings from proxy stats.
+The catalog is loaded from ``data/pricing_catalog.json`` (co-located with
+this package).  All pricing is expressed in USD per 1,000,000 tokens.
+
+Usage::
+
+    from tokenpak.telemetry.pricing import PricingCatalog
+    from tokenpak.telemetry.models import Cost
+
+    catalog = PricingCatalog.load()
+    cost = catalog.compute_cost(
+        trace_id="abc-123",
+        model="claude-sonnet-4-6",
+        baseline_input_tokens=50_000,
+        actual_input_tokens=32_000,
+        output_tokens=2_000,
+        cache_read=15_000,
+    )
+    # cost.actual_cost, cost.savings_total
+
+Anthropic cache multipliers (when not overridden by catalog entry):
+    cache_read  = 0.10 × input price per token
+    cache_write = 1.25 × input price per token
 """
 
 from __future__ import annotations
 
-from typing import Optional
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Any, Optional
 
-# Pricing per million tokens (input, cached, output)
-# Format: {"input": price, "cached": price, "output": price}
+from tokenpak.telemetry.models import Cost
 
-MODEL_RATES = {
-    "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
-    "claude-opus-4-6": {"input": 15.0, "cached": 1.50, "output": 75.0},
-    "claude-sonnet-4-5": {"input": 3.0, "cached": 0.30, "output": 15.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cached": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cached": 0.08, "output": 4.0},
-    "claude-haiku-4-6": {"input": 0.80, "cached": 0.08, "output": 4.0},
-    "gpt-4o": {"input": 2.50, "cached": 1.25, "output": 10.0},
-    "gpt-4o-mini": {"input": 0.15, "cached": 0.075, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "cached": 5.0, "output": 30.0},
-}
-
-# Default rates (use for unknown models)
-DEFAULT_RATE = {"input": 3.0, "cached": 0.30, "output": 15.0}  # sonnet default
+logger = logging.getLogger(__name__)
 
 
-def get_rates(model: Optional[str] = None) -> dict:
-    """Get pricing rates for a model. Falls back to DEFAULT_RATE if not found."""
-    if not model:
-        return DEFAULT_RATE
-    return MODEL_RATES.get(model, DEFAULT_RATE)
+# ---------------------------------------------------------------------------
+# Default Anthropic cache multipliers
+# ---------------------------------------------------------------------------
+
+_ANTHROPIC_CACHE_READ_MULT: float = 0.10
+_ANTHROPIC_CACHE_WRITE_MULT: float = 1.25
+
+_CATALOG_PATH = Path(__file__).parent / "data" / "pricing_catalog.json"
 
 
-def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
-    """Calculate compression + cache savings from proxy stats.
-
-    Args:
-        stats: Dict with keys like:
-            - tokens_raw: total input tokens (pre-compression)
-            - tokens_saved: tokens removed by compression
-            - cache_read_tokens: tokens served from cache
-            - cache_write_tokens: tokens written to cache
-            - model (optional): model name override
-
-        model: Optional model name override. If not provided, uses stats["model"].
-
-    Returns:
-        Dict with:
-            - compression_tokens_saved: tokens removed by compression
-            - compression_cost_saved: estimated $ saved by compression
-            - cache_hit_rate: percentage of requests from cache (if available)
-            - cache_tokens_saved: tokens served from cache instead of fresh
-            - cache_cost_saved: estimated $ saved by cache hits
-            - total_tokens_saved: compression + cache combined
-            - total_cost_saved: combined $ savings
-            - cost_without_tokenpak: estimated cost if no compression/cache
-            - cost_with_tokenpak: estimated cost with compression/cache
-            - reduction_percent: % cost reduction
-    """
-    # Determine model to use
-    model_name = model or stats.get("model")
-    rates = get_rates(model_name)
-
-    # Extract stats with defaults
-    tokens_raw = stats.get("tokens_raw", stats.get("input_tokens", 0))
-    tokens_saved_compression = stats.get("tokens_saved", 0)
-    cache_read_tokens = stats.get("cache_read_tokens", 0)
-    cache_write_tokens = stats.get("cache_write_tokens", 0)
-    session_requests = stats.get("session_requests", 0)
-
-    # Compression savings
-    compression_cost_saved = (tokens_saved_compression / 1_000_000) * rates["input"]
-
-    # Cache savings: cache_read_tokens are served at cached rate instead of input rate
-    # The "savings" is the difference between input rate and cached rate
-    cache_cost_saved = (cache_read_tokens / 1_000_000) * (rates["input"] - rates["cached"])
-
-    # Calculate "without TokenPak" cost (all tokens at input rate)
-    cost_without = (tokens_raw / 1_000_000) * rates["input"]
-
-    # Calculate "with TokenPak" cost
-    # After compression, remaining tokens + cache hits at cached rate
-    tokens_after_compression = tokens_raw - tokens_saved_compression
-    tokens_from_cache = cache_read_tokens
-    tokens_fresh = tokens_after_compression - tokens_from_cache
-
-    cost_with = (tokens_fresh / 1_000_000) * rates["input"] + (
-        tokens_from_cache / 1_000_000
-    ) * rates["cached"]
-
-    # Total savings
-    total_cost_saved = cost_without - cost_with
-    reduction_pct = (total_cost_saved / cost_without * 100.0) if cost_without > 0 else 0.0
-
-    # Cache hit rate
-    cache_hit_rate = (
-        (cache_read_tokens / tokens_after_compression * 100.0)
-        if tokens_after_compression > 0
-        else 0.0
-    )
-
-    return {
-        "compression_tokens_saved": tokens_saved_compression,
-        "compression_cost_saved": round(compression_cost_saved, 4),
-        "cache_hit_rate": round(cache_hit_rate, 1),
-        "cache_tokens_saved": cache_read_tokens,
-        "cache_cost_saved": round(cache_cost_saved, 4),
-        "total_tokens_saved": tokens_saved_compression + cache_read_tokens,
-        "total_cost_saved": round(total_cost_saved, 4),
-        "cost_without_tokenpak": round(cost_without, 4),
-        "cost_with_tokenpak": round(cost_with, 4),
-        "reduction_percent": round(reduction_pct, 1),
-    }
+def _per_token(per_million: float) -> float:
+    """Convert a per-1M price to a per-token price."""
+    return per_million / 1_000_000.0
 
 
-def calculate_request_cost(
-    model: str,
-    input_tokens: int,
-    cache_read_tokens: int = 0,
-    cache_creation_tokens: int = 0,
-    output_tokens: int = 0,
-) -> float:
-    """Calculate actual cost for a request routed through TokenPak."""
-    rates = get_rates(model)
-    input_rate = rates.get("input", 3.0)
-    output_rate = rates.get("output", 15.0)
-    cache_rate = rates.get("cached", input_rate * 0.1)
-
-    cost = (input_tokens / 1_000_000) * input_rate
-    cost += (cache_read_tokens / 1_000_000) * cache_rate
-    cost += (cache_creation_tokens / 1_000_000) * input_rate * 1.25
-    cost += (output_tokens / 1_000_000) * output_rate
-    return round(cost, 6)
-
-
-def calculate_request_cost_baseline(
-    model: str, total_input_tokens: int, output_tokens: int = 0
-) -> float:
-    """Calculate what a request would cost WITHOUT TokenPak (no cache, no compression)."""
-    rates = get_rates(model)
-    input_rate = rates.get("input", 3.0)
-    output_rate = rates.get("output", 15.0)
-
-    cost = (total_input_tokens / 1_000_000) * input_rate
-    cost += (output_tokens / 1_000_000) * output_rate
-    return round(cost, 6)
-
-
-def get_price(model: str, direction: str = "input") -> float:
-    """Get per-million-token price for a model and direction (input/output/cached)."""
-    rates = get_rates(model)
-    if direction == "output":
-        return rates.get("output", 15.0)
-    elif direction == "cached":
-        return rates.get("cached", 0.30)
-    return rates.get("input", 3.0)
-
-
-def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict:
-    """Calculate real dollar savings from the monitor DB using per-model rates.
-
-    Args:
-        db_path: Path to monitor.db SQLite file.
-        period: Time window — "1h", "24h", "7d", "30d", or None (all-time).
-
-    Returns:
-        Dict with total_requests, cost_without_tokenpak, cost_with_tokenpak,
-        total_saved, reduction_percent, per_model list, and velocity sub-dict.
-    """
-    import sqlite3
-    from datetime import datetime, timedelta, timezone
-
-    # Build period filter
-    period_map = {"1h": timedelta(hours=1), "24h": timedelta(hours=24),
-                  "7d": timedelta(days=7), "30d": timedelta(days=30)}
-    where_clause = ""
-    if period and period in period_map:
-        cutoff = (datetime.now(timezone.utc) - period_map[period]).strftime(
-            "%Y-%m-%dT%H:%M:%S"
-        )
-        where_clause = f"WHERE timestamp >= '{cutoff}'"
-
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-
-        rows = cur.execute(
-            f"""
-            SELECT model,
-                   COUNT(*) AS requests,
-                   COALESCE(SUM(input_tokens), 0) AS input_tokens,
-                   COALESCE(SUM(output_tokens), 0) AS output_tokens,
-                   COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-                   COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-                   COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens
-            FROM requests
-            {where_clause}
-            GROUP BY model
-            ORDER BY requests DESC
-            """
-        ).fetchall()
-    except Exception:
-        rows = []
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-    per_model = []
-    total_cost_without = 0.0
-    total_cost_with = 0.0
-    total_requests = 0
-
-    for row in rows:
-        rates = get_rates(row["model"])
-        inp = row["input_tokens"]
-        out = row["output_tokens"]
-        cache_r = row["cache_read_tokens"]
-        cache_c = row["cache_creation_tokens"]
-
-        # "Without" cost: all tokens (input + cache_read) at full input rate + output
-        cost_without = (
-            (inp + cache_r) / 1_000_000 * rates["input"]
-            + out / 1_000_000 * rates["output"]
-            + cache_c / 1_000_000 * rates["input"] * 1.25
-        )
-
-        # "With" cost: input at input rate + cache_read at cached rate + output + cache_creation
-        cost_with = (
-            inp / 1_000_000 * rates["input"]
-            + cache_r / 1_000_000 * rates["cached"]
-            + out / 1_000_000 * rates["output"]
-            + cache_c / 1_000_000 * rates["input"] * 1.25
-        )
-
-        saved = cost_without - cost_with
-        total_input_plus_cache = inp + cache_r
-        cache_hit_pct = (
-            cache_r / total_input_plus_cache * 100.0 if total_input_plus_cache > 0 else 0.0
-        )
-        reduction_pct = saved / cost_without * 100.0 if cost_without > 0 else 0.0
-
-        per_model.append({
-            "model": row["model"],
-            "requests": row["requests"],
-            "cost": round(cost_with, 4),
-            "cost_without": round(cost_without, 4),
-            "saved": round(saved, 4),
-            "cache_hit_percent": round(cache_hit_pct, 1),
-            "reduction_percent": round(reduction_pct, 1),
-        })
-
-        total_cost_without += cost_without
-        total_cost_with += cost_with
-        total_requests += row["requests"]
-
-    total_saved = total_cost_without - total_cost_with
-    reduction_pct = total_saved / total_cost_without * 100.0 if total_cost_without > 0 else 0.0
-
-    # Velocity: compute last_hour, last_24h, all_time regardless of period filter
-    def _saved_for_window(window_clause: str) -> float:
-        try:
-            conn2 = sqlite3.connect(db_path)
-            conn2.row_factory = sqlite3.Row
-            wrows = conn2.execute(
-                f"""
-                SELECT model,
-                       COALESCE(SUM(input_tokens), 0) AS input_tokens,
-                       COALESCE(SUM(output_tokens), 0) AS output_tokens,
-                       COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-                       COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
-                FROM requests
-                {window_clause}
-                GROUP BY model
-                """
-            ).fetchall()
-            conn2.close()
-        except Exception:
-            return 0.0
-        total = 0.0
-        for r in wrows:
-            rt = get_rates(r["model"])
-            cw = (r["cache_read_tokens"] / 1_000_000) * (rt["input"] - rt["cached"])
-            total += cw
-        return round(total, 4)
-
-    now = datetime.now(timezone.utc)
-    cutoff_1h = (now - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    cutoff_24h = (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
-
-    velocity = {
-        "last_hour_saved": _saved_for_window(f"WHERE timestamp >= '{cutoff_1h}'"),
-        "last_24h_saved": _saved_for_window(f"WHERE timestamp >= '{cutoff_24h}'"),
-        "all_time_saved": _saved_for_window(""),
-    }
-
-    return {
-        "period": period or "all-time",
-        "total_requests": total_requests,
-        "cost_without_tokenpak": round(total_cost_without, 4),
-        "cost_with_tokenpak": round(total_cost_with, 4),
-        "total_saved": round(total_saved, 4),
-        "reduction_percent": round(reduction_pct, 1),
-        "per_model": per_model,
-        "velocity": velocity,
-    }
-
-
-def calculate_savings_breakdown(per_model_data: list) -> dict:
-    """Break down savings by type: cache optimization vs token compression.
-
-    Args:
-        per_model_data: The per_model list from calculate_fleet_savings().
-
-    Returns:
-        Dict with cache_optimization, token_compression, and total savings in $.
-    """
-    # All savings in per_model are from cache hits (cache_read at cached vs input rate).
-    # Compression savings are not separately tracked in the current DB schema
-    # (compressed_tokens column is present but represents tokens after compression).
-    # We attribute all measurable savings to cache_optimization.
-    cache_savings = sum(entry.get("saved", 0.0) for entry in per_model_data)
-    compression_savings = 0.0  # would need pre/post compression token counts per request
-
-    return {
-        "cache_optimization": round(cache_savings, 4),
-        "token_compression": round(compression_savings, 4),
-        "total": round(cache_savings + compression_savings, 4),
-    }
-
-
-def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
-    """Compute savings summary from proxy session stats and per-model breakdown.
+class ModelPricing:
+    """Pricing record for a single model.
 
     Parameters
     ----------
-    stats : dict
-        Aggregate session stats (keys: requests, input_tokens, sent_input_tokens,
-        saved_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-        cost, cache_hits, cache_misses, …).
-    by_model : dict
-        Per-model breakdown (model name → same keys as stats).
+    model:
+        Model identifier (as it appears in the catalog).
+    provider:
+        Provider name (``"anthropic"``, ``"openai"``, ``"gemini"``).
+    input_per_token:
+        USD cost per input token.
+    output_per_token:
+        USD cost per output token.
+    cache_read_per_token:
+        USD cost per cache-read token (``None`` if caching not supported).
+    cache_write_per_token:
+        USD cost per cache-write token (``None`` if caching not supported).
+    """
+
+    def __init__(
+        self,
+        model: str,
+        provider: str,
+        input_per_token: float,
+        output_per_token: float,
+        cache_read_per_token: Optional[float],
+        cache_write_per_token: Optional[float],
+    ) -> None:
+        self.model = model
+        self.provider = provider
+        self.input_per_token = input_per_token
+        self.output_per_token = output_per_token
+        self.cache_read_per_token = cache_read_per_token
+        self.cache_write_per_token = cache_write_per_token
+
+    @classmethod
+    def from_dict(cls, model: str, data: dict[str, Any]) -> "ModelPricing":
+        """Construct from a catalog ``models`` entry dict.
+
+        ``cache_read`` / ``cache_write`` may be ``None`` (not supported) or
+        a float value in USD per 1M tokens.
+        """
+        provider = data.get("provider", "unknown")
+        input_pm = float(data.get("input", 0.0))
+        output_pm = float(data.get("output", 0.0))
+
+        cr_pm = data.get("cache_read")
+        cw_pm = data.get("cache_write")
+
+        cache_read = _per_token(float(cr_pm)) if cr_pm is not None else None
+        cache_write = _per_token(float(cw_pm)) if cw_pm is not None else None
+
+        return cls(
+            model=model,
+            provider=provider,
+            input_per_token=_per_token(input_pm),
+            output_per_token=_per_token(output_pm),
+            cache_read_per_token=cache_read,
+            cache_write_per_token=cache_write,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"ModelPricing(model={self.model!r}, provider={self.provider!r}, "
+            f"input={self.input_per_token * 1e6:.4f}/1M, "
+            f"output={self.output_per_token * 1e6:.4f}/1M)"
+        )
+
+
+class PricingCatalog:
+    """Versioned pricing catalog loaded from ``pricing_catalog.json``.
+
+    Attributes
+    ----------
+    version:
+        Catalog version string (from ``_meta.version``).
+    models:
+        Dict mapping model identifiers to :class:`ModelPricing` records.
+
+    Examples
+    --------
+    >>> catalog = PricingCatalog.load()
+    >>> cost = catalog.compute_cost(
+    ...     trace_id="t1",
+    ...     model="claude-sonnet-4-6",
+    ...     baseline_input_tokens=100_000,
+    ...     actual_input_tokens=60_000,
+    ...     output_tokens=5_000,
+    ...     cache_read=20_000,
+    ... )
+    """
+
+    def __init__(
+        self,
+        version: str,
+        models: dict[str, ModelPricing],
+    ) -> None:
+        self.version = version
+        self.models: dict[str, ModelPricing] = models
+
+    # ------------------------------------------------------------------
+    # Constructors
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def load(cls, path: Optional[os.PathLike] = None) -> "PricingCatalog":
+        """Load and parse the pricing catalog from *path*.
+
+        If *path* is ``None`` the bundled ``data/pricing_catalog.json`` is
+        used.
+
+        Raises
+        ------
+        FileNotFoundError:
+            If the catalog file cannot be found.
+        ValueError:
+            If the catalog JSON is malformed.
+        """
+        catalog_path = Path(path) if path is not None else _CATALOG_PATH
+        if not catalog_path.exists():
+            raise FileNotFoundError(f"Pricing catalog not found: {catalog_path}")
+        with catalog_path.open("r", encoding="utf-8") as fh:
+            raw: dict[str, Any] = json.load(fh)
+
+        if "models" not in raw:
+            raise ValueError(f"Pricing catalog at {catalog_path} is missing a 'models' key.")
+
+        meta: dict[str, Any] = raw.get("_meta", {})
+        version: str = meta.get("version", "v1")
+
+        models: dict[str, ModelPricing] = {}
+        for model_id, entry in raw["models"].items():
+            models[model_id] = ModelPricing.from_dict(model_id, entry)
+
+        return cls(version=version, models=models)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PricingCatalog":
+        """Construct a catalog from an already-parsed dict (useful in tests)."""
+        meta = data.get("_meta", {})
+        version = meta.get("version", "v1")
+        models: dict[str, ModelPricing] = {}
+        for model_id, entry in data.get("models", {}).items():
+            models[model_id] = ModelPricing.from_dict(model_id, entry)
+        return cls(version=version, models=models)
+
+    # ------------------------------------------------------------------
+    # Lookups
+    # ------------------------------------------------------------------
+
+    def get_model(self, model: str) -> Optional[ModelPricing]:
+        """Return pricing for *model*, or ``None`` if not in catalog.
+
+        Uses fuzzy matching: tries exact match first, then strips date
+        suffixes, then finds longest prefix match.
+        """
+        resolved = self._resolve_model(model)
+        if resolved is None:
+            return None
+        return self.models.get(resolved)
+
+    def known_models(self) -> list[str]:
+        """Return a sorted list of all model identifiers in the catalog."""
+        return sorted(self.models.keys())
+
+    def _resolve_model(self, model: str) -> Optional[str]:
+        """Resolve model name with fuzzy matching.
+
+        Resolution order:
+        1. Exact match in catalog
+        2. Strip date suffix (e.g. ``-20250514``) and retry
+        3. Longest prefix match from catalog keys
+
+        Parameters
+        ----------
+        model:
+            Model identifier to resolve.
+
+        Returns
+        -------
+        str or None
+            Resolved model identifier, or ``None`` if no match found.
+        """
+        # 1. Exact match
+        if model in self.models:
+            return model
+
+        # 2. Strip date suffix (e.g. claude-opus-4-6-20250514 -> claude-opus-4-6)
+        base = re.sub(r"-\d{8}$", "", model)
+        if base in self.models:
+            logger.debug("Fuzzy match: %s -> %s (stripped date suffix)", model, base)
+            return base
+
+        # 3. Longest prefix match
+        # Try models where either model starts with catalog key
+        # or catalog key starts with model's base prefix
+        matches: list[str] = []
+        model_parts = model.split("-")
+        for key in self.models:
+            # catalog key is prefix of model
+            if model.startswith(key):
+                matches.append(key)
+            # model base (first 2 parts) is prefix of catalog key
+            elif len(model_parts) >= 2:
+                base_prefix = "-".join(model_parts[:2])
+                if key.startswith(base_prefix):
+                    matches.append(key)
+
+        if matches:
+            resolved = max(matches, key=len)
+            logger.debug("Fuzzy match: %s -> %s (prefix match)", model, resolved)
+            return resolved
+
+        logger.warning("Unknown model: %s (no pricing available)", model)
+        return None
+
+    # ------------------------------------------------------------------
+    # Cost computation
+    # ------------------------------------------------------------------
+
+    def compute_cost(
+        self,
+        model: str,
+        baseline_input_tokens: int,
+        actual_input_tokens: int,
+        output_tokens: int,
+        cache_read: int = 0,
+        cache_write: int = 0,
+        trace_id: str = "",
+        savings_qmd: float = 0.0,
+        savings_tp: float = 0.0,
+    ) -> Cost:
+        """Compute cost and compression savings for a single LLM call.
+
+        Parameters
+        ----------
+        model:
+            Model identifier.  If unknown, costs are returned as zero with
+            ``pricing_version="unknown"``.
+        baseline_input_tokens:
+            Token count *before* any compression (for savings calculation).
+        actual_input_tokens:
+            Token count *after* compression, actually sent to the model.
+        output_tokens:
+            Output tokens billed by the provider.
+        cache_read:
+            Tokens served from the provider cache (read hit).
+        cache_write:
+            Tokens written to the provider cache.
+        trace_id:
+            Parent trace identifier copied into the returned :class:`Cost`.
+        savings_qmd:
+            Savings (USD) to attribute to QMD compression pass.
+        savings_tp:
+            Savings (USD) to attribute to TokenPak compression pass.
+
+        Returns
+        -------
+        Cost
+            Populated :class:`~tokenpak.telemetry.models.Cost` instance.
+        """
+        resolved = self._resolve_model(model)
+        if resolved is None:
+            # Unknown model — return zero-cost record
+            return Cost(
+                trace_id=trace_id,
+                pricing_version="unknown",
+                baseline_input_tokens=baseline_input_tokens,
+                actual_input_tokens=actual_input_tokens,
+                output_tokens=output_tokens,
+            )
+        pricing = self.models[resolved]
+
+        # --- baseline cost (no compression, no cache) -------------------
+        baseline_cost = (
+            baseline_input_tokens * pricing.input_per_token
+            + output_tokens * pricing.output_per_token
+        )
+
+        # --- actual cost ------------------------------------------------
+        # Input tokens are billed at the standard rate; cache-read tokens
+        # are billed at the (lower) cache-read rate; cache-write tokens are
+        # billed at the (higher) cache-write rate.
+        cr_rate = pricing.cache_read_per_token if pricing.cache_read_per_token is not None else 0.0
+        cw_rate = (
+            pricing.cache_write_per_token if pricing.cache_write_per_token is not None else 0.0
+        )
+
+        # Actual input = tokens sent minus cache-read tokens (already cached)
+        effective_input = max(0, actual_input_tokens - cache_read)
+        actual_cost = (
+            effective_input * pricing.input_per_token
+            + cache_read * cr_rate
+            + cache_write * cw_rate
+            + output_tokens * pricing.output_per_token
+        )
+
+        savings_total = max(0.0, baseline_cost - actual_cost)
+
+        return Cost(
+            trace_id=trace_id,
+            pricing_version=self.version,
+            baseline_input_tokens=baseline_input_tokens,
+            actual_input_tokens=actual_input_tokens,
+            output_tokens=output_tokens,
+            baseline_cost=baseline_cost,
+            actual_cost=actual_cost,
+            savings_total=savings_total,
+            savings_qmd=savings_qmd,
+            savings_tp=savings_tp,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience helpers
+# ---------------------------------------------------------------------------
+
+_default_catalog: Optional["PricingCatalog"] = None
+
+
+def _get_default_catalog() -> "PricingCatalog":
+    """Return the bundled pricing catalog (cached singleton)."""
+    global _default_catalog
+    if _default_catalog is None:
+        _default_catalog = PricingCatalog.load()
+    return _default_catalog
+
+
+def compute_baseline_cost(model: str, raw_input_tokens: int) -> float:
+    """Compute the hypothetical (no-compression) input cost for a model.
+
+    This is the **"what would naive RAG have cost?"** number — the raw
+    input-token count priced at the model's standard input rate with no
+    cache or compression discounts applied.
+
+    Parameters
+    ----------
+    model:
+        Model identifier (fuzzy-matched against the pricing catalog).
+    raw_input_tokens:
+        Token count *before* any compression / cache discounts.
 
     Returns
     -------
-    dict with keys:
-        cost_without_tokenpak, cost_with_tokenpak, total_saved,
-        cache_saved, compression_saved, routing_saved,
-        total_saved_pct, cache_hit_rate, total_requests, per_model.
+    float
+        Hypothetical cost in USD.  Returns ``0.0`` if the model is not in
+        the pricing catalog (with a warning logged).
+
+    Examples
+    --------
+    >>> cost = compute_baseline_cost("claude-opus-4-6", 50_000)
+    >>> print(f"${cost:.4f}")   # ~ $0.75 at $15/1M
     """
-    requests = stats.get("requests", 0)
-    cache_hits = stats.get("cache_hits", 0)
-    cache_misses = stats.get("cache_misses", requests)
-    total_reqs = requests or 1
-    cache_hit_rate = cache_hits / total_reqs
+    if raw_input_tokens <= 0:
+        return 0.0
 
-    input_tokens = stats.get("input_tokens", 0)
-    sent_input_tokens = stats.get("sent_input_tokens", input_tokens)
-    saved_tokens = stats.get("saved_tokens", input_tokens - sent_input_tokens)
-    output_tokens = stats.get("output_tokens", 0)
-    cost_with = stats.get("cost", 0.0)
+    catalog = _get_default_catalog()
+    pricing = catalog.get_model(model)
 
-    # Estimate cost without tokenpak from raw input tokens
-    default_model = "claude-sonnet-4-6"
-    in_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("input", DEFAULT_RATE)
-    out_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("output", DEFAULT_RATE)
-    cost_without = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000
+    if pricing is None:
+        logger.warning("compute_baseline_cost: unknown model %r — returning 0.0", model)
+        return 0.0
 
-    # Estimate per-component savings
-    compression_saved = (saved_tokens * in_rate) / 1_000_000 if saved_tokens else 0.0
-    cache_saved = max(0.0, cost_without - cost_with - compression_saved)
-    routing_saved = 0.0  # routing savings not tracked at this level
-
-    total_saved = max(0.0, cost_without - cost_with)
-    total_saved_pct = (total_saved / cost_without * 100) if cost_without > 0 else 0.0
-
-    # Per-model breakdown
-    per_model = {}
-    for model, mstats in by_model.items():
-        m_in = mstats.get("input_tokens", 0)
-        m_out = mstats.get("output_tokens", 0)
-        m_in_rate = MODEL_RATES.get(model, {}).get("input", DEFAULT_RATE)
-        m_out_rate = MODEL_RATES.get(model, {}).get("output", DEFAULT_RATE)
-        m_cost_without = (m_in * m_in_rate + m_out * m_out_rate) / 1_000_000
-        m_cost_with = mstats.get("cost", 0.0)
-        per_model[model] = {
-            "cost_without_tokenpak": m_cost_without,
-            "cost_with_tokenpak": m_cost_with,
-            "total_saved": max(0.0, m_cost_without - m_cost_with),
-        }
-
-    return {
-        "cost_without_tokenpak": cost_without,
-        "cost_with_tokenpak": cost_with,
-        "total_saved": total_saved,
-        "cache_saved": cache_saved,
-        "compression_saved": compression_saved,
-        "routing_saved": routing_saved,
-        "total_saved_pct": total_saved_pct,
-        "cache_hit_rate": cache_hit_rate,
-        "total_requests": requests,
-        "per_model": per_model,
-    }
+    return raw_input_tokens * pricing.input_per_token

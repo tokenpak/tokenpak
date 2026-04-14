@@ -15,7 +15,7 @@ except ImportError:
     APIRouter = None  # type: ignore
     Query = None  # type: ignore
 
-from tokenpak.telemetry.query import (
+from tokenpak.telemetry.query_dsl import (
     get_cost_summary,
     get_daily_trend,
     get_model_usage,

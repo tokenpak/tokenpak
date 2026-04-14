@@ -10,10 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from .schemas.artifact import ArtifactSchema
-from .schemas.chunk import ChunkSchema
-from .schemas.retrieval_cache import RetrievalCacheSchema
-from .schemas.source_map import SourceMapSchema
+from tokenpak.core.schemas.artifact import ArtifactSchema
+from tokenpak.core.schemas.chunk import ChunkSchema
+from tokenpak.core.schemas.retrieval_cache import RetrievalCacheSchema
+from tokenpak.core.schemas.source_map import SourceMapSchema
 
 
 class ArtifactStore:

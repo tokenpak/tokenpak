@@ -19,8 +19,8 @@ import time
 import uuid
 from pathlib import Path
 
-from .telemetry.models import Cost, Segment, TelemetryEvent, Usage
-from .telemetry.storage import TelemetryDB
+from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
+from tokenpak.telemetry.storage import TelemetryDB
 
 
 def get_demo_db_path() -> str:

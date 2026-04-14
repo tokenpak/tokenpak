@@ -64,7 +64,7 @@ def _proxy_get(path: str, port: int = None) -> dict | None:
 def _get_model_compression_breakdown() -> list:
     """Fetch per-model compression breakdown from telemetry. Returns [] on error."""
     try:
-        from .telemetry.query import get_model_compression_breakdown
+        from tokenpak.telemetry.query import get_model_compression_breakdown
 
         rows = get_model_compression_breakdown(days=1)
         return [
@@ -84,7 +84,7 @@ def _get_model_compression_breakdown() -> list:
 def _get_savings_report() -> dict:
     """Get historical savings data from telemetry."""
     try:
-        from .telemetry.query import get_savings_report
+        from tokenpak.telemetry.query import get_savings_report
 
         report = get_savings_report(days=1)
         return {
@@ -140,7 +140,7 @@ def _calculate_data() -> DailySavingsData:
     top_model = "unknown"
     top_model_savings = 0.0
     try:
-        from .telemetry.query import get_model_usage
+        from tokenpak.telemetry.query import get_model_usage
 
         usage = get_model_usage(days=1)
         if usage:

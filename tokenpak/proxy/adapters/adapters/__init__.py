@@ -8,7 +8,7 @@ from .grok_adapter import GrokAdapter
 from .openai_chat_adapter import OpenAIChatAdapter
 from .openai_responses_adapter import OpenAIResponsesAdapter
 from .passthrough_adapter import PassthroughAdapter
-from .registry import AdapterRegistry
+from tokenpak.proxy.adapters.registry import AdapterRegistry
 
 
 def build_default_registry() -> AdapterRegistry:

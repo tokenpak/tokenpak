@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .elo import DEFAULT_ELO_PATH, EloRatings
+from tokenpak.telemetry.elo import DEFAULT_ELO_PATH, EloRatings
 from .routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
 
 # ---------------------------------------------------------------------------

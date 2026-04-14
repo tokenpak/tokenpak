@@ -884,7 +884,7 @@ def _run_single_compression_test(
       - time_ms
       - recipe_hits (list of recipe names that matched)
     """
-    from .agent.compression.recipes import get_oss_engine
+    from tokenpak.compression.recipes import get_oss_engine
 
     engine = get_oss_engine()
 

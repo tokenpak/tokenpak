@@ -39,7 +39,7 @@ from .prefix_registry import (
     get_registry,
     reset_registry,
 )
-from .registry import CacheRegistry
+from tokenpak.cache.registry import CacheRegistry
 from .semantic_cache import (
     SemanticCache,
     SemanticCacheConfig,

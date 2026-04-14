@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from .registry import AgentInfo, AgentRegistry, get_registry
+from tokenpak.orchestration.registry import AgentInfo, AgentRegistry, get_registry
 
 
 @dataclass
