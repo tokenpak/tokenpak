@@ -1,0 +1,5 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-04-14T09:00:00.000Z","sessionId":"test-session-003","content":"Hello world"}
+{not valid json at all
+{"type":"user","message":{"role":"user","content":"Valid line after malformed"},"uuid":"user-004","timestamp":"2026-04-14T09:00:01.000Z","sessionId":"test-session-003"}
+incomplete line without closing brace
+{"type":"last-prompt","lastPrompt":"Hello world","sessionId":"test-session-003"}
