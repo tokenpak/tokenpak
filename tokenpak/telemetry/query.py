@@ -177,19 +177,28 @@ def get_model_usage(db_path=None, days=30) -> list[ModelUsage]:
 
 
 def get_savings_report(db_path=None, days=30) -> SavingsReport:
-    """Query token savings (raw vs compressed) from the telemetry DB."""
+    """Query token savings (raw vs compressed) from the telemetry DB.
+
+    Only counts savings from proxy-managed routes (where tokenpak actually
+    caused the cost reduction).  Client-managed routes (e.g. ``claude-code``)
+    are excluded from ``savings_amount`` because their caching is done by the
+    client, not by tokenpak.
+    """
     import sqlite3
     conn = _get_conn(db_path)
     try:
         s, e = _ts_range(days)
         cur = conn.cursor()
         try:
+            # Exclude client-managed routes from savings attribution.
+            # COALESCE(e.route, '') handles rows written before the route column existed.
             cur.execute(
-                "SELECT COALESCE(SUM(c.actual_cost),0) as tc, COALESCE(SUM(c.baseline_cost),0) as bc, COALESCE(SUM(c.savings_total),0) as sv FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
+                "SELECT COALESCE(SUM(c.actual_cost),0) as tc, COALESCE(SUM(c.baseline_cost),0) as bc, COALESCE(SUM(CASE WHEN COALESCE(e.route,'') != 'claude-code' THEN c.savings_total ELSE 0 END),0) as sv FROM tp_costs c JOIN tp_events e ON c.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
                 (s, e),
             )
             r = cur.fetchone()
             tc, bc, sv = r["tc"] or 0, r["bc"] or 0, r["sv"] or 0
+            # Cache hit rate is still reported for observability (all routes)
             cur.execute(
                 "SELECT COALESCE(SUM(u.cache_read),0) as cr, COALESCE(SUM(u.input_billed+u.cache_read),0) as ti FROM tp_usage u JOIN tp_events e ON u.trace_id=e.trace_id WHERE e.ts>=? AND e.ts<=? AND e.event_type='request_end'",
                 (s, e),
@@ -274,7 +283,7 @@ def get_model_compression_breakdown(db_path=None, days=1) -> list[ModelCompressi
                     COUNT(*) AS req_count,
                     COALESCE(AVG(c.baseline_input_tokens), 0) AS avg_raw,
                     COALESCE(AVG(u.input_billed), 0) AS avg_final,
-                    COALESCE(SUM(c.savings_total), 0) AS savings,
+                    COALESCE(SUM(CASE WHEN COALESCE(e.route,'') != 'claude-code' THEN c.savings_total ELSE 0 END), 0) AS savings,
                     COALESCE(SUM(c.baseline_input_tokens - u.input_billed), 0) AS tokens_saved
                 FROM tp_events e
                 LEFT JOIN tp_costs c ON e.trace_id = c.trace_id

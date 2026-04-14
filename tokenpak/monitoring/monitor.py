@@ -79,8 +79,8 @@ def _db_writer_worker() -> None:
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,
-                            cache_creation_tokens,would_have_saved)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            cache_creation_tokens,would_have_saved,route)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -142,7 +142,8 @@ class Monitor:
                 injected_sources TEXT DEFAULT '',
                 cache_read_tokens INTEGER DEFAULT 0,
                 cache_creation_tokens INTEGER DEFAULT 0,
-                would_have_saved INTEGER DEFAULT 0
+                would_have_saved INTEGER DEFAULT 0,
+                route TEXT DEFAULT ''
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
@@ -153,6 +154,7 @@ class Monitor:
             ("cache_read_tokens", "INTEGER DEFAULT 0"),
             ("cache_creation_tokens", "INTEGER DEFAULT 0"),
             ("would_have_saved", "INTEGER DEFAULT 0"),
+            ("route", "TEXT DEFAULT ''"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE requests ADD COLUMN {col} {typedef}")
@@ -191,6 +193,7 @@ class Monitor:
         cache_read_tokens: int = 0,
         cache_creation_tokens: int = 0,
         would_have_saved: int = 0,
+        route: str = "",
     ) -> None:
         """Log a single request observation."""
         params = (
@@ -211,6 +214,7 @@ class Monitor:
             cache_read_tokens,
             cache_creation_tokens,
             would_have_saved,
+            route or "",
         )
         if _DB_WRITE_QUEUE is not None and not _DB_WRITE_QUEUE.full():
             _DB_WRITE_QUEUE.put((self.db_path, params))
@@ -221,8 +225,8 @@ class Monitor:
                    (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                     latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                     compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,
-                    cache_creation_tokens,would_have_saved)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    cache_creation_tokens,would_have_saved,route)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 params,
             )
             _conn.commit()

@@ -110,6 +110,16 @@ def is_compaction_enabled(route: str) -> bool:
     return get_policy(route)["compaction"] == "enabled"
 
 
+def is_cache_client_managed(route: str) -> bool:
+    """Convenience: does the client manage its own caching for this route?
+
+    When True, cache hits reported by the upstream provider were caused by the
+    client (e.g. Claude Code setting its own ``cache_control`` blocks), NOT by
+    tokenpak.  Savings reports must not attribute these cache hits to tokenpak.
+    """
+    return get_policy(route)["cache_control"] == "client_managed"
+
+
 def platform_tag(route: str) -> str:
     """Convenience: get the telemetry platform tag for this route."""
     return get_policy(route)["platform_tag"]

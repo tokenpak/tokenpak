@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS tp_events (
     payload         TEXT NOT NULL DEFAULT '{}',
     span_id         TEXT NOT NULL DEFAULT '',
     node_id         TEXT NOT NULL DEFAULT '',
+    route           TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (trace_id, request_id, event_type)
 );
 
@@ -290,6 +291,8 @@ class TelemetryDB:
         # PRD additions
         _add_col("tp_events", "span_id", "TEXT NOT NULL DEFAULT ''")
         _add_col("tp_events", "node_id", "TEXT NOT NULL DEFAULT ''")
+        # Route classification — needed to separate client-managed vs proxy-managed savings
+        _add_col("tp_events", "route", "TEXT NOT NULL DEFAULT ''")
 
         # ----------------------------------------------------------------
         # tp_segments — PRD additions
@@ -354,8 +357,8 @@ class TelemetryDB:
         INSERT OR REPLACE INTO tp_events
             (trace_id, request_id, event_type, ts, provider, model,
              agent_id, api, stop_reason, session_id, duration_ms,
-             status, error_class, payload, span_id, node_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             status, error_class, payload, span_id, node_id, route)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """
         rows = [
             (
@@ -375,6 +378,7 @@ class TelemetryDB:
                 e.payload_json(),
                 e.span_id,
                 e.node_id,
+                e.route,
             )
             for e in events
         ]
