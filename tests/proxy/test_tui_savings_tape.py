@@ -3,16 +3,18 @@ tests/proxy/test_tui_savings_tape.py
 
 CCI-14: Real-time TUI savings tape (chat footer hook).
 
-Four cases covering the required completion criteria:
+Six cases covering all acceptance criteria:
   A — Tape appears in SSE stream for TUI profile (streaming, CHAT_FOOTER_ENABLED=True)
-  B — Tape suppressed when savings data is zero
+  B — Tape suppressed when savings data is zero (formatter returns None)
   C — Tape format matches the spec (unit test of _format_tui_savings_tape)
   D — Tape does not appear for non-TUI profiles (TUI_SAVINGS_TAPE_ENABLED=False)
+  E — Graceful degradation: shows "tokenpak: active" when formatter raises exception
+  F — TOKENPAK_CHAT_FOOTER=false (CHAT_FOOTER_ENABLED=False) disables the tape
 
 Notes:
   - Real proxy (ForwardProxyHandler) + stub upstream, no Anthropic API calls.
   - Module-level flags are patched per test; SESSION reset between tests.
-  - _format_tui_savings_tape is patched for injection tests (A, B, D) to avoid
+  - _format_tui_savings_tape is patched for injection tests (A, B, D, E, F) to avoid
     depending on real compression being active in the test environment.
   - TestCaseC tests the formatter directly as a unit test.
 """
@@ -339,4 +341,58 @@ class TestCaseD_TapeAbsentForNonTuiProfile:
         assert b"tokenpak:" not in data, (
             "Savings tape must NOT appear when TUI_SAVINGS_TAPE_ENABLED=False. "
             f"Stream tail: {data[-300:]!r}"
+        )
+
+
+# ===========================================================================
+# Case E — Graceful degradation: "tokenpak: active" fallback on exception
+# ===========================================================================
+
+
+class TestCaseE_GracefulDegradationFallback:
+    """When formatter raises an exception, shows 'tokenpak: active' fallback."""
+
+    def test_active_fallback_on_formatter_exception(self, proxy_and_stub):
+        proxy_port, stub_port = proxy_and_stub
+        body = _make_body(stream=True)
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("simulated savings data unavailable")
+
+        with (
+            patch.object(_proxy, "CHAT_FOOTER_ENABLED", True),
+            patch.object(_proxy, "TUI_SAVINGS_TAPE_ENABLED", True),
+            patch.object(_proxy, "_format_tui_savings_tape", side_effect=_raise),
+        ):
+            _status, _hdrs, data = _send_raw(proxy_port, stub_port, body)
+
+        # Falls back to "tokenpak: active" — JSON-encoded inside the SSE event
+        assert b"tokenpak: active" in data or b"tokenpak:\\u0020active" in data, (
+            "Expected 'tokenpak: active' fallback when formatter raises exception. "
+            f"SSE tail: {data[-400:]!r}"
+        )
+
+
+# ===========================================================================
+# Case F — CHAT_FOOTER_ENABLED=False disables the tape
+# ===========================================================================
+
+
+class TestCaseF_ChatFooterFlagDisables:
+    """TOKENPAK_CHAT_FOOTER=false (CHAT_FOOTER_ENABLED=False) disables the savings tape."""
+
+    def test_tape_absent_when_chat_footer_disabled(self, proxy_and_stub):
+        proxy_port, stub_port = proxy_and_stub
+        body = _make_body(stream=True)
+
+        with (
+            patch.object(_proxy, "CHAT_FOOTER_ENABLED", False),  # TOKENPAK_CHAT_FOOTER=false
+            patch.object(_proxy, "TUI_SAVINGS_TAPE_ENABLED", True),
+            patch.object(_proxy, "_format_tui_savings_tape", return_value=_TAPE_FIXED),
+        ):
+            _status, _hdrs, data = _send_raw(proxy_port, stub_port, body)
+
+        assert b"tokenpak:" not in data, (
+            "Expected NO savings tape when CHAT_FOOTER_ENABLED=False. "
+            f"SSE tail: {data[-400:]!r}"
         )

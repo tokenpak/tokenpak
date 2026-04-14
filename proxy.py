@@ -9100,10 +9100,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                                     # CCI-14: TUI savings tape — replace footer with single-line format
                                     if TUI_SAVINGS_TAPE_ENABLED:
                                         _vault_blocks_14 = len(injected_sources)
-                                        _tape14 = _format_tui_savings_tape(
-                                            input_tokens, sent_input_tokens, _temp_cache_r,
-                                            _vault_blocks_14, model, target_url,
-                                        )
+                                        try:
+                                            _tape14 = _format_tui_savings_tape(
+                                                input_tokens, sent_input_tokens, _temp_cache_r,
+                                                _vault_blocks_14, model, target_url,
+                                            )
+                                        except Exception:
+                                            _tape14 = "tokenpak: active"
                                         if _tape14 is None:
                                             # Suppress footer — zero savings
                                             self.wfile.write(after_stop)
@@ -9239,10 +9242,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                         # CCI-14: TUI savings tape — single-line format for non-streaming
                         if TUI_SAVINGS_TAPE_ENABLED:
                             _vault_blocks_14 = len(injected_sources)
-                            _tape14 = _format_tui_savings_tape(
-                                input_tokens, sent_input_tokens, _cache_r,
-                                _vault_blocks_14, model, target_url,
-                            )
+                            try:
+                                _tape14 = _format_tui_savings_tape(
+                                    input_tokens, sent_input_tokens, _cache_r,
+                                    _vault_blocks_14, model, target_url,
+                                )
+                            except Exception:
+                                _tape14 = "tokenpak: active"
                             _footer_text = f"\n{_tape14}" if _tape14 is not None else ""
                         content = resp_json.get("content", [])
                         if content and isinstance(content, list):
