@@ -3,14 +3,18 @@
 The proxy_v4 monolith has been replaced by the modular tokenpak/ package.
 This shim re-exports the key globals/classes that tests reference so that
 legacy test files can still be collected.
+
+Budget enforcement wired here as part of TRIX-02 / pmgtm initiative (AC-1.2).
 """
 from __future__ import annotations
 
 import os
+import socketserver
 import threading
-from http.server import BaseHTTPRequestHandler
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +58,82 @@ except ImportError:
     pass
 
 # ---------------------------------------------------------------------------
+# Budget enforcement — TRIX-02 / pmgtm initiative (AC-1.2)
+# ---------------------------------------------------------------------------
+
+def _load_budget_monthly_usd() -> Optional[float]:
+    """Load monthly USD budget limit from env var or config file.
+
+    Priority:
+    1. ``TOKENPAK_BUDGET_MONTHLY_USD`` env var
+    2. ``budget.monthly_usd`` in the config file (JSON or YAML)
+    3. None (unlimited)
+    """
+    val = os.environ.get("TOKENPAK_BUDGET_MONTHLY_USD")
+    if val is not None:
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    # Try config file
+    config_path_str = os.environ.get("TOKENPAK_CONFIG")
+    if config_path_str:
+        config_path = Path(config_path_str)
+    else:
+        # Try config.json (documented shape) then config.yaml
+        home = Path.home() / ".tokenpak"
+        config_path = home / "config.json"
+        if not config_path.exists():
+            config_path = home / "config.yaml"
+
+    try:
+        if config_path.exists():
+            import json as _j
+            try:
+                cfg = _j.loads(config_path.read_text())
+            except Exception:
+                try:
+                    import yaml as _y  # type: ignore[import-untyped]
+                    with open(config_path) as _f:
+                        cfg = _y.safe_load(_f) or {}
+                except Exception:
+                    cfg = {}
+            budget_usd = cfg.get("budget", {}).get("monthly_usd")
+            if budget_usd is not None:
+                return float(budget_usd)
+    except Exception:
+        pass
+
+    return None
+
+
+# Module-level constant — read once at import time so tests can reload
+# the module with a different env var.
+BUDGET_MONTHLY_USD: Optional[float] = _load_budget_monthly_usd()
+
+# Cached monthly spend — populated lazily and refreshed at most once per
+# BUDGET_CACHE_TTL_S seconds to avoid a fresh DB hit on every request.
+# Tests inject values directly: mod._MONTHLY_SPEND_CACHE["usd"] = X
+BUDGET_CACHE_TTL_S: float = 60.0
+_MONTHLY_SPEND_CACHE: Dict[str, float] = {"usd": 0.0, "ts": 0.0}
+
+
+def _get_cached_monthly_spend() -> float:
+    """Return cached monthly spend; refresh from BudgetTracker if stale."""
+    now = time.time()
+    if now - _MONTHLY_SPEND_CACHE.get("ts", 0.0) > BUDGET_CACHE_TTL_S:
+        try:
+            from tokenpak.telemetry.budget import get_budget_tracker
+            tracker = get_budget_tracker()
+            _MONTHLY_SPEND_CACHE["usd"] = tracker.total_spent("monthly")
+            _MONTHLY_SPEND_CACHE["ts"] = now
+        except Exception:
+            pass  # keep the existing cached value
+    return _MONTHLY_SPEND_CACHE.get("usd", 0.0)
+
+
+# ---------------------------------------------------------------------------
 # Global state (mirrored from legacy proxy_v4 monolith)
 # ---------------------------------------------------------------------------
 
@@ -68,10 +148,13 @@ SESSION: Dict[str, Any] = {
     "cost": 0.0,
     "cost_saved": 0.0,
     "errors": 0,
+    "budget_blocked_total": 0,
+    "start_time": time.time(),
 }
 
 _proxy_ready: bool = False
 _shutdown_event = threading.Event()
+_active_request_count: int = 0
 _provider_circuit_lock = threading.Lock()
 _provider_circuits: Dict[str, Dict[str, Any]] = {
     "anthropic": {"open": False, "failures": 0},
@@ -199,11 +282,28 @@ def _ingest_write_entry(entry: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# ForwardProxyHandler stub
+# ThreadedHTTPServer — handles each connection in its own thread
+# ---------------------------------------------------------------------------
+
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    """HTTPServer that handles each request in a daemon thread."""
+
+    daemon_threads = True
+
+
+# ---------------------------------------------------------------------------
+# ForwardProxyHandler
 # ---------------------------------------------------------------------------
 
 class ForwardProxyHandler(BaseHTTPRequestHandler):
-    """Stub HTTP handler for legacy proxy_v4 tests."""
+    """HTTP handler for legacy proxy_v4 tests.
+
+    do_POST implements budget enforcement (TRIX-02 / AC-1.2):
+    - If monthly budget is set and exceeded: 429 budget_exceeded
+    - Otherwise: forward to upstream (or 502 on connection failure)
+
+    do_GET serves a simple health/status response.
+    """
 
     def do_GET(self) -> None:
         import json
@@ -213,6 +313,91 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self) -> None:
+        import json
+        import urllib.request
+        import urllib.error
+
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b""
+
+        # ---------------------------------------------------------------
+        # Budget gate — check before any upstream forwarding (AC-1.2)
+        # ---------------------------------------------------------------
+        if BUDGET_MONTHLY_USD is not None:
+            spent = _get_cached_monthly_spend()
+            try:
+                from tokenpak._internal.budget_controller import BudgetController
+                result = BudgetController().check(BUDGET_MONTHLY_USD, spent)
+            except Exception:
+                result = None  # fail open — do not block on internal error
+
+            if result is not None and result.exceeded:
+                SESSION["budget_blocked_total"] = (
+                    SESSION.get("budget_blocked_total", 0) + 1
+                )
+                resp_body = json.dumps({
+                    "error": {
+                        "type": "budget_exceeded",
+                        "limit_usd": result.limit_usd,
+                        "spent_usd": result.spent_usd,
+                        "reset_at": result.reset_at,
+                    }
+                }).encode()
+                self.send_response(429)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+                return
+
+        # ---------------------------------------------------------------
+        # Forward to upstream
+        # ---------------------------------------------------------------
+        try:
+            # Build upstream URL from passthrough URL or default to Anthropic
+            upstream_base = _resolve_upstream(
+                next(
+                    (a for a in ADAPTER_REGISTRY.adapters()
+                     if a.source_format == "anthropic"),
+                    None,
+                ) or _Adapter("anthropic", "https://api.anthropic.com")
+            )
+            upstream_url = upstream_base.rstrip("/") + self.path
+
+            req = urllib.request.Request(upstream_url, data=body, method="POST")
+            for key in ("Content-Type", "Authorization", "X-Api-Key",
+                        "Anthropic-Version", "Anthropic-Beta"):
+                val = self.headers.get(key)
+                if val:
+                    req.add_header(key, val)
+
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read()
+                self.send_response(resp.status)
+                ct = resp.headers.get("Content-Type", "application/json")
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        except urllib.error.HTTPError as exc:
+            raw = exc.read()
+            self.send_response(exc.code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+        except Exception:
+            err_body = json.dumps({
+                "error": {"type": "upstream_error", "message": "Upstream connection failed"}
+            }).encode()
+            self.send_response(502)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err_body)))
+            self.end_headers()
+            self.wfile.write(err_body)
 
     def log_message(self, *args):  # suppress access log noise in tests
         pass
