@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "bash /home/sue/tokenpak/tests/companion_probe/hook_probe.sh"
+      }
+    ]
+  }
+}
