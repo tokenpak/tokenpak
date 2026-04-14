@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__tokenpak-probe__probe_status",
+      "mcp__tokenpak-probe__estimate_tokens",
+      "mcp__tokenpak-probe__read_transcript"
+    ]
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
