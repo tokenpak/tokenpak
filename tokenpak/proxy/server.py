@@ -1307,20 +1307,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         applies the model pricing config, and returns an estimated cost breakdown.
         No API key required; no upstream round-trip.
 
-        Response shape:
+        AC2-compliant response shape:
           {
             estimated_cost_usd: float,
+            input_tokens: int,
+            cached_tokens: int,
             ttfb_estimate_ms: int,
             cache_hit_likelihood: float,
-            breakdown: {
-              input_tokens: int,
-              output_estimate: int,
-              cache_hits_estimate: int,
-              cache_creates_estimate: int,
-            }
+            model: str,
+            breakdown: { ... }   # backward-compat nested form
           }
         """
-        from tokenpak.proxy.token_cache import count_tokens as _count_tokens
+        from tokenpak.proxy.config import MONITOR_DB
+        from tokenpak.proxy.forecast_endpoint import build_forecast_response
 
         def _send_err(msg: str) -> None:
             body = json.dumps(
@@ -1344,137 +1343,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _send_err("Request body must include a 'messages' array")
             return
 
-        model = payload.get("model", "claude-sonnet-4-5") or "claude-sonnet-4-5"
-        if not isinstance(model, str):
-            model = "claude-sonnet-4-5"
+        try:
+            session_id = self.headers.get("x-claude-code-session-id", "").strip()
+            result = build_forecast_response(payload, MONITOR_DB, session_id=session_id)
+        except Exception as exc:
+            _send_err(f"forecast error: {exc}")
+            return
 
-        # ── 1. Count input tokens (mirrors _handle_count_tokens logic) ──────────
-        total_input = 0
-
-        system = payload.get("system", "")
-        if isinstance(system, str):
-            total_input += _count_tokens(system)
-        elif isinstance(system, list):
-            for block in system:
-                if isinstance(block, dict):
-                    text = block.get("text", "")
-                    if isinstance(text, str):
-                        total_input += _count_tokens(text)
-                elif isinstance(block, str):
-                    total_input += _count_tokens(block)
-
-        for msg in payload["messages"]:
-            if not isinstance(msg, dict):
-                continue
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                total_input += _count_tokens(content)
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        text = block.get("text", "")
-                        if isinstance(text, str):
-                            total_input += _count_tokens(text)
-                    elif isinstance(block, str):
-                        total_input += _count_tokens(block)
-
-        for tool in payload.get("tools", []):
-            if not isinstance(tool, dict):
-                continue
-            total_input += _count_tokens(tool.get("name", ""))
-            total_input += _count_tokens(tool.get("description", ""))
-            schema = tool.get("input_schema", {})
-            if isinstance(schema, dict):
-                total_input += _count_tokens(json.dumps(schema, separators=(",", ":")))
-
-        # ── 2. Estimate cache creates from cache_control hints ─────────────────
-        cache_creates_estimate = 0
-        cache_hits_estimate = 0
-        for msg in payload["messages"]:
-            if not isinstance(msg, dict):
-                continue
-            content = msg.get("content", "")
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("cache_control"):
-                        block_text = block.get("text", "")
-                        if isinstance(block_text, str):
-                            cache_creates_estimate += _count_tokens(block_text)
-        if isinstance(system, list):
-            for block in system:
-                if isinstance(block, dict) and block.get("cache_control"):
-                    text = block.get("text", "")
-                    if isinstance(text, str):
-                        cache_creates_estimate += _count_tokens(text)
-
-        # ── 3. Output estimate — default 500 unless max_tokens is small ────────
-        max_tokens = payload.get("max_tokens")
-        if isinstance(max_tokens, int) and 0 < max_tokens < 500:
-            output_estimate = max_tokens
-        else:
-            output_estimate = 500
-
-        # ── 4. Apply pricing config ────────────────────────────────────────────
-        estimated_cost_usd = estimate_cost(
-            model,
-            total_input,
-            output_estimate,
-            cache_read_tokens=cache_hits_estimate,
-            cache_creation_tokens=cache_creates_estimate,
-        )
-
-        # ── 5. TTFB estimate from rolling latency average ─────────────────────
-        with _forecast_latency_lock:
-            lats = list(_forecast_latencies)
-        if lats:
-            ttfb_estimate_ms = int(sum(lats) / len(lats))
-        else:
-            ttfb_estimate_ms = 800  # default when no prior requests
-
-        # ── 6. Cache hit likelihood — per-session if available, else 0.5 ───────
-        cache_hit_likelihood = 0.5
-        session_id = self.headers.get("x-claude-code-session-id", "").strip()
-        if session_id:
-            try:
-                import sqlite3 as _sqlite3
-                from tokenpak.proxy.config import MONITOR_DB as _DB
-                _conn = _sqlite3.connect(_DB, timeout=2)
-                try:
-                    _cur = _conn.execute(
-                        "SELECT cache_read_tokens FROM requests "
-                        "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 20",
-                        (session_id,),
-                    )
-                    rows = _cur.fetchall()
-                    if len(rows) >= 3:
-                        hits = sum(1 for r in rows if (r[0] or 0) > 0)
-                        cache_hit_likelihood = round(hits / len(rows), 4)
-                finally:
-                    _conn.close()
-            except Exception:
-                pass  # never break the forecast endpoint
-        else:
-            try:
-                ps = self.server.proxy_server
-                _s = ps.session
-                _cr = _s.get("cache_read_tokens", 0)
-                _total_reqs = _s.get("requests", 0)
-                if _total_reqs >= 5:
-                    cache_hit_likelihood = round(min(1.0, _cr / max(1, _total_reqs * 500)), 4)
-            except Exception:
-                pass
-
-        resp_body = json.dumps({
-            "estimated_cost_usd": round(estimated_cost_usd, 8),
-            "ttfb_estimate_ms": ttfb_estimate_ms,
-            "cache_hit_likelihood": cache_hit_likelihood,
-            "breakdown": {
-                "input_tokens": total_input,
-                "output_estimate": output_estimate,
-                "cache_hits_estimate": cache_hits_estimate,
-                "cache_creates_estimate": cache_creates_estimate,
-            },
-        }, separators=(",", ":")).encode()
+        resp_body = json.dumps(result, separators=(",", ":")).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(resp_body)))
