@@ -1924,8 +1924,11 @@ def cmd_diagnose(args):
 
 def cmd_claude(args):
     """Launch Claude Code with tokenpak companion active."""
-    from .companion.launcher import main as _companion_main
-    _companion_main(args=list(args.args))
+    import os
+    if getattr(args, "budget", None) is not None:
+        os.environ["TOKENPAK_COMPANION_BUDGET"] = str(args.budget)
+    from .companion import launch
+    launch(args=list(args.args))
 
 
 def _build_claude_parser(sub):
@@ -1937,10 +1940,18 @@ def _build_claude_parser(sub):
             "All arguments are forwarded verbatim to the claude binary.\n\n"
             "Examples:\n"
             "  tokenpak claude\n"
+            "  tokenpak claude --budget 5.00\n"
             "  tokenpak claude --print \"Fix the bug\"\n"
             "  tokenpak claude --model claude-sonnet-4-6 --print \"Review this PR\""
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="Daily spend cap in USD; sets TOKENPAK_COMPANION_BUDGET env var",
     )
     p.add_argument(
         "args",
