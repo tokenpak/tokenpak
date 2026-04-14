@@ -137,7 +137,15 @@ def bench_token_counter(transcript_path: str, label: str) -> dict:
     try:
         from tokenpak.tokens import count_tokens
         t0 = time.perf_counter()
-        tiktoken_count = count_tokens(content[:200_000])  # cap to avoid OOM on huge strings
+        # Chunk large texts to avoid LRU cache thrashing
+        CHUNK = 100_000
+        if len(content) <= CHUNK:
+            tiktoken_count = count_tokens(content)
+        else:
+            tiktoken_count = sum(
+                count_tokens(content[i:i + CHUNK])
+                for i in range(0, len(content), CHUNK)
+            )
         tiktoken_ms = (time.perf_counter() - t0) * 1000
     except Exception as e:
         tiktoken_count = -1
@@ -155,7 +163,10 @@ def bench_token_counter(transcript_path: str, label: str) -> dict:
 
 
 def bench_hook_pipeline(transcript_path: str, label: str) -> dict:
-    """Benchmark the hook pre-send pipeline end-to-end."""
+    """Benchmark the hook pre-send pipeline end-to-end.
+
+    Uses the bash hook (pre_send.sh) for production-realistic timing.
+    """
     hook_input = json.dumps({
         "session_id": "stress-test",
         "transcript_path": transcript_path,
@@ -165,9 +176,11 @@ def bench_hook_pipeline(transcript_path: str, label: str) -> dict:
         "prompt": "continue analyzing the code",
     })
 
+    hook_script = Path(__file__).parent.parent.parent / "tokenpak" / "companion" / "hooks" / "pre_send.sh"
+
     t0 = time.perf_counter()
     result = subprocess.run(
-        [sys.executable, "-m", "tokenpak.companion.hooks.pre_send"],
+        ["bash", str(hook_script)],
         input=hook_input,
         capture_output=True,
         text=True,

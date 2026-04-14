@@ -13,9 +13,15 @@ INPUT=$(cat)
 # Quick exit if companion disabled
 [ "${TOKENPAK_COMPANION_ENABLED:-1}" = "0" ] && exit 0
 
-# Parse JSON fields with grep (no python3, no jq dependency)
-TRANSCRIPT=$(echo "$INPUT" | grep -oP '"transcript_path"\s*:\s*"[^"]*"' | grep -oP '(?<=:\s*")[^"]+')
-SESSION_ID=$(echo "$INPUT" | grep -oP '"session_id"\s*:\s*"[^"]*"' | grep -oP '(?<=:\s*")[^"]+')
+# Parse JSON fields — try jq first (fastest), fall back to sed (portable)
+if command -v jq >/dev/null 2>&1; then
+    TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
+    SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
+else
+    # Portable sed extraction (no -P flag needed)
+    TRANSCRIPT=$(echo "$INPUT" | sed -n 's/.*"transcript_path"\s*:\s*"\([^"]*\)".*/\1/p')
+    SESSION_ID=$(echo "$INPUT" | sed -n 's/.*"session_id"\s*:\s*"\([^"]*\)".*/\1/p')
+fi
 
 # Token estimation from file size (instant via stat)
 TOKENS=0

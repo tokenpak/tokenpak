@@ -2,7 +2,7 @@
   {
     "test": "transcript_parser",
     "label": "10k",
-    "elapsed_ms": 0.7,
+    "elapsed_ms": 1.7,
     "messages": 18,
     "tokens_est": 9761,
     "chars": 39047,
@@ -13,29 +13,29 @@
     "test": "token_counter",
     "label": "10k",
     "heuristic_tokens": 10531,
-    "heuristic_ms": 0.001,
+    "heuristic_ms": 0.003,
     "tiktoken_tokens": 10873,
-    "tiktoken_ms": 428.8,
+    "tiktoken_ms": 1600.2,
     "accuracy_pct": 103.2
   },
   {
     "test": "hook_pipeline",
     "label": "10k",
-    "elapsed_ms": 1406.3,
+    "elapsed_ms": 79.1,
     "exit_code": 0,
-    "stderr": "tokenpak: ~10,531 tokens  est $0.0316",
+    "stderr": "grep: lookbehind assertion is not fixed length\ngrep: lookbehind assertion is not fixed length",
     "stdout": ""
   },
   {
     "test": "mcp_estimate_tokens",
     "label": "10k",
-    "elapsed_ms": 657.0,
-    "tool_result": "{\n  \"tokens\": 10873,\n  \"chars\": 42126,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmpu8m1gjj0.jsonl\"\n}"
+    "elapsed_ms": 811.3,
+    "tool_result": "{\n  \"tokens\": 10873,\n  \"chars\": 42126,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmphjgfwdoe.jsonl\"\n}"
   },
   {
     "test": "transcript_parser",
     "label": "50k",
-    "elapsed_ms": 1.8,
+    "elapsed_ms": 3.0,
     "messages": 72,
     "tokens_est": 47484,
     "chars": 189938,
@@ -46,29 +46,29 @@
     "test": "token_counter",
     "label": "50k",
     "heuristic_tokens": 50864,
-    "heuristic_ms": 0.001,
-    "tiktoken_tokens": 52313,
-    "tiktoken_ms": 166.6,
-    "accuracy_pct": 102.8
+    "heuristic_ms": 0.003,
+    "tiktoken_tokens": 53267,
+    "tiktoken_ms": 68.7,
+    "accuracy_pct": 104.7
   },
   {
     "test": "hook_pipeline",
     "label": "50k",
-    "elapsed_ms": 2448.9,
+    "elapsed_ms": 30.9,
     "exit_code": 0,
-    "stderr": "tokenpak: ~50,864 tokens  est $0.1526",
+    "stderr": "grep: lookbehind assertion is not fixed length\ngrep: lookbehind assertion is not fixed length",
     "stdout": ""
   },
   {
     "test": "mcp_estimate_tokens",
     "label": "50k",
-    "elapsed_ms": 795.0,
-    "tool_result": "{\n  \"tokens\": 53267,\n  \"chars\": 203457,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmp5q5t0su1.jsonl\"\n}"
+    "elapsed_ms": 829.7,
+    "tool_result": "{\n  \"tokens\": 53267,\n  \"chars\": 203457,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmpchgi_m13.jsonl\"\n}"
   },
   {
     "test": "transcript_parser",
     "label": "100k",
-    "elapsed_ms": 3.8,
+    "elapsed_ms": 2.6,
     "messages": 140,
     "tokens_est": 93494,
     "chars": 373978,
@@ -79,29 +79,29 @@
     "test": "token_counter",
     "label": "100k",
     "heuristic_tokens": 100108,
-    "heuristic_ms": 0.002,
-    "tiktoken_tokens": 52313,
-    "tiktoken_ms": 0.1,
-    "accuracy_pct": 52.3
+    "heuristic_ms": 0.001,
+    "tiktoken_tokens": 104872,
+    "tiktoken_ms": 68.7,
+    "accuracy_pct": 104.8
   },
   {
     "test": "hook_pipeline",
     "label": "100k",
-    "elapsed_ms": 2181.0,
+    "elapsed_ms": 32.0,
     "exit_code": 0,
-    "stderr": "tokenpak: ~100,108 tokens  est $0.3003",
+    "stderr": "grep: lookbehind assertion is not fixed length\ngrep: lookbehind assertion is not fixed length",
     "stdout": ""
   },
   {
     "test": "mcp_estimate_tokens",
     "label": "100k",
-    "elapsed_ms": 787.4,
-    "tool_result": "{\n  \"tokens\": 104872,\n  \"chars\": 400434,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmpxrjsvn2s.jsonl\"\n}"
+    "elapsed_ms": 972.0,
+    "tool_result": "{\n  \"tokens\": 104872,\n  \"chars\": 400434,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmpvd1vhbcg.jsonl\"\n}"
   },
   {
     "test": "transcript_parser",
     "label": "200k",
-    "elapsed_ms": 10.6,
+    "elapsed_ms": 5.1,
     "messages": 276,
     "tokens_est": 187302,
     "chars": 749208,
@@ -112,23 +112,23 @@
     "test": "token_counter",
     "label": "200k",
     "heuristic_tokens": 200470,
-    "heuristic_ms": 0.002,
-    "tiktoken_tokens": 52313,
-    "tiktoken_ms": 0.2,
-    "accuracy_pct": 26.1
+    "heuristic_ms": 0.001,
+    "tiktoken_tokens": 210401,
+    "tiktoken_ms": 111.2,
+    "accuracy_pct": 105.0
   },
   {
     "test": "hook_pipeline",
     "label": "200k",
-    "elapsed_ms": 6867.6,
+    "elapsed_ms": 29.6,
     "exit_code": 0,
-    "stderr": "tokenpak: ~200,470 tokens  est $0.6014",
+    "stderr": "grep: lookbehind assertion is not fixed length\ngrep: lookbehind assertion is not fixed length",
     "stdout": ""
   },
   {
     "test": "mcp_estimate_tokens",
     "label": "200k",
-    "elapsed_ms": 903.0,
-    "tool_result": "{\n  \"tokens\": 210401,\n  \"chars\": 801880,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmpomo1kzfz.jsonl\"\n}"
+    "elapsed_ms": 1290.5,
+    "tool_result": "{\n  \"tokens\": 210401,\n  \"chars\": 801880,\n  \"method\": \"tiktoken\",\n  \"source\": \"/tmp/tmprjqb1_9z.jsonl\"\n}"
   }
 ]
