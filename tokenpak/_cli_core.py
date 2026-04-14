@@ -3816,7 +3816,29 @@ def main():
                 print("\n   (Use `tokenpak help` to see all commands)", file=_sys_err.stderr)
         sys.exit(1)
 
-    args = parser.parse_args()
+    # For 'claude' subcommand, manually split argv so *all* arguments after
+    # tokenpak's own flags pass through verbatim to the claude binary.
+    # parse_args()/parse_known_args() would mishandle flags like
+    # --dangerously-skip-permissions or split --model <value> pairs.
+    if raw_cmd == "claude":
+        claude_idx = sys.argv.index("claude")
+        claude_tail = sys.argv[claude_idx + 1:]
+        # Extract --budget (the only tokenpak-owned flag) if present
+        budget = None
+        passthrough = []
+        i = 0
+        while i < len(claude_tail):
+            if claude_tail[i] == "--budget" and i + 1 < len(claude_tail):
+                budget = float(claude_tail[i + 1])
+                i += 2
+            else:
+                passthrough.append(claude_tail[i])
+                i += 1
+        args = argparse.Namespace(
+            command="claude", func=cmd_claude, budget=budget, args=passthrough, db=".tokenpak/registry.db"
+        )
+    else:
+        args = parser.parse_args()
 
     # No subcommand given → show smart default (savings summary)
     if not args.command:
