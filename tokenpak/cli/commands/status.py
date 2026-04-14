@@ -490,39 +490,30 @@ def run(
     totals = savings_24h["totals"]
     model_rows = savings_24h["models"]
 
-    print(f"\nTOKENPAK {version}  |  Savings Report")
+    print(f"\nTOKENPAK {version}  |  Status")
     print(SEP)
 
-    # === SAVINGS SECTION ===
-    tokenpak_sav = totals["cache_savings"] + totals["compression_savings"] + totals["routing_savings"]
+    # === TOKENPAK SAVINGS (only what the proxy actually did) ===
+    tp_sav = totals["compression_savings"] + totals["cache_savings"] + totals["routing_savings"]
     cc_sav = totals.get("claude_code_cache_savings", 0)
-    total_sav = tokenpak_sav + cc_sav
 
     print()
-    print("💰 TOTAL SAVINGS (Last 24h)")
+    print("💰 TOKENPAK SAVINGS (Last 24h)")
+    tp_pct = (tp_sav / (totals["with_cost"] + tp_sav) * 100) if (totals["with_cost"] + tp_sav) > 0 else 0.0
+    print(f"  Saved:               {_fmt_cost(tp_sav):>10}  ({tp_pct:.1f}%)")
+    if totals["compression_savings"] > 0:
+        print(f"    Compression:       {_fmt_cost(totals['compression_savings']):>10}")
+    if totals["cache_savings"] > 0:
+        print(f"    Cache management:  {_fmt_cost(totals['cache_savings']):>10}")
+    if totals["routing_savings"] > 0:
+        print(f"    Smart routing:     {_fmt_cost(totals['routing_savings']):>10}")
+
+    # === COST OVERVIEW ===
+    print()
+    print("📊 COST OVERVIEW")
     print(f"  Actual cost:         {_fmt_cost(totals['with_cost']):>10}")
-    print(f"  Without optimization:{_fmt_cost(totals['with_cost'] + total_sav):>10}")
-    print(f"  {SEP_INNER}")
-    print(f"  Total saved:         {_fmt_cost(total_sav):>10}")
-
-    # === ATTRIBUTION BREAKDOWN ===
-    print()
-    print("📊 SAVINGS BREAKDOWN")
-    comp_sav = totals["compression_savings"]
-    cache_sav = totals["cache_savings"]
-    route_sav = totals["routing_savings"]
-
-    # TokenPak's own savings (what the proxy actually changed)
-    print(f"  TokenPak compression:  {_fmt_cost(comp_sav):>10}", end="")
-    if cache_sav > 0:
-        print(f"  + cache mgmt: {_fmt_cost(cache_sav)}", end="")
-    if route_sav > 0:
-        print(f"  + routing: {_fmt_cost(route_sav)}", end="")
-    print()
-
-    # Claude Code's native Anthropic prompt caching
     if cc_sav > 0:
-        print(f"  Claude Code caching:   {_fmt_cost(cc_sav):>10}  (Anthropic prompt cache)")
+        print(f"  Prompt cache:        {_fmt_cost(cc_sav):>10}  (Anthropic server-side)")
 
     # === PER-MODEL TABLE ===
     print()
@@ -531,13 +522,14 @@ def run(
         name = _shorten_model(m["model"])
         reqs = m["requests"]
         tp_saved = m["compression_savings"] + m["cache_savings"]
-        cc_saved = m.get("claude_code_cache_savings", 0)
         cache_hr = m["cache_hit_rate"]
+        compressed = m.get("compressed_tokens", 0)
+        comp_info = f"  {compressed:>8,} tok compressed" if compressed > 0 else ""
         print(
             f"  {name:<24} {reqs:>5} reqs"
-            f"    tp: {_fmt_cost(tp_saved):>8}"
-            f"    cc: {_fmt_cost(cc_saved):>8}"
+            f"    saved: {_fmt_cost(tp_saved):>8}"
             f"    {cache_hr:3.0f}% cache"
+            f"{comp_info}"
         )
 
     # === PERFORMANCE SECTION ===
