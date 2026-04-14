@@ -163,6 +163,7 @@ def run_variant(
         "--model", model,
         "--max-turns", str(task.get("max_turns", 10)),
         "--output-format", "stream-json",
+        "--verbose",
         "--include-hook-events",
         "--permission-mode", "bypassPermissions",
     ])
