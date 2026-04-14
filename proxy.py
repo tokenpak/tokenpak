@@ -2198,36 +2198,13 @@ _BLOCKED_FORWARD_HEADERS: frozenset = frozenset(
 )
 
 # CCG-04: Per-route HTTP header forwarding allowlists.
-# Mirrors the WS-path tuple (proxy.py line ~7303) onto the HTTP path.
-# OPENCLAW_HEADER_ALLOWLIST must never gain new entries — OpenClaw traffic
-# must produce exactly the same forwarded headers as before (bit-for-bit).
-# CLAUDE_CODE_HEADER_ALLOWLIST extends it with Claude Code-specific headers.
-OPENCLAW_HEADER_ALLOWLIST: tuple = (
-    "x-api-key",
-    "authorization",
-    "anthropic-version",
-    "anthropic-beta",
-)
-CLAUDE_CODE_HEADER_ALLOWLIST: tuple = (
-    "x-api-key",
-    "authorization",
-    "content-type",
-    "anthropic-version",
-    "anthropic-beta",
-    "anthropic-dangerous-direct-browser-access",
-    "x-claude-code-session-id",
-    "user-agent",
-    # Claude Code native headers — required for proper quota routing
-    "accept",
-    "x-app",
-    "x-stainless-arch",
-    "x-stainless-lang",
-    "x-stainless-os",
-    "x-stainless-package-version",
-    "x-stainless-retry-count",
-    "x-stainless-runtime",
-    "x-stainless-runtime-version",
-    "x-stainless-timeout",
+# Canonical definitions live in tokenpak.proxy.headers (modular tree).
+# These aliases preserve backward compatibility for any code that
+# references the monolith-level names directly.
+from tokenpak.proxy.headers import (
+    OPENCLAW_HEADER_ALLOWLIST,
+    CLAUDE_CODE_HEADER_ALLOWLIST,
+    forward_headers as _forward_headers,
 )
 
 
@@ -8332,32 +8309,13 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 except Exception as _gate_err:
                     print(f"  ⚠️ Validation gate error (fail-open): {_gate_err}")
 
-        # CCG-04: Per-route header allowlist on the HTTP path.
-        # Anthropic routes use an explicit allowlist (mirroring the WS-path at
-        # proxy.py:~7345).  All other providers keep the existing blocklist path
-        # (_sanitize_headers) — their forwarding behavior is unchanged.
+        # CCG-04: Per-route header allowlist — delegates to modular headers.py.
+        # Anthropic routes use per-route allowlists; non-Anthropic uses sanitize.
         if detect_provider(target_url) is Provider.ANTHROPIC:
             _route = _classify_route(self.path, self.headers)
-            if _route == "claude-code" and _pre_client_has_auth:
-                # Client-auth pass-through: forward ALL headers (like a pure relay).
-                # The allowlist strips headers that Anthropic uses for request identity
-                # and billing routing. Forwarding everything preserves the exact
-                # request signature that Claude Code's OAuth quota expects.
-                _skip = {'host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding'}
-                fwd_headers = {}
-                for _hk, _hv in self.headers.items():
-                    if _hk.lower() not in _skip:
-                        fwd_headers[_hk] = _hv
-            elif _route == "claude-code":
-                fwd_headers = {}
-                for _hk, _hv in self.headers.items():
-                    if _hk.lower() in CLAUDE_CODE_HEADER_ALLOWLIST:
-                        fwd_headers[_hk.lower()] = _hv
-            else:
-                fwd_headers = {}
-                for _hk, _hv in self.headers.items():
-                    if _hk.lower() in OPENCLAW_HEADER_ALLOWLIST:
-                        fwd_headers[_hk.lower()] = _hv
+            fwd_headers = _forward_headers(
+                dict(self.headers), _route, client_has_auth=_pre_client_has_auth
+            )
         else:
             fwd_headers = _sanitize_headers(self.headers)
         fwd_headers["Host"] = parsed.netloc
