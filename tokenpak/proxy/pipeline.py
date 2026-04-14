@@ -410,10 +410,9 @@ def stage_byte_restore(
         result.skip_reason = "no_original_body"
         return request, result
 
-    # Import byte-level injection functions
+    # Import byte-level injection functions (modular request.py)
     try:
-        # These live in proxy.py for now; will be moved to request.py later
-        from tokenpak.proxy.request import _byte_inject_system_block  # type: ignore[attr-defined]
+        from tokenpak.proxy.request import _byte_inject_system_block
     except ImportError:
         _byte_inject_system_block = None
 

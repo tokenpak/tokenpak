@@ -52,6 +52,8 @@ from .request import (  # noqa: F401
     ROUTE_CLAUDE_CODE,
     ROUTE_OPENCLAW,
     ROUTE_SDK,
+    _find_system_array_close,
+    _byte_inject_system_block,
 )
 from .route_policy import (  # noqa: F401
     get_policy,

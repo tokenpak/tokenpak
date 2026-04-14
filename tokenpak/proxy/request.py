@@ -1,6 +1,7 @@
 """Proxy request and response types for the modular proxy architecture."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
@@ -50,6 +51,120 @@ class ProxyResponse:
 ROUTE_CLAUDE_CODE = "claude-code"
 ROUTE_OPENCLAW = "openclaw"
 ROUTE_SDK = "sdk"
+
+
+# ---------------------------------------------------------------------------
+# Byte-level system array injection (extracted from proxy.py:5124-5235)
+# ---------------------------------------------------------------------------
+
+def _find_system_array_close(body: bytes) -> int:
+    """Find the byte offset of the closing ] of the top-level "system" array.
+
+    Scans through raw JSON bytes tracking string state and nesting depth.
+    Returns the offset of the ] character, or -1 if the system key is not
+    found, is not an array, or the JSON is malformed.
+    """
+    n = len(body)
+    i = 0
+    in_string = False
+    depth = 0  # brace depth (top-level object is depth 1)
+    system_key = b'"system"'
+    system_key_len = len(system_key)
+
+    while i < n:
+        c = body[i]
+        if in_string:
+            if c == ord("\\"):
+                i += 2  # skip escaped character
+                continue
+            if c == ord('"'):
+                in_string = False
+            i += 1
+            continue
+
+        if c == ord('"'):
+            # Check if this starts "system" at depth 1 (top-level key)
+            if depth == 1 and body[i : i + system_key_len] == system_key:
+                # Found the key — skip past it and the colon
+                j = i + system_key_len
+                while j < n and body[j] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+                    j += 1
+                if j < n and body[j] == ord(":"):
+                    j += 1
+                    while j < n and body[j] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+                        j += 1
+                    if j < n and body[j] == ord("["):
+                        # Found start of system array — bracket-match to find close
+                        bracket_depth = 1
+                        k = j + 1
+                        in_str = False
+                        while k < n and bracket_depth > 0:
+                            ck = body[k]
+                            if in_str:
+                                if ck == ord("\\"):
+                                    k += 2
+                                    continue
+                                if ck == ord('"'):
+                                    in_str = False
+                            else:
+                                if ck == ord('"'):
+                                    in_str = True
+                                elif ck == ord("["):
+                                    bracket_depth += 1
+                                elif ck == ord("]"):
+                                    bracket_depth -= 1
+                                    if bracket_depth == 0:
+                                        return k
+                            k += 1
+                        return -1  # malformed — never closed
+                    else:
+                        return -1  # system value is not an array
+            in_string = True
+            i += 1
+            continue
+
+        if c == ord("{"):
+            depth += 1
+        elif c == ord("}"):
+            depth -= 1
+        i += 1
+
+    return -1  # "system" key not found
+
+
+def _byte_inject_system_block(body: bytes, injection_text: str) -> bytes:
+    """Inject a text block into the system array via byte splicing.
+
+    Finds the closing ] of the "system" array and inserts a new block
+    just before it. Does NOT re-serialize the rest of the JSON body,
+    preserving the original byte representation exactly.
+
+    Returns the original body unchanged if injection fails for any reason.
+    """
+    if not injection_text:
+        return body
+
+    close_pos = _find_system_array_close(body)
+    if close_pos < 0:
+        return body  # fail-open: no system array found
+
+    # JSON-escape the injection text
+    escaped_text = json.dumps(injection_text, ensure_ascii=False)
+
+    # Build the fragment: {"type": "text", "text": <escaped>}
+    fragment_str = '{"type": "text", "text": ' + escaped_text + "}"
+
+    # Check if the array is empty (no leading comma needed)
+    scan = close_pos - 1
+    while scan >= 0 and body[scan] in (ord(" "), ord("\t"), ord("\n"), ord("\r")):
+        scan -= 1
+    if scan >= 0 and body[scan] == ord("["):
+        # Empty array — no comma
+        fragment = fragment_str.encode("utf-8")
+    else:
+        fragment = (", " + fragment_str).encode("utf-8")
+
+    return body[:close_pos] + fragment + body[close_pos:]
 
 
 class HTTPProxy:
