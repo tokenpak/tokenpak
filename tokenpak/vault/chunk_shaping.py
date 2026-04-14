@@ -13,7 +13,7 @@ Different intents retrieve different chunk types at different granularity levels
 
 Usage::
 
-    from tokenpak.agent.vault.chunk_shapes import (
+    from tokenpak.vault.chunk_shapes import (
         CHUNK_SHAPES,
         reshape_chunks,
         get_shape_for_intent,

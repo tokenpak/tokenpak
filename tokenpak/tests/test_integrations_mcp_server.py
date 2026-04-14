@@ -380,7 +380,7 @@ class TestHandleSummarizeRelatedIssues:
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(available=False)
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
-            with patch("tokenpak.agent.vault.search.extract_must_hit_terms", return_value=[]):
+            with patch("tokenpak.vault.search.extract_must_hit_terms", return_value=[]):
                 result = _handle_summarize_related_issues({"query": "test"})
         assert result["status"] == "no-index"
         assert result["related"] == []
@@ -393,7 +393,7 @@ class TestHandleSummarizeRelatedIssues:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=["BM25"],
             ):
                 result = _handle_summarize_related_issues({"query": "BM25 search"})
@@ -484,7 +484,7 @@ class TestHandleBuildContextPack:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 result = _handle_build_context_pack({"query": "vault search"})
@@ -529,7 +529,7 @@ class TestHandlePrepareReviewPacket:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
@@ -557,7 +557,7 @@ class TestHandlePrepareReviewPacket:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
@@ -577,7 +577,7 @@ class TestHandlePrepareReviewPacket:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
@@ -598,7 +598,7 @@ class TestHandlePrepareReviewPacket:
 
         with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
-                "tokenpak.agent.vault.search.extract_must_hit_terms",
+                "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(

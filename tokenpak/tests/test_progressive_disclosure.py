@@ -20,20 +20,20 @@ import pytest
 # ---------------------------------------------------------------------------
 # Stub out heavy imports that are irrelevant to progressive disclosure
 # ---------------------------------------------------------------------------
-_fake_ingest = types.ModuleType("tokenpak._internal.ingest")
-_fake_sc = types.ModuleType("tokenpak._internal.ingest.schema_converter")
+_fake_ingest = types.ModuleType("tokenpak.vault.ingest")
+_fake_sc = types.ModuleType("tokenpak.vault.ingest.schema_converter")
 _fake_sc.should_serve_schema = lambda intent: False
 _fake_sc.convert_document = MagicMock(return_value={})
 _fake_ingest.schema_converter = _fake_sc
-sys.modules.setdefault("tokenpak._internal.ingest", _fake_ingest)
-sys.modules.setdefault("tokenpak._internal.ingest.schema_converter", _fake_sc)
-sys.modules.setdefault("tokenpak._internal.ingest.api", MagicMock())
+sys.modules.setdefault("tokenpak.vault.ingest", _fake_ingest)
+sys.modules.setdefault("tokenpak.vault.ingest.schema_converter", _fake_sc)
+sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 
-_fake_capsules = types.ModuleType("tokenpak._internal.memory.session_capsules")
+_fake_capsules = types.ModuleType("tokenpak.companion.memory.session_capsules")
 _fake_capsules.capsule_retrieval_score = lambda score, _capsule: score
-sys.modules.setdefault("tokenpak._internal.memory", types.ModuleType("tokenpak._internal.memory"))
+sys.modules.setdefault("tokenpak.companion.memory", types.ModuleType("tokenpak.companion.memory"))
 sys.modules.setdefault(
-    "tokenpak._internal.memory.session_capsules", _fake_capsules
+    "tokenpak.companion.memory.session_capsules", _fake_capsules
 )
 
 from tokenpak.vault.progressive_disclosure import (  # noqa: E402

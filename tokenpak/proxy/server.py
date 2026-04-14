@@ -65,16 +65,16 @@ from .circuit_breaker import get_circuit_breaker_registry, get_rate_limit_regist
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
 from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
-from tokenpak.agent.adapters.registry import detect_platform
-from tokenpak.agent.config import get_stats_footer_enabled
-from tokenpak.agent.dashboard.export_api import ExportAPI
-from tokenpak.agent.dashboard.session_filter import (
+from tokenpak.adapters.registry import detect_platform
+from tokenpak.infrastructure.config import get_stats_footer_enabled
+from tokenpak.dashboard.export_api import ExportAPI
+from tokenpak.dashboard.session_filter import (
     SessionFilter,
     FilterParams,
     get_distinct_models,
 )
-from tokenpak.agent.telemetry.collector import RequestStats
-from tokenpak.agent.telemetry.footer import render_footer_oneline
+from tokenpak.telemetry.collector import RequestStats
+from tokenpak.telemetry.footer import render_footer_oneline
 from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
 
 

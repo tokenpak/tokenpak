@@ -256,7 +256,7 @@ def record_request(
 ) -> None:
     """Record one request. No-op if metrics are disabled. Never raises."""
     try:
-        from tokenpak.agent.config import get_metrics_enabled
+        from tokenpak.infrastructure.config import get_metrics_enabled
 
         if not get_metrics_enabled():
             return

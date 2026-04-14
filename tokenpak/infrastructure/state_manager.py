@@ -293,7 +293,7 @@ class IntentStateManager:
         """Load the JSON schema file for this intent (if it exists)."""
         schemas_dir = _get_schemas_dir()
         try:
-            from tokenpak._internal.state_schemas import INTENT_SCHEMA_MAP
+            from tokenpak.core.state_schemas import INTENT_SCHEMA_MAP
 
             filename = INTENT_SCHEMA_MAP.get(self.intent)
             if filename:

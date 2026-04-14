@@ -22,8 +22,8 @@ import sys
 
 import click
 
-from tokenpak._internal.triggers.matcher import match_event
-from tokenpak._internal.triggers.store import DEFAULT_CONFIG, TriggerStore
+from tokenpak.orchestration.triggers.matcher import match_event
+from tokenpak.orchestration.triggers.store import DEFAULT_CONFIG, TriggerStore
 
 SEP = "─" * 64
 

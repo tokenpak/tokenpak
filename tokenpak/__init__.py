@@ -12,7 +12,7 @@ Sub-package imports:
     from tokenpak.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
-    from tokenpak.agent.agentic.handoff import HandoffManager, HandoffBlock
+    from tokenpak.orchestration.handoff import HandoffManager, HandoffBlock
 """
 
 from __future__ import annotations
@@ -58,15 +58,15 @@ def __getattr__(name: str):
         "Decision": lambda: __import__("tokenpak.report", fromlist=["Decision"]).Decision,
         # CLI
         "main": lambda: __import__("tokenpak.cli", fromlist=["main"]).main,
-        # Agent Handoff Protocol (tokenpak.agent.agentic.handoff — canonical location)
-        "HandoffManager": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffManager"]).HandoffManager,
-        "HandoffBlock": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
-        "HandoffStatus": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
-        "HandoffWire": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
-        "TokenPak": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["TokenPak"]).TokenPak,
-        "ContextRef": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["ContextRef"]).ContextRef,
+        # Agent Handoff Protocol (tokenpak.orchestration.handoff — canonical location)
+        "HandoffManager": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffManager"]).HandoffManager,
+        "HandoffBlock": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
+        "HandoffStatus": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
+        "HandoffWire": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "TokenPak": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["TokenPak"]).TokenPak,
+        "ContextRef": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["ContextRef"]).ContextRef,
         # Handoff alias
-        "Handoff": lambda: __import__("tokenpak.agent.agentic.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "Handoff": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffWire"]).HandoffWire,
     }
     if name in _lazy_map:
         val = _lazy_map[name]()

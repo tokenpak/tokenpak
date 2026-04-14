@@ -11,9 +11,9 @@ Public surface:
     SyncResult           — result of a FingerprintSync.sync() call
 """
 
-from tokenpak._internal.fingerprint.generator import Fingerprint, FingerprintGenerator
-from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
-from tokenpak._internal.fingerprint.sync import FingerprintSync, SyncResult
+from tokenpak.compression.fingerprinting.generator import Fingerprint, FingerprintGenerator
+from tokenpak.compression.fingerprinting.privacy import PrivacyLevel, apply_privacy
+from tokenpak.compression.fingerprinting.sync import FingerprintSync, SyncResult
 
 # Public name used in ARCHITECTURE-RECOMMENDATION.md (C2: Content Fingerprinting)
 FingerPrinter = FingerprintGenerator

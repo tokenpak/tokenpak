@@ -902,7 +902,7 @@ def cmd_index(args):
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
-        from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
+        from tokenpak.vault.watcher import VaultWatcher, WatcherConfig
 
         # Run initial full index first
         _do_index(args)
@@ -1116,7 +1116,7 @@ def cmd_stats(args):
         proxy_data = None
 
     # Also read from the JSONL file for accurate rolling stats
-    from tokenpak.agent.proxy.stats import CompressionStats
+    from tokenpak.proxy.stats import CompressionStats
 
     cs = CompressionStats()
     file_stats = cs.stats_from_file(limit=100)
@@ -1377,7 +1377,7 @@ def cmd_serve(args):
         print("  POST /ingest/batch")
         print("  GET  /health")
         uvicorn.run(
-            "tokenpak.agent.ingest.api:create_ingest_app",
+            "tokenpak.vault.ingest.api:create_ingest_app",
             host="127.0.0.1",
             port=port,
             workers=workers,
@@ -2966,7 +2966,7 @@ def _cmd_alerts_dispatch(args):
 
 
 def _cmd_alerts_test(args):
-    from tokenpak.agent.cli.commands.alerts import cmd_alerts_test
+    from tokenpak.cli.commands.alerts import cmd_alerts_test
     cmd_alerts_test(args)
 
 
@@ -6640,9 +6640,9 @@ def cmd_fingerprint_sync(args):
     import sys as _sys
     from pathlib import Path as _Path
 
-    from tokenpak._internal.fingerprint.generator import FingerprintGenerator
-    from tokenpak._internal.fingerprint.privacy import PrivacyLevel, apply_privacy
-    from tokenpak._internal.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.generator import FingerprintGenerator
+    from tokenpak.compression.fingerprinting.privacy import PrivacyLevel, apply_privacy
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -6737,7 +6737,7 @@ def cmd_fingerprint_sync(args):
 def cmd_fingerprint_cache(args):
     import json as _json
 
-    from tokenpak._internal.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
     status = client.cache_status()
@@ -6757,7 +6757,7 @@ def cmd_fingerprint_cache(args):
 def cmd_fingerprint_clear_cache(args):
     import sys as _sys
 
-    from tokenpak._internal.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
 

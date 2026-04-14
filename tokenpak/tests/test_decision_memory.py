@@ -13,7 +13,7 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
-from tokenpak._internal.memory import DecisionMemoryDB, DecisionRecord
+from tokenpak.companion.memory import DecisionMemoryDB, DecisionRecord
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ stuffing or full glossary dumps.
 
 Usage::
 
-    from tokenpak.agent.semantic import TermResolver, TermResolverConfig
+    from tokenpak.semantic import TermResolver, TermResolverConfig
 
     config = TermResolverConfig(top_k=3, max_bytes_per_card=200)
     resolver = TermResolver(config=config)

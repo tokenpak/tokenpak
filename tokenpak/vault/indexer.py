@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, Optional
 # ---------------------------------------------------------------------------
 INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 
-from tokenpak._internal.ingest.schema_converter import convert_document
+from tokenpak.vault.ingest.schema_converter import convert_document
 from tokenpak.extraction import EntityExtractor
 from tokenpak.processors import get_processor
 from tokenpak.tokens import count_tokens

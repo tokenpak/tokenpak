@@ -331,7 +331,7 @@ class TokenPakAssistant:
         """
         # Import from the tokenpak package (may be on PYTHONPATH)
         try:
-            from tokenpak.agent.agentic.handoff import (
+            from tokenpak.orchestration.handoff import (
                 HandoffWire,
                 TokenPak,
                 HandoffBlock as HBlock,
@@ -390,7 +390,7 @@ class TokenPakAssistant:
             List of loaded message dicts
         """
         try:
-            from tokenpak.agent.agentic.handoff import HandoffWire
+            from tokenpak.orchestration.handoff import HandoffWire
         except ImportError:
             import json as _json
 

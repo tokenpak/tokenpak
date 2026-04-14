@@ -48,7 +48,7 @@ class TestLocalExporterOptIn:
     def test_no_write_when_opted_out(self, tmp_path):
         from tokenpak.telemetry import local_exporter
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=False):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=False):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         assert list(tmp_path.glob("*.jsonl")) == [], "No file should be created when opted out"
@@ -56,7 +56,7 @@ class TestLocalExporterOptIn:
     def test_write_when_opted_in(self, tmp_path):
         from tokenpak.telemetry import local_exporter
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         files = list(tmp_path.glob("*.jsonl"))
@@ -66,7 +66,7 @@ class TestLocalExporterOptIn:
         from tokenpak.telemetry import local_exporter
 
         rec = _make_record()
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(rec, telemetry_dir=tmp_path, mode="local")
 
         files = list(tmp_path.glob("*.jsonl"))
@@ -83,7 +83,7 @@ class TestLocalExporterFileRotation:
         from tokenpak.telemetry import local_exporter
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         expected = tmp_path / f"metrics-{today}.jsonl"
@@ -92,7 +92,7 @@ class TestLocalExporterFileRotation:
     def test_multiple_writes_append_to_same_file(self, tmp_path):
         from tokenpak.telemetry import local_exporter
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
@@ -115,7 +115,7 @@ class TestLocalExporterRetention:
         stale_file = tmp_path / f"metrics-{stale_date}.jsonl"
         stale_file.write_text('{"stale": true}\n')
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         assert not stale_file.exists(), "Stale file should have been pruned"
@@ -130,7 +130,7 @@ class TestLocalExporterRetention:
         recent_file = tmp_path / f"metrics-{recent_date}.jsonl"
         recent_file.write_text('{"recent": true}\n')
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         assert recent_file.exists(), "Recent file should not be pruned"
@@ -145,7 +145,7 @@ class TestLocalExporterRetention:
         boundary_file = tmp_path / f"metrics-{boundary_date}.jsonl"
         boundary_file.write_text('{"boundary": true}\n')
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="local")
 
         assert boundary_file.exists(), "File exactly 30 days old should be preserved"
@@ -157,7 +157,7 @@ class TestLocalExporterRemoteMode:
     def test_remote_mode_skips_write(self, tmp_path):
         from tokenpak.telemetry import local_exporter
 
-        with patch("tokenpak.agent.config.get_metrics_enabled", return_value=True):
+        with patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True):
             local_exporter.write_record(_make_record(), telemetry_dir=tmp_path, mode="remote")
 
         assert list(tmp_path.glob("*.jsonl")) == [], "No file should be created in remote mode"
@@ -193,7 +193,7 @@ class TestRecordRequestIntegration:
         mock_store.record = MagicMock()
 
         with (
-            patch("tokenpak.agent.config.get_metrics_enabled", return_value=True),
+            patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=True),
             patch("tokenpak.telemetry.anon_metrics.get_store", return_value=mock_store),
             patch("tokenpak.telemetry.local_exporter.TELEMETRY_DIR", tmp_path),
             patch("tokenpak.telemetry.local_exporter.TELEMETRY_MODE", "local"),
@@ -217,7 +217,7 @@ class TestRecordRequestIntegration:
         from unittest.mock import MagicMock
 
         with (
-            patch("tokenpak.agent.config.get_metrics_enabled", return_value=False),
+            patch("tokenpak.infrastructure.config.get_metrics_enabled", return_value=False),
             patch("tokenpak.telemetry.local_exporter.TELEMETRY_DIR", tmp_path),
             patch("tokenpak.telemetry.local_exporter.TELEMETRY_MODE", "local"),
         ):

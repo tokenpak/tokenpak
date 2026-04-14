@@ -68,9 +68,9 @@ def fingerprint_sync(
     skip_cache: bool,
     output_json: bool,
 ) -> None:
-    from tokenpak.agent.fingerprint.generator import FingerprintGenerator
-    from tokenpak.agent.fingerprint.privacy import PrivacyLevel
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.generator import FingerprintGenerator
+    from tokenpak.compression.fingerprinting.privacy import PrivacyLevel
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -95,7 +95,7 @@ def fingerprint_sync(
     client = FingerprintSync(ttl=ttl, privacy_level=privacy_level)
 
     if dry_run:
-        from tokenpak.agent.fingerprint.privacy import apply_privacy
+        from tokenpak.compression.fingerprinting.privacy import apply_privacy
 
         payload = apply_privacy(fingerprint.to_dict(), privacy_level)
         if output_json:
@@ -171,7 +171,7 @@ def fingerprint_sync(
 @fingerprint_cmd.command("cache", help="Show local directive cache status.")
 @click.option("--json", "output_json", is_flag=True, default=False)
 def fingerprint_cache(output_json: bool) -> None:
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
     status = client.cache_status()
@@ -197,7 +197,7 @@ def fingerprint_cache(output_json: bool) -> None:
 )
 @click.option("--yes", "-y", is_flag=True, default=False, help="Skip confirmation prompt.")
 def fingerprint_clear_cache(fp_id: Optional[str], yes: bool) -> None:
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
 

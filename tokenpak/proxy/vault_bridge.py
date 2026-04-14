@@ -57,7 +57,7 @@ QUERY_EXPANSION_ENABLED: bool = _cfg(
 # Query expansion — optional; falls back to plain re.findall when unavailable
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.vault.query_expansion import (
+    from tokenpak.vault.query_expansion import (
         expand_query as _qe_expand,
         tokenize as _qe_tokenize,
     )
@@ -368,7 +368,7 @@ def _build_vault_index() -> object:
     """Create the correct VaultIndex backend (sqlite or json_blocks)."""
     if RETRIEVAL_BACKEND == "sqlite":
         try:
-            from tokenpak.agent.vault.sqlite_backend import (
+            from tokenpak.vault.sqlite_backend import (
                 SQLiteRetrievalBackend as _SQLiteBackend,
             )
 

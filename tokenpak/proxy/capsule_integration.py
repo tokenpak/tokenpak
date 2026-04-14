@@ -60,7 +60,7 @@ def _is_capsule_enabled() -> bool:
 
     # Check config file
     try:
-        from tokenpak.agent.config import load_config
+        from tokenpak.infrastructure.config import load_config
 
         config = load_config()
         capsule_cfg = config.get("capsule_builder", {})

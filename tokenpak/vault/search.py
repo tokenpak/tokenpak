@@ -12,7 +12,7 @@ produce byte-identical prompt injections, maximising Anthropic prompt cache hits
 
 Usage::
 
-    from tokenpak.agent.vault.retrieval import sort_retrieval_results, inject_retrieved_context
+    from tokenpak.vault.retrieval import sort_retrieval_results, inject_retrieved_context
 
     results = vault_index.search(query, top_k=10)
     injection = inject_retrieved_context(results, max_tokens=4000)
@@ -24,14 +24,14 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from tokenpak._internal.ingest.schema_converter import should_serve_schema
-from tokenpak._internal.memory.session_capsules import capsule_retrieval_score
+from tokenpak.vault.ingest.schema_converter import should_serve_schema
+from tokenpak.companion.memory.session_capsules import capsule_retrieval_score
 
 # ---------------------------------------------------------------------------
 # Query expansion — optional; falls back to plain re.findall when unavailable
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.agent.vault.query_expansion import (
+    from tokenpak.vault.query_expansion import (
         tokenize as _qe_tokenize,
         expand_query as _qe_expand,
     )

@@ -28,7 +28,7 @@ from tokenpak.cli.trigger_cmd import (
     test_cmd,
     trigger_group,
 )
-from tokenpak._internal.triggers.store import TriggerStore
+from tokenpak.orchestration.triggers.store import TriggerStore
 
 
 # ---------------------------------------------------------------------------

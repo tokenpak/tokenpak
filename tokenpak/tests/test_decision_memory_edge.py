@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock
 
-from tokenpak._internal.memory.decision_memory import DecisionMemoryDB, DecisionRecord
+from tokenpak.companion.memory.decision_memory import DecisionMemoryDB, DecisionRecord
 
 
 @pytest.fixture

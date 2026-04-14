@@ -15,14 +15,14 @@ import pytest
 # ---------------------------------------------------------------------------
 # Patch the broken ingest + proxy import chain
 # ---------------------------------------------------------------------------
-_fake_ingest = types.ModuleType("tokenpak._internal.ingest")
-_fake_sc = types.ModuleType("tokenpak._internal.ingest.schema_converter")
+_fake_ingest = types.ModuleType("tokenpak.vault.ingest")
+_fake_sc = types.ModuleType("tokenpak.vault.ingest.schema_converter")
 _fake_sc.should_serve_schema = lambda intent: False
 _fake_sc.convert_document = MagicMock(return_value={})
 _fake_ingest.schema_converter = _fake_sc
-sys.modules.setdefault("tokenpak._internal.ingest", _fake_ingest)
-sys.modules.setdefault("tokenpak._internal.ingest.schema_converter", _fake_sc)
-sys.modules.setdefault("tokenpak._internal.ingest.api", MagicMock())
+sys.modules.setdefault("tokenpak.vault.ingest", _fake_ingest)
+sys.modules.setdefault("tokenpak.vault.ingest.schema_converter", _fake_sc)
+sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 
 from tokenpak.models import (  # noqa: E402
     ModelAnalyzer,

@@ -12,8 +12,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Import the modules under test
-from tokenpak._internal.memory.lesson_ingest import extract_lessons, ingest_from_vault
-from tokenpak._internal.memory.decision_memory import DecisionMemoryDB
+from tokenpak.companion.memory.lesson_ingest import extract_lessons, ingest_from_vault
+from tokenpak.companion.memory.decision_memory import DecisionMemoryDB
 
 
 class TestExtractLessons:

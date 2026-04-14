@@ -1,7 +1,7 @@
-"""Integration tests for tokenpak._internal.memory public API."""
+"""Integration tests for tokenpak.companion.memory public API."""
 
 import pytest
-from tokenpak._internal.memory import (
+from tokenpak.companion.memory import (
     REQUIRED_CAPSULE_SECTIONS,
     build_session_capsule,
     capsule_retrieval_score,

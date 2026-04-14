@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Import string used by uvicorn when workers > 1.
 # Uvicorn calls create_ingest_app() in each worker process.
-_APP_FACTORY_IMPORT = "tokenpak.agent.ingest.api:create_ingest_app"
+_APP_FACTORY_IMPORT = "tokenpak.vault.ingest.api:create_ingest_app"
 
 
 def _default_workers() -> int:
@@ -106,7 +106,7 @@ def run_serve_cmd(args) -> None:
     if workers == 1:
         # Single-worker: use in-process app object (compatible with tests/hot-reload)
         try:
-            from tokenpak._internal.ingest.api import create_ingest_app
+            from tokenpak.vault.ingest.api import create_ingest_app
         except ImportError as e:
             print(f"✖ Failed to load ingest API: {e}", file=sys.stderr)
             sys.exit(1)
