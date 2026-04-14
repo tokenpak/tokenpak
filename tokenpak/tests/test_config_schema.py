@@ -12,7 +12,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from tokenpak.config_schema_validator import (
+from tokenpak.core.config_schema_validator import (
     format_errors,
     validate_config_dict,
     validate_config_file,

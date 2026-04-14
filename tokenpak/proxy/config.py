@@ -17,7 +17,7 @@ from tokenpak.proxy.adapters import build_default_registry
 # Config — reads ~/.tokenpak/config.yaml with env var overrides
 # ---------------------------------------------------------------------------
 try:
-    from tokenpak.config_loader import get as _cfg
+    from tokenpak.core.config_loader import get as _cfg
 
     print("📄 Config: ~/.tokenpak/config.yaml (env vars override)")
 except ImportError:

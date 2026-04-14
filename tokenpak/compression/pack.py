@@ -3,7 +3,7 @@
 
 Provides the developer-facing compile() API with full transparency:
 
-    from tokenpak.pack import ContextPack, PackBlock
+    from tokenpak.compression.pack import ContextPack, PackBlock
 
     pack = ContextPack(budget=8000)
     pack.add(PackBlock(id="system_prompt", type="instructions", content="...", priority="critical"))

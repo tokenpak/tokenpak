@@ -24,7 +24,7 @@ class TestShadowHookEnabled:
     """Tests for ShadowHook in enabled state."""
 
     def _make_hook(self, tmp_path):
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
 
         ledger_path = str(tmp_path / "test_ledger.db")
         return ShadowHook(ledger_path=ledger_path, enabled=True)
@@ -93,28 +93,28 @@ class TestShadowHookEnabled:
 
 class TestShadowHookDisabled:
     def test_disabled_record_request_returns_none(self):
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
         hook = ShadowHook(enabled=False)
         assert hook.record_request("model", "query") is None
 
     def test_disabled_record_response_returns_none(self):
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
         hook = ShadowHook(enabled=False)
         assert hook.record_response(42, "response") is None
 
     def test_disabled_record_feedback_returns_false(self):
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
         hook = ShadowHook(enabled=False)
         assert hook.record_feedback(1, True) is False
 
     def test_disabled_get_stats_returns_empty_dict(self):
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
         hook = ShadowHook(enabled=False)
         assert hook.get_stats() == {}
 
     def test_init_failure_disables_hook(self, tmp_path):
         """If ledger init fails, hook should disable itself gracefully."""
-        from tokenpak.shadow_hook import ShadowHook
+        from tokenpak.proxy.shadow_hook import ShadowHook
         # Point to a non-writable path to trigger init failure
         bad_path = "/root/noaccess/ledger.db"
         hook = ShadowHook(ledger_path=bad_path, enabled=True)
@@ -131,25 +131,25 @@ class TestShadowReaderDisabled:
     """ShadowReader with TOKENPAK_SHADOW_MODE not set (disabled)."""
 
     def test_observe_request_returns_empty_when_disabled(self, tmp_path):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         reader = ShadowReader(shadow_log_path=tmp_path / "obs.jsonl")
         # Shadow mode env var not set → disabled
         obs_id = reader.observe_request("POST", "/v1/messages", {}, 1024, model="gpt-4o")
         assert obs_id == ""
 
     def test_observe_response_noop_when_disabled(self, tmp_path):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         reader = ShadowReader(shadow_log_path=tmp_path / "obs.jsonl")
         # Should not raise
         reader.observe_response("abc", 200, {}, 512, 100.0)
 
     def test_observe_metric_noop_when_disabled(self, tmp_path):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         reader = ShadowReader(shadow_log_path=tmp_path / "obs.jsonl")
         reader.observe_metric("latency", 42.5)
 
     def test_get_stats_returns_dict_when_disabled(self, tmp_path):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         reader = ShadowReader(shadow_log_path=tmp_path / "obs.jsonl")
         stats = reader.get_stats()
         assert isinstance(stats, dict)
@@ -164,7 +164,7 @@ class TestShadowReaderEnabled:
 
     def _make_reader(self, tmp_path):
         # Force module-level constant by patching the instance
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         reader = ShadowReader(shadow_log_path=tmp_path / "obs.jsonl")
         reader.enabled = True  # override since module constant was set before env patch
         reader.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -217,12 +217,12 @@ class TestShadowReaderEnabled:
 
 class TestShadowReaderHelpers:
     def test_gen_obs_id_is_unique(self):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         ids = {ShadowReader._gen_obs_id() for _ in range(100)}
         assert len(ids) == 100
 
     def test_gen_obs_id_is_string(self):
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
         obs_id = ShadowReader._gen_obs_id()
         assert isinstance(obs_id, str)
 

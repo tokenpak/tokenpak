@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.artifact_store import ArtifactStore
+from tokenpak.telemetry.artifact_store import ArtifactStore
 from tokenpak.schemas.artifact import ArtifactSchema
 from tokenpak.schemas.chunk import ChunkSchema
 from tokenpak.schemas.retrieval_cache import RetrievalCacheSchema

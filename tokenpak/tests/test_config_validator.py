@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.config_validator.ConfigValidator and ConfigValidationError.
+Tests for tokenpak.core.config_validator.ConfigValidator and ConfigValidationError.
 
 Public API under test:
     ConfigValidator.validate(config) -> List[ConfigValidationError]
@@ -13,7 +13,7 @@ import tempfile
 
 import pytest
 
-from tokenpak.config_validator import ConfigValidationError, ConfigValidator
+from tokenpak.core.config_validator import ConfigValidationError, ConfigValidator
 
 
 # ---------------------------------------------------------------------------

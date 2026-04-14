@@ -1,6 +1,6 @@
 """Unit tests for tokenpak/pricing.py"""
 import pytest
-from tokenpak.pricing import (
+from tokenpak.telemetry.pricing import (
     MODEL_RATES,
     DEFAULT_RATE,
     get_rates,

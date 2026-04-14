@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.config_schema_validator public API.
+Tests for tokenpak.core.config_schema_validator public API.
 
 Public API under test:
     validate_config_dict(config) -> (is_valid: bool, errors: list[dict])
@@ -14,7 +14,7 @@ import tempfile
 
 import pytest
 
-from tokenpak.config_schema_validator import (
+from tokenpak.core.config_schema_validator import (
     format_errors,
     validate_config_dict,
     validate_config_file,

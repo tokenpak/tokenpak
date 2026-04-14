@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.models import (
+from tokenpak.telemetry.models import (
     ModelAnalyzer,
     ModelStats,
     get_model_pricing,

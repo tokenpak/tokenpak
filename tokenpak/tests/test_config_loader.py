@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 # Reset module-level cache before each test
-import tokenpak.config_loader as _cl
+import tokenpak.core.config_loader as _cl
 
 
 @pytest.fixture(autouse=True)

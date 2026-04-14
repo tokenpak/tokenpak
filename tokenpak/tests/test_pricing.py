@@ -8,7 +8,7 @@ This file provides the canonical test_pricing.py entry point as required
 by the task spec, with focused tests on key public API contracts.
 """
 import pytest
-from tokenpak.pricing import (
+from tokenpak.telemetry.pricing import (
     MODEL_RATES,
     DEFAULT_RATE,
     get_rates,

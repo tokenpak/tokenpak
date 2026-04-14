@@ -80,7 +80,7 @@ class PluginRegistry:
           1. config.yaml ``plugins.enabled`` list (canonical)
           2. Legacy ``tokenpak.config.json`` ``plugins`` key in CWD (backward compat)
         """
-        from tokenpak.config_loader import get as config_get
+        from tokenpak.core.config_loader import get as config_get
 
         # 1. Canonical: config.yaml
         try:

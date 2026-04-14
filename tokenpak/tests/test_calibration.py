@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from tokenpak.calibration import (
+from tokenpak.orchestration.calibration import (
     _candidate_workers,
     _host_key,
     _run_index_once,
@@ -29,7 +29,7 @@ class TestProfileManagement:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "nonexistent.json"
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 result = load_profile()
                 assert result == {}
@@ -41,7 +41,7 @@ class TestProfileManagement:
             test_data = {"host1": {"best_workers": 4, "scores_sec": {"1": 2.0}}}
 
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 save_profile(test_data)
                 loaded = load_profile()
@@ -55,7 +55,7 @@ class TestProfileManagement:
             profile_path.write_text("{ invalid json }")
 
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 result = load_profile()
                 assert result == {}
@@ -121,7 +121,7 @@ class TestSampleFiles:
                 Path(tmpdir, f"file{i}.txt").write_text(f"content {i}")
 
             with mock.patch(
-                "tokenpak.calibration.walk_directory", return_value=[
+                "tokenpak.orchestration.calibration.walk_directory", return_value=[
                     (f"{tmpdir}/file{i}.txt", "text", None) for i in range(20)
                 ]
             ):
@@ -131,7 +131,7 @@ class TestSampleFiles:
     def test_sample_files_returns_list(self):
         """Sample files returns a list of file tuples."""
         with mock.patch(
-            "tokenpak.calibration.walk_directory",
+            "tokenpak.orchestration.calibration.walk_directory",
             return_value=[(f"/path/file.txt", "text", None)],
         ):
             result = _sample_files("/dummy")
@@ -145,15 +145,15 @@ class TestCalibrateWorkers:
     def test_calibrate_workers_no_files(self):
         """calibrate_workers returns error when no files found."""
         with mock.patch(
-            "tokenpak.calibration.walk_directory", return_value=[]
+            "tokenpak.orchestration.calibration.walk_directory", return_value=[]
         ):
             result = calibrate_workers("/dummy")
             assert "error" in result
             assert result["error"] == "No files found for calibration"
 
-    @mock.patch("tokenpak.calibration._run_index_once")
-    @mock.patch("tokenpak.calibration._candidate_workers")
-    @mock.patch("tokenpak.calibration.walk_directory")
+    @mock.patch("tokenpak.orchestration.calibration._run_index_once")
+    @mock.patch("tokenpak.orchestration.calibration._candidate_workers")
+    @mock.patch("tokenpak.orchestration.calibration.walk_directory")
     def test_calibrate_workers_returns_best(
         self, mock_walk, mock_candidates, mock_run_index
     ):
@@ -169,7 +169,7 @@ class TestCalibrateWorkers:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH",
+                "tokenpak.orchestration.calibration.PROFILE_PATH",
                 Path(tmpdir) / "calibration.json",
             ):
                 result = calibrate_workers("/dummy", rounds=2)
@@ -179,9 +179,9 @@ class TestCalibrateWorkers:
                 assert "scores_sec" in result
                 assert len(result["scores_sec"]) == 3
 
-    @mock.patch("tokenpak.calibration._run_index_once")
-    @mock.patch("tokenpak.calibration._candidate_workers")
-    @mock.patch("tokenpak.calibration.walk_directory")
+    @mock.patch("tokenpak.orchestration.calibration._run_index_once")
+    @mock.patch("tokenpak.orchestration.calibration._candidate_workers")
+    @mock.patch("tokenpak.orchestration.calibration.walk_directory")
     def test_calibrate_workers_saves_profile(
         self, mock_walk, mock_candidates, mock_run_index
     ):
@@ -193,7 +193,7 @@ class TestCalibrateWorkers:
         with tempfile.TemporaryDirectory() as tmpdir:
             profile_path = Path(tmpdir) / "cal" / "calibration.json"
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 calibrate_workers("/dummy", rounds=2)
 
@@ -209,7 +209,7 @@ class TestGetRecommendedWorkers:
         """Without profile, returns default worker count."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH",
+                "tokenpak.orchestration.calibration.PROFILE_PATH",
                 Path(tmpdir) / "nonexistent.json",
             ), mock.patch("os.cpu_count", return_value=4):
                 result = get_recommended_workers(default_workers=4)
@@ -238,10 +238,10 @@ class TestGetRecommendedWorkers:
             profile_path.write_text(json.dumps(profile_data))
 
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 with mock.patch(
-                    "tokenpak.calibration._host_key", return_value="host"
+                    "tokenpak.orchestration.calibration._host_key", return_value="host"
                 ):
                     result = get_recommended_workers(default_workers=4)
                     # Should decrease by 1 due to high load
@@ -264,10 +264,10 @@ class TestGetRecommendedWorkers:
             profile_path.write_text(json.dumps(profile_data))
 
             with mock.patch(
-                "tokenpak.calibration.PROFILE_PATH", profile_path
+                "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
             ):
                 with mock.patch(
-                    "tokenpak.calibration._host_key", return_value="host"
+                    "tokenpak.orchestration.calibration._host_key", return_value="host"
                 ):
                     # Load is low, so should stay at baseline or increase
                     result = get_recommended_workers(default_workers=4)
@@ -285,10 +285,10 @@ class TestGetRecommendedWorkers:
                 profile_path.write_text(json.dumps(profile_data))
 
                 with mock.patch(
-                    "tokenpak.calibration.PROFILE_PATH", profile_path
+                    "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
                 ):
                     with mock.patch(
-                        "tokenpak.calibration._host_key", return_value="host"
+                        "tokenpak.orchestration.calibration._host_key", return_value="host"
                     ):
                         # Should not raise; gracefully use baseline
                         result = get_recommended_workers(default_workers=4)
@@ -322,10 +322,10 @@ class TestBoundaryConditions:
 
             with mock.patch("os.cpu_count", return_value=4):
                 with mock.patch(
-                    "tokenpak.calibration.PROFILE_PATH", profile_path
+                    "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
                 ):
                     with mock.patch(
-                        "tokenpak.calibration._host_key", return_value="host"
+                        "tokenpak.orchestration.calibration._host_key", return_value="host"
                     ):
                         result = get_recommended_workers(default_workers=2, max_workers=4)
                         assert result <= 4
@@ -344,10 +344,10 @@ class TestBoundaryConditions:
                 profile_path.write_text(json.dumps(profile_data))
 
                 with mock.patch(
-                    "tokenpak.calibration.PROFILE_PATH", profile_path
+                    "tokenpak.orchestration.calibration.PROFILE_PATH", profile_path
                 ):
                     with mock.patch(
-                        "tokenpak.calibration._host_key", return_value="host"
+                        "tokenpak.orchestration.calibration._host_key", return_value="host"
                     ):
                         # Any load condition should adjust by at most ±1
                         with mock.patch(

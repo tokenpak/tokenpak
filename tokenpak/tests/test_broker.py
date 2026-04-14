@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.broker import (
+from tokenpak.routing.broker import (
     DOWNGRADE_COOLDOWN,
     Broker,
     RoutingDecision,

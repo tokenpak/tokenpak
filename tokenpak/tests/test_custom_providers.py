@@ -20,13 +20,13 @@ import pytest
 
 def _patch_config(cfg: dict):
     """Patch the config_loader.load_config to return *cfg* for custom_providers."""
-    return patch("tokenpak.config_loader.load_config", return_value=cfg)
+    return patch("tokenpak.core.config_loader.load_config", return_value=cfg)
 
 
 @pytest.fixture(autouse=True)
 def _reset_config_cache():
     """Reset the config_loader cache before each test."""
-    import tokenpak.config_loader as cl
+    import tokenpak.core.config_loader as cl
     old = cl._config
     cl._config = None
     yield
@@ -169,7 +169,7 @@ class TestLoadCustomProviders:
         from tokenpak.proxy.custom_providers import load_custom_providers
 
         # When config_loader is not available, should return empty
-        with patch.dict("sys.modules", {"tokenpak.config_loader": None}):
+        with patch.dict("sys.modules", {"tokenpak.core.config_loader": None}):
             # The function catches ImportError internally
             pass  # Already tested by the fallback path
 

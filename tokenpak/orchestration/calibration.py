@@ -16,10 +16,10 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from .compression.processors import get_processor
-from .core.registry import Block, BlockRegistry
-from .tokens import clear_cache, count_tokens
-from .walker import walk_directory
+from tokenpak.compression.processors import get_processor
+from tokenpak.core.registry import Block, BlockRegistry
+from tokenpak.telemetry.tokens import clear_cache, count_tokens
+from tokenpak.vault.walker import walk_directory
 
 PROFILE_PATH = Path.home() / ".tokenpak" / "calibration.json"
 

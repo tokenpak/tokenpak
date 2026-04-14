@@ -1,7 +1,7 @@
 """Unit tests for context_composer.py"""
 
 import pytest
-from tokenpak.context_composer import (
+from tokenpak.compression.context_composer import (
     ContextComposer,
     RetrievedChunk,
     ComposedContext,

@@ -1,5 +1,5 @@
 """
-Tests for tokenpak.config_validator.ConfigValidator
+Tests for tokenpak.core.config_validator.ConfigValidator
 
 Validates config dict fields on proxy startup:
 - Required fields (api_keys)
@@ -12,7 +12,7 @@ Validates config dict fields on proxy startup:
 import os
 import tempfile
 
-from tokenpak.config_validator import ConfigValidationError, ConfigValidator
+from tokenpak.core.config_validator import ConfigValidationError, ConfigValidator
 
 
 class TestConfigValidationError:

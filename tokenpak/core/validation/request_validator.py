@@ -569,7 +569,7 @@ def get_validation_mode() -> str:
       2. ~/.tokenpak/config.yaml "validation.mode" key
       3. Default: "warn"
     """
-    from tokenpak.config_loader import get as config_get
+    from tokenpak.core.config_loader import get as config_get
     
     env_val = os.environ.get("TOKENPAK_REQUEST_VALIDATION", "").lower().strip()
     if env_val in VALIDATION_MODES:

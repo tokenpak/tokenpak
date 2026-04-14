@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.goals module.
+"""Unit tests for tokenpak.cli.goals module.
 
 Tests cover:
 - Dataclasses: GoalProgress, Goal
@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
-from tokenpak.goals import (
+from tokenpak.cli.goals import (
     GoalType,
     GoalStatus,
     GoalProgress,

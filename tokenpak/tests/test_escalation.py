@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.escalation import (
+from tokenpak.orchestration.escalation import (
     EscalationResult,
     SignalRecoveryResult,
     detect_insufficient_context_signal,
@@ -109,7 +109,7 @@ class TestRunEscalationLoop:
         coverages = iter([coverage_a, coverage_b, coverage_c])
         if monkeypatch is not None:
             monkeypatch.setattr(
-                "tokenpak.escalation.compute_coverage_score",
+                "tokenpak.orchestration.escalation.compute_coverage_score",
                 lambda chunks, terms: next(coverages),
             )
         retrieve = make_retrieve_fn()

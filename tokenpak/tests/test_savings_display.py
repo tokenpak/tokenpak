@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tokenpak.cli.commands import savings, status
-from tokenpak.pricing import estimate_savings, get_rates
+from tokenpak.telemetry.pricing import estimate_savings, get_rates
 
 
 class TestPricingModule:

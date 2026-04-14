@@ -20,14 +20,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.cli_validate_config import format_errors, validate_config_file
+from tokenpak.cli.cli_validate_config import format_errors, validate_config_file
 from tokenpak.startup_validator import setup_validation_logging, validate_on_startup
 
 
 class TestValidateOnStartupValid:
     """Tests for valid configurations."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_valid_config_passes(self, mock_validate):
         """Valid config returns True and logs info."""
         mock_validate.return_value = (True, [])
@@ -37,7 +37,7 @@ class TestValidateOnStartupValid:
         assert result is True
         mock_validate.assert_called_once()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     @patch("tokenpak.startup_validator.logger")
     def test_valid_config_logs_info(self, mock_logger, mock_validate):
         """Valid config logs info message."""
@@ -48,7 +48,7 @@ class TestValidateOnStartupValid:
         # Should call logger.info() exactly once
         assert mock_logger.info.called
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_valid_config_with_custom_path(self, mock_validate):
         """Custom config path is passed to validator."""
         mock_validate.return_value = (True, [])
@@ -62,8 +62,8 @@ class TestValidateOnStartupValid:
 class TestValidateOnStartupInvalidWarnOnly:
     """Tests for invalid configs with warn_only=True (default)."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_invalid_config_returns_true_warn_only(self, mock_format, mock_validate):
         """Invalid config with warn_only=True returns True (doesn't block)."""
         mock_validate.return_value = (False, [{"field": "api_keys", "message": "Missing"}])
@@ -73,8 +73,8 @@ class TestValidateOnStartupInvalidWarnOnly:
 
         assert result is True
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     @patch("tokenpak.startup_validator.logger")
     def test_invalid_config_logs_warning_warn_only(
         self, mock_logger, mock_format, mock_validate
@@ -90,8 +90,8 @@ class TestValidateOnStartupInvalidWarnOnly:
         call_args = str(mock_logger.warning.call_args)
         assert "validation" in call_args.lower()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_multiple_errors_warn_only(self, mock_format, mock_validate):
         """Multiple validation errors handled in warn mode."""
         errors = [
@@ -110,8 +110,8 @@ class TestValidateOnStartupInvalidWarnOnly:
 class TestValidateOnStartupInvalidStrict:
     """Tests for invalid configs with warn_only=False (strict mode)."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_invalid_config_raises_strict(self, mock_format, mock_validate):
         """Invalid config with warn_only=False raises ValueError."""
         mock_validate.return_value = (False, [{"field": "api_keys", "message": "Missing"}])
@@ -120,8 +120,8 @@ class TestValidateOnStartupInvalidStrict:
         with pytest.raises(ValueError, match="Invalid config"):
             validate_on_startup(warn_only=False)
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     @patch("tokenpak.startup_validator.logger")
     def test_invalid_config_logs_error_strict(
         self, mock_logger, mock_format, mock_validate
@@ -136,8 +136,8 @@ class TestValidateOnStartupInvalidStrict:
         # Should log error
         mock_logger.error.assert_called()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_strict_mode_includes_error_count(self, mock_format, mock_validate):
         """ValueError message includes count of errors."""
         errors = [
@@ -154,7 +154,7 @@ class TestValidateOnStartupInvalidStrict:
 class TestValidateOnStartupExceptions:
     """Tests for exception handling during validation."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     @patch("tokenpak.startup_validator.logger")
     def test_validation_exception_warn_only(self, mock_logger, mock_validate):
         """Exception during validation is caught in warn mode."""
@@ -166,7 +166,7 @@ class TestValidateOnStartupExceptions:
         assert result is True
         mock_logger.warning.assert_called()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     @patch("tokenpak.startup_validator.logger")
     def test_validation_exception_strict(self, mock_logger, mock_validate):
         """Exception during validation is raised in strict mode."""
@@ -178,7 +178,7 @@ class TestValidateOnStartupExceptions:
         # Should log error
         mock_logger.error.assert_called()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_ioerror_on_config_file(self, mock_validate):
         """IOError from config file access is handled."""
         mock_validate.side_effect = IOError("Permission denied")
@@ -221,7 +221,7 @@ class TestSetupValidationLogging:
 class TestConfigPathExpansion:
     """Tests for config path handling."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_tilde_expansion_in_path(self, mock_validate):
         """Tilde (~) in path is expanded."""
         mock_validate.return_value = (True, [])
@@ -231,7 +231,7 @@ class TestConfigPathExpansion:
         # Should have been called once (path expansion happens internally)
         mock_validate.assert_called_once()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_absolute_path_preserved(self, mock_validate):
         """Absolute paths are preserved."""
         mock_validate.return_value = (True, [])
@@ -240,7 +240,7 @@ class TestConfigPathExpansion:
 
         mock_validate.assert_called_once()
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_relative_path_accepted(self, mock_validate):
         """Relative paths are accepted."""
         mock_validate.return_value = (True, [])
@@ -253,7 +253,7 @@ class TestConfigPathExpansion:
 class TestReturnValues:
     """Tests for return value semantics."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_valid_returns_true(self, mock_validate):
         """Valid config always returns True."""
         mock_validate.return_value = (True, [])
@@ -261,8 +261,8 @@ class TestReturnValues:
         assert validate_on_startup(warn_only=True) is True
         assert validate_on_startup(warn_only=False) is True
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_invalid_warn_only_returns_true(self, mock_format, mock_validate):
         """Invalid config with warn_only=True returns True."""
         mock_validate.return_value = (False, [{"field": "x"}])
@@ -270,8 +270,8 @@ class TestReturnValues:
 
         assert validate_on_startup(warn_only=True) is True
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_invalid_strict_raises_not_returns(self, mock_format, mock_validate):
         """Invalid config with warn_only=False raises, doesn't return False."""
         mock_validate.return_value = (False, [{"field": "x"}])
@@ -286,8 +286,8 @@ class TestReturnValues:
 class TestEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_empty_error_list(self, mock_format, mock_validate):
         """Empty error list is treated as valid."""
         mock_validate.return_value = (False, [])  # Invalid flag but no errors
@@ -297,8 +297,8 @@ class TestEdgeCases:
         result = validate_on_startup(warn_only=True)
         assert result is True
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
-    @patch("tokenpak.cli_validate_config.format_errors")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.format_errors")
     def test_very_long_error_message(self, mock_format, mock_validate):
         """Long error messages are handled."""
         long_error = "x" * 10000
@@ -308,7 +308,7 @@ class TestEdgeCases:
         result = validate_on_startup(warn_only=True)
         assert result is True
 
-    @patch("tokenpak.cli_validate_config.validate_config_file")
+    @patch("tokenpak.cli.cli_validate_config.validate_config_file")
     def test_none_config_path_defaults(self, mock_validate):
         """None config_path uses default."""
         mock_validate.return_value = (True, [])

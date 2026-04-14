@@ -6,7 +6,7 @@ On threshold breach, emits an auth-failure-detected event so
 downstream hooks (e.g. Telegram alerts) can notify the user.
 
 Usage in proxy.py:
-    from tokenpak.auth_guard import AUTH_GUARD
+    from tokenpak.security.auth_guard import AUTH_GUARD
     AUTH_GUARD.record_response(provider="anthropic", status_code=status)
 """
 

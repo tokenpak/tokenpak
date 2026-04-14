@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-import tokenpak.user_templates as ut
+import tokenpak.cli.user_templates as ut
 
 
 # ---------------------------------------------------------------------------

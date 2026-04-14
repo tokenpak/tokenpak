@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.budget_controller import (
+from tokenpak.telemetry.budget_controller import (
     BudgetController,
     BudgetDecision,
     BudgetThresholdAlert,

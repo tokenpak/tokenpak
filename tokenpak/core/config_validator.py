@@ -11,7 +11,7 @@ Validates proxy config on boot:
 - File paths exist (log dir, cache dir)
 
 Usage:
-    from tokenpak.config_validator import ConfigValidator
+    from tokenpak.core.config_validator import ConfigValidator
 
     validator = ConfigValidator()
     errors = validator.validate(config_dict)

@@ -1,11 +1,11 @@
-"""Unit tests for tokenpak.walker module."""
+"""Unit tests for tokenpak.vault.walker module."""
 
 import os
 import tempfile
 from pathlib import Path
 import pytest
 
-from tokenpak.walker import (
+from tokenpak.vault.walker import (
     walk_directory,
     detect_file_type,
     FILE_TYPES,

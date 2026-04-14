@@ -27,10 +27,10 @@ os.environ["TOKENPAK_INCIDENT_LOG"] = os.path.join(_tmp, "incidents.log")
 # Re-import to pick up env overrides
 import importlib
 
-import tokenpak.auth_guard as auth_guard_module
+import tokenpak.security.auth_guard as auth_guard_module
 
 importlib.reload(auth_guard_module)
-from tokenpak.auth_guard import AuthGuard
+from tokenpak.security.auth_guard import AuthGuard
 
 
 class TestAuthGuardCounters(unittest.TestCase):
@@ -105,7 +105,7 @@ class TestAuthGuardEvents(unittest.TestCase):
     def test_cooldown_prevents_duplicate_alert(self):
         guard = self._make_guard()
         # Override cooldown to 10 seconds for this test
-        import tokenpak.auth_guard as m
+        import tokenpak.security.auth_guard as m
 
         orig = m.AUTH_ALERT_COOLDOWN_SEC
         m.AUTH_ALERT_COOLDOWN_SEC = 10
@@ -153,7 +153,7 @@ class TestAuthGuardIncidentLog(unittest.TestCase):
         log_path = Path(_tmp) / "incidents_test.log"
         os.environ["TOKENPAK_INCIDENT_LOG"] = str(log_path)
         importlib.reload(auth_guard_module)
-        from tokenpak.auth_guard import AuthGuard as FreshGuard
+        from tokenpak.security.auth_guard import AuthGuard as FreshGuard
 
         guard = FreshGuard()
         fired = threading.Event()
@@ -175,7 +175,7 @@ class TestAuthGuardIncidentLog(unittest.TestCase):
 
 class TestAuthAlertMessage(unittest.TestCase):
     def test_message_contains_expected_text(self):
-        from tokenpak.auth_alert import _build_alert_message
+        from tokenpak.security.auth_alert import _build_alert_message
 
         msg = _build_alert_message(
             "anthropic",

@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.aggregate module."""
+"""Unit tests for tokenpak.cli.aggregate module."""
 
 import json
 import pytest
@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tokenpak.aggregate import (
+from tokenpak.cli.aggregate import (
     AggregateRow,
     parse_since,
     load_requests,

@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from tokenpak.daily_report import (
+from tokenpak.cli.daily_report import (
     DailySavingsData,
     ModelCompressionRow,
     _calculate_data,
@@ -166,8 +166,8 @@ class TestGetSavingsReport:
 class TestCalculateData:
     """Test _calculate_data function."""
 
-    @mock.patch("tokenpak.daily_report._get_savings_report")
-    @mock.patch("tokenpak.daily_report._proxy_get")
+    @mock.patch("tokenpak.cli.daily_report._get_savings_report")
+    @mock.patch("tokenpak.cli.daily_report._proxy_get")
     @mock.patch("time.time")
     def test_calculate_data_with_live_proxy(
         self, mock_time, mock_proxy_get, mock_savings
@@ -211,8 +211,8 @@ class TestCalculateData:
         assert data.cache_hit_rate == 0.5  # 50 / 100
         assert data.compression_percent == 20.0  # 2000 / 10000 * 100
 
-    @mock.patch("tokenpak.daily_report._get_savings_report")
-    @mock.patch("tokenpak.daily_report._proxy_get")
+    @mock.patch("tokenpak.cli.daily_report._get_savings_report")
+    @mock.patch("tokenpak.cli.daily_report._proxy_get")
     def test_calculate_data_all_zeros(self, mock_proxy_get, mock_savings):
         """Test _calculate_data with all zero responses."""
         mock_proxy_get.return_value = None
@@ -229,8 +229,8 @@ class TestCalculateData:
         assert data.savings_amount == 0.0
         assert data.cache_hit_rate == 0.0
 
-    @mock.patch("tokenpak.daily_report._get_savings_report")
-    @mock.patch("tokenpak.daily_report._proxy_get")
+    @mock.patch("tokenpak.cli.daily_report._get_savings_report")
+    @mock.patch("tokenpak.cli.daily_report._proxy_get")
     def test_calculate_data_zero_input_tokens(self, mock_proxy_get, mock_savings):
         """Test compression percent calculation with zero input tokens."""
         def proxy_side_effect(path, port=None):
@@ -412,7 +412,7 @@ class TestFormatJson:
 class TestGenerateReport:
     """Test generate_report function."""
 
-    @mock.patch("tokenpak.daily_report._calculate_data")
+    @mock.patch("tokenpak.cli.daily_report._calculate_data")
     def test_generate_report_terminal_format(self, mock_calc):
         """Test generate_report with terminal format."""
         mock_calc.return_value = DailySavingsData(
@@ -434,7 +434,7 @@ class TestGenerateReport:
         assert isinstance(output, str)
         assert "📊 TokenPak Daily Report" in output
 
-    @mock.patch("tokenpak.daily_report._calculate_data")
+    @mock.patch("tokenpak.cli.daily_report._calculate_data")
     def test_generate_report_markdown_format(self, mock_calc):
         """Test generate_report with markdown format."""
         mock_calc.return_value = DailySavingsData(
@@ -456,7 +456,7 @@ class TestGenerateReport:
         assert isinstance(output, str)
         assert "## 📊" in output
 
-    @mock.patch("tokenpak.daily_report._calculate_data")
+    @mock.patch("tokenpak.cli.daily_report._calculate_data")
     def test_generate_report_json_format(self, mock_calc):
         """Test generate_report with JSON format."""
         mock_calc.return_value = DailySavingsData(
@@ -478,7 +478,7 @@ class TestGenerateReport:
         assert isinstance(output, dict)
         assert output["requests"] == 150
 
-    @mock.patch("tokenpak.daily_report._calculate_data")
+    @mock.patch("tokenpak.cli.daily_report._calculate_data")
     def test_generate_report_default_format(self, mock_calc):
         """Test generate_report defaults to terminal format."""
         mock_calc.return_value = DailySavingsData(

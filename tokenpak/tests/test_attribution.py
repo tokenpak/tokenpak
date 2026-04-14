@@ -16,7 +16,7 @@ import time
 import unittest
 from pathlib import Path
 
-from tokenpak.attribution import (
+from tokenpak.telemetry.attribution import (
     AGENT_EMOJI,
     AttributionRecord,
     AttributionTracker,

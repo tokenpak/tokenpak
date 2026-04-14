@@ -386,7 +386,7 @@ class TierSelector:
     Selection matrix
     ----------------
     complexity_score : float
-        0.0–10.0 scale (compatible with ``tokenpak.complexity`` scorer).
+        0.0–10.0 scale (compatible with ``tokenpak.compression.complexity`` scorer).
     budget_remaining : float
         Fraction of token budget still available (0.0 = exhausted, 1.0 = full).
     relevance_score : float, optional

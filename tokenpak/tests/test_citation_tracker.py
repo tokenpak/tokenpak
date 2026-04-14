@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.citation_tracker import (
+from tokenpak.telemetry.citation_tracker import (
     track_citations,
     update_utility,
     get_utility_score,

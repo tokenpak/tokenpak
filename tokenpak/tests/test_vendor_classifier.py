@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import pytest
-from tokenpak.vendor_classifier import (
+from tokenpak.compression.vendor_classifier import (
     classify_vendor_minified,
     should_include_in_index,
     create_metadata_only_block,

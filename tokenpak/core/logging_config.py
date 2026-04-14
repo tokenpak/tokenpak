@@ -4,7 +4,7 @@
 Usage::
 
     # In your entrypoint or __init__.py:
-    from tokenpak.logging_config import configure_logging
+    from tokenpak.core.logging_config import configure_logging
     configure_logging()
 
     # Then use standard logging:

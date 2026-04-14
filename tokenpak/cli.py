@@ -13,8 +13,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Tuple
 
-from .cli.formatting import OutputFormatter, OutputMode, resolve_mode
-from .cli.formatting import symbols as FS
+from tokenpak._formatting import OutputFormatter, OutputMode, resolve_mode
+from tokenpak._formatting import symbols as FS
 
 # ── Live Proxy Access ─────────────────────────────────────────────────────────
 
@@ -351,7 +351,7 @@ def cmd_start(args):
     if config_path.exists():
         try:
             import json as _json
-            from tokenpak.config_validator import ConfigValidator
+            from tokenpak.core.config_validator import ConfigValidator
             with open(config_path, "r") as _cf:
                 _config = _json.load(_cf)
             _validator = ConfigValidator()
@@ -486,15 +486,15 @@ def cmd_logs(args):
 
 # ── End Progressive Disclosure ────────────────────────────────────────────────
 
-from .budget import BudgetBlock, quadratic_allocate
-from .calibration import calibrate_workers, get_recommended_workers
-from .miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
+from .telemetry.budget_allocator import BudgetBlock, quadratic_allocate
+from .orchestration.calibration import calibrate_workers, get_recommended_workers
+from .telemetry.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from .compression.processors import get_processor
 from .core.registry import Block, BlockRegistry
 from .security import secure_write_config
-from .tokens import cache_info, count_tokens, truncate_to_tokens
-from .walker import walk_directory
-from .wire import pack
+from .telemetry.tokens import cache_info, count_tokens, truncate_to_tokens
+from .vault.walker import walk_directory
+from .compression.wire import pack
 
 # Batch size for SQLite transactions
 BATCH_SIZE = 100
@@ -1034,12 +1034,12 @@ def cmd_benchmark(args):
     if latency_mode:
         # Legacy latency benchmark — requires a directory
         directory = getattr(args, "directory", None) or "."
-        from .benchmark import run_benchmark
+        from .orchestration.benchmark import run_benchmark
 
         run_benchmark(directory, args.iterations, compare=args.compare)
     else:
         # Compression benchmark (new default)
-        from .benchmark import run_compression_benchmark
+        from .orchestration.benchmark import run_compression_benchmark
 
         run_compression_benchmark(file=file_arg, use_samples=use_samples, as_json=as_json)
 
@@ -1076,7 +1076,7 @@ class Colors:
 def cmd_requests(args):
     """Live request explorer: tail or show a request by id."""
     import json as _json
-    from tokenpak.request_explorer import (
+    from tokenpak.cli.request_explorer import (
         REQUESTS_PATH,
         load_requests,
         get_request_by_id,
@@ -1175,7 +1175,7 @@ def cmd_requests(args):
 def cmd_aggregate(args):
     """Aggregate request ledger across machines."""
     import json as _json
-    from tokenpak.aggregate import load_requests, aggregate_records, render_table, parse_since, default_machine_name
+    from tokenpak.cli.aggregate import load_requests, aggregate_records, render_table, parse_since, default_machine_name
 
     since_raw = getattr(args, "since", None)
     since_dt = parse_since(since_raw)
@@ -1198,7 +1198,7 @@ def cmd_aggregate(args):
 def cmd_attribution(args):
     """View savings breakdown by agent/skill/model."""
     import json as _json
-    from tokenpak.attribution import AttributionTracker, format_attribution
+    from tokenpak.telemetry.attribution import AttributionTracker, format_attribution
 
     tracker = AttributionTracker()
     tracker.load()
@@ -1221,7 +1221,7 @@ def cmd_attribution(args):
 def cmd_timeline(args):
     """View savings trend over 7/30 days."""
     import json as _json
-    from tokenpak.timeline import get_timeline, format_timeline
+    from tokenpak.telemetry.timeline import get_timeline, format_timeline
 
     days = getattr(args, "days", 7)
     entries = get_timeline(days=days)
@@ -1347,7 +1347,7 @@ def cmd_dashboard(args):
 
     # --public: show public URL with token
     if getattr(args, "public", False):
-        from tokenpak.config_loader import get as _cfg  # noqa: F401
+        from tokenpak.core.config_loader import get as _cfg  # noqa: F401
         port = int(_cfg("port", 8766, "TOKENPAK_PORT", int))
         token = load_or_create_token()
         hostname = socket.gethostname()
@@ -2047,7 +2047,7 @@ def cmd_status(args):
 
     # Budget tracking (local DB)
     try:
-        from .budgeter import BudgetTracker
+        from .telemetry.budgeter import BudgetTracker
         tracker = BudgetTracker()
         rows = []
         for period in ("daily", "weekly", "monthly"):
@@ -2228,7 +2228,7 @@ def cmd_savings(args):
 def cmd_compare(args):
     """Show before/after cost comparison for last N requests."""
     from .telemetry.query import get_recent_events
-    from .pricing import calculate_request_cost, calculate_request_cost_baseline
+    from .telemetry.pricing import calculate_request_cost, calculate_request_cost_baseline
     import time
     
     limit = getattr(args, "last", 1)
@@ -2266,7 +2266,7 @@ def cmd_compare(args):
 def cmd_leaderboard(args):
     """Show per-model efficiency ranking."""
     from .telemetry.query import get_model_usage, get_savings_report
-    from .pricing import calculate_request_cost_baseline, calculate_request_cost
+    from .telemetry.pricing import calculate_request_cost_baseline, calculate_request_cost
     
     days = getattr(args, "days", 1)
     usage = get_model_usage(days=days)
@@ -2578,7 +2578,7 @@ def _save_lock(lock: dict):
 
 def cmd_config(args):
     """Config management: show, init, edit."""
-    from tokenpak.config_loader import CONFIG_PATH, generate_default_yaml, get_all, load_config
+    from tokenpak.core.config_loader import CONFIG_PATH, generate_default_yaml, get_all, load_config
 
     subcmd = getattr(args, "config_cmd", "show")
 
@@ -3826,7 +3826,7 @@ def cmd_forecast(args):
 # ── Goals (Savings Targets & Progress Tracking) ────────────────────────────────
 
 def _get_goal_manager():
-    from .goals import GoalManager
+    from .cli.goals import GoalManager
     return GoalManager()
 
 
@@ -4854,7 +4854,7 @@ def cmd_replay_show(args):
 def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, int]:
     """Compress message content and return (compressed_text, token_count)."""
     from .compression.processors.text import TextProcessor
-    from .tokens import count_tokens
+    from .telemetry.tokens import count_tokens
 
     proc = TextProcessor(aggressive=aggressive)
     parts = []
@@ -4878,7 +4878,7 @@ def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, i
 
 def cmd_replay_run(args):
     """Re-run a captured session with different settings (zero API cost)."""
-    from .tokens import count_tokens
+    from .telemetry.tokens import count_tokens
 
     store = _get_replay_store()
     e = store.get(args.id)
@@ -5120,7 +5120,7 @@ def _run_compression_demo():
     """Show live compression on a sample prompt with before/after token counts."""
     from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.compression.engines.base import CompactionHints
-    from tokenpak.tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 
     SAMPLE_PROMPT = """\
 You are a helpful assistant. Please help me understand the following documentation.
@@ -6035,7 +6035,7 @@ def cmd_validate(args):
     import json as _json
     import sys as _sys
 
-    from tokenpak.validator import TokenPakValidator
+    from tokenpak.core.validator import TokenPakValidator
 
     validator = TokenPakValidator()
     result = validator.validate_file(args.file, verbose=getattr(args, "verbose", False))
@@ -6153,7 +6153,7 @@ def cmd_vault_health(args):
 
 def cmd_config_check(args):
     """Validate a proxy config file (JSON)."""
-    from tokenpak.config_validator import ConfigValidator
+    from tokenpak.core.config_validator import ConfigValidator
     import json
     
     config_path = Path(args.file).expanduser()
@@ -6193,7 +6193,7 @@ def cmd_config_check(args):
 
 def cmd_fleet(args):
     """Query and manage a fleet of TokenPak proxy instances."""
-    from .fleet import (
+    from .cli.fleet import (
         load_fleet_config,
         query_fleet,
         render_fleet_table,

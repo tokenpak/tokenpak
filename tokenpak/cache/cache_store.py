@@ -28,7 +28,7 @@ keys and whose values are objects with the shape::
 
 Usage::
 
-    from tokenpak.cache_store import CacheStore
+    from tokenpak.cache.cache_store import CacheStore
 
     store = CacheStore()                     # default path
     store.set("model_list", ["gpt-4", …], ttl=3600)

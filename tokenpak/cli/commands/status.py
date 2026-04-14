@@ -32,7 +32,7 @@ except ImportError:
 
 # Import pricing module for per-model rates
 try:
-    from tokenpak.pricing import MODEL_RATES, DEFAULT_RATE, get_rates
+    from tokenpak.telemetry.pricing import MODEL_RATES, DEFAULT_RATE, get_rates
 except ImportError:
     MODEL_RATES = {
         "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
@@ -743,7 +743,7 @@ def run_full(
 
     # Import estimate_savings if available
     try:
-        from tokenpak.pricing import estimate_savings
+        from tokenpak.telemetry.pricing import estimate_savings
     except ImportError:
         estimate_savings = None
 

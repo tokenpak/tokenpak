@@ -716,7 +716,7 @@ class ProxyRoutesMixin:
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             provided = params.get("token", [None])[0]
-            from tokenpak.token_manager import load_or_create_token
+            from tokenpak.telemetry.token_manager import load_or_create_token
             expected = load_or_create_token()
             if not provided or provided != expected:
                 self._send_json(

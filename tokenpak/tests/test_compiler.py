@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.compiler import (
+from tokenpak.compression.compiler import (
     compile_with_refs,
     _build_ephemeral_block,
     _cache_get,
@@ -19,7 +19,7 @@ from tokenpak.compiler import (
     _prune_stale,
     _save_cache,
 )
-from tokenpak.reference_scanner import Reference
+from tokenpak.compression.reference_scanner import Reference
 
 
 class TestTokenEstimation:
@@ -213,7 +213,7 @@ class TestCompileWithRefs:
         blocks = [{"content": "test", "tokens": 10}]
         query = "test query"
         
-        with patch("tokenpak.compiler.pack") as mock_pack:
+        with patch("tokenpak.compression.compiler.pack") as mock_pack:
             mock_pack.return_value = "packed result"
             result = compile_with_refs(
                 blocks,
@@ -230,8 +230,8 @@ class TestCompileWithRefs:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_path = Path(tmpdir) / "cache.json"
             
-            with patch("tokenpak.compiler.scan_for_references", return_value=[]):
-                with patch("tokenpak.compiler.pack") as mock_pack:
+            with patch("tokenpak.compression.compiler.scan_for_references", return_value=[]):
+                with patch("tokenpak.compression.compiler.pack") as mock_pack:
                     mock_pack.return_value = "packed"
                     result = compile_with_refs(
                         [],
@@ -262,8 +262,8 @@ class TestCompileWithRefs:
             
             blocks = [{"content": "test", "tokens": 50}]
             
-            with patch("tokenpak.compiler.scan_for_references", return_value=[ref]):
-                with patch("tokenpak.compiler.pack") as mock_pack:
+            with patch("tokenpak.compression.compiler.scan_for_references", return_value=[ref]):
+                with patch("tokenpak.compression.compiler.pack") as mock_pack:
                     mock_pack.return_value = "packed"
                     result = compile_with_refs(
                         blocks,
@@ -297,10 +297,10 @@ class TestCompileWithRefs:
             refs = [ref]
             fetched_content = "x" * 200  # Would be 50 tokens
             
-            with patch("tokenpak.compiler.scan_for_references", return_value=refs):
-                with patch("tokenpak.compiler.fetch_reference") as mock_fetch:
+            with patch("tokenpak.compression.compiler.scan_for_references", return_value=refs):
+                with patch("tokenpak.compression.compiler.fetch_reference") as mock_fetch:
                     mock_fetch.return_value = fetched_content
-                    with patch("tokenpak.compiler.pack") as mock_pack:
+                    with patch("tokenpak.compression.compiler.pack") as mock_pack:
                         mock_pack.return_value = "packed"
                         result = compile_with_refs(
                             blocks,

@@ -11,7 +11,7 @@ Tests that each error path:
 
 import pytest
 
-from tokenpak.config_validator import ConfigValidator
+from tokenpak.core.config_validator import ConfigValidator
 from tokenpak.sdk.integrations.litellm.formatter import compile_pack
 from tokenpak.sdk.integrations.litellm.middleware import TokenPakMiddleware
 

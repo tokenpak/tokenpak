@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.trace module.
+Unit tests for tokenpak.companion.trace module.
 
 Tests cover the public API:
 - TokenPakTrace (dataclass + serialization)
@@ -12,7 +12,7 @@ Tests cover the public API:
 import base64
 import json
 import pytest
-from tokenpak.trace import (
+from tokenpak.companion.trace import (
     TokenPakTrace,
     TraceBuilder,
     TRACE_HEADER,

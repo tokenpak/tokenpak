@@ -120,7 +120,7 @@ try:
         """Validate a TokenPak config file against the schema."""
         import sys
 
-        from tokenpak.cli_validate_config import format_errors, validate_config_file
+        from tokenpak.cli.cli_validate_config import format_errors, validate_config_file
 
         is_valid, errors = validate_config_file(config_file)
 

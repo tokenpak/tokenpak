@@ -2,7 +2,7 @@
 """Tests for tokenpak/cache_report.py"""
 
 import pytest
-from tokenpak.cache_report import format_cache_report
+from tokenpak.cache.cache_report import format_cache_report
 
 
 # ---------------------------------------------------------------------------

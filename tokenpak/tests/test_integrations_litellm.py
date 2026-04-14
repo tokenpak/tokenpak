@@ -113,14 +113,14 @@ class TestDictToBlocks:
 
 class TestBlocksToMessages:
     def test_empty_blocks_produces_system_message(self):
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = blocks_to_messages([], budget=8000, compaction="none")
         assert len(msgs) == 1
         assert msgs[0]["role"] == "system"
 
     def test_block_content_in_system_message(self):
         blocks = [_make_block("important context")]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = blocks_to_messages(blocks, budget=8000, compaction="none")
         assert "important context" in msgs[0]["content"]
 
@@ -130,7 +130,7 @@ class TestBlocksToMessages:
             {"role": "system", "content": "old system"},
             {"role": "user", "content": "hi"},
         ]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = blocks_to_messages(blocks, budget=8000, compaction="none", existing_messages=existing)
         # First message is new system, old system skipped, user included
         assert msgs[0]["role"] == "system"
@@ -142,7 +142,7 @@ class TestBlocksToMessages:
     def test_aggressive_compaction_truncates_oversized_block(self):
         large_content = "x" * 40000  # ~10000 tokens
         blocks = [_make_block(content=large_content, tokens=10000)]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = blocks_to_messages(blocks, budget=200, compaction="aggressive")
         # Should have truncated — content in system message much smaller than 40000 chars
         sys_content = msgs[0]["content"]
@@ -151,7 +151,7 @@ class TestBlocksToMessages:
     def test_none_compaction_does_not_truncate(self):
         content = "y" * 800  # ~200 tokens
         blocks = [_make_block(content=content, tokens=200)]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = blocks_to_messages(blocks, budget=100, compaction="none")
         # With compaction="none" blocks are added as-is regardless of budget
         assert content in msgs[0]["content"]
@@ -159,7 +159,7 @@ class TestBlocksToMessages:
     def test_balanced_compaction_falls_back_on_engine_error(self):
         large_content = "z" * 40000
         blocks = [_make_block(content=large_content, tokens=10000)]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             with patch(
                 "tokenpak.compression.engines.get_engine",
                 side_effect=Exception("engine fail"),
@@ -176,7 +176,7 @@ class TestBlocksToMessages:
 class TestCompilePack:
     def test_compile_list_of_blocks(self):
         blocks = [_make_block("block content")]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = compile_pack(blocks, budget=8000, compaction="none")
         assert msgs[0]["role"] == "system"
         assert "block content" in msgs[0]["content"]
@@ -186,7 +186,7 @@ class TestCompilePack:
             "version": "1.0",
             "blocks": [{"ref": "doc.md", "type": "text", "content": "dict content", "tokens": 10}],
         }
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = compile_pack(pack_dict, budget=8000, compaction="none")
         assert "dict content" in msgs[0]["content"]
 
@@ -194,13 +194,13 @@ class TestCompilePack:
         block = _make_block("registry block")
         registry = MagicMock()
         registry.all_blocks.return_value = [block]
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = compile_pack(registry, budget=8000, compaction="none")
         assert "registry block" in msgs[0]["content"]
 
     def test_compile_registry_without_all_blocks_returns_empty_system(self):
         registry = MagicMock(spec=[])  # no all_blocks attribute
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             msgs = compile_pack(registry, budget=8000, compaction="none")
         assert msgs[0]["role"] == "system"
 
@@ -340,7 +340,7 @@ class TestTokenPakMiddlewarePreCallHook:
         pack_dict = {"blocks": [{"ref": "a.md", "content": "ctx text", "tokens": 5}]}
         data = {"tokenpak": pack_dict, "model": "gpt-4"}
 
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             result = mw.pre_call_hook(None, None, data, "completion")
 
         assert "messages" in result
@@ -352,7 +352,7 @@ class TestTokenPakMiddlewarePreCallHook:
         pack_dict = {"blocks": [{"ref": "a.md", "content": "ctx", "tokens": 3}]}
         data = {"tokenpak": pack_dict, "model": "gpt-4"}
 
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             result = mw.pre_call_hook(None, None, data, "completion")
 
         assert "_tokenpak_meta" in result
@@ -363,7 +363,7 @@ class TestTokenPakMiddlewarePreCallHook:
         pack_dict = {"blocks": [{"ref": "a.md", "content": "ctx", "tokens": 3}]}
         data = {"tokenpak": pack_dict, "model": "gpt-4"}
 
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             result = mw.pre_call_hook(None, None, data, "completion")
 
         assert "_tokenpak_meta" not in result
@@ -436,7 +436,7 @@ class TestTokenPakMiddlewareWrapKwargs:
     def test_wrap_with_tokenpak(self):
         mw = TokenPakMiddleware(telemetry=False)
         pack_dict = {"blocks": [{"content": "wrapped ctx", "tokens": 5}]}
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             result = mw.wrap_kwargs(tokenpak=pack_dict, model="gpt-4")
         assert "messages" in result
         assert "tokenpak" not in result
@@ -445,7 +445,7 @@ class TestTokenPakMiddlewareWrapKwargs:
     def test_wrap_removes_internal_keys(self):
         mw = TokenPakMiddleware(telemetry=False)
         pack_dict = {"blocks": [{"content": "x", "tokens": 1}]}
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             result = mw.wrap_kwargs(
                 tokenpak=pack_dict,
                 model="gpt-4",
@@ -521,7 +521,7 @@ class TestProxyHandlerHandle:
             "model": "gpt-4",
             "tokenpak": {"blocks": [{"content": "ctx", "tokens": 5}]},
         }
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             with patch.dict("sys.modules", {"litellm": None}):
                 result = self._run(handler.handle(body))
         assert result["error"]["status"] == 500
@@ -534,7 +534,7 @@ class TestProxyHandlerHandle:
         }
         mock_litellm = MagicMock()
         mock_litellm.acompletion = AsyncMock(side_effect=RuntimeError("model unavailable"))
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             with patch.dict("sys.modules", {"litellm": mock_litellm}):
                 result = self._run(handler.handle(body))
         assert result["error"]["status"] == 502
@@ -551,7 +551,7 @@ class TestProxyHandlerHandle:
         mock_litellm = MagicMock()
         mock_litellm.acompletion = AsyncMock(return_value=mock_response)
 
-        with patch("tokenpak.wire.pack", _wire_pack_passthrough):
+        with patch("tokenpak.compression.wire.pack", _wire_pack_passthrough):
             with patch.dict("sys.modules", {"litellm": mock_litellm}):
                 result = self._run(handler.handle(body))
 

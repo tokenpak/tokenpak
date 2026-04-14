@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
-from tokenpak.fleet import (
+from tokenpak.cli.fleet import (
     FleetMachine,
     FleetStats,
     FleetAgentRow,
@@ -155,7 +155,7 @@ class TestFleetConfig:
 
     def test_load_fleet_config_empty(self):
         """Test loading when no config file exists."""
-        with patch("tokenpak.fleet._get_fleet_config_path") as mock_path:
+        with patch("tokenpak.cli.fleet._get_fleet_config_path") as mock_path:
             mock_path.return_value = Path("/nonexistent/fleet.yaml")
             machines = load_fleet_config()
             assert machines == []
@@ -174,7 +174,7 @@ class TestFleetConfig:
             with open(config_path, "w") as f:
                 yaml.dump(config_data, f)
 
-            with patch("tokenpak.fleet._get_fleet_config_path") as mock_path:
+            with patch("tokenpak.cli.fleet._get_fleet_config_path") as mock_path:
                 mock_path.return_value = config_path
                 machines = load_fleet_config()
 
@@ -189,7 +189,7 @@ class TestFleetConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = Path(tmpdir) / "fleet.yaml"
 
-            with patch("tokenpak.fleet._get_fleet_config_path") as mock_path:
+            with patch("tokenpak.cli.fleet._get_fleet_config_path") as mock_path:
                 mock_path.return_value = config_path
                 save_fleet_config(sample_machines)
 
@@ -215,7 +215,7 @@ class TestFleetConfig:
             with open(config_path, "w") as f:
                 yaml.dump(config_data, f)
 
-            with patch("tokenpak.fleet._get_fleet_config_path") as mock_path:
+            with patch("tokenpak.cli.fleet._get_fleet_config_path") as mock_path:
                 mock_path.return_value = config_path
                 machines = load_fleet_config()
 

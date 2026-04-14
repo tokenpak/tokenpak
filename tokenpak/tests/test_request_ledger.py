@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tokenpak.request_ledger import (
+from tokenpak.telemetry.request_ledger import (
     REQUESTS_PATH,
     append_request,
     MAX_REQUESTS,
@@ -78,7 +78,7 @@ class TestAppendRequest:
 
     def test_append_request_uses_default_path_when_none(self, tmp_path):
         """Test that None path defaults to REQUESTS_PATH."""
-        with patch("tokenpak.request_ledger.REQUESTS_PATH", tmp_path / "default.jsonl"):
+        with patch("tokenpak.telemetry.request_ledger.REQUESTS_PATH", tmp_path / "default.jsonl"):
             record = {"request_id": "req-default"}
             append_request(record, path=None)
 

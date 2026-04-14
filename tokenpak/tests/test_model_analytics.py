@@ -24,7 +24,7 @@ sys.modules.setdefault("tokenpak.vault.ingest", _fake_ingest)
 sys.modules.setdefault("tokenpak.vault.ingest.schema_converter", _fake_sc)
 sys.modules.setdefault("tokenpak.vault.ingest.api", MagicMock())
 
-from tokenpak.models import (  # noqa: E402
+from tokenpak.telemetry.models import (  # noqa: E402
     ModelAnalyzer,
     ModelStats,
     get_model_pricing,

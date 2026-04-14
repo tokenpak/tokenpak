@@ -17,8 +17,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import tokenpak._pro_hooks as ph
-from tokenpak.wire import make_slice_id, pack
+import tokenpak.sdk._pro_hooks as ph
+from tokenpak.compression.wire import make_slice_id, pack
 
 
 # ---------------------------------------------------------------------------

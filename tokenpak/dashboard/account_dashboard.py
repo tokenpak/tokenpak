@@ -85,7 +85,7 @@ def _load_usage_data(user_id: str, start_date: str, end_date: str) -> list[dict]
       ]
     """
     try:
-        from tokenpak.metering import UsageMeterManager
+        from tokenpak.telemetry.metering import UsageMeterManager
 
         manager = UsageMeterManager()
         meter = manager.get_meter(user_id)
@@ -122,7 +122,7 @@ def _calculate_roi(saved_tokens: int) -> dict:
     """
     Calculate dollar savings from saved tokens.
 
-    Uses per-model pricing (from tokenpak.pricing or hard-coded fallback).
+    Uses per-model pricing (from tokenpak.telemetry.pricing or hard-coded fallback).
 
     Returns:
       {

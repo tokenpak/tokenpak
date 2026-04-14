@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.forecast module.
+"""Unit tests for tokenpak.cli.forecast module.
 
 Tests cover:
 - BurnRateAnalysis dataclass construction
@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from unittest import mock
 from typing import Dict, Any, List
 
-from tokenpak.forecast import (
+from tokenpak.cli.forecast import (
     BurnRateAnalysis,
     get_burn_rate,
     _calculate_wow_trend,

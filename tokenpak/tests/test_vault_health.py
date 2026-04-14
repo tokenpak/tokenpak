@@ -1,12 +1,12 @@
 """
-Tests for tokenpak.vault_health — Phase 1a
+Tests for tokenpak.vault.vault_health — Phase 1a
 """
 
 import json
 
 import pytest
 
-from tokenpak.vault_health import (
+from tokenpak.vault.vault_health import (
     IndexStatus,
     VaultHealth,
     _make_block_id,

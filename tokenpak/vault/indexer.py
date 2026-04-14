@@ -20,8 +20,8 @@ INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 from tokenpak.vault.ingest.schema_converter import convert_document
 from tokenpak.compression.extraction import EntityExtractor
 from tokenpak.compression.processors import get_processor
-from tokenpak.tokens import count_tokens
-from tokenpak.walker import detect_file_type, walk_directory
+from tokenpak.telemetry.tokens import count_tokens
+from tokenpak.vault.walker import detect_file_type, walk_directory
 
 from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
 from .slicer import SliceRecord, should_slice, slice_content

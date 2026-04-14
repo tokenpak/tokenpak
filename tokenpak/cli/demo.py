@@ -6,7 +6,7 @@ model diversity, and realistic savings.
 
 Usage::
 
-    from tokenpak.demo import seed_demo_data, clear_demo_data
+    from tokenpak.cli.demo import seed_demo_data, clear_demo_data
 
     seed_demo_data()           # Populate with 24h of demo data
     clear_demo_data()          # Remove all demo data

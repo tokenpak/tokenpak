@@ -53,7 +53,7 @@ def quadratic_allocate(
     # Optionally load utility weights from store
     if utility_path is not None:
         try:
-            from tokenpak.citation_tracker import get_utility_weight
+            from tokenpak.telemetry.citation_tracker import get_utility_weight
 
             for b in blocks:
                 if b.slice_id:

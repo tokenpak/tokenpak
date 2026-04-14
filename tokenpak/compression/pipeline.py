@@ -228,7 +228,7 @@ def _shadow_validate(original: str, compressed: str) -> bool:
         sys.path.insert(
             0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
-        from tokenpak.shadow_reader import ShadowReader
+        from tokenpak.proxy.shadow_reader import ShadowReader
 
         reader = ShadowReader()
         result = reader.validate(original=original, compressed=compressed)

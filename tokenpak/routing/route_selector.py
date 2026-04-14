@@ -16,7 +16,7 @@ All operations are thread-safe.
 
 Usage::
 
-    from tokenpak.route_selector import RouteSelector
+    from tokenpak.routing.route_selector import RouteSelector
 
     sel = RouteSelector()
     sel.add_route("primary",   provider="anthropic", priority=1,   cost_per_token=0.000003)

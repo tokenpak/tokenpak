@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.calibrator import (
+from tokenpak.routing.calibrator import (
     DEFAULT_CALIBRATION_PATH,
     DECAY_14D_WEIGHT,
     DECAY_30D_CUTOFF,

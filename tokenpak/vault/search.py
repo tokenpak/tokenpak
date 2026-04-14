@@ -100,7 +100,7 @@ def inject_retrieved_context(
         results: List of (block_dict, score) tuples.
         max_tokens: Hard token cap for the entire injection (header + content).
         count_tokens_fn: Optional callable(text) -> int for token counting.
-                         Falls back to ``tokenpak.tokens.count_tokens`` if not
+                         Falls back to ``tokenpak.telemetry.tokens.count_tokens`` if not
                          provided.
 
     Returns:
@@ -109,7 +109,7 @@ def inject_retrieved_context(
     """
     if count_tokens_fn is None:
         try:
-            from tokenpak.tokens import count_tokens  # type: ignore
+            from tokenpak.telemetry.tokens import count_tokens  # type: ignore
 
             count_tokens_fn = count_tokens
         except ImportError:
@@ -590,7 +590,7 @@ def _compile_from_results(
         return "", 0, []
 
     try:
-        from tokenpak.tokens import count_tokens  # type: ignore
+        from tokenpak.telemetry.tokens import count_tokens  # type: ignore
     except ImportError:
         def count_tokens(t: str) -> int:  # type: ignore[misc]
             return max(1, len(t) // 4)

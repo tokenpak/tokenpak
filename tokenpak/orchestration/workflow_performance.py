@@ -1,284 +1,316 @@
-"""tokenpak.orchestration.workflow_performance — Performance tracking and ranking for workflows.
+"""tokenpak.orchestration.workflow_performance — Performance tracking and ranking for workflow templates.
 
-Tracks execution metrics per workflow template (success rate, duration, tokens, regressions)
-and provides deterministic ranking for selecting the best workflow for a problem class.
+Tracks per-template execution stats (success/failure/duration/tokens/regressions)
+and provides a scoring/ranking function so the best template is tried first.
+
+Stats are persisted to ~/.tokenpak/workflow_stats.json.
+
+Usage::
+
+    from tokenpak.orchestration.workflow_performance import get_tracker, record_workflow_execution
+
+    tracker = get_tracker()
+
+    # After a workflow completes:
+    record_workflow_execution(workflow_record, tokens_used=1500, regression=False)
+
+    # Before starting — pick best template:
+    ranked = tracker.rank_templates("deploy", candidates=["deploy", "proxy", "release"])
+    best_template = ranked[0][0]
+
+Scoring formula::
+
+    score = (success_rate × 0.5) + (speed_score × 0.2)
+          + (token_efficiency × 0.2) + (no_regression × 0.1)
+
+All sub-scores are normalized to [0.0, 1.0].  Templates with no data score 0.0.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import time
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
-from workflow import WorkflowRecord, WorkflowStatus
+STATS_PATH = Path.home() / ".tokenpak" / "workflow_stats.json"
+MAX_HISTORY = 1_000  # cap per-template execution history
 
-DEFAULT_STATS_FILE = Path(os.path.expanduser("~/.tokenpak/workflow_stats.json"))
+
+# ── Data structures ──────────────────────────────────────────────────────────
 
 
 @dataclass
 class WorkflowStats:
-    """Performance statistics for a workflow template."""
+    """Aggregate counters for a single workflow template."""
 
-    template_name: str
+    template: str
     success_count: int = 0
     failure_count: int = 0
     total_duration_seconds: float = 0.0
     total_tokens: int = 0
     regression_count: int = 0
-    last_updated: float = field(default_factory=time.time)
-    executions: List[Dict] = field(default_factory=list)  # Detailed per-execution records
+    # Per-execution history (capped at MAX_HISTORY)
+    history: List[Dict] = field(default_factory=list)
 
+    # ── Derived metrics ──────────────────────────────────────────────────────
+
+    @property
+    def total_runs(self) -> int:
+        return self.success_count + self.failure_count
+
+    @property
     def success_rate(self) -> float:
-        """Return success rate (0.0-1.0)."""
-        total = self.success_count + self.failure_count
-        if total == 0:
-            return 0.5  # Default for no data
-        return self.success_count / total
+        """Fraction of runs that succeeded (0.0–1.0).  0.0 when no data."""
+        if self.total_runs == 0:
+            return 0.0
+        return self.success_count / self.total_runs
 
-    def avg_duration_seconds(self) -> float:
-        """Return average duration in seconds."""
-        total = self.success_count + self.failure_count
-        if total == 0:
-            return float("inf")
-        return self.total_duration_seconds / total
+    @property
+    def avg_duration(self) -> float:
+        """Mean execution time in seconds across all runs."""
+        if self.total_runs == 0:
+            return 0.0
+        return self.total_duration_seconds / self.total_runs
 
+    @property
     def avg_tokens(self) -> float:
-        """Return average tokens per execution."""
-        total = self.success_count + self.failure_count
-        if total == 0:
+        """Mean token count across all runs."""
+        if self.total_runs == 0:
             return 0.0
-        return self.total_tokens / total
+        return self.total_tokens / self.total_runs
 
+    @property
     def regression_rate(self) -> float:
-        """Return regression rate (0.0-1.0)."""
-        total = self.success_count + self.failure_count
-        if total == 0:
+        """Fraction of successful runs that had a regression (0.0–1.0)."""
+        if self.success_count == 0:
             return 0.0
-        return self.regression_count / total
+        return self.regression_count / self.success_count
+
+    # ── Serialisation ────────────────────────────────────────────────────────
 
     def to_dict(self) -> Dict:
         d = asdict(self)
-        d["last_updated"] = self.last_updated
         return d
 
     @classmethod
-    def from_dict(cls, d: Dict) -> WorkflowStats:
-        d = dict(d)
-        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+    def from_dict(cls, d: Dict) -> "WorkflowStats":
+        return cls(
+            template=d["template"],
+            success_count=d.get("success_count", 0),
+            failure_count=d.get("failure_count", 0),
+            total_duration_seconds=d.get("total_duration_seconds", 0.0),
+            total_tokens=d.get("total_tokens", 0),
+            regression_count=d.get("regression_count", 0),
+            history=d.get("history", []),
+        )
+
+
+# ── Tracker ──────────────────────────────────────────────────────────────────
 
 
 class WorkflowPerformanceTracker:
-    """Tracks execution metrics and ranks workflows by performance."""
+    """Persist and query per-template workflow performance statistics."""
 
-    def __init__(self, stats_file: Optional[Path] = None):
-        self._stats_file = stats_file or DEFAULT_STATS_FILE
+    def __init__(self, stats_path: Path = STATS_PATH) -> None:
+        self._path = stats_path
         self._stats: Dict[str, WorkflowStats] = {}
-        self._load_stats()
+        self._load()
 
-    def _load_stats(self):
-        """Load stats from disk."""
-        if self._stats_file.exists():
+    # ── Persistence ─────────────────────────────────────────────────────────
+
+    def _load(self) -> None:
+        if self._path.exists():
             try:
-                data = json.loads(self._stats_file.read_text())
-                self._stats = {
-                    name: WorkflowStats.from_dict(stat_data) for name, stat_data in data.items()
-                }
-            except Exception:
+                raw = json.loads(self._path.read_text())
+                self._stats = {k: WorkflowStats.from_dict(v) for k, v in raw.items()}
+            except (json.JSONDecodeError, KeyError):
                 self._stats = {}
-        else:
-            self._stats_file.parent.mkdir(parents=True, exist_ok=True)
 
-    def _save_stats(self):
-        """Save stats to disk."""
-        self._stats_file.parent.mkdir(parents=True, exist_ok=True)
-        data = {name: stats.to_dict() for name, stats in self._stats.items()}
-        tmp = self._stats_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(data, indent=2))
-        tmp.replace(self._stats_file)
+    def _save(self) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({k: v.to_dict() for k, v in self._stats.items()}, indent=2))
+        tmp.replace(self._path)
 
-    def record_execution(
+    # ── Recording ────────────────────────────────────────────────────────────
+
+    def record(
         self,
-        template_name: str,
+        template: str,
         success: bool,
         duration_seconds: float,
         tokens_used: int = 0,
         regression: bool = False,
-        metadata: Optional[Dict] = None,
     ) -> WorkflowStats:
-        """Record a workflow execution."""
-        if template_name not in self._stats:
-            self._stats[template_name] = WorkflowStats(template_name=template_name)
+        """Record the outcome of a single workflow execution.
 
-        stats = self._stats[template_name]
+        Args:
+            template: Template name (e.g. ``"deploy"``).
+            success: Whether the workflow completed successfully.
+            duration_seconds: Wall-clock execution time.
+            tokens_used: Total tokens consumed.
+            regression: Whether a regression was detected post-run.
+
+        Returns:
+            Updated :class:`WorkflowStats` for the template.
+        """
+        if template not in self._stats:
+            self._stats[template] = WorkflowStats(template=template)
+
+        stats = self._stats[template]
+
         if success:
             stats.success_count += 1
-            stats.total_duration_seconds += duration_seconds
-            stats.total_tokens += tokens_used
+            if regression:
+                stats.regression_count += 1
         else:
             stats.failure_count += 1
 
-        if regression:
-            stats.regression_count += 1
+        stats.total_duration_seconds += duration_seconds
+        stats.total_tokens += tokens_used
 
-        # Record detailed execution
-        stats.executions.append(
-            {
-                "timestamp": time.time(),
-                "success": success,
-                "duration": duration_seconds,
-                "tokens": tokens_used,
-                "regression": regression,
-                "metadata": metadata or {},
-            }
-        )
+        entry = {
+            "ts": time.time(),
+            "success": success,
+            "duration": duration_seconds,
+            "tokens": tokens_used,
+            "regression": regression,
+        }
+        stats.history.append(entry)
+        if len(stats.history) > MAX_HISTORY:
+            stats.history = stats.history[-MAX_HISTORY:]
 
-        # Keep last 1000 executions to avoid unbounded growth
-        if len(stats.executions) > 1000:
-            stats.executions = stats.executions[-1000:]
-
-        stats.last_updated = time.time()
-        self._save_stats()
+        self._save()
         return stats
 
-    def get_stats(self, template_name: str) -> Optional[WorkflowStats]:
-        """Get stats for a template."""
-        return self._stats.get(template_name)
-
-    def all_stats(self) -> Dict[str, WorkflowStats]:
-        """Get all stats."""
-        return dict(self._stats)
+    # ── Scoring & ranking ────────────────────────────────────────────────────
 
     def score_template(
-        self, template_name: str, max_duration_seconds: float = 300.0, max_tokens: int = 100000
+        self,
+        template: str,
+        *,
+        max_duration: float = 300.0,
+        max_tokens: int = 50_000,
     ) -> float:
+        """Compute a scalar score in [0.0, 1.0] for *template*.
+
+        Formula::
+
+            score = (success_rate × 0.5)
+                  + (speed_score   × 0.2)   # lower duration → higher score
+                  + (token_eff     × 0.2)   # lower tokens   → higher score
+                  + (no_regression × 0.1)   # lower regression rate → higher score
+
+        Returns 0.0 for unknown templates (no data yet).
         """
-        Score a template using the ranking formula:
-        Score = (success_rate × 0.5) + (speed_score × 0.2) + (token_efficiency × 0.2) + (no_regression × 0.1)
+        stats = self._stats.get(template)
+        if stats is None or stats.total_runs == 0:
+            return 0.0
 
-        Args:
-            template_name: The template to score
-            max_duration_seconds: Reference duration for speed_score (lower is better)
-            max_tokens: Reference token count for token_efficiency (lower is better)
+        success_score = stats.success_rate
 
-        Returns:
-            Score from 0.0 to 1.0
-        """
-        stats = self.get_stats(template_name)
-        if stats is None or (stats.success_count + stats.failure_count) == 0:
-            return 0.0  # No data = low score
+        # Speed: 1.0 when avg_duration == 0, 0.0 when avg_duration >= max_duration
+        speed_score = max(0.0, 1.0 - stats.avg_duration / max_duration)
 
-        # Success rate: 0.0-1.0
-        success_score = stats.success_rate()
+        # Token efficiency: 1.0 when avg_tokens == 0, 0.0 when >= max_tokens
+        token_eff = max(0.0, 1.0 - stats.avg_tokens / max_tokens)
 
-        # Speed score: inverse of normalized duration
-        # Lower duration = higher score
-        avg_duration = stats.avg_duration_seconds()
-        if avg_duration == float("inf"):
-            speed_score = 0.0
-        else:
-            speed_score = max(0.0, 1.0 - (avg_duration / max_duration_seconds))
+        # Regression-free: 1.0 when no regressions
+        no_regression = 1.0 - stats.regression_rate
 
-        # Token efficiency: inverse of normalized tokens
-        # Lower tokens = higher score
-        avg_tokens_val = stats.avg_tokens()
-        token_efficiency = max(0.0, 1.0 - (avg_tokens_val / max_tokens))
-
-        # No regression: penalize by regression rate
-        no_regression_score = 1.0 - stats.regression_rate()
-
-        score = (
-            success_score * 0.5
-            + speed_score * 0.2
-            + token_efficiency * 0.2
-            + no_regression_score * 0.1
-        )
-        return round(score, 4)
+        return success_score * 0.5 + speed_score * 0.2 + token_eff * 0.2 + no_regression * 0.1
 
     def rank_templates(
         self,
         task_type: str,
-        candidates: Optional[List[str]] = None,
-        max_duration_seconds: float = 300.0,
-        max_tokens: int = 100000,
-    ) -> List[Tuple[str, float, WorkflowStats]]:
-        """
-        Rank templates for a given task type.
+        *,
+        candidates: Optional[Sequence[str]] = None,
+        max_duration: float = 300.0,
+        max_tokens: int = 50_000,
+    ) -> List[Tuple[str, float]]:
+        """Return templates sorted by score, highest first.
 
         Args:
-            task_type: The task/problem class (for logging/filtering)
-            candidates: Optional list of templates to rank. If None, rank all available.
-            max_duration_seconds: Reference duration for speed scoring
-            max_tokens: Reference token count for efficiency scoring
+            task_type: Informational label for the class of task (unused for
+                scoring; present for future per-class filtering).
+            candidates: Explicit list of template names to rank.  When omitted,
+                all known templates are ranked.
+            max_duration: Upper bound for speed normalisation (seconds).
+            max_tokens: Upper bound for token-efficiency normalisation.
 
         Returns:
-            List of (template_name, score, stats) sorted by score descending
+            List of ``(template_name, score)`` tuples, descending by score.
         """
-        if candidates is None:
-            candidates = list(self._stats.keys())
-
-        ranked = []
-        for template_name in candidates:
-            score = self.score_template(template_name, max_duration_seconds, max_tokens)
-            stats = self.get_stats(template_name)
-            ranked.append((template_name, score, stats or WorkflowStats(template_name)))
-
-        # Sort by score descending (higher is better)
-        ranked.sort(key=lambda x: x[1], reverse=True)
-        return ranked
-
-    def clear_stats(self, template_name: Optional[str] = None):
-        """Clear stats for a template or all templates."""
-        if template_name:
-            self._stats.pop(template_name, None)
+        names: Sequence[str]
+        if candidates is not None:
+            names = list(candidates)
         else:
-            self._stats = {}
-        self._save_stats()
+            names = list(self._stats.keys())
+
+        scored = [
+            (name, self.score_template(name, max_duration=max_duration, max_tokens=max_tokens))
+            for name in names
+        ]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
+
+    # ── Accessors ────────────────────────────────────────────────────────────
+
+    def get_stats(self, template: str) -> Optional[WorkflowStats]:
+        """Return :class:`WorkflowStats` for *template*, or ``None``."""
+        return self._stats.get(template)
+
+    def all_stats(self) -> Dict[str, WorkflowStats]:
+        """Return a copy of all tracked stats."""
+        return {k: deepcopy(v) for k, v in self._stats.items()}
+
+
+# ── Singleton + convenience ──────────────────────────────────────────────────
+
+_tracker: Optional[WorkflowPerformanceTracker] = None
+
+
+def get_tracker(stats_path: Path = STATS_PATH) -> WorkflowPerformanceTracker:
+    """Return the module-level singleton :class:`WorkflowPerformanceTracker`."""
+    global _tracker
+    if _tracker is None:
+        _tracker = WorkflowPerformanceTracker(stats_path=stats_path)
+    return _tracker
 
 
 def record_workflow_execution(
-    workflow: WorkflowRecord,
+    workflow,  # WorkflowRecord from tokenpak.orchestration.workflow
+    *,
     tokens_used: int = 0,
     regression: bool = False,
     tracker: Optional[WorkflowPerformanceTracker] = None,
-):
-    """
-    Convenience function to record a completed workflow execution.
+) -> Optional[WorkflowStats]:
+    """Convenience wrapper — record a completed :class:`WorkflowRecord`.
+
+    If the workflow has no template set, returns ``None`` and does nothing.
 
     Args:
-        workflow: The completed WorkflowRecord
-        tokens_used: Total tokens used during execution
-        regression: Whether a regression was detected
-        tracker: Optional tracker instance. If None, creates a new one.
+        workflow: A :class:`~tokenpak.orchestration.workflow.WorkflowRecord`.
+        tokens_used: Total tokens consumed by this run.
+        regression: Whether a regression was detected post-completion.
+        tracker: Optional explicit tracker; defaults to module singleton.
     """
-    if not tracker:
-        tracker = WorkflowPerformanceTracker()
-
     if workflow.template is None:
-        return  # Skip workflows without a template
+        return None
+
+    from tokenpak.orchestration.workflow import WorkflowStatus  # local import
 
     success = workflow.status == WorkflowStatus.COMPLETED
     duration = workflow.duration_seconds() or 0.0
 
-    tracker.record_execution(
-        template_name=workflow.template,
+    t = tracker or get_tracker()
+    return t.record(
+        template=workflow.template,
         success=success,
         duration_seconds=duration,
         tokens_used=tokens_used,
         regression=regression,
-        metadata={"workflow_id": workflow.id, "workflow_name": workflow.name},
     )
-
-
-# Global tracker instance
-_tracker = None
-
-
-def get_tracker(stats_file: Optional[Path] = None) -> WorkflowPerformanceTracker:
-    """Get or create the global tracker instance."""
-    global _tracker
-    if _tracker is None:
-        _tracker = WorkflowPerformanceTracker(stats_file)
-    return _tracker

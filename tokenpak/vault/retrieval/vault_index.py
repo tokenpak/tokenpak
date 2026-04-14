@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 try:
-    from tokenpak.tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 except ImportError:
     try:
         from ..tokens import count_tokens  # type: ignore[no-redef]

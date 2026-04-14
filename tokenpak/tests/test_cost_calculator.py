@@ -1,4 +1,4 @@
-"""Unit tests for cost calculation functions in tokenpak.pricing.
+"""Unit tests for cost calculation functions in tokenpak.telemetry.pricing.
 
 The task references cost_calculator.py, which does not exist as a standalone module.
 Cost calculation is implemented in tokenpak/pricing.py — this file tests those functions.
@@ -6,7 +6,7 @@ Cost calculation is implemented in tokenpak/pricing.py — this file tests those
 
 import pytest
 
-from tokenpak.pricing import (
+from tokenpak.telemetry.pricing import (
     MODEL_RATES,
     DEFAULT_RATE,
     calculate_request_cost,

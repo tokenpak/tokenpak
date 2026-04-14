@@ -269,7 +269,7 @@ class TestDiscoverFromEnv:
 class TestDiscoverFromConfigYaml:
     def test_config_yaml_plugins_loaded(self):
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = [
                 "tokenpak.plugins.examples.passthrough.PassthroughPlugin"
             ]
@@ -278,7 +278,7 @@ class TestDiscoverFromConfigYaml:
 
     def test_config_yaml_empty_list_noop(self, tmp_path):
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []
             reg._discover_from_config()
         assert reg.get_plugins() == []
@@ -286,7 +286,7 @@ class TestDiscoverFromConfigYaml:
     def test_config_yaml_exception_falls_through(self, tmp_path, caplog):
         """If config_get raises, registry logs and moves on (no crash)."""
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get", side_effect=RuntimeError("boom")):
+        with patch("tokenpak.core.config_loader.get", side_effect=RuntimeError("boom")):
             with patch("pathlib.Path.exists", return_value=False):
                 with caplog.at_level(logging.DEBUG, logger="tokenpak.plugins.registry"):
                     reg._discover_from_config()
@@ -304,7 +304,7 @@ class TestDiscoverFromConfigLegacyJson:
         (tmp_path / "tokenpak.config.json").write_text(json.dumps(cfg))
 
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []  # canonical list is empty → fall to legacy
             reg._discover_from_config()
 
@@ -316,7 +316,7 @@ class TestDiscoverFromConfigLegacyJson:
         (tmp_path / "tokenpak.config.json").write_text(json.dumps(cfg))
 
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []
             with caplog.at_level(logging.WARNING, logger="tokenpak.plugins.registry"):
                 reg._discover_from_config()
@@ -328,7 +328,7 @@ class TestDiscoverFromConfigLegacyJson:
         (tmp_path / "tokenpak.config.json").write_text(json.dumps({}))
 
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []
             reg._discover_from_config()
 
@@ -339,7 +339,7 @@ class TestDiscoverFromConfigLegacyJson:
         (tmp_path / "tokenpak.config.json").write_text("NOT VALID JSON {{")
 
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []
             with caplog.at_level(logging.WARNING, logger="tokenpak.plugins.registry"):
                 reg._discover_from_config()
@@ -349,7 +349,7 @@ class TestDiscoverFromConfigLegacyJson:
     def test_no_legacy_file_and_empty_config_is_noop(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         reg = PluginRegistry()
-        with patch("tokenpak.config_loader.get") as mock_get:
+        with patch("tokenpak.core.config_loader.get") as mock_get:
             mock_get.return_value = []
             reg._discover_from_config()
         assert reg.get_plugins() == []

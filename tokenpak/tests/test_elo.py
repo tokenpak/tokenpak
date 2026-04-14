@@ -5,7 +5,7 @@ import json
 import pytest
 from pathlib import Path
 
-from tokenpak.elo import (
+from tokenpak.telemetry.elo import (
     EloRatings,
     INITIAL_RATING,
     K_FACTOR,

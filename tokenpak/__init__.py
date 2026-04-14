@@ -11,7 +11,7 @@ Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
     from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
     from tokenpak.core.registry import Block, BlockRegistry
-    from tokenpak.budgeter import Budgeter
+    from tokenpak.telemetry.budgeter import Budgeter
     from tokenpak.orchestration.handoff import HandoffManager, HandoffBlock
 """
 
@@ -34,28 +34,28 @@ def __getattr__(name: str):
         # Sub-packages
         "connectors": lambda: __import__("tokenpak.sources", fromlist=[""]),
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
-        "watchdog": lambda: __import__("tokenpak.proxy_watchdog", fromlist=[""]),
+        "watchdog": lambda: __import__("tokenpak.proxy.proxy_watchdog", fromlist=[""]),
         # Budgeting
-        "Budgeter": lambda: __import__("tokenpak.budgeter", fromlist=["Budgeter"]).Budgeter,
-        "BudgetBlock": lambda: __import__("tokenpak.budget", fromlist=["BudgetBlock"]).BudgetBlock,
+        "Budgeter": lambda: __import__("tokenpak.telemetry.budgeter", fromlist=["Budgeter"]).Budgeter,
+        "BudgetBlock": lambda: __import__("tokenpak.telemetry.budget", fromlist=["BudgetBlock"]).BudgetBlock,
         # Telemetry — CompletionTracker re-exported from tokenpak.telemetry
         "TelemetryCollector": lambda: __import__("tokenpak.telemetry.collector", fromlist=["TelemetryCollector"]).TelemetryCollector,
         "CacheManager": lambda: __import__("tokenpak.telemetry.cache", fromlist=["CacheStore"]).CacheStore,
         "CompletionTracker": lambda: __import__("tokenpak.telemetry", fromlist=["CompletionTracker"]).CompletionTracker,
         # Token utilities
-        "count_tokens": lambda: __import__("tokenpak.tokens", fromlist=["count_tokens"]).count_tokens,
+        "count_tokens": lambda: __import__("tokenpak.telemetry.tokens", fromlist=["count_tokens"]).count_tokens,
         # Packing
-        "pack_prompt": lambda: __import__("tokenpak.pack", fromlist=["pack_prompt"]).pack_prompt,
-        "ContextPack": lambda: __import__("tokenpak.pack", fromlist=["ContextPack"]).ContextPack,
-        "PackBlock": lambda: __import__("tokenpak.pack", fromlist=["PackBlock"]).PackBlock,
-        "CompiledResult": lambda: __import__("tokenpak.pack", fromlist=["CompiledResult"]).CompiledResult,
+        "pack_prompt": lambda: __import__("tokenpak.compression.pack", fromlist=["pack_prompt"]).pack_prompt,
+        "ContextPack": lambda: __import__("tokenpak.compression.pack", fromlist=["ContextPack"]).ContextPack,
+        "PackBlock": lambda: __import__("tokenpak.compression.pack", fromlist=["PackBlock"]).PackBlock,
+        "CompiledResult": lambda: __import__("tokenpak.compression.pack", fromlist=["CompiledResult"]).CompiledResult,
         # Registry
         "Block": lambda: __import__("tokenpak.core.registry", fromlist=["Block"]).Block,
         "BlockRegistry": lambda: __import__("tokenpak.core.registry", fromlist=["BlockRegistry"]).BlockRegistry,
         # Reports
-        "Action": lambda: __import__("tokenpak.report", fromlist=["Action"]).Action,
-        "CompileReport": lambda: __import__("tokenpak.report", fromlist=["CompileReport"]).CompileReport,
-        "Decision": lambda: __import__("tokenpak.report", fromlist=["Decision"]).Decision,
+        "Action": lambda: __import__("tokenpak.compression.report", fromlist=["Action"]).Action,
+        "CompileReport": lambda: __import__("tokenpak.compression.report", fromlist=["CompileReport"]).CompileReport,
+        "Decision": lambda: __import__("tokenpak.compression.report", fromlist=["Decision"]).Decision,
         # CLI
         "main": lambda: __import__("tokenpak.cli", fromlist=["main"]).main,
         # Agent Handoff Protocol (tokenpak.orchestration.handoff — canonical location)

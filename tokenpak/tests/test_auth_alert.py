@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.auth_alert module."""
+"""Unit tests for tokenpak.security.auth_alert module."""
 
 import json
 import logging
@@ -7,7 +7,7 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from tokenpak.auth_alert import (
+from tokenpak.security.auth_alert import (
     NullNotificationHook,
     WebhookNotificationHook,
     _build_alert_message,
@@ -235,7 +235,7 @@ class TestRegisterAuthAlertHook:
         hook = WebhookNotificationHook(url="https://example.com/alerts")
         
         # Patch the lazy import inside register_auth_alert_hook
-        with mock.patch("tokenpak.auth_guard.AUTH_GUARD") as mock_guard:
+        with mock.patch("tokenpak.security.auth_guard.AUTH_GUARD") as mock_guard:
             register_auth_alert_hook(hook)
             
             # AUTH_GUARD.on_auth_failure should have been called
@@ -245,7 +245,7 @@ class TestRegisterAuthAlertHook:
         """Should be able to register a NullNotificationHook."""
         hook = NullNotificationHook()
         
-        with mock.patch("tokenpak.auth_guard.AUTH_GUARD") as mock_guard:
+        with mock.patch("tokenpak.security.auth_guard.AUTH_GUARD") as mock_guard:
             register_auth_alert_hook(hook)
             
             mock_guard.on_auth_failure.assert_called_once_with(hook)
@@ -255,7 +255,7 @@ class TestRegisterAuthAlertHook:
         def my_handler(provider: str, event: str, details: dict) -> None:
             pass
         
-        with mock.patch("tokenpak.auth_guard.AUTH_GUARD") as mock_guard:
+        with mock.patch("tokenpak.security.auth_guard.AUTH_GUARD") as mock_guard:
             register_auth_alert_hook(my_handler)
             
             mock_guard.on_auth_failure.assert_called_once_with(my_handler)

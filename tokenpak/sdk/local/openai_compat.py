@@ -153,7 +153,7 @@ class TokenPakOpenAICompat:
         if tokenpak is not None:
             # Auto-set budget if not already set
             if not getattr(tokenpak, "budget", None):
-                tokenpak.budget = self.budget_for(model)
+                tokenpak.telemetry.budget = self.budget_for(model)
             try:
                 compiled = tokenpak.compile()
                 messages.extend(compiled.to_messages())

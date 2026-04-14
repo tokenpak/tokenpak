@@ -33,7 +33,7 @@ work naturally::
 
 Usage::
 
-    from tokenpak.cache_manager import CacheManager
+    from tokenpak.cache.cache_manager import CacheManager
 
     cm = CacheManager()
     cm.set("session-abc", {"data": 1}, ttl=120)   # → volatile

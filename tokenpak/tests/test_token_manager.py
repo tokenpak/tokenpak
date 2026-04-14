@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from tokenpak.token_manager import (
+from tokenpak.telemetry.token_manager import (
     generate_token,
     load_or_create_token,
     regenerate_token,
@@ -31,7 +31,7 @@ def temp_token_dir():
 def mock_token_file(temp_token_dir):
     """Mock TOKEN_FILE to point to a temporary location."""
     token_path = temp_token_dir / ".tokenpak" / "dashboard_token"
-    with patch("tokenpak.token_manager.TOKEN_FILE", token_path):
+    with patch("tokenpak.telemetry.token_manager.TOKEN_FILE", token_path):
         yield token_path
 
 

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
-    from tokenpak.tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 except ImportError:
     # Fallback if tokens module unavailable — heuristic only
     def count_tokens(text: str) -> int:  # type: ignore[misc]

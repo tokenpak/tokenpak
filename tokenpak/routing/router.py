@@ -12,7 +12,7 @@ the model→provider lookup layer.
 
 Usage::
 
-    from tokenpak.router import Router, RoutingError
+    from tokenpak.routing.router import Router, RoutingError
 
     r = Router(default_provider="anthropic")
     r.register("gpt-4o", "openai")

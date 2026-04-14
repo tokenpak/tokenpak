@@ -1,5 +1,5 @@
 """
-Edge case tests for tokenpak.config_validator.
+Edge case tests for tokenpak.core.config_validator.
 
 Covers:
 - Malformed input (invalid JSON, missing fields)
@@ -15,7 +15,7 @@ import tempfile
 
 import pytest
 
-from tokenpak.config_validator import ConfigValidator
+from tokenpak.core.config_validator import ConfigValidator
 
 
 class TestMalformedInput:

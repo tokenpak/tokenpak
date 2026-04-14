@@ -85,7 +85,7 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
 
     # Tiktoken with chunking for large texts (avoids OOM / LRU cache thrashing)
     try:
-        from tokenpak.tokens import count_tokens
+        from tokenpak.telemetry.tokens import count_tokens
         CHUNK = 100_000  # chars per chunk — keeps LRU cache effective
         if chars <= CHUNK:
             tokens = count_tokens(text)

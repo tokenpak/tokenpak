@@ -7,7 +7,7 @@ a no-op NullNotificationHook.
 
 Usage — register any callable as a handler:
 
-    from tokenpak.auth_alert import register_auth_alert_hook, WebhookNotificationHook
+    from tokenpak.security.auth_alert import register_auth_alert_hook, WebhookNotificationHook
 
     # Option 1: Generic webhook (any HTTP endpoint)
     hook = WebhookNotificationHook(
@@ -235,7 +235,7 @@ def register_auth_alert_hook(hook: Optional[NotificationHook] = None) -> None:
 
     Example::
 
-        from tokenpak.auth_alert import register_auth_alert_hook, WebhookNotificationHook
+        from tokenpak.security.auth_alert import register_auth_alert_hook, WebhookNotificationHook
 
         # Register built-in Telegram handler:
         register_auth_alert_hook()
@@ -245,7 +245,7 @@ def register_auth_alert_hook(hook: Optional[NotificationHook] = None) -> None:
             url="https://your-endpoint.com/tokenpak-alerts",
         ))
     """
-    from tokenpak.auth_guard import AUTH_GUARD  # noqa: PLC0415 (lazy import — avoids circular)
+    from tokenpak.security.auth_guard import AUTH_GUARD  # noqa: PLC0415 (lazy import — avoids circular)
 
     effective_hook = hook if hook is not None else _on_auth_failure
     AUTH_GUARD.on_auth_failure(effective_hook)

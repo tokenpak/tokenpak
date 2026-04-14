@@ -1,4 +1,4 @@
-"""Comprehensive unit tests for tokenpak.pack module.
+"""Comprehensive unit tests for tokenpak.compression.pack module.
 
 Tests cover:
 - PackBlock dataclass (creation, defaults)
@@ -13,13 +13,13 @@ import json
 import pytest
 from typing import Dict, Any
 
-from tokenpak.pack import (
+from tokenpak.compression.pack import (
     PackBlock,
     CompiledResult,
     ContextPack,
     pack_prompt,
 )
-from tokenpak.report import CompileReport, Action
+from tokenpak.compression.report import CompileReport, Action
 
 
 # ──────────────────────────────────────────────────────────────────────────

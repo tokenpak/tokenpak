@@ -9,10 +9,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .compression.processors import get_processor
-from .core.registry import Block, BlockRegistry
-from .tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
-from .walker import walk_directory
+from tokenpak.compression.processors import get_processor
+from tokenpak.core.registry import Block, BlockRegistry
+from tokenpak.telemetry.tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
+from tokenpak.vault.walker import walk_directory
 
 # ---------------------------------------------------------------------------
 # Built-in sample data for compression benchmark
@@ -946,7 +946,7 @@ def run_compression_benchmark(
             return
 
         # Infer file type from extension
-        from .walker import FILE_TYPES
+        from tokenpak.vault.walker import FILE_TYPES
 
         suffix = path.suffix.lower()
         file_type = FILE_TYPES.get(suffix, "text")

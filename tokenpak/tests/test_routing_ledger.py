@@ -19,7 +19,7 @@ import threading
 import unittest
 from pathlib import Path
 
-from tokenpak.routing_ledger import RoutingLedger
+from tokenpak.routing.routing_ledger import RoutingLedger
 
 
 class TestRoutingLedgerInit(unittest.TestCase):

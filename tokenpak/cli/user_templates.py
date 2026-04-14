@@ -7,7 +7,7 @@ Each template is a JSON file with keys: name, content, created_at, updated_at.
 Variable syntax: {{variable_name}}
 
 Usage (module):
-    from tokenpak.user_templates import add, list_templates, show, remove, use
+    from tokenpak.cli.user_templates import add, list_templates, show, remove, use
 
 CLI:
     tokenpak template list

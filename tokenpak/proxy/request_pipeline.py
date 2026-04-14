@@ -499,7 +499,7 @@ def _get_budget_controller():
         with _BUDGET_CTRL_LOCK:
             if _BUDGET_CTRL_INSTANCE is None:
                 try:
-                    from tokenpak.budget_controller import BudgetController
+                    from tokenpak.telemetry.budget_controller import BudgetController
 
                     _BUDGET_CTRL_INSTANCE = BudgetController()
                 except Exception:
@@ -674,7 +674,7 @@ def _apply_budget(components: Dict[str, Any], total_tokens: Optional[int] = None
         sys.path.insert(
             0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
         )
-        from tokenpak.budgeter import Budgeter
+        from tokenpak.telemetry.budgeter import Budgeter
 
         b = Budgeter()
         return b.allocate(components, total_tokens=budget_total)

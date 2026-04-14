@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-tokenpak.trace — Debug Trace Side-Channel
+tokenpak.companion.trace — Debug Trace Side-Channel
 ==========================================
 
 Attaches diagnostic metadata to TokenPak responses WITHOUT leaking into
@@ -15,7 +15,7 @@ The trace is NEVER appended to ``assistant.content``.
 
 Usage::
 
-    from tokenpak.trace import TraceBuilder, attach_trace_header, strip_trace
+    from tokenpak.companion.trace import TraceBuilder, attach_trace_header, strip_trace
 
     trace = (
         TraceBuilder()

@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.broker import Broker
-from tokenpak.elo import INITIAL_RATING
+from tokenpak.routing.broker import Broker
+from tokenpak.telemetry.elo import INITIAL_RATING
 
 # ---------------------------------------------------------------------------
 # Constants

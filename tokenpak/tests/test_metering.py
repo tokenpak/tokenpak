@@ -16,7 +16,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from tokenpak.metering import UsageMeter, UsageMeterManager, UsageRecord
+from tokenpak.telemetry.metering import UsageMeter, UsageMeterManager, UsageRecord
 
 
 class TestUsageRecord(unittest.TestCase):

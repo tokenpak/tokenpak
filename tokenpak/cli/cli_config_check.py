@@ -11,7 +11,7 @@ from pathlib import Path
 
 def cmd_config_check(args):
     """Validate a proxy config file (JSON)."""
-    from tokenpak.config_validator import ConfigValidator
+    from tokenpak.core.config_validator import ConfigValidator
 
     config_path = Path(args.file).expanduser()
 

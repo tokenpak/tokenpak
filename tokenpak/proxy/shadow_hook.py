@@ -6,7 +6,7 @@ Lightweight integration point for the forward proxy. The proxy calls
 receiving the LLM reply. Thread-safe, fail-silent (never breaks proxy).
 
 Usage in proxy.py:
-    from tokenpak.shadow_hook import ShadowHook
+    from tokenpak.proxy.shadow_hook import ShadowHook
     _shadow = ShadowHook()
 
     # Before forwarding:

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.validator import (
+from tokenpak.core.validator import (
     TokenPakValidator,
     ValidationResult,
     ValidationIssue,
