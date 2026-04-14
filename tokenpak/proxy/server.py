@@ -235,9 +235,12 @@ def _new_session() -> Dict[str, Any]:
 
 # ---------------------------------------------------------------------------
 # Request latency tracking (rolling window, used by /v1/messages/forecast)
+# Shared with forecast_endpoint module so both reads and writes use same buffer.
 # ---------------------------------------------------------------------------
-_forecast_latencies: deque = deque(maxlen=100)
-_forecast_latency_lock = threading.Lock()
+from tokenpak.proxy.forecast_endpoint import (  # noqa: E402
+    _forecast_latencies,
+    _forecast_latency_lock,
+)
 
 
 # ---------------------------------------------------------------------------
