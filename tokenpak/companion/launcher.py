@@ -5,12 +5,15 @@ the companion active.
 What it does:
     1. Loads companion config from env vars
     2. Ensures the tokenpak proxy is running (if configured)
-    3. Generates temp files: MCP config, settings overlay, system prompt
+    3. Generates config files: MCP config, settings overlay, system prompt
     4. Execs into ``claude`` with the right flags
+
+Config files are written to the fixed location ~/.tokenpak/companion/run/
+(not tempfile) so they persist across relaunches and are inspectable.
 
 What the user sees:
     $ tokenpak claude
-    tokenpak: companion ready (balanced, budget $5.00/day)
+    tokenpak: companion ready (balanced, no budget cap)
     [Claude Code TUI starts normally]
 """
 
@@ -19,7 +22,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from pathlib import Path
 
 from .config import CompanionConfig
@@ -51,15 +53,14 @@ def main(args: list[str] | None = None) -> int:
     config = CompanionConfig.from_env()
     config.profile_overrides()
 
-    # Ensure journal dir exists
+    # Ensure journal dir and fixed run dir exist
     config.journal_dir.mkdir(parents=True, exist_ok=True)
+    config.run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate temp files that Claude Code will consume
-    tmpdir = tempfile.mkdtemp(prefix="tokenpak-companion-")
-
-    mcp_config_path = _write_mcp_config(tmpdir)
-    settings_path = _write_settings(tmpdir, config)
-    prompt_path = _write_system_prompt(tmpdir)
+    # Generate config files at fixed location (AC5: ~/.tokenpak/companion/run/)
+    mcp_config_path = _write_mcp_config(config)
+    settings_path = _write_settings(config)
+    prompt_path = _write_system_prompt(config)
 
     # Print startup banner
     banner_parts = ["tokenpak: companion ready"]
@@ -95,9 +96,9 @@ def main(args: list[str] | None = None) -> int:
     return 1
 
 
-def _write_mcp_config(tmpdir: str) -> str:
-    """Write the MCP server configuration."""
-    config = {
+def _write_mcp_config(config: CompanionConfig) -> str:
+    """Write the MCP server configuration to fixed run_dir."""
+    mcp_data = {
         "mcpServers": {
             "tokenpak-companion": {
                 "type": "stdio",
@@ -106,13 +107,12 @@ def _write_mcp_config(tmpdir: str) -> str:
             }
         }
     }
-    path = os.path.join(tmpdir, "mcp.json")
-    with open(path, "w") as f:
-        json.dump(config, f)
-    return path
+    path = config.run_dir / "mcp.json"
+    path.write_text(json.dumps(mcp_data, indent=2))
+    return str(path)
 
 
-def _write_settings(tmpdir: str, config: CompanionConfig) -> str:
+def _write_settings(config: CompanionConfig) -> str:
     """Write the settings overlay with hook configuration and permissions."""
     hook_cmd = f"{sys.executable} -m tokenpak.companion.hooks.pre_send"
 
@@ -128,21 +128,24 @@ def _write_settings(tmpdir: str, config: CompanionConfig) -> str:
         settings["hooks"] = {
             "UserPromptSubmit": [
                 {
-                    "type": "command",
-                    "command": hook_cmd,
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": hook_cmd,
+                        }
+                    ],
                 }
             ],
         }
 
-    path = os.path.join(tmpdir, "settings.json")
-    with open(path, "w") as f:
-        json.dump(settings, f)
-    return path
+    path = config.run_dir / "settings.json"
+    path.write_text(json.dumps(settings, indent=2))
+    return str(path)
 
 
-def _write_system_prompt(tmpdir: str) -> str:
+def _write_system_prompt(config: CompanionConfig) -> str:
     """Write the companion system prompt fragment."""
-    path = os.path.join(tmpdir, "companion-prompt.md")
-    with open(path, "w") as f:
-        f.write(_SYSTEM_PROMPT)
-    return path
+    path = config.run_dir / "companion-prompt.md"
+    path.write_text(_SYSTEM_PROMPT)
+    return str(path)

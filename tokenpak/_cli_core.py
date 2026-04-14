@@ -237,6 +237,9 @@ _COMMAND_GROUPS = {
         ("aggregate", "Aggregate request ledger across machines"),
         ("requests", "Live request explorer"),
     ],
+    "Companion": [
+        ("claude", "Launch Claude Code with companion active"),
+    ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
         ("macro", "Manage and run macros"),
@@ -1918,6 +1921,35 @@ def cmd_diagnose(args):
     from .cli_diagnose import cmd_diagnose as _run_diagnose
     _run_diagnose(args)
 
+
+def cmd_claude(args):
+    """Launch Claude Code with tokenpak companion active."""
+    from .companion.launcher import main as _companion_main
+    _companion_main(args=list(args.args))
+
+
+def _build_claude_parser(sub):
+    p = sub.add_parser(
+        "claude",
+        help="Launch Claude Code with companion active",
+        description=(
+            "Launch Claude Code with tokenpak companion active.\n\n"
+            "All arguments are forwarded verbatim to the claude binary.\n\n"
+            "Examples:\n"
+            "  tokenpak claude\n"
+            "  tokenpak claude --print \"Fix the bug\"\n"
+            "  tokenpak claude --model claude-sonnet-4-6 --print \"Review this PR\""
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Arguments forwarded verbatim to claude",
+    )
+    p.set_defaults(func=cmd_claude)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="tokenpak",
@@ -2261,6 +2293,7 @@ def build_parser():
     _build_last_parser(sub)
     _build_prune_parser(sub)
     _build_retrieval_parser(sub)
+    _build_claude_parser(sub)
 
     return parser
 

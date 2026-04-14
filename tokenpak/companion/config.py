@@ -50,6 +50,11 @@ class CompanionConfig:
     proxy_url: str = ""
     mcp_server_pid: Optional[int] = None
 
+    @property
+    def run_dir(self) -> Path:
+        """Fixed runtime directory for generated config files (AC5)."""
+        return Path.home() / ".tokenpak" / "companion" / "run"
+
     @classmethod
     def from_env(cls) -> "CompanionConfig":
         """Build config from environment variables + defaults."""
