@@ -806,7 +806,7 @@ def cmd_stats(args):
     from tokenpak.proxy.stats import CompressionStats
 
     cs = CompressionStats()
-    file_stats = cs.stats_from_file(limit=100)
+    file_stats = cs.get_stats()
 
     # Prefer live proxy data for request counts / uptime when available
     if proxy_data:
@@ -2228,7 +2228,7 @@ def cmd_savings(args):
 def cmd_compare(args):
     """Show before/after cost comparison for last N requests."""
     from .telemetry.query import get_recent_events
-    from .telemetry.pricing import calculate_request_cost, calculate_request_cost_baseline
+    from .telemetry.pricing_rates import calculate_request_cost, calculate_request_cost_baseline
     import time
     
     limit = getattr(args, "last", 1)
@@ -2266,7 +2266,7 @@ def cmd_compare(args):
 def cmd_leaderboard(args):
     """Show per-model efficiency ranking."""
     from .telemetry.query import get_model_usage, get_savings_report
-    from .telemetry.pricing import calculate_request_cost_baseline, calculate_request_cost
+    from .telemetry.pricing_rates import calculate_request_cost_baseline, calculate_request_cost
     
     days = getattr(args, "days", 1)
     usage = get_model_usage(days=days)
