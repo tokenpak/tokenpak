@@ -213,8 +213,9 @@ def get_savings_report(db_path=None, days=30) -> SavingsReport:
                 cache_hit_rate=(cache_read / total_in if total_in else 0),
             )
         except sqlite3.OperationalError as e:
-            if "no such table" in str(e):
-                # Empty database — return zeroed report
+            if "no such table" in str(e) or "no such column" in str(e):
+                # Legacy DB schema — missing tp_events/tp_costs tables or route column.
+                # Return zeroed report rather than crashing.
                 return SavingsReport(
                     total_cost=0.0,
                     estimated_without_compression=0.0,

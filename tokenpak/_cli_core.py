@@ -1961,6 +1961,34 @@ def _build_claude_parser(sub):
     p.set_defaults(func=cmd_claude)
 
 
+def _build_stub_parsers(sub):
+    """Register stub parsers for commands advertised in help/registry but not yet implemented.
+
+    These prevent 'invalid choice' argparse errors and give users a clear message
+    instead of a traceback.
+    """
+    _STUBS = {
+        "license": "Show license and edition info (not yet implemented — OSS edition has no license gate)",
+        "plan": "Show current tier, expiry, seats, and features (not yet implemented)",
+        "activate": "Activate a Pro/Team/Enterprise license key (not yet implemented)",
+        "deactivate": "Remove license and revert to OSS (not yet implemented)",
+        "audit": "Enterprise audit log management (not yet implemented)",
+        "compliance": "Generate compliance reports (not yet implemented)",
+        "watch": "Live terminal savings dashboard (not yet implemented — use `tokenpak dashboard` instead)",
+        "integrate": "Client-specific setup guides (not yet implemented — see README for integration docs)",
+    }
+
+    def _make_stub(name, desc):
+        def handler(args):
+            print(f"tokenpak {name}: {desc}")
+            print("This command is planned but not yet available in this version.")
+        return handler
+
+    for name, desc in _STUBS.items():
+        p = sub.add_parser(name, help=desc)
+        p.set_defaults(func=_make_stub(name, desc))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="tokenpak",
@@ -2305,6 +2333,9 @@ def build_parser():
     _build_prune_parser(sub)
     _build_retrieval_parser(sub)
     _build_claude_parser(sub)
+
+    # --- Stub parsers for commands advertised in help/registry but not yet wired ---
+    _build_stub_parsers(sub)
 
     return parser
 
@@ -3774,6 +3805,11 @@ def main():
         "last",
         "prune",
         "retrieval",
+        # Stub commands (advertised in help/registry, not yet implemented)
+        "license",
+        "plan",
+        "activate",
+        "deactivate",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (

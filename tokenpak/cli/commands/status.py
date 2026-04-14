@@ -197,6 +197,16 @@ def _calculate_fleet_savings(
         where_clause = "WHERE timestamp >= datetime('now', ?)"
         params = [period_map[period]]
 
+    # Check if 'route' column exists in the requests table (legacy DBs lack it)
+    col_names = {r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()}
+    has_route = "route" in col_names
+
+    route_expr = (
+        "COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' THEN cache_read_tokens ELSE 0 END), 0)"
+        if has_route
+        else "0"
+    )
+
     try:
         rows = conn.execute(
             f"""
@@ -210,7 +220,7 @@ def _calculate_fleet_savings(
                 COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens,
                 COALESCE(SUM(protected_tokens), 0) AS protected_tokens,
                 COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost,
-                COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' THEN cache_read_tokens ELSE 0 END), 0) AS client_managed_cache_read
+                {route_expr} AS client_managed_cache_read
             FROM requests
             {where_clause}
             GROUP BY model
