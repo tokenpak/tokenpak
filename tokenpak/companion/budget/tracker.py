@@ -19,11 +19,22 @@ from pathlib import Path
 from typing import Optional
 
 
-# Simplified model costs (USD per 1M tokens).  Full table in proxy.
-_MODEL_COSTS = {
-    "opus": {"input": 15.0, "output": 75.0, "cached": 1.50},
-    "sonnet": {"input": 3.0, "output": 15.0, "cached": 0.30},
-    "haiku": {"input": 0.80, "output": 4.0, "cached": 0.08},
+# Model costs (USD per 1M tokens).  Mirrors proxy MODEL_COSTS + cached rates.
+# Anthropic cache-read discount = 10% of input price.
+_MODEL_COSTS: dict[str, dict[str, float]] = {
+    # Claude Opus — $15 input / $75 output / $1.50 cache-read
+    "claude-opus-4-6": {"input": 15.0, "output": 75.0, "cached": 1.50},
+    "claude-opus-4-5": {"input": 15.0, "output": 75.0, "cached": 1.50},
+    # Claude Sonnet — $3 input / $15 output / $0.30 cache-read
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cached": 0.30},
+    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0, "cached": 0.30},
+    # Claude Haiku — $0.80 input / $4 output / $0.08 cache-read
+    "claude-haiku-4-5": {"input": 0.80, "output": 4.0, "cached": 0.08},
+    "claude-haiku-3-5": {"input": 0.80, "output": 4.0, "cached": 0.08},
+    # Short-form / legacy keys (matched by substring in _resolve_rates)
+    "opus":   {"input": 15.0, "output": 75.0, "cached": 1.50},
+    "sonnet": {"input": 3.0,  "output": 15.0, "cached": 0.30},
+    "haiku":  {"input": 0.80, "output": 4.0,  "cached": 0.08},
 }
 
 
@@ -84,7 +95,9 @@ class BudgetTracker:
             fresh_input * rates["input"] / 1_000_000
             + cached_tokens * rates["cached"] / 1_000_000
         )
-        daily_total = self._get_daily_total() + self._session_cost
+        # DB already contains all recorded costs (including current session).
+        # Do NOT add _session_cost — that would double-count.
+        daily_total = self._get_daily_total()
         remaining = max(0.0, self._daily_budget - daily_total) if self._daily_budget > 0 else float("inf")
 
         return CostEstimate(
@@ -159,9 +172,18 @@ class BudgetTracker:
 
 
 def _resolve_rates(model: str) -> dict[str, float]:
-    """Match a model name to its pricing rates."""
+    """Match a model name to its pricing rates.
+
+    Resolution order:
+    1. Exact match (e.g. "claude-sonnet-4-6")
+    2. Prefix match for versioned names (e.g. "claude-sonnet-4-6-20251022")
+    3. Substring match for short-form names (e.g. "sonnet")
+    4. Default: sonnet rates
+    """
+    if model in _MODEL_COSTS:
+        return _MODEL_COSTS[model]
     model_lower = model.lower()
     for key, rates in _MODEL_COSTS.items():
-        if key in model_lower:
+        if model_lower.startswith(key) or key in model_lower:
             return rates
     return _MODEL_COSTS["sonnet"]  # default
