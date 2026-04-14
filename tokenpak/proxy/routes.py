@@ -97,12 +97,12 @@ class ProxyRoutesMixin:
             return
 
         if self.path == "/cache-stats":
-            from tokenpak.runtime.proxy import _build_cache_stats_payload
+            from tokenpak.core.runtime.proxy import _build_cache_stats_payload
             self._send_json(_build_cache_stats_payload())
             return
 
         if self.path == "/recent":
-            from tokenpak.runtime.proxy import MONITOR
+            from tokenpak.core.runtime.proxy import MONITOR
             self._send_json({"recent": MONITOR.recent(50)})
             return
 
@@ -177,7 +177,7 @@ class ProxyRoutesMixin:
             TERM_RESOLVER_MAX_BYTES, QUERY_EXPANSION_ENABLED, UPSTREAM_TIMEOUT,
         )
         from tokenpak.proxy.fallback import _provider_circuits
-        from tokenpak.runtime.proxy import (
+        from tokenpak.core.runtime.proxy import (
             SESSION, VAULT_INDEX, CAPSULE_BUILDER, CANON_AVAILABLE,
             TOOL_REGISTRY_AVAILABLE, TERM_RESOLVER, _request_latencies, _get_tool_registry,
         )
@@ -233,7 +233,7 @@ class ProxyRoutesMixin:
             COMPILATION_MODE, ROUTER_ENABLED, SKELETON_ENABLED, SHADOW_ENABLED,
             BUDGET_TOTAL_TOKENS, MAX_COMPRESSION_TIME_MS,
         )
-        from tokenpak.runtime.proxy import SESSION, VAULT_INDEX, CAPSULE_BUILDER, CANON_AVAILABLE, MONITOR
+        from tokenpak.core.runtime.proxy import SESSION, VAULT_INDEX, CAPSULE_BUILDER, CANON_AVAILABLE, MONITOR
 
         self._send_json(
             build_stats_response(
@@ -260,7 +260,7 @@ class ProxyRoutesMixin:
 
     def _route_stats_last(self):
         """Handle GET /stats/last — per-request stats for the most recent request."""
-        from tokenpak.runtime.proxy import SESSION, LAST_REQUEST, _LAST_REQUEST_LOCK
+        from tokenpak.core.runtime.proxy import SESSION, LAST_REQUEST, _LAST_REQUEST_LOCK
 
         with _LAST_REQUEST_LOCK:
             if LAST_REQUEST["request_id"] is None:
@@ -289,7 +289,7 @@ class ProxyRoutesMixin:
 
     def _route_stats_session(self):
         """Handle GET /stats/session — session aggregates."""
-        from tokenpak.runtime.proxy import SESSION
+        from tokenpak.core.runtime.proxy import SESSION
 
         uptime_hours = round((time.time() - SESSION["start_time"]) / 3600, 2)
         self._send_json(
@@ -313,7 +313,7 @@ class ProxyRoutesMixin:
 
     def _route_savings(self):
         """Handle GET /savings[?since=...]."""
-        from tokenpak.runtime.proxy import MONITOR
+        from tokenpak.core.runtime.proxy import MONITOR
 
         parsed = urlparse(self.path)
         qparams = parse_qs(parsed.query)
@@ -322,7 +322,7 @@ class ProxyRoutesMixin:
 
     def _route_vault_debug(self):
         """Handle GET /vault — debug endpoint showing vault index state."""
-        from tokenpak.runtime.proxy import VAULT_INDEX
+        from tokenpak.core.runtime.proxy import VAULT_INDEX
 
         blocks_info = []
         for bid, block in VAULT_INDEX.blocks.items():
@@ -384,10 +384,10 @@ class ProxyRoutesMixin:
 
     def _route_metrics_prometheus(self):
         """Handle GET /metrics — Prometheus text format metrics."""
-        from tokenpak.runtime.proxy import SESSION, VAULT_INDEX, MONITOR
+        from tokenpak.core.runtime.proxy import SESSION, VAULT_INDEX, MONITOR
 
         try:
-            from tokenpak.metrics.prometheus import build_metrics_text
+            from tokenpak.telemetry.metrics.prometheus import build_metrics_text
 
             vault_blocks = len(VAULT_INDEX.blocks) if VAULT_INDEX.available else 0
             body_out = build_metrics_text(SESSION, MONITOR, vault_blocks=vault_blocks).encode()
@@ -412,7 +412,7 @@ class ProxyRoutesMixin:
 
     def _route_metrics_dashboard(self):
         """Handle GET /metrics/dashboard — comprehensive 8-metric dashboard payload."""
-        from tokenpak.runtime.proxy import SESSION, MONITOR
+        from tokenpak.core.runtime.proxy import SESSION, MONITOR
 
         today_stats = MONITOR.get_stats(hours=24)
         recent_reqs = MONITOR.recent(limit=100)
@@ -537,7 +537,7 @@ class ProxyRoutesMixin:
 
     def _ingest_single(self, payload):
         """Handle single entry ingest."""
-        from tokenpak.runtime.proxy import SESSION, _ingest_write_entry
+        from tokenpak.core.runtime.proxy import SESSION, _ingest_write_entry
 
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)
@@ -578,7 +578,7 @@ class ProxyRoutesMixin:
 
     def _ingest_batch(self, payload):
         """Handle batch entry ingest."""
-        from tokenpak.runtime.proxy import SESSION, _ingest_write_entry
+        from tokenpak.core.runtime.proxy import SESSION, _ingest_write_entry
 
         if not isinstance(payload, dict):
             self._send_json({"error": "expected object, got " + type(payload).__name__}, status=400)

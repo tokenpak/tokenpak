@@ -7,7 +7,7 @@ and place_topic_aware_breakpoints.
 
 import pytest
 
-from tokenpak.compaction.topic_aware import (
+from tokenpak.compression.budgets.topic_aware import (
     TopicBoundaryDetector,
     TopicSegment,
     place_topic_aware_breakpoints,

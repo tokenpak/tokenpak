@@ -289,7 +289,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
 
         route = MetricsRoute()
         with patch(
-            "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+            "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
             return_value=collect_return,
         ):
             # Store the mock so we can call handle() with it active
@@ -297,7 +297,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
         return route
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_returns_string(self, _mock):
@@ -308,7 +308,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
         self.assertIsInstance(result, str)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_contains_prometheus_content(self, _mock):
@@ -319,7 +319,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
         self.assertIn("tokenpak_up", result)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_passes_proxy_server_to_collector(self, mock_collect):
@@ -334,7 +334,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
         self.assertTrue(mock_collect.called)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value="",
     )
     def test_handle_empty_metrics_is_string(self, _mock):
@@ -352,7 +352,7 @@ class TestMetricsRouteHandle(unittest.TestCase):
 
 class TestMetricsRouteHandleBytes(unittest.TestCase):
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_returns_tuple_of_three(self, _mock):
@@ -364,7 +364,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertEqual(len(result), 3)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_body_is_bytes(self, _mock):
@@ -375,7 +375,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertIsInstance(body, bytes)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_status_is_200(self, _mock):
@@ -386,7 +386,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertEqual(status, 200)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_content_type_prometheus(self, _mock):
@@ -398,7 +398,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertIn("0.0.4", headers["Content-Type"])
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_content_length_matches_body(self, _mock):
@@ -409,7 +409,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertEqual(int(headers["Content-Length"]), len(body))
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_cors_header_present(self, _mock):
@@ -420,7 +420,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertEqual(headers["Access-Control-Allow-Origin"], "*")
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_body_decodes_to_source_text(self, _mock):
@@ -431,7 +431,7 @@ class TestMetricsRouteHandleBytes(unittest.TestCase):
         self.assertEqual(body.decode("utf-8"), _SAMPLE_PROMETHEUS)
 
     @patch(
-        "tokenpak.monitoring.metrics.ProxyMetricsCollector.collect",
+        "tokenpak.telemetry.monitoring.metrics.ProxyMetricsCollector.collect",
         return_value=_SAMPLE_PROMETHEUS,
     )
     def test_handle_bytes_no_cache_header(self, _mock):

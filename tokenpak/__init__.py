@@ -9,8 +9,8 @@ Quick start:
 
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
-    from tokenpak.engines import CompactionEngine, HeuristicEngine
-    from tokenpak.registry import Block, BlockRegistry
+    from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
+    from tokenpak.core.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
     from tokenpak.orchestration.handoff import HandoffManager, HandoffBlock
 """
@@ -32,7 +32,7 @@ def __getattr__(name: str):
     """Lazy top-level attribute resolution — defers heavy imports until used."""
     _lazy_map = {
         # Sub-packages
-        "connectors": lambda: __import__("tokenpak.connectors", fromlist=[""]),
+        "connectors": lambda: __import__("tokenpak.sources", fromlist=[""]),
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
         "watchdog": lambda: __import__("tokenpak.proxy_watchdog", fromlist=[""]),
         # Budgeting
@@ -50,8 +50,8 @@ def __getattr__(name: str):
         "PackBlock": lambda: __import__("tokenpak.pack", fromlist=["PackBlock"]).PackBlock,
         "CompiledResult": lambda: __import__("tokenpak.pack", fromlist=["CompiledResult"]).CompiledResult,
         # Registry
-        "Block": lambda: __import__("tokenpak.registry", fromlist=["Block"]).Block,
-        "BlockRegistry": lambda: __import__("tokenpak.registry", fromlist=["BlockRegistry"]).BlockRegistry,
+        "Block": lambda: __import__("tokenpak.core.registry", fromlist=["Block"]).Block,
+        "BlockRegistry": lambda: __import__("tokenpak.core.registry", fromlist=["BlockRegistry"]).BlockRegistry,
         # Reports
         "Action": lambda: __import__("tokenpak.report", fromlist=["Action"]).Action,
         "CompileReport": lambda: __import__("tokenpak.report", fromlist=["CompileReport"]).CompileReport,
@@ -77,9 +77,9 @@ def __getattr__(name: str):
 # All public names are available lazily via __getattr__ above.
 # CompressionEngine / HeuristicEngine / get_engine need graceful degradation — handle here.
 try:
-    from tokenpak.engines import get_engine
-    from tokenpak.engines.base import CompactionEngine as CompressionEngine
-    from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.compression.engines import get_engine
+    from tokenpak.compression.engines.base import CompactionEngine as CompressionEngine
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
 except ImportError:
     def get_engine(*args, **kwargs):
         raise NotImplementedError(

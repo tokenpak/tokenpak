@@ -258,7 +258,7 @@ def submit_to_memory(
         unavailable (soft dependency).
     """
     try:
-        from tokenpak.agentic.memory_promoter import (  # noqa: PLC0415
+        from tokenpak.orchestration.memory_promoter import (  # noqa: PLC0415
             DEFAULT_PROMOTER_PATH,
             MemoryPromoter,
         )

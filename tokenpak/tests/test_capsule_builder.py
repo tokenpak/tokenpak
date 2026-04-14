@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.capsule.builder
+Unit tests for tokenpak.companion.capsules.builder
 
 Covers:
 - CapsuleBuilder initialization
@@ -20,7 +20,7 @@ import json
 
 import pytest
 
-from tokenpak.capsule.builder import (
+from tokenpak.companion.capsules.builder import (
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,
     _MAX_PARA_CHARS,

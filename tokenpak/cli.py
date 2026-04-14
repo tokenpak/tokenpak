@@ -13,8 +13,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional, Tuple
 
-from .formatting import OutputFormatter, OutputMode, resolve_mode
-from .formatting import symbols as FS
+from .cli.formatting import OutputFormatter, OutputMode, resolve_mode
+from .cli.formatting import symbols as FS
 
 # ── Live Proxy Access ─────────────────────────────────────────────────────────
 
@@ -489,8 +489,8 @@ def cmd_logs(args):
 from .budget import BudgetBlock, quadratic_allocate
 from .calibration import calibrate_workers, get_recommended_workers
 from .miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
-from .processors import get_processor
-from .registry import Block, BlockRegistry
+from .compression.processors import get_processor
+from .core.registry import Block, BlockRegistry
 from .security import secure_write_config
 from .tokens import cache_info, count_tokens, truncate_to_tokens
 from .walker import walk_directory
@@ -546,7 +546,7 @@ def cmd_index(args):
     if getattr(args, "status", False):
         import os
 
-        from tokenpak.registry import BlockRegistry
+        from tokenpak.core.registry import BlockRegistry
 
         db_path = getattr(args, "db", os.path.join(os.getcwd(), ".tokenpak", "registry.db"))
         if not os.path.exists(db_path):
@@ -4159,7 +4159,7 @@ def cmd_cost_show_budget(args):
     """Show budget status and spending progress."""
     import json
     try:
-        from tokenpak.cost.budget_tracker import BudgetTracker
+        from tokenpak.telemetry.costs.budget_tracker import BudgetTracker
     except ImportError:
         print("Budget tracking module not available.")
         return 1
@@ -4216,7 +4216,7 @@ def _build_cost_parser(sub):
 
 def cmd_costs(args):
     """Aggregate cost report with CSV export and burn-rate alarms."""
-    from tokenpak.cost.cost_aggregator import CostAggregator
+    from tokenpak.telemetry.costs.cost_aggregator import CostAggregator
 
     days = args.days
     fmt = args.format
@@ -4853,7 +4853,7 @@ def cmd_replay_show(args):
 
 def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, int]:
     """Compress message content and return (compressed_text, token_count)."""
-    from .processors.text import TextProcessor
+    from .compression.processors.text import TextProcessor
     from .tokens import count_tokens
 
     proc = TextProcessor(aggressive=aggressive)
@@ -5118,8 +5118,8 @@ def _build_demo_parser(sub):
 
 def _run_compression_demo():
     """Show live compression on a sample prompt with before/after token counts."""
-    from tokenpak.engines.heuristic import HeuristicEngine
-    from tokenpak.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
+    from tokenpak.compression.engines.base import CompactionHints
     from tokenpak.tokens import count_tokens
 
     SAMPLE_PROMPT = """\
@@ -6290,9 +6290,9 @@ def _build_fleet_parser(sub):
 def cmd_retrieval_status(args):
     """Show retrieval configuration and index stats."""
     import asyncio
-    from .retrieval.base import HybridSearchConfig
-    from .retrieval.bm25 import BM25Retriever
-    from .retrieval.vector_local import LocalVectorRetriever
+    from .vault.retrieval.base import HybridSearchConfig
+    from .vault.retrieval.bm25 import BM25Retriever
+    from .vault.retrieval.vector_local import LocalVectorRetriever
 
     cfg = HybridSearchConfig.from_env()
     json_out = getattr(args, "json", False)
@@ -6379,8 +6379,8 @@ def _vec_doc_count(vec) -> int:
 def cmd_retrieval_test(args):
     """Test a query through all enabled retrievers."""
     import asyncio
-    from .retrieval.base import HybridSearchConfig, RetrievalQuery
-    from .retrieval.hybrid import HybridRetriever
+    from .vault.retrieval.base import HybridSearchConfig, RetrievalQuery
+    from .vault.retrieval.hybrid import HybridRetriever
 
     cfg = HybridSearchConfig.from_env()
     query_text = args.query

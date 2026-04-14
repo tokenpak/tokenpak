@@ -20,11 +20,11 @@ import pytest
 # ---------------------------------------------------------------------------
 # Module imports
 # ---------------------------------------------------------------------------
-import tokenpak.formatting.colors as _colors
-import tokenpak.formatting.modes as _modes
-import tokenpak.formatting.symbols as _symbols
-from tokenpak.formatting import OutputFormatter, OutputMode, resolve_mode
-from tokenpak.formatting.colors import Color, paint, supports_color
+import tokenpak.compression.formatting.colors as _colors
+import tokenpak.compression.formatting.modes as _modes
+import tokenpak.compression.formatting.symbols as _symbols
+from tokenpak.compression.formatting import OutputFormatter, OutputMode, resolve_mode
+from tokenpak.compression.formatting.colors import Color, paint, supports_color
 
 
 # ===========================================================================
@@ -284,10 +284,10 @@ class TestOutputFormatterInit:
 
     def test_color_reflects_terminal(self):
         """color attribute is set from supports_color() at init."""
-        with patch("tokenpak.formatting.formatter.supports_color", return_value=True):
+        with patch("tokenpak.compression.formatting.formatter.supports_color", return_value=True):
             f = OutputFormatter("s")
             assert f.color is True
-        with patch("tokenpak.formatting.formatter.supports_color", return_value=False):
+        with patch("tokenpak.compression.formatting.formatter.supports_color", return_value=False):
             f = OutputFormatter("s")
             assert f.color is False
 
@@ -480,13 +480,13 @@ class TestPublicAPI:
     """formatting package exposes correct public names."""
 
     def test_output_formatter_exported(self):
-        from tokenpak.formatting import OutputFormatter as OF
+        from tokenpak.compression.formatting import OutputFormatter as OF
         assert OF is OutputFormatter
 
     def test_output_mode_exported(self):
-        from tokenpak.formatting import OutputMode as OM
+        from tokenpak.compression.formatting import OutputMode as OM
         assert OM is OutputMode
 
     def test_resolve_mode_exported(self):
-        from tokenpak.formatting import resolve_mode as rm
+        from tokenpak.compression.formatting import resolve_mode as rm
         assert rm is resolve_mode

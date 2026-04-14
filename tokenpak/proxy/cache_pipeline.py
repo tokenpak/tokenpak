@@ -19,7 +19,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 try:
-    from tokenpak.runtime.providers import Provider
+    from tokenpak.core.runtime.providers import Provider
 except ImportError:
     Provider = None  # type: ignore[assignment,misc]
 

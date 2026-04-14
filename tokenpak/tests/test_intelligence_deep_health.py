@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Unit tests for tokenpak.intelligence.deep_health.
+Unit tests for tokenpak.proxy.intelligence.deep_health.
 
 Covers:
 - CheckResult.to_dict — field inclusion logic
@@ -33,7 +33,7 @@ from unittest.mock import MagicMock, patch, mock_open
 
 class TestCheckResultToDict(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.deep_health import CheckResult
+        from tokenpak.proxy.intelligence.deep_health import CheckResult
 
         self.CR = CheckResult
 
@@ -77,7 +77,7 @@ class TestCheckResultToDict(unittest.TestCase):
 
 class TestDeepHealthResult(unittest.TestCase):
     def _make(self, statuses):
-        from tokenpak.intelligence.deep_health import CheckResult, DeepHealthResult
+        from tokenpak.proxy.intelligence.deep_health import CheckResult, DeepHealthResult
 
         checks = {name: CheckResult(status=s) for name, s in statuses.items()}
         worst = "error" if "error" in statuses.values() else "degraded" if "warning" in statuses.values() else "ok"
@@ -123,7 +123,7 @@ class TestDeepHealthResult(unittest.TestCase):
 
 class TestCheckDatabase(unittest.TestCase):
     def test_file_exists_returns_ok(self):
-        from tokenpak.intelligence.deep_health import check_database
+        from tokenpak.proxy.intelligence.deep_health import check_database
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             f.write(b"x" * 1024)
@@ -135,7 +135,7 @@ class TestCheckDatabase(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_file_exists_reports_size(self):
-        from tokenpak.intelligence.deep_health import check_database
+        from tokenpak.proxy.intelligence.deep_health import check_database
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             f.write(b"x" * (1024 * 1024))  # 1 MB
@@ -147,14 +147,14 @@ class TestCheckDatabase(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_file_missing_returns_error(self):
-        from tokenpak.intelligence.deep_health import check_database
+        from tokenpak.proxy.intelligence.deep_health import check_database
 
         result = check_database(db_path="/nonexistent/path/monitor.db")
         self.assertEqual(result.status, "error")
         self.assertIn("not_found", result.error)
 
     def test_path_included_in_ok_details(self):
-        from tokenpak.intelligence.deep_health import check_database
+        from tokenpak.proxy.intelligence.deep_health import check_database
 
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             tmp_path = f.name
@@ -172,7 +172,7 @@ class TestCheckDatabase(unittest.TestCase):
 
 class TestCheckIndex(unittest.TestCase):
     def test_fresh_index_returns_ok(self):
-        from tokenpak.intelligence.deep_health import check_index
+        from tokenpak.proxy.intelligence.deep_health import check_index
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             tmp_path = f.name
@@ -185,7 +185,7 @@ class TestCheckIndex(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_stale_index_returns_warning(self):
-        from tokenpak.intelligence.deep_health import check_index
+        from tokenpak.proxy.intelligence.deep_health import check_index
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             tmp_path = f.name
@@ -200,14 +200,14 @@ class TestCheckIndex(unittest.TestCase):
             os.unlink(tmp_path)
 
     def test_missing_index_returns_error(self):
-        from tokenpak.intelligence.deep_health import check_index
+        from tokenpak.proxy.intelligence.deep_health import check_index
 
         result = check_index(index_path="/nonexistent/pricing_index.json")
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error, "index_not_found")
 
     def test_age_hours_in_details(self):
-        from tokenpak.intelligence.deep_health import check_index
+        from tokenpak.proxy.intelligence.deep_health import check_index
 
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             tmp_path = f.name
@@ -226,7 +226,7 @@ class TestCheckIndex(unittest.TestCase):
 
 class TestCheckMemoryPsutil(unittest.TestCase):
     def test_ok_under_85_percent(self):
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         mock_vm = MagicMock()
         mock_vm.percent = 60.0
@@ -236,7 +236,7 @@ class TestCheckMemoryPsutil(unittest.TestCase):
         self.assertEqual(result.details["percent"], 60.0)
 
     def test_warning_above_85_percent(self):
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         mock_vm = MagicMock()
         mock_vm.percent = 88.0
@@ -245,7 +245,7 @@ class TestCheckMemoryPsutil(unittest.TestCase):
         self.assertEqual(result.status, "warning")
 
     def test_error_above_95_percent(self):
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         mock_vm = MagicMock()
         mock_vm.percent = 97.0
@@ -264,7 +264,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_ok(self):
         import sys
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         # 37.5% used — should be ok
         meminfo = self._mock_meminfo(total_kb=8_000_000, available_kb=5_000_000)
@@ -275,7 +275,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_warning(self):
         import sys
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         # 88% used
         meminfo = self._mock_meminfo(total_kb=10_000_000, available_kb=1_200_000)
@@ -286,7 +286,7 @@ class TestCheckMemoryProcMeminfo(unittest.TestCase):
 
     def test_procmeminfo_total_zero_returns_error(self):
         import sys
-        from tokenpak.intelligence.deep_health import check_memory
+        from tokenpak.proxy.intelligence.deep_health import check_memory
 
         meminfo = "MemTotal:       0 kB\nMemAvailable:   0 kB\n"
         with patch.dict(sys.modules, {"psutil": None}):
@@ -307,21 +307,21 @@ class TestCheckDisk(unittest.TestCase):
         return DU(total=total, used=used, free=total - used)
 
     def test_ok_under_80_percent(self):
-        from tokenpak.intelligence.deep_health import check_disk
+        from tokenpak.proxy.intelligence.deep_health import check_disk
 
         with patch("shutil.disk_usage", return_value=self._usage(100_000, 50_000)):
             result = check_disk("/")
         self.assertEqual(result.status, "ok")
 
     def test_warning_above_80_percent(self):
-        from tokenpak.intelligence.deep_health import check_disk
+        from tokenpak.proxy.intelligence.deep_health import check_disk
 
         with patch("shutil.disk_usage", return_value=self._usage(100_000, 82_000)):
             result = check_disk("/")
         self.assertEqual(result.status, "warning")
 
     def test_error_above_95_percent(self):
-        from tokenpak.intelligence.deep_health import check_disk
+        from tokenpak.proxy.intelligence.deep_health import check_disk
 
         with patch("shutil.disk_usage", return_value=self._usage(100_000, 96_000)):
             result = check_disk("/")
@@ -329,7 +329,7 @@ class TestCheckDisk(unittest.TestCase):
         self.assertEqual(result.error, "disk_full")
 
     def test_free_gb_in_details(self):
-        from tokenpak.intelligence.deep_health import check_disk
+        from tokenpak.proxy.intelligence.deep_health import check_disk
 
         with patch("shutil.disk_usage", return_value=self._usage(100_000_000_000, 40_000_000_000)):
             result = check_disk("/")
@@ -337,7 +337,7 @@ class TestCheckDisk(unittest.TestCase):
         self.assertGreater(result.details["free_gb"], 0)
 
     def test_error_on_exception(self):
-        from tokenpak.intelligence.deep_health import check_disk
+        from tokenpak.proxy.intelligence.deep_health import check_disk
 
         with patch("shutil.disk_usage", side_effect=OSError("no such path")):
             result = check_disk("/nonexistent_mount")
@@ -351,7 +351,7 @@ class TestCheckDisk(unittest.TestCase):
 
 class TestCheckProvider(unittest.TestCase):
     def _run(self, env_key, env_val, urlopen_side_effect=None, urlopen_return=None):
-        from tokenpak.intelligence import deep_health as dh
+        from tokenpak.proxy.intelligence import deep_health as dh
 
         env = {env_key: env_val} if env_val else {}
         with patch.dict(os.environ, env, clear=False):
@@ -386,7 +386,7 @@ class TestCheckProvider(unittest.TestCase):
         # Ensure env var is absent
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MISSING_KEY_XYZ", None)
-            from tokenpak.intelligence.deep_health import _check_provider
+            from tokenpak.proxy.intelligence.deep_health import _check_provider
             result = _check_provider("test", "MISSING_KEY_XYZ", "https://x.com", "x-api-key")
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error, "api_key_not_configured")
@@ -400,7 +400,7 @@ class TestCheckProvider(unittest.TestCase):
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
 
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", return_value=mock_resp):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -411,7 +411,7 @@ class TestCheckProvider(unittest.TestCase):
         import urllib.error
 
         err = urllib.error.HTTPError(url="https://x.com", code=429, msg="Too Many", hdrs=None, fp=None)
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -422,7 +422,7 @@ class TestCheckProvider(unittest.TestCase):
         import urllib.error
 
         err = urllib.error.HTTPError(url="https://x.com", code=401, msg="Unauthorized", hdrs=None, fp=None)
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -433,7 +433,7 @@ class TestCheckProvider(unittest.TestCase):
         import urllib.error
 
         err = urllib.error.HTTPError(url="https://x.com", code=403, msg="Forbidden", hdrs=None, fp=None)
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -444,7 +444,7 @@ class TestCheckProvider(unittest.TestCase):
         import urllib.error
 
         err = urllib.error.HTTPError(url="https://x.com", code=500, msg="Server Error", hdrs=None, fp=None)
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -455,7 +455,7 @@ class TestCheckProvider(unittest.TestCase):
         import urllib.error
 
         err = urllib.error.URLError(reason="Name or service not known")
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=err):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -463,7 +463,7 @@ class TestCheckProvider(unittest.TestCase):
         self.assertIn("network_error", result.error)
 
     def test_timeout_returns_error(self):
-        from tokenpak.intelligence.deep_health import _check_provider
+        from tokenpak.proxy.intelligence.deep_health import _check_provider
         with patch.dict(os.environ, {"TEST_KEY": "mykey"}):
             with patch("urllib.request.urlopen", side_effect=TimeoutError()):
                 result = _check_provider("test", "TEST_KEY", "https://x.com", "x-api-key")
@@ -475,7 +475,7 @@ class TestCheckAnthropicOpenAIWiring(unittest.TestCase):
     """Verify check_anthropic / check_openai call _check_provider with correct args."""
 
     def test_check_anthropic_uses_correct_env(self):
-        from tokenpak.intelligence import deep_health as dh
+        from tokenpak.proxy.intelligence import deep_health as dh
 
         captured = {}
 
@@ -491,7 +491,7 @@ class TestCheckAnthropicOpenAIWiring(unittest.TestCase):
         self.assertIn("anthropic.com", captured["probe_url"])
 
     def test_check_openai_uses_correct_env(self):
-        from tokenpak.intelligence import deep_health as dh
+        from tokenpak.proxy.intelligence import deep_health as dh
 
         captured = {}
 
@@ -513,23 +513,23 @@ class TestCheckAnthropicOpenAIWiring(unittest.TestCase):
 
 
 def _ok():
-    from tokenpak.intelligence.deep_health import CheckResult
+    from tokenpak.proxy.intelligence.deep_health import CheckResult
     return CheckResult(status="ok")
 
 
 def _warn():
-    from tokenpak.intelligence.deep_health import CheckResult
+    from tokenpak.proxy.intelligence.deep_health import CheckResult
     return CheckResult(status="warning", error="stale")
 
 
 def _err():
-    from tokenpak.intelligence.deep_health import CheckResult
+    from tokenpak.proxy.intelligence.deep_health import CheckResult
     return CheckResult(status="error", error="not_found")
 
 
 class TestDeepHealthCheckerInit(unittest.TestCase):
     def test_default_init(self):
-        from tokenpak.intelligence.deep_health import DeepHealthChecker
+        from tokenpak.proxy.intelligence.deep_health import DeepHealthChecker
 
         checker = DeepHealthChecker()
         self.assertIsNone(checker.db_path)
@@ -537,7 +537,7 @@ class TestDeepHealthCheckerInit(unittest.TestCase):
         self.assertEqual(checker.provider_timeout, 5.0)
 
     def test_custom_paths(self):
-        from tokenpak.intelligence.deep_health import DeepHealthChecker
+        from tokenpak.proxy.intelligence.deep_health import DeepHealthChecker
 
         checker = DeepHealthChecker(db_path="/tmp/test.db", index_path="/tmp/idx.json")
         self.assertEqual(checker.db_path, "/tmp/test.db")
@@ -546,7 +546,7 @@ class TestDeepHealthCheckerInit(unittest.TestCase):
 
 class TestDeepHealthCheckerRun(unittest.TestCase):
     def _make_checker(self, anthropic_result, openai_result, db_result, index_result, memory_result, disk_result):
-        from tokenpak.intelligence.deep_health import DeepHealthChecker
+        from tokenpak.proxy.intelligence.deep_health import DeepHealthChecker
 
         return DeepHealthChecker(
             _check_anthropic=lambda timeout: anthropic_result,
@@ -601,7 +601,7 @@ class TestDeepHealthCheckerRun(unittest.TestCase):
 
 class TestGetCheckerSingleton(unittest.TestCase):
     def test_get_checker_returns_instance(self):
-        import tokenpak.intelligence.deep_health as dh
+        import tokenpak.proxy.intelligence.deep_health as dh
 
         # Reset singleton for clean test
         dh._checker = None
@@ -609,7 +609,7 @@ class TestGetCheckerSingleton(unittest.TestCase):
         self.assertIsInstance(checker, dh.DeepHealthChecker)
 
     def test_get_checker_returns_same_instance(self):
-        import tokenpak.intelligence.deep_health as dh
+        import tokenpak.proxy.intelligence.deep_health as dh
 
         dh._checker = None
         c1 = dh.get_checker()

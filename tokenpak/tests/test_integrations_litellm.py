@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.integrations.litellm (formatter, parser, middleware, proxy)."""
+"""Unit tests for tokenpak.sdk.integrations.litellm (formatter, parser, middleware, proxy)."""
 
 from __future__ import annotations
 
@@ -10,19 +10,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tokenpak.integrations.litellm.formatter import (
+from tokenpak.sdk.integrations.litellm.formatter import (
     _dict_to_blocks,
     _estimate_tokens,
     blocks_to_messages,
     compile_pack,
 )
-from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
-from tokenpak.integrations.litellm.parser import (
+from tokenpak.sdk.integrations.litellm.middleware import TokenPakMiddleware
+from tokenpak.sdk.integrations.litellm.parser import (
     extract_budget_from_kwargs,
     extract_compaction_from_kwargs,
     parse_tokenpak_request,
 )
-from tokenpak.integrations.litellm.proxy import ProxyHandler, _json_error
+from tokenpak.sdk.integrations.litellm.proxy import ProxyHandler, _json_error
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +161,7 @@ class TestBlocksToMessages:
         blocks = [_make_block(content=large_content, tokens=10000)]
         with patch("tokenpak.wire.pack", _wire_pack_passthrough):
             with patch(
-                "tokenpak.engines.get_engine",
+                "tokenpak.compression.engines.get_engine",
                 side_effect=Exception("engine fail"),
             ):
                 msgs = blocks_to_messages(blocks, budget=100, compaction="balanced")
@@ -379,7 +379,7 @@ class TestTokenPakMiddlewarePreCallHook:
             compiled_budgets.append(budget)
             return [{"role": "system", "content": "x"}]
 
-        with patch("tokenpak.integrations.litellm.middleware.compile_pack", mock_compile):
+        with patch("tokenpak.sdk.integrations.litellm.middleware.compile_pack", mock_compile):
             mw.pre_call_hook(None, None, data, "completion")
 
         assert compiled_budgets[0] == 4000
@@ -577,7 +577,7 @@ class TestProxyHandlerHandle:
         mock_litellm = MagicMock()
         mock_litellm.acompletion = AsyncMock(return_value=mock_response)
 
-        with patch("tokenpak.integrations.litellm.proxy.compile_pack", mock_compile):
+        with patch("tokenpak.sdk.integrations.litellm.proxy.compile_pack", mock_compile):
             with patch.dict("sys.modules", {"litellm": mock_litellm}):
                 self._run(handler.handle(body))
 

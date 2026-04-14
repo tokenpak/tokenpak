@@ -145,7 +145,7 @@ def _run_daily_sync() -> None:
         if not _should_sync_today():
             return
         try:
-            from tokenpak.infrastructure.config import get_metrics_enabled
+            from tokenpak.core.config import get_metrics_enabled
 
             if not get_metrics_enabled():
                 return

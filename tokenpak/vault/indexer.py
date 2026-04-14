@@ -18,8 +18,8 @@ from typing import Any, Callable, Dict, Optional
 INGEST_ENTRIES_DIR = Path.home() / "vault" / ".tokenpak" / "entries"
 
 from tokenpak.vault.ingest.schema_converter import convert_document
-from tokenpak.extraction import EntityExtractor
-from tokenpak.processors import get_processor
+from tokenpak.compression.extraction import EntityExtractor
+from tokenpak.compression.processors import get_processor
 from tokenpak.tokens import count_tokens
 from tokenpak.walker import detect_file_type, walk_directory
 
@@ -275,7 +275,7 @@ def sync_to_vault() -> None:
     vault_path = Path.home() / "vault" / "System" / "tokenpak-stats.json"
     if vault_path.parent.exists():
         try:
-            from tokenpak.runtime.proxy import MONITOR, SESSION  # type: ignore[import]
+            from tokenpak.core.runtime.proxy import MONITOR, SESSION  # type: ignore[import]
 
             stats = MONITOR.get_stats()
             stats["by_model"] = MONITOR.get_by_model()

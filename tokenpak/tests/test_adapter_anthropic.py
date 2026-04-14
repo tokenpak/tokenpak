@@ -14,8 +14,8 @@ import unittest
 from unittest.mock import MagicMock, Mock, patch
 import requests
 
-from tokenpak.adapters.anthropic import AnthropicAdapter
-from tokenpak.adapters.base import (
+from tokenpak.sdk.anthropic import AnthropicAdapter
+from tokenpak.sdk.base import (
     TokenPakAdapterError,
     TokenPakAuthError,
     TokenPakConfigError,
@@ -193,7 +193,7 @@ class TestSend(unittest.TestCase):
             timeout_s=30.0,
         )
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_send_successful(self, mock_requests):
         """Test successful HTTP request."""
         mock_resp = Mock()
@@ -222,7 +222,7 @@ class TestSend(unittest.TestCase):
         self.assertEqual(call_args[1]["headers"]["x-api-key"], "sk-ant-test")
         self.assertEqual(call_args[1]["timeout"], 30.0)
 
-    @patch("tokenpak.adapters.anthropic._requests.post")
+    @patch("tokenpak.sdk.anthropic._requests.post")
     def test_send_timeout(self, mock_post):
         """Test that timeout raises TokenPakTimeoutError."""
         mock_post.side_effect = requests.exceptions.Timeout(
@@ -237,7 +237,7 @@ class TestSend(unittest.TestCase):
         with self.assertRaises(TokenPakTimeoutError):
             self.adapter.send(prepared)
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_send_auth_error_401(self, mock_requests):
         """Test that 401 response raises TokenPakAuthError."""
         mock_resp = Mock()
@@ -252,7 +252,7 @@ class TestSend(unittest.TestCase):
         with self.assertRaises(TokenPakAuthError):
             self.adapter.send(prepared)
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_send_auth_error_403(self, mock_requests):
         """Test that 403 response raises TokenPakAuthError."""
         mock_resp = Mock()
@@ -267,7 +267,7 @@ class TestSend(unittest.TestCase):
         with self.assertRaises(TokenPakAuthError):
             self.adapter.send(prepared)
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_send_http_error_500(self, mock_requests):
         """Test that 5xx response raises TokenPakAdapterError."""
         mock_resp = Mock()
@@ -284,7 +284,7 @@ class TestSend(unittest.TestCase):
         with self.assertRaises(TokenPakAdapterError):
             self.adapter.send(prepared)
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_send_invalid_json_response(self, mock_requests):
         """Test that invalid JSON response raises TokenPakAdapterError."""
         mock_resp = Mock()
@@ -301,7 +301,7 @@ class TestSend(unittest.TestCase):
         with self.assertRaises(TokenPakAdapterError):
             self.adapter.send(prepared)
 
-    @patch("tokenpak.adapters.anthropic._requests.post")
+    @patch("tokenpak.sdk.anthropic._requests.post")
     def test_send_request_exception(self, mock_post):
         """Test that generic RequestException raises TokenPakAdapterError."""
         mock_post.side_effect = requests.exceptions.RequestException(
@@ -445,7 +445,7 @@ class TestExtractTokens(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """Integration tests for the full request/response cycle."""
 
-    @patch("tokenpak.adapters.anthropic._requests")
+    @patch("tokenpak.sdk.anthropic._requests")
     def test_full_cycle(self, mock_requests):
         """Test complete prepare → send → parse → extract cycle."""
         adapter = AnthropicAdapter(

@@ -1,4 +1,4 @@
-"""tokenpak.agentic.workflow — re-export shim for workflow classes."""
+"""tokenpak.orchestration.workflow — re-export shim for workflow classes."""
 from tokenpak.orchestration.workflow import (
     WorkflowManager,
     WorkflowStatus,

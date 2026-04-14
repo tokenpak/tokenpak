@@ -41,7 +41,7 @@ def _parse_bool(raw: str) -> bool:
 
 def run(verbose: bool = False) -> None:
     """Print TOKENPAK_* environment configuration."""
-    from tokenpak.infrastructure.config import get_config
+    from tokenpak.core.config import get_config
 
     SEP = "────────────────────────"
     print(f"TOKENPAK  |  Configuration\n{SEP}\n")
@@ -63,7 +63,7 @@ def run(verbose: bool = False) -> None:
 
 def run_set(key: str, value: str) -> None:
     """Set a persistent config value by friendly key name."""
-    from tokenpak.infrastructure.config import set_config
+    from tokenpak.core.config import set_config
 
     if key not in _SETTABLE_KEYS:
         known = ", ".join(_SETTABLE_KEYS.keys())

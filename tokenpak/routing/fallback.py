@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from unittest.mock import patch
 
-from tokenpak.agentic.retry import (
+from tokenpak.orchestration.retry import (
     ImmediateAlertError,
     RetryEngine,
     RetryExhaustedError,

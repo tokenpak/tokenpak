@@ -12,8 +12,8 @@ Tests that each error path:
 import pytest
 
 from tokenpak.config_validator import ConfigValidator
-from tokenpak.integrations.litellm.formatter import compile_pack
-from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
+from tokenpak.sdk.integrations.litellm.formatter import compile_pack
+from tokenpak.sdk.integrations.litellm.middleware import TokenPakMiddleware
 
 
 class TestConfigErrors:
@@ -224,7 +224,7 @@ class TestProxyErrorWrapping:
 
     def test_json_error_format(self):
         """Proxy errors should return JSON with status and message."""
-        from tokenpak.integrations.litellm.proxy import _json_error
+        from tokenpak.sdk.integrations.litellm.proxy import _json_error
 
         result = _json_error(400, "Test error message")
         assert isinstance(result, dict)
@@ -234,7 +234,7 @@ class TestProxyErrorWrapping:
 
     def test_missing_tokenpak_field_error(self):
         """Missing 'tokenpak' field should be clear."""
-        from tokenpak.integrations.litellm.proxy import _json_error
+        from tokenpak.sdk.integrations.litellm.proxy import _json_error
 
         result = _json_error(400, "Missing required field: 'tokenpak'")
         assert "tokenpak" in result["error"]["message"]

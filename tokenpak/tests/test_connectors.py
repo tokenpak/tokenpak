@@ -15,17 +15,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.connectors import get_connector, list_connectors
-from tokenpak.connectors.base import ConnectorConfig, RemoteFile
-from tokenpak.connectors.base_source import (
+from tokenpak.sources import get_connector, list_connectors
+from tokenpak.sources.base import ConnectorConfig, RemoteFile
+from tokenpak.sources.base_source import (
     Provenance,
     SourceAdapter,
     SourceFetchError,
 )
-from tokenpak.connectors.github import GitHubConnector
-from tokenpak.connectors.google_drive import GoogleDriveConnector
-from tokenpak.connectors.notion import NotionConnector
-from tokenpak.connectors.notion_adapter import (
+from tokenpak.sources.github import GitHubConnector
+from tokenpak.sources.google_drive import GoogleDriveConnector
+from tokenpak.sources.notion import NotionConnector
+from tokenpak.sources.notion_adapter import (
     NotionAdapter,
     _block_to_text,
     _extract_rich_text,
@@ -49,7 +49,7 @@ def make_config(source_path="owner/repo", auth_token="tok123"):
 
 class TestConnectorsInit:
     def test_package_importable(self):
-        import tokenpak.connectors  # noqa: F401
+        import tokenpak.sources  # noqa: F401
 
     def test_list_connectors_returns_list(self):
         result = list_connectors()
@@ -630,7 +630,7 @@ class TestNotionAdapter:
                 return result
             return {}
 
-        import tokenpak.connectors.notion_adapter as na_mod
+        import tokenpak.sources.notion_adapter as na_mod
         monkeypatch.setattr(na_mod, "_get", mock_get)
 
         adapter = NotionAdapter(api_token="tok")
@@ -650,7 +650,7 @@ class TestNotionAdapter:
         }
         blocks_response = {"results": [], "has_more": False}
 
-        import tokenpak.connectors.notion_adapter as na_mod
+        import tokenpak.sources.notion_adapter as na_mod
         monkeypatch.setattr(na_mod, "_get", lambda url, h: page_data if "/pages/" in url else blocks_response)
 
         adapter = NotionAdapter(api_token="tok")
@@ -658,7 +658,7 @@ class TestNotionAdapter:
         assert prov.title == ""
 
     def test_has_changed_true(self, monkeypatch):
-        import tokenpak.connectors.notion_adapter as na_mod
+        import tokenpak.sources.notion_adapter as na_mod
         monkeypatch.setattr(
             na_mod, "_get", lambda url, h: {"last_edited_time": "2026-02-01T00:00:00Z"}
         )
@@ -666,14 +666,14 @@ class TestNotionAdapter:
         assert adapter.has_changed("page-1", "2026-01-01T00:00:00Z") is True
 
     def test_has_changed_false(self, monkeypatch):
-        import tokenpak.connectors.notion_adapter as na_mod
+        import tokenpak.sources.notion_adapter as na_mod
         ts = "2026-01-01T00:00:00Z"
         monkeypatch.setattr(na_mod, "_get", lambda url, h: {"last_edited_time": ts})
         adapter = NotionAdapter(api_token="tok")
         assert adapter.has_changed("page-1", ts) is False
 
     def test_has_changed_returns_false_on_error(self, monkeypatch):
-        import tokenpak.connectors.notion_adapter as na_mod
+        import tokenpak.sources.notion_adapter as na_mod
 
         def raise_error(url, h):
             raise SourceFetchError("network down")

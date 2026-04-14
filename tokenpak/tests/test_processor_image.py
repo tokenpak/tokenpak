@@ -59,30 +59,30 @@ def _make_jpeg_bytes(width: int, height: int) -> bytes:
 
 class TestImageType:
     def test_import(self):
-        from tokenpak.processors.image import ImageType
+        from tokenpak.compression.processors.image import ImageType
         assert ImageType is not None
 
     def test_document_value(self):
-        from tokenpak.processors.image import ImageType
+        from tokenpak.compression.processors.image import ImageType
         assert ImageType.DOCUMENT.value == "document"
 
     def test_screenshot_value(self):
-        from tokenpak.processors.image import ImageType
+        from tokenpak.compression.processors.image import ImageType
         assert ImageType.SCREENSHOT.value == "screenshot"
 
     def test_photo_value(self):
-        from tokenpak.processors.image import ImageType
+        from tokenpak.compression.processors.image import ImageType
         assert ImageType.PHOTO.value == "photo"
 
 
 class TestCompressedImage:
     def test_import(self):
-        from tokenpak.processors.image import CompressedImage
+        from tokenpak.compression.processors.image import CompressedImage
         assert CompressedImage is not None
 
     @requires_pillow
     def test_fields(self):
-        from tokenpak.processors.image import CompressedImage, ImageType
+        from tokenpak.compression.processors.image import CompressedImage, ImageType
         ci = CompressedImage(
             data=b"abc",
             original_size=100,
@@ -104,8 +104,8 @@ class TestCompressedImage:
 
 class TestClassifyNoPillow:
     def test_raises_import_error_when_pillow_absent(self):
-        with mock.patch("tokenpak.processors.image._PILLOW_AVAILABLE", False):
-            from tokenpak.processors.image import classify
+        with mock.patch("tokenpak.compression.processors.image._PILLOW_AVAILABLE", False):
+            from tokenpak.compression.processors.image import classify
             with pytest.raises(ImportError, match="pip install tokenpak"):
                 classify("any_path.png")
 
@@ -117,8 +117,8 @@ class TestClassifyNoPillow:
 
 class TestCompressNoPillow:
     def test_raises_import_error_when_pillow_absent(self):
-        with mock.patch("tokenpak.processors.image._PILLOW_AVAILABLE", False):
-            from tokenpak.processors.image import compress
+        with mock.patch("tokenpak.compression.processors.image._PILLOW_AVAILABLE", False):
+            from tokenpak.compression.processors.image import compress
             with pytest.raises(ImportError, match="pip install tokenpak"):
                 compress("any_path.png")
 
@@ -130,8 +130,8 @@ class TestCompressNoPillow:
 
 class TestImageProcessorNoPillow:
     def test_passthrough_returns_original_bytes(self):
-        with mock.patch("tokenpak.processors.image._PILLOW_AVAILABLE", False):
-            from tokenpak.processors.image import ImageProcessor
+        with mock.patch("tokenpak.compression.processors.image._PILLOW_AVAILABLE", False):
+            from tokenpak.compression.processors.image import ImageProcessor
             ip = ImageProcessor()
             raw = b"\x89PNG\r\n\x1a\n" + b"\x00" * 50
             with warnings.catch_warnings(record=True) as caught:
@@ -140,8 +140,8 @@ class TestImageProcessorNoPillow:
             assert result == raw
 
     def test_passthrough_emits_import_warning(self):
-        with mock.patch("tokenpak.processors.image._PILLOW_AVAILABLE", False):
-            from tokenpak.processors.image import ImageProcessor
+        with mock.patch("tokenpak.compression.processors.image._PILLOW_AVAILABLE", False):
+            from tokenpak.compression.processors.image import ImageProcessor
             ip = ImageProcessor()
             raw = b"\x00" * 10
             with warnings.catch_warnings(record=True) as caught:
@@ -158,12 +158,12 @@ class TestImageProcessorNoPillow:
 @requires_pillow
 class TestImageProcessorWithPillow:
     def test_instantiation(self):
-        from tokenpak.processors.image import ImageProcessor
+        from tokenpak.compression.processors.image import ImageProcessor
         ip = ImageProcessor()
         assert ip is not None
 
     def test_process_returns_bytes(self):
-        from tokenpak.processors.image import ImageProcessor
+        from tokenpak.compression.processors.image import ImageProcessor
         ip = ImageProcessor()
         # Use a small solid-color PNG (limited unique colors → DOCUMENT type)
         raw = _make_png_bytes(20, 30, color=(200, 200, 200))
@@ -173,7 +173,7 @@ class TestImageProcessorWithPillow:
 
     def test_process_photo_like_image(self):
         """High-color-variety image should be processed as PHOTO."""
-        from tokenpak.processors.image import ImageProcessor
+        from tokenpak.compression.processors.image import ImageProcessor
         ip = ImageProcessor()
         raw = _make_jpeg_bytes(200, 200)
         result = ip.process(raw, path="photo.jpg")
@@ -188,12 +188,12 @@ class TestImageProcessorWithPillow:
 
 class TestProcessorsDict:
     def test_image_in_processors(self):
-        from tokenpak.processors import PROCESSORS
+        from tokenpak.compression.processors import PROCESSORS
         assert "image" in PROCESSORS
 
     @requires_pillow
     def test_image_processor_not_none_with_pillow(self):
-        from tokenpak.processors import PROCESSORS
+        from tokenpak.compression.processors import PROCESSORS
         assert PROCESSORS["image"] is not None
 
 
@@ -204,5 +204,5 @@ class TestProcessorsDict:
 
 class TestPillowFlag:
     def test_flag_is_bool(self):
-        import tokenpak.processors.image as img_mod
+        import tokenpak.compression.processors.image as img_mod
         assert isinstance(img_mod._PILLOW_AVAILABLE, bool)

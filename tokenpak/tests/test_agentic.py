@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.agentic module.
+"""Unit tests for tokenpak.orchestration module.
 
 Covers:
   - Package import (agentic/__init__.py)
@@ -30,16 +30,16 @@ import pytest
 
 
 def test_agentic_package_importable():
-    import tokenpak.agentic  # noqa: F401 — just verify the import works
+    import tokenpak.orchestration  # noqa: F401 — just verify the import works
 
 
 def test_agentic_exports_error_normalizer():
-    from tokenpak.agentic import ErrorNormalizer
+    from tokenpak.orchestration import ErrorNormalizer
     assert callable(ErrorNormalizer)
 
 
 def test_agentic_exports_retry_engine():
-    from tokenpak.agentic import RetryEngine
+    from tokenpak.orchestration import RetryEngine
     assert callable(RetryEngine)
 
 
@@ -52,7 +52,7 @@ class TestErrorNormalizerDefaults:
     """Tests using only the built-in default patterns."""
 
     def setup_method(self):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
         # Use a non-existent path so no external file is loaded
         self.norm = ErrorNormalizer(extra_pattern_path=Path("/nonexistent/path.json"))
 
@@ -104,25 +104,25 @@ class TestErrorNormalizerDefaults:
 
 class TestErrorNormalizerFallback:
     def test_fallback_signature_static(self):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
         sig = ErrorNormalizer._fallback_signature("hello world 42")
         assert sig == "HELLO_WORLD_42"
 
     def test_fallback_truncates_at_80(self):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
         long_msg = "x" * 200
         sig = ErrorNormalizer._fallback_signature(long_msg)
         assert len(sig) <= 80
 
     def test_fallback_collapses_separators(self):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
         sig = ErrorNormalizer._fallback_signature("a--b__c  d")
         assert "__" not in sig
 
 
 class TestErrorNormalizerExternalPatterns:
     def test_loads_external_patterns(self, tmp_path):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         pattern_file = tmp_path / "patterns.json"
         pattern_file.write_text(json.dumps([
@@ -132,7 +132,7 @@ class TestErrorNormalizerExternalPatterns:
         assert norm.normalize("No space left: disk full") == "DISK_FULL"
 
     def test_ignores_invalid_json(self, tmp_path):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         bad_file = tmp_path / "bad.json"
         bad_file.write_text("not-json{{{")
@@ -141,7 +141,7 @@ class TestErrorNormalizerExternalPatterns:
         assert norm.normalize("connection refused") == "CONNECTION_REFUSED"
 
     def test_ignores_non_list_json(self, tmp_path):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         bad_file = tmp_path / "bad.json"
         bad_file.write_text(json.dumps({"not": "a list"}))
@@ -149,7 +149,7 @@ class TestErrorNormalizerExternalPatterns:
         assert norm.normalize("connection refused") == "CONNECTION_REFUSED"
 
     def test_skips_bad_regex_entries(self, tmp_path):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer
 
         bad_file = tmp_path / "patterns.json"
         bad_file.write_text(json.dumps([
@@ -167,7 +167,7 @@ class TestErrorNormalizerExternalPatterns:
 
 class TestFailureSignatureDB:
     def setup_method(self):
-        from tokenpak.agentic.error_normalizer import ErrorNormalizer, FailureSignatureDB
+        from tokenpak.orchestration.error_normalizer import ErrorNormalizer, FailureSignatureDB
         norm = ErrorNormalizer(extra_pattern_path=Path("/nonexistent/path.json"))
         self.db = FailureSignatureDB(normalizer=norm)
 
@@ -216,7 +216,7 @@ class TestFailureSignatureDB:
 
 class TestExtractHttpStatus:
     def setup_method(self):
-        from tokenpak.agentic.retry import _extract_http_status
+        from tokenpak.orchestration.retry import _extract_http_status
         self.fn = _extract_http_status
 
     def test_status_code_attribute(self):
@@ -255,7 +255,7 @@ class TestExtractHttpStatus:
 
 class TestRetryAttempt:
     def test_to_dict_basic(self):
-        from tokenpak.agentic.retry import RetryAttempt
+        from tokenpak.orchestration.retry import RetryAttempt
         attempt = RetryAttempt(level=0, description="test", error="oops")
         d = attempt.to_dict()
         assert d["level"] == 0
@@ -264,13 +264,13 @@ class TestRetryAttempt:
         assert "timestamp" in d
 
     def test_to_dict_with_http_status(self):
-        from tokenpak.agentic.retry import RetryAttempt
+        from tokenpak.orchestration.retry import RetryAttempt
         attempt = RetryAttempt(level=1, description="retry", error="429", http_status="429")
         d = attempt.to_dict()
         assert d["http_status"] == "429"
 
     def test_to_dict_no_http_status_key_when_none(self):
-        from tokenpak.agentic.retry import RetryAttempt
+        from tokenpak.orchestration.retry import RetryAttempt
         attempt = RetryAttempt(level=0, description="x", error="y")
         d = attempt.to_dict()
         assert "http_status" not in d
@@ -283,7 +283,7 @@ class TestRetryAttempt:
 
 class TestRetryErrors:
     def test_retry_exhausted_error_message(self):
-        from tokenpak.agentic.retry import RetryAttempt, RetryExhaustedError
+        from tokenpak.orchestration.retry import RetryAttempt, RetryExhaustedError
         attempts = [RetryAttempt(0, "a", "e"), RetryAttempt(1, "b", "f")]
         exc = RetryExhaustedError(context={"task_id": "t1"}, partial_state={}, attempts=attempts)
         assert "2 attempts" in str(exc)
@@ -291,7 +291,7 @@ class TestRetryErrors:
         assert exc.attempts is attempts
 
     def test_immediate_alert_error(self):
-        from tokenpak.agentic.retry import ImmediateAlertError
+        from tokenpak.orchestration.retry import ImmediateAlertError
         original = RuntimeError("auth denied")
         exc = ImmediateAlertError(status_code="401", original=original)
         assert exc.status_code == "401"
@@ -306,7 +306,7 @@ class TestRetryErrors:
 
 class TestRetryEngineInit:
     def test_default_init(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(fn=fn, context={"task_id": "t1"}, state_dir=tmp_path)
         assert engine.agent_id is not None
@@ -314,7 +314,7 @@ class TestRetryEngineInit:
         assert len(engine.wait_seconds) == 3
 
     def test_custom_per_error_merged(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(
             fn=fn,
@@ -327,7 +327,7 @@ class TestRetryEngineInit:
         assert engine._per_error.get("429") == "wait"
 
     def test_model_from_context(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         fn = MagicMock(return_value="ok")
         engine = RetryEngine(
             fn=fn,
@@ -340,7 +340,7 @@ class TestRetryEngineInit:
 
 class TestRetryEngineSuccessPath:
     def test_success_on_first_attempt(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         fn = MagicMock(return_value=42)
         engine = RetryEngine(fn=fn, context={"task_id": "t1"}, state_dir=tmp_path,
                              wait_seconds=[0, 0, 0])
@@ -348,7 +348,7 @@ class TestRetryEngineSuccessPath:
         assert result == 42
 
     def test_fn_called_with_context_and_state(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         calls = []
 
         def fn(ctx, state):
@@ -362,7 +362,7 @@ class TestRetryEngineSuccessPath:
         assert calls[0][0]["task_id"] == "x"
 
     def test_partial_state_passed_through(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
 
         received_states = []
 
@@ -379,7 +379,7 @@ class TestRetryEngineSuccessPath:
 
 class TestRetryEngineEscalation:
     def test_exhausted_raises_retry_exhausted_error(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine, RetryExhaustedError
+        from tokenpak.orchestration.retry import RetryEngine, RetryExhaustedError
 
         alert_calls = []
 
@@ -404,7 +404,7 @@ class TestRetryEngineEscalation:
         assert len(exc_info.value.attempts) > 0
 
     def test_immediate_alert_on_401(self, tmp_path):
-        from tokenpak.agentic.retry import ImmediateAlertError, RetryEngine, RetryExhaustedError
+        from tokenpak.orchestration.retry import ImmediateAlertError, RetryEngine, RetryExhaustedError
 
         def fn(ctx, state):
             exc = Exception("HTTP 401 Unauthorized")
@@ -425,7 +425,7 @@ class TestRetryEngineEscalation:
         assert len(alert_calls) == 1
 
     def test_model_downgrade_default(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         chain = engine._model_chain
         # Should return next model in chain
@@ -433,14 +433,14 @@ class TestRetryEngineEscalation:
         assert next_model == chain[1]
 
     def test_model_downgrade_at_end_returns_last(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         last = engine._model_chain[-1]
         result = engine._default_model_downgrade(last)
         assert result == last
 
     def test_provider_switch_default(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         engine = RetryEngine(fn=MagicMock(), context={}, state_dir=tmp_path)
         chain = engine._provider_chain
         next_prov = engine._default_provider_switch(chain[0])
@@ -449,7 +449,7 @@ class TestRetryEngineEscalation:
 
 class TestRetryEngineState:
     def test_save_and_load_state(self, tmp_path):
-        from tokenpak.agentic.retry import RetryEngine
+        from tokenpak.orchestration.retry import RetryEngine
         engine = RetryEngine(
             fn=MagicMock(return_value="ok"),
             context={"task_id": "state-test"},
@@ -470,7 +470,7 @@ class TestRetryEngineState:
 
 class TestFileLockManager:
     def test_claim_returns_record(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         record = mgr.claim("/tmp/fake-file.txt")
         assert record["agent"] == "test-agent"
@@ -478,7 +478,7 @@ class TestFileLockManager:
         assert "acquired" in record
 
     def test_claim_and_query(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         path = "/tmp/test-lock-target.txt"
         mgr.claim(path)
@@ -487,7 +487,7 @@ class TestFileLockManager:
         assert rec["agent"] == "test-agent"
 
     def test_release_removes_lock(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         path = "/tmp/test-file-release.txt"
         mgr.claim(path)
@@ -496,12 +496,12 @@ class TestFileLockManager:
         assert mgr.query(path) is None
 
     def test_release_returns_false_if_no_lock(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="test-agent", lock_dir=tmp_path)
         assert mgr.release("/tmp/not-locked.txt") is False
 
     def test_conflict_from_different_agent(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager, LockConflictError
+        from tokenpak.orchestration.locks import FileLockManager, LockConflictError
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/contested.txt"
@@ -510,7 +510,7 @@ class TestFileLockManager:
             mgr_b.claim(path)
 
     def test_same_agent_can_re_claim(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         path = "/tmp/same-agent.txt"
         r1 = mgr.claim(path, timeout_s=600)
@@ -518,7 +518,7 @@ class TestFileLockManager:
         assert r2["agent"] == "agent-x"
 
     def test_expired_lock_can_be_stolen(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/expiring.txt"
@@ -529,7 +529,7 @@ class TestFileLockManager:
         assert record["agent"] == "agent-b"
 
     def test_prune_expired_removes_stale_locks(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/stale.txt", timeout_s=0)
         time.sleep(0.05)  # ensure it's expired
@@ -537,7 +537,7 @@ class TestFileLockManager:
         assert removed >= 1
 
     def test_locks_lists_active_only(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/active-lock.txt", timeout_s=600)
         mgr.claim("/tmp/also-active.txt", timeout_s=600)
@@ -549,7 +549,7 @@ class TestFileLockManager:
         assert len(live) >= 2
 
     def test_suggest_alternatives_excludes_locked(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         mgr.claim("/tmp/locked.txt", timeout_s=600)
         candidates = ["/tmp/locked.txt", "/tmp/free-a.txt", "/tmp/free-b.txt"]
@@ -558,7 +558,7 @@ class TestFileLockManager:
         assert "/tmp/free-a.txt" in alts
 
     def test_renew_extends_expiry(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager
+        from tokenpak.orchestration.locks import FileLockManager
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         path = "/tmp/renewable.txt"
         mgr.claim(path, timeout_s=60)
@@ -567,13 +567,13 @@ class TestFileLockManager:
         assert updated["expires"] > original_expires
 
     def test_renew_raises_on_missing_lock(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager, LockExpiredError
+        from tokenpak.orchestration.locks import FileLockManager, LockExpiredError
         mgr = FileLockManager(agent_id="agent-x", lock_dir=tmp_path)
         with pytest.raises(LockExpiredError):
             mgr.renew("/tmp/no-such-lock.txt")
 
     def test_renew_raises_when_owned_by_other(self, tmp_path):
-        from tokenpak.agentic.locks import FileLockManager, LockConflictError
+        from tokenpak.orchestration.locks import FileLockManager, LockConflictError
         mgr_a = FileLockManager(agent_id="agent-a", lock_dir=tmp_path)
         mgr_b = FileLockManager(agent_id="agent-b", lock_dir=tmp_path)
         path = "/tmp/owned-by-a.txt"
@@ -589,13 +589,13 @@ class TestFileLockManager:
 
 class TestValidationDataClasses:
     def test_validation_check_fields(self):
-        from tokenpak.agentic.validation_framework import ValidationCheck
+        from tokenpak.orchestration.validation_framework import ValidationCheck
         check = ValidationCheck(name="my_check", passed=True, message="all good")
         assert check.name == "my_check"
         assert check.passed is True
 
     def test_validation_result_summary_pass(self):
-        from tokenpak.agentic.validation_framework import ValidationCheck, ValidationResult
+        from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=True),
@@ -609,7 +609,7 @@ class TestValidationDataClasses:
         assert "2/2" in summary
 
     def test_validation_result_summary_fail(self):
-        from tokenpak.agentic.validation_framework import ValidationCheck, ValidationResult
+        from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=False, message="broke"),
@@ -623,7 +623,7 @@ class TestValidationDataClasses:
         assert "1/2" in summary
 
     def test_failed_checks_filters_correctly(self):
-        from tokenpak.agentic.validation_framework import ValidationCheck, ValidationResult
+        from tokenpak.orchestration.validation_framework import ValidationCheck, ValidationResult
         checks = [
             ValidationCheck(name="a", passed=True),
             ValidationCheck(name="b", passed=False),
@@ -644,7 +644,7 @@ class TestValidationDataClasses:
 
 class TestFileStateValidator:
     def test_must_exist_passes(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "exists.txt"
         f.write_text("hello")
         v = FileStateValidator(must_exist=[str(f)])
@@ -652,19 +652,19 @@ class TestFileStateValidator:
         assert result.passed
 
     def test_must_exist_fails_when_missing(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         v = FileStateValidator(must_exist=[str(tmp_path / "missing.txt")])
         result = v.validate({}, {})
         assert not result.passed
 
     def test_must_not_exist_passes_when_absent(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         v = FileStateValidator(must_not_exist=[str(tmp_path / "absent.txt")])
         result = v.validate({}, {})
         assert result.passed
 
     def test_must_not_exist_fails_when_present(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "present.txt"
         f.write_text("here")
         v = FileStateValidator(must_not_exist=[str(f)])
@@ -672,7 +672,7 @@ class TestFileStateValidator:
         assert not result.passed
 
     def test_content_pattern_passes_when_matched(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "log.txt"
         f.write_text("Status: ok\nAll done")
         v = FileStateValidator(content_patterns={str(f): r"Status: ok"})
@@ -680,7 +680,7 @@ class TestFileStateValidator:
         assert result.passed
 
     def test_content_pattern_fails_when_not_matched(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "log.txt"
         f.write_text("Status: error")
         v = FileStateValidator(content_patterns={str(f): r"Status: ok"})
@@ -688,13 +688,13 @@ class TestFileStateValidator:
         assert not result.passed
 
     def test_no_checks_configured_vacuously_passes(self):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         v = FileStateValidator()
         result = v.validate({}, {})
         assert result.passed
 
     def test_must_be_newer_than_passes(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "newfile.txt"
         f.write_text("content")
         past_ts = time.time() - 10
@@ -703,7 +703,7 @@ class TestFileStateValidator:
         assert result.passed
 
     def test_must_be_newer_than_fails_for_old_file(self, tmp_path):
-        from tokenpak.agentic.validation_framework import FileStateValidator
+        from tokenpak.orchestration.validation_framework import FileStateValidator
         f = tmp_path / "oldfile.txt"
         f.write_text("content")
         future_ts = time.time() + 9999
@@ -719,61 +719,61 @@ class TestFileStateValidator:
 
 class TestSchemaValidator:
     def test_required_key_present(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"required_keys": ["status"]})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_required_key_missing(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"required_keys": ["status"]})
         result = v.validate({}, {})
         assert not result.passed
 
     def test_disallowed_key_absent(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"disallowed_keys": ["error"]})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_disallowed_key_present(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"disallowed_keys": ["error"]})
         result = v.validate({"status": "ok", "error": "boom"}, {})
         assert not result.passed
 
     def test_type_check_passes(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"types": {"count": int}})
         result = v.validate({"count": 5}, {})
         assert result.passed
 
     def test_type_check_fails(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"types": {"count": int}})
         result = v.validate({"count": "five"}, {})
         assert not result.passed
 
     def test_allowed_values_passes(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"allowed_values": {"status": ["ok", "pending"]}})
         result = v.validate({"status": "ok"}, {})
         assert result.passed
 
     def test_allowed_values_fails(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({"allowed_values": {"status": ["ok", "pending"]}})
         result = v.validate({"status": "error"}, {})
         assert not result.passed
 
     def test_empty_schema_vacuously_passes(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({})
         result = v.validate({"anything": True}, {})
         assert result.passed
 
     def test_combined_schema(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({
             "required_keys": ["id", "status"],
             "types": {"id": int, "status": str},
@@ -784,7 +784,7 @@ class TestSchemaValidator:
         assert result.passed
 
     def test_validator_name_property(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator
+        from tokenpak.orchestration.validation_framework import SchemaValidator
         v = SchemaValidator({})
         assert v.name == "SchemaValidator"
 
@@ -796,13 +796,13 @@ class TestSchemaValidator:
 
 class TestValidationOrchestrator:
     def test_no_validators_returns_pass(self):
-        from tokenpak.agentic.validation_framework import ValidationOrchestrator
+        from tokenpak.orchestration.validation_framework import ValidationOrchestrator
         orch = ValidationOrchestrator()
         result = orch.validate_step("deploy", {}, {})
         assert result.passed
 
     def test_registered_validator_runs(self, tmp_path):
-        from tokenpak.agentic.validation_framework import (
+        from tokenpak.orchestration.validation_framework import (
             FileStateValidator,
             ValidationOrchestrator,
         )
@@ -814,7 +814,7 @@ class TestValidationOrchestrator:
         assert result.passed
 
     def test_failed_validator_fails_step(self, tmp_path):
-        from tokenpak.agentic.validation_framework import (
+        from tokenpak.orchestration.validation_framework import (
             FileStateValidator,
             ValidationOrchestrator,
         )
@@ -826,7 +826,7 @@ class TestValidationOrchestrator:
         assert not result.passed
 
     def test_validation_history_recorded(self):
-        from tokenpak.agentic.validation_framework import SchemaValidator, ValidationOrchestrator
+        from tokenpak.orchestration.validation_framework import SchemaValidator, ValidationOrchestrator
         orch = ValidationOrchestrator()
         orch.register_step_validator("check", SchemaValidator({"required_keys": ["x"]}))
         orch.validate_step("check", {"x": 1}, {})
@@ -836,7 +836,7 @@ class TestValidationOrchestrator:
         assert history[0]["passed"] is True
 
     def test_handle_failure_raises_validation_error_when_escalation_disabled(self):
-        from tokenpak.agentic.validation_framework import (
+        from tokenpak.orchestration.validation_framework import (
             RetryPolicy,
             SchemaValidator,
             ValidationError,
@@ -852,7 +852,7 @@ class TestValidationOrchestrator:
             orch.handle_failure("step", initial, expected={})
 
     def test_handle_failure_calls_on_escalate(self):
-        from tokenpak.agentic.validation_framework import (
+        from tokenpak.orchestration.validation_framework import (
             RetryPolicy,
             SchemaValidator,
             ValidationOrchestrator,
@@ -876,45 +876,45 @@ class TestValidationOrchestrator:
 
 class TestWorkflowBudget:
     def test_init_basic(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b", "c", "d"])
         assert budget.total == 1000
         assert budget.remaining == 1000
         assert set(budget.pending_steps) == {"a", "b", "c", "d"}
 
     def test_even_split_allocation(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b", "c", "d"])
         # Each step gets 250
         assert budget.step_allocation("a") == 250
         assert budget.step_allocation("b") == 250
 
     def test_invalid_total_raises(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         with pytest.raises(ValueError):
             WorkflowBudget(total=0, steps=["a"])
 
     def test_empty_steps_raises(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         with pytest.raises(ValueError):
             WorkflowBudget(total=1000, steps=[])
 
     def test_record_usage_updates_remaining(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         assert budget.remaining == 600
         assert budget.step_usage("a") == 400
 
     def test_record_usage_removes_from_pending(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         assert "a" not in budget.pending_steps
         assert "a" in budget.completed_steps
 
     def test_overspend_generates_warning_event(self):
-        from tokenpak.agentic.workflow_budget import BudgetEventKind, WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
         # warn_pct=1.20 — step uses 121% of its 500-token allocation
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 610)  # 610 > 500 * 1.20 = 600
@@ -922,14 +922,14 @@ class TestWorkflowBudget:
         assert BudgetEventKind.WARNING in kinds
 
     def test_no_warning_for_normal_spend(self):
-        from tokenpak.agentic.workflow_budget import BudgetEventKind, WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 400)  # under 500 allocation
         kinds = [e.kind for e in events]
         assert BudgetEventKind.WARNING not in kinds
 
     def test_critical_event_when_budget_low(self):
-        from tokenpak.agentic.workflow_budget import BudgetEventKind, WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
         # Total 100, 4 steps → 25 each. Spend 85 on step a → 15 left (<20%)
         budget = WorkflowBudget(total=100, steps=["a", "b", "c", "d"])
         events = budget.record_usage("a", 85)
@@ -937,46 +937,46 @@ class TestWorkflowBudget:
         assert BudgetEventKind.CRITICAL in kinds
 
     def test_exhausted_event_when_budget_zero(self):
-        from tokenpak.agentic.workflow_budget import BudgetEventKind, WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
         budget = WorkflowBudget(total=100, steps=["a", "b"])
         events = budget.record_usage("a", 100)
         kinds = [e.kind for e in events]
         assert BudgetEventKind.EXHAUSTED in kinds
 
     def test_rebalanced_event_on_underspend(self):
-        from tokenpak.agentic.workflow_budget import BudgetEventKind, WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import BudgetEventKind, WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         events = budget.record_usage("a", 100)  # underspend by 400
         kinds = [e.kind for e in events]
         assert BudgetEventKind.REBALANCED in kinds
 
     def test_duplicate_record_raises(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 400)
         with pytest.raises(ValueError):
             budget.record_usage("a", 100)
 
     def test_negative_usage_raises(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(ValueError):
             budget.record_usage("a", -5)
 
     def test_unknown_step_raises_key_error(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(KeyError):
             budget.record_usage("z", 100)
 
     def test_unknown_step_allocation_raises_key_error(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a"])
         with pytest.raises(KeyError):
             budget.step_allocation("z")
 
     def test_snapshot_reflects_state(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a", "b"])
         budget.record_usage("a", 300)
         snap = budget.snapshot()
@@ -986,12 +986,12 @@ class TestWorkflowBudget:
         assert "b" in snap["pending_steps"]
 
     def test_step_usage_returns_none_before_record(self):
-        from tokenpak.agentic.workflow_budget import WorkflowBudget
+        from tokenpak.orchestration.workflow_budget import WorkflowBudget
         budget = WorkflowBudget(total=1000, steps=["a"])
         assert budget.step_usage("a") is None
 
     def test_is_warning_event(self):
-        from tokenpak.agentic.workflow_budget import BudgetEvent, BudgetEventKind
+        from tokenpak.orchestration.workflow_budget import BudgetEvent, BudgetEventKind
         warn = BudgetEvent(kind=BudgetEventKind.WARNING, step="a", message="test")
         crit = BudgetEvent(kind=BudgetEventKind.CRITICAL, step="a", message="test")
         normal = BudgetEvent(kind=BudgetEventKind.USAGE_RECORDED, step="a", message="test")
@@ -1007,7 +1007,7 @@ class TestWorkflowBudget:
 
 class TestAgentCapabilities:
     def test_defaults(self):
-        from tokenpak.agentic.capabilities import AgentCapabilities
+        from tokenpak.orchestration.capabilities import AgentCapabilities
         caps = AgentCapabilities()
         assert caps.gpu is False
         assert caps.memory_gb == 4.0
@@ -1015,7 +1015,7 @@ class TestAgentCapabilities:
         assert "anthropic" in caps.provider_access
 
     def test_to_dict_round_trip(self):
-        from tokenpak.agentic.capabilities import AgentCapabilities
+        from tokenpak.orchestration.capabilities import AgentCapabilities
         caps = AgentCapabilities(gpu=True, memory_gb=16.0, specialties=["code"])
         d = caps.to_dict()
         restored = AgentCapabilities.from_dict(d)
@@ -1024,7 +1024,7 @@ class TestAgentCapabilities:
         assert "code" in restored.specialties
 
     def test_from_dict_with_missing_fields_uses_defaults(self):
-        from tokenpak.agentic.capabilities import AgentCapabilities
+        from tokenpak.orchestration.capabilities import AgentCapabilities
         caps = AgentCapabilities.from_dict({})
         assert caps.gpu is False
         assert caps.memory_gb == 4.0
@@ -1032,7 +1032,7 @@ class TestAgentCapabilities:
 
 class TestTaskRequirements:
     def test_defaults(self):
-        from tokenpak.agentic.capabilities import TaskRequirements
+        from tokenpak.orchestration.capabilities import TaskRequirements
         req = TaskRequirements()
         assert req.requires_gpu is None
         assert req.min_memory_gb is None
@@ -1040,7 +1040,7 @@ class TestTaskRequirements:
         assert req.prefer_idle is True
 
     def test_to_dict(self):
-        from tokenpak.agentic.capabilities import TaskRequirements
+        from tokenpak.orchestration.capabilities import TaskRequirements
         req = TaskRequirements(requires_gpu=True, min_memory_gb=8.0)
         d = req.to_dict()
         assert d["requires_gpu"] is True

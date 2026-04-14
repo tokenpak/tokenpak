@@ -16,8 +16,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from .processors import get_processor
-from .registry import Block, BlockRegistry
+from .compression.processors import get_processor
+from .core.registry import Block, BlockRegistry
 from .tokens import clear_cache, count_tokens
 from .walker import walk_directory
 

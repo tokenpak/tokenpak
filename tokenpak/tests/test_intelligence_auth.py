@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Unit tests for tokenpak.intelligence.auth.
+Unit tests for tokenpak.proxy.intelligence.auth.
 
 Covers:
 - LicenseTier enum values and TIER_RATE_LIMITS mapping
@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 class TestLicenseTier(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import LicenseTier, TIER_RATE_LIMITS
+        from tokenpak.proxy.intelligence.auth import LicenseTier, TIER_RATE_LIMITS
 
         self.LicenseTier = LicenseTier
         self.TIER_RATE_LIMITS = TIER_RATE_LIMITS
@@ -63,7 +63,7 @@ class TestLicenseTier(unittest.TestCase):
 
 class TestPIIScrubFilter(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import PIIScrubFilter
+        from tokenpak.proxy.intelligence.auth import PIIScrubFilter
 
         self.filt = PIIScrubFilter()
 
@@ -126,14 +126,14 @@ class TestPIIScrubFilter(unittest.TestCase):
 
 class TestAPIKeyValidatorInit(unittest.TestCase):
     def test_empty_init_no_keys(self):
-        from tokenpak.intelligence.auth import APIKeyValidator
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator
 
         with patch.dict(os.environ, {"TOKENPAK_ALLOWED_KEYS": ""}, clear=False):
             v = APIKeyValidator()
         self.assertIsNone(v.lookup("anykey"))
 
     def test_loads_env_keys(self):
-        from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier
 
         env = {"TOKENPAK_ALLOWED_KEYS": "testkey:pro,teamkey:team"}
         with patch.dict(os.environ, env, clear=False):
@@ -142,7 +142,7 @@ class TestAPIKeyValidatorInit(unittest.TestCase):
         self.assertEqual(v.lookup("teamkey"), LicenseTier.TEAM)
 
     def test_invalid_tier_in_env_is_skipped(self):
-        from tokenpak.intelligence.auth import APIKeyValidator
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator
 
         env = {"TOKENPAK_ALLOWED_KEYS": "badkey:unknowntier"}
         with patch.dict(os.environ, env, clear=False):
@@ -150,7 +150,7 @@ class TestAPIKeyValidatorInit(unittest.TestCase):
         self.assertIsNone(v.lookup("badkey"))
 
     def test_env_key_missing_colon_is_skipped(self):
-        from tokenpak.intelligence.auth import APIKeyValidator
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator
 
         env = {"TOKENPAK_ALLOWED_KEYS": "nokeyformat"}
         with patch.dict(os.environ, env, clear=False):
@@ -158,7 +158,7 @@ class TestAPIKeyValidatorInit(unittest.TestCase):
         self.assertIsNone(v.lookup("nokeyformat"))
 
     def test_env_whitespace_trimmed(self):
-        from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier
 
         env = {"TOKENPAK_ALLOWED_KEYS": " trimmed : free "}
         with patch.dict(os.environ, env, clear=False):
@@ -168,13 +168,13 @@ class TestAPIKeyValidatorInit(unittest.TestCase):
 
 class TestAPIKeyValidatorRegisterLookup(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import APIKeyValidator
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator
 
         with patch.dict(os.environ, {"TOKENPAK_ALLOWED_KEYS": ""}, clear=False):
             self.v = APIKeyValidator()
 
     def test_register_and_lookup(self):
-        from tokenpak.intelligence.auth import LicenseTier
+        from tokenpak.proxy.intelligence.auth import LicenseTier
 
         self.v.register("k1", LicenseTier.ENTERPRISE)
         self.assertEqual(self.v.lookup("k1"), LicenseTier.ENTERPRISE)
@@ -183,7 +183,7 @@ class TestAPIKeyValidatorRegisterLookup(unittest.TestCase):
         self.assertIsNone(self.v.lookup("does_not_exist"))
 
     def test_register_overwrites(self):
-        from tokenpak.intelligence.auth import LicenseTier
+        from tokenpak.proxy.intelligence.auth import LicenseTier
 
         self.v.register("k1", LicenseTier.FREE)
         self.v.register("k1", LicenseTier.PRO)
@@ -192,7 +192,7 @@ class TestAPIKeyValidatorRegisterLookup(unittest.TestCase):
 
 class TestAPIKeyValidatorValidate(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier
 
         with patch.dict(os.environ, {"TOKENPAK_ALLOWED_KEYS": ""}, clear=False):
             self.v = APIKeyValidator()
@@ -230,7 +230,7 @@ class TestAPIKeyValidatorValidate(unittest.TestCase):
 
 class TestRateLimiterEnterprise(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
 
         self.limiter = RateLimiter()
         self.enterprise = LicenseTier.ENTERPRISE
@@ -248,7 +248,7 @@ class TestRateLimiterEnterprise(unittest.TestCase):
 
 class TestRateLimiterFree(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
 
         self.limiter = RateLimiter()
         self.free = LicenseTier.FREE
@@ -274,7 +274,7 @@ class TestRateLimiterFree(unittest.TestCase):
         self.assertEqual(r1, r0 - 1)
 
     def test_window_resets(self):
-        from tokenpak.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
 
         limiter = RateLimiter()
         key = "window_reset_key"
@@ -299,7 +299,7 @@ class TestRateLimiterFree(unittest.TestCase):
     def test_thread_safety(self):
         import threading
 
-        from tokenpak.intelligence.auth import RateLimiter, LicenseTier
+        from tokenpak.proxy.intelligence.auth import RateLimiter, LicenseTier
 
         limiter = RateLimiter()
         key = "thread_key"
@@ -324,14 +324,14 @@ class TestRateLimiterFree(unittest.TestCase):
 
 class TestRateLimiterHashing(unittest.TestCase):
     def test_hash_is_deterministic(self):
-        from tokenpak.intelligence.auth import RateLimiter
+        from tokenpak.proxy.intelligence.auth import RateLimiter
 
         h1 = RateLimiter._hash("mykey")
         h2 = RateLimiter._hash("mykey")
         self.assertEqual(h1, h2)
 
     def test_different_keys_different_hash(self):
-        from tokenpak.intelligence.auth import RateLimiter
+        from tokenpak.proxy.intelligence.auth import RateLimiter
 
         self.assertNotEqual(RateLimiter._hash("key1"), RateLimiter._hash("key2"))
 
@@ -348,7 +348,7 @@ class TestTokenPakAuthMiddlewareBypass(unittest.TestCase):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
         from starlette.responses import JSONResponse
-        from tokenpak.intelligence.auth import (
+        from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             RateLimiter,
             TokenPakAuthMiddleware,
@@ -398,7 +398,7 @@ class TestTokenPakAuthMiddlewareAuth(unittest.TestCase):
     def _make_client_with_key(self, key, tier_str):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
-        from tokenpak.intelligence.auth import (
+        from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             LicenseTier,
             RateLimiter,
@@ -449,7 +449,7 @@ class TestTokenPakAuthMiddlewareRateLimit(unittest.TestCase):
     def _make_client_exhausted(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
-        from tokenpak.intelligence.auth import (
+        from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             LicenseTier,
             RateLimiter,
@@ -499,7 +499,7 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
     def setUp(self):
         from fastapi import FastAPI
         from starlette.testclient import TestClient
-        from tokenpak.intelligence.auth import (
+        from tokenpak.proxy.intelligence.auth import (
             APIKeyValidator,
             LicenseTier,
             RateLimiter,
@@ -532,7 +532,7 @@ class TestTokenPakAuthMiddlewareRateLimitHeaders(unittest.TestCase):
         self.assertIn("x-ratelimit-remaining", resp.headers)
 
     def test_enterprise_shows_unlimited_limit(self):
-        from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter, TokenPakAuthMiddleware
+        from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter, TokenPakAuthMiddleware
         from fastapi import FastAPI
         from starlette.testclient import TestClient
 

@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.integrations.claude_code.mcp_server."""
+"""Unit tests for tokenpak.sdk.integrations.claude_code.mcp_server."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.integrations.claude_code.mcp_server import (
+from tokenpak.sdk.integrations.claude_code.mcp_server import (
     HANDLERS,
     TOOLS,
     _build_summary,
@@ -287,7 +287,7 @@ class TestHandleSearchCorpus:
     def test_no_index_when_index_unavailable(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(available=False)
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             result = _handle_search_corpus({"query": "test"})
         assert result["status"] == "no-index"
         assert result["results"] == []
@@ -296,7 +296,7 @@ class TestHandleSearchCorpus:
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         block = _make_block()
         mock_index = _make_index_mock(search_results=[(block, 0.95)])
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             result = _handle_search_corpus({"query": "search term", "top_k": 3})
         assert result["status"] == "ok"
         assert result["query"] == "search term"
@@ -311,7 +311,7 @@ class TestHandleSearchCorpus:
     def test_default_top_k_is_five(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(search_results=[])
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             result = _handle_search_corpus({"query": "test"})
         assert result["top_k"] == 5
 
@@ -379,7 +379,7 @@ class TestHandleSummarizeRelatedIssues:
     def test_no_index_returns_empty_related(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(available=False)
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch("tokenpak.vault.search.extract_must_hit_terms", return_value=[]):
                 result = _handle_summarize_related_issues({"query": "test"})
         assert result["status"] == "no-index"
@@ -391,7 +391,7 @@ class TestHandleSummarizeRelatedIssues:
         mock_index = _make_index_mock(search_results=[(block, 0.8)])
         mock_index._get_content.return_value = "BM25 retrieval decision"
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=["BM25"],
@@ -482,7 +482,7 @@ class TestHandleBuildContextPack:
         mock_index = _make_index_mock(search_results=[(block, 0.7)])
         mock_index._get_content.return_value = "Some relevant snippet"
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
@@ -499,7 +499,7 @@ class TestHandleBuildContextPack:
     def test_include_related_false_skips_related(self, monkeypatch, tmp_path):
         monkeypatch.setenv("TOKENPAK_VAULT_ROOT", str(tmp_path))
         mock_index = _make_index_mock(search_results=[])
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             result = _handle_build_context_pack(
                 {"query": "vault search", "include_related": False}
             )
@@ -527,13 +527,13 @@ class TestHandlePrepareReviewPacket:
         mock_policy.compact_block.return_value = "compacted text"
         mock_policy.to_dict.return_value = {"compaction": {"mode": "balanced"}}
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
-                    "tokenpak.compaction.policy.CompactionPolicy"
+                    "tokenpak.compression.budgets.policy.CompactionPolicy"
                 ) as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"branch": "feature/abc"})
@@ -555,13 +555,13 @@ class TestHandlePrepareReviewPacket:
         mock_policy.to_dict.return_value = {"compaction": {}}
         diff_text = "+added line\n-removed line\n--- old\n+++ new"
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
-                    "tokenpak.compaction.policy.CompactionPolicy"
+                    "tokenpak.compression.budgets.policy.CompactionPolicy"
                 ) as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"diff": diff_text})
@@ -575,13 +575,13 @@ class TestHandlePrepareReviewPacket:
         mock_policy.compact_block.return_value = ""
         mock_policy.to_dict.return_value = {"compaction": {}}
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
-                    "tokenpak.compaction.policy.CompactionPolicy"
+                    "tokenpak.compression.budgets.policy.CompactionPolicy"
                 ) as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({})
@@ -596,13 +596,13 @@ class TestHandlePrepareReviewPacket:
         mock_policy.compact_block.return_value = ""
         mock_policy.to_dict.return_value = {"compaction": {}}
 
-        with patch("tokenpak.retrieval.vault_index.VaultIndex", return_value=mock_index):
+        with patch("tokenpak.vault.retrieval.vault_index.VaultIndex", return_value=mock_index):
             with patch(
                 "tokenpak.vault.search.extract_must_hit_terms",
                 return_value=[],
             ):
                 with patch(
-                    "tokenpak.compaction.policy.CompactionPolicy"
+                    "tokenpak.compression.budgets.policy.CompactionPolicy"
                 ) as MockCP:
                     MockCP.default.return_value = mock_policy
                     result = _handle_prepare_review_packet({"file": "src/core.py"})

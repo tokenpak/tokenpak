@@ -103,7 +103,7 @@ def write_record(
         return
 
     try:
-        from tokenpak.infrastructure.config import get_metrics_enabled
+        from tokenpak.core.config import get_metrics_enabled
 
         if not get_metrics_enabled():
             return

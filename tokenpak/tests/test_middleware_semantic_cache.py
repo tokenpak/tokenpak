@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.middleware.semantic_cache_middleware.SemanticCacheMiddleware
+Unit tests for tokenpak.proxy.middleware.semantic_cache_middleware.SemanticCacheMiddleware
 
 Covers: initialization, scope management, check/record lifecycle, build_trace,
         stats, and clear.  Uses real SemanticCache (pure Python, no network I/O).
@@ -14,7 +14,7 @@ from tokenpak.cache.semantic_cache import (
     SemanticCacheEntry,
     SemanticCacheLookup,
 )
-from tokenpak.middleware.semantic_cache_middleware import SemanticCacheMiddleware
+from tokenpak.proxy.middleware.semantic_cache_middleware import SemanticCacheMiddleware
 
 
 # ---------------------------------------------------------------------------

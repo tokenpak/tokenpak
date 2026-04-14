@@ -49,7 +49,7 @@ def cmd_preview(args):
     import sys
 
     from tokenpak.compression.core import Compressor
-    from tokenpak.formatting import OutputFormatter, OutputMode
+    from tokenpak.compression.formatting import OutputFormatter, OutputMode
 
     # Get input text
     if args.file:

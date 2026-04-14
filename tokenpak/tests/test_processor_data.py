@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from tokenpak.processors.data import DataProcessor
+from tokenpak.compression.processors.data import DataProcessor
 
 
 class TestDataProcessorInit:

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.registry import Block, BlockRegistry
+from tokenpak.core.registry import Block, BlockRegistry
 
 
 # ---------------------------------------------------------------------------

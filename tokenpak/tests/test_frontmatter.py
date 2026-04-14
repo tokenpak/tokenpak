@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.validation.frontmatter import FrontmatterDiagnostics, parse_frontmatter
+from tokenpak.core.validation.frontmatter import FrontmatterDiagnostics, parse_frontmatter
 
 
 # ---------------------------------------------------------------------------

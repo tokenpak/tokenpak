@@ -931,7 +931,7 @@ def on_episode_complete(
     Returns:
         The distilled EpisodeRecord.
     """
-    from tokenpak.agentic.episode_distiller import (  # noqa: PLC0415
+    from tokenpak.orchestration.episode_distiller import (  # noqa: PLC0415
         EpisodeRecord,
         distill_episode,
         submit_to_memory,

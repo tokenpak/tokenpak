@@ -9,24 +9,24 @@ from __future__ import annotations
 import json
 import pytest
 
-from tokenpak.validation.request_validator import (
+from tokenpak.core.validation.request_validator import (
     VALIDATION_MODES,
     RequestValidationResult,
     RequestValidator,
 )
-from tokenpak.validation.request_schema import (
+from tokenpak.core.validation.request_schema import (
     ANTHROPIC_MESSAGE_SCHEMA,
     GOOGLE_GENERATE_CONTENT_SCHEMA,
     OPENAI_CHAT_SCHEMA,
     OPENAI_RESPONSES_SCHEMA,
     get_request_schema,
 )
-from tokenpak.validation.response_schema import (
+from tokenpak.core.validation.response_schema import (
     RESPONSE_SCHEMA,
     RESPONSE_SCHEMA_MINIMAL,
     get_schema,
 )
-from tokenpak.validation.validator import (
+from tokenpak.core.validation.validator import (
     ResponseValidator,
     ValidationResult,
     is_valid,

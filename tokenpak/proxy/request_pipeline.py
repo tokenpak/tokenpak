@@ -46,7 +46,7 @@ def _get_router():
                 from tokenpak.proxy.intent_policy import decide as _policy_decide
 
                 try:
-                    from tokenpak.validation_gate import ValidationGate
+                    from tokenpak.core.validation_gate import ValidationGate
                 except ImportError:
                     ValidationGate = None  # type: ignore[assignment,misc]
 
@@ -136,7 +136,7 @@ _VALIDATION_GATE_LOCK = threading.Lock()
 
 def _has_validation_gate() -> bool:
     try:
-        from tokenpak.validation_gate import ValidationGate  # noqa
+        from tokenpak.core.validation_gate import ValidationGate  # noqa
 
         return True
     except Exception:
@@ -150,7 +150,7 @@ def _get_validation_gate():
     with _VALIDATION_GATE_LOCK:
         if _VALIDATION_GATE_INSTANCE is None:
             try:
-                from tokenpak.validation_gate import ValidationGate
+                from tokenpak.core.validation_gate import ValidationGate
 
                 _VALIDATION_GATE_INSTANCE = ValidationGate(
                     enabled=True,
@@ -210,7 +210,7 @@ def _classify_intent(text: str, _semantic_meta: "dict | None" = None) -> str:
     """
     # Phase 0: Semantic alias resolution (deterministic, no LLM)
     try:
-        from tokenpak.semantic.resolver import get_default_resolver as _get_resolver
+        from tokenpak.vault.semantic.resolver import get_default_resolver as _get_resolver
 
         _resolver = _get_resolver()
         _sem_result = _resolver.resolve_intent(text)

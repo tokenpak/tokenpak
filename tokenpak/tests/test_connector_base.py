@@ -3,13 +3,13 @@
 
 import pytest
 
-from tokenpak.connectors import get_connector, list_connectors
-from tokenpak.connectors.base import (
+from tokenpak.sources import get_connector, list_connectors
+from tokenpak.sources.base import (
     Connector,
     ConnectorConfig,
     RemoteFile,
 )
-from tokenpak.connectors.base_source import (
+from tokenpak.sources.base_source import (
     Provenance,
     SourceAdapter,
     SourceFetchError,

@@ -57,7 +57,7 @@ def list_adapters() -> Dict[str, Any]:
 def discover() -> int:
     """Discover and load adapters from installed entry points.
 
-    Scans the ``tokenpak.adapters`` entry point group. Each entry point
+    Scans the ``tokenpak.sdk`` entry point group. Each entry point
     should resolve to a module with a ``register()`` function.
 
     Returns:
@@ -70,9 +70,9 @@ def discover() -> int:
         eps = entry_points()
         # Python 3.12+ returns a SelectableGroups; 3.9 returns dict
         if hasattr(eps, "select"):
-            adapter_eps = eps.select(group="tokenpak.adapters")
+            adapter_eps = eps.select(group="tokenpak.sdk")
         else:
-            adapter_eps = eps.get("tokenpak.adapters", [])
+            adapter_eps = eps.get("tokenpak.sdk", [])
 
         for ep in adapter_eps:
             try:

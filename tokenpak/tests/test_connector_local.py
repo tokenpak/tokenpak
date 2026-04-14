@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.connectors.base import ConnectorConfig
-from tokenpak.connectors.local import LocalConnector
+from tokenpak.sources.base import ConnectorConfig
+from tokenpak.sources.local import LocalConnector
 
 
 def _make_config(tmp_path, **kwargs):

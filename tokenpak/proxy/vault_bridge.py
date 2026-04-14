@@ -432,7 +432,7 @@ def _init_singletons() -> None:
 
         # --- Capsule Builder ---
         try:
-            from tokenpak.capsule.builder import CapsuleBuilder as _CapsuleBuilder  # type: ignore[assignment]
+            from tokenpak.companion.capsules.builder import CapsuleBuilder as _CapsuleBuilder  # type: ignore[assignment]
 
             _CAPSULE_BUILDER = _CapsuleBuilder(
                 enabled=ENABLE_CAPSULE_BUILDER,
@@ -494,7 +494,7 @@ class _LazyAlias:
 
 
 # For callers using module-level names in the *same* module only.
-# server.py imports these from tokenpak.runtime.proxy, not here —
+# server.py imports these from tokenpak.core.runtime.proxy, not here —
 # so backward-compat aliases are only needed for direct vault_bridge importers.
 VAULT_INDEX = _LazyAlias(get_vault_index)  # type: ignore[assignment]
 TERM_RESOLVER = _LazyAlias(get_term_resolver)  # type: ignore[assignment]
@@ -517,7 +517,7 @@ def inject_vault_context(
     # Lazy imports for proxy-layer dependencies (transferred to subpackages in A2c)
     from tokenpak.proxy.adapters.utils import _detect_adapter, extract_query_signal
     try:
-        from tokenpak.runtime.proxy import SESSION  # type: ignore[import]
+        from tokenpak.core.runtime.proxy import SESSION  # type: ignore[import]
     except ImportError:
         SESSION = {}  # type: ignore[assignment]
     from tokenpak.vault.search import _compile_from_results, score_and_sort  # type: ignore[import]
@@ -563,7 +563,7 @@ def inject_vault_context(
     _t3 = time.perf_counter()
     semantic_scorer = None
     try:
-        from tokenpak.runtime.proxy import SEMANTIC_SCORER as semantic_scorer  # type: ignore[import]
+        from tokenpak.core.runtime.proxy import SEMANTIC_SCORER as semantic_scorer  # type: ignore[import]
     except Exception:
         pass
 

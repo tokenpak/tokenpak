@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for tokenpak.runtime.cache_telemetry — CacheTelemetry and ProviderCacheStats."""
+"""Unit tests for tokenpak.core.runtime.cache_telemetry — CacheTelemetry and ProviderCacheStats."""
 
 import threading
 import pytest
-from tokenpak.runtime.cache_telemetry import CacheTelemetry, ProviderCacheStats
+from tokenpak.core.runtime.cache_telemetry import CacheTelemetry, ProviderCacheStats
 
 
 # ---------------------------------------------------------------------------

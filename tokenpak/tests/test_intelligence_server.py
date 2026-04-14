@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Unit tests for tokenpak.intelligence.server.
+Unit tests for tokenpak.proxy.intelligence.server.
 
 Covers:
 - _cors_origins — env var parsing (wildcard, list, default)
@@ -44,26 +44,26 @@ class TestCorsOrigins(unittest.TestCase):
             os.environ.pop("TOKENPAK_CORS_ORIGINS", None)
             if env_val is not None:
                 os.environ["TOKENPAK_CORS_ORIGINS"] = env_val
-            from tokenpak.intelligence import server as srv
+            from tokenpak.proxy.intelligence import server as srv
             import importlib
             importlib.reload(srv)
             return srv._cors_origins()
 
     def test_wildcard_returns_star_list(self):
-        from tokenpak.intelligence.server import _cors_origins
+        from tokenpak.proxy.intelligence.server import _cors_origins
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "*"}):
             result = _cors_origins()
         self.assertEqual(result, ["*"])
 
     def test_comma_separated_parsed(self):
-        from tokenpak.intelligence.server import _cors_origins
+        from tokenpak.proxy.intelligence.server import _cors_origins
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "https://a.com,https://b.com"}):
             result = _cors_origins()
         self.assertIn("https://a.com", result)
         self.assertIn("https://b.com", result)
 
     def test_empty_env_returns_defaults(self):
-        from tokenpak.intelligence.server import _cors_origins
+        from tokenpak.proxy.intelligence.server import _cors_origins
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": ""}):
             result = _cors_origins()
         self.assertGreater(len(result), 0)
@@ -71,7 +71,7 @@ class TestCorsOrigins(unittest.TestCase):
         self.assertTrue(any("localhost" in o for o in result))
 
     def test_whitespace_stripped(self):
-        from tokenpak.intelligence.server import _cors_origins
+        from tokenpak.proxy.intelligence.server import _cors_origins
         with patch.dict(os.environ, {"TOKENPAK_CORS_ORIGINS": "  https://a.com ,  https://b.com  "}):
             result = _cors_origins()
         self.assertIn("https://a.com", result)
@@ -85,7 +85,7 @@ class TestCorsOrigins(unittest.TestCase):
 
 class TestEstimateTokens(unittest.TestCase):
     def setUp(self):
-        from tokenpak.intelligence.server import _estimate_tokens
+        from tokenpak.proxy.intelligence.server import _estimate_tokens
 
         self.fn = _estimate_tokens
 
@@ -121,7 +121,7 @@ class TestEstimateTokens(unittest.TestCase):
 
 class TestCompressRequestValidator(unittest.TestCase):
     def _make(self, **kwargs):
-        from tokenpak.intelligence.server import CompressRequest
+        from tokenpak.proxy.intelligence.server import CompressRequest
 
         defaults = {"content": "hello world", "model": "gpt-4o", "mode": "hybrid"}
         defaults.update(kwargs)
@@ -167,7 +167,7 @@ class TestCompressRequestValidator(unittest.TestCase):
 
 class TestBudgetRequestValidator(unittest.TestCase):
     def _make(self, **kwargs):
-        from tokenpak.intelligence.server import BudgetRequest
+        from tokenpak.proxy.intelligence.server import BudgetRequest
 
         defaults = {"content": "hello world", "model": "gpt-4o", "target_tokens": 8000}
         defaults.update(kwargs)
@@ -196,8 +196,8 @@ class TestBudgetRequestValidator(unittest.TestCase):
 def _make_test_client(key="testkey", tier="pro"):
     """Return a TestClient with a pre-registered API key."""
     from starlette.testclient import TestClient
-    from tokenpak.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter
-    from tokenpak.intelligence.server import create_app
+    from tokenpak.proxy.intelligence.auth import APIKeyValidator, LicenseTier, RateLimiter
+    from tokenpak.proxy.intelligence.server import create_app
 
     validator = APIKeyValidator()
     validator.register(key, LicenseTier(tier))
@@ -214,19 +214,19 @@ def _make_test_client(key="testkey", tier="pro"):
 class TestCreateApp(unittest.TestCase):
     def test_returns_fastapi_instance(self):
         from fastapi import FastAPI
-        from tokenpak.intelligence.server import create_app
+        from tokenpak.proxy.intelligence.server import create_app
 
         app = create_app()
         self.assertIsInstance(app, FastAPI)
 
     def test_title(self):
-        from tokenpak.intelligence.server import create_app
+        from tokenpak.proxy.intelligence.server import create_app
 
         app = create_app()
         self.assertIn("TokenPak", app.title)
 
     def test_disable_docs_env(self):
-        from tokenpak.intelligence.server import create_app
+        from tokenpak.proxy.intelligence.server import create_app
 
         with patch.dict(os.environ, {"TOKENPAK_DISABLE_DOCS": "1"}):
             app = create_app()
@@ -234,7 +234,7 @@ class TestCreateApp(unittest.TestCase):
         self.assertIsNone(app.redoc_url)
 
     def test_docs_enabled_by_default(self):
-        from tokenpak.intelligence.server import create_app
+        from tokenpak.proxy.intelligence.server import create_app
 
         with patch.dict(os.environ, {"TOKENPAK_DISABLE_DOCS": "0"}):
             app = create_app()
@@ -270,7 +270,7 @@ class TestHealthEndpoint(unittest.TestCase):
 
 class TestDeepHealthEndpoint(unittest.TestCase):
     def _make_checker(self, status="ok"):
-        from tokenpak.intelligence.deep_health import CheckResult, DeepHealthResult
+        from tokenpak.proxy.intelligence.deep_health import CheckResult, DeepHealthResult
 
         checks = {
             k: CheckResult(status=status)
@@ -286,7 +286,7 @@ class TestDeepHealthEndpoint(unittest.TestCase):
         client, _ = _make_test_client()
         checker = self._make_checker("ok")
         # get_checker is imported inside the endpoint: `from .deep_health import get_checker`
-        with patch("tokenpak.intelligence.deep_health.get_checker", return_value=checker):
+        with patch("tokenpak.proxy.intelligence.deep_health.get_checker", return_value=checker):
             resp = client.get("/health?deep=true")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["status"], "ok")
@@ -294,14 +294,14 @@ class TestDeepHealthEndpoint(unittest.TestCase):
     def test_deep_true_returns_503_when_error(self):
         client, _ = _make_test_client()
         checker = self._make_checker("error")
-        with patch("tokenpak.intelligence.deep_health.get_checker", return_value=checker):
+        with patch("tokenpak.proxy.intelligence.deep_health.get_checker", return_value=checker):
             resp = client.get("/health?deep=true")
         self.assertEqual(resp.status_code, 503)
 
     def test_deep_response_includes_checks(self):
         client, _ = _make_test_client()
         checker = self._make_checker("ok")
-        with patch("tokenpak.intelligence.deep_health.get_checker", return_value=checker):
+        with patch("tokenpak.proxy.intelligence.deep_health.get_checker", return_value=checker):
             resp = client.get("/health?deep=true")
         self.assertIn("checks", resp.json())
 

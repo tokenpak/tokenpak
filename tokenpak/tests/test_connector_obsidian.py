@@ -3,8 +3,8 @@
 
 import pytest
 
-from tokenpak.connectors.base import ConnectorConfig
-from tokenpak.connectors.obsidian import ObsidianConnector
+from tokenpak.sources.base import ConnectorConfig
+from tokenpak.sources.obsidian import ObsidianConnector
 
 
 def _make_config(tmp_path, **kwargs):

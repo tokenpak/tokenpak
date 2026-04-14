@@ -1,9 +1,9 @@
 """tokenpak.exceptions — backward-compat shim.
 
-All exception classes have moved to tokenpak.infrastructure.error_handling.
+All exception classes have moved to tokenpak.core.error_handling.
 """
 
-from tokenpak.infrastructure.error_handling import (
+from tokenpak.core.error_handling import (
     TokenPakError,
     ProxyError,
     UpstreamError,

@@ -7,7 +7,7 @@ Proxy-layer access to the CapsuleBuilder.
 This module exposes :class:`CapsuleBuilder` at the
 ``tokenpak.proxy.capsule_builder`` import path that the proxy
 pipeline expects, delegating to the canonical implementation in
-``tokenpak.capsule.builder``.
+``tokenpak.companion.capsules.builder``.
 
 Typical use
 -----------
@@ -34,7 +34,7 @@ import os
 
 # Re-export the canonical implementation so callers can do:
 #   from tokenpak.proxy.capsule_builder import CapsuleBuilder
-from tokenpak.capsule.builder import (
+from tokenpak.companion.capsules.builder import (
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,
     CapsuleBuilder,

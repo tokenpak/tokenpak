@@ -1,4 +1,4 @@
-"""Unit tests for tokenpak.metrics.prometheus module."""
+"""Unit tests for tokenpak.telemetry.metrics.prometheus module."""
 
 import math
 import sqlite3
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from tokenpak.metrics.prometheus import (
+from tokenpak.telemetry.metrics.prometheus import (
     _escape_label_value,
     _labels,
     _counter,

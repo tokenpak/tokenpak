@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for tokenpak.runtime.proxy — shim functions and Monitor subclass."""
+"""Unit tests for tokenpak.core.runtime.proxy — shim functions and Monitor subclass."""
 
 import hashlib
 import json
@@ -10,7 +10,7 @@ import threading
 import pytest
 from unittest.mock import patch, MagicMock
 
-from tokenpak.runtime.proxy import (
+from tokenpak.core.runtime.proxy import (
     _resolve_session_id,
     _prune_mutation_audit,
     _write_mutation_audit,

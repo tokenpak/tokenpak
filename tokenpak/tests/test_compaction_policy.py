@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.compaction.modes import CompactionMode
-from tokenpak.compaction.policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
+from tokenpak.compression.budgets.modes import CompactionMode
+from tokenpak.compression.budgets.policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
 
 
 # ============================================================================
@@ -318,7 +318,7 @@ class TestTopicAwarePolicy:
 
     def test_compact_with_topics_single_segment_falls_back(self):
         """Single-segment text uses standard compact_block."""
-        from tokenpak.compaction.topic_aware import TopicSegment
+        from tokenpak.compression.budgets.topic_aware import TopicSegment
 
         single_seg = TopicSegment(0, 20, "hello world text.", "topic_0", activity_score=0.6)
         mock_detector = MagicMock()
@@ -327,7 +327,7 @@ class TestTopicAwarePolicy:
         p = TopicAwarePolicy(mode=CompactionMode.LOSSLESS)
 
         with patch(
-            "tokenpak.compaction.topic_aware.TopicBoundaryDetector",
+            "tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector",
             return_value=mock_detector,
         ):
             result = p.compact_with_topics("hello world text.")
@@ -342,7 +342,7 @@ class TestTopicAwarePolicy:
         p = TopicAwarePolicy(mode=CompactionMode.LOSSLESS)
 
         with patch(
-            "tokenpak.compaction.topic_aware.TopicBoundaryDetector",
+            "tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector",
             return_value=mock_detector,
         ):
             result = p.compact_with_topics("")
@@ -351,7 +351,7 @@ class TestTopicAwarePolicy:
 
     def test_compact_with_topics_active_uses_active_mode(self):
         """Active topics are compacted with active_mode."""
-        from tokenpak.compaction.topic_aware import TopicSegment
+        from tokenpak.compression.budgets.topic_aware import TopicSegment
 
         active_seg = TopicSegment(0, 50, "active topic content here", "topic_0", activity_score=0.8)
         inactive_seg = TopicSegment(50, 100, "inactive topic content here", "topic_1", activity_score=0.2)
@@ -373,8 +373,8 @@ class TestTopicAwarePolicy:
 
         # TopicBoundaryDetector is inline-imported in compact_with_topics → patch in topic_aware module
         # compact is module-level in policy.py → patch there
-        with patch("tokenpak.compaction.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
-            with patch("tokenpak.compaction.policy.compact", side_effect=mock_compact):
+        with patch("tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
+            with patch("tokenpak.compression.budgets.policy.compact", side_effect=mock_compact):
                 p.compact_with_topics("active topic content here inactive topic content here")
 
         modes_used = [m for _, m in called_with]
@@ -383,7 +383,7 @@ class TestTopicAwarePolicy:
 
     def test_compact_with_topics_per_topic_limit_overrides_budget(self):
         """Per-topic limits override the breakpoint budget."""
-        from tokenpak.compaction.topic_aware import TopicSegment
+        from tokenpak.compression.budgets.topic_aware import TopicSegment
 
         seg_a = TopicSegment(0, 50, "topic content alpha", "topic_0", activity_score=0.8)
         seg_b = TopicSegment(50, 100, "topic content beta", "topic_1", activity_score=0.8)
@@ -403,12 +403,12 @@ class TestTopicAwarePolicy:
 
         # Both TopicBoundaryDetector and place_topic_aware_breakpoints are inline-imported
         # → patch them in the topic_aware module; compact is module-level in policy.py
-        with patch("tokenpak.compaction.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
+        with patch("tokenpak.compression.budgets.topic_aware.TopicBoundaryDetector", return_value=mock_detector):
             with patch(
-                "tokenpak.compaction.topic_aware.place_topic_aware_breakpoints",
+                "tokenpak.compression.budgets.topic_aware.place_topic_aware_breakpoints",
                 return_value={"topic_0": 999},
             ):
-                with patch("tokenpak.compaction.policy.compact", side_effect=mock_compact):
+                with patch("tokenpak.compression.budgets.policy.compact", side_effect=mock_compact):
                     p.compact_with_topics("topic content")
 
         # Per-topic limit 42 should override breakpoint budget 999

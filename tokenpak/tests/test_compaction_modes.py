@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.compaction.modes import (
+from tokenpak.compression.budgets.modes import (
     CompactionMode,
     _multi_blank_sub,
     _trim_to_tokens,
@@ -119,7 +119,7 @@ class TestCompactBalanced:
         mock_proc.process.return_value = "processed text"
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_balanced("some input text")
 
         mock_cls.assert_called_once_with(aggressive=True)
@@ -131,7 +131,7 @@ class TestCompactBalanced:
         mock_proc.process.return_value = "PROCESSED"
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_balanced("hello")
 
         assert result == "PROCESSED"
@@ -142,7 +142,7 @@ class TestCompactBalanced:
         mock_proc.process.return_value = long_output
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_balanced("input", target_tokens=10)
 
         # 10 tokens * 4 = 40 chars max, output ends with \n…
@@ -155,7 +155,7 @@ class TestCompactBalanced:
         mock_proc.process.return_value = output
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_balanced("input", target_tokens=0)
 
         assert result == output
@@ -167,7 +167,7 @@ class TestCompactBalanced:
         mock_proc.process.side_effect = lambda t, _: captured.append(t) or t
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             compact_balanced("hello   \n\n\n\nworld")
 
         assert captured, "process() not called"
@@ -179,7 +179,7 @@ class TestCompactBalanced:
         mock_proc.process.return_value = ""
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_balanced("")
 
         assert result == ""
@@ -201,7 +201,7 @@ class TestCompactAggressive:
         bullet = "- " + "x" * 80  # 82 chars total, > 60
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(bullet)
 
         # Result bullet line should end with …
@@ -213,7 +213,7 @@ class TestCompactAggressive:
         bullet = "- short item"
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(bullet)
 
         assert "short item" in result
@@ -223,7 +223,7 @@ class TestCompactAggressive:
         item = "1. " + "y" * 80
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(item)
 
         lines = [l for l in result.split("\n") if l]
@@ -233,7 +233,7 @@ class TestCompactAggressive:
         text = "![alt text](https://example.com/image.png)"
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(text)
 
         assert "[img:alt text]" in result
@@ -245,7 +245,7 @@ class TestCompactAggressive:
         text = f"[link text]({long_url})"
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(text)
 
         assert "link text" in result
@@ -255,7 +255,7 @@ class TestCompactAggressive:
         text = "[link](short.url)"  # < 40 chars
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(text)
 
         assert "[link](short.url)" in result
@@ -264,7 +264,7 @@ class TestCompactAggressive:
         long_text = "plain text line\n" * 100
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive(long_text, target_tokens=10)
 
         assert result.endswith("\n…")
@@ -272,7 +272,7 @@ class TestCompactAggressive:
     def test_empty_string(self):
         mock_cls = self._make_passthrough_mock()
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact_aggressive("")
 
         assert result == ""
@@ -300,11 +300,11 @@ class TestCompactSemantic:
 
     def test_falls_back_on_engine_error(self):
         """If engine raises, falls back to aggressive (same as fallback path)."""
-        with patch("tokenpak.compaction.modes.compact_aggressive") as mock_agg:
+        with patch("tokenpak.compression.budgets.modes.compact_aggressive") as mock_agg:
             mock_agg.return_value = "fallback result"
 
             # Force the try block to fail by patching inside engines.llmlingua
-            with patch.dict("sys.modules", {"tokenpak.engines.llmlingua": None}):
+            with patch.dict("sys.modules", {"tokenpak.compression.engines.llmlingua": None}):
                 result = compact_semantic("some text")
 
         # Either the mock was called (fallback path) or it worked on its own
@@ -330,7 +330,7 @@ class TestCompactDispatch:
         mock_proc.process.return_value = "ok"
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact("hello", mode="balanced")
         assert result == "ok"
 
@@ -339,7 +339,7 @@ class TestCompactDispatch:
         mock_proc.process.side_effect = lambda t, _: t
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact("hello", mode="aggressive")
         assert isinstance(result, str)
 
@@ -357,7 +357,7 @@ class TestCompactDispatch:
         mock_proc.process.return_value = "balanced default"
         mock_cls = MagicMock(return_value=mock_proc)
 
-        with patch("tokenpak.processors.text.TextProcessor", mock_cls):
+        with patch("tokenpak.compression.processors.text.TextProcessor", mock_cls):
             result = compact("hello")
 
         assert result == "balanced default"

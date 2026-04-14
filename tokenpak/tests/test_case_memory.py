@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tokenpak.agentic.case_memory import (
+from tokenpak.orchestration.case_memory import (
     CaseMemoryDB,
     CaseRecord,
     _extract_terms,

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """
-Unit tests for tokenpak.monitoring modules.
+Unit tests for tokenpak.telemetry.monitoring modules.
 
 Covers: health, metrics, provider_health, request_logger, request_size,
         audit_trail, swap_alert.
@@ -25,14 +25,14 @@ from unittest import mock
 
 class TestEstimateDictMemoryMb(unittest.TestCase):
     def test_empty_dict(self):
-        from tokenpak.monitoring.health import _estimate_dict_memory_mb
+        from tokenpak.telemetry.monitoring.health import _estimate_dict_memory_mb
 
         result = _estimate_dict_memory_mb({})
         self.assertIsInstance(result, float)
         self.assertGreaterEqual(result, 0.0)
 
     def test_nonempty_dict_positive(self):
-        from tokenpak.monitoring.health import _estimate_dict_memory_mb
+        from tokenpak.telemetry.monitoring.health import _estimate_dict_memory_mb
 
         # Use values large enough (>1KB each) so the estimate rounds above 0.0 MB
         d = {"key1": "x" * 2000, "key2": "y" * 2000}
@@ -40,7 +40,7 @@ class TestEstimateDictMemoryMb(unittest.TestCase):
         self.assertGreater(result, 0.0)
 
     def test_returns_float(self):
-        from tokenpak.monitoring.health import _estimate_dict_memory_mb
+        from tokenpak.telemetry.monitoring.health import _estimate_dict_memory_mb
 
         result = _estimate_dict_memory_mb({"a": 1})
         self.assertIsInstance(result, float)
@@ -48,7 +48,7 @@ class TestEstimateDictMemoryMb(unittest.TestCase):
 
 class TestAggregateStatus(unittest.TestCase):
     def test_all_ok_returns_healthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         providers = {
             "anthropic": {"status": "ok"},
@@ -57,13 +57,13 @@ class TestAggregateStatus(unittest.TestCase):
         self.assertEqual(aggregate_status(providers, cache_ok=True), "healthy")
 
     def test_cache_down_returns_unhealthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         providers = {"anthropic": {"status": "ok"}}
         self.assertEqual(aggregate_status(providers, cache_ok=False), "unhealthy")
 
     def test_single_provider_timeout_is_degraded(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         # Single provider that timed out with multiple providers → degraded
         providers = {
@@ -73,7 +73,7 @@ class TestAggregateStatus(unittest.TestCase):
         self.assertEqual(aggregate_status(providers, cache_ok=True), "degraded")
 
     def test_two_provider_failures_returns_unhealthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         providers = {
             "anthropic": {"status": "timeout"},
@@ -82,26 +82,26 @@ class TestAggregateStatus(unittest.TestCase):
         self.assertEqual(aggregate_status(providers, cache_ok=True), "unhealthy")
 
     def test_single_provider_error_returns_unhealthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         providers = {"anthropic": {"status": "error"}}
         self.assertEqual(aggregate_status(providers, cache_ok=True), "unhealthy")
 
     def test_single_provider_ok_returns_healthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         providers = {"anthropic": {"status": "ok"}}
         self.assertEqual(aggregate_status(providers, cache_ok=True), "healthy")
 
     def test_empty_providers_no_bad_returns_healthy(self):
-        from tokenpak.monitoring.health import aggregate_status
+        from tokenpak.telemetry.monitoring.health import aggregate_status
 
         self.assertEqual(aggregate_status({}, cache_ok=True), "healthy")
 
 
 class TestCheckProviderMocked(unittest.TestCase):
     def test_ok_on_2xx_response(self):
-        from tokenpak.monitoring.health import _check_provider
+        from tokenpak.telemetry.monitoring.health import _check_provider
 
         mock_resp = mock.MagicMock()
         mock_resp.status_code = 200
@@ -113,7 +113,7 @@ class TestCheckProviderMocked(unittest.TestCase):
 
     def test_ok_on_401_response(self):
         """Any non-5xx response means network path is open."""
-        from tokenpak.monitoring.health import _check_provider
+        from tokenpak.telemetry.monitoring.health import _check_provider
 
         mock_resp = mock.MagicMock()
         mock_resp.status_code = 401
@@ -122,7 +122,7 @@ class TestCheckProviderMocked(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
 
     def test_error_on_5xx_response(self):
-        from tokenpak.monitoring.health import _check_provider
+        from tokenpak.telemetry.monitoring.health import _check_provider
 
         mock_resp = mock.MagicMock()
         mock_resp.status_code = 503
@@ -132,14 +132,14 @@ class TestCheckProviderMocked(unittest.TestCase):
 
     def test_timeout_status(self):
         import httpx
-        from tokenpak.monitoring.health import _check_provider
+        from tokenpak.telemetry.monitoring.health import _check_provider
 
         with mock.patch("httpx.head", side_effect=httpx.TimeoutException("timeout")):
             result = _check_provider("anthropic", "https://api.anthropic.com")
         self.assertEqual(result["status"], "timeout")
 
     def test_generic_exception_returns_error(self):
-        from tokenpak.monitoring.health import _check_provider
+        from tokenpak.telemetry.monitoring.health import _check_provider
 
         with mock.patch("httpx.head", side_effect=Exception("network down")):
             result = _check_provider("anthropic", "https://api.anthropic.com")
@@ -149,14 +149,14 @@ class TestCheckProviderMocked(unittest.TestCase):
 class TestHealthChecker(unittest.TestCase):
     def _make_checker_with_mock_providers(self, provider_status="ok"):
         """Return a HealthChecker with mocked check_providers and get_cache_metrics."""
-        from tokenpak.monitoring.health import HealthChecker
+        from tokenpak.telemetry.monitoring.health import HealthChecker
 
         checker = HealthChecker(start_time=time.time() - 60, version="1.1.0")
         mock_providers = {"anthropic": {"status": provider_status}}
         mock_cache = {"entries": 5, "memory_used_mb": 0.1, "compression_ratio": 0.75}
 
-        with mock.patch("tokenpak.monitoring.health.check_providers", return_value=mock_providers), \
-             mock.patch("tokenpak.monitoring.health.get_cache_metrics", return_value=mock_cache):
+        with mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value=mock_providers), \
+             mock.patch("tokenpak.telemetry.monitoring.health.get_cache_metrics", return_value=mock_cache):
             result = checker.check()
         return result
 
@@ -170,12 +170,12 @@ class TestHealthChecker(unittest.TestCase):
         self.assertGreater(result["uptime_seconds"], 0)
 
     def test_check_version_default(self):
-        from tokenpak.monitoring.health import HealthChecker
+        from tokenpak.telemetry.monitoring.health import HealthChecker
         import tokenpak
 
         checker = HealthChecker(start_time=time.time())
-        with mock.patch("tokenpak.monitoring.health.check_providers", return_value={}), \
-             mock.patch("tokenpak.monitoring.health.get_cache_metrics",
+        with mock.patch("tokenpak.telemetry.monitoring.health.check_providers", return_value={}), \
+             mock.patch("tokenpak.telemetry.monitoring.health.get_cache_metrics",
                         return_value={"entries": 0, "memory_used_mb": 0.0, "compression_ratio": 0.0}):
             result = checker.check()
         self.assertEqual(result["proxy_version"], tokenpak.__version__)
@@ -189,7 +189,7 @@ class TestHealthChecker(unittest.TestCase):
         self.assertEqual(result["status"], "unhealthy")
 
     def test_init_with_explicit_start_time(self):
-        from tokenpak.monitoring.health import HealthChecker
+        from tokenpak.telemetry.monitoring.health import HealthChecker
 
         t0 = time.time() - 100
         checker = HealthChecker(start_time=t0, version="0.0.1")
@@ -204,63 +204,63 @@ class TestHealthChecker(unittest.TestCase):
 
 class TestMetricsFormatHelpers(unittest.TestCase):
     def test_escape_label_value_backslash(self):
-        from tokenpak.monitoring.metrics import _escape_label_value
+        from tokenpak.telemetry.monitoring.metrics import _escape_label_value
 
         self.assertEqual(_escape_label_value("a\\b"), "a\\\\b")
 
     def test_escape_label_value_double_quote(self):
-        from tokenpak.monitoring.metrics import _escape_label_value
+        from tokenpak.telemetry.monitoring.metrics import _escape_label_value
 
         self.assertEqual(_escape_label_value('say "hi"'), 'say \\"hi\\"')
 
     def test_escape_label_value_newline(self):
-        from tokenpak.monitoring.metrics import _escape_label_value
+        from tokenpak.telemetry.monitoring.metrics import _escape_label_value
 
         self.assertEqual(_escape_label_value("line\nnext"), "line\\nnext")
 
     def test_label_str_single(self):
-        from tokenpak.monitoring.metrics import _label_str
+        from tokenpak.telemetry.monitoring.metrics import _label_str
 
         result = _label_str(provider="anthropic")
         self.assertEqual(result, '{provider="anthropic"}')
 
     def test_label_str_multiple(self):
-        from tokenpak.monitoring.metrics import _label_str
+        from tokenpak.telemetry.monitoring.metrics import _label_str
 
         result = _label_str(provider="openai", model="gpt-4")
         self.assertIn('provider="openai"', result)
         self.assertIn('model="gpt-4"', result)
 
     def test_label_str_empty_value_omitted(self):
-        from tokenpak.monitoring.metrics import _label_str
+        from tokenpak.telemetry.monitoring.metrics import _label_str
 
         result = _label_str(provider="anthropic", model="")
         self.assertNotIn("model", result)
 
     def test_label_str_no_labels(self):
-        from tokenpak.monitoring.metrics import _label_str
+        from tokenpak.telemetry.monitoring.metrics import _label_str
 
         result = _label_str()
         self.assertEqual(result, "")
 
     def test_fmt_integer(self):
-        from tokenpak.monitoring.metrics import _fmt
+        from tokenpak.telemetry.monitoring.metrics import _fmt
 
         self.assertEqual(_fmt(42.0), "42")
 
     def test_fmt_inf(self):
-        from tokenpak.monitoring.metrics import _fmt
+        from tokenpak.telemetry.monitoring.metrics import _fmt
 
         self.assertEqual(_fmt(float("inf")), "+Inf")
 
     def test_fmt_nan(self):
-        from tokenpak.monitoring.metrics import _fmt
+        from tokenpak.telemetry.monitoring.metrics import _fmt
 
         result = _fmt(float("nan"))
         self.assertEqual(result, "NaN")
 
     def test_fmt_float(self):
-        from tokenpak.monitoring.metrics import _fmt
+        from tokenpak.telemetry.monitoring.metrics import _fmt
 
         result = _fmt(3.14159)
         self.assertIn("3.14159", result)
@@ -268,7 +268,7 @@ class TestMetricsFormatHelpers(unittest.TestCase):
 
 class TestProxyMetricsCollector(unittest.TestCase):
     def _make_collector(self):
-        from tokenpak.monitoring.metrics import ProxyMetricsCollector
+        from tokenpak.telemetry.monitoring.metrics import ProxyMetricsCollector
 
         return ProxyMetricsCollector(proxy_server=None, db_path="/nonexistent/db.db")
 
@@ -310,7 +310,7 @@ class TestProxyMetricsCollector(unittest.TestCase):
         self.assertEqual(collector._get_up_status(), 1)
 
     def test_get_up_status_shutting_down_returns_0(self):
-        from tokenpak.monitoring.metrics import ProxyMetricsCollector
+        from tokenpak.telemetry.monitoring.metrics import ProxyMetricsCollector
 
         mock_ps = mock.MagicMock()
         mock_ps.shutdown.is_shutting_down = True
@@ -346,7 +346,7 @@ class TestProxyMetricsCollector(unittest.TestCase):
 
 class TestProviderMetrics(unittest.TestCase):
     def test_to_dict_structure(self):
-        from tokenpak.monitoring.provider_health import ProviderMetrics
+        from tokenpak.telemetry.monitoring.provider_health import ProviderMetrics
         from collections import deque
 
         m = ProviderMetrics(provider="anthropic", latencies_ms=deque())
@@ -371,7 +371,7 @@ class TestProviderMetrics(unittest.TestCase):
 
 class TestProviderHealthMonitor(unittest.TestCase):
     def setUp(self):
-        from tokenpak.monitoring.provider_health import ProviderHealthMonitor
+        from tokenpak.telemetry.monitoring.provider_health import ProviderHealthMonitor
 
         self.monitor = ProviderHealthMonitor()
 
@@ -462,7 +462,7 @@ class TestProviderHealthMonitor(unittest.TestCase):
 
 class TestGetMonitorSingleton(unittest.TestCase):
     def test_returns_same_instance(self):
-        from tokenpak.monitoring import provider_health
+        from tokenpak.telemetry.monitoring import provider_health
 
         # Reset singleton for isolation
         provider_health._monitor = None
@@ -471,7 +471,7 @@ class TestGetMonitorSingleton(unittest.TestCase):
         self.assertIs(m1, m2)
 
     def test_record_provider_request_convenience(self):
-        from tokenpak.monitoring import provider_health
+        from tokenpak.telemetry.monitoring import provider_health
 
         provider_health._monitor = None
         provider_health.record_provider_request("anthropic", 123.0, 200)
@@ -486,7 +486,7 @@ class TestGetMonitorSingleton(unittest.TestCase):
 
 class TestRequestLogRecord(unittest.TestCase):
     def _make_record(self, **kwargs):
-        from tokenpak.monitoring.request_logger import RequestLogRecord, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogRecord, LEVEL_INFO
 
         defaults = dict(
             request_id="req-001",
@@ -560,12 +560,12 @@ class TestRequestLogRecord(unittest.TestCase):
 
 class TestRequestLoggerInit(unittest.TestCase):
     def tearDown(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         RequestLogger.reset_instance()
 
     def test_init_with_stdout_config(self):
-        from tokenpak.monitoring.request_logger import RequestLogger, _StdoutWriter
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, _StdoutWriter
 
         rl = RequestLogger(config={
             "enabled": True,
@@ -577,26 +577,26 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_new_request_id_generates_uuid(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
         import uuid
 
         rid = RequestLogger.new_request_id()
         self.assertIsNotNone(uuid.UUID(rid))  # validates UUID format
 
     def test_new_request_id_honours_x_request_id_header(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         rid = RequestLogger.new_request_id({"X-Request-ID": "my-custom-id"})
         self.assertEqual(rid, "my-custom-id")
 
     def test_new_request_id_case_insensitive_header(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         rid = RequestLogger.new_request_id({"x-request-id": "lower-case-id"})
         self.assertEqual(rid, "lower-case-id")
 
     def test_get_instance_returns_singleton(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         # Use stdout to avoid filesystem I/O
         with mock.patch.object(RequestLogger, "__init__", lambda self, config=None: (
@@ -621,7 +621,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl1.stop()
 
     def test_build_record_warn_level_for_4xx(self):
-        from tokenpak.monitoring.request_logger import RequestLogger, LEVEL_WARN
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, LEVEL_WARN
 
         rl = RequestLogger(config={
             "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -635,7 +635,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_build_record_info_level_for_2xx(self):
-        from tokenpak.monitoring.request_logger import RequestLogger, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, LEVEL_INFO
 
         rl = RequestLogger(config={
             "enabled": True, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -645,7 +645,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_log_disabled_does_not_enqueue(self):
-        from tokenpak.monitoring.request_logger import RequestLogger, RequestLogRecord, LEVEL_INFO
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger, RequestLogRecord, LEVEL_INFO
 
         rl = RequestLogger(config={
             "enabled": False, "level": "info", "destination": "stdout", "retention_days": 7,
@@ -660,7 +660,7 @@ class TestRequestLoggerInit(unittest.TestCase):
         rl.stop()
 
     def test_log_level_filtered(self):
-        from tokenpak.monitoring.request_logger import (
+        from tokenpak.telemetry.monitoring.request_logger import (
             RequestLogger, RequestLogRecord, LEVEL_DEBUG, LEVEL_INFO,
         )
 
@@ -679,14 +679,14 @@ class TestRequestLoggerInit(unittest.TestCase):
 
 class TestModuleLevelConvenienceFunctions(unittest.TestCase):
     def test_new_request_id_module_level(self):
-        from tokenpak.monitoring.request_logger import new_request_id
+        from tokenpak.telemetry.monitoring.request_logger import new_request_id
 
         rid = new_request_id()
         self.assertIsInstance(rid, str)
         self.assertGreater(len(rid), 0)
 
     def test_new_request_id_with_header(self):
-        from tokenpak.monitoring.request_logger import new_request_id
+        from tokenpak.telemetry.monitoring.request_logger import new_request_id
 
         rid = new_request_id({"X-Request-ID": "trace-999"})
         self.assertEqual(rid, "trace-999")
@@ -699,7 +699,7 @@ class TestModuleLevelConvenienceFunctions(unittest.TestCase):
 
 class TestAlertLevel(unittest.TestCase):
     def test_enum_values(self):
-        from tokenpak.monitoring.request_size import AlertLevel
+        from tokenpak.telemetry.monitoring.request_size import AlertLevel
 
         self.assertEqual(AlertLevel.YELLOW.value, "yellow")
         self.assertEqual(AlertLevel.ORANGE.value, "orange")
@@ -708,7 +708,7 @@ class TestAlertLevel(unittest.TestCase):
 
 class TestRequestSizeMonitor(unittest.TestCase):
     def setUp(self):
-        from tokenpak.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
+        from tokenpak.telemetry.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
 
         self.config = RequestSizeConfig(
             enabled=True,
@@ -723,21 +723,21 @@ class TestRequestSizeMonitor(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_yellow_threshold_triggers_alert(self):
-        from tokenpak.monitoring.request_size import AlertLevel
+        from tokenpak.telemetry.monitoring.request_size import AlertLevel
 
         result = self.monitor.check_request_size(350_000)
         self.assertIsNotNone(result)
         self.assertEqual(result.level, AlertLevel.YELLOW)
 
     def test_orange_threshold_triggers_alert(self):
-        from tokenpak.monitoring.request_size import AlertLevel
+        from tokenpak.telemetry.monitoring.request_size import AlertLevel
 
         result = self.monitor.check_request_size(550_000)
         self.assertIsNotNone(result)
         self.assertEqual(result.level, AlertLevel.ORANGE)
 
     def test_red_threshold_triggers_alert(self):
-        from tokenpak.monitoring.request_size import AlertLevel
+        from tokenpak.telemetry.monitoring.request_size import AlertLevel
 
         result = self.monitor.check_request_size(750_000)
         self.assertIsNotNone(result)
@@ -756,7 +756,7 @@ class TestRequestSizeMonitor(unittest.TestCase):
         self.assertIsNotNone(result)
 
     def test_reset_session_allows_re_alert(self):
-        from tokenpak.monitoring.request_size import AlertLevel
+        from tokenpak.telemetry.monitoring.request_size import AlertLevel
 
         self.monitor.check_request_size(350_000, session_id="sess1")
         self.monitor.reset_session("sess1")
@@ -784,7 +784,7 @@ class TestRequestSizeMonitor(unittest.TestCase):
         self.assertIn("size_bytes", history[0])
 
     def test_disabled_monitor_returns_none(self):
-        from tokenpak.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
+        from tokenpak.telemetry.monitoring.request_size import RequestSizeMonitor, RequestSizeConfig
 
         mon = RequestSizeMonitor(config=RequestSizeConfig(enabled=False))
         self.assertIsNone(mon.check_request_size(999_999))
@@ -806,19 +806,19 @@ class TestRequestSizeMonitor(unittest.TestCase):
 
 class TestRequestSizeMonitorSingleton(unittest.TestCase):
     def tearDown(self):
-        from tokenpak.monitoring import request_size
+        from tokenpak.telemetry.monitoring import request_size
 
         request_size._monitor = None
 
     def test_get_monitor_returns_singleton(self):
-        from tokenpak.monitoring.request_size import get_monitor
+        from tokenpak.telemetry.monitoring.request_size import get_monitor
 
         m1 = get_monitor()
         m2 = get_monitor()
         self.assertIs(m1, m2)
 
     def test_reset_monitor_clears_singleton(self):
-        from tokenpak.monitoring.request_size import get_monitor, reset_monitor
+        from tokenpak.telemetry.monitoring.request_size import get_monitor, reset_monitor
 
         m1 = get_monitor()
         reset_monitor()
@@ -833,7 +833,7 @@ class TestRequestSizeMonitorSingleton(unittest.TestCase):
 
 class TestAuditTrail(unittest.TestCase):
     def _make_trail(self):
-        from tokenpak.monitoring.audit_trail import AuditTrail
+        from tokenpak.telemetry.monitoring.audit_trail import AuditTrail
 
         return AuditTrail(request_id="req-audit-001")
 
@@ -896,7 +896,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(event["field"], "model")
 
     def test_flush_sends_to_logger(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         trail = self._make_trail()
         trail.record_compile(input_block_count=5, output_block_count=3)
@@ -913,7 +913,7 @@ class TestAuditTrail(unittest.TestCase):
         trail = self._make_trail()
         trail.record_compile(input_block_count=5, output_block_count=3)
 
-        with mock.patch("tokenpak.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
+        with mock.patch("tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
             mock_logger = mock.MagicMock()
             mock_get.return_value = mock_logger
             trail.flush()
@@ -921,7 +921,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(len(trail), 0)
 
     def test_flush_empty_trail_is_noop(self):
-        from tokenpak.monitoring.request_logger import RequestLogger
+        from tokenpak.telemetry.monitoring.request_logger import RequestLogger
 
         trail = self._make_trail()
         with mock.patch.object(RequestLogger, "get_instance") as mock_get:
@@ -937,7 +937,7 @@ class TestAuditTrail(unittest.TestCase):
         trail.record_error(error_type="Timeout", message="upstream slow")
 
         calls = []
-        with mock.patch("tokenpak.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
+        with mock.patch("tokenpak.telemetry.monitoring.audit_trail.RequestLogger.get_instance") as mock_get:
             mock_logger = mock.MagicMock()
             mock_logger.log.side_effect = lambda r: calls.append(r.extra["event"])
             mock_get.return_value = mock_logger
@@ -973,7 +973,7 @@ class TestGetSwapMb(unittest.TestCase):
         )
         mock_open = mock.mock_open(read_data=fake_meminfo)
         with mock.patch("builtins.open", mock_open):
-            from tokenpak.monitoring.swap_alert import _get_swap_mb
+            from tokenpak.telemetry.monitoring.swap_alert import _get_swap_mb
 
             used_mb, total_mb, pct = _get_swap_mb()
 
@@ -989,7 +989,7 @@ class TestGetSwapMb(unittest.TestCase):
         )
         mock_open = mock.mock_open(read_data=fake_meminfo)
         with mock.patch("builtins.open", mock_open):
-            from tokenpak.monitoring.swap_alert import _get_swap_mb
+            from tokenpak.telemetry.monitoring.swap_alert import _get_swap_mb
 
             used_mb, total_mb, pct = _get_swap_mb()
 
@@ -998,7 +998,7 @@ class TestGetSwapMb(unittest.TestCase):
 
 class TestGetSwapStats(unittest.TestCase):
     def test_returns_dict_with_expected_keys(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch.object(sa, "_get_swap_mb", return_value=(512.0, 2048.0, 25.0)):
             stats = sa.get_swap_stats()
@@ -1009,7 +1009,7 @@ class TestGetSwapStats(unittest.TestCase):
         self.assertIn("alert_threshold_mb", stats)
 
     def test_values_match_mock(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch.object(sa, "_get_swap_mb", return_value=(512.0, 2048.0, 25.0)):
             stats = sa.get_swap_stats()
@@ -1019,7 +1019,7 @@ class TestGetSwapStats(unittest.TestCase):
         self.assertAlmostEqual(stats["swap_pct"], 25.0)
 
     def test_last_alert_ago_none_when_no_alert(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = 0.0
         with mock.patch.object(sa, "_get_swap_mb", return_value=(0.0, 0.0, 0.0)):
@@ -1030,19 +1030,19 @@ class TestGetSwapStats(unittest.TestCase):
 class TestCheckSwapPressure(unittest.TestCase):
     def setUp(self):
         # Reset module-level state before each test
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = 0.0
 
     def test_below_threshold_no_alert(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch.object(sa, "_get_swap_mb", return_value=(100.0, 2048.0, 5.0)):
             result = sa.check_swap_pressure(threshold_mb=1024, cooldown_s=60)
         self.assertFalse(result)
 
     def test_above_threshold_sends_telegram(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)), \
              mock.patch.object(sa, "_send_telegram", return_value=True) as mock_send:
@@ -1051,7 +1051,7 @@ class TestCheckSwapPressure(unittest.TestCase):
         mock_send.assert_called_once()
 
     def test_rate_limited_does_not_send(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = time.time()  # alert was just sent
         with mock.patch.object(sa, "_get_swap_mb", return_value=(1500.0, 2048.0, 73.0)), \
@@ -1061,7 +1061,7 @@ class TestCheckSwapPressure(unittest.TestCase):
         mock_send.assert_not_called()
 
     def test_alert_updates_last_alert_time(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = 0.0
         before = time.time()
@@ -1071,7 +1071,7 @@ class TestCheckSwapPressure(unittest.TestCase):
         self.assertGreaterEqual(sa._last_alert_time, before)
 
     def test_telegram_failure_returns_false(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         sa._last_alert_time = 0.0
         with mock.patch.object(sa, "_get_swap_mb", return_value=(2000.0, 4096.0, 50.0)), \
@@ -1082,7 +1082,7 @@ class TestCheckSwapPressure(unittest.TestCase):
 
 class TestGetTelegramToken(unittest.TestCase):
     def test_reads_from_config_json(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         fake_config = {"channels": {"telegram": {"botToken": "bot-from-config"}}}
         mock_open = mock.mock_open(read_data=json.dumps(fake_config))
@@ -1092,7 +1092,7 @@ class TestGetTelegramToken(unittest.TestCase):
         self.assertEqual(token, "bot-from-config")
 
     def test_falls_back_to_env_var(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch("builtins.open", side_effect=FileNotFoundError), \
              mock.patch.dict("os.environ", {"TELEGRAM_BOT_TOKEN": "env-token"}):
@@ -1100,7 +1100,7 @@ class TestGetTelegramToken(unittest.TestCase):
         self.assertEqual(token, "env-token")
 
     def test_returns_none_when_no_token(self):
-        import tokenpak.monitoring.swap_alert as sa
+        import tokenpak.telemetry.monitoring.swap_alert as sa
 
         with mock.patch("builtins.open", side_effect=FileNotFoundError), \
              mock.patch.dict("os.environ", {}, clear=True):

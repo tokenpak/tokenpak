@@ -1,8 +1,8 @@
 """tokenpak.agent.auth — backward-compat shim.
 
-CooldownManager has moved to tokenpak.infrastructure.cooldown.
+CooldownManager has moved to tokenpak.core.cooldown.
 """
 
-from tokenpak.infrastructure.cooldown import CooldownManager
+from tokenpak.core.cooldown import CooldownManager
 
 __all__ = ['CooldownManager', 'cooldown_manager', 'oauth_manager']

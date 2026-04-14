@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.middleware.logger and tokenpak.middleware.logging_middleware
+Unit tests for tokenpak.proxy.middleware.logger and tokenpak.proxy.middleware.logging_middleware
 
 Covers: LogRecord, LoggingConfig, AsyncLogger, RequestLogger, init/get_logger,
         LoggingMiddleware (wrap_request, audit log helpers, _get_client_ip).
@@ -12,15 +12,15 @@ import json
 import unittest
 from unittest.mock import MagicMock, call
 
-import tokenpak.middleware.logger as logger_mod
-from tokenpak.middleware.audit_trail import (
+import tokenpak.proxy.middleware.logger as logger_mod
+from tokenpak.proxy.middleware.audit_trail import (
     BlockAudit,
     BlockType,
     MetricsAudit,
     create_cache_audit,
     create_compile_audit,
 )
-from tokenpak.middleware.logger import (
+from tokenpak.proxy.middleware.logger import (
     AsyncLogger,
     LoggingConfig,
     LogRecord,
@@ -28,7 +28,7 @@ from tokenpak.middleware.logger import (
     get_logger,
     init_logger,
 )
-from tokenpak.middleware.logging_middleware import LoggingMiddleware
+from tokenpak.proxy.middleware.logging_middleware import LoggingMiddleware
 
 
 # ---------------------------------------------------------------------------

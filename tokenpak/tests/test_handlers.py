@@ -13,7 +13,7 @@ Covers:
 
 import pytest
 from tokenpak import handlers
-from tokenpak.handlers.rate_limit import RateLimitBackoff
+from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
 
 
 # ── handlers package ────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ def test_handlers_package_importable():
 
 
 def test_rate_limit_module_importable():
-    """RateLimitBackoff is importable from tokenpak.handlers.rate_limit."""
+    """RateLimitBackoff is importable from tokenpak.proxy.handlers.rate_limit."""
     assert RateLimitBackoff is not None
 
 

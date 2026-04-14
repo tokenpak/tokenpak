@@ -271,7 +271,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
 
     # Check request size against thresholds (monitoring)
     try:
-        from tokenpak.monitoring.request_size import get_monitor
+        from tokenpak.telemetry.monitoring.request_size import get_monitor
 
         monitor = get_monitor()
         # Extract session ID from headers if available
@@ -747,7 +747,7 @@ async def lifespan(app):
     _cooldown_clearer = None
     _oauth_refresher = None
     try:
-        from tokenpak.infrastructure.config import get_config
+        from tokenpak.core.config import get_config
 
         cfg = get_config()
         auth_cfg = cfg.get("auth", {}) if isinstance(cfg.get("auth"), dict) else {}

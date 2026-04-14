@@ -64,9 +64,9 @@ from .degradation import get_degradation_tracker, DegradationEventType
 from .circuit_breaker import get_circuit_breaker_registry, get_rate_limit_registry, provider_from_url
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
-from tokenpak.monitoring.request_logger import log_request, new_request_id as _new_request_id
-from tokenpak.adapters.registry import detect_platform
-from tokenpak.infrastructure.config import get_stats_footer_enabled
+from tokenpak.telemetry.monitoring.request_logger import log_request, new_request_id as _new_request_id
+from tokenpak.sdk.registry import detect_platform
+from tokenpak.core.config import get_stats_footer_enabled
 from tokenpak.dashboard.export_api import ExportAPI
 from tokenpak.dashboard.session_filter import (
     SessionFilter,
@@ -350,7 +350,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._send_503_shutdown()
             return
         if path == "/metrics":
-            from tokenpak.monitoring.metrics import ProxyMetricsCollector
+            from tokenpak.telemetry.monitoring.metrics import ProxyMetricsCollector
             collector = ProxyMetricsCollector(proxy_server=ps)
             body = collector.collect().encode("utf-8")
             self.send_response(200)
@@ -845,7 +845,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # --- Request schema validation (strict/warn/off) ---
             if body:
                 try:
-                    from tokenpak.validation.request_validator import (
+                    from tokenpak.core.validation.request_validator import (
                         get_request_validator,
                     )
                     _rv = get_request_validator()

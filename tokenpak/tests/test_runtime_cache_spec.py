@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Unit tests for tokenpak.runtime.cache_spec — CacheSpec, resolve_cache_mode, etc."""
+"""Unit tests for tokenpak.core.runtime.cache_spec — CacheSpec, resolve_cache_mode, etc."""
 
 import pytest
-from tokenpak.runtime.providers import Provider
-from tokenpak.runtime.cache_spec import (
+from tokenpak.core.runtime.providers import Provider
+from tokenpak.core.runtime.cache_spec import (
     CacheMode,
     CacheSpec,
     FallbackPolicy,

@@ -1,9 +1,9 @@
 """tokenpak.errors — backward-compat shim.
 
-All error classes have moved to tokenpak.infrastructure.error_handling.
+All error classes have moved to tokenpak.core.error_handling.
 """
 
-from tokenpak.infrastructure.error_handling import (
+from tokenpak.core.error_handling import (
     TokenPakError,
     ConfigError,
     ConfigValidationError,

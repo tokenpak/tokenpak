@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tokenpak.connectors.base_source import SourceFetchError
-from tokenpak.connectors.git_adapter import (
+from tokenpak.sources.base_source import SourceFetchError
+from tokenpak.sources.git_adapter import (
     GitAdapter,
     _read_file_at_commit,
     _resolve_sha,
@@ -58,19 +58,19 @@ class TestRunGit:
 
 class TestResolveSha:
     def test_returns_full_sha(self):
-        with patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_git.return_value = _FAKE_SHA + "\n"
             sha = _resolve_sha("/repo", "HEAD")
         assert sha == _FAKE_SHA
 
     def test_raises_on_short_sha(self):
-        with patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_git.return_value = "abc123\n"  # Too short
             with pytest.raises(SourceFetchError, match="SHA format"):
                 _resolve_sha("/repo", "HEAD")
 
     def test_raises_on_empty_output(self):
-        with patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_git.return_value = "\n"
             with pytest.raises(SourceFetchError):
                 _resolve_sha("/repo", "HEAD")
@@ -83,7 +83,7 @@ class TestResolveSha:
 
 class TestReadFileAtCommit:
     def test_returns_file_content(self):
-        with patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_git.return_value = "line1\nline2\n"
             result = _read_file_at_commit("/repo", "src/main.py", _FAKE_SHA)
         assert result == "line1\nline2\n"
@@ -93,7 +93,7 @@ class TestReadFileAtCommit:
 
     def test_propagates_source_fetch_error(self):
         with patch(
-            "tokenpak.connectors.git_adapter._run_git",
+            "tokenpak.sources.git_adapter._run_git",
             side_effect=SourceFetchError("not found"),
         ):
             with pytest.raises(SourceFetchError, match="not found"):
@@ -111,8 +111,8 @@ class TestGitAdapterIngest:
 
     def test_ingest_returns_content_and_provenance(self):
         adapter = self._make_adapter()
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._read_file_at_commit") as mock_read:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._read_file_at_commit") as mock_read:
             mock_sha.return_value = _FAKE_SHA
             mock_read.return_value = "def hello(): pass\n"
             content, prov = adapter.ingest(
@@ -131,8 +131,8 @@ class TestGitAdapterIngest:
 
     def test_ingest_title_contains_repo_name_and_sha(self):
         adapter = self._make_adapter()
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._read_file_at_commit") as mock_read:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._read_file_at_commit") as mock_read:
             mock_sha.return_value = _FAKE_SHA
             mock_read.return_value = "content"
             _, prov = adapter.ingest("README.md", repo_path="/home/user/myrepo")
@@ -143,8 +143,8 @@ class TestGitAdapterIngest:
 
     def test_ingest_uses_head_as_default_commit(self):
         adapter = self._make_adapter()
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._read_file_at_commit") as mock_read:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._read_file_at_commit") as mock_read:
             mock_sha.return_value = _FAKE_SHA
             mock_read.return_value = ""
             adapter.ingest("x.py", repo_path="/repo")
@@ -153,8 +153,8 @@ class TestGitAdapterIngest:
     def test_ingest_custom_commit_sha(self):
         adapter = self._make_adapter()
         custom_sha = "b" * 40
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._read_file_at_commit") as mock_read:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._read_file_at_commit") as mock_read:
             mock_sha.return_value = custom_sha
             mock_read.return_value = "old content"
             _, prov = adapter.ingest("x.py", repo_path="/repo", commit_sha=custom_sha)
@@ -162,8 +162,8 @@ class TestGitAdapterIngest:
 
     def test_ingest_fetched_at_is_iso_timestamp(self):
         adapter = self._make_adapter()
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._read_file_at_commit") as mock_read:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._read_file_at_commit") as mock_read:
             mock_sha.return_value = _FAKE_SHA
             mock_read.return_value = ""
             _, prov = adapter.ingest("x.py", repo_path="/repo")
@@ -182,7 +182,7 @@ class TestGitAdapterHasChanged:
 
     def test_returns_false_when_sha_same(self):
         adapter = self._make_adapter()
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha:
             mock_sha.return_value = _FAKE_SHA
             result = adapter.has_changed("src/x.py", _FAKE_SHA, repo_path="/repo")
         assert result is False
@@ -190,8 +190,8 @@ class TestGitAdapterHasChanged:
     def test_returns_true_when_file_in_diff(self):
         adapter = self._make_adapter()
         new_sha = "b" * 40
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_sha.return_value = new_sha
             mock_git.return_value = "src/x.py\n"  # diff shows file changed
             result = adapter.has_changed("src/x.py", _FAKE_SHA, repo_path="/repo")
@@ -200,8 +200,8 @@ class TestGitAdapterHasChanged:
     def test_returns_false_when_file_not_in_diff(self):
         adapter = self._make_adapter()
         new_sha = "b" * 40
-        with patch("tokenpak.connectors.git_adapter._resolve_sha") as mock_sha, \
-             patch("tokenpak.connectors.git_adapter._run_git") as mock_git:
+        with patch("tokenpak.sources.git_adapter._resolve_sha") as mock_sha, \
+             patch("tokenpak.sources.git_adapter._run_git") as mock_git:
             mock_sha.return_value = new_sha
             mock_git.return_value = ""  # No changes to this file
             result = adapter.has_changed("src/x.py", _FAKE_SHA, repo_path="/repo")
@@ -215,7 +215,7 @@ class TestGitAdapterHasChanged:
     def test_returns_false_on_source_fetch_error(self):
         adapter = self._make_adapter()
         with patch(
-            "tokenpak.connectors.git_adapter._resolve_sha",
+            "tokenpak.sources.git_adapter._resolve_sha",
             side_effect=SourceFetchError("git error"),
         ):
             result = adapter.has_changed("src/x.py", _FAKE_SHA, repo_path="/repo")

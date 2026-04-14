@@ -1,5 +1,5 @@
 """
-Unit tests for tokenpak.middleware.audit_trail
+Unit tests for tokenpak.proxy.middleware.audit_trail
 
 Covers: enums, dataclasses, factory functions, to_dict/to_json serialisation.
 """
@@ -8,7 +8,7 @@ import json
 import re
 import unittest
 
-from tokenpak.middleware.audit_trail import (
+from tokenpak.proxy.middleware.audit_trail import (
     BlockAudit,
     BlockType,
     CacheAudit,

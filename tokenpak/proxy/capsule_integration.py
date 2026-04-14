@@ -60,7 +60,7 @@ def _is_capsule_enabled() -> bool:
 
     # Check config file
     try:
-        from tokenpak.infrastructure.config import load_config
+        from tokenpak.core.config import load_config
 
         config = load_config()
         capsule_cfg = config.get("capsule_builder", {})
@@ -133,7 +133,7 @@ def capsule_request_hook(
     # Run capsule builder
     t0 = time.monotonic()
     try:
-        from tokenpak.capsule.builder import CapsuleBuilder
+        from tokenpak.companion.capsules.builder import CapsuleBuilder
 
         builder = CapsuleBuilder(enabled=True)
         new_body, stats = builder.process(body)

@@ -640,7 +640,7 @@ def create_app(
         try:
             import dataclasses
 
-            from tokenpak.capsule import CapsuleBuilder
+            from tokenpak.companion.capsules import CapsuleBuilder
 
             builder = CapsuleBuilder()
             capsule = builder.build(  # type: ignore[attr-defined]
@@ -652,7 +652,7 @@ def create_app(
                 retrieval_chunks=body.retrieval_chunks,
             )
             # Run ValidationGate before returning capsule
-            from tokenpak.validation_gate import ValidationGate
+            from tokenpak.core.validation_gate import ValidationGate
 
             gate = ValidationGate()
             vresult = gate.validate(capsule, dry_run=False)
