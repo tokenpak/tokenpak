@@ -549,6 +549,15 @@ def main():
                 "Workers restart on crash; graceful shutdown drains all workers."
             ),
         )
+        sp.add_argument(
+            "--safe",
+            action="store_true",
+            default=False,
+            help=(
+                "Disable compression defaults (restore pre-1.1 passthrough behavior). "
+                "Equivalent to TOKENPAK_COMPACT=0."
+            ),
+        )
         sargs = sp.parse_args(sys.argv[2:])
         from tokenpak.agent.cli.commands.serve import run_serve_cmd
 

@@ -304,11 +304,19 @@ TokenPak CLI
     │
     └── tokenpak serve --port 8766
         │
-        ├── Transparent proxy mode (current, working)
-        ├── Intercepts LLM requests
-        ├── Injects relevant context from index
-        ├── Tracks tokens, cost, latency
-        └── Syncs stats to dashboard
+        ├── Full pipeline mode (OpenClaw, SDK clients)
+        │   ├── Intercepts LLM requests
+        │   ├── Injects relevant context from index
+        │   ├── Compacts conversation history
+        │   ├── Manages cache_control breakpoints
+        │   ├── Tracks tokens, cost, latency
+        │   └── Syncs stats to dashboard
+        │
+        └── Client-auth pass-through mode (Claude Code CLI)
+            ├── Preserves original request bytes (billing identity)
+            ├── Byte-level vault injection (no JSON re-serialization)
+            ├── Response-side cost tracking + logging
+            └── Full model access (Opus/Sonnet/Haiku)
 ```
 
 ---

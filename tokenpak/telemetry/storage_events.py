@@ -31,8 +31,8 @@ class EventsMixin:
         INSERT OR REPLACE INTO tp_events
             (trace_id, request_id, event_type, ts, provider, model,
              agent_id, api, stop_reason, session_id, duration_ms,
-             status, error_class, payload, span_id, node_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             status, error_class, payload, span_id, node_id, route)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """
         rows = [
             (
@@ -52,6 +52,7 @@ class EventsMixin:
                 e.payload_json(),
                 e.span_id,
                 e.node_id,
+                e.route,
             )
             for e in events
         ]

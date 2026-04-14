@@ -45,6 +45,37 @@ from .circuit_breaker import (  # noqa: F401
 )
 
 
+from .request import (  # noqa: F401
+    ProxyRequest,
+    ProxyResponse,
+    HTTPProxy,
+    ROUTE_CLAUDE_CODE,
+    ROUTE_OPENCLAW,
+    ROUTE_SDK,
+    _find_system_array_close,
+    _byte_inject_system_block,
+)
+from .route_policy import (  # noqa: F401
+    get_policy,
+    is_byte_preserved,
+    is_auth_passthrough,
+    is_compaction_enabled,
+    platform_tag,
+    ROUTE_POLICIES,
+)
+from .headers import (  # noqa: F401
+    forward_headers,
+    sanitize_headers,
+    OPENCLAW_HEADER_ALLOWLIST,
+    CLAUDE_CODE_HEADER_ALLOWLIST,
+)
+from .pipeline import (  # noqa: F401
+    process_request,
+    PipelineResult,
+    StageResult,
+)
+
+
 class ProxyStats:
     """Stats/metrics container — resets on each new instance (restart)."""
 

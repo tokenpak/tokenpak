@@ -1,34 +1,25 @@
 """
-TokenPak Proxy Server (LEGACY)
+TokenPak Proxy Server — Modular Architecture
 
-⚠️  DEPRECATED: This module is superseded by the canonical proxy.py, which has full
-    compression pipeline, cache poison removal, vault injection, tool schema
-    registry, circuit breakers, and Prometheus metrics.
+HTTP proxy server for LLM API traffic. Routes requests through the
+tokenpak pipeline (vault injection, cost tracking, compression) based
+on per-route policy (Claude Code byte-preserved, OpenClaw full pipeline,
+SDK sanitized).
 
-    Use `tokenpak start` (which now launches proxy.py) or run proxy.py
-    directly. This module is kept for backward compatibility.
-
-Core HTTP proxy server / request-handling layer. Wraps Python's built-in
-HTTPServer into a multi-threaded ProxyServer with compression pipeline hooks,
-session stats, and management endpoints.
+This is the canonical modular proxy server. The monolith at repo root
+(proxy.py) is being incrementally decomposed into this module tree.
 
 Env vars (all optional):
     TOKENPAK_PORT          (default 8766)
     TOKENPAK_MODE          (default hybrid) — strict|hybrid|aggressive
     TOKENPAK_COMPACT       (default 1) — master on/off switch
     TOKENPAK_COMPACT_THRESHOLD_TOKENS (default 4500)
-    TOKENPAK_DB            (default .ocp/monitor.db)
+    TOKENPAK_DB            (default .tokenpak/monitor.db)
     NOTIFY_SOCKET          systemd sd_notify socket path (set by systemd, not TokenPak)
+
+See tokenpak/proxy/route_policy.py for the per-route behavior matrix.
 """
 from __future__ import annotations
-
-import warnings as _warnings
-_warnings.warn(
-    "tokenpak.agent.proxy.server is deprecated — use proxy.py instead. "
-    "Run `tokenpak start` to launch the current proxy.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 import gzip
 import http.client
@@ -54,6 +45,8 @@ from urllib.parse import urlparse
 import httpx
 
 from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
+from .route_policy import get_policy, platform_tag, ROUTE_POLICIES
+from .request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
@@ -615,6 +608,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 request_id=str(uuid.uuid4())[:8],
                 timestamp=datetime.now().strftime("%H:%M:%S"),
             )
+
+        # Route classification and policy lookup
+        _route = _classify_route(self.path, self.headers)
+        _policy = get_policy(_route)
+        _source_platform = _policy["platform_tag"]
 
         # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"

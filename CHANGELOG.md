@@ -6,8 +6,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Infrastructure
-- **Consolidation Stage 2 complete (2026-04-09)** — Modular tree (`tokenpak/tokenpak/`) is now runnable via `python -m tokenpak.proxy.server`. Entry point (`main()`, `ThreadedHTTPServer`, signal handlers, PID management) wired by Trix in TPK-CONSOLIDATION-A3 (commits `16984ce2f`, `94da85528`). Monolith remains on the fleet until cutover proposal is approved. All new development targets the modular tree; monolith is frozen hotfix-only per TPK-CONSOLIDATION-001.
+### Changed
+- **Compression now enabled by default** — `ENABLE_COMPACTION`, `BUDGET_CONTROLLER_ENABLED` default to `True`; `COMPACT_THRESHOLD_TOKENS` defaults to `1500` (was `4500`). To restore the legacy passthrough behavior, use `tokenpak serve --safe`. (TRIX-01 / pmgtm)
+
+### Added
+- **Claude Code client-auth pass-through** (`proxy.py`) — When Claude Code sends its own OAuth credentials (`Authorization: Bearer` + `anthropic-beta: oauth-2025-04-20`), the proxy preserves the original request bytes while applying response-side features (cost tracking, logging, budget enforcement). Byte preservation is required because JSON re-serialization changes the request signature, causing Anthropic's billing to route to the wrong quota pool (`YOU_RE_OUT_OF_EXTRA_USAGE`).
+- **Byte-level vault injection** (`proxy.py`: `_find_system_array_close()`, `_byte_inject_system_block()`) — Splices vault context directly into the JSON system array at a byte offset without `json.loads`/`json.dumps` round-trip. Preserves all original bytes except the insertion point. Configurable via `TOKENPAK_CC_INJECT_MAX_CHARS` (default 2000) and relevance-gated via `TOKENPAK_CC_INJECT_MIN_QUERY` (default 50 chars).
+- **Full header forwarding for Claude Code** (`proxy.py`) — Client-auth requests forward all headers verbatim (no allowlist filtering) to preserve the request identity Anthropic uses for OAuth quota routing. Includes `x-app`, `X-Stainless-*`, `Content-Type`, and all Anthropic beta flags.
+- **TTL-aware cache_control in anthropic adapter** (`tokenpak/proxy/adapters/anthropic_adapter.py`: `_body_has_explicit_ttl()`) — `inject_system_context()` now detects requests with explicit `ttl` values in cache_control blocks and skips adding default ephemeral markers that would violate Anthropic's TTL ordering rule.
+- **`inject_vault_context()` returns raw injection text** (`proxy.py`) — 4th tuple element enables byte-level injection to reuse vault search results without re-running the search.
+
+### Fixed
+- **Failover iterator thread safety** (`tokenpak/proxy/failover.py`) — `FailoverManager.iter_providers()` now snapshots the provider chain under a lock before iterating, preventing `RuntimeError: dictionary changed size during iteration` when `reload_config()` races with an in-flight iteration (TRIX-MTC-07 #1)
+- **Circuit breaker config reload synchronization** (`tokenpak/proxy/circuit_breaker.py`) — Added `CircuitBreakerRegistry.reload_config()` which re-reads env vars and propagates the new config to all existing breakers under the registry lock, preventing stale-config races (TRIX-MTC-07 #2)
+- **Streaming handler cross-chunk SSE buffering** (`tokenpak/proxy/streaming.py`) — `StreamHandler.process_chunk()` now accumulates text in a line buffer and flushes only complete lines into the byte buffer, preventing parse failures when a `data: {...}` SSE event spans two `recv()` calls (TRIX-MTC-07 #3)
+- **Cost tracking failure audit trail** (`tokenpak/proxy/proxy.py`) — When `cost_tracker.record_request()` raises, the failure is now logged at `ERROR` level with a structured `COST_TRACKING_FAILURE model=... tokens=...` message instead of a bare `WARNING`, so ops dashboards can detect cost data loss (TRIX-MTC-07 #4)
+- **Router Content-Length validation** (`tokenpak/proxy/router.py`) — `ProviderRouter.route()` now raises `ValueError` when the `Content-Length` header doesn't match the actual body size or is non-numeric, preventing truncated bodies from being silently forwarded upstream (TRIX-MTC-07 #5)
+- **Passthrough config post-deserialization validation** (`tokenpak/proxy/passthrough.py`) — `PassthroughConfig.__post_init__()` now raises `ValueError` if any header name appears in both `strip_headers` and `safe_to_log`, catching contradictory configs at construction time rather than producing undefined forwarding behavior at runtime (TRIX-MTC-07 #6)
 
 ### Added
 - **`tokenpak prune` command** — Top-level alias for `tokenpak audit prune`; accepts `--days` (retention window) and `--db` (audit DB path) flags

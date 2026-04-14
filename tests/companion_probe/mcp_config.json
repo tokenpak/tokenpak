@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tokenpak-probe": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/home/sue/tokenpak/tests/companion_probe/mcp_probe_server.py"]
+    }
+  }
+}

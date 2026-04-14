@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS tp_events (
     payload         TEXT NOT NULL DEFAULT '{}',
     span_id         TEXT NOT NULL DEFAULT '',
     node_id         TEXT NOT NULL DEFAULT '',
+    route           TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (trace_id, request_id, event_type)
 );
 
@@ -262,6 +263,8 @@ class TelemetryDBBase:
         # PRD additions
         _add_col("tp_events", "span_id", "TEXT NOT NULL DEFAULT ''")
         _add_col("tp_events", "node_id", "TEXT NOT NULL DEFAULT ''")
+        # Route classification — needed to separate client-managed vs proxy-managed savings
+        _add_col("tp_events", "route", "TEXT NOT NULL DEFAULT ''")
 
         # ----------------------------------------------------------------
         # tp_segments — PRD additions

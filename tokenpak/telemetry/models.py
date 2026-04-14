@@ -128,6 +128,8 @@ class TelemetryEvent:
     # PRD fields
     span_id: str = ""
     node_id: str = ""
+    # Route classification (e.g. "claude-code", "openclaw", "sdk")
+    route: str = ""
 
     def payload_json(self) -> str:
         """Return :attr:`payload` serialised as a JSON string."""

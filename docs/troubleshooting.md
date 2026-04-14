@@ -15,7 +15,7 @@ Find your problem fast. Every section follows **Problem → Cause → Fix** with
 7. [pip install Fails](#7-pip-install-fails)
 8. [High Latency](#8-high-latency)
 9. [Cost Data Missing or Zero](#9-cost-data-missing-or-zero)
-10. [Logs Not Showing / Wrong Level](#10-logs-not-showing--wrong-level)
+10. [Logs Not Showing / Wrong Level](#10-logs-not-showing-wrong-level)
 11. [Cache Not Working](#11-cache-not-working)
 12. [Compression Not Reducing Tokens](#12-compression-not-reducing-tokens)
 13. [Missing Python Dependencies](#13-missing-python-dependencies)

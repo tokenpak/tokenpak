@@ -42,20 +42,23 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
 
-        # Get overall stats
+        # Get overall stats — exclude client-managed routes (e.g. claude-code)
+        # from tokenpak-attributed savings.  Cache reads are still reported for
+        # observability but savings_usd only counts proxy-managed caching.
         cur.execute("""
             SELECT
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as cache_hits,
                 COALESCE(SUM(cache_read_tokens), 0) as total_cache_read,
                 COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation,
-                COALESCE(SUM(CASE WHEN cache_provider IS NOT NULL THEN cache_estimated_savings ELSE 0 END), 0) as total_savings
+                COALESCE(SUM(CASE WHEN cache_provider IS NOT NULL AND COALESCE(route, '') != 'claude-code' THEN cache_estimated_savings ELSE 0 END), 0) as total_savings,
+                COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' AND cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END), 0) as client_managed_cache_read
             FROM requests
             WHERE timestamp >= ?
         """, (cutoff,))
         overall = cur.fetchone()
 
-        # Get per-provider stats
+        # Get per-provider stats — only count proxy-managed savings
         cur.execute("""
             SELECT
                 cache_provider,
@@ -63,7 +66,7 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
                 SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as hits,
                 COALESCE(SUM(cache_read_tokens), 0) as read_tokens,
                 COALESCE(SUM(cache_creation_tokens), 0) as creation_tokens,
-                COALESCE(SUM(cache_estimated_savings), 0) as savings
+                COALESCE(SUM(CASE WHEN COALESCE(route, '') != 'claude-code' THEN cache_estimated_savings ELSE 0 END), 0) as savings
             FROM requests
             WHERE timestamp >= ? AND cache_provider IS NOT NULL AND cache_provider != ''
             GROUP BY cache_provider
@@ -97,6 +100,7 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "cache_read_tokens": overall[2] or 0,
             "cache_creation_tokens": overall[3] or 0,
             "estimated_savings_usd": round(overall[4] or 0.0, 6),
+            "client_managed_cache_read_tokens": overall[5] or 0,
             "per_provider": provider_stats,
         }
     except Exception as e:
@@ -108,6 +112,7 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "cache_read_tokens": 0,
             "cache_creation_tokens": 0,
             "estimated_savings_usd": 0.0,
+            "client_managed_cache_read_tokens": 0,
             "per_provider": {},
             "error": str(e),
         }

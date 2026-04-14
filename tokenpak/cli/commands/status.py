@@ -209,7 +209,8 @@ def _calculate_fleet_savings(
                 COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
                 COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens,
                 COALESCE(SUM(protected_tokens), 0) AS protected_tokens,
-                COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost
+                COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost,
+                COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' THEN cache_read_tokens ELSE 0 END), 0) AS client_managed_cache_read
             FROM requests
             {where_clause}
             GROUP BY model
@@ -258,18 +259,26 @@ def _calculate_fleet_savings(
         cache_create = row["cache_creation_tokens"]
         compressed_tok = row["compressed_tokens"]  # tokens removed by compression
 
+        # Separate proxy-managed cache reads (tokenpak caused these) from
+        # client-managed reads (Claude Code caused these — tokenpak just observed).
+        client_managed_cr = row["client_managed_cache_read"] if "client_managed_cache_read" in row.keys() else 0
+        proxy_managed_cr = max(0, cache_read - client_managed_cr)
+
         # "Without TokenPak" cost:
-        # All input tokens (including compressed + cache_read) at full input rate
-        # + output at output rate
+        # - Compressed tokens would have been sent at full input rate
+        # - Proxy-managed cache reads would have been full-price input (tokenpak caused the discount)
+        # - Client-managed cache reads stay at cached rate (Claude Code does this regardless)
+        # - Output at output rate
         raw_input = input_tok + compressed_tok  # pre-compression input
-        baseline_input = raw_input + cache_read  # if no caching, all would be fresh input
+        baseline_input = raw_input + proxy_managed_cr  # only proxy-managed cache was tokenpak's doing
         without_cost = (
             (baseline_input / 1_000_000) * input_rate
+            + (client_managed_cr / 1_000_000) * cached_rate
             + (output_tok / 1_000_000) * output_rate
         )
 
         # "With TokenPak" cost:
-        # Fresh input at input rate + cache reads at cached rate + output at output rate
+        # Fresh input at input rate + all cache reads at cached rate + output at output rate
         with_cost = (
             (input_tok / 1_000_000) * input_rate
             + (cache_read / 1_000_000) * cached_rate
@@ -279,11 +288,11 @@ def _calculate_fleet_savings(
         saved = without_cost - with_cost
         pct = (saved / without_cost * 100) if without_cost > 0 else 0.0
 
-        # Breakdown: cache savings vs compression savings
-        cache_saving = (cache_read / 1_000_000) * (input_rate - cached_rate)
+        # Breakdown: only proxy-managed cache counts as tokenpak savings
+        cache_saving = (proxy_managed_cr / 1_000_000) * (input_rate - cached_rate)
         compression_saving = (compressed_tok / 1_000_000) * input_rate
 
-        # Cache hit rate: cache_read / (cache_read + input_tok) — what % of input was cached
+        # Cache hit rate: all cache_read / total input handled (observability, not attribution)
         total_input_handled = cache_read + input_tok
         cache_hit_rate = (cache_read / total_input_handled * 100) if total_input_handled > 0 else 0.0
 
@@ -300,6 +309,8 @@ def _calculate_fleet_savings(
             "input_tokens": input_tok,
             "output_tokens": output_tok,
             "cache_read_tokens": cache_read,
+            "proxy_managed_cache_read": proxy_managed_cr,
+            "client_managed_cache_read": client_managed_cr,
             "compressed_tokens": compressed_tok,
         })
 
