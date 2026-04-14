@@ -81,18 +81,27 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
         else:
             return json.dumps({"error": f"File not found: {file_path}"})
 
-    # Try tiktoken, fall back to heuristic
+    chars = len(text)
+
+    # Tiktoken with chunking for large texts (avoids OOM / LRU cache thrashing)
     try:
         from tokenpak.tokens import count_tokens
-        tokens = count_tokens(text)
+        CHUNK = 100_000  # chars per chunk — keeps LRU cache effective
+        if chars <= CHUNK:
+            tokens = count_tokens(text)
+        else:
+            tokens = sum(
+                count_tokens(text[i:i + CHUNK])
+                for i in range(0, chars, CHUNK)
+            )
         method = "tiktoken"
     except Exception:
-        tokens = len(text) // 4
+        tokens = chars // 4
         method = "heuristic (chars/4)"
 
     return json.dumps({
         "tokens": tokens,
-        "chars": len(text),
+        "chars": chars,
         "method": method,
         "source": file_path or "inline text",
     }, indent=2)

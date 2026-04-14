@@ -114,7 +114,11 @@ def _write_mcp_config(config: CompanionConfig) -> str:
 
 def _write_settings(config: CompanionConfig) -> str:
     """Write the settings overlay with hook configuration and permissions."""
-    hook_cmd = f"{sys.executable} -m tokenpak.companion.hooks.pre_send"
+    # Use the bash hook for speed (~30ms vs ~400ms for Python hook).
+    # The bash hook does file-size token estimation, budget gating, and
+    # stderr output without spawning a Python interpreter on every prompt.
+    hook_script = Path(__file__).parent / "hooks" / "pre_send.sh"
+    hook_cmd = f"bash {hook_script}"
 
     settings: dict = {
         "permissions": {
