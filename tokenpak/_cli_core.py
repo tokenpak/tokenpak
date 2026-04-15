@@ -240,7 +240,8 @@ _COMMAND_GROUPS = {
     "Companion": [
         ("claude", "Launch Claude Code with companion active"),
         ("codex", "Launch Codex with companion active"),
-        ("prove", "A/B value proof: direct API vs tokenpak"),
+        ("test", "Interactive A/B test with auto-detection"),
+        ("prove", "A/B value proof (scriptable, matrix mode)"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1942,6 +1943,12 @@ def cmd_codex(args):
     launch(args=list(args.args))
 
 
+def cmd_test(args):
+    """Interactive A/B test — auto-detects platforms, providers, models."""
+    from .cli.commands.test import run
+    run(args)
+
+
 def cmd_prove(args):
     """Run an A/B value proof comparing direct API vs tokenpak."""
     action = getattr(args, "prove_action", None)
@@ -2185,6 +2192,21 @@ def _build_prove_parser(sub):
     p_providers.set_defaults(func=cmd_prove)
 
     p.set_defaults(func=cmd_prove)
+
+
+def _build_test_parser(sub):
+    p = sub.add_parser(
+        "test",
+        help="Interactive A/B test with auto-detection",
+        description=(
+            "Launch an interactive test that auto-detects your available\n"
+            "platforms, providers, and models, then runs a 5-turn A/B\n"
+            "comparison (with vs without tokenpak) with live display.\n\n"
+            "Just run: tokenpak test"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.set_defaults(func=cmd_test)
 
 
 def _build_stub_parsers(sub):
@@ -2561,6 +2583,7 @@ def build_parser():
     _build_claude_parser(sub)
     _build_codex_parser(sub)
     _build_prove_parser(sub)
+    _build_test_parser(sub)
 
     # --- Stub parsers for commands advertised in help/registry but not yet wired ---
     _build_stub_parsers(sub)
