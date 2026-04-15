@@ -1,6 +1,6 @@
 """doctor_claude_code — CCI-12 Claude Code health checks for tokenpak doctor --claude-code.
 
-8 health checks:
+9 health checks:
   1. ANTHROPIC_BASE_URL is set (env + ~/.claude/settings.json)
   2. Proxy reachable at configured URL (GET /health)
   3. Auth flow works (POST /v1/messages/count_tokens, expect 200)
@@ -9,6 +9,7 @@
   6. Telemetry visible (session logged in last 24 h)
   7. No PYTHONPATH drift (proxy proc environ vs canonical from systemd unit)
   8. Per-host install consistency (tokenpak.env, systemd unit, settings.json same URL)
+  9. Plugin directory exists at ~/.claude/plugins/tokenpak or ~/.claude/plugins/tokenpak-claude-code
 
 Each check runs independently.  A failure in one does not block the rest.
 Exit: non-zero if any check fails.
@@ -32,7 +33,10 @@ from typing import TypedDict
 DEFAULT_PROXY_URL = "http://127.0.0.1:8766"
 SYSTEMD_UNIT_NAME = "tokenpak-proxy.service"
 REMEDIATION = "Run `tokenpak install --claude-code` to fix this"
-NUM_CHECKS = 8
+NUM_CHECKS = 9
+
+# Plugin directory candidate names under ~/.claude/plugins/
+_PLUGIN_DIR_NAMES = ("tokenpak", "tokenpak-claude-code")
 
 
 # Path helpers — evaluated at call time so monkeypatching Path.home() works in tests
@@ -617,6 +621,39 @@ def _check_install_consistency() -> CheckResult:
     )
 
 
+def _check_plugin_dir() -> CheckResult:
+    """Check 9 (CCP-09): tokenpak plugin directory exists under ~/.claude/plugins/."""
+    home = Path.home()
+    candidates = [home / ".claude" / "plugins" / name for name in _PLUGIN_DIR_NAMES]
+
+    for path in candidates:
+        if path.exists():
+            return CheckResult(
+                check="plugin_dir",
+                status="pass",
+                message=f"Check 9  Plugin directory     found: {path}",
+                detail=f"path={path}",
+                remediation="",
+            )
+
+    checked = ", ".join(str(p) for p in candidates)
+    return CheckResult(
+        check="plugin_dir",
+        status="fail",
+        message=(
+            "Check 9  Plugin directory     NOT FOUND — MCP tools unavailable\n"
+            f"         Checked: {checked}"
+        ),
+        detail=f"candidates_checked=[{checked}]",
+        remediation=(
+            "Install the Claude Code plugin:\n"
+            "  mkdir -p ~/.claude/plugins/tokenpak\n"
+            "  # Then copy or symlink the plugin files into that directory.\n"
+            "  # See tokenpak/integrations/claude_code/plugin/README.md for full instructions."
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -625,7 +662,7 @@ def run_claude_code_checks(
     output_json: bool = False,
     verbose: bool = False,
 ) -> tuple[int, list[CheckResult]]:
-    """Run all 8 CCI-12 Claude Code health checks.
+    """Run all 9 CCI-12 + CCP-09 Claude Code health checks.
 
     Returns:
         (fail_count, checks) — fail_count is the number of failed checks.
@@ -639,6 +676,7 @@ def run_claude_code_checks(
         _check_telemetry_visible,
         _check_pythonpath_drift,
         _check_install_consistency,
+        _check_plugin_dir,
     ]
 
     results: list[CheckResult] = []

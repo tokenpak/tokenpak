@@ -1,10 +1,10 @@
 """tests/cli/test_doctor_claude_code.py
 
-Tests for the CCI-12 Claude Code health checks:
+Tests for the CCI-12 + CCP-09 Claude Code health checks:
   tokenpak doctor --claude-code
 
 Coverage:
-  0. Healthy install — all 8 checks pass
+  0. Healthy install — all 9 checks pass
   1. Check 1 fails when ANTHROPIC_BASE_URL is not set
   2. Check 2 fails when proxy is unreachable
   3. Check 3 fails when count_tokens returns non-200
@@ -13,8 +13,11 @@ Coverage:
   6. Check 6 passes (skip) when no traffic and no DB
   7. Check 7 fails on PYTHONPATH drift (calibot incident pattern)
   8. Check 8 fails when sources disagree on proxy URL
+  9. Check 9 fails when neither plugin dir candidate exists
   Additional: Check 7 passes when PYTHONPATH matches canonical
   Additional: Check 8 passes when all sources agree
+  Additional: Check 9 passes when tokenpak dir exists
+  Additional: Check 9 passes when tokenpak-claude-code dir exists
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from tokenpak.cli.commands.doctor_claude_code import (
     _check_auth_flow,
     _check_base_url_set,
     _check_install_consistency,
+    _check_plugin_dir,
     _check_proxy_reachable,
     _check_pythonpath_drift,
     _check_sample_roundtrip,
@@ -59,19 +63,19 @@ def tmp_home(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def healthy_env(tmp_home, monkeypatch):
-    """Set up a minimal environment that satisfies all 8 checks (mocked network)."""
+    """Set up a minimal environment that satisfies all 9 checks (mocked network)."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
     monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
     yield tmp_home
 
 
 # ---------------------------------------------------------------------------
-# Test 0: Healthy install — all 8 checks pass
+# Test 0: Healthy install — all 9 checks pass
 # ---------------------------------------------------------------------------
 
 
-def test_healthy_install_all_8_pass(tmp_home, monkeypatch):
-    """All 8 checks pass when network is mocked healthy and env is correct."""
+def test_healthy_install_all_9_pass(tmp_home, monkeypatch):
+    """All 9 checks pass when network is mocked healthy and env is correct."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
     monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
 
@@ -93,11 +97,12 @@ def test_healthy_install_all_8_pass(tmp_home, monkeypatch):
     (tmp_home / ".config").mkdir(parents=True, exist_ok=True)
     (tmp_home / ".config" / "tokenpak.env").write_text("TOKENPAK_PORT=8766\n")
 
-    # ~/.claude/settings.json
+    # ~/.claude/settings.json + plugin dir
     (tmp_home / ".claude").mkdir(parents=True, exist_ok=True)
     (tmp_home / ".claude" / "settings.json").write_text(
         json.dumps({"anthropicBaseUrl": "http://127.0.0.1:8766"})
     )
+    (tmp_home / ".claude" / "plugins" / "tokenpak").mkdir(parents=True, exist_ok=True)
 
     def mock_http_get(url, timeout=4):
         if "/health" in url:
@@ -467,8 +472,8 @@ def test_check8_consistency_ok(tmp_home, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_run_returns_8_results(monkeypatch):
-    """run_claude_code_checks always returns exactly NUM_CHECKS (8) results."""
+def test_run_returns_9_results(monkeypatch):
+    """run_claude_code_checks always returns exactly NUM_CHECKS (9) results."""
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:8766")
     monkeypatch.setenv("TOKENPAK_PROFILE", "claude-code-cli")
 
@@ -495,3 +500,44 @@ def test_normalise_url_localhost():
     assert _normalise_url("http://localhost:8766/") == "http://127.0.0.1:8766"
     assert _normalise_url("http://127.0.0.1:8766") == "http://127.0.0.1:8766"
     assert _normalise_url("http://127.0.0.1:8766/") == "http://127.0.0.1:8766"
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Plugin directory check (CCP-09)
+# ---------------------------------------------------------------------------
+
+
+def test_check9_plugin_dir_missing(tmp_home, monkeypatch):
+    """Check 9 fails when neither ~/.claude/plugins/tokenpak nor tokenpak-claude-code exists."""
+    result = _check_plugin_dir()
+    assert result["status"] == "fail"
+    assert "NOT FOUND" in result["message"]
+    assert "mkdir -p ~/.claude/plugins/tokenpak" in result["remediation"]
+
+
+def test_check9_plugin_dir_tokenpak_exists(tmp_home, monkeypatch):
+    """Check 9 passes when ~/.claude/plugins/tokenpak exists."""
+    plugin_dir = tmp_home / ".claude" / "plugins" / "tokenpak"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _check_plugin_dir()
+    assert result["status"] == "pass"
+    assert "tokenpak" in result["message"]
+
+
+def test_check9_plugin_dir_tokenpak_claude_code_exists(tmp_home, monkeypatch):
+    """Check 9 passes when ~/.claude/plugins/tokenpak-claude-code exists."""
+    plugin_dir = tmp_home / ".claude" / "plugins" / "tokenpak-claude-code"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+
+    result = _check_plugin_dir()
+    assert result["status"] == "pass"
+    assert "tokenpak-claude-code" in result["message"]
+
+
+def test_check9_plugin_dir_checks_both_candidates(tmp_home, monkeypatch):
+    """Check 9 failure message lists both candidate paths."""
+    result = _check_plugin_dir()
+    assert result["status"] == "fail"
+    assert "tokenpak" in result["message"]
+    assert "tokenpak-claude-code" in result["message"] or "tokenpak" in result["detail"]
