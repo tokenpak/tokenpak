@@ -133,6 +133,40 @@ def run_install_cmd(args) -> None:
     if getattr(args, "systemd", False):
         install_systemd_unit(proxy_url=proxy_url)
 
+    # Auto-detect and configure OpenClaw if installed
+    _setup_openclaw_if_present(proxy_url)
+
+
+def _setup_openclaw_if_present(proxy_url: str) -> None:
+    """Auto-detect OpenClaw and configure tokenpak integration."""
+    try:
+        from tokenpak.sdk.openclaw import detect_openclaw, setup_openclaw
+    except ImportError:
+        return
+
+    if not detect_openclaw():
+        return
+
+    print("  OpenClaw detected — configuring tokenpak providers...")
+    result = setup_openclaw(proxy_url=proxy_url)
+
+    if "error" in result:
+        print(f"  OpenClaw setup error: {result['error']}")
+        return
+
+    added = result.get("providers_added", [])
+    updated = result.get("providers_updated", [])
+    claude_code = result.get("claude_code_backend", False)
+
+    if added:
+        print(f"  Added providers: {', '.join(added)}")
+    if updated:
+        print(f"  Updated providers: {', '.join(updated)}")
+    if claude_code:
+        print(f"  Claude Code backend: enabled (tokenpak-claude-code)")
+    if not added and not updated:
+        print(f"  All providers up to date.")
+
 
 __all__ = [
     "PROXY_URL",

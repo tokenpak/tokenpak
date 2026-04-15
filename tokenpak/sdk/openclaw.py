@@ -247,4 +247,144 @@ class OpenClawAdapter(TokenPakAdapter):
         return resp.json()
 
 
-__all__ = ["OpenClawAdapter", "execute_via_claude_code"]
+# ═══════════════════════════════════════════════════════════════════════
+# Setup — configure openclaw.json to route through tokenpak
+# ═══════════════════════════════════════════════════════════════════════
+
+_OPENCLAW_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
+
+# Provider templates — what tokenpak adds to openclaw.json
+_PROVIDER_TEMPLATES: dict[str, dict] = {
+    "tokenpak-anthropic": {
+        "baseUrl": "http://localhost:8766",
+        "api": "anthropic-messages",
+        "models": [
+            {"id": "claude-opus-4-6", "name": "Opus 4.6",
+             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+            {"id": "claude-sonnet-4-6", "name": "Sonnet 4.6",
+             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+            {"id": "claude-haiku-4-5", "name": "Haiku 4.5",
+             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+        ],
+    },
+    "tokenpak-openai-codex": {
+        "baseUrl": "http://localhost:8766",
+        "api": "openai-codex-responses",
+        "models": [
+            {"id": "gpt-4o", "name": "GPT-4o",
+             "cost": {"input": 0, "output": 0}},
+            {"id": "o3", "name": "o3",
+             "cost": {"input": 0, "output": 0}},
+            {"id": "o4-mini", "name": "o4-mini",
+             "cost": {"input": 0, "output": 0}},
+        ],
+    },
+    "tokenpak-gemini": {
+        "baseUrl": "http://localhost:8766",
+        "api": "google-generative-ai",
+        "models": [
+            {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash",
+             "cost": {"input": 0, "output": 0}},
+            {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro",
+             "cost": {"input": 0, "output": 0}},
+        ],
+    },
+    "tokenpak-claude-code": {
+        "baseUrl": "http://localhost:8766",
+        "api": "anthropic-messages",
+        "headers": {"X-TokenPak-Backend": "claude-code"},
+        "models": [
+            {"id": "claude-sonnet-4-6", "name": "Sonnet 4.6 (Claude Code)",
+             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+            {"id": "claude-opus-4-6", "name": "Opus 4.6 (Claude Code)",
+             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
+        ],
+    },
+}
+
+
+def detect_openclaw() -> bool:
+    """Check if OpenClaw is installed and has a config file."""
+    return _OPENCLAW_CONFIG_PATH.exists()
+
+
+def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
+    """Configure openclaw.json to route through tokenpak.
+
+    Adds/updates tokenpak-* provider entries. Preserves all existing
+    non-tokenpak configuration. Idempotent — safe to run repeatedly.
+
+    Args:
+        proxy_url: TokenPak proxy URL (default: http://localhost:8766).
+
+    Returns:
+        Dict with setup results: providers_added, providers_updated,
+        claude_code_backend (bool).
+    """
+    result = {"providers_added": [], "providers_updated": [], "claude_code_backend": False}
+
+    if not _OPENCLAW_CONFIG_PATH.exists():
+        return {"error": f"OpenClaw config not found at {_OPENCLAW_CONFIG_PATH}"}
+
+    config = json.loads(_OPENCLAW_CONFIG_PATH.read_text())
+
+    # Ensure models.providers exists
+    if "models" not in config:
+        config["models"] = {"mode": "merge", "providers": {}}
+    if "providers" not in config["models"]:
+        config["models"]["providers"] = {}
+
+    providers = config["models"]["providers"]
+
+    # Add/update each tokenpak provider template
+    for name, template in _PROVIDER_TEMPLATES.items():
+        # Update baseUrl to match configured proxy
+        provider_data = dict(template)
+        provider_data["baseUrl"] = proxy_url
+
+        if name in providers:
+            # Update baseUrl but preserve user's model customizations
+            providers[name]["baseUrl"] = proxy_url
+            # Add any missing models
+            existing_ids = {m["id"] for m in providers[name].get("models", [])}
+            for model in template.get("models", []):
+                if model["id"] not in existing_ids:
+                    providers[name].setdefault("models", []).append(model)
+            result["providers_updated"].append(name)
+        else:
+            providers[name] = provider_data
+            result["providers_added"].append(name)
+
+    # Ensure auth profiles exist for tokenpak providers
+    if "auth" not in config:
+        config["auth"] = {"profiles": {}, "order": {}}
+    auth = config["auth"]
+    if "profiles" not in auth:
+        auth["profiles"] = {}
+    if "order" not in auth:
+        auth["order"] = {}
+
+    for name in _PROVIDER_TEMPLATES:
+        profile_key = f"{name}:manual"
+        if profile_key not in auth["profiles"]:
+            auth["profiles"][profile_key] = {
+                "provider": name,
+                "mode": "oauth",
+            }
+        if name not in auth.get("order", {}):
+            auth["order"][name] = [profile_key]
+
+    # Check if claude-code backend is configured
+    if "tokenpak-claude-code" in providers:
+        result["claude_code_backend"] = True
+
+    # Atomic write
+    import tempfile
+    tmp = _OPENCLAW_CONFIG_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(config, indent=2))
+    os.replace(tmp, _OPENCLAW_CONFIG_PATH)
+
+    return result
+
+
+__all__ = ["OpenClawAdapter", "execute_via_claude_code", "detect_openclaw", "setup_openclaw"]
