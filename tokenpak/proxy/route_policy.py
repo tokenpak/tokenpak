@@ -60,6 +60,11 @@ ROUTE_POLICIES: Dict[str, Dict[str, Any]] = {
         "cache_poison_removal": "enabled",
         "stable_cache_stamps": "enabled",
         "cache_cap": "enabled",
+        # Backend: "api" (default, forward to provider HTTP API) or
+        # "claude_code" (delegate to tokenpak claude -p --resume for
+        # tool use, CLAUDE.md, subscription billing, persistent sessions).
+        # Selected per-request via X-TokenPak-Backend header.
+        "backend": "api",
     },
     ROUTE_SDK: {
         "auth": "passthrough",
