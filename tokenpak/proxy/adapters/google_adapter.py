@@ -141,6 +141,21 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
             return int(usage["totalTokenCount"])
         return 0
 
+    def detect_streaming(self, path: str) -> bool:
+        """Detect streaming from URL path or query parameters.
+
+        Google streaming is signalled by the URL, not the body:
+        - Path contains ``streamGenerateContent``
+        - Query string contains ``alt=sse``
+
+        Returns True when either signal is present, False otherwise.
+        """
+        if "streamGenerateContent" in path:
+            return True
+        if "alt=sse" in path:
+            return True
+        return False
+
     def get_default_upstream(self) -> str:
         return "https://generativelanguage.googleapis.com"
 
