@@ -286,8 +286,10 @@ def _run_turn_anthropic(
     body = {"model": model, "max_tokens": max_tokens, "system": system,
             "messages": messages, "stream": True}
     url = f"{base_url}/v1/messages"
-    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01",
+    headers = {"anthropic-version": "2023-06-01",
                "content-type": "application/json"}
+    if api_key:
+        headers["x-api-key"] = api_key
     parts: list[str] = []
     try:
         with client.stream("POST", url, headers=headers, json=body, timeout=120.0) as resp:
@@ -339,7 +341,9 @@ def _run_turn_openai(
     body = {"model": model, "max_tokens": max_tokens, "messages": full_msgs,
             "stream": True, "stream_options": {"include_usage": True}}
     url = f"{base_url}/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "content-type": "application/json"}
+    headers = {"content-type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     parts: list[str] = []
     try:
         with client.stream("POST", url, headers=headers, json=body, timeout=120.0) as resp:
@@ -398,7 +402,9 @@ def _run_turn_google(
     }
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
-    url = f"{base_url}/models/{model}:streamGenerateContent?alt=sse&key={api_key}"
+    url = f"{base_url}/models/{model}:streamGenerateContent?alt=sse"
+    if api_key:
+        url += f"&key={api_key}"
     headers = {"content-type": "application/json"}
     parts: list[str] = []
     try:
@@ -468,10 +474,12 @@ def _execute_turn_proxy(
 ) -> TurnResult:
     """Execute via tokenpak proxy — same format, different base URL.
 
-    The proxy manages API keys internally, so we use a placeholder
-    if no env key is set. The proxy will authenticate with its own config.
+    If no env API key is set, send with empty key so the proxy injects
+    its own credentials (from key pool, Claude CLI OAuth, or Codex OAuth).
+    Sending a fake key would cause the proxy to pass it through as-is,
+    which the upstream provider rejects.
     """
-    api_key = os.environ.get(cfg.api_key_env, "") or "proxy-managed"
+    api_key = os.environ.get(cfg.api_key_env, "")
     run_fn = _FORMAT_DISPATCH.get(cfg.format)
     if not run_fn:
         return TurnResult(error=f"Unknown format: {cfg.format}")
