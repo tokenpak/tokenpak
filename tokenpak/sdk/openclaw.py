@@ -120,13 +120,15 @@ def execute_via_claude_code(
         cmd.extend(["--resume", claude_session])
 
     cmd.extend(["--output-format", "json"])
-    cmd.extend(["-p", latest_msg])
+    cmd.append("-p")
+    # Message goes via stdin — avoids OS arg size limit (~128KB)
 
     # Execute
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
             cmd,
+            input=latest_msg,
             capture_output=True,
             text=True,
             timeout=300,

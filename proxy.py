@@ -7235,55 +7235,122 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
             },
         })
 
+    def _send_sse_response(self, result: dict):
+        """Send a complete Anthropic API response as SSE stream events.
+
+        Converts a single JSON response into the SSE event sequence that
+        OpenClaw's streaming parser expects:
+          event: message_start → content_block_start → content_block_delta
+          → content_block_stop → message_delta → message_stop
+        """
+        import uuid as _uuid
+        msg_id = result.get("id", f"msg_{_uuid.uuid4().hex[:24]}")
+        model = result.get("model", "claude-sonnet-4-6")
+        usage = result.get("usage", {})
+        content = result.get("content", [])
+        text = content[0].get("text", "") if content else ""
+
+        events = []
+
+        # message_start
+        events.append(json.dumps({
+            "type": "message_start",
+            "message": {
+                "id": msg_id, "type": "message", "role": "assistant",
+                "content": [], "model": model,
+                "stop_reason": None, "stop_sequence": None,
+                "usage": {"input_tokens": usage.get("input_tokens", 0),
+                          "output_tokens": 0,
+                          "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                          "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0)},
+            }
+        }))
+
+        # content_block_start
+        events.append(json.dumps({
+            "type": "content_block_start", "index": 0,
+            "content_block": {"type": "text", "text": ""}
+        }))
+
+        # content_block_delta (send text in one chunk)
+        events.append(json.dumps({
+            "type": "content_block_delta", "index": 0,
+            "delta": {"type": "text_delta", "text": text}
+        }))
+
+        # content_block_stop
+        events.append(json.dumps({
+            "type": "content_block_stop", "index": 0
+        }))
+
+        # message_delta
+        events.append(json.dumps({
+            "type": "message_delta",
+            "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+            "usage": {"output_tokens": usage.get("output_tokens", 0)}
+        }))
+
+        # message_stop
+        events.append(json.dumps({"type": "message_stop"}))
+
+        # Send as SSE — event type must match the data type
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        for evt_json in events:
+            evt_type = json.loads(evt_json).get("type", "message")
+            self.wfile.write(f"event: {evt_type}\ndata: {evt_json}\n\n".encode())
+        self.wfile.flush()
+
+    def _handle_claude_code_backend(self):
+        """Route requests through Claude Code CLI via tokenpak companion.
+
+        Triggered by ``X-TokenPak-Backend: claude-code`` header.
+        Delegates to ``tokenpak claude -p --resume`` for tool use,
+        CLAUDE.md context, and subscription billing.  Returns response
+        as Anthropic SSE stream.
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(content_length) if content_length else b"{}"
+            body = json.loads(raw_body)
+
+            oc_session = ""
+            for k, v in self.headers.items():
+                if k.lower() == "x-openclaw-session":
+                    oc_session = v.strip()
+                    break
+            if not oc_session:
+                oc_session = f"oc_{hash(str(body.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
+
+            from tokenpak.sdk.openclaw import execute_via_claude_code
+            result = execute_via_claude_code(
+                openclaw_session=oc_session,
+                messages=body.get("messages", []),
+                model=body.get("model", "claude-sonnet-4-6"),
+                system=body.get("system", ""),
+                max_tokens=body.get("max_tokens", 4096),
+            )
+
+            if result.get("type") == "error":
+                self._send_json(result, status=500)
+            else:
+                self._send_sse_response(result)
+        except Exception as e:
+            print(f"  [claude-code-backend] Error: {e}", flush=True)
+            self._send_json(
+                {"error": {"type": "backend_error", "message": str(e)}},
+                status=500,
+            )
+
     def _reverse_proxy(self, method):
-        # ── Claude Code backend dispatch (early exit) ─────────
-        # Triggered by X-TokenPak-Backend header OR model name containing
-        # "claude-code" suffix (e.g. "claude-sonnet-4-6" from tokenpak-claude-code provider).
-        # OpenClaw may not forward custom headers, so we also check the request body.
-        _is_claude_code_backend = False
-        # DEBUG: log all headers for openclaw requests (temporary)
-        _all_hdrs = {k.lower(): v for k, v in self.headers.items()}
-        if not _all_hdrs.get("x-claude-code-session-id"):
-            print(f"  [header-debug] path={self.path} headers={list(_all_hdrs.keys())}", flush=True)
+        # Claude Code backend — check header before anything else
         for _bk, _bv in self.headers.items():
             if _bk.lower() == "x-tokenpak-backend" and _bv.strip().lower() == "claude-code":
-                _is_claude_code_backend = True
-                break
-        # Also detect from OpenClaw provider name in any header
-        if not _is_claude_code_backend:
-            for _bk, _bv in self.headers.items():
-                if "claude-code" in _bv.lower():
-                    print(f"  [header-debug] found claude-code in {_bk}={_bv[:60]}", flush=True)
-                    _is_claude_code_backend = True
-                    break
-        if _is_claude_code_backend:
-                try:
-                    content_length = int(self.headers.get("Content-Length", 0))
-                    raw_body = self.rfile.read(content_length) if content_length else b"{}"
-                    _oc_body = json.loads(raw_body)
-                    _oc_session = ""
-                    for _sk, _sv in self.headers.items():
-                        if _sk.lower() == "x-openclaw-session":
-                            _oc_session = _sv.strip()
-                            break
-                    if not _oc_session:
-                        _oc_session = f"oc_{hash(str(_oc_body.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
-                    from tokenpak.sdk.openclaw import execute_via_claude_code
-                    _oc_result = execute_via_claude_code(
-                        openclaw_session=_oc_session,
-                        messages=_oc_body.get("messages", []),
-                        model=_oc_body.get("model", "claude-sonnet-4-6"),
-                        system=_oc_body.get("system", ""),
-                        max_tokens=_oc_body.get("max_tokens", 4096),
-                    )
-                    self._send_json(_oc_result, status=200 if _oc_result.get("type") != "error" else 500)
-                except Exception as _oc_err:
-                    print(f"  [claude-code-backend] Error: {_oc_err}", flush=True)
-                    self._send_json(
-                        {"error": {"type": "backend_error", "message": str(_oc_err)}},
-                        status=500,
-                    )
+                self._handle_claude_code_backend()
                 return
+
         # Pre-flight: check for missing API credentials before touching upstream.
         # If the client sent no auth header AND the environment has no key set,
         # surface a clear auth_missing error immediately rather than forwarding a
