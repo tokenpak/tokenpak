@@ -279,11 +279,17 @@ def _get_models(provider: str) -> list[tuple[str, str]]:
 # Built-in 10-turn test scenarios — lightweight prompts for fast turns
 # that build up cached context to demonstrate multi-turn savings.
 #
-# Design principles for showcasing tokenpak:
+# How the comparison works:
+#   Arm 1 (Claude Code):    claude -p → direct to Anthropic
+#   Arm 2 (w/ TokenPak):    tokenpak claude -p → auto-routes through
+#                           tokenpak proxy (compression + caching + dedup)
+#                           + companion MCP tools available
+#
+# Design principles:
 #   - Prompts are 200-400 chars each (substantial but not bloated)
-#   - Repeated references to the same code/specs across turns → cache hits
-#   - Re-stating requirements and context → compression opportunities
-#   - 10 turns builds a growing conversation → savings curve
+#   - Repeated references to the same code/specs → proxy compression
+#   - Re-stating requirements and context → dedup opportunities
+#   - 10 turns builds growing conversation → cache savings compound
 # ═══════════════════════════════════════════════════════════════════════
 
 _SCENARIOS: dict[str, dict] = {

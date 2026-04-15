@@ -83,10 +83,23 @@ def main(args: list[str] | None = None) -> int:
     # Pass through any user-provided args
     claude_args.extend(args)
 
-    # Set env vars for the proxy
+    # Route through tokenpak proxy for compression/caching/dedup.
+    # Auto-detect if proxy is running when no explicit proxy_url is set.
     env = os.environ.copy()
-    if config.proxy_url:
-        env["ANTHROPIC_BASE_URL"] = config.proxy_url
+    proxy_url = config.proxy_url
+    if not proxy_url:
+        # Auto-detect: check if the tokenpak proxy is running
+        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
+        try:
+            import httpx
+            resp = httpx.get(f"{default_proxy}/health", timeout=1.0)
+            if resp.status_code == 200:
+                proxy_url = default_proxy
+                print(f"tokenpak: routing through proxy ({proxy_url})", file=sys.stderr)
+        except Exception:
+            pass
+    if proxy_url:
+        env["ANTHROPIC_BASE_URL"] = proxy_url
 
     # Exec into claude — replaces this process
     os.execvpe("claude", claude_args, env)
