@@ -674,9 +674,11 @@ def run_test(
         label = arms_cfg[i].name
         print(f"  Log [{label}]: {lf}")
 
-    if display:
+    if display and display._method == "tmux":
         print(f"\n  Live windows still open for review.")
         print(f"  Close with: tmux kill-session -t tokenpak-prove")
+    elif display and display._method == "terminal":
+        print(f"\n  Live windows still open for review.")
 
     print()
 

@@ -54,12 +54,15 @@ class LiveDisplay:
         if self._try_terminal_windows():
             return "Two terminal windows opened"
 
-        # Fallback: background tail processes (write to separate files)
+        # Fallback: log files only — user can tail them in another terminal
         self._method = "logs"
+        hint = ""
+        if not shutil.which("tmux"):
+            hint = "\n    Tip: install tmux for automatic split-pane live view"
         return (
-            f"Watch live:\n"
-            f"    tail -f {self.arm_a_log}   # Arm A (Direct)\n"
-            f"    tail -f {self.arm_b_log}   # Arm B (TokenPak)"
+            f"Review logs after test completes (or tail -f in another terminal):\n"
+            f"    {self.arm_a_log}\n"
+            f"    {self.arm_b_log}{hint}"
         )
 
     def stop(self) -> None:
@@ -111,45 +114,55 @@ class LiveDisplay:
             return False
 
     def _try_terminal_windows(self) -> bool:
-        """Launch two terminal emulator windows."""
-        # Try common Linux terminal emulators
+        """Launch two terminal emulator windows.
+
+        Requires a display server ($DISPLAY or $WAYLAND_DISPLAY).
+        Skipped entirely in headless/SSH sessions.
+        """
+        # Guard: no display server → GUI terminals will fail
+        if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            return False
+
         for term_cmd in ["gnome-terminal", "xfce4-terminal", "konsole", "xterm"]:
             if not shutil.which(term_cmd):
                 continue
             try:
                 if term_cmd == "gnome-terminal":
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "--title", "ARM A: Direct API", "--",
-                        "bash", "-c", f"echo 'ARM A: Direct API'; tail -f {self.arm_a_log}; read",
-                    ]))
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "--title", "ARM B: With TokenPak", "--",
-                        "bash", "-c", f"echo 'ARM B: TokenPak'; tail -f {self.arm_b_log}; read",
-                    ]))
+                    args_a = [term_cmd, "--title", "ARM A: Direct", "--",
+                              "bash", "-c", f"echo 'ARM A: Direct'; tail -f {self.arm_a_log}; read"]
+                    args_b = [term_cmd, "--title", "ARM B: TokenPak", "--",
+                              "bash", "-c", f"echo 'ARM B: TokenPak'; tail -f {self.arm_b_log}; read"]
                 elif term_cmd == "xterm":
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "-T", "ARM A: Direct API", "-e",
-                        f"bash -c 'echo ARM A: Direct API; tail -f {self.arm_a_log}; read'",
-                    ]))
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "-T", "ARM B: With TokenPak", "-e",
-                        f"bash -c 'echo ARM B: TokenPak; tail -f {self.arm_b_log}; read'",
-                    ]))
+                    args_a = [term_cmd, "-T", "ARM A: Direct", "-e",
+                              f"bash -c 'echo ARM A; tail -f {self.arm_a_log}; read'"]
+                    args_b = [term_cmd, "-T", "ARM B: TokenPak", "-e",
+                              f"bash -c 'echo ARM B; tail -f {self.arm_b_log}; read'"]
                 else:
-                    # Generic: most terminals support -e or --command
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "-e",
-                        f"bash -c 'echo ARM A: Direct API; tail -f {self.arm_a_log}; read'",
-                    ]))
-                    self._subprocesses.append(subprocess.Popen([
-                        term_cmd, "-e",
-                        f"bash -c 'echo ARM B: TokenPak; tail -f {self.arm_b_log}; read'",
-                    ]))
+                    args_a = [term_cmd, "-e",
+                              f"bash -c 'echo ARM A: Direct; tail -f {self.arm_a_log}; read'"]
+                    args_b = [term_cmd, "-e",
+                              f"bash -c 'echo ARM B: TokenPak; tail -f {self.arm_b_log}; read'"]
 
+                p_a = subprocess.Popen(args_a, stderr=subprocess.DEVNULL)
+                p_b = subprocess.Popen(args_b, stderr=subprocess.DEVNULL)
+
+                # Verify the processes didn't immediately exit (display error)
+                import time as _time
+                _time.sleep(0.3)
+                if p_a.poll() is not None or p_b.poll() is not None:
+                    # Failed to stay running — display issue
+                    for p in (p_a, p_b):
+                        try:
+                            p.terminate()
+                        except Exception:
+                            pass
+                    continue
+
+                self._subprocesses.extend([p_a, p_b])
                 self._method = "terminal"
                 return True
+
             except (FileNotFoundError, OSError):
-                # Clean up any launched processes
                 for p in self._subprocesses:
                     try:
                         p.terminate()
