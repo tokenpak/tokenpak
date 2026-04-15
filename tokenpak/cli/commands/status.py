@@ -405,6 +405,19 @@ def _fmt_uptime(seconds: float) -> str:
     return f"{minutes}m"
 
 
+def _fmt_num(n: int) -> str:
+    """Compact number: 1234 -> 1.2K, 1234567 -> 1.2M, etc."""
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.1f}B"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 10_000:
+        return f"{n / 1_000:.1f}K"
+    if n >= 1_000:
+        return f"{n:,}"
+    return str(n)
+
+
 def _shorten_model(name: str) -> str:
     """Shorten model name for table display."""
     # Remove common prefixes for compact display
@@ -438,181 +451,169 @@ def run(
     if minimal:
         return _run_minimal(proxy_base=proxy_base, db_path=db_path, no_meme=no_meme)
 
-    # --- Fetch proxy health (optional — savings still work without it) ---
+    # --- Fetch live proxy data (primary source for current session) ---
     health = _fetch(f"{proxy_base}/health")
     stats = _fetch(f"{proxy_base}/stats")
     cache = _fetch(f"{proxy_base}/cache-stats")
     proxy_up = health is not None
+    session = stats.get("session", {}) if stats else {}
 
-    # --- Fetch savings from DB ---
-    savings_24h = _calculate_fleet_savings(db_path=db_path, period="24h")
-    savings_1h = _calculate_fleet_savings(db_path=db_path, period="1h")
+    # --- Fetch DB data (historical / all-time) ---
     savings_all = _calculate_fleet_savings(db_path=db_path, period=None)
 
     version = _get_version()
 
-    # --- Handle empty DB ---
-    if savings_24h.get("error") == "db_not_found":
-        print(f"\nTOKENPAK {version}  |  Savings Report")
-        print(SEP)
-        print()
-        print("  ⚠️  Monitor database not found.")
-        print(f"     Expected: {savings_24h.get('db_path', DB_DEFAULT)}")
-        print()
-        print("  Run some requests through the proxy to start tracking.")
-        print("  Then try `tokenpak status` again.")
-        print()
-        return
+    # --- Derive metrics from live proxy when available ---
+    if proxy_up and session:
+        total_reqs = session.get("requests", 0)
+        input_tok = session.get("input_tokens", 0)
+        sent_tok = session.get("sent_input_tokens", 0)
+        output_tok = session.get("output_tokens", 0)
+        cache_read_tok = session.get("cache_read_tokens", 0)
+        cache_create_tok = session.get("cache_creation_tokens", 0)
+        saved_tok = session.get("saved_tokens", 0)
+        cost = session.get("cost", 0.0)
+        errors = session.get("errors", 0)
+        injected_tok = session.get("injected_tokens", 0)
+        injection_hits = session.get("injection_hits", 0)
+        start_time = session.get("start_time", time.time())
+        uptime_s = time.time() - start_time
+        source_label = "this session"
+    else:
+        # Fall back to DB
+        if savings_all.get("error"):
+            print(f"\nTOKENPAK {version}")
+            print(SEP)
+            if savings_all.get("error") == "db_not_found":
+                print("\n  Proxy unreachable and no monitor database found.")
+                print("  Start the proxy with `tokenpak serve`.\n")
+            else:
+                print(f"\n  {savings_all['error']}\n")
+            return
+        t = savings_all["totals"]
+        total_reqs = t["requests"]
+        input_tok = sum(m["input_tokens"] for m in savings_all["models"])
+        sent_tok = input_tok  # can't distinguish from DB without route
+        saved_tok = sum(m["compressed_tokens"] for m in savings_all["models"])
+        output_tok = sum(m["output_tokens"] for m in savings_all["models"])
+        cache_read_tok = sum(m["cache_read_tokens"] for m in savings_all["models"])
+        cache_create_tok = 0
+        cost = t["with_cost"]
+        errors = 0
+        injected_tok = 0
+        injection_hits = 0
+        uptime_s = 0
+        source_label = "all time"
 
-    if savings_24h.get("error") == "no_data":
-        print(f"\nTOKENPAK {version}  |  Savings Report")
-        print(SEP)
-        print()
-        print("  📭 No savings data yet for the last 24 hours.")
-        print()
-        print("  Run some requests through the proxy to start tracking.")
-        print("  If you just started, give it a few minutes.")
-        print()
-        if not proxy_up:
-            print("  ⚠️  Proxy unreachable — start it with `tokenpak serve`")
-            print()
-        return
+    # --- Compute attribution ---
+    # Use the best available model rates
+    # For live data, use the proxy's cost directly
+    tp_compression_usd = 0.0
+    provider_cache_usd = 0.0
+    if total_reqs > 0:
+        # TokenPak compression: tokens removed * avg input rate
+        # Approximate from live cost and token counts
+        total_billed_input = sent_tok + cache_read_tok
+        avg_input_rate = (cost / (total_billed_input / 1_000_000)) if total_billed_input > 0 else 3.0
+        # Cap at reasonable rate
+        avg_input_rate = min(avg_input_rate, 20.0)
+        tp_compression_usd = (saved_tok / 1_000_000) * avg_input_rate
 
-    if savings_24h.get("error"):
-        print(f"\nTOKENPAK {version}  |  Savings Report")
-        print(SEP)
-        print()
-        print(f"  ❌ Error querying savings: {savings_24h['error']}")
-        print()
-        return
+        # Provider cache: cache_read tokens were served at ~10% of input rate
+        # Savings = cache_read * (input_rate - cached_rate)
+        # cached_rate ~ 10% of input_rate
+        provider_cache_usd = (cache_read_tok / 1_000_000) * avg_input_rate * 0.9
 
-    # --- Render v3 layout ---
-    totals = savings_24h["totals"]
-    model_rows = savings_24h["models"]
+    # TokenPak compression %: tokens avoided out of what would have been sent
+    raw_input = sent_tok + saved_tok
+    tp_compression_pct = (saved_tok / raw_input * 100) if raw_input > 0 else 0.0
 
-    print(f"\nTOKENPAK {version}  |  Status")
+    # Provider cache %: cache_read out of total input handled
+    total_input_handled = sent_tok + cache_read_tok
+    provider_cache_pct = (cache_read_tok / total_input_handled * 100) if total_input_handled > 0 else 0.0
+
+    # =====================================================================
+    # RENDER
+    # =====================================================================
+
+    print(f"\n  TOKENPAK {version}")
     print(SEP)
 
-    # === TOKENPAK SAVINGS (only what the proxy actually did) ===
-    tp_sav = totals["compression_savings"] + totals["cache_savings"] + totals["routing_savings"]
-    cc_sav = totals.get("claude_code_cache_savings", 0)
-
+    # --- 1. VALUE CREATED ---
     print()
-    print("💰 TOKENPAK SAVINGS (Last 24h)")
-    tp_pct = (tp_sav / (totals["with_cost"] + tp_sav) * 100) if (totals["with_cost"] + tp_sav) > 0 else 0.0
-    print(f"  Saved:               {_fmt_cost(tp_sav):>10}  ({tp_pct:.1f}%)")
-    if totals["compression_savings"] > 0:
-        print(f"    Compression:       {_fmt_cost(totals['compression_savings']):>10}")
-    if totals["cache_savings"] > 0:
-        print(f"    Cache management:  {_fmt_cost(totals['cache_savings']):>10}")
-    if totals["routing_savings"] > 0:
-        print(f"    Smart routing:     {_fmt_cost(totals['routing_savings']):>10}")
+    print(f"  💰 Value Created ({source_label})")
+    print(f"     TokenPak saved        {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
+    print(f"     Tokens compressed    {_fmt_num(saved_tok):>10}   of {_fmt_num(raw_input)} input")
+    if injected_tok > 0:
+        print(f"     Vault injected       {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
 
-    # === COST OVERVIEW ===
+    # --- 2. TRAFFIC ---
     print()
-    print("📊 COST OVERVIEW")
-    print(f"  Actual cost:         {_fmt_cost(totals['with_cost']):>10}")
-    if cc_sav > 0:
-        print(f"  Prompt cache:        {_fmt_cost(cc_sav):>10}  (Anthropic server-side)")
+    print(f"  📡 Traffic")
+    print(f"     Requests             {total_reqs:>10,}")
+    print(f"     Input tokens         {_fmt_num(sent_tok):>10}   sent to provider")
+    print(f"     Output tokens        {_fmt_num(output_tok):>10}")
+    print(f"     Cost                 {_fmt_cost(cost):>10}")
 
-    # === PER-MODEL TABLE ===
+    # --- 3. CACHE & REUSE ---
     print()
-    print("🤖 MODELS")
-    for m in model_rows:
-        name = _shorten_model(m["model"])
-        reqs = m["requests"]
-        tp_saved = m["compression_savings"] + m["cache_savings"]
-        cache_hr = m["cache_hit_rate"]
-        compressed = m.get("compressed_tokens", 0)
-        comp_info = f"  {compressed:>8,} tok compressed" if compressed > 0 else ""
-        print(
-            f"  {name:<24} {reqs:>5} reqs"
-            f"    saved: {_fmt_cost(tp_saved):>8}"
-            f"    {cache_hr:3.0f}% cache"
-            f"{comp_info}"
-        )
-
-    # === PERFORMANCE SECTION ===
-    print()
-    print("⚡ PERFORMANCE")
-
-    total_reqs = totals["requests"]
-    db_rows = savings_24h.get("db_rows", 0)
-
-    # Uptime from proxy health
-    if proxy_up and health:
-        s = health.get("stats", {})
-        start_time = s.get("start_time", time.time())
-        uptime_s = time.time() - start_time
-        uptime_str = _fmt_uptime(uptime_s)
-    else:
-        uptime_str = "n/a"
-
-    # Cache hit rate from live proxy
-    if cache:
-        hits = cache.get("cache_hits", 0)
-        misses = cache.get("cache_misses", 0)
-        total_cache = hits + misses
-        hit_rate = (hits / total_cache * 100) if total_cache > 0 else 0.0
-    else:
-        # Estimate from DB data
-        total_cache_read = sum(m.get("cache_read_tokens", 0) for m in model_rows)
-        total_input = sum(m.get("input_tokens", 0) for m in model_rows)
-        total_handled = total_cache_read + total_input
-        hit_rate = (total_cache_read / total_handled * 100) if total_handled > 0 else 0.0
-
-    # Errors from proxy
-    errors = 0
-    if proxy_up and health:
-        errors = health.get("stats", {}).get("errors", 0)
-
-    # Avg latency from proxy
-    latency_str = "n/a"
-    if proxy_up and stats:
-        session = stats.get("session", {})
-        avg_lat = session.get("avg_latency_ms", 0)
-        if avg_lat > 0:
-            latency_str = f"+{avg_lat:.0f}ms"
-
-    print(f"  Requests:   {total_reqs:>6,}  |  Uptime: {uptime_str}")
-    print(f"  Cache hit:  {hit_rate:>5.0f}%  |  Avg latency: {latency_str}")
-    print(f"  Errors:     {errors:>6,}  |  DB rows: {db_rows:,}")
-
-    # Tool schema registry summary (CCI-02)
+    print(f"  🔄 Cache & Reuse")
+    print(f"     Provider cache       {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} tokens read")
+    if cache_create_tok > 0:
+        print(f"     Cache created        {_fmt_num(cache_create_tok):>10}")
+    print(f"     Cache savings        {_fmt_cost(provider_cache_usd):>10}   (Anthropic server-side)")
+    # Tool schema registry
     if proxy_up and health:
         tsr = health.get("tool_schema_registry", {})
         if tsr.get("enabled") and tsr.get("total_requests", 0) > 0:
             tsr_tools = tsr.get("frozen_tools", 0)
-            tsr_bytes = tsr.get("bytes_saved", 0)
-            tsr_kb = tsr_bytes / 1024.0
-            print(f"  Tools:      {tsr_tools:>5} normalized  |  {tsr_kb:.1f} KB saved this session")
+            print(f"     Schema reuse         {tsr_tools:>10}   tool schemas normalized")
 
-    # === SAVINGS VELOCITY ===
+    # --- 4. MODELS ---
+    if not savings_all.get("error") and savings_all.get("models"):
+        model_rows = savings_all["models"]
+        print()
+        print(f"  🤖 Models (all time)")
+        print(f"     {'Model':<26} {'Reqs':>6}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}")
+        print(f"     {'─' * 26} {'─' * 6}  {'─' * 8}  {'─' * 6}  {'─' * 10}")
+        for m in model_rows[:6]:
+            name = m["model"]
+            reqs = m["requests"]
+            inp = m["input_tokens"]
+            cr = m["cache_read_tokens"]
+            comp = m.get("compressed_tokens", 0)
+            total_h = inp + cr
+            c_pct = (cr / total_h * 100) if total_h > 0 else 0.0
+            print(
+                f"     {name:<26} {reqs:>6}  {_fmt_num(inp):>8}"
+                f"  {c_pct:>5.0f}%  {_fmt_num(comp):>10}"
+            )
+
+    # --- 5. PERFORMANCE ---
     print()
-    last_hour_saved = 0.0
-    if not savings_1h.get("error"):
-        last_hour_saved = savings_1h["totals"]["saved"]
+    print(f"  ⚡ Performance")
+    uptime_str = _fmt_uptime(uptime_s) if uptime_s > 0 else "n/a"
+    latency_str = "n/a"
+    if proxy_up and stats:
+        avg_lat = session.get("avg_latency_ms", 0)
+        if avg_lat > 0:
+            latency_str = f"{avg_lat:.0f}ms"
+    print(f"     Uptime               {uptime_str:>10}")
+    print(f"     Proxy overhead       {latency_str:>10}")
 
-    all_time_saved = 0.0
-    if not savings_all.get("error"):
-        all_time_saved = savings_all["totals"]["saved"]
-
-    print(f"  Last hour:  {_fmt_cost(last_hour_saved)} saved  |  All-time:  {_fmt_cost(all_time_saved)} saved")
-
-    # === HEALTH STATUS ===
+    # --- 6. HEALTH ---
     print()
     if not proxy_up:
-        print("⚠️  Proxy unreachable — showing historical data only")
+        print(f"  ⚠️  Proxy unreachable — showing DB data only")
     elif errors > 0:
-        print(f"⚠️  {errors} error(s) this session — run `tokenpak doctor` for details")
+        print(f"  ⚠️  {errors} error(s) — run `tokenpak doctor`")
     else:
-        print("✅ All systems healthy")
+        print(f"  ✅ Healthy")
 
     # === MEME LINE ===
     if not no_meme:
-        print()
         meme = random.choice(MEME_LINES)
-        print(f"📦 {meme}")
+        print(f"     {meme}")
 
     print()
 
@@ -627,26 +628,29 @@ def _run_minimal(
     db_path: Optional[str] = None,
     no_meme: bool = False,
 ) -> None:
-    """Print one-line savings summary."""
-    savings = _calculate_fleet_savings(db_path=db_path, period="24h")
+    """Print one-line savings summary. Prefers live proxy data."""
+    stats = _fetch(f"{proxy_base}/stats")
+    session = stats.get("session", {}) if stats else {}
 
-    if savings.get("error"):
-        print("📦 TokenPak: no data yet")
-        return
+    if session:
+        reqs = session.get("requests", 0)
+        saved_tok = session.get("saved_tokens", 0)
+        sent = session.get("sent_input_tokens", 0)
+        raw = sent + saved_tok
+        pct = (saved_tok / raw * 100) if raw > 0 else 0.0
+        cache_r = session.get("cache_read_tokens", 0)
+        total_h = sent + cache_r
+        cache_pct = (cache_r / total_h * 100) if total_h > 0 else 0.0
+        line = f"📦 TokenPak: {_fmt_num(saved_tok)} tokens saved ({pct:.0f}%) | {reqs:,} reqs | {cache_pct:.0f}% provider cache"
+    else:
+        # Fall back to DB
+        savings = _calculate_fleet_savings(db_path=db_path, period="24h")
+        if savings.get("error"):
+            print("📦 TokenPak: proxy unreachable, no recent data")
+            return
+        t = savings["totals"]
+        line = f"📦 TokenPak: {_fmt_cost(t['saved'])} saved | {t['requests']:,} reqs"
 
-    t = savings["totals"]
-    saved = _fmt_cost(t["saved"])
-    pct = t["savings_pct"]
-    reqs = t["requests"]
-
-    # Cache hit rate from DB
-    model_rows = savings.get("models", [])
-    total_cache_read = sum(m.get("cache_read_tokens", 0) for m in model_rows)
-    total_input = sum(m.get("input_tokens", 0) for m in model_rows)
-    total_handled = total_cache_read + total_input
-    cache_pct = (total_cache_read / total_handled * 100) if total_handled > 0 else 0.0
-
-    line = f"📦 TokenPak: {saved} saved ({pct:.0f}%) | {reqs:,} reqs | {cache_pct:.0f}% cache"
     if not no_meme:
         meme = random.choice(MEME_LINES)
         line += f" — {meme}"
