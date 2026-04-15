@@ -630,7 +630,7 @@ def run(
     # === MEME LINE ===
     if not no_meme:
         meme = random.choice(MEME_LINES)
-        print(f"     {meme}")
+        print(f"  📦 {meme}")
 
     print()
 
