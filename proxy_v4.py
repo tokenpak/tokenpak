@@ -307,8 +307,119 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         import json
-        body = json.dumps({"status": "ok", "proxy": "tokenpak-shim"}).encode()
-        self.send_response(200)
+        import datetime
+
+        if self.path == "/health":
+            self._handle_health()
+        elif self.path == "/ready":
+            self._handle_ready()
+        else:
+            body = json.dumps({"status": "ok", "proxy": "tokenpak-shim"}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    def _handle_health(self) -> None:
+        import json
+        import datetime
+
+        # Determine circuit breaker state
+        with _provider_circuit_lock:
+            open_circuits = [k for k, v in _provider_circuits.items() if v["open"]]
+        total_circuits = len(_provider_circuits)
+        all_open = len(open_circuits) == total_circuits
+
+        # Determine error rate
+        requests = SESSION.get("requests", 0)
+        errors = SESSION.get("errors", 0)
+        high_error_rate = requests > 0 and (errors / requests) > 0.10
+
+        # Compute status
+        if all_open:
+            status = "critical"
+            http_code = 503
+        elif open_circuits or high_error_rate:
+            status = "degraded"
+            http_code = 200
+        else:
+            status = "healthy"
+            http_code = 200
+
+        # Compute uptime
+        uptime = int(time.time() - SESSION.get("start_time", time.time()))
+
+        # Version
+        try:
+            from tokenpak import __version__ as _ver
+        except Exception:
+            _ver = "unknown"
+
+        # Timestamp
+        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # Components
+        components = {
+            "cache": {
+                "hits": SESSION.get("cache_hits", 0),
+                "misses": SESSION.get("cache_misses", 0),
+            },
+            "provider_connections": {
+                k: ("open" if v["open"] else "closed")
+                for k, v in _provider_circuits.items()
+            },
+            "config": {
+                "budget_controller": BUDGET_CONTROLLER_ENABLED,
+                "compaction": ENABLE_COMPACTION,
+            },
+        }
+
+        # Suggestions
+        suggestions: list = []
+        if all_open:
+            suggestions.append(
+                "All providers unreachable — check provider API keys and network connectivity"
+            )
+        elif open_circuits:
+            suggestions.append(
+                f"Provider(s) {', '.join(open_circuits)} have open circuit breakers — check provider status"
+            )
+        if high_error_rate:
+            pct = int(errors / requests * 100)
+            suggestions.append(
+                f"High error rate detected ({pct}%) — review logs for upstream errors"
+            )
+
+        body = json.dumps({
+            "status": status,
+            "uptime": uptime,
+            "version": _ver,
+            "timestamp": timestamp,
+            "components": components,
+            "suggestions": suggestions,
+        }).encode()
+
+        self.send_response(http_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _handle_ready(self) -> None:
+        import json
+
+        if _shutdown_event.is_set():
+            body = json.dumps({"ready": False, "status": "shutting_down"}).encode()
+            http_code = 503
+        elif not _proxy_ready:
+            body = json.dumps({"ready": False, "status": "starting_up"}).encode()
+            http_code = 503
+        else:
+            body = json.dumps({"ready": True}).encode()
+            http_code = 200
+
+        self.send_response(http_code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
