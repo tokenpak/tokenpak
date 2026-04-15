@@ -276,213 +276,60 @@ def _get_models(provider: str) -> list[tuple[str, str]]:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Built-in 5-turn test scenarios
+# Built-in 10-turn test scenarios — lightweight prompts for fast turns
+# that build up cached context to demonstrate multi-turn savings.
 # ═══════════════════════════════════════════════════════════════════════
 
 _SCENARIOS: dict[str, dict] = {
     "coding": {
-        "name": "Coding — Build a Utility Library",
-        "label": "Coding  (write a Python utility library — 5 turns)",
-        "system": "You are a senior Python engineer. Write clean, typed, tested code.",
+        "name": "Coding — Config Parser",
+        "label": "Coding  (build a config parser — 10 quick turns)",
+        "system": "You are a Python engineer. Keep responses under 150 words. Code only when asked.",
         "turns": [
-            ("Design", (
-                "Design a Python `RateLimiter` class using the token bucket algorithm.\n"
-                "Requirements:\n"
-                "- Per-key rate limiting (e.g., per user ID)\n"
-                "- Configurable rate (tokens/sec) and burst size\n"
-                "- Thread-safe operation\n"
-                "- Clean public API with type hints\n\n"
-                "Show the class interface, explain your design choices, and describe "
-                "the algorithm. Include usage examples."
-            )),
-            ("Implement", (
-                "Now write the full implementation of the RateLimiter class you designed.\n"
-                "Include:\n"
-                "- Complete `__init__`, `acquire`, `try_acquire`, and `reset` methods\n"
-                "- Thread safety with `threading.Lock`\n"
-                "- Proper token refill calculation based on elapsed time\n"
-                "- Docstrings for all public methods"
-            )),
-            ("Error handling", (
-                "Add robust error handling and edge cases to the RateLimiter:\n"
-                "- Custom `RateLimitExceeded` exception with retry-after info\n"
-                "- `wait_for_token()` async method that blocks until a token is available\n"
-                "- Graceful handling of clock skew / time going backwards\n"
-                "- Input validation on rate, burst, and key parameters\n"
-                "- A decorator `@rate_limit(rate, burst)` for easy function wrapping"
-            )),
-            ("Testing", (
-                "Write comprehensive pytest tests for the RateLimiter:\n"
-                "- Test basic acquire/deny cycle\n"
-                "- Test burst handling (burst allows N immediate tokens)\n"
-                "- Test per-key isolation (different keys don't interfere)\n"
-                "- Test token refill over time (mock time.monotonic)\n"
-                "- Test thread safety with concurrent access\n"
-                "- Test the decorator\n"
-                "- Test edge cases: zero rate, very large burst, negative values\n"
-                "- At least 15 test functions"
-            )),
-            ("Optimize", (
-                "Review the RateLimiter implementation for performance:\n"
-                "- Profile the hot path (acquire/try_acquire) and identify bottlenecks\n"
-                "- Reduce lock contention for the per-key case\n"
-                "- Add a cleanup mechanism for expired keys (memory leak prevention)\n"
-                "- Add metrics: total_acquired, total_denied, avg_wait_time\n"
-                "- Write a benchmark comparing throughput with 1, 10, 100 concurrent keys"
-            )),
+            ("Design",         "What are the 3 best approaches to parse TOML config files in Python? Just list them with one sentence each."),
+            ("Pick",           "Let's go with approach 1. What would the class interface look like? Show just the class signature and method names, no implementation."),
+            ("Init",           "Write the __init__ method. Accept a file path, load and parse the TOML. Handle FileNotFoundError."),
+            ("Get",            "Write a get(key, default=None) method that supports dotted keys like 'database.host'. Keep it short."),
+            ("Set",            "Write a set(key, value) method that also supports dotted keys. Create nested dicts as needed."),
+            ("Save",           "Write a save() method that writes the config back to the TOML file atomically using a temp file."),
+            ("Validate",       "Add a validate(schema) method that checks required keys exist. Schema is just a list of dotted key strings. Return missing keys."),
+            ("Test get",       "Write 3 pytest test functions for the get() method: basic key, dotted key, missing key with default."),
+            ("Test set",       "Write 3 pytest test functions for set(): basic key, dotted key creating nested dict, overwrite existing."),
+            ("Summary",        "Summarize the full class in a docstring: what it does, all public methods, and a 3-line usage example."),
         ],
     },
     "planning": {
-        "name": "Planning — System Architecture",
-        "label": "Planning  (design a system architecture — 5 turns)",
-        "system": "You are a senior systems architect. Be thorough and precise.",
+        "name": "Planning — API Design",
+        "label": "Planning  (design a REST API — 10 quick turns)",
+        "system": "You are a backend architect. Keep responses under 150 words. Be precise.",
         "turns": [
-            ("Requirements", (
-                "Analyze the requirements for a real-time notification system that:\n"
-                "- Delivers notifications to 1M+ daily active users\n"
-                "- Supports push (mobile), email, in-app, and SMS channels\n"
-                "- Allows user-configurable preferences per channel\n"
-                "- Handles rate limiting per user and per channel\n"
-                "- Supports templated messages with i18n\n"
-                "- Provides delivery tracking and retry logic\n\n"
-                "Identify functional requirements, non-functional requirements, "
-                "and key constraints."
-            )),
-            ("Architecture", (
-                "Design the high-level system architecture:\n"
-                "- Component diagram showing all services and their interactions\n"
-                "- Message flow from trigger to delivery for each channel\n"
-                "- Queue topology (what gets queued where, fan-out strategy)\n"
-                "- Storage design (what DB for preferences, templates, delivery log)\n"
-                "- Explain your technology choices and trade-offs"
-            )),
-            ("Data models", (
-                "Define the data models in detail:\n"
-                "- User preferences schema (channels, quiet hours, frequency caps)\n"
-                "- Notification template schema (with i18n support)\n"
-                "- Delivery event schema (tracking status, retries, timestamps)\n"
-                "- Rate limit state schema\n"
-                "- Show the schemas as Python dataclasses or SQL CREATE TABLE statements"
-            )),
-            ("API design", (
-                "Design the API surface:\n"
-                "- REST endpoints for notification management (send, batch, status)\n"
-                "- REST endpoints for user preferences (get, update)\n"
-                "- Webhook endpoint for delivery status callbacks\n"
-                "- Internal gRPC service definitions for inter-service communication\n"
-                "- Show request/response examples for each endpoint"
-            )),
-            ("Deployment", (
-                "Design the deployment and operations strategy:\n"
-                "- Kubernetes deployment architecture (replicas, HPA, resource limits)\n"
-                "- Observability: metrics to track, alerts to set, dashboards to build\n"
-                "- Failure modes and mitigation (what happens when each component fails)\n"
-                "- Capacity planning: calculate resources for 1M DAU target\n"
-                "- Rollout strategy for the initial launch"
-            )),
+            ("Scope",          "We're building a bookmark manager API. What are the 5 core resources we need? Just list them."),
+            ("Bookmark CRUD",  "Define the REST endpoints for the Bookmark resource. Just show method, path, and one-line description."),
+            ("Collection",     "Define endpoints for organizing bookmarks into Collections (folders). Same format: method, path, description."),
+            ("Tags",           "Define endpoints for a tagging system. Bookmarks can have multiple tags. Method, path, description."),
+            ("Search",         "Design the search endpoint. What query parameters should it accept? List them with types."),
+            ("Auth",           "How should we handle authentication? Describe the approach in 3 sentences. No code."),
+            ("Errors",         "Define our error response format. Show one JSON example for a 404 and one for a 422 validation error."),
+            ("Pagination",     "How should list endpoints handle pagination? Show the query params and response envelope format."),
+            ("Rate limits",    "What rate limits should we set? Give specific numbers per endpoint category (read, write, search)."),
+            ("Summary",        "Write a one-paragraph API overview suitable for the top of the docs. Cover scope, auth, and key design choices."),
         ],
     },
     "codebase": {
-        "name": "Large Codebase — Deep File Analysis",
-        "label": "Codebase  (analyze and refactor large code — 5 turns)",
-        "system": "You are a senior engineer doing a code review and refactor.",
+        "name": "Codebase — Code Review",
+        "label": "Codebase  (review and fix code — 10 quick turns)",
+        "system": "You are a code reviewer. Keep responses under 150 words unless showing code.",
         "turns": [
-            ("Analyze", (
-                "You're reviewing a legacy Python web application. Here's the main "
-                "request handler module (simulated). Analyze this code:\n\n"
-                "```python\n"
-                "import json, os, re, hashlib, hmac, time, logging, sqlite3\n"
-                "from http.server import BaseHTTPRequestHandler\n"
-                "from urllib.parse import urlparse, parse_qs\n"
-                "from datetime import datetime, timedelta\n\n"
-                "logger = logging.getLogger(__name__)\n"
-                "DB_PATH = os.environ.get('DB_PATH', '/tmp/app.db')\n"
-                "SECRET = os.environ.get('APP_SECRET', 'changeme')\n"
-                "RATE_LIMIT = int(os.environ.get('RATE_LIMIT', '100'))\n"
-                "rate_limits = {}  # global mutable state\n"
-                "sessions = {}    # global mutable state\n\n"
-                "class RequestHandler(BaseHTTPRequestHandler):\n"
-                "    def do_GET(self):\n"
-                "        path = urlparse(self.path).path\n"
-                "        params = parse_qs(urlparse(self.path).query)\n"
-                "        if path == '/api/users':\n"
-                "            conn = sqlite3.connect(DB_PATH)\n"
-                "            users = conn.execute('SELECT * FROM users WHERE active=1 '\n"
-                "                + ('AND role=' + params['role'][0] if 'role' in params else '')\n"
-                "            ).fetchall()\n"
-                "            conn.close()\n"
-                "            self.send_response(200)\n"
-                "            self.send_header('Content-Type', 'application/json')\n"
-                "            self.end_headers()\n"
-                "            self.wfile.write(json.dumps(users).encode())\n"
-                "        elif path == '/api/sessions':\n"
-                "            token = self.headers.get('Authorization', '').replace('Bearer ', '')\n"
-                "            if token in sessions:\n"
-                "                self.send_response(200)\n"
-                "                self.wfile.write(json.dumps(sessions[token]).encode())\n"
-                "            else:\n"
-                "                self.send_response(401)\n"
-                "                self.wfile.write(b'unauthorized')\n"
-                "    def do_POST(self):\n"
-                "        length = int(self.headers.get('Content-Length', 0))\n"
-                "        body = json.loads(self.rfile.read(length))\n"
-                "        path = urlparse(self.path).path\n"
-                "        if path == '/api/login':\n"
-                "            conn = sqlite3.connect(DB_PATH)\n"
-                "            user = conn.execute(\n"
-                "                f\"SELECT * FROM users WHERE email='{body['email']}' \"\n"
-                "                f\"AND password='{hashlib.md5(body['password'].encode()).hexdigest()}'\"\n"
-                "            ).fetchone()\n"
-                "            conn.close()\n"
-                "            if user:\n"
-                "                token = hashlib.sha256(os.urandom(32)).hexdigest()\n"
-                "                sessions[token] = {'user_id': user[0], 'created': time.time()}\n"
-                "                self.send_response(200)\n"
-                "                self.wfile.write(json.dumps({'token': token}).encode())\n"
-                "            else:\n"
-                "                self.send_response(401)\n"
-                "```\n\n"
-                "Identify all security vulnerabilities, code smells, and architectural "
-                "problems. Categorize by severity (critical, high, medium, low)."
-            )),
-            ("Security fixes", (
-                "Fix all the critical and high severity security issues you identified:\n"
-                "- SQL injection in the users query and login query\n"
-                "- MD5 password hashing (replace with bcrypt/argon2)\n"
-                "- Hardcoded default secret\n"
-                "- Missing rate limiting on login\n"
-                "- Missing CSRF/CORS protections\n"
-                "- Session fixation vulnerabilities\n\n"
-                "Show the refactored code with all security fixes applied. "
-                "Explain each fix."
-            )),
-            ("Architecture refactor", (
-                "Refactor the handler from a monolithic class into a clean architecture:\n"
-                "- Separate routing from business logic\n"
-                "- Extract a proper database layer (connection pooling, parameterized queries)\n"
-                "- Extract an authentication middleware\n"
-                "- Extract a rate limiting middleware\n"
-                "- Add proper error handling with consistent error responses\n"
-                "- Add request validation\n\n"
-                "Show the refactored module structure and all new files."
-            )),
-            ("Add tests", (
-                "Write tests for the refactored code:\n"
-                "- Unit tests for the auth module (login, token validation, session expiry)\n"
-                "- Unit tests for the rate limiter\n"
-                "- Integration tests for the API endpoints\n"
-                "- Security regression tests (verify SQL injection is fixed, etc.)\n"
-                "- Use pytest fixtures, parametrize where appropriate\n"
-                "- At least 15 test functions"
-            )),
-            ("Documentation", (
-                "Write developer documentation for the refactored system:\n"
-                "- Architecture overview (module structure, data flow)\n"
-                "- API reference (all endpoints with request/response examples)\n"
-                "- Security model (how auth works, session management, rate limiting)\n"
-                "- Deployment guide (env vars, database setup, production checklist)\n"
-                "- Migration guide (how to upgrade from the old handler)"
-            )),
+            ("Review",         "Review this function:\n```python\ndef process(data):\n    result = []\n    for item in data:\n        if item['status'] == 'active':\n            result.append({'name': item['name'], 'score': item['score'] * 1.1})\n    return sorted(result, key=lambda x: x['score'], reverse=True)\n```\nList 3 issues."),
+            ("Fix types",      "Add type hints to the function. Show the rewritten signature and return type."),
+            ("Fix perf",       "Rewrite it as a list comprehension. Is it actually faster? One sentence on why or why not."),
+            ("Edge cases",     "What happens if data is empty? If an item is missing the 'score' key? Add defensive handling."),
+            ("Naming",         "Suggest better names for the function and its parameter. Explain your reasoning in one sentence each."),
+            ("Docstring",      "Write a docstring for the improved function. Include Args, Returns, and Raises sections."),
+            ("Test happy",     "Write 2 pytest tests: one with normal input, one verifying the sort order."),
+            ("Test edge",      "Write 2 pytest tests: empty list input, and an item missing the 'score' key."),
+            ("Extract",        "Should we extract the scoring logic (score * 1.1) into its own function? Answer in 2 sentences."),
+            ("Final",          "Show the final version of the function with all improvements applied. No explanation, just code."),
         ],
     },
 }
