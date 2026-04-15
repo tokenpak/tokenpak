@@ -556,41 +556,52 @@ def _execute_turn_cli(
     cfg: ArmConfig, system: str, messages: list[dict],
     max_tokens: int, log_file: Optional[IO], client: httpx.Client,
 ) -> TurnResult:
-    """Execute via CLI subprocess (claude -p, codex exec, etc.).
+    """Execute via CLI subprocess with real multi-turn sessions.
 
-    Uses the CLI tool's native auth and billing (not raw API keys).
-    This means Claude Code uses OAuth billing with higher rate limits,
-    and Codex uses ChatGPT plan billing.
+    Uses claude/codex in print mode with --session-id and --resume to
+    maintain a real conversation across turns. This gives:
+      - Subscription billing (not API rate limits)
+      - Real conversation context (not prompt concatenation)
+      - Provider-side auto-caching between turns
+      - Actual token counts from the JSON output format
 
-    Multi-turn is simulated by concatenating prior conversation into
-    the prompt, since -p mode is single-shot.
+    The session_id is stored on cfg._session_id (set by run_arm on first turn).
     """
     result = TurnResult()
     t0 = time.monotonic()
 
-    # Build a single prompt from conversation history
-    prompt_parts = []
-    if system:
-        prompt_parts.append(f"[System: {system}]")
-    for m in messages:
-        role = m["role"].capitalize()
-        prompt_parts.append(f"[{role}]\n{m['content']}")
-    full_prompt = "\n\n".join(prompt_parts)
+    # Only send the latest user message (conversation state is maintained
+    # by the CLI tool via --resume)
+    latest_msg = messages[-1]["content"] if messages else ""
 
     cmd = cfg.cli_command
     if not cmd:
         result.error = f"No cli_command configured for provider {cfg.provider}"
         return result
 
-    # Parse command + add model flag + prompt
     cmd_parts = cmd.split()
-    # Insert model flag for claude/codex
-    if cfg.model:
-        if "claude" in cmd:
-            cmd_parts.extend(["--model", cfg.model])
-        elif "codex" in cmd:
-            cmd_parts.extend(["--model", cfg.model])
-    cmd_parts.append(full_prompt)
+
+    # Add model flag
+    if cfg.model and "claude" in cmd:
+        cmd_parts.extend(["--model", cfg.model])
+    elif cfg.model and "codex" in cmd:
+        cmd_parts.extend(["--model", cfg.model])
+
+    # Multi-turn: use --session-id for turn 1, --resume for turns 2+
+    session_id = getattr(cfg, "_session_id", "")
+    if session_id and len(messages) > 1:
+        # Continue existing conversation
+        cmd_parts.extend(["--resume", session_id])
+    elif session_id:
+        # First turn with pre-assigned session ID
+        cmd_parts.extend(["--session-id", session_id])
+
+    # Use JSON output to get structured results with token counts
+    if "claude" in cmd:
+        cmd_parts.extend(["--output-format", "json"])
+
+    # Add the prompt
+    cmd_parts.extend(["-p", latest_msg])
 
     try:
         proc = subprocess.run(
@@ -599,20 +610,49 @@ def _execute_turn_cli(
             text=True,
             timeout=300,
         )
-        result.response_text = proc.stdout.strip()
-        if proc.returncode != 0 and not result.response_text:
-            result.error = proc.stderr.strip()[:200] or f"Exit code {proc.returncode}"
+
+        if proc.returncode != 0 and not proc.stdout.strip():
+            result.error = proc.stderr.strip()[:300] or f"Exit code {proc.returncode}"
+            result.latency_s = time.monotonic() - t0
+            return result
+
+        # Parse JSON output for real metrics
+        output = proc.stdout.strip()
+        if "claude" in cmd and output.startswith("{"):
+            try:
+                data = json.loads(output)
+                result.response_text = data.get("result", output)
+                # Extract session ID for subsequent turns
+                sid = data.get("session_id", "")
+                if sid:
+                    cfg._session_id = sid
+                # Extract real token usage
+                usage = data.get("usage", {}) or {}
+                result.input_tokens = usage.get("input_tokens", 0)
+                result.output_tokens = usage.get("output_tokens", 0)
+                result.cache_read_tokens = usage.get("cache_read_input_tokens", 0)
+                result.cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                # Cost from API response
+                cost_usd = data.get("cost_usd", 0)
+                if cost_usd:
+                    result.cost_usd = cost_usd
+            except json.JSONDecodeError:
+                result.response_text = output
+        else:
+            result.response_text = output
+
+        # Fallback: estimate tokens from text if not in JSON
+        if not result.input_tokens:
+            result.input_tokens = len(latest_msg) // 4
+        if not result.output_tokens:
+            result.output_tokens = len(result.response_text) // 4
 
         if log_file:
             log_file.write(result.response_text)
             log_file.flush()
 
-        # CLI platforms don't report token counts — estimate from text
-        result.input_tokens = len(full_prompt) // 4
-        result.output_tokens = len(result.response_text) // 4
-
     except subprocess.TimeoutExpired:
-        result.error = "CLI command timed out"
+        result.error = "CLI command timed out (300s)"
     except FileNotFoundError:
         result.error = f"Command not found: {cmd_parts[0]}"
     except Exception as e:
@@ -657,6 +697,11 @@ def run_arm(
     """
     cfg = cfg.resolve()
 
+    # For CLI platforms, assign a unique session ID for multi-turn state
+    if cfg.platform == "cli" and not getattr(cfg, "_session_id", ""):
+        import uuid
+        cfg._session_id = str(uuid.uuid4())
+
     result = ArmResult(
         arm_name=cfg.name,
         platform=cfg.platform,
@@ -698,11 +743,12 @@ def run_arm(
             turn_result = executor(cfg, system, messages, max_tokens, log_file, client)
             turn_result.turn_number = turn.number
             turn_result.label = turn.label
-            turn_result.cost_usd = estimate_cost(
-                cfg.provider, cfg.model,
-                turn_result.input_tokens, turn_result.output_tokens,
-                turn_result.cache_read_tokens,
-            )
+            if not turn_result.cost_usd:
+                turn_result.cost_usd = estimate_cost(
+                    cfg.provider, cfg.model,
+                    turn_result.input_tokens, turn_result.output_tokens,
+                    turn_result.cache_read_tokens,
+                )
 
             if turn_result.response_text:
                 messages.append({"role": "assistant", "content": turn_result.response_text})
