@@ -10,7 +10,6 @@ Tests:
 
 
 import pytest
-pytest.importorskip("tokenpak.runtime.proxy", reason="module not available in current build")
 import logging
 import os
 import sys
@@ -23,7 +22,13 @@ _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from tokenpak.runtime.proxy import check_swap_pressure, get_swap_mb  # noqa: E402
+try:
+    from tokenpak.runtime.proxy import check_swap_pressure, get_swap_mb  # noqa: E402
+except ImportError:
+    pytest.skip(
+        "check_swap_pressure/get_swap_mb not available in current build",
+        allow_module_level=True,
+    )
 
 # ---------------------------------------------------------------------------
 # Helpers
