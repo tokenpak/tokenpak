@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """Live display management for prove runs.
 
-Launches two terminal panes (via tmux, or new terminal windows, or
-background tail processes) so the user can watch both arms stream live.
+Strategy:
+  - If already inside tmux ($TMUX set): split current window into panes
+  - If GUI desktop ($DISPLAY set): try terminal emulator windows
+  - Otherwise: skip live display — inline progress is sufficient
 
-Falls back gracefully: tmux > new terminal windows > inline progress only.
+Never creates detached sessions or asks the user to type commands.
 """
 
 from __future__ import annotations
@@ -18,88 +20,73 @@ from typing import Optional
 
 
 def _ensure_tmux() -> None:
-    """Install tmux if not present. tmux is a tokenpak dependency for live
-    test display (split-pane log tailing)."""
+    """Install tmux if not present."""
     if shutil.which("tmux"):
         return
 
-    print("  Installing tmux (required for live test display)...", file=sys.stderr)
-
-    # Try package managers in order of likelihood
+    print("  Installing tmux...", file=sys.stderr, end=" ", flush=True)
     for cmd in [
-        ["sudo", "apt-get", "install", "-y", "tmux"],
-        ["sudo", "dnf", "install", "-y", "tmux"],
-        ["sudo", "yum", "install", "-y", "tmux"],
-        ["sudo", "pacman", "-S", "--noconfirm", "tmux"],
-        ["brew", "install", "tmux"],
+        ["sudo", "apt-get", "install", "-y", "-qq", "tmux"],
+        ["sudo", "dnf", "install", "-y", "-q", "tmux"],
+        ["sudo", "pacman", "-S", "--noconfirm", "--quiet", "tmux"],
+        ["brew", "install", "-q", "tmux"],
     ]:
-        if not shutil.which(cmd[0] if cmd[0] != "sudo" else cmd[1]):
+        pkg_mgr = cmd[1] if cmd[0] == "sudo" else cmd[0]
+        if not shutil.which(pkg_mgr):
             continue
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0 and shutil.which("tmux"):
-                print("  tmux installed.", file=sys.stderr)
+                print("done.", file=sys.stderr)
                 return
         except (subprocess.TimeoutExpired, FileNotFoundError):
             continue
 
-    print("  Could not install tmux automatically.", file=sys.stderr)
+    print("failed.", file=sys.stderr)
 
 
 class LiveDisplay:
     """Manage live display of two arm log files.
 
-    Usage::
-
-        display = LiveDisplay(arm_a_log, arm_b_log)
-        display.start()    # open panes/windows
-        # ... run arms, they write to log files ...
-        display.stop()     # clean up
-
-    The display is best-effort — if no terminal multiplexer is available,
-    the user gets instructions to tail the logs manually.
+    Automatically picks the best available method with zero user interaction.
     """
 
     def __init__(self, arm_a_log: Path, arm_b_log: Path) -> None:
         self.arm_a_log = arm_a_log
         self.arm_b_log = arm_b_log
         self._method: Optional[str] = None
-        self._tmux_session: Optional[str] = None
+        self._tmux_pane_id: Optional[str] = None
         self._subprocesses: list[subprocess.Popen] = []
 
-    def start(self) -> str:
-        """Start the live display. Returns a description of what was launched."""
-        # Ensure log files exist (tail -f needs them)
+    def start(self) -> Optional[str]:
+        """Start the live display. Returns a description, or None if skipped."""
         self.arm_a_log.parent.mkdir(parents=True, exist_ok=True)
         self.arm_b_log.parent.mkdir(parents=True, exist_ok=True)
         self.arm_a_log.touch()
         self.arm_b_log.touch()
 
-        # Install tmux if missing (tokenpak dependency)
         if not shutil.which("tmux"):
             _ensure_tmux()
 
-        # Try tmux first
-        if self._try_tmux():
-            return f"tmux attach -t {self._tmux_session}"
+        # Best: already inside tmux — split the current window
+        if os.environ.get("TMUX") and shutil.which("tmux"):
+            if self._try_tmux_split():
+                return "Split pane opened (right side)"
 
-        # Try launching terminal windows (Linux desktop)
-        if self._try_terminal_windows():
-            return "Two terminal windows opened"
+        # Good: GUI desktop — open terminal windows
+        if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+            if self._try_terminal_windows():
+                return "Terminal window opened"
 
-        # Fallback: log files only — user can tail them in another terminal
-        self._method = "logs"
-        return (
-            f"Review logs after test completes (or tail -f in another terminal):\n"
-            f"    {self.arm_a_log}\n"
-            f"    {self.arm_b_log}"
-        )
+        # Otherwise: skip live display, inline progress is enough
+        self._method = None
+        return None
 
     def stop(self) -> None:
-        """Clean up the live display."""
-        if self._method == "tmux" and self._tmux_session:
+        """Clean up — close panes we opened, terminate subprocesses."""
+        if self._method == "tmux-split" and self._tmux_pane_id:
             subprocess.run(
-                ["tmux", "kill-session", "-t", self._tmux_session],
+                ["tmux", "kill-pane", "-t", self._tmux_pane_id],
                 capture_output=True,
             )
         for p in self._subprocesses:
@@ -108,48 +95,35 @@ class LiveDisplay:
             except Exception:
                 pass
 
-    def _try_tmux(self) -> bool:
-        """Launch a detached tmux session with split panes."""
-        if not shutil.which("tmux"):
-            return False
-
-        session = "tokenpak-prove"
-        self._tmux_session = session
-
-        # Kill any existing session with this name
-        subprocess.run(
-            ["tmux", "kill-session", "-t", session],
-            capture_output=True,
-        )
-
+    def _try_tmux_split(self) -> bool:
+        """Split the current tmux window — shows logs in a right pane."""
         try:
-            # Create session with Arm A log in first pane
-            subprocess.run(
-                ["tmux", "new-session", "-d", "-s", session,
-                 "-x", "200", "-y", "50",
-                 f"echo '  ARM A: Direct API'; echo ''; tail -f {self.arm_a_log}"],
-                check=True,
-                capture_output=True,
+            # Create a vertical split showing both logs stacked
+            result = subprocess.run(
+                ["tmux", "split-window", "-h", "-l", "50%",
+                 f"echo '  Arm A (baseline)'; echo '─────────────────'; "
+                 f"tail -f {self.arm_a_log} & "
+                 f"echo ''; echo '  Arm B (w/ TokenPak)'; echo '─────────────────'; "
+                 f"tail -f {self.arm_b_log}; wait"],
+                capture_output=True, text=True, check=True,
             )
-            # Split horizontally and add Arm B log
-            subprocess.run(
-                ["tmux", "split-window", "-h", "-t", session,
-                 f"echo '  ARM B: With TokenPak'; echo ''; tail -f {self.arm_b_log}"],
-                check=True,
-                capture_output=True,
+            # Focus back to the original pane (left side)
+            subprocess.run(["tmux", "select-pane", "-L"], capture_output=True)
+
+            # Get the pane ID so we can clean it up later
+            pane_result = subprocess.run(
+                ["tmux", "display-message", "-p", "-t", ":.+", "#{pane_id}"],
+                capture_output=True, text=True,
             )
-            self._method = "tmux"
+            self._tmux_pane_id = pane_result.stdout.strip() or None
+
+            self._method = "tmux-split"
             return True
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
     def _try_terminal_windows(self) -> bool:
-        """Launch two terminal emulator windows.
-
-        Requires a display server ($DISPLAY or $WAYLAND_DISPLAY).
-        Skipped entirely in headless/SSH sessions.
-        """
-        # Guard: no display server → GUI terminals will fail
+        """Launch a terminal emulator window showing both logs."""
         if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             return False
 
@@ -157,48 +131,28 @@ class LiveDisplay:
             if not shutil.which(term_cmd):
                 continue
             try:
+                tail_script = (
+                    f"echo '  Arm A (baseline)'; echo '─────────────────'; "
+                    f"tail -f {self.arm_a_log} & "
+                    f"echo ''; echo '  Arm B (w/ TokenPak)'; echo '─────────────────'; "
+                    f"tail -f {self.arm_b_log}; wait"
+                )
                 if term_cmd == "gnome-terminal":
-                    args_a = [term_cmd, "--title", "ARM A: Direct", "--",
-                              "bash", "-c", f"echo 'ARM A: Direct'; tail -f {self.arm_a_log}; read"]
-                    args_b = [term_cmd, "--title", "ARM B: TokenPak", "--",
-                              "bash", "-c", f"echo 'ARM B: TokenPak'; tail -f {self.arm_b_log}; read"]
-                elif term_cmd == "xterm":
-                    args_a = [term_cmd, "-T", "ARM A: Direct", "-e",
-                              f"bash -c 'echo ARM A; tail -f {self.arm_a_log}; read'"]
-                    args_b = [term_cmd, "-T", "ARM B: TokenPak", "-e",
-                              f"bash -c 'echo ARM B; tail -f {self.arm_b_log}; read'"]
+                    args = [term_cmd, "--title", "TokenPak Test — Live View",
+                            "--", "bash", "-c", tail_script]
                 else:
-                    args_a = [term_cmd, "-e",
-                              f"bash -c 'echo ARM A: Direct; tail -f {self.arm_a_log}; read'"]
-                    args_b = [term_cmd, "-e",
-                              f"bash -c 'echo ARM B: TokenPak; tail -f {self.arm_b_log}; read'"]
+                    args = [term_cmd, "-e", f"bash -c '{tail_script}'"]
 
-                p_a = subprocess.Popen(args_a, stderr=subprocess.DEVNULL)
-                p_b = subprocess.Popen(args_b, stderr=subprocess.DEVNULL)
-
-                # Verify the processes didn't immediately exit (display error)
+                p = subprocess.Popen(args, stderr=subprocess.DEVNULL)
                 import time as _time
                 _time.sleep(0.3)
-                if p_a.poll() is not None or p_b.poll() is not None:
-                    # Failed to stay running — display issue
-                    for p in (p_a, p_b):
-                        try:
-                            p.terminate()
-                        except Exception:
-                            pass
+                if p.poll() is not None:
                     continue
 
-                self._subprocesses.extend([p_a, p_b])
+                self._subprocesses.append(p)
                 self._method = "terminal"
                 return True
-
             except (FileNotFoundError, OSError):
-                for p in self._subprocesses:
-                    try:
-                        p.terminate()
-                    except Exception:
-                        pass
-                self._subprocesses.clear()
                 continue
 
         return False
