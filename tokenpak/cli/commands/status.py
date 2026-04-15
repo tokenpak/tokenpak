@@ -506,31 +506,43 @@ def run(
         source_label = "all time"
 
     # --- Compute attribution ---
-    # Use the best available model rates
-    # For live data, use the proxy's cost directly
     tp_compression_usd = 0.0
-    provider_cache_usd = 0.0
+    total_cache_usd = 0.0
     if total_reqs > 0:
-        # TokenPak compression: tokens removed * avg input rate
-        # Approximate from live cost and token counts
         total_billed_input = sent_tok + cache_read_tok
         avg_input_rate = (cost / (total_billed_input / 1_000_000)) if total_billed_input > 0 else 3.0
-        # Cap at reasonable rate
         avg_input_rate = min(avg_input_rate, 20.0)
         tp_compression_usd = (saved_tok / 1_000_000) * avg_input_rate
-
-        # Provider cache: cache_read tokens were served at ~10% of input rate
-        # Savings = cache_read * (input_rate - cached_rate)
-        # cached_rate ~ 10% of input_rate
-        provider_cache_usd = (cache_read_tok / 1_000_000) * avg_input_rate * 0.9
+        total_cache_usd = (cache_read_tok / 1_000_000) * avg_input_rate * 0.9
 
     # TokenPak compression %: tokens avoided out of what would have been sent
     raw_input = sent_tok + saved_tok
     tp_compression_pct = (saved_tok / raw_input * 100) if raw_input > 0 else 0.0
 
-    # Provider cache %: cache_read out of total input handled
+    # Cache %: cache_read out of total input handled by provider
     total_input_handled = sent_tok + cache_read_tok
     provider_cache_pct = (cache_read_tok / total_input_handled * 100) if total_input_handled > 0 else 0.0
+
+    # --- TokenPak cache attribution ---
+    # tokenpak actively manages cache behavior via:
+    # - apply_stable_cache_control: places cache_control breakpoints at system
+    #   prompt, tools, conversation midpoint, second-to-last assistant
+    # - tool_schema_registry: normalizes tool JSON to byte-identical across
+    #   requests, preventing cache busts from non-deterministic ordering
+    # - classify_system_blocks: separates stable vs volatile content, placing
+    #   breakpoints before volatile blocks so stable prefix stays cached
+    # Pull tokenpak-specific cache stats from the live proxy's /cache-stats
+    tp_cache_hit_rate = 0.0
+    tp_cache_misses_prevented = 0
+    tp_cache_hits = 0
+    tp_cache_misses = 0
+    if cache:
+        tp_cache_hits = cache.get("cache_hits", 0)
+        tp_cache_misses = cache.get("cache_misses", 0)
+        tp_total = tp_cache_hits + tp_cache_misses
+        tp_cache_hit_rate = (tp_cache_hits / tp_total * 100) if tp_total > 0 else 0.0
+        # Schema changes absorbed = misses prevented by tool normalization
+        tp_cache_misses_prevented = health.get("tool_schema_registry", {}).get("schema_changes", 0) if health else 0
 
     # =====================================================================
     # RENDER
@@ -540,10 +552,14 @@ def run(
     print(SEP)
 
     # --- 1. VALUE CREATED ---
+    tp_total_usd = tp_compression_usd + total_cache_usd
     print()
     print(f"  💰 Value Created ({source_label})")
-    print(f"     TokenPak saved        {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
-    print(f"     Tokens compressed    {_fmt_num(saved_tok):>10}   of {_fmt_num(raw_input)} input")
+    print(f"     Total saved           {_fmt_cost(tp_total_usd):>10}")
+    print(f"       Compression         {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
+    print(f"       Cache management    {_fmt_cost(total_cache_usd):>10}   {tp_cache_hit_rate:.0f}% hit rate")
+    if saved_tok > 0:
+        print(f"     Tokens compressed    {_fmt_num(saved_tok):>10}   of {_fmt_num(raw_input)} input")
     if injected_tok > 0:
         print(f"     Vault injected       {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
 
@@ -558,16 +574,19 @@ def run(
     # --- 3. CACHE & REUSE ---
     print()
     print(f"  🔄 Cache & Reuse")
+    print(f"     TokenPak cache       {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} hits / {tp_cache_misses:,} misses")
     print(f"     Provider cache       {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} tokens read")
     if cache_create_tok > 0:
         print(f"     Cache created        {_fmt_num(cache_create_tok):>10}")
-    print(f"     Cache savings        {_fmt_cost(provider_cache_usd):>10}   (Anthropic server-side)")
-    # Tool schema registry
-    if proxy_up and health:
-        tsr = health.get("tool_schema_registry", {})
-        if tsr.get("enabled") and tsr.get("total_requests", 0) > 0:
-            tsr_tools = tsr.get("frozen_tools", 0)
-            print(f"     Schema reuse         {tsr_tools:>10}   tool schemas normalized")
+    if tp_cache_misses_prevented > 0:
+        print(f"     Schema changes       {tp_cache_misses_prevented:>10}   absorbed by tool normalization")
+    # Miss reasons (if available from live proxy)
+    if cache:
+        miss_reasons = cache.get("miss_reasons", {})
+        if miss_reasons:
+            top_reason = max(miss_reasons, key=miss_reasons.get)
+            top_count = miss_reasons[top_reason]
+            print(f"     Top miss reason      {top_count:>10}   {top_reason.replace('_', ' ')}")
 
     # --- 4. MODELS ---
     if not savings_all.get("error") and savings_all.get("models"):
@@ -638,10 +657,13 @@ def _run_minimal(
         sent = session.get("sent_input_tokens", 0)
         raw = sent + saved_tok
         pct = (saved_tok / raw * 100) if raw > 0 else 0.0
-        cache_r = session.get("cache_read_tokens", 0)
-        total_h = sent + cache_r
-        cache_pct = (cache_r / total_h * 100) if total_h > 0 else 0.0
-        line = f"📦 TokenPak: {_fmt_num(saved_tok)} tokens saved ({pct:.0f}%) | {reqs:,} reqs | {cache_pct:.0f}% provider cache"
+        # Pull tokenpak cache hit rate from /cache-stats
+        cache_data = _fetch(f"{proxy_base}/cache-stats")
+        tp_hits = cache_data.get("cache_hits", 0) if cache_data else 0
+        tp_misses = cache_data.get("cache_misses", 0) if cache_data else 0
+        tp_total = tp_hits + tp_misses
+        tp_cache_pct = (tp_hits / tp_total * 100) if tp_total > 0 else 0.0
+        line = f"📦 TokenPak: {_fmt_num(saved_tok)} tokens saved ({pct:.0f}%) | {reqs:,} reqs | {tp_cache_pct:.0f}% cache hit"
     else:
         # Fall back to DB
         savings = _calculate_fleet_savings(db_path=db_path, period="24h")
