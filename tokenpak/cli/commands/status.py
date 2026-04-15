@@ -571,16 +571,14 @@ def run(
     print(f"     Output tokens        {_fmt_num(output_tok):>10}")
     print(f"     Cost                 {_fmt_cost(cost):>10}")
 
-    # --- 3. CACHE & REUSE ---
+    # --- 3. CACHE ---
     print()
-    print(f"  🔄 Cache & Reuse")
-    print(f"     TokenPak cache       {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} hits / {tp_cache_misses:,} misses")
-    print(f"     Provider cache       {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} tokens read")
-    if cache_create_tok > 0:
-        print(f"     Cache created        {_fmt_num(cache_create_tok):>10}")
+    total_cache_handled = sent_tok + cache_read_tok
+    print(f"  🔄 Cache")
+    print(f"     Token cache rate     {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} of {_fmt_num(total_cache_handled)} input tokens")
+    print(f"     Request hit rate     {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} of {tp_cache_hits + tp_cache_misses:,} requests")
     if tp_cache_misses_prevented > 0:
-        print(f"     Schema changes       {tp_cache_misses_prevented:>10}   absorbed by tool normalization")
-    # Miss reasons (if available from live proxy)
+        print(f"     Schema normalized    {tp_cache_misses_prevented:>10}   tool changes absorbed")
     if cache:
         miss_reasons = cache.get("miss_reasons", {})
         if miss_reasons:
