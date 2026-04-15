@@ -97,52 +97,144 @@ def _pick(title: str, options: list[tuple[str, str]],
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Auto-detection
+# Auto-detection — checks all auth sources, not just env vars
 # ═══════════════════════════════════════════════════════════════════════
+
+# Cache so detection runs once per session, not per picker screen
+_detection_cache: dict = {}
+
+
+def _detect_proxy() -> tuple[bool, list[str]]:
+    """Check proxy status and which providers it routes.
+
+    Returns (is_running, list_of_provider_names).
+    """
+    if "proxy" in _detection_cache:
+        return _detection_cache["proxy"]
+
+    proxy_url = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
+    try:
+        resp = httpx.get(f"{proxy_url}/health", timeout=2.0)
+        if resp.status_code != 200:
+            _detection_cache["proxy"] = (False, [])
+            return False, []
+        health = resp.json()
+        # circuit_breakers keys are the active providers
+        providers = list(health.get("circuit_breakers", {}).keys())
+        _detection_cache["proxy"] = (True, providers)
+        return True, providers
+    except Exception:
+        _detection_cache["proxy"] = (False, [])
+        return False, []
+
+
+def _detect_claude_code_auth() -> bool:
+    """Check if Claude Code is authenticated."""
+    if "claude_auth" in _detection_cache:
+        return _detection_cache["claude_auth"]
+
+    creds = Path.home() / ".claude" / ".credentials.json"
+    if creds.exists():
+        try:
+            import json as _json
+            data = _json.loads(creds.read_text())
+            # Has OAuth or API key config
+            ok = bool(data.get("claudeAiOauth") or data.get("apiKey"))
+            _detection_cache["claude_auth"] = ok
+            return ok
+        except Exception:
+            pass
+    _detection_cache["claude_auth"] = False
+    return False
+
+
+def _detect_codex_auth() -> bool:
+    """Check if Codex is authenticated."""
+    if "codex_auth" in _detection_cache:
+        return _detection_cache["codex_auth"]
+
+    auth_file = Path.home() / ".codex" / "auth.json"
+    if auth_file.exists():
+        try:
+            import json as _json
+            data = _json.loads(auth_file.read_text())
+            # Has API key or OAuth tokens
+            ok = bool(data.get("OPENAI_API_KEY") or data.get("tokens"))
+            _detection_cache["codex_auth"] = ok
+            return ok
+        except Exception:
+            pass
+    _detection_cache["codex_auth"] = False
+    return False
 
 
 def _detect_platforms() -> list[tuple[str, str]]:
-    """Detect available platforms."""
+    """Detect available platforms by checking binaries, proxy, and auth."""
     platforms = []
 
-    # API is available if any provider key is set
+    proxy_running, proxy_providers = _detect_proxy()
+
+    # API (direct) — needs env var keys
     has_any_key = any(
         os.environ.get(k)
         for k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY")
     )
     if has_any_key:
-        platforms.append(("api", "API  (direct HTTP — requires API key in env)"))
+        platforms.append(("api", "API Direct  (env API keys)"))
 
-    # Proxy is available if the tokenpak proxy is running
-    # (proxy has its own key config, so direct API keys aren't required)
-    if _detect_proxy_running():
-        platforms.append(("proxy", "API via TokenPak Proxy  (proxy manages keys)"))
+    # API via proxy — proxy handles keys
+    if proxy_running:
+        providers_str = ", ".join(proxy_providers) if proxy_providers else "configured"
+        platforms.append(("proxy", f"API via TokenPak Proxy  ({providers_str})"))
 
-    # Claude Code
-    if shutil.which("claude"):
-        platforms.append(("claude-code", "Claude Code  (claude CLI)"))
+    # Claude Code — needs binary + auth
+    if shutil.which("claude") and _detect_claude_code_auth():
+        platforms.append(("claude-code", "Claude Code  (authenticated)"))
 
-    # Codex
-    if shutil.which("codex"):
-        platforms.append(("codex", "Codex  (codex CLI)"))
+    # Codex — needs binary + auth
+    if shutil.which("codex") and _detect_codex_auth():
+        platforms.append(("codex", "Codex  (authenticated)"))
 
     return platforms
 
 
 def _detect_providers() -> list[tuple[str, str]]:
-    """Detect providers with API keys set."""
-    providers = []
-    checks = [
-        ("anthropic", "ANTHROPIC_API_KEY", "Anthropic"),
-        ("openai",    "OPENAI_API_KEY",    "OpenAI"),
-        ("google",    "GOOGLE_API_KEY",    "Google (Gemini)"),
-        ("xai",       "XAI_API_KEY",       "xAI (Grok)"),
-    ]
-    for pid, env_var, label in checks:
-        if os.environ.get(env_var):
-            providers.append((pid, f"{label}  ({env_var} detected)"))
+    """Detect available providers from all auth sources.
 
-    # Check user providers.yaml
+    Checks (in order): proxy circuit_breakers, Claude Code auth,
+    Codex auth, env vars, user providers.yaml.
+    """
+    found: dict[str, str] = {}  # provider_id → detection reason
+
+    # 1. Proxy — knows which providers are routed
+    proxy_running, proxy_providers = _detect_proxy()
+    if proxy_running:
+        _LABELS = {"anthropic": "Anthropic", "openai": "OpenAI",
+                    "google": "Google (Gemini)", "xai": "xAI (Grok)"}
+        for p in proxy_providers:
+            if p not in found:
+                found[p] = "via proxy"
+
+    # 2. Claude Code auth → Anthropic
+    if _detect_claude_code_auth() and "anthropic" not in found:
+        found["anthropic"] = "via Claude Code"
+
+    # 3. Codex auth → OpenAI
+    if _detect_codex_auth() and "openai" not in found:
+        found["openai"] = "via Codex"
+
+    # 4. Env vars (direct API keys)
+    _ENV_CHECKS = [
+        ("anthropic", "ANTHROPIC_API_KEY"),
+        ("openai",    "OPENAI_API_KEY"),
+        ("google",    "GOOGLE_API_KEY"),
+        ("xai",       "XAI_API_KEY"),
+    ]
+    for pid, env_var in _ENV_CHECKS:
+        if os.environ.get(env_var) and pid not in found:
+            found[pid] = f"{env_var}"
+
+    # 5. User providers.yaml
     user_cfg = Path.home() / ".tokenpak" / "prove" / "providers.yaml"
     if user_cfg.exists():
         try:
@@ -150,24 +242,24 @@ def _detect_providers() -> list[tuple[str, str]]:
             data = yaml.safe_load(user_cfg.read_text()) or {}
             for name, cfg in data.get("providers", {}).items():
                 env_key = cfg.get("api_key_env", "")
-                if env_key and os.environ.get(env_key):
-                    providers.append((name, f"{name}  ({env_key} detected)"))
+                if env_key and os.environ.get(env_key) and name not in found:
+                    found[name] = env_key
         except Exception:
             pass
 
-    return providers
+    _LABELS = {"anthropic": "Anthropic", "openai": "OpenAI",
+                "google": "Google (Gemini)", "xai": "xAI (Grok)"}
+
+    return [
+        (pid, f"{_LABELS.get(pid, pid)}  ({reason})")
+        for pid, reason in found.items()
+    ]
 
 
 def _detect_proxy_running() -> bool:
-    """Check if tokenpak proxy is running."""
-    try:
-        resp = httpx.get(
-            os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766") + "/health",
-            timeout=2.0,
-        )
-        return resp.status_code == 200
-    except Exception:
-        return False
+    """Quick check — is the proxy alive?"""
+    running, _ = _detect_proxy()
+    return running
 
 
 def _get_models(provider: str) -> list[tuple[str, str]]:
