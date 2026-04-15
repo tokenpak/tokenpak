@@ -267,18 +267,10 @@ _PROVIDER_TEMPLATES: dict[str, dict] = {
              "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
         ],
     },
-    "tokenpak-openai-codex": {
-        "baseUrl": "http://localhost:8766",
-        "api": "openai-codex-responses",
-        "models": [
-            {"id": "gpt-4o", "name": "GPT-4o",
-             "cost": {"input": 0, "output": 0}},
-            {"id": "o3", "name": "o3",
-             "cost": {"input": 0, "output": 0}},
-            {"id": "o4-mini", "name": "o4-mini",
-             "cost": {"input": 0, "output": 0}},
-        ],
-    },
+    # Note: tokenpak-openai-codex is NOT templated here — it uses
+    # openai-codex-responses format with custom model IDs (gpt-5.x-codex)
+    # that the user configures. We only update its baseUrl, never inject
+    # models because chat-completions models break codex-responses format.
     "tokenpak-gemini": {
         "baseUrl": "http://localhost:8766",
         "api": "google-generative-ai",
@@ -336,24 +328,27 @@ def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
 
     providers = config["models"]["providers"]
 
-    # Add/update each tokenpak provider template
+    # Add new tokenpak providers from templates. For existing providers,
+    # only update baseUrl — never inject models (they may use a different
+    # API format like codex-responses vs chat-completions).
     for name, template in _PROVIDER_TEMPLATES.items():
-        # Update baseUrl to match configured proxy
-        provider_data = dict(template)
-        provider_data["baseUrl"] = proxy_url
-
         if name in providers:
-            # Update baseUrl but preserve user's model customizations
+            # Existing provider — only update baseUrl to current proxy
             providers[name]["baseUrl"] = proxy_url
-            # Add any missing models
-            existing_ids = {m["id"] for m in providers[name].get("models", [])}
-            for model in template.get("models", []):
-                if model["id"] not in existing_ids:
-                    providers[name].setdefault("models", []).append(model)
             result["providers_updated"].append(name)
         else:
+            # New provider — add with template models
+            provider_data = dict(template)
+            provider_data["baseUrl"] = proxy_url
             providers[name] = provider_data
             result["providers_added"].append(name)
+
+    # Also update baseUrl for any tokenpak-* providers NOT in templates
+    # (user-created ones like tokenpak-ollama-redpc)
+    for name in list(providers.keys()):
+        if name.startswith("tokenpak-") and name not in _PROVIDER_TEMPLATES:
+            if providers[name].get("baseUrl", "").startswith("http://localhost"):
+                providers[name]["baseUrl"] = proxy_url
 
     # Ensure auth profiles exist for tokenpak providers
     if "auth" not in config:
