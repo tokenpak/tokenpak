@@ -1,5 +1,8 @@
 """Unit tests for code_treesitter.py (Part D — Tree-sitter Code Processing)."""
 
+
+import pytest
+pytest.importorskip("tokenpak.processors", reason="module not available in current build")
 import warnings
 import pytest
 

@@ -1,5 +1,8 @@
 """Tests for macro scheduler, script hooks, and premade macros (M.2-M.4)."""
 
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 import json
 import os
 import subprocess

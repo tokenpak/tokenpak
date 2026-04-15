@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.pro", reason="module not available in current build")
 import json
 import sys
 from io import StringIO

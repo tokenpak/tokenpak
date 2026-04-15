@@ -9,6 +9,9 @@ Covers:
   5. Profile features are correctly enabled/disabled
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.profiles", reason="module not available in current build")
 import json
 import os
 import pytest

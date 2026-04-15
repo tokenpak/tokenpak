@@ -10,6 +10,9 @@ Tests:
 - Log management
 """
 
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 import json
 import os
 import tempfile

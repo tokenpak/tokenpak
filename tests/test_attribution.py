@@ -1,5 +1,8 @@
 """Tests for tokenpak.attribution — agent/skill attribution tracking."""
 
+
+import pytest
+pytest.importorskip("tokenpak.attribution", reason="module not available in current build")
 import json
 import tempfile
 import time

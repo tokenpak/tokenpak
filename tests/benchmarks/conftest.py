@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.pack import ContextPack, PackBlock
+from tokenpak.compression.pack import ContextPack, PackBlock
 
 # ---------------------------------------------------------------------------
 # Shared content fixtures (deterministic, reproducible across runs)

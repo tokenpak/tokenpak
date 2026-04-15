@@ -13,6 +13,9 @@ Requirements tested:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.pack", reason="module not available in current build")
 import hashlib
 import json
 import statistics

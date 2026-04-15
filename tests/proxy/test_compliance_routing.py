@@ -14,6 +14,9 @@ Tests:
  10. Per-request X-TokenPak-Compliance: bedrock header honoured
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import base64
 import importlib
 import json

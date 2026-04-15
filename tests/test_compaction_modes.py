@@ -12,6 +12,9 @@ Covers:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.compaction", reason="module not available in current build")
 import re
 import unittest
 

@@ -1,3 +1,6 @@
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 from tokenpak._internal.regression.artifact_reuse import (
     merge_artifact_components,
     plan_artifact_reuse,

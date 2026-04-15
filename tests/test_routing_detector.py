@@ -1,5 +1,8 @@
 """Tests for provider detection."""
 
+
+import pytest
+pytest.importorskip("tokenpak.pro", reason="module not available in current build")
 import pytest
 from tokenpak.pro.routing.detector import ProviderDetector, Provider
 

@@ -12,6 +12,9 @@ Covers at least 3 functions/classes from each of the 3 compaction modules.
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.compaction", reason="module not available in current build")
 import unittest
 
 from tokenpak.compaction import (

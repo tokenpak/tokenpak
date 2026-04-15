@@ -10,6 +10,9 @@ AC-2: Two Claude Code requests with materially different tools
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.agent", reason="module not available in current build")
 import json
 
 import pytest

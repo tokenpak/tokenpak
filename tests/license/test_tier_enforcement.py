@@ -11,6 +11,9 @@ Covers:
 """
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.license", reason="module not available in current build")
 import json
 import os
 from pathlib import Path

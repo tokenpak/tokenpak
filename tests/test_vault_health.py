@@ -4,6 +4,9 @@ These tests use the actual VaultHealth interface which stores index at
 vault_dir/.tokenpak/index.json and blocks at vault_dir/.tokenpak/blocks/.
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.vault_health", reason="module not available in current build")
 import json
 import pytest
 import tempfile

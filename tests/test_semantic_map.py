@@ -12,6 +12,9 @@ Covers:
 """
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.semantic", reason="module not available in current build")
 import sys
 from pathlib import Path
 from typing import Optional

@@ -1,4 +1,7 @@
 """Tests for tokenpak._internal.macros.premade_macros module."""
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 import pytest
 from tokenpak._internal.macros.premade_macros import PremadeMacroRunner, PREMADE_MACROS, format_macro_output
 

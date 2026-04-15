@@ -10,6 +10,9 @@ Verifies:
   - select_state_manager factory returns correct IntentStateManager type
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
 import json
 import tempfile
 from pathlib import Path

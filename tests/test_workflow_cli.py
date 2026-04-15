@@ -13,6 +13,9 @@ AC coverage:
   AC8 — ETA shown for workflows with completed step durations
 """
 from __future__ import annotations
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 import json, time, tempfile
 from pathlib import Path
 

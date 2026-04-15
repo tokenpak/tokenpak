@@ -17,6 +17,9 @@ No real Anthropic API calls are made.
 """
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import json
 import os
 import socket

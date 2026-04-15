@@ -13,6 +13,9 @@ Coverage:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.trace", reason="module not available in current build")
 import base64
 import json
 

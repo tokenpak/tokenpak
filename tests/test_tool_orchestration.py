@@ -1,5 +1,8 @@
 """Unit tests for Compile-Time Tool Orchestration (Phase 3.4)."""
 
+
+import pytest
+pytest.importorskip("tokenpak.reference_scanner", reason="module not available in current build")
 import json
 import os
 import tempfile

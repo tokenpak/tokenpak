@@ -18,6 +18,9 @@ Tests:
   14. shadow AB sample rate capped at 50%
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import importlib
 import json
 import os

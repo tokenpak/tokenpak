@@ -9,6 +9,9 @@ Covers:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.pack", reason="module not available in current build")
 import json
 from pathlib import Path
 

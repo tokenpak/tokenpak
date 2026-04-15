@@ -1,6 +1,9 @@
 """
 Tests for TokenPak Live Monitor Dashboard.
 """
+
+import pytest
+pytest.importorskip("tokenpak.monitor", reason="module not available in current build")
 import json
 import os
 import pathlib

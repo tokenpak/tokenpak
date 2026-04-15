@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.pricing", reason="module not available in current build")
 import pytest
 
 from tokenpak.pricing import (

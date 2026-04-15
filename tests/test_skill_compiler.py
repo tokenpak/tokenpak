@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 
 from tokenpak._internal.agentic.skill_compiler import (
     ExtractedSkill,

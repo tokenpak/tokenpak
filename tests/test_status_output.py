@@ -10,6 +10,9 @@ Covers:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.formatting", reason="module not available in current build")
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch

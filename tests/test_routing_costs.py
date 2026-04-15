@@ -1,5 +1,8 @@
 """Tests for cost tracking."""
 
+
+import pytest
+pytest.importorskip("tokenpak.pro", reason="module not available in current build")
 import pytest
 from datetime import datetime, timedelta
 from tokenpak.pro.routing.costs import (

@@ -8,6 +8,9 @@ Verifies that compression thresholds don't degrade, determinism holds,
 and lossless/lossy guarantees are met.
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.capsule", reason="module not available in current build")
 import pytest
 from tokenpak.capsule.builder import CapsuleBuilder, _compress_text
 

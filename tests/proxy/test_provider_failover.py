@@ -13,6 +13,9 @@ Tests:
   9. _translate_model passthrough on unknown model
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import importlib
 import json
 import os

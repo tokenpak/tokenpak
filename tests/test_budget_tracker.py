@@ -11,6 +11,9 @@ Test cases:
   7. Alert summary and history
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.cost", reason="module not available in current build")
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock

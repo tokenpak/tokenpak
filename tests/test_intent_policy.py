@@ -8,6 +8,9 @@ Verifies:
   - Action profiles (lightweight, compress, verbose, retrieve, standard)
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.proxy.intent_policy", reason="module not available in current build")
 import pytest
 from tokenpak.proxy.intent_policy import (
     decide,

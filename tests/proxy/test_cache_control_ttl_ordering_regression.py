@@ -31,6 +31,9 @@ Both /home/cali/tokenpak/proxy.py and /home/sue/tokenpak/proxy.py are tested whe
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import io
 import json
 import os

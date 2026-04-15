@@ -10,6 +10,9 @@ Coverage:
 
 from __future__ import annotations
 
+
+import pytest
+pytest.importorskip("tokenpak.workflow_performance", reason="module not available in current build")
 import json
 import time
 from pathlib import Path

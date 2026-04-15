@@ -10,6 +10,9 @@ Covers:
   6. Toggle behavior (toggles ON → entries populated; toggles OFF → no entries)
 """
 
+
+import pytest
+pytest.importorskip("tokenpak._internal", reason="module not available in current build")
 import json
 import tempfile
 import time

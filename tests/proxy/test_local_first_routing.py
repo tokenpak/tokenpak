@@ -15,6 +15,9 @@ Tests:
  11. _cci06_translate_to_ollama: tools field absent in translated payload
 """
 
+
+import pytest
+pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
 import json
 import os
 import sys

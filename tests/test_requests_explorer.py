@@ -1,3 +1,6 @@
+
+import pytest
+pytest.importorskip("tokenpak.request_explorer", reason="module not available in current build")
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

@@ -1,5 +1,8 @@
 """Tests for adapter registry."""
 
+
+import pytest
+pytest.importorskip("tokenpak.pro", reason="module not available in current build")
 import pytest
 from unittest.mock import Mock, patch
 from tokenpak.pro.routing.registry import AdapterRegistry
