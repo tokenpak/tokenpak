@@ -240,6 +240,7 @@ _COMMAND_GROUPS = {
     "Companion": [
         ("claude", "Launch Claude Code with companion active"),
         ("codex", "Launch Codex with companion active"),
+        ("prove", "A/B value proof: direct API vs tokenpak"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1941,6 +1942,121 @@ def cmd_codex(args):
     launch(args=list(args.args))
 
 
+def cmd_prove(args):
+    """Run an A/B value proof comparing direct API vs tokenpak."""
+    action = getattr(args, "prove_action", None)
+
+    if action == "run":
+        from .prove.scenario import resolve_scenario
+        from .prove.runner import run_proof
+        scenario_name = getattr(args, "scenario", "default")
+        # Apply CLI overrides
+        scenario = resolve_scenario(scenario_name)
+        if getattr(args, "model", None):
+            scenario.model = args.model
+            from .prove.scenario import _detect_provider
+            scenario.provider = _detect_provider(args.model)
+        if getattr(args, "provider", None):
+            scenario.provider = args.provider
+        no_live = getattr(args, "no_live", False)
+        run_proof(scenario, live=not no_live)
+
+    elif action == "list":
+        from .prove.scenario import list_scenarios
+        scenarios = list_scenarios()
+        if not scenarios:
+            print("No scenarios found.")
+            print(f"Create one at: ~/.tokenpak/prove/scenarios/<name>.md")
+            return
+        print(f"\n  Available scenarios:\n")
+        for s in scenarios:
+            turns = s.get("turns", "?")
+            print(f"    {s['id']:24s}  {s.get('name', ''):30s}  {turns} turns  ({s['source']})")
+        print()
+
+    elif action == "show":
+        import json
+        proof_id = getattr(args, "proof_id", "")
+        results_dir = __import__("pathlib").Path.home() / ".tokenpak" / "prove" / "results"
+        path = results_dir / f"{proof_id}.json"
+        if not path.exists():
+            # Try prefix match
+            matches = list(results_dir.glob(f"{proof_id}*.json")) if results_dir.exists() else []
+            if matches:
+                path = matches[0]
+            else:
+                print(f"Proof '{proof_id}' not found in {results_dir}")
+                return
+        data = json.loads(path.read_text())
+        print(json.dumps(data, indent=2))
+
+    elif action == "create":
+        _prove_create_scenario(args)
+
+    else:
+        print("Usage: tokenpak prove {run|list|show|create}")
+        print("  run [scenario]   Run a value proof (default: 'default')")
+        print("  list             List available scenarios")
+        print("  show <proof_id>  Show a past proof result")
+        print("  create           Create a new scenario interactively")
+
+
+def _prove_create_scenario(args):
+    """Create a new scenario .md file from CLI args or interactively."""
+    from pathlib import Path
+    name = getattr(args, "name", None)
+    if not name:
+        print("Usage: tokenpak prove create --name <scenario-name>")
+        return
+
+    scenarios_dir = Path.home() / ".tokenpak" / "prove" / "scenarios"
+    scenarios_dir.mkdir(parents=True, exist_ok=True)
+    path = scenarios_dir / f"{name}.md"
+
+    if path.exists():
+        print(f"Scenario '{name}' already exists at {path}")
+        return
+
+    # Get prompts from args or generate template
+    prompts = getattr(args, "prompts", [])
+    model = getattr(args, "model", None) or "claude-sonnet-4-6"
+
+    lines = [
+        "---",
+        f"name: {name}",
+        f"model: {model}",
+        "system: You are a helpful software engineer. Be concise and precise.",
+        "max_tokens: 4096",
+        "---",
+        "",
+    ]
+
+    if prompts:
+        for i, prompt in enumerate(prompts, 1):
+            lines.append(f"## Turn {i}")
+            lines.append("")
+            lines.append(prompt)
+            lines.append("")
+    else:
+        lines.append("## Turn 1: Exploration")
+        lines.append("")
+        lines.append("Describe your first prompt here.")
+        lines.append("")
+        lines.append("## Turn 2: Implementation")
+        lines.append("")
+        lines.append("Describe your second prompt here.")
+        lines.append("")
+        lines.append("## Turn 3: Verification")
+        lines.append("")
+        lines.append("Describe your third prompt here.")
+        lines.append("")
+
+    path.write_text("\n".join(lines))
+    print(f"Created scenario: {path}")
+    print(f"Edit the file to customize your test prompts, then run:")
+    print(f"  tokenpak prove run {name}")
+
+
 def _build_claude_parser(sub):
     p = sub.add_parser(
         "claude",
@@ -2000,6 +2116,58 @@ def _build_codex_parser(sub):
         help="Arguments forwarded verbatim to codex",
     )
     p.set_defaults(func=cmd_codex)
+
+
+def _build_prove_parser(sub):
+    p = sub.add_parser(
+        "prove",
+        help="A/B value proof: direct API vs tokenpak",
+        description=(
+            "Run the same multi-turn prompt scenario through direct API and through\n"
+            "tokenpak, then compare metrics side-by-side.\n\n"
+            "Scenarios are .md files with YAML frontmatter and ## Turn headings.\n"
+            "Create your own at: ~/.tokenpak/prove/scenarios/<name>.md\n\n"
+            "Examples:\n"
+            "  tokenpak prove run                       # run default scenario\n"
+            "  tokenpak prove run my-scenario            # run custom scenario\n"
+            "  tokenpak prove run default --model gpt-4o # override model\n"
+            "  tokenpak prove list                       # list all scenarios\n"
+            "  tokenpak prove show prf_a1b2c3d4          # show past result\n"
+            "  tokenpak prove create --name my-test      # create new scenario"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    prove_sub = p.add_subparsers(dest="prove_action")
+
+    # prove run
+    p_run = prove_sub.add_parser("run", help="Run a value proof")
+    p_run.add_argument("scenario", nargs="?", default="default",
+                        help="Scenario name (default: 'default')")
+    p_run.add_argument("--model", "-m", help="Override model from scenario")
+    p_run.add_argument("--provider", help="Override provider (anthropic|openai)")
+    p_run.add_argument("--no-live", action="store_true",
+                        help="Skip launching live display windows")
+    p_run.set_defaults(func=cmd_prove)
+
+    # prove list
+    p_list = prove_sub.add_parser("list", help="List available scenarios")
+    p_list.set_defaults(func=cmd_prove)
+
+    # prove show
+    p_show = prove_sub.add_parser("show", help="Show a past proof result")
+    p_show.add_argument("proof_id", help="Proof ID (e.g. prf_a1b2c3d4)")
+    p_show.set_defaults(func=cmd_prove)
+
+    # prove create
+    p_create = prove_sub.add_parser("create", help="Create a new scenario")
+    p_create.add_argument("--name", required=True, help="Scenario name")
+    p_create.add_argument("--model", help="Model to use (default: claude-sonnet-4-6)")
+    p_create.add_argument("prompts", nargs="*",
+                           help="Turn prompts (one per positional arg)")
+    p_create.set_defaults(func=cmd_prove)
+
+    p.set_defaults(func=cmd_prove)
 
 
 def _build_stub_parsers(sub):
@@ -2375,6 +2543,7 @@ def build_parser():
     _build_retrieval_parser(sub)
     _build_claude_parser(sub)
     _build_codex_parser(sub)
+    _build_prove_parser(sub)
 
     # --- Stub parsers for commands advertised in help/registry but not yet wired ---
     _build_stub_parsers(sub)
