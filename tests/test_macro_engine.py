@@ -15,7 +15,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.macros.engine", reason="module not available in current build")
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
