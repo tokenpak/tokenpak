@@ -466,12 +466,12 @@ def _execute_turn_proxy(
     cfg: ArmConfig, system: str, messages: list[dict],
     max_tokens: int, log_file: Optional[IO], client: httpx.Client,
 ) -> TurnResult:
-    """Execute via tokenpak proxy — same format, different base URL."""
-    # The proxy uses the provider's API key from its own config,
-    # but we still need it for the request header.
-    api_key = os.environ.get(cfg.api_key_env, "")
-    if not api_key:
-        return TurnResult(error=f"{cfg.api_key_env} not set")
+    """Execute via tokenpak proxy — same format, different base URL.
+
+    The proxy manages API keys internally, so we use a placeholder
+    if no env key is set. The proxy will authenticate with its own config.
+    """
+    api_key = os.environ.get(cfg.api_key_env, "") or "proxy-managed"
     run_fn = _FORMAT_DISPATCH.get(cfg.format)
     if not run_fn:
         return TurnResult(error=f"Unknown format: {cfg.format}")
@@ -514,7 +514,7 @@ def _execute_turn_cli(
             cmd_parts,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
         )
         result.response_text = proc.stdout.strip()
         if proc.returncode != 0 and not result.response_text:

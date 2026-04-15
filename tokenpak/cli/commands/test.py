@@ -494,68 +494,70 @@ _SCENARIOS: dict[str, dict] = {
 
 
 def _map_platform_to_adapter(platform: str, provider: str, model: str):
-    """Map user-facing platform to adapter ArmConfigs (direct + tokenpak)."""
+    """Map user-facing platform to adapter ArmConfigs.
+
+    The comparison is always: baseline (direct) vs w/ TokenPak (proxy).
+    Token savings happen at the proxy layer, so even CLI-initiated tests
+    route through the API/proxy for the actual A/B measurement.
+    """
     from tokenpak.prove.adapter import ArmConfig
 
     proxy_available = _detect_proxy_running()
 
-    if platform == "api":
-        arms = [
-            ArmConfig(name="Direct API", platform="api",
-                      provider=provider, model=model),
-        ]
-        if proxy_available:
-            arms.append(ArmConfig(
-                name="TokenPak Proxy", platform="proxy",
-                provider=provider, model=model, via_tokenpak=True,
-            ))
-        return arms
-
-    elif platform == "proxy":
-        # Proxy-only: user selected proxy platform (may not have direct key)
-        arms = [
-            ArmConfig(name="TokenPak Proxy", platform="proxy",
-                      provider=provider, model=model, via_tokenpak=True),
-        ]
-        # If they also have the direct API key, add a baseline arm
+    if platform in ("api", "proxy"):
+        arms = []
+        # Baseline: direct API (if key available)
         from tokenpak.prove.adapter import _get_provider
         reg = _get_provider(provider)
         key_env = reg.get("api_key_env", "")
         if key_env and os.environ.get(key_env):
-            arms.insert(0, ArmConfig(
-                name="Direct API", platform="api",
+            arms.append(ArmConfig(
+                name="Direct", platform="api",
                 provider=provider, model=model,
+            ))
+        # Comparison: through proxy
+        if proxy_available:
+            arms.append(ArmConfig(
+                name="w/ TokenPak", platform="proxy",
+                provider=provider, model=model, via_tokenpak=True,
+            ))
+        # If only proxy (no direct key), still run it solo for metrics
+        if not arms and proxy_available:
+            arms.append(ArmConfig(
+                name="w/ TokenPak", platform="proxy",
+                provider=provider, model=model, via_tokenpak=True,
             ))
         return arms
 
     elif platform == "claude-code":
-        arms = [
-            ArmConfig(name="Claude Code", platform="cli",
-                      provider="anthropic", model=model,
-                      cli_command="claude -p"),
-        ]
-        if shutil.which("tokenpak"):
+        # For Claude Code / Codex: the real value proof needs API-level
+        # measurement. CLI subprocesses can't expose cache/compression.
+        # Route through proxy for real metrics. Use CLI as fallback only.
+        arms = []
+        if proxy_available:
             arms.append(ArmConfig(
-                name="Claude Code + TokenPak", platform="cli",
-                provider="anthropic", model=model,
-                cli_command="tokenpak claude -p",
-                via_tokenpak=True,
+                name="w/ TokenPak", platform="proxy",
+                provider="anthropic", model=model, via_tokenpak=True,
             ))
+        else:
+            arms.append(ArmConfig(
+                name="Claude Code", platform="cli",
+                provider="anthropic", model=model,
+                cli_command="claude -p"))
         return arms
 
     elif platform == "codex":
-        arms = [
-            ArmConfig(name="Codex", platform="cli",
-                      provider="openai", model=model,
-                      cli_command="codex exec"),
-        ]
-        if shutil.which("tokenpak"):
+        arms = []
+        if proxy_available:
             arms.append(ArmConfig(
-                name="Codex + TokenPak", platform="cli",
-                provider="openai", model=model,
-                cli_command="tokenpak codex exec",  # future
-                via_tokenpak=True,
+                name="w/ TokenPak", platform="proxy",
+                provider="openai", model=model, via_tokenpak=True,
             ))
+        else:
+            arms.append(ArmConfig(
+                name="Codex", platform="cli",
+                provider="openai", model=model,
+                cli_command="codex exec"))
         return arms
 
     return []
@@ -603,16 +605,16 @@ def run_test(
         print(f"    [{i+1}] {a.name}")
     print(f"  Proof:     {proof_id}")
 
-    # ── Launch live display ─────────────────────────────────
+    # ── Launch live display (automatic, no user action needed) ──
+    display = None
     if n_arms >= 2:
         log_a = log_dir / f"{proof_id}_1.log"
         log_b = log_dir / f"{proof_id}_2.log"
         from tokenpak.prove.display import LiveDisplay
         display = LiveDisplay(log_a, log_b)
-        attach_info = display.start()
-        print(f"\n  Live view: {attach_info}")
-    else:
-        display = None
+        display_msg = display.start()
+        if display_msg:
+            print(f"\n  {display_msg}")
 
     print()
 
@@ -672,11 +674,11 @@ def run_test(
         label = arms_cfg[i].name
         print(f"  Log [{label}]: {lf}")
 
-    if display and display._method == "tmux":
-        print(f"\n  Live windows still open for review.")
-        print(f"  Close with: tmux kill-session -t tokenpak-prove")
+    # Clean up live display (tmux pane auto-closes, terminal stays for review)
+    if display and display._method == "tmux-split":
+        display.stop()
     elif display and display._method == "terminal":
-        print(f"\n  Live windows still open for review.")
+        print(f"\n  Live view window still open for review.")
 
     print()
 
