@@ -13,7 +13,12 @@ Config files are written to the fixed location ~/.tokenpak/companion/run/
 
 What the user sees:
     $ tokenpak claude
-    tokenpak: companion ready (balanced, no budget cap)
+
+    📦 TokenPak Companion
+       Ready • Mode: Balanced • Budget: Unlimited
+
+       Your API bill called. It's crying.
+       Proxy active → http://localhost:8766
     [Claude Code TUI starts normally]
 """
 
@@ -21,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -62,14 +68,22 @@ def main(args: list[str] | None = None) -> int:
     settings_path = _write_settings(config)
     prompt_path = _write_system_prompt(config)
 
-    # Print startup banner
-    banner_parts = ["tokenpak: companion ready"]
-    banner_parts.append(f"({config.profile}")
-    if config.budget_daily_usd > 0:
-        banner_parts.append(f"budget ${config.budget_daily_usd:.2f}/day)")
-    else:
-        banner_parts.append("no budget cap)")
-    print("  ".join(banner_parts), file=sys.stderr)
+    # Print styled startup banner
+    _TEAL = "\033[38;2;0;180;170m"
+    _DIM = "\033[2m"
+    _RESET = "\033[0m"
+
+    mode = config.profile.capitalize()
+    budget = f"${config.budget_daily_usd:.2f}/day" if config.budget_daily_usd > 0 else "Unlimited"
+
+    from tokenpak.cli.commands.status import MEME_LINES
+    meme = random.choice(MEME_LINES)
+
+    print(file=sys.stderr)
+    print(f"\U0001f4e6 Token{_TEAL}Pak{_RESET} Companion", file=sys.stderr)
+    print(f"   {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{_RESET}", file=sys.stderr)
+    print(file=sys.stderr)
+    print(f"   {_DIM}{meme}{_RESET}", file=sys.stderr)
 
     # Prefix session name with 📦 so tokenpak sessions are visually distinct
     # in terminal tabs. If the user provided --name/-n, prefix their value;
@@ -92,7 +106,9 @@ def main(args: list[str] | None = None) -> int:
     # Auto-detect if proxy is running when no explicit proxy_url is set.
     env = os.environ.copy()
     proxy_url = config.proxy_url
-    if not proxy_url:
+    if proxy_url:
+        print(f"   {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
+    else:
         # Auto-detect: check if the tokenpak proxy is running
         default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
         try:
@@ -100,7 +116,7 @@ def main(args: list[str] | None = None) -> int:
             resp = httpx.get(f"{default_proxy}/health", timeout=1.0)
             if resp.status_code == 200:
                 proxy_url = default_proxy
-                print(f"tokenpak: routing through proxy ({proxy_url})", file=sys.stderr)
+                print(f"   {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
         except Exception:
             pass
     if proxy_url:
