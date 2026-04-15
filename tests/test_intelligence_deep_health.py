@@ -26,7 +26,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.intelligence", reason="module not available in current build")
+pytest.importorskip("tokenpak.intelligence.deep_health", reason="module not available in current build")
 import os
 import time
 import tempfile

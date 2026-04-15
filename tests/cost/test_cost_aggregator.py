@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.cost", reason="module not available in current build")
+pytest.importorskip("tokenpak.cost.cost_aggregator", reason="module not available in current build")
 import csv
 import io
 from datetime import date, timedelta

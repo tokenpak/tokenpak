@@ -14,7 +14,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.compaction", reason="module not available in current build")
+pytest.importorskip("tokenpak.compaction.topic_aware", reason="module not available in current build")
 import unittest
 
 from tokenpak.compaction import (

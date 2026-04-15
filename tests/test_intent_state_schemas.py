@@ -12,7 +12,7 @@ Verifies:
 
 
 import pytest
-pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
+pytest.importorskip("tokenpak.infrastructure.state_manager", reason="module not available in current build")
 import json
 import tempfile
 from pathlib import Path

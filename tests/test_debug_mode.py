@@ -4,7 +4,7 @@ Tests for debug mode toggle and logging.
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.config", reason="module not available in current build")
 import io
 import json
 import os

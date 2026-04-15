@@ -10,7 +10,7 @@ Tests:
 
 
 import pytest
-pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
+pytest.importorskip("tokenpak.runtime.proxy", reason="module not available in current build")
 import logging
 import os
 import sys

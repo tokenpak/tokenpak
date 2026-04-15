@@ -1,7 +1,7 @@
 """Tests for tokenpak._internal.agentic.precondition_gates"""
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.agentic.precondition_gates", reason="module not available in current build")
 import json
 import os
 import subprocess

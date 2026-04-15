@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.connectors", reason="module not available in current build")
+pytest.importorskip("tokenpak.connectors.notion_adapter", reason="module not available in current build")
 import json
 import os
 import subprocess

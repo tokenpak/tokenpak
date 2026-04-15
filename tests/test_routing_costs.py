@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.pro", reason="module not available in current build")
+pytest.importorskip("tokenpak.pro.routing.costs", reason="module not available in current build")
 import pytest
 from datetime import datetime, timedelta
 from tokenpak.pro.routing.costs import (

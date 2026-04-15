@@ -1,6 +1,6 @@
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.memory.session_capsules", reason="module not available in current build")
 from tokenpak._internal.memory.session_capsules import (
     REQUIRED_CAPSULE_SECTIONS,
     build_session_capsule,

@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.triggers.matcher", reason="module not available in current build")
 import pytest
 import time
 from pathlib import Path

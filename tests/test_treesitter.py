@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.processors", reason="module not available in current build")
+pytest.importorskip("tokenpak.processors.code_treesitter", reason="module not available in current build")
 import warnings
 import pytest
 

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.ingest.document_parser", reason="module not available in current build")
 import pytest
 
 from tokenpak._internal.ingest.document_parser import (

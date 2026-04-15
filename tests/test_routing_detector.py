@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.pro", reason="module not available in current build")
+pytest.importorskip("tokenpak.pro.routing.detector", reason="module not available in current build")
 import pytest
 from tokenpak.pro.routing.detector import ProviderDetector, Provider
 

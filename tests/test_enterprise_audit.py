@@ -13,7 +13,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.enterprise", reason="module not available in current build")
+pytest.importorskip("tokenpak.enterprise.compliance", reason="module not available in current build")
 import csv
 import json
 import os

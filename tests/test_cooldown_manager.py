@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
+pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
 import asyncio
 import json
 import tempfile

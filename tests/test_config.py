@@ -1,7 +1,7 @@
 """Tests for tokenpak._internal.config module."""
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.config", reason="module not available in current build")
 import pytest
 from tokenpak._internal.config import get_config, get_debug_enabled, get_metrics_enabled
 

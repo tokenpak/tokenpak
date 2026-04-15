@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.ingest.disclosure", reason="module not available in current build")
 from tokenpak._internal.ingest.disclosure import (
     DocumentView,
     SectionView,

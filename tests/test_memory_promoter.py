@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.agentic", reason="module not available in current build")
+pytest.importorskip("tokenpak.agentic.memory_promoter", reason="module not available in current build")
 import json
 import time
 from pathlib import Path

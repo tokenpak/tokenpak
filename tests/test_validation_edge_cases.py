@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.validation", reason="module not available in current build")
+pytest.importorskip("tokenpak.validation.request_validator", reason="module not available in current build")
 import json
 
 import pytest

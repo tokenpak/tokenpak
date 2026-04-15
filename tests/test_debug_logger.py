@@ -1,7 +1,7 @@
 """Tests for tokenpak._internal.debug.logger module."""
 
 import pytest
-pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
+pytest.importorskip("tokenpak.infrastructure.debug", reason="module not available in current build")
 import pytest
 from tokenpak.infrastructure.debug import DebugLogger
 

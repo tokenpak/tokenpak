@@ -33,7 +33,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.runtime", reason="module not available in current build")
+pytest.importorskip("tokenpak.runtime.providers", reason="module not available in current build")
 import io
 import json
 import os

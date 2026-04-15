@@ -12,7 +12,7 @@ Tests cover:
 
 
 import pytest
-pytest.importorskip("tokenpak.monitoring", reason="module not available in current build")
+pytest.importorskip("tokenpak.monitoring.request_size", reason="module not available in current build")
 import pytest
 from datetime import datetime
 from unittest.mock import patch

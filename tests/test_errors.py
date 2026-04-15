@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
+pytest.importorskip("tokenpak.infrastructure.error_handling", reason="module not available in current build")
 import pytest
 
 from tokenpak.infrastructure.error_handling import (

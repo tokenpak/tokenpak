@@ -27,7 +27,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.intelligence", reason="module not available in current build")
+pytest.importorskip("tokenpak.intelligence.server", reason="module not available in current build")
 import logging
 import time
 from unittest.mock import patch

@@ -15,7 +15,7 @@ AC coverage:
 from __future__ import annotations
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.agentic.workflow", reason="module not available in current build")
 import json, time, tempfile
 from pathlib import Path
 

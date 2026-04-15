@@ -21,7 +21,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.agentic", reason="module not available in current build")
+pytest.importorskip("tokenpak.agentic.error_normalizer", reason="module not available in current build")
 import json
 import os
 import sys

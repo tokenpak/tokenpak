@@ -3,7 +3,7 @@ Tests for TokenPak Live Monitor Dashboard.
 """
 
 import pytest
-pytest.importorskip("tokenpak.monitor", reason="module not available in current build")
+pytest.importorskip("tokenpak.monitor.server", reason="module not available in current build")
 import json
 import os
 import pathlib

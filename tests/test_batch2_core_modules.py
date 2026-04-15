@@ -8,7 +8,7 @@ All tests use REAL module APIs (verified by reading source first).
 
 
 import pytest
-pytest.importorskip("tokenpak.infrastructure", reason="module not available in current build")
+pytest.importorskip("tokenpak.infrastructure.cooldown", reason="module not available in current build")
 import json
 import tempfile
 import time

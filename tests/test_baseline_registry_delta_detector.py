@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.regression.baseline_registry", reason="module not available in current build")
 import json
 import tempfile
 from datetime import datetime

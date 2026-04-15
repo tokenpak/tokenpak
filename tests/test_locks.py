@@ -1,7 +1,7 @@
 """Tests for tokenpak.agentic.locks"""
 
 import pytest
-pytest.importorskip("tokenpak.agentic", reason="module not available in current build")
+pytest.importorskip("tokenpak.agentic.locks", reason="module not available in current build")
 import time
 import pytest
 from pathlib import Path

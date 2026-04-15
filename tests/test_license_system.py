@@ -8,7 +8,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak._internal", reason="module not available in current build")
+pytest.importorskip("tokenpak._internal.license.keys", reason="module not available in current build")
 import json
 import time
 import tempfile

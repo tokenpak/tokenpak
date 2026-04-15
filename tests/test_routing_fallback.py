@@ -23,7 +23,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.agentic", reason="module not available in current build")
+pytest.importorskip("tokenpak.agentic.retry", reason="module not available in current build")
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call as mock_call

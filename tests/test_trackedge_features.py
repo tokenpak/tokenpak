@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 
 # trackedge is a separate project not installed in this environment — skip all tests here
-trackedge = pytest.importorskip("trackedge", reason="trackedge package not installed (separate project)")
+trackedge = pytest.importorskip("trackedge.processing.feature_engine", reason="trackedge package not installed (separate project)")
 
 from trackedge.processing.feature_engine import (
     speed_score, pace_style, race_pace_scenario, class_fit,

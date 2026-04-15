@@ -2,7 +2,7 @@
 
 
 import pytest
-pytest.importorskip("tokenpak.pro", reason="module not available in current build")
+pytest.importorskip("tokenpak.pro.routing.failover", reason="module not available in current build")
 import pytest
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch

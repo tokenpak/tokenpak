@@ -17,7 +17,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.adapters", reason="module not available in current build")
+pytest.importorskip("tokenpak.adapters.anthropic", reason="module not available in current build")
 import json
 from typing import Any
 from unittest.mock import MagicMock, patch

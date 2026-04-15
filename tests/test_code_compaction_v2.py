@@ -13,7 +13,7 @@ from __future__ import annotations
 
 
 import pytest
-pytest.importorskip("tokenpak.processors", reason="module not available in current build")
+pytest.importorskip("tokenpak.processors.code", reason="module not available in current build")
 import hashlib
 import re
 import unittest
