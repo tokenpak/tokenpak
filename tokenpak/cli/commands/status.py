@@ -434,22 +434,29 @@ def run(
     raw: bool = False,
     minimal: bool = False,
     full: bool = False,
+    by_source: bool = False,
+    by_provider: bool = False,
     as_json: bool = False,
     no_meme: bool = False,
     db_path: Optional[str] = None,
 ) -> None:
-    """Print savings-first status (v3 layout) to stdout.
+    """Print savings-first status to stdout.
 
-    This is the new default. The old technical output is accessible
-    via ``full=True`` (``--full`` flag).
+    Flags:
+      --full         Expanded default view with all sections
+      --by-source    Breakdown by request source (Claude Code, Codex, API, etc.)
+      --by-provider  Breakdown by provider (Anthropic, OpenAI, etc.)
+      --minimal      One-line summary
+      --json         Machine-readable JSON dump
     """
-    # Dispatch to sub-modes
-    if full:
-        return run_full(proxy_base=proxy_base, raw=raw, minimal=minimal)
     if as_json:
         return _run_json(proxy_base=proxy_base, db_path=db_path)
     if minimal:
         return _run_minimal(proxy_base=proxy_base, db_path=db_path, no_meme=no_meme)
+    if by_source:
+        return _run_by_source(proxy_base=proxy_base, db_path=db_path)
+    if by_provider:
+        return _run_by_provider(proxy_base=proxy_base, db_path=db_path)
 
     # --- Fetch live proxy data (primary source for current session) ---
     health = _fetch(f"{proxy_base}/health")
@@ -589,11 +596,12 @@ def run(
     # --- 4. MODELS ---
     if not savings_all.get("error") and savings_all.get("models"):
         model_rows = savings_all["models"]
+        show_limit = len(model_rows) if full else 6
         print()
         print(f"  🤖 Models (all time)")
         print(f"     {'Model':<26} {'Reqs':>6}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}")
         print(f"     {'─' * 26} {'─' * 6}  {'─' * 8}  {'─' * 6}  {'─' * 10}")
-        for m in model_rows[:6]:
+        for m in model_rows[:show_limit]:
             name = m["model"]
             reqs = m["requests"]
             inp = m["input_tokens"]
@@ -605,6 +613,13 @@ def run(
                 f"     {name:<26} {reqs:>6}  {_fmt_num(inp):>8}"
                 f"  {c_pct:>5.0f}%  {_fmt_num(comp):>10}"
             )
+        if not full and len(model_rows) > 6:
+            print(f"     ... +{len(model_rows) - 6} more (use --full to see all)")
+
+    # --- 4b. FULL: by-source and by-provider summaries inline ---
+    if full:
+        _print_by_source_inline(db_path)
+        _print_by_provider_inline(db_path)
 
     # --- 5. PERFORMANCE ---
     print()
@@ -634,6 +649,157 @@ def run(
         print(f"  📦 {meme}")
 
     print()
+
+
+# ---------------------------------------------------------------------------
+# Shared DB queries for breakdowns
+# ---------------------------------------------------------------------------
+
+_SOURCE_CASE = """
+    CASE
+        WHEN session_id LIKE 'gpt-%' OR endpoint LIKE '%openai%' THEN 'Codex / OpenAI'
+        WHEN endpoint LIKE '%api.anthropic.com%?beta=true' THEN 'Claude Code'
+        WHEN endpoint LIKE '%api.anthropic.com%' AND endpoint NOT LIKE '%?beta=true' THEN 'API Direct'
+        WHEN endpoint LIKE '%127.0.0.1%' OR endpoint LIKE '%localhost%' THEN 'Local / Ollama'
+        ELSE 'Other'
+    END
+"""
+
+_PROVIDER_CASE = """
+    CASE
+        WHEN endpoint LIKE '%api.anthropic.com%' THEN 'Anthropic'
+        WHEN endpoint LIKE '%openai%' OR endpoint LIKE '%api.openai.com%' THEN 'OpenAI'
+        WHEN endpoint LIKE '%googleapis.com%' THEN 'Google'
+        WHEN endpoint LIKE '%127.0.0.1%' OR endpoint LIKE '%localhost%' THEN 'Local'
+        ELSE 'Other'
+    END
+"""
+
+
+def _query_breakdown(db_path: Optional[str], group_expr: str) -> list:
+    """Run a grouped breakdown query against monitor.db."""
+    conn = _connect_db(db_path)
+    if conn is None:
+        return []
+    try:
+        return conn.execute(f"""
+            SELECT
+                {group_expr} AS label,
+                COUNT(*) AS reqs,
+                COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(cache_read_tokens), 0) AS cache_read,
+                COALESCE(SUM(compressed_tokens), 0) AS compressed,
+                COALESCE(SUM(estimated_cost), 0.0) AS cost,
+                GROUP_CONCAT(DISTINCT model) AS models
+            FROM requests
+            GROUP BY label
+            ORDER BY reqs DESC
+        """).fetchall()
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def _print_breakdown_table(title: str, emoji: str, rows: list) -> None:
+    """Print a formatted breakdown table."""
+    version = _get_version()
+    print(f"\n  TOKENPAK {version}  |  {title}")
+    print(SEP)
+    print()
+    print(f"  {emoji} {title}")
+    print(f"     {'Source':<20} {'Reqs':>7}  {'Input':>8}  {'Cache%':>6}  {'Compressed':>10}  {'Cost':>10}")
+    print(f"     {'─' * 20} {'─' * 7}  {'─' * 8}  {'─' * 6}  {'─' * 10}  {'─' * 10}")
+
+    total_reqs = 0
+    total_cost = 0.0
+    for r in rows:
+        label = r["label"]
+        reqs = r["reqs"]
+        inp = r["input_tokens"]
+        cr = r["cache_read"]
+        comp = r["compressed"]
+        cost = r["cost"]
+        total_h = inp + cr
+        c_pct = (cr / total_h * 100) if total_h > 0 else 0.0
+        total_reqs += reqs
+        total_cost += cost
+        print(
+            f"     {label:<20} {reqs:>7,}  {_fmt_num(inp):>8}"
+            f"  {c_pct:>5.0f}%  {_fmt_num(comp):>10}  {_fmt_cost(cost):>10}"
+        )
+
+    print(f"     {'─' * 20} {'─' * 7}  {'─' * 8}  {'─' * 6}  {'─' * 10}  {'─' * 10}")
+    print(f"     {'Total':<20} {total_reqs:>7,}  {'':>8}  {'':>6}  {'':>10}  {_fmt_cost(total_cost):>10}")
+
+    # Show models per source
+    print()
+    for r in rows:
+        models = r["models"] or ""
+        model_list = sorted(set(models.split(",")))[:4]
+        if model_list:
+            suffix = f" +{len(set(models.split(','))) - 4}" if len(set(models.split(","))) > 4 else ""
+            print(f"     {r['label']:<20} {', '.join(model_list)}{suffix}")
+    print()
+
+
+def _run_by_source(
+    proxy_base: str = PROXY_DEFAULT,
+    db_path: Optional[str] = None,
+) -> None:
+    """Print breakdown by request source."""
+    rows = _query_breakdown(db_path, _SOURCE_CASE)
+    if not rows:
+        print("No data available. Run requests through the proxy first.")
+        return
+    _print_breakdown_table("By Source", "📱", rows)
+
+
+def _run_by_provider(
+    proxy_base: str = PROXY_DEFAULT,
+    db_path: Optional[str] = None,
+) -> None:
+    """Print breakdown by provider."""
+    rows = _query_breakdown(db_path, _PROVIDER_CASE)
+    if not rows:
+        print("No data available. Run requests through the proxy first.")
+        return
+    _print_breakdown_table("By Provider", "🏢", rows)
+
+
+def _print_by_source_inline(db_path: Optional[str] = None) -> None:
+    """Print compact by-source summary for --full mode."""
+    rows = _query_breakdown(db_path, _SOURCE_CASE)
+    if not rows:
+        return
+    print()
+    print(f"  📱 Sources (all time)")
+    print(f"     {'Source':<20} {'Reqs':>7}  {'Cost':>10}  {'Cache%':>6}")
+    print(f"     {'─' * 20} {'─' * 7}  {'─' * 10}  {'─' * 6}")
+    for r in rows:
+        inp = r["input_tokens"]
+        cr = r["cache_read"]
+        total_h = inp + cr
+        c_pct = (cr / total_h * 100) if total_h > 0 else 0.0
+        print(f"     {r['label']:<20} {r['reqs']:>7,}  {_fmt_cost(r['cost']):>10}  {c_pct:>5.0f}%")
+
+
+def _print_by_provider_inline(db_path: Optional[str] = None) -> None:
+    """Print compact by-provider summary for --full mode."""
+    rows = _query_breakdown(db_path, _PROVIDER_CASE)
+    if not rows:
+        return
+    print()
+    print(f"  🏢 Providers (all time)")
+    print(f"     {'Provider':<20} {'Reqs':>7}  {'Cost':>10}  {'Cache%':>6}")
+    print(f"     {'─' * 20} {'─' * 7}  {'─' * 10}  {'─' * 6}")
+    for r in rows:
+        inp = r["input_tokens"]
+        cr = r["cache_read"]
+        total_h = inp + cr
+        c_pct = (cr / total_h * 100) if total_h > 0 else 0.0
+        print(f"     {r['label']:<20} {r['reqs']:>7,}  {_fmt_cost(r['cost']):>10}  {c_pct:>5.0f}%")
 
 
 # ---------------------------------------------------------------------------

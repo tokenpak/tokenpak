@@ -2599,17 +2599,15 @@ def _cmd_status_legacy(args):
 
 
 def cmd_status(args):
-    """Show savings-first status (default) or legacy technical output (--full)."""
+    """Show savings-first status (default) with optional drill-down views."""
     is_full = getattr(args, "full", False)
     is_json = getattr(args, "as_json", False)
     is_minimal = getattr(args, "minimal", False)
     no_meme = getattr(args, "no_meme", False)
+    by_source = getattr(args, "by_source", False)
+    by_provider = getattr(args, "by_provider", False)
 
-    # --full dispatches to legacy output
-    if is_full:
-        return _cmd_status_legacy(args)
-
-    # --raw also dispatches to legacy (raw JSON mode)
+    # --raw dispatches to legacy (raw JSON mode)
     if getattr(args, "raw", False):
         return _cmd_status_legacy(args)
 
@@ -2620,6 +2618,9 @@ def cmd_status(args):
         savings_status_run(
             proxy_base=proxy_url,
             minimal=is_minimal,
+            full=is_full,
+            by_source=by_source,
+            by_provider=by_provider,
             as_json=is_json,
             no_meme=no_meme,
         )
@@ -2904,7 +2905,9 @@ def cmd_check_alerts(args):
 def _build_status_parser(sub):
     p_status = sub.add_parser("status", help="Show savings report (default) or full system status")
     p_status.add_argument("--limit", type=int, default=20, help="Max retry events to show")
-    p_status.add_argument("--full", action="store_true", help="Show full technical output (legacy)")
+    p_status.add_argument("--full", action="store_true", help="Expanded view with all details")
+    p_status.add_argument("--by-source", dest="by_source", action="store_true", help="Breakdown by request source (Claude Code, Codex, API, etc.)")
+    p_status.add_argument("--by-provider", dest="by_provider", action="store_true", help="Breakdown by provider (Anthropic, OpenAI, Google, etc.)")
     p_status.add_argument("--minimal", action="store_true", help="One-line savings summary")
     p_status.add_argument("--json", dest="as_json", action="store_true", help="Full JSON data dump")
     p_status.add_argument("--no-meme", dest="no_meme", action="store_true", help="Suppress tagline")
