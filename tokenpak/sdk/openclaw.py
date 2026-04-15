@@ -283,23 +283,62 @@ _PROVIDER_TEMPLATES: dict[str, dict] = {
              "cost": {"input": 0, "output": 0}},
         ],
     },
-    "tokenpak-claude-code": {
-        "baseUrl": "http://localhost:8766",
-        "api": "anthropic-messages",
-        "headers": {"X-TokenPak-Backend": "claude-code"},
-        "models": [
-            {"id": "claude-sonnet-4-6", "name": "Sonnet 4.6 (Claude Code)",
-             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
-            {"id": "claude-opus-4-6", "name": "Opus 4.6 (Claude Code)",
-             "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}},
-        ],
-    },
+    # tokenpak-claude-code is NOT in this static template — its models
+    # are synced dynamically from the anthropic provider at setup time.
+    # See _build_claude_code_provider() below.
 }
 
 
 def detect_openclaw() -> bool:
     """Check if OpenClaw is installed and has a config file."""
     return _OPENCLAW_CONFIG_PATH.exists()
+
+
+def _build_claude_code_provider(
+    providers: dict, proxy_url: str, result: dict,
+) -> None:
+    """Build tokenpak-claude-code by syncing models from anthropic provider.
+
+    Copies all models from tokenpak-anthropic (or anthropic), appends
+    "(Claude Code)" to display names, and sets the X-TokenPak-Backend header.
+    Automatically picks up new models when the anthropic provider is updated.
+    """
+    name = "tokenpak-claude-code"
+    source = providers.get("tokenpak-anthropic") or providers.get("anthropic") or {}
+    source_models = source.get("models", [])
+
+    if not source_models:
+        return
+
+    models = []
+    for m in source_models:
+        cc = dict(m)
+        orig_name = cc.get("name", cc["id"])
+        if "(Claude Code)" not in orig_name:
+            cc["name"] = f"{orig_name} (Claude Code)"
+        cc["cost"] = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
+        models.append(cc)
+
+    existing = providers.get(name, {})
+    existing_ids = {m["id"] for m in existing.get("models", [])}
+    want_ids = {m["id"] for m in models}
+
+    if (existing.get("baseUrl") == proxy_url
+            and existing.get("headers", {}).get("X-TokenPak-Backend") == "claude-code"
+            and existing_ids == want_ids):
+        return  # already up to date
+
+    providers[name] = {
+        "baseUrl": proxy_url,
+        "api": "anthropic-messages",
+        "headers": {"X-TokenPak-Backend": "claude-code"},
+        "models": models,
+    }
+
+    if name in existing_ids:
+        result["providers_updated"].append(name)
+    else:
+        result["providers_added"].append(name)
 
 
 def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
@@ -351,6 +390,9 @@ def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
         if name.startswith("tokenpak-") and name not in _PROVIDER_TEMPLATES:
             if providers[name].get("baseUrl", "").startswith("http://localhost"):
                 providers[name]["baseUrl"] = proxy_url
+
+    # Build tokenpak-claude-code dynamically from anthropic models
+    _build_claude_code_provider(providers, proxy_url, result)
 
     # Ensure auth profiles exist for tokenpak providers
     if "auth" not in config:
