@@ -22,11 +22,12 @@ VersionInfo = namedtuple('VersionInfo', ['major', 'minor', 'micro', 'releaseleve
 
 class DoctorChecksPythonVersionTest(unittest.TestCase):
     """Test Python version check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.captured_output = StringIO()
     
     @patch('sys.stdout', new_callable=StringIO)
@@ -62,11 +63,12 @@ class DoctorChecksPythonVersionTest(unittest.TestCase):
 
 class DoctorConfigFileTest(unittest.TestCase):
     """Test config file check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -123,11 +125,12 @@ class DoctorConfigFileTest(unittest.TestCase):
 
 class DoctorVaultIndexTest(unittest.TestCase):
     """Test vault index check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -136,7 +139,8 @@ class DoctorVaultIndexTest(unittest.TestCase):
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_vault_index_with_blocks(self, mock_stdout):
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
+    def test_vault_index_with_blocks(self, mock_proxy_get, mock_stdout):
         """Valid vault index with blocks should pass."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -155,7 +159,8 @@ class DoctorVaultIndexTest(unittest.TestCase):
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_vault_index_zero_blocks(self, mock_stdout):
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
+    def test_vault_index_zero_blocks(self, mock_proxy_get, mock_stdout):
         """Vault index with 0 blocks should warn."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -174,7 +179,8 @@ class DoctorVaultIndexTest(unittest.TestCase):
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_vault_index_missing(self, mock_stdout):
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
+    def test_vault_index_missing(self, mock_proxy_get, mock_stdout):
         """Missing vault index should warn."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -190,7 +196,8 @@ class DoctorVaultIndexTest(unittest.TestCase):
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
-    def test_vault_index_invalid_json(self, mock_stdout):
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
+    def test_vault_index_invalid_json(self, mock_proxy_get, mock_stdout):
         """Invalid vault index JSON should fail."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -211,11 +218,12 @@ class DoctorVaultIndexTest(unittest.TestCase):
 
 class DoctorProxyPortTest(unittest.TestCase):
     """Test proxy port connectivity check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -226,28 +234,29 @@ class DoctorProxyPortTest(unittest.TestCase):
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('socket.socket')
     def test_proxy_reachable(self, mock_socket, mock_stdout):
-        """Reachable proxy should pass."""
+        """Reachable proxy port should be reported (TCP fallback when HTTP mocked away)."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
         config_file = config_dir / "config.json"
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 0  # Success
         mock_socket.return_value = mock_sock
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
-            self.assertIn('✅', output)
-            self.assertIn('Proxy reachable', output)
+            self.assertIn('⚠️', output)
+            self.assertIn('port open', output)
     
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('socket.socket')
-    def test_proxy_unreachable(self, mock_socket, mock_stdout):
+    def test_proxy_unreachable(self, mock_socket, mock_stdout, mock_proxy_get):
         """Unreachable proxy should warn."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -255,21 +264,22 @@ class DoctorProxyPortTest(unittest.TestCase):
         config_file.write_text(json.dumps({"port": 8766}))
         index_file = config_dir / "index.json"
         index_file.write_text(json.dumps({"blocks": []}))
-        
+
         mock_sock = MagicMock()
         mock_sock.connect_ex.return_value = 1  # Connection refused
         mock_socket.return_value = mock_sock
-        
+
         with patch('pathlib.Path.home', return_value=self.temp_path):
             cmd_doctor(self.args)
             output = mock_stdout.getvalue()
             self.assertIn('⚠️', output)
-            self.assertIn('not reachable', output)
+            self.assertIn('not running', output)
     
+    @patch('tokenpak.cli.commands.doctor._proxy_get', return_value=None)
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
     @patch('socket.socket')
-    def test_proxy_check_exception(self, mock_socket, mock_stdout):
+    def test_proxy_check_exception(self, mock_socket, mock_stdout, mock_proxy_get):
         """Socket exception should warn."""
         config_dir = self.temp_path / ".tokenpak"
         config_dir.mkdir()
@@ -289,11 +299,12 @@ class DoctorProxyPortTest(unittest.TestCase):
 
 class DoctorDiskSpaceTest(unittest.TestCase):
     """Test disk space check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -351,11 +362,12 @@ class DoctorDiskSpaceTest(unittest.TestCase):
 
 class DoctorLogFileTest(unittest.TestCase):
     """Test log file check."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -402,11 +414,12 @@ class DoctorLogFileTest(unittest.TestCase):
 
 class DoctorFixFlagTest(unittest.TestCase):
     """Test --fix flag functionality."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = True
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -466,11 +479,12 @@ class DoctorFixFlagTest(unittest.TestCase):
 
 class DoctorOutputFormatTest(unittest.TestCase):
     """Test output formatting."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
     
     @patch('sys.stdout', new_callable=StringIO)
     @patch('tokenpak.cli.sys.version_info', VersionInfo(3, 10, 0, 'final', 0))
@@ -510,11 +524,12 @@ class DoctorOutputFormatTest(unittest.TestCase):
 
 class DoctorExitCodesTest(unittest.TestCase):
     """Test exit codes."""
-    
+
     def setUp(self):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
     
@@ -590,6 +605,7 @@ class DoctorRequiredDirsTest(unittest.TestCase):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 
@@ -652,6 +668,7 @@ class DoctorDependenciesTest(unittest.TestCase):
         self.args = MagicMock()
         self.args.fix = False
         self.args.fleet = False
+        self.args.claude_code = False
         self.temp_home = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_home.name)
 
