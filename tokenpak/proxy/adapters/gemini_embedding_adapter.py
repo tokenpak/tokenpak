@@ -16,13 +16,15 @@ _GEMINI_EMBED_BASE = "https://generativelanguage.googleapis.com"
 class GeminiEmbeddingAdapter(EmbeddingAdapter):
     """Embedding adapter for Google Gemini.
 
-    Upstream: https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent
-    Auth:     query param ?key=<GEMINI_API_KEY>  (NOT Authorization header)
-    Schema:   {content: {parts: [{text: ...}]}} → {embedding: {values: [...]}}
+    Single input:  POST /v1beta/models/{model}:embedContent
+                   Body: {content: {parts: [{text: ...}]}}
+                   Response: {embedding: {values: [...]}}
 
-    NOTE — batch inputs: embedContent accepts a single text. For >1 input, the
-    batchEmbedContent endpoint should be used.  This adapter currently embeds
-    only the *first* input string.  Full batch support is tracked as a TODO.
+    Batch input:   POST /v1beta/models/{model}:batchEmbedContents
+                   Body: {requests: [{model: "models/{model}", content: {parts: [{text: ...}]}}, ...]}
+                   Response: {embeddings: [{values: [...]}, ...]}
+
+    Auth: query param ?key=<GEMINI_API_KEY>  (NOT Authorization header)
     """
 
     source_format = "gemini-embeddings"
@@ -41,83 +43,85 @@ class GeminiEmbeddingAdapter(EmbeddingAdapter):
     def normalize_request(
         self, canonical: CanonicalEmbeddingRequest
     ) -> Tuple[str, Dict[str, str], bytes]:
-        """Convert a canonical embedding request to Gemini embedContent wire format.
+        """Convert a canonical embedding request to Gemini wire format.
+
+        Single input  → embedContent endpoint (single-text API).
+        Multiple inputs → batchEmbedContents endpoint (all inputs embedded in one call).
 
         Returns:
             (url, headers, body) ready to forward to the Gemini API.
-
-        NOTE: Only the first element of canonical.input is sent.  Batch
-        support (batchEmbedContent) is a TODO — see class docstring.
         """
         model = canonical.model or self.get_default_model()
-
-        # Gemini embedContent is single-text; use first input only.
-        # TODO: implement batch via batchEmbedContent for len(canonical.input) > 1
-        text = canonical.input[0] if canonical.input else ""
-
-        payload: Dict = {
-            "content": {
-                "parts": [{"text": text}]
-            }
-        }
-
-        # Map canonical dimensions → Gemini outputDimensionality
-        if canonical.dimensions is not None:
-            payload["outputDimensionality"] = canonical.dimensions
-
         api_key = os.environ.get(self.get_env_key_name(), "")
-        url = (
-            f"{_GEMINI_EMBED_BASE}/v1beta/models/{model}:embedContent"
-            f"?{urlencode({'key': api_key})}"
-        )
+        out_headers: Dict[str, str] = {"Content-Type": "application/json"}
 
-        out_headers: Dict[str, str] = {
-            "Content-Type": "application/json",
-        }
+        if len(canonical.input) > 1:
+            # Batch path: batchEmbedContents accepts multiple texts in one request.
+            requests_list: List[Dict] = []
+            for text in canonical.input:
+                req: Dict = {
+                    "model": f"models/{model}",
+                    "content": {"parts": [{"text": text}]},
+                }
+                if canonical.dimensions is not None:
+                    req["outputDimensionality"] = canonical.dimensions
+                requests_list.append(req)
+
+            payload: Dict = {"requests": requests_list}
+            url = (
+                f"{_GEMINI_EMBED_BASE}/v1beta/models/{model}:batchEmbedContents"
+                f"?{urlencode({'key': api_key})}"
+            )
+        else:
+            # Single-text path: embedContent.
+            text = canonical.input[0] if canonical.input else ""
+            payload = {"content": {"parts": [{"text": text}]}}
+            if canonical.dimensions is not None:
+                payload["outputDimensionality"] = canonical.dimensions
+            url = (
+                f"{_GEMINI_EMBED_BASE}/v1beta/models/{model}:embedContent"
+                f"?{urlencode({'key': api_key})}"
+            )
+
         out_body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-
         return url, out_headers, out_body
 
     def normalize_response(self, status: int, headers: Dict[str, str], body: bytes) -> bytes:
-        """Convert a Gemini embedContent response to OpenAI-compatible embedding format.
+        """Convert a Gemini embedContent or batchEmbedContents response to OpenAI format.
 
-        Gemini returns:
-            {"embedding": {"values": [...]}}
+        Single response:  {"embedding": {"values": [...]}}
+        Batch response:   {"embeddings": [{"values": [...]}, ...]}
 
         OpenAI format returned:
             {
               "object": "list",
-              "data": [{"object": "embedding", "index": 0, "embedding": [...]}],
+              "data": [{"object": "embedding", "index": N, "embedding": [...]}],
               "model": "<model>",
-              "usage": {"prompt_tokens": N, "total_tokens": N}
+              "usage": {"prompt_tokens": 0, "total_tokens": 0}
             }
         """
         raw = json.loads(body)
 
-        values: List[float] = raw.get("embedding", {}).get("values", [])
-
-        # Gemini embedContent returns no token-usage metadata.
-        # Estimate from the embedded text length as a best-effort proxy.
-        estimated_tokens = 0
-        try:
-            req_content = raw.get("_request_content")  # not present in response
-        except Exception:
-            pass
+        if "embeddings" in raw:
+            # batchEmbedContents response
+            data: List[Dict] = [
+                {
+                    "object": "embedding",
+                    "index": i,
+                    "embedding": emb.get("values", []),
+                }
+                for i, emb in enumerate(raw["embeddings"])
+            ]
+        else:
+            # embedContent response
+            values: List[float] = raw.get("embedding", {}).get("values", [])
+            data = [{"object": "embedding", "index": 0, "embedding": values}]
 
         openai_response: Dict = {
             "object": "list",
-            "data": [
-                {
-                    "object": "embedding",
-                    "index": 0,
-                    "embedding": values,
-                }
-            ],
+            "data": data,
             "model": raw.get("model", self.get_default_model()),
-            "usage": {
-                "prompt_tokens": estimated_tokens,
-                "total_tokens": estimated_tokens,
-            },
+            "usage": {"prompt_tokens": 0, "total_tokens": 0},
         }
 
         return json.dumps(openai_response, ensure_ascii=False).encode("utf-8")
