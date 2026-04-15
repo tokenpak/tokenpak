@@ -76,7 +76,7 @@ def test_write_settings_with_hooks_enabled(tmp_path):
     assert "UserPromptSubmit" in settings["hooks"]
     hook_cmd = settings["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     assert "pre_send" in hook_cmd
-    assert sys.executable in hook_cmd
+    assert "bash" in hook_cmd
 
 
 def test_write_settings_without_hooks(tmp_path):
