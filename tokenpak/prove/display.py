@@ -17,6 +17,35 @@ from pathlib import Path
 from typing import Optional
 
 
+def _ensure_tmux() -> None:
+    """Install tmux if not present. tmux is a tokenpak dependency for live
+    test display (split-pane log tailing)."""
+    if shutil.which("tmux"):
+        return
+
+    print("  Installing tmux (required for live test display)...", file=sys.stderr)
+
+    # Try package managers in order of likelihood
+    for cmd in [
+        ["sudo", "apt-get", "install", "-y", "tmux"],
+        ["sudo", "dnf", "install", "-y", "tmux"],
+        ["sudo", "yum", "install", "-y", "tmux"],
+        ["sudo", "pacman", "-S", "--noconfirm", "tmux"],
+        ["brew", "install", "tmux"],
+    ]:
+        if not shutil.which(cmd[0] if cmd[0] != "sudo" else cmd[1]):
+            continue
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0 and shutil.which("tmux"):
+                print("  tmux installed.", file=sys.stderr)
+                return
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            continue
+
+    print("  Could not install tmux automatically.", file=sys.stderr)
+
+
 class LiveDisplay:
     """Manage live display of two arm log files.
 
@@ -46,6 +75,10 @@ class LiveDisplay:
         self.arm_a_log.touch()
         self.arm_b_log.touch()
 
+        # Install tmux if missing (tokenpak dependency)
+        if not shutil.which("tmux"):
+            _ensure_tmux()
+
         # Try tmux first
         if self._try_tmux():
             return f"tmux attach -t {self._tmux_session}"
@@ -56,13 +89,10 @@ class LiveDisplay:
 
         # Fallback: log files only — user can tail them in another terminal
         self._method = "logs"
-        hint = ""
-        if not shutil.which("tmux"):
-            hint = "\n    Tip: install tmux for automatic split-pane live view"
         return (
             f"Review logs after test completes (or tail -f in another terminal):\n"
             f"    {self.arm_a_log}\n"
-            f"    {self.arm_b_log}{hint}"
+            f"    {self.arm_b_log}"
         )
 
     def stop(self) -> None:

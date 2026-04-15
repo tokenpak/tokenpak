@@ -600,8 +600,7 @@ def run_test(
     print(f"  Turns:     {n_turns}")
     print(f"  Arms:      {n_arms}")
     for i, a in enumerate(arms_cfg):
-        tp = " + tokenpak" if a.via_tokenpak else ""
-        print(f"    [{i+1}] {a.name}{tp}")
+        print(f"    [{i+1}] {a.name}")
     print(f"  Proof:     {proof_id}")
 
     # ── Launch live display ─────────────────────────────────
@@ -624,8 +623,7 @@ def run_test(
         arm_num = arm_idx + 1
         log_path = log_dir / f"{proof_id}_{arm_num}.log"
 
-        tp = " + TokenPak" if arm_cfg.via_tokenpak else ""
-        print(f"  [{arm_num}/{n_arms}] Running {arm_cfg.name}{tp}...")
+        print(f"  [{arm_num}/{n_arms}] Running {arm_cfg.name}...")
 
         def on_turn(turn_num: int, tr: TurnResult) -> None:
             if tr.error:
@@ -789,8 +787,7 @@ def run(args=None) -> None:
     sys.stdout.write(f"    Proxy:      {proxy_status}\n")
     sys.stdout.write(f"    Arms:       {len(arms)}\n")
     for i, a in enumerate(arms):
-        tp = " + tokenpak" if a.via_tokenpak else ""
-        sys.stdout.write(f"      [{i+1}] {a.name}{tp}\n")
+        sys.stdout.write(f"      [{i+1}] {a.name}\n")
     sys.stdout.write(f"\n")
     sys.stdout.flush()
 
