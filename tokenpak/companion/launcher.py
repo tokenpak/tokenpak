@@ -71,6 +71,11 @@ def main(args: list[str] | None = None) -> int:
         banner_parts.append("no budget cap)")
     print("  ".join(banner_parts), file=sys.stderr)
 
+    # Prefix session name with 📦 so tokenpak sessions are visually distinct
+    # in terminal tabs. If the user provided --name/-n, prefix their value;
+    # otherwise inject a default name.
+    args = _prefix_session_name(args)
+
     # Build claude command
     claude_args = ["claude"]
 
@@ -101,12 +106,41 @@ def main(args: list[str] | None = None) -> int:
     if proxy_url:
         env["ANTHROPIC_BASE_URL"] = proxy_url
 
+    # Set terminal tab title immediately so the 📦 is visible even before
+    # Claude Code finishes initialising and sets its own title.
+    sys.stderr.write("\033]0;📦 tokenpak claude\007")
+    sys.stderr.flush()
+
     # Exec into claude — replaces this process
     os.execvpe("claude", claude_args, env)
 
     # Only reached if exec fails
     print("tokenpak: failed to launch claude", file=sys.stderr)
     return 1
+
+
+_SESSION_PREFIX = "\U0001f4e6"  # 📦
+
+
+def _prefix_session_name(args: list[str]) -> list[str]:
+    """Prefix the Claude Code session name with 📦.
+
+    Handles ``--name VALUE``, ``-n VALUE``, and ``--name=VALUE`` forms.
+    If no name flag is present, injects ``--name "📦 tokenpak"``.
+    Returns a new list (never mutates the input).
+    """
+    args = list(args)  # shallow copy
+    for i, arg in enumerate(args):
+        if arg in ("--name", "-n") and i + 1 < len(args):
+            args[i + 1] = f"{_SESSION_PREFIX} {args[i + 1]}"
+            return args
+        if arg.startswith("--name="):
+            _, val = arg.split("=", 1)
+            args[i] = f"--name={_SESSION_PREFIX} {val}"
+            return args
+    # No name flag found — inject a default
+    args.extend(["--name", f"{_SESSION_PREFIX} tokenpak claude"])
+    return args
 
 
 def _write_mcp_config(config: CompanionConfig) -> str:

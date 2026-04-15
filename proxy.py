@@ -7236,6 +7236,38 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
         })
 
     def _reverse_proxy(self, method):
+        # ── Claude Code backend dispatch (early exit) ─────────
+        # Check X-TokenPak-Backend header BEFORE any pipeline processing.
+        # If set to "claude-code", delegate to Claude Code CLI and return.
+        for _bk, _bv in self.headers.items():
+            if _bk.lower() == "x-tokenpak-backend" and _bv.strip().lower() == "claude-code":
+                try:
+                    content_length = int(self.headers.get("Content-Length", 0))
+                    raw_body = self.rfile.read(content_length) if content_length else b"{}"
+                    _oc_body = json.loads(raw_body)
+                    _oc_session = ""
+                    for _sk, _sv in self.headers.items():
+                        if _sk.lower() == "x-openclaw-session":
+                            _oc_session = _sv.strip()
+                            break
+                    if not _oc_session:
+                        _oc_session = f"oc_{hash(str(_oc_body.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
+                    from tokenpak.sdk.openclaw import execute_via_claude_code
+                    _oc_result = execute_via_claude_code(
+                        openclaw_session=_oc_session,
+                        messages=_oc_body.get("messages", []),
+                        model=_oc_body.get("model", "claude-sonnet-4-6"),
+                        system=_oc_body.get("system", ""),
+                        max_tokens=_oc_body.get("max_tokens", 4096),
+                    )
+                    self._send_json(_oc_result, status=200 if _oc_result.get("type") != "error" else 500)
+                except Exception as _oc_err:
+                    print(f"  [claude-code-backend] Error: {_oc_err}", flush=True)
+                    self._send_json(
+                        {"error": {"type": "backend_error", "message": str(_oc_err)}},
+                        status=500,
+                    )
+                return
         # Pre-flight: check for missing API credentials before touching upstream.
         # If the client sent no auth header AND the environment has no key set,
         # surface a clear auth_missing error immediately rather than forwarding a
@@ -8404,46 +8436,6 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
                 fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
                 fwd_headers.setdefault("originator", "codex_cli_rs")
                 fwd_headers.setdefault("Accept", "text/event-stream")
-
-        # ── Claude Code backend dispatch ───────────────────────
-        # When X-TokenPak-Backend: claude-code is set, delegate to
-        # Claude Code CLI instead of forwarding HTTP to the provider.
-        # This gives OpenClaw users tool use, CLAUDE.md, subscription
-        # billing, and persistent multi-turn via --resume.
-        _backend_header = ""
-        for _bk, _bv in self.headers.items():
-            if _bk.lower() == "x-tokenpak-backend":
-                _backend_header = _bv.strip().lower()
-                break
-
-        if _backend_header == "claude-code" and _route == "openclaw":
-            try:
-                from tokenpak.sdk.openclaw import execute_via_claude_code
-                _oc_body = json.loads(body) if isinstance(body, (bytes, str)) else body
-                _oc_session = ""
-                for _sk, _sv in self.headers.items():
-                    if _sk.lower() == "x-openclaw-session":
-                        _oc_session = _sv.strip()
-                        break
-                if not _oc_session:
-                    _oc_session = f"oc_{hash(str(_oc_body.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
-
-                _oc_result = execute_via_claude_code(
-                    openclaw_session=_oc_session,
-                    messages=_oc_body.get("messages", []),
-                    model=_oc_body.get("model", "claude-sonnet-4-6"),
-                    system=_oc_body.get("system", ""),
-                    max_tokens=_oc_body.get("max_tokens", 4096),
-                )
-                self._send_json(_oc_result, status=200 if _oc_result.get("type") != "error" else 500)
-                return
-            except Exception as _oc_err:
-                print(f"  [claude-code-backend] Error: {_oc_err}", flush=True)
-                self._send_json(
-                    {"error": {"type": "backend_error", "message": str(_oc_err)}},
-                    status=500,
-                )
-                return
 
         # Fix #5: Check per-provider circuit breaker before attempting upstream
         _cb_provider = _provider_for_url(target_url)
