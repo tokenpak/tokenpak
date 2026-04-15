@@ -1824,30 +1824,48 @@ class ProxyServer:
         """Return a concise operational status snapshot for GET /status."""
         with self._session_lock:
             start_time = self.session["start_time"]
+            requests_total = self.session["requests"]
         uptime = round(time.time() - start_time)
-        last_restart = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        # Provider health from circuit breakers; unknown when no circuit exists yet.
-        _known_providers = ("anthropic", "openai", "google")
+        started_at = datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # last_request_at: ISO timestamp of most recent proxied request, or None.
+        with self._last_lock:
+            last_req = self._last_request
+        last_request_at = last_req["timestamp"] if last_req is not None else None
+
+        # Provider health — cached from circuit breaker state; no live probe per request.
+        # Key env vars determine whether a provider is configured at all.
+        _provider_keys = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "google": "GOOGLE_API_KEY",
+        }
         cb_registry = get_circuit_breaker_registry()
         cb_statuses = cb_registry.all_statuses()
         providers: dict = {}
         active_alerts = 0
-        for name in _known_providers:
-            if name in cb_statuses:
+        for name, env_var in _provider_keys.items():
+            has_key = bool(os.environ.get(env_var, "").strip())
+            if not has_key:
+                providers[name] = "no-key"
+            elif name in cb_statuses:
                 state = cb_statuses[name].get("state", "unknown")
                 if state in ("open", "half_open"):
-                    providers[name] = "error"
+                    providers[name] = "unreachable"
                     active_alerts += 1
                 else:
-                    providers[name] = "ok"
+                    providers[name] = "reachable"
             else:
-                providers[name] = "unknown"
+                providers[name] = "reachable"
+
         return {
-            "uptime_seconds": uptime,
             "version": _tokenpak_version,
-            "last_restart": last_restart,
-            "active_alerts": active_alerts,
+            "uptime_seconds": uptime,
+            "started_at": started_at,
             "providers": providers,
+            "active_alerts": active_alerts,
+            "requests_total": requests_total,
+            "last_request_at": last_request_at,
         }
 
     def stats(self) -> dict:
