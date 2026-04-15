@@ -558,8 +558,12 @@ def _execute_turn_cli(
 ) -> TurnResult:
     """Execute via CLI subprocess (claude -p, codex exec, etc.).
 
-    CLI platforms only support the latest user message (not full multi-turn
-    history), so we concatenate the conversation into a single prompt.
+    Uses the CLI tool's native auth and billing (not raw API keys).
+    This means Claude Code uses OAuth billing with higher rate limits,
+    and Codex uses ChatGPT plan billing.
+
+    Multi-turn is simulated by concatenating prior conversation into
+    the prompt, since -p mode is single-shot.
     """
     result = TurnResult()
     t0 = time.monotonic()
@@ -578,8 +582,14 @@ def _execute_turn_cli(
         result.error = f"No cli_command configured for provider {cfg.provider}"
         return result
 
-    # Parse command + add prompt
+    # Parse command + add model flag + prompt
     cmd_parts = cmd.split()
+    # Insert model flag for claude/codex
+    if cfg.model:
+        if "claude" in cmd:
+            cmd_parts.extend(["--model", cfg.model])
+        elif "codex" in cmd:
+            cmd_parts.extend(["--model", cfg.model])
     cmd_parts.append(full_prompt)
 
     try:

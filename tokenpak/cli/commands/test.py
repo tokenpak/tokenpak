@@ -496,51 +496,63 @@ _SCENARIOS: dict[str, dict] = {
 def _map_platform_to_adapter(platform: str, provider: str, model: str):
     """Map user-facing platform to adapter ArmConfigs.
 
-    The comparison is always two arms:
-      - Direct: hits provider API directly (bypasses proxy)
-      - w/ TokenPak: routes through proxy (compression + caching active)
-
-    API keys are resolved from env vars OR CLI OAuth tokens
-    (~/.claude/.credentials.json, ~/.codex/auth.json), so this works
-    even when env vars aren't exported.
+    Each platform uses its native execution method:
+      - claude-code: `claude -p` vs `tokenpak claude -p` (CLI subprocess,
+        uses Claude Code's own OAuth billing — no API rate limit conflict)
+      - codex: `codex exec` vs `tokenpak codex exec`
+      - api/proxy: direct HTTP vs proxy HTTP (raw API key route)
     """
     from tokenpak.prove.adapter import ArmConfig, _resolve_api_key, _get_provider
 
     proxy_available = _detect_proxy_running()
-    reg = _get_provider(provider)
-    key_env = reg.get("api_key_env", "")
-    has_key = bool(_resolve_api_key(provider, key_env))
 
-    # Always build two arms when possible: Direct + w/ TokenPak
-    arms = []
+    if platform == "claude-code":
+        # Claude Code uses its own OAuth billing (not raw API rate limits).
+        # The comparison: native claude vs claude with tokenpak companion.
+        arms = [
+            ArmConfig(name="Claude Code", platform="cli",
+                      provider="anthropic", model=model,
+                      cli_command="claude -p"),
+            ArmConfig(name="w/ TokenPak", platform="cli",
+                      provider="anthropic", model=model,
+                      cli_command="tokenpak claude -p",
+                      via_tokenpak=True),
+        ]
+        return arms
 
-    if has_key:
-        arms.append(ArmConfig(
-            name="Direct", platform="api",
-            provider=provider, model=model,
-            base_url=reg.get("base_url", ""),
-        ))
+    elif platform == "codex":
+        arms = [
+            ArmConfig(name="Codex", platform="cli",
+                      provider="openai", model=model,
+                      cli_command="codex exec"),
+            ArmConfig(name="w/ TokenPak", platform="cli",
+                      provider="openai", model=model,
+                      cli_command="tokenpak codex exec",
+                      via_tokenpak=True),
+        ]
+        return arms
 
-    if proxy_available:
-        arms.append(ArmConfig(
-            name="w/ TokenPak", platform="proxy",
-            provider=provider, model=model, via_tokenpak=True,
-        ))
+    elif platform in ("api", "proxy"):
+        # API route: direct HTTP vs through proxy
+        arms = []
+        reg = _get_provider(provider)
+        key_env = reg.get("api_key_env", "")
+        has_key = bool(_resolve_api_key(provider, key_env))
 
-    # Fallback: CLI only if no API key and no proxy
-    if not arms:
-        if platform == "claude-code" and shutil.which("claude"):
+        if has_key:
             arms.append(ArmConfig(
-                name="Claude Code", platform="cli",
-                provider="anthropic", model=model,
-                cli_command="claude -p"))
-        elif platform == "codex" and shutil.which("codex"):
+                name="Direct", platform="api",
+                provider=provider, model=model,
+                base_url=reg.get("base_url", ""),
+            ))
+        if proxy_available:
             arms.append(ArmConfig(
-                name="Codex", platform="cli",
-                provider="openai", model=model,
-                cli_command="codex exec"))
+                name="w/ TokenPak", platform="proxy",
+                provider=provider, model=model, via_tokenpak=True,
+            ))
+        return arms
 
-    return arms
+    return []
 
 
 def _count_active_sessions() -> dict[str, int]:
