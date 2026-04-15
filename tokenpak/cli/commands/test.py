@@ -278,58 +278,219 @@ def _get_models(provider: str) -> list[tuple[str, str]]:
 # ═══════════════════════════════════════════════════════════════════════
 # Built-in 10-turn test scenarios — lightweight prompts for fast turns
 # that build up cached context to demonstrate multi-turn savings.
+#
+# Design principles for showcasing tokenpak:
+#   - Prompts are 200-400 chars each (substantial but not bloated)
+#   - Repeated references to the same code/specs across turns → cache hits
+#   - Re-stating requirements and context → compression opportunities
+#   - 10 turns builds a growing conversation → savings curve
 # ═══════════════════════════════════════════════════════════════════════
 
 _SCENARIOS: dict[str, dict] = {
     "coding": {
         "name": "Coding — Config Parser",
-        "label": "Coding  (build a config parser — 10 quick turns)",
-        "system": "You are a Python engineer. Keep responses under 150 words. Code only when asked.",
+        "label": "Coding  (build a config parser — 10 turns)",
+        "system": "You are a Python engineer. Keep responses concise (under 200 words). Show code when asked. Use type hints.",
         "turns": [
-            ("Design",         "What are the 3 best approaches to parse TOML config files in Python? Just list them with one sentence each."),
-            ("Pick",           "Let's go with approach 1. What would the class interface look like? Show just the class signature and method names, no implementation."),
-            ("Init",           "Write the __init__ method. Accept a file path, load and parse the TOML. Handle FileNotFoundError."),
-            ("Get",            "Write a get(key, default=None) method that supports dotted keys like 'database.host'. Keep it short."),
-            ("Set",            "Write a set(key, value) method that also supports dotted keys. Create nested dicts as needed."),
-            ("Save",           "Write a save() method that writes the config back to the TOML file atomically using a temp file."),
-            ("Validate",       "Add a validate(schema) method that checks required keys exist. Schema is just a list of dotted key strings. Return missing keys."),
-            ("Test get",       "Write 3 pytest test functions for the get() method: basic key, dotted key, missing key with default."),
-            ("Test set",       "Write 3 pytest test functions for set(): basic key, dotted key creating nested dict, overwrite existing."),
-            ("Summary",        "Summarize the full class in a docstring: what it does, all public methods, and a 3-line usage example."),
+            ("Design", (
+                "I need a Python `ConfigManager` class that loads TOML config files, "
+                "supports dotted key access like 'database.host', and can write changes "
+                "back atomically. What should the public API look like? Show the class "
+                "signature with method names and type signatures — no implementation yet."
+            )),
+            ("Init", (
+                "For the `ConfigManager` class with dotted key access and atomic writes "
+                "that we just designed: write the `__init__` method. It should accept a "
+                "file path, load and parse the TOML file, and raise `FileNotFoundError` "
+                "with a clear message if the file doesn't exist."
+            )),
+            ("Get method", (
+                "For our `ConfigManager` class: write the `get(key, default=None)` method. "
+                "It must support dotted keys like 'database.host' by walking nested dicts. "
+                "Return the default if any part of the key path is missing. Include the "
+                "type signature with generics."
+            )),
+            ("Set method", (
+                "For our `ConfigManager` class with dotted key support: write the "
+                "`set(key, value)` method. It should support dotted keys like 'database.host' "
+                "and automatically create intermediate nested dicts when they don't exist. "
+                "Raise `TypeError` if an intermediate key exists but isn't a dict."
+            )),
+            ("Save", (
+                "For our `ConfigManager` class that supports dotted key access: write the "
+                "`save()` method. It must write the config back to the TOML file atomically "
+                "using a temporary file and `os.replace()`. Preserve the original file on "
+                "write failure. Include error handling."
+            )),
+            ("Validate", (
+                "For our `ConfigManager` class with get/set/save: add a `validate(schema)` "
+                "method. The schema is a dict mapping dotted key paths to their expected "
+                "Python types, like `{'database.host': str, 'database.port': int}`. "
+                "Return a list of `(key, expected_type, actual_type)` tuples for violations."
+            )),
+            ("Env override", (
+                "For our `ConfigManager` class with get/set/save/validate: add environment "
+                "variable override support. The `get()` method should first check for an "
+                "env var like `CONFIG_DATABASE_HOST` (uppercase, dots→underscores) before "
+                "falling back to the TOML value. Show the updated `get()` method."
+            )),
+            ("Test get/set", (
+                "For our `ConfigManager` class with dotted key access and env overrides: "
+                "write 4 pytest test functions covering: basic get, dotted key get, "
+                "get with env var override, and set creating nested keys. Use `tmp_path` "
+                "fixture for the TOML file."
+            )),
+            ("Test save", (
+                "For our `ConfigManager` class with atomic save via `os.replace()`: write "
+                "3 pytest tests covering: basic save round-trip (load→set→save→reload), "
+                "save atomicity (file intact after simulated write failure), and validate "
+                "catching a type mismatch."
+            )),
+            ("Docstring", (
+                "For our complete `ConfigManager` class with get/set/save/validate and env "
+                "override support: write a comprehensive module-level docstring covering "
+                "what it does, all public methods with one-line descriptions, the env var "
+                "override convention, and a 5-line usage example."
+            )),
         ],
     },
     "planning": {
         "name": "Planning — API Design",
-        "label": "Planning  (design a REST API — 10 quick turns)",
-        "system": "You are a backend architect. Keep responses under 150 words. Be precise.",
+        "label": "Planning  (design a REST API — 10 turns)",
+        "system": "You are a backend architect. Keep responses concise (under 200 words). Be precise and specific.",
         "turns": [
-            ("Scope",          "We're building a bookmark manager API. What are the 5 core resources we need? Just list them."),
-            ("Bookmark CRUD",  "Define the REST endpoints for the Bookmark resource. Just show method, path, and one-line description."),
-            ("Collection",     "Define endpoints for organizing bookmarks into Collections (folders). Same format: method, path, description."),
-            ("Tags",           "Define endpoints for a tagging system. Bookmarks can have multiple tags. Method, path, description."),
-            ("Search",         "Design the search endpoint. What query parameters should it accept? List them with types."),
-            ("Auth",           "How should we handle authentication? Describe the approach in 3 sentences. No code."),
-            ("Errors",         "Define our error response format. Show one JSON example for a 404 and one for a 422 validation error."),
-            ("Pagination",     "How should list endpoints handle pagination? Show the query params and response envelope format."),
-            ("Rate limits",    "What rate limits should we set? Give specific numbers per endpoint category (read, write, search)."),
-            ("Summary",        "Write a one-paragraph API overview suitable for the top of the docs. Cover scope, auth, and key design choices."),
+            ("Resources", (
+                "We're building a bookmark manager REST API. Users can save URLs, organize "
+                "them into collections, and tag them for search. What are the core resources "
+                "and their relationships? List each resource with its key fields and how "
+                "they relate to each other."
+            )),
+            ("Bookmark CRUD", (
+                "For our bookmark manager API with bookmarks, collections, and tags: define "
+                "the CRUD endpoints for the Bookmark resource. Show HTTP method, path, "
+                "request body fields, and response status codes for each endpoint. Bookmarks "
+                "have: url, title, description, collection_id, and tags."
+            )),
+            ("Collections", (
+                "For our bookmark manager API where bookmarks belong to collections: define "
+                "the CRUD endpoints for collections. A collection has a name, description, "
+                "and optional parent_id for nesting. Include an endpoint to list all bookmarks "
+                "in a collection. Show method, path, and key fields."
+            )),
+            ("Tags & search", (
+                "For our bookmark manager API with bookmarks, collections, and tags: design "
+                "the tagging and search endpoints. Tags are simple strings attached to "
+                "bookmarks (many-to-many). Include: add/remove tags, list all tags, search "
+                "bookmarks by tag/title/url with query parameters."
+            )),
+            ("Auth", (
+                "For our bookmark manager API with bookmarks, collections, and tags: how "
+                "should authentication work? We need user isolation (each user sees only "
+                "their own bookmarks). Describe the auth approach: token format, header "
+                "convention, how to get a token, and token expiry strategy."
+            )),
+            ("Errors", (
+                "For our bookmark manager API with auth, bookmarks, collections, and tags: "
+                "define the error response format. All errors should use a consistent JSON "
+                "shape. Show examples for: 401 unauthorized, 404 bookmark not found, and "
+                "422 validation error (missing required field 'url')."
+            )),
+            ("Pagination", (
+                "For our bookmark manager API: how should list endpoints handle pagination? "
+                "We have list-bookmarks, list-collections, list-tags, and search endpoints "
+                "that all need it. Define the query parameters and the response envelope "
+                "with pagination metadata."
+            )),
+            ("Rate limits", (
+                "For our bookmark manager API with auth, CRUD, search, and pagination: "
+                "what rate limits should we enforce? Consider read endpoints (list/get), "
+                "write endpoints (create/update/delete), and the search endpoint separately. "
+                "Give specific numbers per minute and explain the rationale."
+            )),
+            ("Import/export", (
+                "For our bookmark manager API with bookmarks, collections, and tags: design "
+                "a bulk import endpoint that accepts a Netscape bookmark HTML file (the "
+                "standard browser export format) and a bulk export endpoint that produces "
+                "one. Show the endpoints, content types, and key behaviors."
+            )),
+            ("Summary", (
+                "For our complete bookmark manager API with bookmarks, collections, tags, "
+                "search, auth, pagination, rate limits, and import/export: write a one-paragraph "
+                "API overview suitable for developer docs. Cover scope, auth model, key "
+                "design choices, and rate limit policy."
+            )),
         ],
     },
     "codebase": {
         "name": "Codebase — Code Review",
-        "label": "Codebase  (review and fix code — 10 quick turns)",
-        "system": "You are a code reviewer. Keep responses under 150 words unless showing code.",
+        "label": "Codebase  (review and fix code — 10 turns)",
+        "system": "You are a code reviewer. Keep responses concise (under 200 words). Show code when fixing issues.",
         "turns": [
-            ("Review",         "Review this function:\n```python\ndef process(data):\n    result = []\n    for item in data:\n        if item['status'] == 'active':\n            result.append({'name': item['name'], 'score': item['score'] * 1.1})\n    return sorted(result, key=lambda x: x['score'], reverse=True)\n```\nList 3 issues."),
-            ("Fix types",      "Add type hints to the function. Show the rewritten signature and return type."),
-            ("Fix perf",       "Rewrite it as a list comprehension. Is it actually faster? One sentence on why or why not."),
-            ("Edge cases",     "What happens if data is empty? If an item is missing the 'score' key? Add defensive handling."),
-            ("Naming",         "Suggest better names for the function and its parameter. Explain your reasoning in one sentence each."),
-            ("Docstring",      "Write a docstring for the improved function. Include Args, Returns, and Raises sections."),
-            ("Test happy",     "Write 2 pytest tests: one with normal input, one verifying the sort order."),
-            ("Test edge",      "Write 2 pytest tests: empty list input, and an item missing the 'score' key."),
-            ("Extract",        "Should we extract the scoring logic (score * 1.1) into its own function? Answer in 2 sentences."),
-            ("Final",          "Show the final version of the function with all improvements applied. No explanation, just code."),
+            ("Review", (
+                "Review this Python function and list the top 5 issues (bugs, style, "
+                "performance, safety):\n```python\ndef process_users(data):\n"
+                "    result = []\n    for item in data:\n"
+                "        if item['status'] == 'active':\n"
+                "            user = {'name': item['name'], 'email': item['email'],\n"
+                "                    'score': item['score'] * 1.1}\n"
+                "            result.append(user)\n"
+                "    result = sorted(result, key=lambda x: x['score'], reverse=True)\n"
+                "    return result[:10]\n```"
+            )),
+            ("Type hints", (
+                "For the `process_users` function that filters active users, applies a "
+                "1.1x score multiplier, sorts by score, and returns the top 10: add proper "
+                "type hints. Define a TypedDict for the input items and the output items. "
+                "Show the full rewritten function signature."
+            )),
+            ("Comprehension", (
+                "For the `process_users` function that filters active users, computes "
+                "score * 1.1, sorts descending, and returns top 10: rewrite the filter + "
+                "transform as a list comprehension. Keep the sort and slice separate. "
+                "Is this actually faster than the loop? One sentence."
+            )),
+            ("Edge cases", (
+                "For our `process_users` function that filters by status='active' and "
+                "accesses item['score'] and item['email']: what happens if data is None? "
+                "If an item is missing the 'score' key? If 'email' contains None? Add "
+                "defensive handling for each case. Show the updated code."
+            )),
+            ("Extract scoring", (
+                "For our `process_users` function that multiplies score by 1.1: the "
+                "multiplier should be configurable, not hardcoded. Extract it into a "
+                "parameter with a default value. Also, should the scoring logic be its "
+                "own function? Show the refactored code."
+            )),
+            ("Naming", (
+                "For our `process_users` function that filters active users, applies "
+                "score multiplier, sorts by score, and returns top N: the name "
+                "'process_users' is vague. Suggest a better function name and better "
+                "parameter names. Explain your reasoning in one sentence each."
+            )),
+            ("Docstring", (
+                "For our renamed and improved function (formerly `process_users`) that "
+                "filters active users, applies a configurable score multiplier, sorts "
+                "descending by score, and returns the top N: write a Google-style docstring "
+                "with Args, Returns, and Raises sections."
+            )),
+            ("Test happy", (
+                "For our improved `process_users` function with type hints, configurable "
+                "multiplier, top-N, and defensive handling: write 3 pytest tests covering "
+                "normal input (verify filtering + sort + limit), custom multiplier value, "
+                "and the sort order (highest score first)."
+            )),
+            ("Test edge", (
+                "For our improved `process_users` function with defensive handling for "
+                "missing keys and None values: write 3 pytest tests covering empty input "
+                "list, an item missing the 'score' key, and an item with status != 'active' "
+                "being excluded from results."
+            )),
+            ("Final", (
+                "Show the final, complete version of the function (formerly `process_users`) "
+                "with all improvements applied: type hints, TypedDicts, configurable multiplier, "
+                "top-N parameter, defensive handling, better name, and docstring. Just the "
+                "code, no explanation."
+            )),
         ],
     },
 }
