@@ -1,0 +1,62 @@
+# Example ~/.tokenpak/prove/providers.yaml
+#
+# Add custom providers here. They'll be available in prove scenarios
+# alongside the built-in providers (anthropic, openai, google, xai).
+#
+# Copy this file to: ~/.tokenpak/prove/providers.yaml
+#
+# The `format` field determines how requests are built:
+#   - "anthropic"  → /v1/messages, Anthropic SSE format
+#   - "openai"     → /v1/chat/completions, OpenAI SSE format
+#                    (works for any OpenAI-compatible API)
+#   - "google"     → /v1beta/models/…:streamGenerateContent
+
+providers:
+
+  # ── xAI / Grok (OpenAI-compatible) ─────────────────────
+  # Already built-in, but you can override pricing or add models:
+  # xai:
+  #   models:
+  #     grok-4: { input: 5.0, output: 25.0, cached: 0.50 }
+
+  # ── Together AI ─────────────────────────────────────────
+  # together:
+  #   format: openai
+  #   base_url: https://api.together.xyz/v1
+  #   api_key_env: TOGETHER_API_KEY
+  #   models:
+  #     meta-llama/Llama-3.3-70B-Instruct-Turbo:
+  #       input: 0.88
+  #       output: 0.88
+  #       cached: 0.44
+
+  # ── Fireworks AI ────────────────────────────────────────
+  # fireworks:
+  #   format: openai
+  #   base_url: https://api.fireworks.ai/inference/v1
+  #   api_key_env: FIREWORKS_API_KEY
+  #   models:
+  #     accounts/fireworks/models/llama-v3p3-70b-instruct:
+  #       input: 0.90
+  #       output: 0.90
+  #       cached: 0.45
+
+  # ── Ollama (local) ─────────────────────────────────────
+  # ollama:
+  #   format: openai
+  #   base_url: http://localhost:11434/v1
+  #   api_key_env: OLLAMA_API_KEY   # can be "ollama" or empty
+  #   models:
+  #     llama3.3:    { input: 0, output: 0, cached: 0 }
+  #     qwen2.5:     { input: 0, output: 0, cached: 0 }
+
+  # ── AWS Bedrock (via OpenAI-compatible proxy) ──────────
+  # bedrock:
+  #   format: openai
+  #   base_url: http://localhost:4000/v1   # litellm proxy
+  #   api_key_env: LITELLM_API_KEY
+  #   models:
+  #     bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0:
+  #       input: 3.0
+  #       output: 15.0
+  #       cached: 0.30

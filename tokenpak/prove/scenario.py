@@ -50,7 +50,29 @@ class Turn:
 
 @dataclass
 class Scenario:
-    """A parsed prove scenario."""
+    """A parsed prove scenario.
+
+    The ``matrix`` field defines which (platform, provider, model)
+    combinations to test.  When empty, the runner falls back to the
+    legacy two-arm (direct vs proxy) behaviour using ``model`` and
+    ``provider`` from the top-level frontmatter.
+
+    Matrix format in frontmatter::
+
+        matrix:
+          - name: Sonnet Direct
+            platform: api
+            provider: anthropic
+            model: claude-sonnet-4-6
+          - name: Sonnet + TokenPak
+            platform: proxy
+            provider: anthropic
+            model: claude-sonnet-4-6
+          - name: GPT-4o Direct
+            platform: api
+            provider: openai
+            model: gpt-4o
+    """
 
     name: str
     model: str = "claude-sonnet-4-6"
@@ -58,6 +80,7 @@ class Scenario:
     system: str = "You are a helpful software engineer. Be concise and precise."
     max_tokens: int = 4096
     turns: list[Turn] = field(default_factory=list)
+    matrix: list[dict] = field(default_factory=list)
     source_path: str = ""
 
     @classmethod
@@ -79,6 +102,7 @@ class Scenario:
             provider=meta.get("provider", _detect_provider(meta.get("model", ""))),
             system=meta.get("system", cls.system),
             max_tokens=meta.get("max_tokens", 4096),
+            matrix=meta.get("matrix", []),
             source_path=str(path),
         )
 

@@ -1950,8 +1950,8 @@ def cmd_prove(args):
         from .prove.scenario import resolve_scenario
         from .prove.runner import run_proof
         scenario_name = getattr(args, "scenario", "default")
-        # Apply CLI overrides
         scenario = resolve_scenario(scenario_name)
+        # Apply CLI overrides
         if getattr(args, "model", None):
             scenario.model = args.model
             from .prove.scenario import _detect_provider
@@ -1980,7 +1980,6 @@ def cmd_prove(args):
         results_dir = __import__("pathlib").Path.home() / ".tokenpak" / "prove" / "results"
         path = results_dir / f"{proof_id}.json"
         if not path.exists():
-            # Try prefix match
             matches = list(results_dir.glob(f"{proof_id}*.json")) if results_dir.exists() else []
             if matches:
                 path = matches[0]
@@ -1993,12 +1992,26 @@ def cmd_prove(args):
     elif action == "create":
         _prove_create_scenario(args)
 
+    elif action == "providers":
+        from .prove.adapter import list_providers
+        providers = list_providers()
+        print(f"\n  Registered providers:\n")
+        for p in providers:
+            models = ", ".join(p["models"][:5])
+            if len(p["models"]) > 5:
+                models += f", ... (+{len(p['models']) - 5})"
+            print(f"    {p['name']:12s}  format={p['format']:10s}  ({p['source']})")
+            print(f"    {'':12s}  models: {models}")
+        print(f"\n  Add custom providers: ~/.tokenpak/prove/providers.yaml")
+        print()
+
     else:
-        print("Usage: tokenpak prove {run|list|show|create}")
+        print("Usage: tokenpak prove {run|list|show|create|providers}")
         print("  run [scenario]   Run a value proof (default: 'default')")
         print("  list             List available scenarios")
         print("  show <proof_id>  Show a past proof result")
-        print("  create           Create a new scenario interactively")
+        print("  create           Create a new scenario")
+        print("  providers        List registered providers + models")
 
 
 def _prove_create_scenario(args):
@@ -2166,6 +2179,10 @@ def _build_prove_parser(sub):
     p_create.add_argument("prompts", nargs="*",
                            help="Turn prompts (one per positional arg)")
     p_create.set_defaults(func=cmd_prove)
+
+    # prove providers
+    p_providers = prove_sub.add_parser("providers", help="List registered providers + models")
+    p_providers.set_defaults(func=cmd_prove)
 
     p.set_defaults(func=cmd_prove)
 

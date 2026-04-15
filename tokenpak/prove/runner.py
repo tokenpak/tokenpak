@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Orchestrate a prove run — execute both arms and produce the report.
+"""Orchestrate a prove run — execute all arms and produce the report.
 
-Flow:
-  1. Parse the scenario .md file
-  2. Launch live display (tmux panes or terminal windows)
-  3. Run Arm A (Direct API) — all turns, streaming to log file
-  4. Run Arm B (Through TokenPak) — same turns, streaming to log file
-  5. Print comparison report in the triggering terminal
-  6. Save results to JSON
+Supports two modes:
 
-Arm A runs first so its requests don't warm the provider's cache for Arm B.
-This makes the comparison conservative (Arm B gets zero unfair advantage).
+  **Legacy (2-arm)**: scenario has no ``matrix:`` — runs direct vs proxied
+  for the single model/provider defined in the frontmatter.
+
+  **Matrix (N-arm)**: scenario has a ``matrix:`` list — runs every
+  (platform, provider, model) combination defined, each as a separate arm.
+
+Arms run sequentially.  Each arm gets its own log file for live display.
+The triggering terminal shows per-turn progress for every arm, then
+the full comparison report at the end.
 """
 
 from __future__ import annotations
@@ -20,129 +21,133 @@ import sys
 import time
 from pathlib import Path
 
-from .arm import ArmResult, TurnResult, run_arm
+from .adapter import ArmConfig, ArmResult, TurnResult, run_arm as adapter_run_arm
 from .display import LiveDisplay
-from .reporter import format_report, save_result
+from .reporter import format_matrix_report, save_result
 from .scenario import Scenario
+
+
+def _build_arms(scenario: Scenario) -> list[ArmConfig]:
+    """Build the list of arms to execute from the scenario."""
+    if scenario.matrix:
+        arms = []
+        for entry in scenario.matrix:
+            arms.append(ArmConfig(
+                name=entry.get("name", f"{entry.get('provider', '?')}/{entry.get('model', '?')}"),
+                platform=entry.get("platform", "api"),
+                provider=entry.get("provider", scenario.provider),
+                model=entry.get("model", scenario.model),
+                via_tokenpak=entry.get("via_tokenpak", entry.get("platform") == "proxy"),
+                base_url=entry.get("base_url", ""),
+                api_key_env=entry.get("api_key_env", ""),
+                format=entry.get("format", ""),
+                cli_command=entry.get("cli_command", ""),
+            ))
+        return arms
+
+    # Legacy: two arms — direct + proxy
+    return [
+        ArmConfig(name="Direct API", platform="api",
+                  provider=scenario.provider, model=scenario.model),
+        ArmConfig(name="With TokenPak", platform="proxy",
+                  provider=scenario.provider, model=scenario.model,
+                  via_tokenpak=True),
+    ]
 
 
 def run_proof(
     scenario: Scenario,
     live: bool = True,
     output_dir: Path | None = None,
-) -> tuple[ArmResult, ArmResult, str]:
-    """Execute a full prove run: both arms + report.
-
-    Args:
-        scenario: The parsed scenario to run.
-        live: Whether to launch live display windows.
-        output_dir: Override for result storage directory.
+) -> tuple[list[ArmResult], str]:
+    """Execute a full prove run: all arms + report.
 
     Returns:
-        (arm_a_result, arm_b_result, proof_id)
+        (list_of_arm_results, proof_id)
     """
-    # Generate proof ID
     proof_id = f"prf_{hashlib.sha1(f'{scenario.name}{time.time()}'.encode()).hexdigest()[:8]}"
 
-    # Log file paths
+    arms = _build_arms(scenario)
+    n_arms = len(arms)
+    n_turns = len(scenario.turns)
+
     log_dir = Path.home() / ".tokenpak" / "prove" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    arm_a_log = log_dir / f"{proof_id}_arm_a.log"
-    arm_b_log = log_dir / f"{proof_id}_arm_b.log"
 
     # ── Header ──────────────────────────────────────────────
-    n_turns = len(scenario.turns)
-    print(f"\n  tokenpak prove: starting value proof \"{scenario.name}\"", file=sys.stderr)
-    print(f"  model: {scenario.model}  |  turns: {n_turns}  |  provider: {scenario.provider}", file=sys.stderr)
-    print(f"  proof id: {proof_id}", file=sys.stderr)
+    print(f"\n  tokenpak prove: \"{scenario.name}\"", file=sys.stderr)
+    print(f"  turns: {n_turns}  |  arms: {n_arms}  |  proof: {proof_id}", file=sys.stderr)
+    for i, arm in enumerate(arms):
+        tp = " + tokenpak" if arm.via_tokenpak else ""
+        print(f"    [{i+1}] {arm.name:24s}  {arm.platform}/{arm.provider}/{arm.model}{tp}", file=sys.stderr)
+    print("", file=sys.stderr)
 
-    # ── Live display ────────────────────────────────────────
+    # ── Live display (first two arms for split pane) ────────
     display = None
-    if live:
-        display = LiveDisplay(arm_a_log, arm_b_log)
+    if live and n_arms >= 2:
+        log_a = log_dir / f"{proof_id}_arm_1.log"
+        log_b = log_dir / f"{proof_id}_arm_2.log"
+        display = LiveDisplay(log_a, log_b)
         attach_info = display.start()
-        print(f"\n  Live view: {attach_info}", file=sys.stderr)
+        print(f"  Live view: {attach_info}", file=sys.stderr)
+        print("", file=sys.stderr)
 
-    print("", file=sys.stderr)
+    # ── Execute arms sequentially ───────────────────────────
+    results: list[ArmResult] = []
 
-    # ── Arm A: Direct API ───────────────────────────────────
-    print("  Running Arm A (Direct API)...", file=sys.stderr)
+    for i, arm_cfg in enumerate(arms):
+        arm_num = i + 1
+        log_path = log_dir / f"{proof_id}_arm_{arm_num}.log"
 
-    def on_turn_a(turn_num: int, result: TurnResult) -> None:
-        if result.error:
-            print(f"    Turn {turn_num}/{n_turns} ERROR: {result.error}", file=sys.stderr)
-        else:
-            cache_str = ""
-            if result.cache_read_tokens:
-                cache_str = f" ({result.cache_read_tokens:,} cached)"
-            print(
-                f"    Turn {turn_num}/{n_turns} done  "
-                f"{result.input_tokens:,} in{cache_str}"
-                f" / {result.output_tokens:,} out"
-                f" / {result.latency_s:.1f}s"
-                f" / ${result.cost_usd:.4f}",
-                file=sys.stderr,
-            )
+        tp_tag = " + TokenPak" if arm_cfg.via_tokenpak else ""
+        print(f"  [{arm_num}/{n_arms}] {arm_cfg.name}{tp_tag}...", file=sys.stderr)
 
-    arm_a = run_arm(
-        scenario=scenario,
-        proxied=False,
-        log_path=arm_a_log,
-        on_turn_complete=on_turn_a,
-    )
+        def on_turn(turn_num: int, tr: TurnResult, _arm=arm_num) -> None:
+            if tr.error:
+                print(f"    Turn {turn_num}/{n_turns} ERROR: {tr.error}", file=sys.stderr)
+            else:
+                cache = f" ({tr.cache_read_tokens:,} cached)" if tr.cache_read_tokens else ""
+                print(
+                    f"    Turn {turn_num}/{n_turns} done  "
+                    f"{tr.input_tokens:,} in{cache}"
+                    f" / {tr.output_tokens:,} out"
+                    f" / {tr.latency_s:.1f}s"
+                    f" / ${tr.cost_usd:.4f}",
+                    file=sys.stderr,
+                )
 
-    if arm_a.error and not arm_a.turns:
-        print(f"\n  Arm A failed: {arm_a.error}", file=sys.stderr)
-        if display:
-            display.stop()
-        return arm_a, ArmResult(arm_name="tokenpak", error="skipped (Arm A failed)"), proof_id
+        arm_result = adapter_run_arm(
+            cfg=arm_cfg,
+            turns=scenario.turns,
+            system=scenario.system,
+            max_tokens=scenario.max_tokens,
+            log_path=log_path,
+            on_turn_complete=on_turn,
+        )
+        results.append(arm_result)
 
-    # Brief pause between arms — let provider rate limits reset
-    print("", file=sys.stderr)
-    time.sleep(2)
+        if arm_result.error and not arm_result.turns:
+            print(f"    FAILED: {arm_result.error}", file=sys.stderr)
 
-    # ── Arm B: Through TokenPak ─────────────────────────────
-    print("  Running Arm B (With TokenPak)...", file=sys.stderr)
-
-    def on_turn_b(turn_num: int, result: TurnResult) -> None:
-        if result.error:
-            print(f"    Turn {turn_num}/{n_turns} ERROR: {result.error}", file=sys.stderr)
-        else:
-            cache_str = ""
-            if result.cache_read_tokens:
-                cache_str = f" ({result.cache_read_tokens:,} cached)"
-            print(
-                f"    Turn {turn_num}/{n_turns} done  "
-                f"{result.input_tokens:,} in{cache_str}"
-                f" / {result.output_tokens:,} out"
-                f" / {result.latency_s:.1f}s"
-                f" / ${result.cost_usd:.4f}",
-                file=sys.stderr,
-            )
-
-    arm_b = run_arm(
-        scenario=scenario,
-        proxied=True,
-        log_path=arm_b_log,
-        on_turn_complete=on_turn_b,
-    )
+        # Brief pause between arms
+        if i < n_arms - 1:
+            print("", file=sys.stderr)
+            time.sleep(2)
 
     # ── Report ──────────────────────────────────────────────
-    report = format_report(arm_a, arm_b, scenario.name, proof_id)
+    report = format_matrix_report(results, scenario.name, proof_id)
     print(report, file=sys.stdout)
 
-    # Save result JSON
-    result_path = save_result(arm_a, arm_b, scenario.name, proof_id, output_dir)
+    result_path = save_result(results, scenario.name, proof_id, output_dir)
     print(f"  Saved: {result_path}", file=sys.stderr)
 
-    # Save log paths
-    print(f"  Logs:  {arm_a_log}", file=sys.stderr)
-    print(f"         {arm_b_log}", file=sys.stderr)
+    log_files = [log_dir / f"{proof_id}_arm_{i+1}.log" for i in range(n_arms)]
+    print(f"  Logs:  {log_files[0]}", file=sys.stderr)
+    for lf in log_files[1:]:
+        print(f"         {lf}", file=sys.stderr)
 
-    # ── Cleanup ─────────────────────────────────────────────
     if display:
         print(f"\n  Live display still running — close with: tmux kill-session -t tokenpak-prove", file=sys.stderr)
 
     print("", file=sys.stderr)
-
-    return arm_a, arm_b, proof_id
+    return results, proof_id

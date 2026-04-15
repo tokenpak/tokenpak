@@ -1,137 +1,130 @@
 # SPDX-License-Identifier: Apache-2.0
 """Format and display the prove comparison report.
 
-Takes results from both arms and produces:
-  - Terminal output with side-by-side comparison table
-  - JSON file for programmatic access / later review
+Supports N-arm matrix comparisons.  The first arm is used as the
+baseline for delta calculations.  Works for 2 arms (legacy A/B)
+or any number of arms (matrix mode).
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from pathlib import Path
 from typing import Optional
 
-from .arm import ArmResult
+from .adapter import ArmResult
 
 
-def format_report(
-    arm_a: ArmResult,
-    arm_b: ArmResult,
+# ═══════════════════════════════════════════════════════════════════════
+# Matrix report (N arms)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def format_matrix_report(
+    arms: list[ArmResult],
     scenario_name: str,
     proof_id: str,
 ) -> str:
-    """Format the comparison report for terminal display."""
+    """Format the comparison report for N arms."""
+    if not arms:
+        return "  No results to display.\n"
+
     lines: list[str] = []
-    w = 62  # total width
+    w = 16  # column width for values
 
     lines.append("")
     lines.append(f"  TokenPak Value Proof — \"{scenario_name}\"")
-    lines.append("  " + "=" * (w - 2))
+    lines.append("  " + "=" * 70)
 
-    # Summary line
-    n_turns = max(len(arm_a.turns), len(arm_b.turns))
-    lines.append(f"  Model: {arm_a.model}  |  Turns: {n_turns}  |  Provider: {arm_a.provider}")
+    n_turns = max((len(a.turns) for a in arms), default=0)
+    lines.append(f"  Arms: {len(arms)}  |  Turns: {n_turns}  |  Proof: {proof_id}")
     lines.append("")
 
-    # Check for errors
-    if arm_a.error and not arm_a.turns:
-        lines.append(f"  Arm A error: {arm_a.error}")
-    if arm_b.error and not arm_b.turns:
-        lines.append(f"  Arm B error: {arm_b.error}")
-    if (arm_a.error and not arm_a.turns) or (arm_b.error and not arm_b.turns):
-        return "\n".join(lines)
+    # Column names (arm names, truncated)
+    max_name = w - 2
+    names = [a.arm_name[:max_name] for a in arms]
 
-    # ── Aggregate comparison ────────────────────────────────
-    col_w = 16
-    hdr = f"  {'':24s}{'Direct':>{col_w}s}{'TokenPak':>{col_w}s}{'Delta':>{col_w}s}"
-    sep = "  " + "-" * (24 + col_w * 3)
-
+    # ── Summary header row ──────────────────────────────────
+    label_w = 22
+    hdr = f"  {'':>{label_w}s}" + "".join(f"{n:>{w}s}" for n in names)
+    if len(arms) > 1:
+        hdr += f"{'vs [1]':>{w}s}"
     lines.append(hdr)
-    lines.append(sep)
+    lines.append("  " + "-" * (label_w + w * len(arms) + (w if len(arms) > 1 else 0)))
 
-    lines.append(_row("Input tokens",
-                       f"{arm_a.total_input_tokens:,}",
-                       f"{arm_b.total_input_tokens:,}",
-                       _pct_delta(arm_a.total_input_tokens, arm_b.total_input_tokens),
-                       col_w))
+    # Descriptor row: platform/provider
+    desc_row = f"  {'platform/provider':>{label_w}s}"
+    for a in arms:
+        tag = f"{a.platform}/{a.provider}"
+        desc_row += f"{tag:>{w}s}"
+    lines.append(desc_row)
 
-    if arm_b.total_cache_read_tokens:
-        lines.append(_row("Cache-read tokens",
-                           "0",
-                           f"{arm_b.total_cache_read_tokens:,}",
-                           "",
-                           col_w))
+    model_row = f"  {'model':>{label_w}s}"
+    for a in arms:
+        model_row += f"{a.model[:max_name]:>{w}s}"
+    lines.append(model_row)
+    lines.append("")
 
-    lines.append(_row("Output tokens",
-                       f"{arm_a.total_output_tokens:,}",
-                       f"{arm_b.total_output_tokens:,}",
-                       _pct_delta(arm_a.total_output_tokens, arm_b.total_output_tokens),
-                       col_w))
+    # ── Aggregate metrics ───────────────────────────────────
+    baseline = arms[0]
 
-    lines.append(_row("Total cost",
-                       f"${arm_a.total_cost_usd:.4f}",
-                       f"${arm_b.total_cost_usd:.4f}",
-                       _pct_delta(arm_a.total_cost_usd, arm_b.total_cost_usd),
-                       col_w))
+    lines.append(_metric_row("Input tokens", [a.total_input_tokens for a in arms],
+                              baseline.total_input_tokens, label_w, w, fmt="int"))
+    lines.append(_metric_row("Cache-read tokens", [a.total_cache_read_tokens for a in arms],
+                              None, label_w, w, fmt="int"))
+    lines.append(_metric_row("Output tokens", [a.total_output_tokens for a in arms],
+                              baseline.total_output_tokens, label_w, w, fmt="int"))
+    lines.append(_metric_row("Total cost", [a.total_cost_usd for a in arms],
+                              baseline.total_cost_usd, label_w, w, fmt="usd"))
+    lines.append(_metric_row("Total time", [a.total_latency_s for a in arms],
+                              baseline.total_latency_s, label_w, w, fmt="time"))
 
-    lines.append(_row("Total time",
-                       f"{arm_a.total_latency_s:.1f}s",
-                       f"{arm_b.total_latency_s:.1f}s",
-                       _pct_delta(arm_a.total_latency_s, arm_b.total_latency_s),
-                       col_w))
-
-    lines.append(sep)
+    lines.append("  " + "-" * (label_w + w * len(arms) + (w if len(arms) > 1 else 0)))
 
     # ── Per-turn breakdown ──────────────────────────────────
     lines.append("")
     lines.append("  Per-turn breakdown:")
 
-    for i in range(n_turns):
-        ta = arm_a.turns[i] if i < len(arm_a.turns) else None
-        tb = arm_b.turns[i] if i < len(arm_b.turns) else None
+    for t_idx in range(n_turns):
+        turn_data = [a.turns[t_idx] if t_idx < len(a.turns) else None for a in arms]
+        label = next((t.label for t in turn_data if t), f"Turn {t_idx + 1}")
 
-        label = (ta or tb).label if (ta or tb) else f"Turn {i + 1}"
-        lines.append(f"\n  Turn {i + 1}: {label}")
+        lines.append(f"\n  Turn {t_idx + 1}: {label}")
 
-        a_in = ta.input_tokens if ta else 0
-        b_in = tb.input_tokens if tb else 0
-        lines.append(_row("  Input", f"{a_in:,}", f"{b_in:,}",
-                           _pct_delta(a_in, b_in), col_w))
+        inputs = [t.input_tokens if t else 0 for t in turn_data]
+        lines.append(_metric_row("  Input", inputs, inputs[0] if inputs else 0, label_w, w, fmt="int"))
 
-        b_cache = tb.cache_read_tokens if tb else 0
-        if b_cache:
-            lines.append(_row("  Cached", "0", f"{b_cache:,}", "", col_w))
+        caches = [t.cache_read_tokens if t else 0 for t in turn_data]
+        if any(c > 0 for c in caches):
+            lines.append(_metric_row("  Cached", caches, None, label_w, w, fmt="int"))
 
-        a_out = ta.output_tokens if ta else 0
-        b_out = tb.output_tokens if tb else 0
-        lines.append(_row("  Output", f"{a_out:,}", f"{b_out:,}",
-                           _pct_delta(a_out, b_out), col_w))
+        outputs = [t.output_tokens if t else 0 for t in turn_data]
+        lines.append(_metric_row("  Output", outputs, outputs[0] if outputs else 0, label_w, w, fmt="int"))
 
-        a_cost = ta.cost_usd if ta else 0
-        b_cost = tb.cost_usd if tb else 0
-        lines.append(_row("  Cost", f"${a_cost:.4f}", f"${b_cost:.4f}",
-                           _pct_delta(a_cost, b_cost), col_w))
+        costs = [t.cost_usd if t else 0 for t in turn_data]
+        lines.append(_metric_row("  Cost", costs, costs[0] if costs else 0, label_w, w, fmt="usd"))
 
-        a_time = ta.latency_s if ta else 0
-        b_time = tb.latency_s if tb else 0
-        lines.append(_row("  Time", f"{a_time:.1f}s", f"{b_time:.1f}s",
-                           _pct_delta(a_time, b_time), col_w))
+        times = [t.latency_s if t else 0 for t in turn_data]
+        lines.append(_metric_row("  Time", times, times[0] if times else 0, label_w, w, fmt="time"))
 
-    # ── Feature attribution ─────────────────────────────────
-    if arm_b.total_cache_read_tokens:
+    # ── Feature highlights ──────────────────────────────────
+    highlights = []
+    for a in arms:
+        if a.total_cache_read_tokens:
+            highlights.append(f"    {a.arm_name}: {a.total_cache_read_tokens:,} cache-read tokens")
+        input_diff = baseline.total_input_tokens - a.total_input_tokens
+        if input_diff > 0:
+            pct = input_diff / baseline.total_input_tokens * 100 if baseline.total_input_tokens else 0
+            highlights.append(f"    {a.arm_name}: {input_diff:,} fewer input tokens ({pct:.1f}% compression)")
+        cost_diff = baseline.total_cost_usd - a.total_cost_usd
+        if cost_diff > 0:
+            pct = cost_diff / baseline.total_cost_usd * 100 if baseline.total_cost_usd else 0
+            highlights.append(f"    {a.arm_name}: ${cost_diff:.4f} saved ({pct:.1f}% cheaper)")
+
+    if highlights:
         lines.append("")
-        lines.append("  Feature attribution:")
-        lines.append(f"    cache_control      saved {arm_b.total_cache_read_tokens:,} cache-read tokens")
-
-    input_saved = arm_a.total_input_tokens - arm_b.total_input_tokens
-    if input_saved > 0:
-        lines.append(f"    compression        saved {input_saved:,} input tokens ({_pct(input_saved, arm_a.total_input_tokens)})")
-
-    cost_saved = arm_a.total_cost_usd - arm_b.total_cost_usd
-    if cost_saved > 0:
-        lines.append(f"    total_savings      ${cost_saved:.4f} saved ({_pct(cost_saved, arm_a.total_cost_usd)})")
+        lines.append("  Highlights (vs first arm):")
+        lines.extend(highlights)
 
     # ── Footer ──────────────────────────────────────────────
     lines.append("")
@@ -141,33 +134,47 @@ def format_report(
     return "\n".join(lines)
 
 
+# ── Legacy 2-arm wrapper (backwards compat) ─────────────────────────
+
+def format_report(arm_a: ArmResult, arm_b: ArmResult,
+                  scenario_name: str, proof_id: str) -> str:
+    return format_matrix_report([arm_a, arm_b], scenario_name, proof_id)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Save results
+# ═══════════════════════════════════════════════════════════════════════
+
+
 def save_result(
-    arm_a: ArmResult,
-    arm_b: ArmResult,
+    arms: list[ArmResult] | ArmResult,
     scenario_name: str,
     proof_id: str,
     output_dir: Optional[Path] = None,
 ) -> Path:
-    """Save the proof result as JSON."""
+    """Save proof result as JSON."""
+    if isinstance(arms, ArmResult):
+        arms = [arms]
+
     if output_dir is None:
         output_dir = Path.home() / ".tokenpak" / "prove" / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     path = output_dir / f"{proof_id}.json"
 
-    # Strip response_text to keep the file manageable
+    baseline = arms[0] if arms else None
+
     result = {
         "proof_id": proof_id,
         "scenario": scenario_name,
-        "arm_a": _arm_to_dict(arm_a),
-        "arm_b": _arm_to_dict(arm_b),
+        "arms": [_arm_to_dict(a) for a in arms],
         "summary": {
-            "input_tokens_saved": arm_a.total_input_tokens - arm_b.total_input_tokens,
-            "input_tokens_saved_pct": _pct_val(arm_a.total_input_tokens, arm_b.total_input_tokens),
-            "cost_saved_usd": round(arm_a.total_cost_usd - arm_b.total_cost_usd, 6),
-            "cost_saved_pct": _pct_val(arm_a.total_cost_usd, arm_b.total_cost_usd),
-            "cache_read_tokens": arm_b.total_cache_read_tokens,
-            "time_saved_s": round(arm_a.total_latency_s - arm_b.total_latency_s, 2),
+            "arm_count": len(arms),
+            "baseline": arms[0].arm_name if arms else "",
+            "best_cost": min(a.total_cost_usd for a in arms) if arms else 0,
+            "best_cost_arm": min(arms, key=lambda a: a.total_cost_usd).arm_name if arms else "",
+            "best_time": min(a.total_latency_s for a in arms) if arms else 0,
+            "best_time_arm": min(arms, key=lambda a: a.total_latency_s).arm_name if arms else "",
         },
     }
 
@@ -175,11 +182,18 @@ def save_result(
     return path
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+
 def _arm_to_dict(arm: ArmResult) -> dict:
     return {
         "arm_name": arm.arm_name,
-        "model": arm.model,
+        "platform": arm.platform,
         "provider": arm.provider,
+        "model": arm.model,
+        "via_tokenpak": arm.via_tokenpak,
         "total_input_tokens": arm.total_input_tokens,
         "total_output_tokens": arm.total_output_tokens,
         "total_cache_read_tokens": arm.total_cache_read_tokens,
@@ -202,29 +216,28 @@ def _arm_to_dict(arm: ArmResult) -> dict:
     }
 
 
-# ── Formatting helpers ──────────────────────────────────────────────────
+def _metric_row(label: str, values: list, baseline_val, label_w: int,
+                col_w: int, fmt: str = "int") -> str:
+    """Build one row of the comparison table."""
+    row = f"  {label:>{label_w}s}"
 
+    for v in values:
+        if fmt == "int":
+            row += f"{v:>{col_w},d}" if isinstance(v, int) else f"{int(v):>{col_w},d}"
+        elif fmt == "usd":
+            row += f"{'$' + f'{v:.4f}':>{col_w}s}"
+        elif fmt == "time":
+            row += f"{f'{v:.1f}s':>{col_w}s}"
+        else:
+            row += f"{str(v):>{col_w}s}"
 
-def _row(label: str, a: str, b: str, delta: str, col_w: int) -> str:
-    return f"  {label:24s}{a:>{col_w}s}{b:>{col_w}s}{delta:>{col_w}s}"
+    # Delta column (last arm vs first arm)
+    if len(values) > 1 and baseline_val is not None and baseline_val != 0:
+        last = values[-1]
+        diff = (last - baseline_val) / baseline_val * 100
+        if abs(diff) < 0.1:
+            row += f"{'0.0%':>{col_w}s}"
+        else:
+            row += f"{f'{diff:+.1f}%':>{col_w}s}"
 
-
-def _pct_delta(a: float, b: float) -> str:
-    if a == 0:
-        return ""
-    diff = (b - a) / a * 100
-    if abs(diff) < 0.1:
-        return "0.0%"
-    return f"{diff:+.1f}%"
-
-
-def _pct(part: float, whole: float) -> str:
-    if whole == 0:
-        return "0%"
-    return f"{part / whole * 100:.1f}%"
-
-
-def _pct_val(a: float, b: float) -> float:
-    if a == 0:
-        return 0.0
-    return round((a - b) / a * 100, 1)
+    return row
