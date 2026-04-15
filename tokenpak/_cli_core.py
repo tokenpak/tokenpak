@@ -239,6 +239,7 @@ _COMMAND_GROUPS = {
     ],
     "Companion": [
         ("claude", "Launch Claude Code with companion active"),
+        ("codex", "Launch Codex with companion active"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
@@ -1931,6 +1932,15 @@ def cmd_claude(args):
     launch(args=list(args.args))
 
 
+def cmd_codex(args):
+    """Launch Codex with tokenpak companion active."""
+    import os
+    if getattr(args, "budget", None) is not None:
+        os.environ["TOKENPAK_COMPANION_BUDGET"] = str(args.budget)
+    from .companion.codex import launch
+    launch(args=list(args.args))
+
+
 def _build_claude_parser(sub):
     p = sub.add_parser(
         "claude",
@@ -1959,6 +1969,37 @@ def _build_claude_parser(sub):
         help="Arguments forwarded verbatim to claude",
     )
     p.set_defaults(func=cmd_claude)
+
+
+def _build_codex_parser(sub):
+    p = sub.add_parser(
+        "codex",
+        help="Launch Codex with companion active",
+        description=(
+            "Launch OpenAI Codex CLI with tokenpak companion active.\n\n"
+            "Registers the MCP server, installs hooks, and writes AGENTS.md,\n"
+            "then launches Codex with any user-provided arguments.\n\n"
+            "Examples:\n"
+            "  tokenpak codex\n"
+            "  tokenpak codex --budget 5.00\n"
+            '  tokenpak codex "Fix the login bug"\n'
+            "  tokenpak codex --model o3 -s workspace-write"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        metavar="USD",
+        help="Daily spend cap in USD; sets TOKENPAK_COMPANION_BUDGET env var",
+    )
+    p.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Arguments forwarded verbatim to codex",
+    )
+    p.set_defaults(func=cmd_codex)
 
 
 def _build_stub_parsers(sub):
@@ -2333,6 +2374,7 @@ def build_parser():
     _build_prune_parser(sub)
     _build_retrieval_parser(sub)
     _build_claude_parser(sub)
+    _build_codex_parser(sub)
 
     # --- Stub parsers for commands advertised in help/registry but not yet wired ---
     _build_stub_parsers(sub)
