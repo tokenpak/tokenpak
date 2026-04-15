@@ -563,6 +563,29 @@ def _map_platform_to_adapter(platform: str, provider: str, model: str):
     return []
 
 
+def _count_active_sessions() -> dict[str, int]:
+    """Count active Claude/Codex sessions (excluding test subprocesses)."""
+    counts: dict[str, int] = {}
+    try:
+        result = subprocess.run(
+            ["pgrep", "-fa", "claude|codex"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            # Skip our own test subprocesses and grep noise
+            if "pgrep" in line or "tokenpak/prove" in line:
+                continue
+            if "claude" in line.lower() and "claude -p" not in line:
+                counts["claude"] = counts.get("claude", 0) + 1
+            elif "codex" in line.lower():
+                counts["codex"] = counts.get("codex", 0) + 1
+    except Exception:
+        pass
+    return counts
+
+
 def run_test(
     platform: str,
     provider: str,
@@ -772,12 +795,30 @@ def run(args=None) -> None:
     scenario = _SCENARIOS[test_id]
     arms = _map_platform_to_adapter(platform, provider, model)
 
+    # Detect active sessions that share the rate limit
+    active = _count_active_sessions()
+    active_warning = ""
+    if provider == "anthropic" and active.get("claude", 0) > 0:
+        n = active["claude"]
+        active_warning = (
+            f"\n  \033[33mWarning: {n} active Claude session(s) detected.\033[0m\n"
+            f"  They share the same rate limit. The test may get throttled.\n"
+            f"  For best results, run the test when no other sessions are active,\n"
+            f"  or select a model with higher limits (e.g. haiku).\n"
+        )
+    elif provider == "openai" and active.get("codex", 0) > 0:
+        n = active["codex"]
+        active_warning = (
+            f"\n  \033[33mWarning: {n} active Codex session(s) detected.\033[0m\n"
+            f"  They share the same rate limit. The test may get throttled.\n"
+        )
+
     confirm_options = [
         ("start", "Start test"),
         ("cancel", "Cancel"),
     ]
 
-    # Build confirmation screen manually
+    # Build confirmation screen
     sys.stdout.write("\033[2J\033[H")
     sys.stdout.write(f"\n  \033[1mtokenpak test\033[0m\n\n")
     sys.stdout.write(f"  Ready to run:\n\n")
@@ -790,6 +831,8 @@ def run(args=None) -> None:
     sys.stdout.write(f"    Arms:       {len(arms)}\n")
     for i, a in enumerate(arms):
         sys.stdout.write(f"      [{i+1}] {a.name}\n")
+    if active_warning:
+        sys.stdout.write(active_warning)
     sys.stdout.write(f"\n")
     sys.stdout.flush()
 
