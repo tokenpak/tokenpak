@@ -275,6 +275,9 @@ def estimate_cost(provider: str, model: str, input_tok: int,
 # Provider formats — request building + response parsing
 # ═══════════════════════════════════════════════════════════════════════
 
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = [10, 30, 60]  # seconds between retries for 429/529
+
 
 def _run_turn_anthropic(
     client: httpx.Client, base_url: str, api_key: str,
@@ -291,40 +294,54 @@ def _run_turn_anthropic(
     if api_key:
         headers["x-api-key"] = api_key
     parts: list[str] = []
-    try:
-        with client.stream("POST", url, headers=headers, json=body, timeout=120.0) as resp:
-            if resp.status_code != 200:
-                result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
-                result.latency_s = time.monotonic() - t0
-                return result
-            for line in resp.iter_lines():
-                if not line.startswith("data: "):
+    last_error = ""
+    for attempt in range(_MAX_RETRIES + 1):
+        parts.clear()
+        last_error = ""
+        try:
+            with client.stream("POST", url, headers=headers, json=body, timeout=180.0) as resp:
+                if resp.status_code in (429, 529) and attempt < _MAX_RETRIES:
+                    resp.read()
+                    wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+                    import sys as _sys
+                    print(f"      rate limited, retrying in {wait}s...", file=_sys.stderr)
+                    time.sleep(wait)
                     continue
-                d = line[6:]
-                if d == "[DONE]":
-                    break
-                try:
-                    evt = json.loads(d)
-                except json.JSONDecodeError:
-                    continue
-                t = evt.get("type", "")
-                if t == "message_start":
-                    u = evt.get("message", {}).get("usage", {})
-                    result.input_tokens = u.get("input_tokens", 0)
-                    result.cache_read_tokens = u.get("cache_read_input_tokens", 0)
-                    result.cache_creation_tokens = u.get("cache_creation_input_tokens", 0)
-                elif t == "content_block_delta":
-                    txt = evt.get("delta", {}).get("text", "")
-                    if txt:
-                        parts.append(txt)
-                        if log_file:
-                            log_file.write(txt); log_file.flush()
-                elif t == "message_delta":
-                    result.output_tokens = evt.get("usage", {}).get("output_tokens", 0)
-    except httpx.TimeoutException:
-        result.error = "Request timed out"
-    except Exception as e:
-        result.error = str(e)
+                if resp.status_code != 200:
+                    result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    result.latency_s = time.monotonic() - t0
+                    return result
+                for line in resp.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    d = line[6:]
+                    if d == "[DONE]":
+                        break
+                    try:
+                        evt = json.loads(d)
+                    except json.JSONDecodeError:
+                        continue
+                    t = evt.get("type", "")
+                    if t == "message_start":
+                        u = evt.get("message", {}).get("usage", {})
+                        result.input_tokens = u.get("input_tokens", 0)
+                        result.cache_read_tokens = u.get("cache_read_input_tokens", 0)
+                        result.cache_creation_tokens = u.get("cache_creation_input_tokens", 0)
+                    elif t == "content_block_delta":
+                        txt = evt.get("delta", {}).get("text", "")
+                        if txt:
+                            parts.append(txt)
+                            if log_file:
+                                log_file.write(txt); log_file.flush()
+                    elif t == "message_delta":
+                        result.output_tokens = evt.get("usage", {}).get("output_tokens", 0)
+            break  # success
+        except httpx.TimeoutException:
+            last_error = "Request timed out"
+        except Exception as e:
+            last_error = str(e)
+    if last_error:
+        result.error = last_error
     result.latency_s = time.monotonic() - t0
     result.response_text = "".join(parts)
     return result
@@ -345,39 +362,53 @@ def _run_turn_openai(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     parts: list[str] = []
-    try:
-        with client.stream("POST", url, headers=headers, json=body, timeout=120.0) as resp:
-            if resp.status_code != 200:
-                result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
-                result.latency_s = time.monotonic() - t0
-                return result
-            for line in resp.iter_lines():
-                if not line.startswith("data: "):
+    last_error = ""
+    for attempt in range(_MAX_RETRIES + 1):
+        parts.clear()
+        last_error = ""
+        try:
+            with client.stream("POST", url, headers=headers, json=body, timeout=180.0) as resp:
+                if resp.status_code == 429 and attempt < _MAX_RETRIES:
+                    resp.read()
+                    wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+                    import sys as _sys
+                    print(f"      rate limited, retrying in {wait}s...", file=_sys.stderr)
+                    time.sleep(wait)
                     continue
-                d = line[6:].strip()
-                if d == "[DONE]":
-                    break
-                try:
-                    evt = json.loads(d)
-                except json.JSONDecodeError:
-                    continue
-                choices = evt.get("choices", [])
-                if choices:
-                    txt = choices[0].get("delta", {}).get("content", "")
-                    if txt:
-                        parts.append(txt)
-                        if log_file:
-                            log_file.write(txt); log_file.flush()
-                usage = evt.get("usage")
-                if usage:
-                    result.input_tokens = usage.get("prompt_tokens", 0)
-                    result.output_tokens = usage.get("completion_tokens", 0)
-                    det = usage.get("prompt_tokens_details") or {}
-                    result.cache_read_tokens = det.get("cached_tokens", 0)
-    except httpx.TimeoutException:
-        result.error = "Request timed out"
-    except Exception as e:
-        result.error = str(e)
+                if resp.status_code != 200:
+                    result.error = f"HTTP {resp.status_code}: {resp.read().decode(errors='replace')[:200]}"
+                    result.latency_s = time.monotonic() - t0
+                    return result
+                for line in resp.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    d = line[6:].strip()
+                    if d == "[DONE]":
+                        break
+                    try:
+                        evt = json.loads(d)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = evt.get("choices", [])
+                    if choices:
+                        txt = choices[0].get("delta", {}).get("content", "")
+                        if txt:
+                            parts.append(txt)
+                            if log_file:
+                                log_file.write(txt); log_file.flush()
+                    usage = evt.get("usage")
+                    if usage:
+                        result.input_tokens = usage.get("prompt_tokens", 0)
+                        result.output_tokens = usage.get("completion_tokens", 0)
+                        det = usage.get("prompt_tokens_details") or {}
+                        result.cache_read_tokens = det.get("cached_tokens", 0)
+            break  # success
+        except httpx.TimeoutException:
+            last_error = "Request timed out"
+        except Exception as e:
+            last_error = str(e)
+    if last_error:
+        result.error = last_error
     result.latency_s = time.monotonic() - t0
     result.response_text = "".join(parts)
     return result
