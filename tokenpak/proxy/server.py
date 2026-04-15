@@ -621,10 +621,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
         if _adapters_enabled and should_log and is_messages:
             import logging as _logging
-            _adapter = detect_platform(dict(self.headers), dict(os.environ))
+            _platform = detect_platform()
             _logging.debug(
                 "tokenpak.proxy: detected platform=%s for request to %s",
-                _adapter.platform_name,
+                _platform,
                 target_url[:60],
             )
 
