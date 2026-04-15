@@ -173,6 +173,18 @@ def _compress_text(text: str) -> str:
     return "\n\n".join(compressed_blocks)
 
 
+def load_capsule(path: str) -> str:
+    """Read and return the contents of a capsule file at *path*.
+
+    Returns an empty string if the file cannot be read.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
 def _wrap_capsule(original: str, compressed: str) -> str:
     """
     Wrap *compressed* content in a capsule envelope.
