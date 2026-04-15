@@ -496,71 +496,51 @@ _SCENARIOS: dict[str, dict] = {
 def _map_platform_to_adapter(platform: str, provider: str, model: str):
     """Map user-facing platform to adapter ArmConfigs.
 
-    The comparison is always: baseline (direct) vs w/ TokenPak (proxy).
-    Token savings happen at the proxy layer, so even CLI-initiated tests
-    route through the API/proxy for the actual A/B measurement.
+    The comparison is always two arms:
+      - Direct: hits provider API directly (bypasses proxy)
+      - w/ TokenPak: routes through proxy (compression + caching active)
+
+    API keys are resolved from env vars OR CLI OAuth tokens
+    (~/.claude/.credentials.json, ~/.codex/auth.json), so this works
+    even when env vars aren't exported.
     """
-    from tokenpak.prove.adapter import ArmConfig
+    from tokenpak.prove.adapter import ArmConfig, _resolve_api_key, _get_provider
 
     proxy_available = _detect_proxy_running()
+    reg = _get_provider(provider)
+    key_env = reg.get("api_key_env", "")
+    has_key = bool(_resolve_api_key(provider, key_env))
 
-    if platform in ("api", "proxy"):
-        arms = []
-        # Baseline: direct API (if key available)
-        from tokenpak.prove.adapter import _get_provider
-        reg = _get_provider(provider)
-        key_env = reg.get("api_key_env", "")
-        if key_env and os.environ.get(key_env):
-            arms.append(ArmConfig(
-                name="Direct", platform="api",
-                provider=provider, model=model,
-            ))
-        # Comparison: through proxy
-        if proxy_available:
-            arms.append(ArmConfig(
-                name="w/ TokenPak", platform="proxy",
-                provider=provider, model=model, via_tokenpak=True,
-            ))
-        # If only proxy (no direct key), still run it solo for metrics
-        if not arms and proxy_available:
-            arms.append(ArmConfig(
-                name="w/ TokenPak", platform="proxy",
-                provider=provider, model=model, via_tokenpak=True,
-            ))
-        return arms
+    # Always build two arms when possible: Direct + w/ TokenPak
+    arms = []
 
-    elif platform == "claude-code":
-        # For Claude Code / Codex: the real value proof needs API-level
-        # measurement. CLI subprocesses can't expose cache/compression.
-        # Route through proxy for real metrics. Use CLI as fallback only.
-        arms = []
-        if proxy_available:
-            arms.append(ArmConfig(
-                name="w/ TokenPak", platform="proxy",
-                provider="anthropic", model=model, via_tokenpak=True,
-            ))
-        else:
+    if has_key:
+        arms.append(ArmConfig(
+            name="Direct", platform="api",
+            provider=provider, model=model,
+            base_url=reg.get("base_url", ""),
+        ))
+
+    if proxy_available:
+        arms.append(ArmConfig(
+            name="w/ TokenPak", platform="proxy",
+            provider=provider, model=model, via_tokenpak=True,
+        ))
+
+    # Fallback: CLI only if no API key and no proxy
+    if not arms:
+        if platform == "claude-code" and shutil.which("claude"):
             arms.append(ArmConfig(
                 name="Claude Code", platform="cli",
                 provider="anthropic", model=model,
                 cli_command="claude -p"))
-        return arms
-
-    elif platform == "codex":
-        arms = []
-        if proxy_available:
-            arms.append(ArmConfig(
-                name="w/ TokenPak", platform="proxy",
-                provider="openai", model=model, via_tokenpak=True,
-            ))
-        else:
+        elif platform == "codex" and shutil.which("codex"):
             arms.append(ArmConfig(
                 name="Codex", platform="cli",
                 provider="openai", model=model,
                 cli_command="codex exec"))
-        return arms
 
-    return []
+    return arms
 
 
 def _count_active_sessions() -> dict[str, int]:

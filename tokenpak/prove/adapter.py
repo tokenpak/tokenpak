@@ -484,14 +484,48 @@ _FORMAT_DISPATCH = {
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _resolve_api_key(provider: str, api_key_env: str) -> str:
+    """Resolve API key from env vars, then CLI OAuth tokens as fallback."""
+    # 1. Env var
+    key = os.environ.get(api_key_env, "").strip()
+    if key:
+        return key
+
+    # 2. Claude CLI OAuth token (~/.claude/.credentials.json)
+    if provider == "anthropic":
+        try:
+            creds_path = Path.home() / ".claude" / ".credentials.json"
+            if creds_path.exists():
+                data = json.loads(creds_path.read_text())
+                token = data.get("claudeAiOauth", {}).get("accessToken", "")
+                if token:
+                    return token
+        except Exception:
+            pass
+
+    # 3. Codex OAuth token (~/.codex/auth.json)
+    if provider == "openai":
+        try:
+            auth_path = Path.home() / ".codex" / "auth.json"
+            if auth_path.exists():
+                data = json.loads(auth_path.read_text())
+                token = data.get("tokens", {}).get("access_token", "")
+                if token:
+                    return token
+        except Exception:
+            pass
+
+    return ""
+
+
 def _execute_turn_api(
     cfg: ArmConfig, system: str, messages: list[dict],
     max_tokens: int, log_file: Optional[IO], client: httpx.Client,
 ) -> TurnResult:
-    """Execute via direct HTTP API call."""
-    api_key = os.environ.get(cfg.api_key_env, "")
+    """Execute via direct HTTP API call (bypasses proxy)."""
+    api_key = _resolve_api_key(cfg.provider, cfg.api_key_env)
     if not api_key:
-        return TurnResult(error=f"{cfg.api_key_env} not set")
+        return TurnResult(error=f"No API key found for {cfg.provider}")
     run_fn = _FORMAT_DISPATCH.get(cfg.format)
     if not run_fn:
         return TurnResult(error=f"Unknown format: {cfg.format}")
