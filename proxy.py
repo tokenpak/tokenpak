@@ -7237,10 +7237,26 @@ class ForwardProxyHandler(BaseHTTPRequestHandler):
 
     def _reverse_proxy(self, method):
         # ── Claude Code backend dispatch (early exit) ─────────
-        # Check X-TokenPak-Backend header BEFORE any pipeline processing.
-        # If set to "claude-code", delegate to Claude Code CLI and return.
+        # Triggered by X-TokenPak-Backend header OR model name containing
+        # "claude-code" suffix (e.g. "claude-sonnet-4-6" from tokenpak-claude-code provider).
+        # OpenClaw may not forward custom headers, so we also check the request body.
+        _is_claude_code_backend = False
+        # DEBUG: log all headers for openclaw requests (temporary)
+        _all_hdrs = {k.lower(): v for k, v in self.headers.items()}
+        if not _all_hdrs.get("x-claude-code-session-id"):
+            print(f"  [header-debug] path={self.path} headers={list(_all_hdrs.keys())}", flush=True)
         for _bk, _bv in self.headers.items():
             if _bk.lower() == "x-tokenpak-backend" and _bv.strip().lower() == "claude-code":
+                _is_claude_code_backend = True
+                break
+        # Also detect from OpenClaw provider name in any header
+        if not _is_claude_code_backend:
+            for _bk, _bv in self.headers.items():
+                if "claude-code" in _bv.lower():
+                    print(f"  [header-debug] found claude-code in {_bk}={_bv[:60]}", flush=True)
+                    _is_claude_code_backend = True
+                    break
+        if _is_claude_code_backend:
                 try:
                     content_length = int(self.headers.get("Content-Length", 0))
                     raw_body = self.rfile.read(content_length) if content_length else b"{}"

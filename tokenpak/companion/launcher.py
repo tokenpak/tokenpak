@@ -14,11 +14,12 @@ Config files are written to the fixed location ~/.tokenpak/companion/run/
 What the user sees:
     $ tokenpak claude
 
-    📦 TokenPak Companion
-       Ready • Mode: Balanced • Budget: Unlimited
+      📦 TokenPak Companion
+         Ready • Mode: Balanced • Budget: Unlimited
+         Proxy active → http://localhost:8766
 
-       Your API bill called. It's crying.
-       Proxy active → http://localhost:8766
+         Your API bill called. It's crying.
+
     [Claude Code TUI starts normally]
 """
 
@@ -68,7 +69,6 @@ def main(args: list[str] | None = None) -> int:
     settings_path = _write_settings(config)
     prompt_path = _write_system_prompt(config)
 
-    # Print styled startup banner
     _TEAL = "\033[38;2;0;180;170m"
     _DIM = "\033[2m"
     _RESET = "\033[0m"
@@ -76,14 +76,34 @@ def main(args: list[str] | None = None) -> int:
     mode = config.profile.capitalize()
     budget = f"${config.budget_daily_usd:.2f}/day" if config.budget_daily_usd > 0 else "Unlimited"
 
+    # Route through tokenpak proxy for compression/caching/dedup.
+    # Auto-detect if proxy is running when no explicit proxy_url is set.
+    env = os.environ.copy()
+    proxy_url = config.proxy_url
+    if not proxy_url:
+        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
+        try:
+            import httpx
+            resp = httpx.get(f"{default_proxy}/health", timeout=1.0)
+            if resp.status_code == 200:
+                proxy_url = default_proxy
+        except Exception:
+            pass
+    if proxy_url:
+        env["ANTHROPIC_BASE_URL"] = proxy_url
+
+    # Print styled startup banner
     from tokenpak.cli.commands.status import MEME_LINES
     meme = random.choice(MEME_LINES)
 
     print(file=sys.stderr)
-    print(f"\U0001f4e6 Token{_TEAL}Pak{_RESET} Companion", file=sys.stderr)
-    print(f"   {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{_RESET}", file=sys.stderr)
+    print(f"  \U0001f4e6 Token{_TEAL}Pak{_RESET} Companion", file=sys.stderr)
+    print(f"     {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{_RESET}", file=sys.stderr)
+    if proxy_url:
+        print(f"     {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
     print(file=sys.stderr)
-    print(f"   {_DIM}{meme}{_RESET}", file=sys.stderr)
+    print(f"     {_DIM}{meme}{_RESET}", file=sys.stderr)
+    print(file=sys.stderr)
 
     # Prefix session name with 📦 so tokenpak sessions are visually distinct
     # in terminal tabs. If the user provided --name/-n, prefix their value;
@@ -101,26 +121,6 @@ def main(args: list[str] | None = None) -> int:
 
     # Pass through any user-provided args
     claude_args.extend(args)
-
-    # Route through tokenpak proxy for compression/caching/dedup.
-    # Auto-detect if proxy is running when no explicit proxy_url is set.
-    env = os.environ.copy()
-    proxy_url = config.proxy_url
-    if proxy_url:
-        print(f"   {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
-    else:
-        # Auto-detect: check if the tokenpak proxy is running
-        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
-        try:
-            import httpx
-            resp = httpx.get(f"{default_proxy}/health", timeout=1.0)
-            if resp.status_code == 200:
-                proxy_url = default_proxy
-                print(f"   {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
-        except Exception:
-            pass
-    if proxy_url:
-        env["ANTHROPIC_BASE_URL"] = proxy_url
 
     # Set terminal tab title immediately so the 📦 is visible even before
     # Claude Code finishes initialising and sets its own title.
