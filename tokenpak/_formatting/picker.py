@@ -153,12 +153,10 @@ def pick(
     filter_text = ""
     idx = 0
 
-    # Build the full option list (with optional back entry)
+    # Build the full option list (back at bottom, not top)
     all_options = list(options)
-    back_offset = 0
     if back_label:
-        all_options.insert(0, (_BACK_SENTINEL, f"< {back_label}"))
-        back_offset = 1
+        all_options.append((_BACK_SENTINEL, back_label))
 
     # Hide cursor
     sys.stdout.write("\033[?25l")

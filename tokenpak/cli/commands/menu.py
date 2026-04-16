@@ -37,7 +37,7 @@ def _header() -> str:
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
     ver = paint(f"v{__version__}", Color.LIGHT_GRAY, c)
     tagline = paint("LLM Proxy with Context Compression", Color.LIGHT_GRAY, c)
-    return f"\n  {token}{pak}  {ver}\n  {tagline}\n"
+    return f"\n  \U0001F4E6 {token}{pak}  {ver}\n  {tagline}\n"
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +116,7 @@ def _header_compact() -> str:
     c = supports_color()
     token = paint("token", Color.WHITE + Color.BOLD, c)
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
-    return f"{token}{pak}"
+    return f"\U0001F4E6 {token}{pak}"
 
 
 def _wait() -> None:
@@ -154,25 +154,24 @@ def _result_screen(header: str, title: str, message: str,
 # ---------------------------------------------------------------------------
 
 _HOME_ITEMS = [
-    ("start_proxy",       "Start proxy"),
-    ("run_demo",          "Run demo"),
-    ("check_health",      "Check proxy health"),
-    ("view_spend",        "View spend & savings"),
-    ("configure",         "Configure TokenPak"),
-    ("companion",         "Companion tools"),
-    ("diagnose",          "Diagnose problems"),
-    ("browse_all",        "Browse all commands"),
+    ("start_proxy",  "Start proxy"),
+    ("run_demo",     "Run demo"),
+    ("check_health", "Proxy status"),
+    ("view_spend",   "Spend & savings"),
+    ("configure",    "Configure"),
+    ("companion",    "Companion"),
+    ("diagnose",     "Troubleshoot"),
+    ("browse_all",   "Browse all commands"),
 ]
 
-# Search aliases: map home item values + raw CLI commands to extra search terms
 _SEARCH_ALIASES: dict[str, list[str]] = {
     "start_proxy":  ["start", "proxy", "run", "launch", "serve"],
     "run_demo":     ["demo", "sample", "example", "test compression"],
-    "check_health": ["status", "health", "ping", "alive"],
+    "check_health": ["status", "health", "ping", "alive", "proxy status"],
     "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
     "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
-    "companion":    ["claude", "codex", "session", "capsule", "journal", "mcp"],
-    "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "health check"],
+    "companion":    ["claude", "codex", "session", "capsule", "journal", "mcp", "companion"],
+    "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "troubleshoot", "health check"],
     "browse_all":   ["all", "commands", "search", "find", "list"],
 }
 
@@ -196,7 +195,7 @@ def _section_demo(hdr: str) -> None:
                 ("--clear",               "Reset demo data"),
             ],
             header=hdr,
-            subtitle="See TokenPak compression in action using safe local data.",
+            subtitle="See compression in action. No API key required.",
             back_label="Back",
         )
         if choice is None or choice == _BACK_SENTINEL:
@@ -238,7 +237,7 @@ def _section_configure(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Configure TokenPak", Color.PASTEL_YELLOW, c),
+            paint("Configure", Color.PASTEL_YELLOW, c),
             [
                 ("show",     "View current config"),
                 ("validate", "Validate config"),
@@ -260,7 +259,7 @@ def _section_companion(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Companion tools", Color.PASTEL_YELLOW, c),
+            paint("Companion", Color.PASTEL_YELLOW, c),
             [
                 ("claude",       "Launch Claude companion"),
                 ("codex",        "Launch Codex companion"),
@@ -279,7 +278,7 @@ def _section_diagnose(hdr: str) -> None:
     c = supports_color()
     while True:
         choice = pick(
-            paint("Diagnose problems", Color.PASTEL_YELLOW, c),
+            paint("Troubleshoot", Color.PASTEL_YELLOW, c),
             [
                 ("",              "Run diagnostics"),
                 ("--fix",         "Diagnose and auto-fix"),
@@ -296,34 +295,116 @@ def _section_diagnose(hdr: str) -> None:
         _wait()
 
 
+_POLISHED_LABELS: dict[str, str] = {
+    "start":        "Start proxy",
+    "stop":         "Stop proxy",
+    "restart":      "Restart proxy",
+    "demo":         "Run demo",
+    "cost":         "View spend & savings",
+    "status":       "Proxy status",
+    "logs":         "Recent logs",
+    "index":        "Index directory",
+    "search":       "Search indexed content",
+    "route":        "Manage routing rules",
+    "recipe":       "Manage compression recipes",
+    "template":     "Manage prompt templates",
+    "budget":       "Set budget limits",
+    "alerts":       "Manage alert channels",
+    "goals":        "Track savings goals",
+    "config":       "View & edit config",
+    "explain":      "Explain workflow profiles",
+    "version":      "Show version",
+    "update":       "Update tokenpak",
+    "benchmark":    "Run benchmarks",
+    "calibrate":    "Calibrate workers",
+    "doctor":       "Run diagnostics",
+    "diagnose":     "Full health check",
+    "dashboard":    "Live dashboard",
+    "timeline":     "View savings trend",
+    "attribution":  "Savings by source",
+    "models":       "Per-model breakdown",
+    "forecast":     "Cost projections",
+    "debug":        "Toggle debug logging",
+    "claude":       "Launch Claude companion",
+    "codex":        "Launch Codex companion",
+    "test":         "Interactive A/B test",
+    "prove":        "A/B value proof",
+    "trigger":      "Manage event triggers",
+    "macro":        "Manage macros",
+    "config-check": "Validate config file",
+    "validate":     "Validate JSON file",
+    "diff":         "Show context changes",
+    "serve":        "Start proxy server",
+    "replay":       "Replay captured sessions",
+    "audit":        "Audit log management",
+    "compliance":   "Compliance reports",
+    # Internal / advanced — kept but separated
+    "fingerprint":  "Fingerprint management",
+    "agent":        "Agent coordination",
+    "lock":         "File lock management",
+    "run":          "Schedule macro runs",
+    "learn":        "View learned patterns",
+    "vault-health": "Vault index health",
+    "fleet":        "Fleet status",
+    "aggregate":    "Aggregate ledger",
+    "requests":     "Live request explorer",
+    "stats":        "Registry stats",
+    "retrieval":    "Test search retrieval",
+    "monitor":      "Start live monitor",
+}
+
+# Commands shown in the default "Common" view
+_COMMON_COMMANDS = {
+    "start", "stop", "restart", "demo", "cost", "status", "logs",
+    "index", "search", "route", "recipe", "budget", "config", "explain",
+    "version", "update", "doctor", "diagnose", "dashboard", "timeline",
+    "models", "forecast", "claude", "codex", "test", "prove",
+    "benchmark", "calibrate", "alerts", "template", "goals",
+    "attribution", "debug",
+}
+
+
 def _section_browse_all(hdr: str) -> None:
-    """Flat searchable list of all commands."""
+    """Browse all commands — common first, toggle to show advanced."""
     from tokenpak._cli_core import _COMMAND_GROUPS
 
     c = supports_color()
-    all_cmds = []
-    all_aliases: dict[str, list[str]] = {}
-    for group_name, cmds in _COMMAND_GROUPS.items():
-        for cmd, desc in cmds:
-            label = (
-                paint(f"{cmd:<16}", Color.WHITE, c)
-                + paint(desc, Color.LIGHT_GRAY, c)
-            )
-            all_cmds.append((cmd, label))
-            all_aliases[cmd] = [group_name.lower(), desc.lower()]
+    show_all = False
 
     while True:
+        cmds_list = []
+        aliases: dict[str, list[str]] = {}
+
+        for group_name, cmds in _COMMAND_GROUPS.items():
+            for cmd, desc in cmds:
+                if not show_all and cmd not in _COMMON_COMMANDS:
+                    continue
+                label_text = _POLISHED_LABELS.get(cmd, desc)
+                label = paint(label_text, Color.WHITE, c)
+                cmds_list.append((cmd, label))
+                aliases[cmd] = [cmd, desc.lower(), group_name.lower()]
+
+        # Add toggle option
+        if show_all:
+            cmds_list.append(("__toggle__", paint("Show common only", Color.LIGHT_GRAY, c)))
+        else:
+            cmds_list.append(("__toggle__", paint("Show all commands", Color.LIGHT_GRAY, c)))
+
         choice = pick(
-            "All commands",
-            all_cmds,
+            "Common commands" if not show_all else "All commands",
+            cmds_list,
             header=hdr,
             subtitle="Type to search",
             filterable=True,
             back_label="Back",
-            search_aliases=all_aliases,
+            search_aliases=aliases,
+            footer="[enter] select   [esc] back   [q] quit",
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
+        if choice == "__toggle__":
+            show_all = not show_all
+            continue
         _exec(choice)
         _wait()
 
@@ -382,7 +463,7 @@ def run_menu() -> None:
                 "check_health": "tokenpak status",
                 "view_spend":   "tokenpak cost",
                 "configure":    "tokenpak config",
-                "companion":    "tokenpak claude",
+                "companion":    "",
                 "diagnose":     "tokenpak doctor",
                 "browse_all":   "",
             }
@@ -405,7 +486,7 @@ def run_menu() -> None:
                 subtitle="Type to search all commands",
                 filterable=True,
                 search_aliases=_SEARCH_ALIASES,
-                footer="[enter] select   [/] search   [esc] back   [q] quit",
+                footer="Type to search   [enter] select   [q] quit",
             )
 
             if choice is None:
