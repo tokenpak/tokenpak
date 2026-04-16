@@ -80,6 +80,35 @@ from tokenpak.telemetry.collector import RequestStats
 from tokenpak.telemetry.footer import render_footer_oneline
 from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
 
+# ---------------------------------------------------------------------------
+# Codex OAuth credentials — read from ~/.codex/auth.json (cached, file-mtime-based)
+# ---------------------------------------------------------------------------
+import threading as _threading
+
+_CODEX_AUTH_PATH = os.path.expanduser("~/.codex/auth.json")
+_CODEX_CREDS_CACHE: dict = {"mtime": 0.0, "access_token": "", "account_id": ""}
+_CODEX_CREDS_LOCK = _threading.Lock()
+
+
+def _load_codex_credentials() -> tuple:
+    """Load Codex OAuth token from ~/.codex/auth.json (file-mtime cached)."""
+    try:
+        st = os.stat(_CODEX_AUTH_PATH)
+    except OSError:
+        return "", ""
+    with _CODEX_CREDS_LOCK:
+        if st.st_mtime != _CODEX_CREDS_CACHE["mtime"]:
+            try:
+                with open(_CODEX_AUTH_PATH, "r") as f:
+                    data = json.load(f)
+                tokens = data.get("tokens", {}) if isinstance(data, dict) else {}
+                _CODEX_CREDS_CACHE["access_token"] = tokens.get("access_token", "") or ""
+                _CODEX_CREDS_CACHE["account_id"] = tokens.get("account_id", "") or ""
+                _CODEX_CREDS_CACHE["mtime"] = st.st_mtime
+            except (OSError, ValueError):
+                return "", ""
+        return _CODEX_CREDS_CACHE["access_token"], _CODEX_CREDS_CACHE["account_id"]
+
 
 # ---------------------------------------------------------------------------
 # Systemd integration — read sd_notify socket path from environment
@@ -934,6 +963,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         fwd_headers["Host"] = parsed.netloc
         if body is not None:
             fwd_headers["Content-Length"] = str(len(body))
+
+        # ── Codex OAuth credential injection ─────────────────────────
+        # OpenAI Codex (Responses API) routes need OAuth token from
+        # ~/.codex/auth.json — similar to how Claude Code uses subscription auth.
+        _upstream_provider = provider_from_url(target_url)
+        if _upstream_provider == "openai" and (
+            "codex" in target_url.lower()
+            or fwd_headers.get("openai-beta", "") == "responses=experimental"
+            or any("codex" in str(v).lower() for v in (model,))
+        ):
+            try:
+                _codex_token, _codex_account = _load_codex_credentials()
+                if _codex_token:
+                    fwd_headers["Authorization"] = f"Bearer {_codex_token}"
+                    for _ck in ("x-api-key", "X-Api-Key"):
+                        fwd_headers.pop(_ck, None)
+                    if _codex_account:
+                        fwd_headers["chatgpt-account-id"] = _codex_account
+                    fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
+                    fwd_headers.setdefault("originator", "codex_cli_rs")
+            except Exception:
+                pass  # fail-open: codex credential loading must not break requests
 
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
