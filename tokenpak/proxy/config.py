@@ -276,6 +276,11 @@ INJECT_MIN_PROMPT = _cfg("vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_P
 # Default: 5000ms. Set to 0 to disable the cap.
 MAX_COMPRESSION_TIME_MS = _cfg("compression.max_time_ms", 5000, "MAX_COMPRESSION_TIME_MS", int)
 VAULT_INDEX_RELOAD_INTERVAL = 300
+# Auto-reindex: rebuild vault index from source files when stale.
+# Runs in background thread. Default: 3600s (1 hour). Set to 0 to disable.
+VAULT_AUTO_REINDEX_INTERVAL: int = _cfg(
+    "vault.auto_reindex_interval", 3600, "TOKENPAK_VAULT_AUTO_REINDEX", int
+)
 # Tiered vault memory — LRU content cache config
 VAULT_CACHE_MAX_BYTES: int = _cfg(
     "vault.cache_max_bytes", 256 * 1024 * 1024, "TOKENPAK_VAULT_MEMORY_MAX", int

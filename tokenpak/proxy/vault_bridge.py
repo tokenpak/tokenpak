@@ -18,6 +18,7 @@ from .config import (
     _cfg,
     VAULT_INDEX_PATH,
     VAULT_INDEX_RELOAD_INTERVAL,
+    VAULT_AUTO_REINDEX_INTERVAL,
     RETRIEVAL_BACKEND,
     INJECT_BUDGET,
     INJECT_TOP_K,
@@ -405,6 +406,32 @@ def _init_singletons() -> None:
             t.start()
 
         _vault_index_reload_timer()
+
+        # Start background auto-reindex timer (rebuilds index from source files)
+        if VAULT_AUTO_REINDEX_INTERVAL > 0:
+            def _vault_auto_reindex_timer() -> None:
+                try:
+                    from tokenpak.vault.vault_health import VaultHealth
+                    # VAULT_INDEX_PATH points to the .tokenpak dir inside vault
+                    # VaultHealth expects the vault root (parent of .tokenpak)
+                    vault_dir = Path(VAULT_INDEX_PATH).parent
+                    checker = VaultHealth(vault_dir=vault_dir)
+                    result = checker.repair()
+                    if result.success and result.log_entry and "Rebuilt" in str(result.log_entry):
+                        print(f"  🔄 Auto-reindex: {result.index_entries} blocks", flush=True)
+                        _VAULT_INDEX.maybe_reload()  # type: ignore[union-attr]
+                except Exception as e:
+                    print(f"  ⚠️ Auto-reindex failed: {e}", flush=True)
+
+                t = threading.Timer(VAULT_AUTO_REINDEX_INTERVAL, _vault_auto_reindex_timer)
+                t.daemon = True
+                t.start()
+
+            # First auto-reindex check after the configured interval
+            t_reindex = threading.Timer(VAULT_AUTO_REINDEX_INTERVAL, _vault_auto_reindex_timer)
+            t_reindex.daemon = True
+            t_reindex.start()
+            print(f"  🔄 Auto-reindex: every {VAULT_AUTO_REINDEX_INTERVAL}s", flush=True)
 
         # --- Term Resolver ---
         _TERM_RESOLVER_AVAILABLE = False
