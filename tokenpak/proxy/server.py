@@ -1447,8 +1447,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if not oc_session:
                 oc_session = f"oc_{hash(str(body_data.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
 
-            _log.info("claude-code backend: session=%s model=%s stream=%s",
-                       oc_session, body_data.get("model", "?"), is_streaming)
+            # Resolve agent workspace (OpenClaw default or header override)
+            oc_workspace = ""
+            for _wk, _wv in self.headers.items():
+                if _wk.lower() == "x-openclaw-workspace":
+                    oc_workspace = _wv.strip()
+                    break
+
+            _log.info("claude-code backend: session=%s model=%s stream=%s workspace=%s",
+                       oc_session, body_data.get("model", "?"), is_streaming,
+                       oc_workspace or "(default)")
 
             result = execute_via_claude_code(
                 openclaw_session=oc_session,
@@ -1456,6 +1464,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 model=body_data.get("model", "claude-sonnet-4-6"),
                 system=body_data.get("system", ""),
                 max_tokens=body_data.get("max_tokens", 4096),
+                workspace=oc_workspace,
             )
 
             if result.get("type") == "error":

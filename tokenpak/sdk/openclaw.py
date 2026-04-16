@@ -77,6 +77,7 @@ def execute_via_claude_code(
     model: str = "claude-sonnet-4-6",
     system: str = "",
     max_tokens: int = 4096,
+    workspace: str = "",
 ) -> dict[str, Any]:
     """Execute a request through Claude Code via ``tokenpak claude -p --resume``.
 
@@ -129,6 +130,17 @@ def execute_via_claude_code(
     _env = os.environ.copy()
     _env.pop("ANTHROPIC_BASE_URL", None)  # remove proxy redirect
     _env["DISABLE_PROMPT_CACHING"] = "1"  # avoid cache overhead for short msgs
+    # Bare mode: strip Claude Code native context (CLAUDE.md, auto memory,
+    # prompt history, permissions) — OpenClaw injects its own.
+    _env["TOKENPAK_COMPANION_BARE"] = "1"
+
+    # Working directory: use explicit workspace, or resolve from OpenClaw default
+    _cwd = workspace or os.environ.get(
+        "OPENCLAW_WORKSPACE",
+        str(Path.home() / ".openclaw" / "workspace"),
+    )
+    if not Path(_cwd).is_dir():
+        _cwd = str(Path.home())  # fallback to home if workspace doesn't exist
 
     t0 = time.monotonic()
     try:
@@ -139,6 +151,7 @@ def execute_via_claude_code(
             text=True,
             timeout=300,
             env=_env,
+            cwd=_cwd,
         )
     except subprocess.TimeoutExpired:
         return _error_response("Claude Code session timed out (300s)")
