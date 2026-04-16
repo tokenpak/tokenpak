@@ -110,8 +110,9 @@ def execute_via_claude_code(
     if not latest_msg:
         return _error_response("No user message found in request")
 
-    # Build the command
-    cmd = ["tokenpak", "claude"]
+    # Build the command — use `claude` directly (not `tokenpak claude`)
+    # to avoid the companion launcher re-setting ANTHROPIC_BASE_URL to the proxy.
+    cmd = ["claude"]
     cmd.extend(["--model", model])
 
     if is_new:
@@ -123,7 +124,12 @@ def execute_via_claude_code(
     cmd.append("-p")
     # Message goes via stdin — avoids OS arg size limit (~128KB)
 
-    # Execute
+    # Execute — use a clean env that points directly at Anthropic API,
+    # NOT back through the proxy (which would create a request loop).
+    _env = os.environ.copy()
+    _env.pop("ANTHROPIC_BASE_URL", None)  # remove proxy redirect
+    _env["DISABLE_PROMPT_CACHING"] = "1"  # avoid cache overhead for short msgs
+
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
@@ -132,6 +138,7 @@ def execute_via_claude_code(
             capture_output=True,
             text=True,
             timeout=300,
+            env=_env,
         )
     except subprocess.TimeoutExpired:
         return _error_response("Claude Code session timed out (300s)")
