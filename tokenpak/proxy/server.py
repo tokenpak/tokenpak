@@ -625,39 +625,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _backend_header = _bv.strip().lower()
                 break
         if _backend_header == "claude-code" and body:
-            try:
-                from tokenpak.sdk.openclaw import execute_via_claude_code
-                body_data = json.loads(body)
-                oc_session = ""
-                for _sk, _sv in self.headers.items():
-                    if _sk.lower() == "x-openclaw-session":
-                        oc_session = _sv.strip()
-                        break
-                if not oc_session:
-                    oc_session = f"oc_{hash(str(body_data.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
-                result = execute_via_claude_code(
-                    openclaw_session=oc_session,
-                    messages=body_data.get("messages", []),
-                    model=body_data.get("model", "claude-sonnet-4-6"),
-                    system=body_data.get("system", ""),
-                    max_tokens=body_data.get("max_tokens", 4096),
-                )
-                if result.get("type") == "error":
-                    err_body = json.dumps(result).encode()
-                    self.send_response(500)
-                    self.send_header("Content-Type", "application/json")
-                    self.send_header("Content-Length", str(len(err_body)))
-                    self.end_headers()
-                    self.wfile.write(err_body)
-                else:
-                    self._send_json(result)
-            except Exception as _cc_err:
-                import logging as _logging
-                _logging.getLogger(__name__).error("claude-code backend error: %s", _cc_err)
-                self._send_json(
-                    {"error": {"type": "backend_error", "message": str(_cc_err)}},
-                    status=500,
-                )
+            self._handle_claude_code_backend(body)
             return
 
         # Route classification and policy lookup
@@ -1456,6 +1424,151 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(resp_body)
+
+    def _handle_claude_code_backend(self, body: bytes) -> None:
+        """Route request through Claude Code CLI (subscription billing).
+
+        Triggered by X-TokenPak-Backend: claude-code header from OpenClaw.
+        Returns SSE-formatted response when request has stream:true (which
+        OpenClaw always sends), or plain JSON otherwise.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+        try:
+            from tokenpak.sdk.openclaw import execute_via_claude_code
+            body_data = json.loads(body)
+            is_streaming = body_data.get("stream", False)
+
+            oc_session = ""
+            for _sk, _sv in self.headers.items():
+                if _sk.lower() == "x-openclaw-session":
+                    oc_session = _sv.strip()
+                    break
+            if not oc_session:
+                oc_session = f"oc_{hash(str(body_data.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
+
+            _log.info("claude-code backend: session=%s model=%s stream=%s",
+                       oc_session, body_data.get("model", "?"), is_streaming)
+
+            result = execute_via_claude_code(
+                openclaw_session=oc_session,
+                messages=body_data.get("messages", []),
+                model=body_data.get("model", "claude-sonnet-4-6"),
+                system=body_data.get("system", ""),
+                max_tokens=body_data.get("max_tokens", 4096),
+            )
+
+            if result.get("type") == "error":
+                err_body = json.dumps(result).encode()
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err_body)))
+                self.end_headers()
+                self.wfile.write(err_body)
+            elif is_streaming:
+                # OpenClaw expects Anthropic SSE format
+                self._send_claude_code_sse(result)
+            else:
+                self._send_json(result)
+
+            _log.info("claude-code backend: done session=%s", oc_session)
+        except Exception as _cc_err:
+            _log.error("claude-code backend error: %s", _cc_err, exc_info=True)
+            err = json.dumps({"error": {"type": "backend_error", "message": str(_cc_err)}}).encode()
+            try:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(err)))
+                self.end_headers()
+                self.wfile.write(err)
+            except Exception:
+                pass
+
+    def _send_claude_code_sse(self, result: dict) -> None:
+        """Convert a complete Anthropic-format response dict to SSE stream.
+
+        Emits the three events OpenClaw expects:
+          1. message_start — contains the message shell + usage.input_tokens
+          2. content_block_delta — contains the assistant text
+          3. message_delta — contains stop_reason + usage.output_tokens
+        """
+        msg_id = result.get("id", "msg_unknown")
+        model = result.get("model", "claude-sonnet-4-6")
+        usage = result.get("usage", {})
+        content = result.get("content", [])
+        text = ""
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "")
+                break
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        def _sse(event: str, data: dict) -> None:
+            line = f"event: {event}\ndata: {json.dumps(data)}\n\n"
+            self.wfile.write(line.encode())
+            self.wfile.flush()
+
+        # 1. message_start
+        _sse("message_start", {
+            "type": "message_start",
+            "message": {
+                "id": msg_id,
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": model,
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {
+                    "input_tokens": usage.get("input_tokens", 0),
+                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+                    "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                    "output_tokens": 0,
+                },
+            },
+        })
+
+        # 2. content_block_start
+        _sse("content_block_start", {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "text", "text": ""},
+        })
+
+        # 3. content_block_delta — send text in one chunk
+        _sse("content_block_delta", {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": text},
+        })
+
+        # 4. content_block_stop
+        _sse("content_block_stop", {
+            "type": "content_block_stop",
+            "index": 0,
+        })
+
+        # 5. message_delta — stop reason + output tokens
+        _sse("message_delta", {
+            "type": "message_delta",
+            "delta": {
+                "stop_reason": result.get("stop_reason", "end_turn"),
+                "stop_sequence": None,
+            },
+            "usage": {"output_tokens": usage.get("output_tokens", 0)},
+        })
+
+        # 6. message_stop
+        _sse("message_stop", {"type": "message_stop"})
+
+        # Final empty data line to signal end of stream
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
 
     def _send_json(self, data: dict) -> None:
         body = json.dumps(data, indent=2).encode()
