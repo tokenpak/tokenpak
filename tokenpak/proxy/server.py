@@ -969,9 +969,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # ~/.codex/auth.json — similar to how Claude Code uses subscription auth.
         _upstream_provider = provider_from_url(target_url)
         if _upstream_provider == "openai" and (
-            "codex" in target_url.lower()
+            "/v1/responses" in target_url
+            or "codex" in target_url.lower()
+            or "codex" in model.lower()
             or fwd_headers.get("openai-beta", "") == "responses=experimental"
-            or any("codex" in str(v).lower() for v in (model,))
         ):
             try:
                 _codex_token, _codex_account = _load_codex_credentials()
