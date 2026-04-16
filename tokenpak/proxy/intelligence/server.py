@@ -223,7 +223,7 @@ def create_app(
 
     # ── Removed routers (Pro/Enterprise) ─────────────────────────
     # cost_router, ab_router, and license_router have been moved
-    # to _pro_staging as they are Pro+ features.
+    # to _staging as they are advanced features.
 
     # ──────────────────────────────────────────────────────────
     # Routes

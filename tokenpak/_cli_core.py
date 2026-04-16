@@ -6853,7 +6853,7 @@ def _build_macro_parser(sub):
 
 
 def _build_fingerprint_parser(sub):
-    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management (Pro+)")
+    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management")
     fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=True)
 
     # fingerprint sync

@@ -253,18 +253,18 @@ def cmd_help(args):
             ],
         ),
         (
-            "PRO",
+            "ADVANCED",
             [
-                ("optimize", "Auto-analyze session for cost + token efficiency (Pro+)"),
-                ("optimize --apply", "Auto-apply optimization recommendations (Pro+)"),
+                ("optimize", "Auto-analyze session for cost + token efficiency"),
+                ("optimize --apply", "Auto-apply optimization recommendations"),
                 ("cost", "Token usage and cost reporting"),
-                ("budget intelligence", "Burn rate, ETA, trend, suggestions (Pro+)"),
-                ("prune", "Remove low-priority blocks from store (Pro+)"),
-                ("prune --dry-run", "Preview prune candidates without changes (Pro+)"),
-                ("prune --auto", "Auto-prune without confirmation (Pro+)"),
-                ("retain <id>", "Pin a block so it survives pruning (Pro+)"),
-                ("retain --list", "Show all pinned blocks (Pro+)"),
-                ("retain --remove <id>", "Unpin a block (Pro+)"),
+                ("budget intelligence", "Burn rate, ETA, trend, suggestions"),
+                ("prune", "Remove low-priority blocks from store"),
+                ("prune --dry-run", "Preview prune candidates without changes"),
+                ("prune --auto", "Auto-prune without confirmation"),
+                ("retain <id>", "Pin a block so it survives pruning"),
+                ("retain --list", "Show all pinned blocks"),
+                ("retain --remove <id>", "Unpin a block"),
             ],
         ),
     ]
@@ -386,8 +386,8 @@ def _budget_argparse(argv: list) -> None:
     # tokenpak budget forecast
     bsub.add_parser("forecast", help="Projected spend forecast")
 
-    # tokenpak budget intelligence (Pro+)
-    intp = bsub.add_parser("intelligence", help="Pro: burn rate, ETA, trend, suggestions")
+    # tokenpak budget intelligence
+    intp = bsub.add_parser("intelligence", help="Burn rate, ETA, trend, suggestions")
     intp.add_argument("--json", dest="raw", action="store_true", help="Output raw JSON")
 
     bp.add_argument("--raw", action="store_true", help="Output raw JSON")
@@ -564,7 +564,7 @@ def main():
         _cost_argparse(sys.argv[2:])
         return
 
-    # Delegate optimize subcommand (Pro+)
+    # Delegate optimize subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "optimize":
         import argparse as _ap
         from tokenpak.agent.cli.commands.optimize import run_optimize
@@ -581,22 +581,22 @@ def main():
         _budget_argparse(sys.argv[2:])
         return
 
-    # Delegate diff subcommand (Pro+)
+    # Delegate diff subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "diff":
         _diff_argparse(sys.argv[2:])
         return
 
-    # Delegate prune subcommand (Pro+)
+    # Delegate prune subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "prune":
         _prune_argparse(sys.argv[2:])
         return
 
-    # Delegate retain subcommand (Pro+)
+    # Delegate retain subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "retain":
         _retain_argparse(sys.argv[2:])
         return
 
-    # Delegate Enterprise policy/sla/compliance commands
+    # Delegate policy/sla/compliance commands
     if len(sys.argv) > 1 and sys.argv[1] == "policy":
         from tokenpak.agent.cli.commands.policy import run as _policy_run
         _policy_run(sys.argv[2:])
@@ -622,10 +622,10 @@ def main():
         sub.add_parser(c)
 
     # activate / deactivate / plan (license management)
-    act_p = sub.add_parser("activate", help="Activate a Pro/Team/Enterprise license key")
+    act_p = sub.add_parser("activate", help="Activate a license key")
     act_p.add_argument("key", help="License token to activate")
     sub.add_parser("deactivate", help="Remove license and revert to OSS")
-    sub.add_parser("plan", help="Show current license tier, expiry, seats, and features")
+    sub.add_parser("plan", help="Show current license status")
 
     # Special argument handling for 'last' command
     lastp = sub.add_parser("last")

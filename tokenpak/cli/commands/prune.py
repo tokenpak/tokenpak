@@ -1,4 +1,4 @@
-"""prune command — /tokenpak prune — Pro+ feature.
+"""prune command — /tokenpak prune.
 
 Remove low-priority memory/blocks from compression store.
 
@@ -204,7 +204,7 @@ try:
     )
     @click.option("--json", "as_json", is_flag=True, help="Output raw JSON")
     def prune_cmd(auto, dry_run, threshold, as_json):
-        """Remove low-priority blocks from compression store (Pro+).
+        """Remove low-priority blocks from compression store.
 
         \b
         Examples:

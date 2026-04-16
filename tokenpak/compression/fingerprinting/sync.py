@@ -182,10 +182,10 @@ class FingerprintSync:
         self.privacy_level = privacy_level
         self.timeout = timeout
 
-    # ── License gate (removed — OSS build) ─────────────────────────────
+    # ── License gate ────────────────────────────────────────────────────
 
     def _assert_pro(self) -> None:
-        """No-op in OSS build. Previously gated on Pro+ license."""
+        """No-op. All features available."""
         pass
 
     # ── Public API ────────────────────────────────────────────────────────

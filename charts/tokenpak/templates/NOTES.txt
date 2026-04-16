@@ -10,7 +10,7 @@ Components enabled:
 {{- if .Values.dashboard.enabled }}
   ✅ Dashboard            (port {{ .Values.dashboard.service.port }})
 {{- else }}
-  ⬜ Dashboard            (disabled — set dashboard.enabled=true to enable)
+  ⬜ Dashboard            (disabled — set dashboard.enabled=true in values.yaml)
 {{- end }}
 
 To access the Intelligence Server from within the cluster:

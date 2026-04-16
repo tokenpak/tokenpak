@@ -4,7 +4,7 @@
 
 Buyers in this space are often evaluating several tools at once. This page gives an honest comparison so you can decide whether TokenPak is the right fit — or whether one of the alternatives serves you better.
 
-> TokenPak is positioned as a **local-first compression proxy**. It runs on your machine, reduces the tokens you send upstream, and optionally adds commercial features (budget enforcement, audit logs, multi-provider routing). It is not a multi-tenant SaaS observability platform. If that's what you need, read the honest weak spots section below.
+> TokenPak is positioned as a **local-first compression proxy**. It runs on your machine, reduces the tokens you send upstream, and includes budget enforcement, audit logs, and multi-provider routing. It is not a multi-tenant SaaS observability platform. If that's what you need, read the honest weak spots section below.
 
 ---
 
@@ -22,7 +22,7 @@ Competitors compared: [Helicone](https://helicone.ai), [LangSmith](https://smith
 | **Budget enforcement** (hard 429 on overage) | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes |
 | **Audit logs** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ Enterprise only | ⚠️ Enterprise only |
 | **Self-hostable** | ✅ Yes | ✅ Yes | ⚠️ Enterprise license | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
-| **Pricing** | OSS free / Pro paid | OSS free / cloud paid | Free tier / enterprise | OSS free / enterprise | OSS gateway / cloud paid | OSS free / cloud paid | Pay-per-token (no self-host) |
+| **Pricing** | Open source | OSS free / cloud paid | Free tier / enterprise | OSS free / enterprise | OSS gateway / cloud paid | OSS free / cloud paid | Pay-per-token (no self-host) |
 | **Primary persona** | Developer, cost-conscious team | Developer / team | LangChain developer / team | Developer / infra engineer | Team / enterprise | Developer / team | Developer / indie builder |
 
 *Table reflects publicly available information as of April 2026. Offerings change — always verify against each vendor's current docs.*

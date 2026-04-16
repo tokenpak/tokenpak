@@ -1,4 +1,4 @@
-"""retain command — /tokenpak retain — Pro+ feature.
+"""retain command — /tokenpak retain.
 
 Pin blocks so they're never removed by compression or prune.
 
@@ -168,16 +168,6 @@ def run_retain(
     remove: Optional[str] = None,
 ) -> None:
     """Dispatch retain subcommand."""
-    # Tier gate
-    try:
-        from tokenpak.infrastructure.license_activation import is_pro
-        if not is_pro():
-            print("⛔ /tokenpak retain requires a Pro or higher license.")
-            print("   Upgrade at: https://tokenpak.dev/pro")
-            sys.exit(1)
-    except ImportError:
-        pass  # Allow in test/dev environments
-
     if list_pins:
         run_retain_list()
     elif remove:
@@ -204,7 +194,7 @@ try:
     @click.option("--list", "list_pins", is_flag=True, help="Show all pinned blocks")
     @click.option("--remove", metavar="BLOCK_ID", default=None, help="Unpin a block")
     def retain_cmd(block_id, list_pins, remove):
-        """Pin blocks so they survive compression and prune (Pro+).
+        """Pin blocks so they survive compression and prune.
 
         \b
         Examples:

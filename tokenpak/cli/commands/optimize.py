@@ -1,4 +1,4 @@
-"""optimize command — /tokenpak optimize — Pro+ feature.
+"""optimize command — /tokenpak optimize.
 
 Analyzes the current session for cost + token efficiency, suggests better
 routing, identifies redundant context, and optionally auto-applies
@@ -524,7 +524,7 @@ try:
     @click.option("--json", "as_json", is_flag=True, help="Machine-readable JSON output")
     @click.option("--apply", is_flag=True, help="Auto-apply recommendations")
     def optimize_cmd(verbose, as_json, apply):
-        """Analyze session for cost + token efficiency (Pro+)."""
+        """Analyze session for cost + token efficiency."""
         run_optimize(verbose=verbose, as_json=as_json, apply=apply)
 
 except ImportError:

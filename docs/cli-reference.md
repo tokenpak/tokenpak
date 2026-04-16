@@ -717,7 +717,7 @@ Compress a piece of text, JSON, or code.
 
 ### `tokenpak diff` [stable]
 
-Show context changes (Pro feature)
+Show context changes
 
 **Flags:**
 
@@ -855,7 +855,7 @@ The following commands are documented but **not yet available** in the current r
 
 ### `tokenpak audit` [planned]
 
-Enterprise audit log management (coming in a future release)
+Audit log management (coming in a future release)
 
 **Planned subcommands:** `list`, `export`, `verify`, `prune`, `summary`
 

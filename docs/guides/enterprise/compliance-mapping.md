@@ -1,6 +1,6 @@
 # TokenPak Compliance Mapping
 
-Maps enterprise features to compliance requirements across SOC 2, GDPR, and CCPA.
+Maps production features to compliance requirements across SOC 2, GDPR, and CCPA.
 
 ---
 

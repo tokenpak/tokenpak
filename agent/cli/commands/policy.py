@@ -34,13 +34,12 @@ def _tier_name() -> str:
 
 
 def _print_upgrade() -> None:
-    print("TOKENPAK  |  Enterprise Feature")
+    print("TOKENPAK  |  Policy Engine")
     print(_SEP[:32])
     print()
-    print("This feature requires an Enterprise license.")
-    print(f"Current tier: {_tier_name()}")
+    print("Policy management is not yet configured.")
     print()
-    print("Learn more: https://tokenpak.dev/enterprise")
+    print("Learn more: https://tokenpak.ai")
     print()
 
 

@@ -129,31 +129,22 @@ graph LR
 
 ---
 
-## Plans
+## Features
 
-| Feature | OSS | Pro | Team |
-|---|:---:|:---:|:---:|
-| Context compression | ✅ | ✅ | ✅ |
-| Model routing | ✅ | ✅ | ✅ |
-| Cost tracking | ✅ | ✅ | ✅ |
-| Vault indexing + search | ✅ | ✅ | ✅ |
-| CLI + proxy | ✅ | ✅ | ✅ |
-| A/B testing | ✅ | ✅ | ✅ |
-| Replay + debug | ✅ | ✅ | ✅ |
-| Advanced compression recipes | — | ✅ | ✅ |
-| Budget enforcement + alerts | — | ✅ | ✅ |
-| Priority support | — | ✅ | ✅ |
-| Multi-agent coordination | — | — | ✅ |
-| Shared vault (team) | — | — | ✅ |
-| RBAC + audit logs | — | — | ✅ |
-| Seat management | — | — | ✅ |
-| SSO / enterprise auth | — | — | ✅ |
-| On-premises deployment | — | — | ✅ |
-| **Price** | **Free** | **$99/mo** | **$299/mo** |
-
-**Enterprise:** Custom pricing for large organizations. [Contact sales](mailto:sales@tokenpak.ai).
-
-[→ View full pricing](docs/PRODUCT_STRATEGY.md#product-tiers) | [→ License details](LICENSE_COMMERCIAL.md)
+- Context compression
+- Model routing
+- Cost tracking
+- Vault indexing + search
+- CLI + proxy
+- A/B testing
+- Replay + debug
+- Advanced compression recipes
+- Budget enforcement + alerts
+- Multi-agent coordination
+- Shared vault (team)
+- RBAC + audit logs
+- SSO / auth integrations
+- On-premises deployment
 
 ---
 

@@ -2,7 +2,7 @@
   "_meta": {
     "version": "v2",
     "description": "TokenPak pricing catalog — costs are USD per 1,000,000 tokens",
-    "updated": "2026-02-26",
+    "updated": "2026-04-15",
     "fields": {
       "input": "Cost per 1M input tokens (USD)",
       "output": "Cost per 1M output tokens (USD)",

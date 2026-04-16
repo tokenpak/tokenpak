@@ -43,7 +43,7 @@ Role enforcement is applied on all API endpoints before any business logic execu
 
 ## Audit Logging
 
-The enterprise audit log provides **immutable, tamper-evident** records:
+The audit log provides **immutable, tamper-evident** records:
 
 - **Who**: `user_id`, `agent_id`, `source_ip`
 - **What**: `action` (proxy_request, auth_failure, config_change, ...)

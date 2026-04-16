@@ -24,7 +24,7 @@ TokenPak is not a text compressor. It's a **universal content compiler** that pr
 
 ---
 
-## The Problem (Enterprise)
+## The Problem
 
 Companies have:
 - 50TB of docs, contracts, images, recordings, code, data
@@ -389,14 +389,9 @@ def allocate_budget(blocks, total_budget):
 
 ---
 
-## Revenue Model
+## License
 
-| Tier | Price | Includes |
-|---|---|---|
-| **Open Source** | Free (MIT) | CLI, text processing, basic compression, QMD integration |
-| **Pro** | $99/mo | Multimodal processing, monitoring dashboard, priority support |
-| **Enterprise** | $999/mo+ | Quality review queue, SLA, custom integrations, audit trails |
-| **Usage-based** | $0.10-0.50 per 1M tokens processed | Alternative for high-volume users |
+Open source (MIT). All features included: CLI, text processing, compression, QMD integration, multimodal processing, monitoring dashboard, quality review queue, custom integrations, audit trails.
 
 ---
 

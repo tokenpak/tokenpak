@@ -96,6 +96,10 @@ autogen = [
 llamaindex = [
     "llama-index-core>=0.10.0",
 ]
+serve = [
+    "uvicorn>=0.27.0",
+    "starlette>=0.36.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/tokenpak/tokenpak"

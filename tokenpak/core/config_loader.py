@@ -3,28 +3,79 @@ TokenPak Config Loader
 
 Single source of truth: ~/.tokenpak/config.yaml
 Env vars override config file values.
+
+Auto-migration: if ~/.tokenpak/config.json exists but config.yaml does not,
+the JSON is converted to YAML and the original renamed to config.json.migrated.
 """
 
+import json as _json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 try:
     import yaml as _yaml
 
+    _HAS_YAML = True
+
     def _load_yaml(path: str) -> dict:
         with open(path, "r") as f:
             return _yaml.safe_load(f) or {}
 
 except ImportError:
-    import json
+    _HAS_YAML = False
 
     def _load_yaml(path: str) -> dict:
         with open(path, "r") as f:
-            return json.load(f)
+            return _json.load(f)
 
 
 CONFIG_PATH = Path(os.environ.get("TOKENPAK_CONFIG", str(Path.home() / ".tokenpak" / "config.yaml")))
+
+
+def _maybe_migrate_json_to_yaml() -> None:
+    """Auto-migrate ~/.tokenpak/config.json -> config.yaml (one-shot).
+
+    Runs only when config.yaml does NOT exist and config.json DOES.
+    After writing config.yaml the original is renamed to config.json.migrated
+    so it is preserved but no longer picked up by any loader.
+    """
+    yaml_path = CONFIG_PATH
+    json_path = CONFIG_PATH.parent / "config.json"
+    migrated_path = CONFIG_PATH.parent / "config.json.migrated"
+
+    if yaml_path.exists() or not json_path.exists():
+        return  # nothing to do
+
+    try:
+        data = _json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"tokenpak: failed to read config.json for migration: {exc}", file=sys.stderr)
+        return
+
+    try:
+        if _HAS_YAML:
+            yaml_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(yaml_path, "w", encoding="utf-8") as f:
+                _yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        else:
+            # Fallback: write JSON with a .yaml extension (still valid for our loader)
+            yaml_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(yaml_path, "w", encoding="utf-8") as f:
+                _json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as exc:
+        print(f"tokenpak: failed to write config.yaml during migration: {exc}", file=sys.stderr)
+        return
+
+    try:
+        json_path.rename(migrated_path)
+    except Exception as exc:
+        print(f"tokenpak: migrated config.yaml written but failed to rename config.json: {exc}",
+              file=sys.stderr)
+        return
+
+    print("tokenpak: migrated config.json \u2192 config.yaml")
 
 # Cached config
 _config: Optional[Dict[str, Any]] = None
@@ -50,13 +101,16 @@ def _bool_env(val: str) -> bool:
 def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     """Load config from YAML file. Returns empty dict if file missing.
 
-    If a legacy config.json exists alongside config.yaml, emits a warning
-    suggesting the user run 'tokenpak config migrate'.
+    On first call (no custom *path*), runs automatic JSON-to-YAML migration
+    so users never need to run ``tokenpak config migrate`` manually.
     """
-    import logging as _logging
     global _config
     if _config is not None and path is None:
         return _config
+
+    # Auto-migrate legacy config.json -> config.yaml (only for default path)
+    if path is None:
+        _maybe_migrate_json_to_yaml()
 
     config_path = Path(path) if path else CONFIG_PATH
     if config_path.exists():
@@ -66,15 +120,6 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
             _config = {}
     else:
         _config = {}
-
-    # Warn if legacy config.json exists (migration reminder)
-    if path is None:
-        legacy_json = CONFIG_PATH.parent / "config.json"
-        if legacy_json.exists():
-            _logging.getLogger(__name__).warning(
-                "Detected legacy ~/.tokenpak/config.json — "
-                "run 'tokenpak config migrate' to merge settings into config.yaml"
-            )
 
     return _config
 
@@ -127,7 +172,7 @@ def get_all() -> Dict[str, Any]:
         "compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int
     )
     result["compression.threshold_tokens"] = get(
-        "compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int
+        "compression.threshold_tokens", 1500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int
     )
     result["compression.cache_size"] = get(
         "compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int
@@ -149,7 +194,7 @@ def get_all() -> Dict[str, Any]:
         ("trace", "TRACE", False),
         ("strict_mode", "STRICT_MODE", False),
         ("error_normalizer", "ERROR_NORMALIZER", False),
-        ("budget_controller", "BUDGET_CONTROLLER", False),
+        ("budget_controller", "BUDGET_CONTROLLER", True),
         ("request_logger", "REQUEST_LOGGER", False),
         ("salience_router", "SALIENCE_ROUTER", False),
         ("cache_registry", "CACHE_REGISTRY", False),
@@ -247,7 +292,7 @@ mode: hybrid  # strict|hybrid|aggressive
 compression:
   enabled: true
   max_chars: 120
-  threshold_tokens: 4500
+  threshold_tokens: 1500  # was 4500 pre-TRIX-01; lowered for default savings
   cache_size: 2000
 
 features:
@@ -264,9 +309,9 @@ features:
   compression_dict: false
   trace: false
   strict_mode: false
-  # Tier 2 modules (disabled by default)
+  # Tier 2 modules
   error_normalizer: false
-  budget_controller: false
+  budget_controller: true  # was false pre-TRIX-01; enabled for default budget enforcement
   request_logger: false
   salience_router: false
   cache_registry: false

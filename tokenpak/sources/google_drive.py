@@ -1,4 +1,4 @@
-"""Google Drive connector (Pro tier)."""
+"""Google Drive connector."""
 
 from datetime import datetime
 from typing import Iterator, Optional
@@ -10,7 +10,7 @@ class GoogleDriveConnector(Connector):
     """
     Connector for Google Drive.
 
-    Pro tier — requires:
+    Requires:
     - OAuth2 credentials (client_id, client_secret)
     - User authorization flow
 
@@ -45,7 +45,7 @@ class GoogleDriveConnector(Connector):
         - Path to credentials file
         """
         try:
-            # DEFERRED (Pro tier): Implement when adding Pro tier
+            # TODO: Implement
             # from google.oauth2.credentials import Credentials
             # from googleapiclient.discovery import build
             #
@@ -54,7 +54,7 @@ class GoogleDriveConnector(Connector):
             # )
             # self._service = build('drive', 'v3', credentials=creds)
             # return True
-            raise NotImplementedError("Google Drive connector requires Pro tier")
+            raise NotImplementedError("Google Drive connector not yet implemented")
         except Exception as e:
             print(f"Google Drive connection failed: {e}")
             return False
@@ -69,7 +69,7 @@ class GoogleDriveConnector(Connector):
         if not self._service:
             raise RuntimeError("Not connected")
 
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # TODO: Implement
         # if since:
         #     # Incremental sync using changes API
         #     changes = self._service.changes().list(
@@ -94,7 +94,7 @@ class GoogleDriveConnector(Connector):
         #         page_token = response.get('nextPageToken')
         #         if not page_token:
         #             break
-        raise NotImplementedError("Google Drive connector requires Pro tier")
+        raise NotImplementedError("Google Drive connector not yet implemented")
 
     def get_content(self, file: RemoteFile) -> bytes:
         """
@@ -106,7 +106,7 @@ class GoogleDriveConnector(Connector):
         if not self._service:
             raise RuntimeError("Not connected")
 
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # TODO: Implement
         # mime_type = file.file_type
         # if mime_type in self.EXPORT_FORMATS:
         #     # Export Google Workspace file
@@ -120,7 +120,7 @@ class GoogleDriveConnector(Connector):
         #     request = self._service.files().get_media(fileId=file.source_id)
         #
         # return request.execute()
-        raise NotImplementedError("Google Drive connector requires Pro tier")
+        raise NotImplementedError("Google Drive connector not yet implemented")
 
     def _to_remote_file(self, drive_file: dict) -> RemoteFile:
         """Convert Drive API file to RemoteFile."""

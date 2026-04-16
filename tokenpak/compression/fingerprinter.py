@@ -7,7 +7,7 @@ Public surface:
     Fingerprint          — fingerprint data class
     PrivacyLevel         — detail level control (MINIMAL / STANDARD / FULL)
     apply_privacy        — strip/blur fingerprint fields before transmission
-    FingerprintSync      — send to intelligence server, receive directives (Pro+)
+    FingerprintSync      — send to intelligence server, receive directives
     SyncResult           — result of a FingerprintSync.sync() call
 """
 

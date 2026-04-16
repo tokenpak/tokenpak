@@ -603,13 +603,12 @@ class DirectiveApplier:
     """
     Apply compression directives to a messages list.
 
-    OSS stub — passes messages through unmodified.
-    Pro integration: replaces with rule-based directive engine.
+    Passes messages through unmodified when no directives are configured.
 
     Parameters
     ----------
     directives : list[dict], optional
-        List of directive dicts (Pro feature; ignored in OSS).
+        List of directive dicts to apply.
     """
 
     def __init__(self, directives: Optional[List[Dict[str, Any]]] = None) -> None:
@@ -631,11 +630,11 @@ class DirectiveApplier:
         list[dict]
             Transformed messages (pass-through in OSS build).
         """
-        # OSS: no directives applied
+        # No directives applied
         return messages
 
     def add_directive(self, directive: Dict[str, Any]) -> None:
-        """Register a directive (Pro feature placeholder)."""
+        """Register a directive."""
         self._directives.append(directive)
 
     def clear(self) -> None:

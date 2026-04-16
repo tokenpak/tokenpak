@@ -1821,13 +1821,12 @@ def fail(text: str) -> str
 
 Apply compression directives to a messages list.
 
-OSS stub — passes messages through unmodified.
-Pro integration: replaces with rule-based directive engine.
+Apply compression directives to a messages list using the rule-based directive engine.
 
 Parameters
 ----------
 directives : list[dict], optional
-    List of directive dicts (Pro feature; ignored in OSS).
+    List of directive dicts.
 
 #### `__init__`
 
@@ -1853,7 +1852,7 @@ def add_directive(self, directive: Dict[str, Any]) -> None
 ```
 
 - **Returns:** `None`
-- **Description:** Register a directive (Pro feature placeholder).
+- **Description:** Register a directive.
 
 #### `clear`
 
@@ -1943,7 +1942,7 @@ Orchestrates the TokenPak compression pipeline.
 Stages (all optional, enabled by default):
   1. dedup    — remove duplicate / near-duplicate message turns
   2. segment  — classify messages into typed Segment objects
-  3. directives — apply Pro-tier directives (stub; no-op in OSS)
+  3. directives — apply compression directives
 
 Custom compression hooks can be added via :meth:`add_hook`.
 
@@ -2588,7 +2587,7 @@ def to_dict(self) -> dict
 
 Syncs fingerprints to the intelligence server and caches returned directives.
 
-Requires a Pro+ license. Falls back to cached or OSS directives when offline.
+Syncs fingerprints and caches returned directives. Falls back to cached directives when offline.
 
 Usage:
     sync = FingerprintSync()
@@ -2833,7 +2832,7 @@ def has_feature(self, token: str, feature: str) -> bool
 
 **Bases:** object
 
-Track active seat claims for Team tier.
+Track active seat claims.
 
 #### `claim`
 
@@ -7811,7 +7810,7 @@ def has_changed(self, source_id: str, cached_version: str, **kwargs) -> bool
 
 Connector for GitHub repositories.
 
-Pro tier — requires:
+Requires:
 - Personal access token (PAT) or GitHub App
 - Repository access permissions
 
@@ -7871,7 +7870,7 @@ def list_issues(self, state: str = 'all') -> Iterator[RemoteFile]
 
 Connector for Google Drive.
 
-Pro tier — requires:
+Requires:
 - OAuth2 credentials (client_id, client_secret)
 - User authorization flow
 
@@ -7957,7 +7956,7 @@ def get_content(self, file: RemoteFile) -> bytes
 
 Connector for Notion workspaces.
 
-Pro tier — requires:
+Requires:
 - Notion integration token
 - Workspace access permissions
 

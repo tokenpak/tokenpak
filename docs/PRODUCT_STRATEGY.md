@@ -26,49 +26,30 @@ TokenPak is an open-source compression proxy that reduces LLM API costs by 40-60
 
 ## Target Audiences
 
-### OSS (Free)
 - **Individual developers** building AI projects
 - **Researchers** running experiments at scale
 - **Open-source projects** that need cost efficiency
 - **Students** learning AI development
-
-### Pro ($99/mo)
-- **Indie hackers** shipping AI products
-- **Small startups** (1-5 devs) with growing API costs
-- **Freelancers** building for clients
-
-### Team ($299/mo)
-- **Startups** (5-50 employees) with AI-first products
+- **Startups** with growing API costs
 - **Agencies** building AI solutions for clients
 - **Product teams** inside larger companies
-
-### Enterprise (Custom)
-- **Large tech companies** with compliance requirements
-- **Financial services** (on-prem, audit trails)
-- **Healthcare** (HIPAA compliance)
-- **Government** (FedRAMP, air-gapped)
+- **Organizations** with compliance requirements (on-prem, audit trails, HIPAA)
 
 ---
 
-## Product Tiers
+## Feature Set
 
-```
-                    OSS         Pro         Team        Enterprise
-                    ────────────────────────────────────────────────
-Compression Engine   ✅          ✅          ✅          ✅
-CLI Tools            ✅          ✅          ✅          ✅
-Local Telemetry      ✅          ✅          ✅          ✅
-Self-Hosted          ✅          ❌          ❌          ✅
-Cloud Dashboard      ❌          ✅          ✅          ✅
-Managed API Proxy    ❌          ✅          ✅          ✅
-Multi-User           ❌          ❌          ✅          ✅
-SSO/SAML             ❌          ❌          ❌          ✅
-On-Premises          ❌          ❌          ❌          ✅
-SLA                  ❌          ❌          ❌          ✅
-Support              Community   Priority    Priority    Dedicated
-License              MIT         Commercial  Commercial  Custom
-Price                Free        $99/mo      $299/mo     Custom
-```
+All features are included in the open-source release:
+
+- Compression engine
+- CLI tools
+- Local telemetry
+- Self-hosted deployment
+- Cloud dashboard
+- Multi-user support
+- SSO/SAML
+- On-premises deployment
+- MIT license
 
 ---
 
@@ -101,7 +82,7 @@ Price                Free        $99/mo      $299/mo     Custom
 | Time to implement | Weeks-months | Minutes |
 | Maintenance | Ongoing | Handled |
 | Features | Basic | Production-grade |
-| Cost | Engineering time | Free (OSS) or $99/mo |
+| Cost | Engineering time | Free (open source) |
 
 **TokenPak advantage:** Instant setup, battle-tested, continuously improved.
 
@@ -123,16 +104,15 @@ Price                Free        $99/mo      $299/mo     Custom
 ```
 Monthly LLM spend: $10,000
 TokenPak savings: 45% = $4,500/month
-TokenPak Pro cost: $99/month
-Net savings: $4,401/month
-ROI: 4,344%
+TokenPak cost: $0 (open source)
+Net savings: $4,500/month
 ```
 
 ---
 
 ## Roadmap
 
-### Phase 1: OSS Launch (Now)
+### Phase 1: Launch (Now)
 - [x] Core compression engine
 - [x] CLI tools
 - [x] Local telemetry
@@ -140,85 +120,42 @@ ROI: 4,344%
 - [ ] GitHub release
 - [ ] PyPI package
 
-### Phase 2: Pro Launch (Q2 2026)
+### Phase 2: Dashboard + Analytics (Q2 2026)
 - [ ] Cloud dashboard (tokenpak.ai)
 - [ ] Managed proxy service
 - [ ] Usage analytics
-- [ ] Stripe billing integration
 
-### Phase 3: Team Launch (Q3 2026)
+### Phase 3: Collaboration (Q3 2026)
 - [ ] Multi-user workspaces
-- [ ] Team billing
 - [ ] Role-based access
 - [ ] Slack/Discord integrations
 
-### Phase 4: Enterprise (Q4 2026)
+### Phase 4: Production Hardening (Q4 2026)
 - [ ] On-premises deployment package
 - [ ] SSO/SAML integration
 - [ ] Compliance documentation
-- [ ] Enterprise sales motion
-
----
-
-## Pricing Strategy
-
-### OSS: Free Forever
-- Full compression engine
-- No feature gates or time limits
-- MIT license for maximum adoption
-
-### Pro: $99/month
-- Sweet spot for individual developers
-- Lower than enterprise tools ($500+/mo)
-- High value vs. cost (save $1000s, pay $99)
-
-### Team: $299/month
-- Competitive with B2B SaaS
-- Includes 10 seats (vs. per-seat pricing)
-- Easy budget approval for startups
-
-### Enterprise: Custom
-- Value-based pricing
-- Typically $2,000-10,000/month
-- Based on scale, compliance needs, support level
 
 ---
 
 ## Go-to-Market
 
-### OSS Growth
+### Growth Strategy
 1. **GitHub** — Primary distribution
 2. **Hacker News** — Launch post
 3. **Reddit** — r/LocalLLaMA, r/MachineLearning
 4. **Twitter/X** — AI developer community
 5. **Discord** — Community building
-
-### Pro/Team Conversion
-1. **In-product prompts** — "Upgrade for dashboard"
-2. **Usage-based triggers** — High usage = outreach
-3. **Content marketing** — ROI case studies
-4. **Comparison pages** — vs. alternatives
-
-### Enterprise Sales
-1. **Inbound** — Contact form, demo requests
-2. **Outbound** — Target high-spend AI companies
-3. **Partners** — AI consulting firms, system integrators
+6. **Content marketing** — ROI case studies
+7. **Comparison pages** — vs. alternatives
 
 ---
 
 ## Success Metrics
 
-### OSS
 - GitHub stars: 1,000+ (year 1)
 - PyPI downloads: 10,000/month
 - Active installations: 500+
 - Contributors: 20+
-
-### Commercial
-- Pro subscribers: 100 (year 1)
-- Team accounts: 20 (year 1)
-- Enterprise contracts: 5 (year 1)
-- ARR target: $500K (year 1)
 
 ---
 
@@ -240,5 +177,5 @@ ROI: 4,344%
 ### Don't Say
 - "AI magic" (we're deterministic, not magic)
 - "Lossless" (compression has tradeoffs)
-- "Free forever" for commercial tiers
+- "Free forever" (implies it could change)
 - "Guaranteed savings" (results vary)

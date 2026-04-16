@@ -2,8 +2,7 @@
 
 Run a shared TokenPak proxy for your whole team.
 
-!!! warning "Coming in Phase 5"
-    The Team Server is under active development. This guide documents the planned architecture and configuration. Some features may not yet be available in the current release.
+The shared server is under active development. This guide documents the planned architecture and configuration. Some features may not yet be available in the current release.
 
 ---
 

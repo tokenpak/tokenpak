@@ -1,4 +1,4 @@
-"""template command — team shared prompt templates."""
+"""template command — shared prompt templates."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ try:
 
     @click.group("template")
     def template_cmd():
-        """Team shared prompt template commands."""
+        """Shared prompt template commands."""
         pass
 
     @template_cmd.command("list")

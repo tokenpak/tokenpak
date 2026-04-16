@@ -1,4 +1,4 @@
-# TokenPak Enterprise Deployment Guide
+# TokenPak Production Deployment Guide
 
 This guide covers deploying TokenPak in production environments: **bare metal**, **Docker**, and **Kubernetes**.
 

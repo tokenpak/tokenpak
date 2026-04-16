@@ -1,5 +1,5 @@
 """
-tokenpak help — Tier-aware, programmatic help system.
+tokenpak help — Programmatic help system.
 
 Commands:
     /tokenpak help                  Essential commands only
@@ -12,7 +12,6 @@ Commands:
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -46,25 +45,6 @@ _INTERMEDIATE_COMMANDS = {
 }
 
 # ─────────────────────────────────────────────
-# Tier ordering (lower index = lower tier)
-# ─────────────────────────────────────────────
-
-_TIER_ORDER = ["oss", "pro", "team", "enterprise"]
-
-_TIER_LABELS = {
-    "oss": "OSS (Community Edition)",
-    "pro": "Pro",
-    "team": "Team",
-    "enterprise": "Enterprise",
-}
-
-_UPSELL_MESSAGES = {
-    "oss": "Upgrade to PRO to unlock adaptive compression, smart routing, and real-time dashboards.",
-    "pro": "Upgrade to TEAM to unlock multi-agent coordination, distributed workflows, and SLA management.",
-    "team": "Upgrade to ENTERPRISE to unlock compliance reporting, audit logs, and encrypted vault storage.",
-}
-
-# ─────────────────────────────────────────────
 # Registry loader
 # ─────────────────────────────────────────────
 
@@ -79,32 +59,6 @@ def _load_registry() -> list[dict]:
         return data.get("commands", [])
     except Exception:
         return []
-
-
-# ─────────────────────────────────────────────
-# Tier detection
-# ─────────────────────────────────────────────
-
-def _current_tier() -> str:
-    """Return current license tier string (oss/pro/team/enterprise). Never raises."""
-    try:
-        from tokenpak.infrastructure.license_activation import get_plan
-        result = get_plan()
-        return result.tier.value
-    except Exception:
-        return "oss"
-
-
-def _tier_rank(tier: str) -> int:
-    try:
-        return _TIER_ORDER.index(tier.lower())
-    except ValueError:
-        return 0
-
-
-def _is_visible(cmd_tier: str, user_tier: str) -> bool:
-    """Return True if user's tier includes access to cmd_tier."""
-    return _tier_rank(cmd_tier) <= _tier_rank(user_tier)
 
 
 # ─────────────────────────────────────────────
@@ -167,17 +121,11 @@ def print_intermediate_help() -> None:
 
 
 def print_full_help(tier: Optional[str] = None) -> None:
-    """Print all commands (tier-filtered for licensing, but not complexity-tiered)."""
-    if tier is None:
-        tier = _current_tier()
-    tier_label = _TIER_LABELS.get(tier, tier.upper())
-
+    """Print all commands."""
     commands = _load_registry()
-    visible = [c for c in commands if _is_visible(c.get("tier", "oss"), tier)]
-    groups = _group_commands(visible)
+    groups = _group_commands(commands)
 
-    print(f"TokenPak — LLM Proxy with Context Compression")
-    print(f"Tier: {tier_label}\n")
+    print("TokenPak — LLM Proxy with Context Compression\n")
     print("All Commands:\n")
 
     for group_name, cmds in groups.items():
@@ -190,29 +138,16 @@ def print_full_help(tier: Optional[str] = None) -> None:
             print(f"    {name:<16} {desc}{alias_str}")
         print()
 
-    upsell = _UPSELL_MESSAGES.get(tier)
-    if upsell:
-        print(f"  ↑ {upsell}")
-        print()
-
     print("Run `tokenpak help <command>` for details.")
 
 
 def print_minimal_help(tier: Optional[str] = None) -> None:
-    """Print one-line compact command list filtered by tier."""
-    if tier is None:
-        tier = _current_tier()
-    tier_label = _TIER_LABELS.get(tier, tier.upper())
-
+    """Print one-line compact command list."""
     commands = _load_registry()
-    visible = [c["command"] for c in commands if _is_visible(c.get("tier", "oss"), tier)]
+    names = [c["command"] for c in commands]
 
-    print(f"TokenPak [{tier_label}]  —  available commands:")
-    print("  " + "  ".join(visible))
-
-    upsell = _UPSELL_MESSAGES.get(tier)
-    if upsell:
-        print(f"\n  ↑ {upsell}")
+    print("TokenPak  —  available commands:")
+    print("  " + "  ".join(names))
 
 
 def print_command_help(command_name: str) -> None:
@@ -231,14 +166,9 @@ def print_command_help(command_name: str) -> None:
         print("Run `tokenpak help` to see all available commands.")
         sys.exit(1)
 
-    tier = target.get("tier", "oss")
-    tier_label = _TIER_LABELS.get(tier, tier.upper())
-    current = _current_tier()
-
     print(f"tokenpak {target['command']}")
     print("─" * 40)
     print(f"  Purpose  : {target.get('description', '')}")
-    print(f"  Tier     : {tier_label}")
     print(f"  Usage    : {target.get('usage', '')}")
     print()
 
@@ -254,11 +184,6 @@ def print_command_help(command_name: str) -> None:
     related = target.get("related", [])
     if related:
         print(f"  Related  : {', '.join(related)}")
-
-    if not _is_visible(tier, current):
-        current_label = _TIER_LABELS.get(current, current.upper())
-        print()
-        print(f"  ⚠️  This command requires {tier_label}. (You are on {current_label}.)")
 
 
 # ─────────────────────────────────────────────
@@ -312,7 +237,7 @@ try:
     @click.argument("command", required=False, default=None)
     @click.option("--minimal", is_flag=True, help="Show compact one-line command list")
     def help_cmd(command: Optional[str], minimal: bool):
-        """Show tier-aware help. Use `help <command>` for details."""
+        """Show help. Use `help <command>` for details."""
         if minimal:
             print_minimal_help()
         elif command:

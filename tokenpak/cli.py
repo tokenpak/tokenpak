@@ -138,7 +138,7 @@ def _print_quick_help():
 
 
 def _print_full_help():
-    """Print the power-user grouped help output (tier-aware)."""
+    """Print the power-user grouped help output."""
     try:
         from tokenpak.cli.commands.help import print_full_help
         print_full_help()
@@ -155,7 +155,7 @@ def _print_full_help():
 
 
 def cmd_help(args):
-    """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
+    """Show help. Pass a command name for details, or --minimal for compact list."""
     try:
         from tokenpak.cli.commands.help import run as help_run
         
@@ -5851,7 +5851,7 @@ def _build_macro_parser(sub):
 
 
 def _build_fingerprint_parser(sub):
-    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management (Pro+)")
+    p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management")
     fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=True)
 
     # fingerprint sync

@@ -462,7 +462,7 @@ def run_budget_cmd(args) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Budget Intelligence (Pro+)
+# Budget Intelligence
 # ---------------------------------------------------------------------------
 
 _MODEL_TIER_MAP: dict[str, str] = {

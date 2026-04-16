@@ -46,6 +46,7 @@ _ANTHROPIC_CACHE_READ_MULT: float = 0.10
 _ANTHROPIC_CACHE_WRITE_MULT: float = 1.25
 
 _CATALOG_PATH = Path(__file__).parent / "data" / "pricing_catalog.json"
+_STALENESS_DAYS = 90  # warn if catalog is older than this
 
 
 def _per_token(per_million: float) -> float:
@@ -149,9 +150,11 @@ class PricingCatalog:
         self,
         version: str,
         models: dict[str, ModelPricing],
+        updated: Optional[str] = None,
     ) -> None:
         self.version = version
         self.models: dict[str, ModelPricing] = models
+        self.updated = updated  # ISO date string from _meta.updated
 
     # ------------------------------------------------------------------
     # Constructors
@@ -182,22 +185,45 @@ class PricingCatalog:
 
         meta: dict[str, Any] = raw.get("_meta", {})
         version: str = meta.get("version", "v1")
+        updated: Optional[str] = meta.get("updated")
 
         models: dict[str, ModelPricing] = {}
         for model_id, entry in raw["models"].items():
             models[model_id] = ModelPricing.from_dict(model_id, entry)
 
-        return cls(version=version, models=models)
+        catalog = cls(version=version, models=models, updated=updated)
+        catalog.check_staleness()
+        return catalog
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PricingCatalog":
         """Construct a catalog from an already-parsed dict (useful in tests)."""
         meta = data.get("_meta", {})
         version = meta.get("version", "v1")
+        updated = meta.get("updated")
         models: dict[str, ModelPricing] = {}
         for model_id, entry in data.get("models", {}).items():
             models[model_id] = ModelPricing.from_dict(model_id, entry)
-        return cls(version=version, models=models)
+        return cls(version=version, models=models, updated=updated)
+
+    def check_staleness(self) -> None:
+        """Log a warning if catalog pricing data is older than _STALENESS_DAYS."""
+        if not self.updated:
+            return
+        try:
+            from datetime import date as _date
+            updated_date = _date.fromisoformat(self.updated)
+            age_days = (_date.today() - updated_date).days
+            if age_days > _STALENESS_DAYS:
+                logger.warning(
+                    "Pricing catalog last updated %s (%d days ago). "
+                    "Cost estimates may be inaccurate. Update "
+                    "tokenpak/telemetry/data/pricing_catalog.json and bump "
+                    "_meta.updated.",
+                    self.updated, age_days,
+                )
+        except (ValueError, TypeError):
+            pass
 
     # ------------------------------------------------------------------
     # Lookups

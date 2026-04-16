@@ -17,7 +17,7 @@ from typing import Optional
 import click
 
 
-@click.group("fingerprint", help="Fingerprint sync and cache management (Pro+).")
+@click.group("fingerprint", help="Fingerprint sync and cache management.")
 def fingerprint_cmd():
     pass
 

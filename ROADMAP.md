@@ -2,9 +2,9 @@
 
 This document outlines the planned development of TokenPak.
 
-## Current Release: v0.1.0 (OSS)
+## Current Release: v0.1.0
 
-✅ **Shipped:**
+**Shipped:**
 - Deterministic compression engine
 - Multi-mode compression (hybrid, aggressive, minimal)
 - Vault context injection (BM25)
@@ -18,56 +18,43 @@ This document outlines the planned development of TokenPak.
 
 ---
 
-## Q2 2026: v0.2.0 (OSS) + Pro Beta
+## Q2 2026: v0.2.0
 
-### OSS Improvements
 - [ ] Performance optimization (10x faster compression)
 - [ ] Plugin system for custom compressors
 - [ ] WebSocket support
 - [ ] OpenTelemetry export
 - [ ] Docker official image
-
-### Pro Beta (Invite Only)
-- [ ] Cloud dashboard (read-only)
+- [ ] Cloud dashboard
 - [ ] Usage analytics
 - [ ] Cost tracking across projects
-- [ ] Early adopter pricing ($49/mo)
 
 ---
 
-## Q3 2026: v1.0.0 (OSS) + Pro GA
+## Q3 2026: v1.0.0
 
-### OSS v1.0
 - [ ] Stable API (no breaking changes)
 - [ ] Multi-provider support (Anthropic, OpenAI, Google, Mistral)
 - [ ] Streaming compression
 - [ ] Batch processing mode
 - [ ] Comprehensive test suite
-
-### Pro General Availability
-- [ ] Full cloud dashboard
 - [ ] Managed proxy service
 - [ ] API key management
-- [ ] Team invites (preview)
-- [ ] Stripe billing
 
 ---
 
-## Q4 2026: Team Edition
+## Q4 2026
 
-### Team Features
 - [ ] Multi-user workspaces
 - [ ] Role-based access control
 - [ ] Shared dashboards
-- [ ] Team billing and invoicing
 - [ ] Audit logs
 - [ ] Slack/Discord integrations
 
 ---
 
-## 2027: Enterprise Edition
+## 2027
 
-### Enterprise Features
 - [ ] On-premises deployment
 - [ ] SSO/SAML authentication
 - [ ] Custom integrations
@@ -98,9 +85,7 @@ Have an idea? Open an issue on GitHub with the `feature-request` label.
 
 ## Release Cadence
 
-- **OSS:** Monthly releases (patch), quarterly features (minor)
-- **Pro/Team:** Continuous deployment
-- **Enterprise:** Quarterly releases with LTS option
+- Monthly releases (patch), quarterly features (minor)
 
 ## Versioning
 

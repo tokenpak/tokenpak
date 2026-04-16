@@ -1,4 +1,4 @@
-"""optimize command — /tokenpak optimize — Pro+ feature.
+"""optimize command — /tokenpak optimize.
 
 Analyzes the current session for cost + token efficiency, suggests better
 routing, identifies redundant context, and optionally auto-applies
@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import sys
 import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
@@ -480,16 +479,6 @@ def _apply_recommendations(recs: List[Dict[str, Any]]) -> None:
 
 def run_optimize(verbose: bool = False, as_json: bool = False, apply: bool = False) -> None:
     """Run the full optimization analysis."""
-    # Pro+ gate
-    try:
-        from tokenpak.infrastructure.license_activation import is_pro
-        if not is_pro():
-            print("⚠  /tokenpak optimize requires a Pro (or higher) license.")
-            print("   Run: tokenpak activate <key>")
-            sys.exit(1)
-    except ImportError:
-        pass  # license module not available in all installs — proceed
-
     # Fetch session stats
     session = _proxy_get("/stats/session") or {}
 
@@ -521,7 +510,7 @@ try:
     @click.option("--json", "as_json", is_flag=True, help="Machine-readable JSON output")
     @click.option("--apply", is_flag=True, help="Auto-apply recommendations")
     def optimize_cmd(verbose, as_json, apply):
-        """Analyze session for cost + token efficiency (Pro+)."""
+        """Analyze session for cost + token efficiency."""
         run_optimize(verbose=verbose, as_json=as_json, apply=apply)
 
 except ImportError:

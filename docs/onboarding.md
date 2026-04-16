@@ -394,4 +394,3 @@ You've completed the onboarding journey. Here's what's next:
 | Deploy a shared team server | [Team Server](guides/team-server.md) |
 | Production deployment deep dive | [DEPLOYMENT.md](DEPLOYMENT.md) |
 | Full CLI reference | [CLI Reference](cli-reference.md) |
-| Pro/Team upgrade | [Pricing portal](https://tokenpak.ai/pricing) |

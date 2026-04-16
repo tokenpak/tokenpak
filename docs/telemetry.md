@@ -27,7 +27,7 @@ The proxy sits between your LLM client and your provider. It reads:
 
 The only outbound connections TokenPak makes:
 1. Your LLM request, forwarded to your provider (Anthropic, OpenAI, Google)
-2. License validation (Pro/Team tiers only) — sends your license key hash, not usage data
+2. License validation — sends your license key hash, not usage data
 
 ### Optional anonymous metrics
 

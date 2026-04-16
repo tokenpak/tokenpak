@@ -1,4 +1,4 @@
-"""prune command — /tokenpak prune — Pro+ feature.
+"""prune command — /tokenpak prune.
 
 Remove low-priority memory/blocks from compression store.
 
@@ -118,16 +118,6 @@ def run_prune(
     as_json: bool = False,
 ) -> None:
     """Core prune logic — callable from tests or CLI."""
-    # Tier gate
-    try:
-        from tokenpak.infrastructure.license_activation import is_pro
-        if not is_pro():
-            print("⛔ /tokenpak prune requires a Pro or higher license.")
-            print("   Upgrade at: https://tokenpak.dev/pro")
-            sys.exit(1)
-    except ImportError:
-        pass  # Allow in test/dev environments without license module
-
     pins = _load_pins()
     all_blocks = _load_blocks()
 
@@ -216,7 +206,7 @@ try:
     )
     @click.option("--json", "as_json", is_flag=True, help="Output raw JSON")
     def prune_cmd(auto, dry_run, threshold, as_json):
-        """Remove low-priority blocks from compression store (Pro+).
+        """Remove low-priority blocks from compression store.
 
         \b
         Examples:

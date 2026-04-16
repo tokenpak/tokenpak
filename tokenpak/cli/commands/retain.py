@@ -1,4 +1,4 @@
-"""retain command — /tokenpak retain — Pro+ feature.
+"""retain command — /tokenpak retain.
 
 Pin blocks so they're never removed by compression or prune.
 
@@ -193,7 +193,7 @@ try:
     @click.option("--list", "list_pins", is_flag=True, help="Show all pinned blocks")
     @click.option("--remove", metavar="BLOCK_ID", default=None, help="Unpin a block")
     def retain_cmd(block_id, list_pins, remove):
-        """Pin blocks so they survive compression and prune (Pro+).
+        """Pin blocks so they survive compression and prune.
 
         \b
         Examples:

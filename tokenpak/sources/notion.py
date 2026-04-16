@@ -1,4 +1,4 @@
-"""Notion connector (Pro tier)."""
+"""Notion connector."""
 
 from datetime import datetime
 from typing import Iterator, Optional
@@ -10,7 +10,7 @@ class NotionConnector(Connector):
     """
     Connector for Notion workspaces.
 
-    Pro tier — requires:
+    Requires:
     - Notion integration token
     - Workspace access permissions
 
@@ -22,7 +22,6 @@ class NotionConnector(Connector):
     """
 
     name = "notion"
-    tier = "pro"
 
     NOTION_API_BASE = "https://api.notion.com/v1"
 
@@ -46,7 +45,7 @@ class NotionConnector(Connector):
             "Content-Type": "application/json",
         }
 
-        # DEFERRED (Pro tier): Implement connection test when adding Pro tier
+        # DEFERRED: Implement connection test
         # try:
         #     response = requests.get(
         #         f"{self.NOTION_API_BASE}/users/me",
@@ -56,7 +55,7 @@ class NotionConnector(Connector):
         # except Exception as e:
         #     print(f"Notion connection failed: {e}")
         #     return False
-        raise NotImplementedError("Notion connector requires Pro tier")
+        raise NotImplementedError("Notion connector is not yet implemented")
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
         """
@@ -64,7 +63,7 @@ class NotionConnector(Connector):
 
         Uses search API with last_edited_time filter for incremental sync.
         """
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # DEFERRED: Implement Notion search API integration
         # filter_params = {}
         # if since:
         #     filter_params["filter"] = {
@@ -92,7 +91,7 @@ class NotionConnector(Connector):
         #
         #     has_more = response.get("has_more", False)
         #     start_cursor = response.get("next_cursor")
-        raise NotImplementedError("Notion connector requires Pro tier")
+        raise NotImplementedError("Notion connector is not yet implemented")
 
     def get_content(self, file: RemoteFile) -> bytes:
         """
@@ -100,7 +99,7 @@ class NotionConnector(Connector):
 
         Recursively fetches nested blocks and converts to markdown.
         """
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # DEFERRED: Implement block content retrieval
         # blocks = []
         # has_more = True
         # start_cursor = None
@@ -118,7 +117,7 @@ class NotionConnector(Connector):
         #
         # markdown = self._blocks_to_markdown(blocks)
         # return markdown.encode("utf-8")
-        raise NotImplementedError("Notion connector requires Pro tier")
+        raise NotImplementedError("Notion connector is not yet implemented")
 
     def _to_remote_file(self, notion_obj: dict) -> RemoteFile:
         """Convert Notion API object to RemoteFile."""
@@ -152,7 +151,7 @@ class NotionConnector(Connector):
 
     def _blocks_to_markdown(self, blocks: list) -> str:
         """Convert Notion blocks to markdown."""
-        # DEFERRED (Pro tier): Implement block-to-markdown conversion
+        # DEFERRED: Implement block-to-markdown conversion
         # This would handle: paragraph, heading_1/2/3, bulleted_list_item,
         # numbered_list_item, code, quote, callout, image, etc.
         lines = []

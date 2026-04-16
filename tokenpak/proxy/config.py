@@ -91,7 +91,7 @@ else:
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
 LISTEN_ADDRESS = _cfg("listen_address", "127.0.0.1", "TOKENPAK_BIND_ADDRESS", str)
 PROXY_AUTH_KEY = os.environ.get("TOKENPAK_PROXY_KEY", "")
-DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", True, "TOKENPAK_DASHBOARD_AUTH", bool)
+DASHBOARD_AUTH_ENABLED = _cfg("dashboard.require_token", False, "TOKENPAK_DASHBOARD_AUTH", bool)
 MONITOR_DB = _cfg("db", str(Path(__file__).parent / "monitor.db"), "TOKENPAK_DB", str)
 BUDGET_DAILY_LIMIT_USD = float(os.environ.get("TOKENPAK_BUDGET_DAILY_LIMIT_USD", "0"))
 BUDGET_ALERT_THRESHOLD_PCT = float(os.environ.get("TOKENPAK_BUDGET_ALERT_PCT", "80"))
@@ -304,17 +304,26 @@ ADAPTER_REGISTRY = build_default_registry()
 
 def _load_tokenpak_upstream_overrides() -> Dict[str, str]:
     """
-    Auto-discover upstream routes from config.json tokenpak-* provider mirrors.
+    Auto-discover upstream routes from tokenpak-* provider mirrors.
+    Checks config.json first (pre-migration), then falls back to
+    the loaded config.yaml (post-migration).
     Supports current shape at `models.providers` and legacy root `providers`.
     """
     cfg_path = Path.home() / ".tokenpak" / "config.json"
-    if not cfg_path.exists():
-        return {}
-
-    try:
-        cfg = json.loads(cfg_path.read_text())
-    except Exception:
-        return {}
+    if cfg_path.exists():
+        try:
+            cfg = json.loads(cfg_path.read_text())
+        except Exception:
+            return {}
+    else:
+        # Post-migration: provider mirrors live in config.yaml now
+        try:
+            from tokenpak.core.config_loader import load_config
+            cfg = load_config() or {}
+        except ImportError:
+            return {}
+        if not cfg:
+            return {}
 
     providers = None
     models = cfg.get("models")

@@ -34,13 +34,12 @@ def _tier_name() -> str:
 
 
 def _print_upgrade() -> None:
-    print("TOKENPAK  |  Enterprise Feature")
+    print("TOKENPAK  |  Compliance")
     print(_SEP[:32])
     print()
-    print("This feature requires an Enterprise license.")
-    print(f"Current tier: {_tier_name()}")
+    print("Compliance reporting is not yet configured.")
     print()
-    print("Learn more: https://tokenpak.dev/enterprise")
+    print("Learn more: https://tokenpak.ai")
     print()
 
 
@@ -110,8 +109,7 @@ def run(argv: list[str] | None = None) -> None:
         print("  report ccpa    Generate CCPA compliance report")
         print()
         if not _enterprise_check():
-            print(f"  ⚠  Enterprise license required (current tier: {_tier_name()})")
-            print("     https://tokenpak.dev/enterprise")
+            print(f"  Note: Compliance reporting requires configuration.")
             print()
         return
 

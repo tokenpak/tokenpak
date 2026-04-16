@@ -1,4 +1,4 @@
-"""GitHub connector (Pro tier)."""
+"""GitHub connector."""
 
 from typing import Iterator, Optional
 
@@ -9,7 +9,7 @@ class GitHubConnector(Connector):
     """
     Connector for GitHub repositories.
 
-    Pro tier — requires:
+    Requires:
     - Personal access token (PAT) or GitHub App
     - Repository access permissions
 
@@ -53,7 +53,7 @@ class GitHubConnector(Connector):
             "Accept": "application/vnd.github.v3+json",
         }
 
-        # DEFERRED (Pro tier): Implement connection test when adding Pro tier
+        # TODO: Implement connection test
         # try:
         #     response = requests.get(
         #         f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}",
@@ -63,7 +63,7 @@ class GitHubConnector(Connector):
         # except Exception as e:
         #     print(f"GitHub connection failed: {e}")
         #     return False
-        raise NotImplementedError("GitHub connector requires Pro tier")
+        raise NotImplementedError("GitHub connector not yet implemented")
 
     def list_files(self, since: Optional[str] = None) -> Iterator[RemoteFile]:
         """
@@ -71,7 +71,7 @@ class GitHubConnector(Connector):
 
         Uses commit SHA for incremental sync.
         """
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # TODO: Implement
         # Get default branch
         # repo = requests.get(
         #     f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}",
@@ -95,11 +95,11 @@ class GitHubConnector(Connector):
         #             modified_at=datetime.now().isoformat(),  # Tree doesn't have timestamps
         #             file_type=self._detect_language(item["path"]),
         #         )
-        raise NotImplementedError("GitHub connector requires Pro tier")
+        raise NotImplementedError("GitHub connector not yet implemented")
 
     def get_content(self, file: RemoteFile) -> bytes:
         """Download file content from GitHub."""
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # TODO: Implement
         # response = requests.get(
         #     f"{self.GITHUB_API_BASE}/repos/{self._owner}/{self._repo}/git/blobs/{file.source_id}",
         #     headers=self._headers
@@ -111,11 +111,11 @@ class GitHubConnector(Connector):
         # if encoding == "base64":
         #     return base64.b64decode(content)
         # return content.encode("utf-8")
-        raise NotImplementedError("GitHub connector requires Pro tier")
+        raise NotImplementedError("GitHub connector not yet implemented")
 
     def list_issues(self, state: str = "all") -> Iterator[RemoteFile]:
         """List issues as virtual files."""
-        # DEFERRED (Pro tier): Implement when adding Pro tier
+        # TODO: Implement
         # page = 1
         # while True:
         #     response = requests.get(
@@ -137,7 +137,7 @@ class GitHubConnector(Connector):
         #         )
         #
         #     page += 1
-        raise NotImplementedError("GitHub connector requires Pro tier")
+        raise NotImplementedError("GitHub connector not yet implemented")
 
     def _detect_language(self, path: str) -> str:
         """Detect programming language from file extension."""
