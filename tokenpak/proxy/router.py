@@ -118,17 +118,19 @@ class ProviderRouter:
         Raises:
             ValueError: If Content-Length header doesn't match actual body size.
         """
-        # Validate Content-Length before doing any routing work
+        # Validate Content-Length before doing any routing work — only when body
+        # is actually provided to this call (body=None means caller omitted it
+        # for routing purposes; skip validation in that case).
         lower_headers = {k.lower(): v for k, v in headers.items()}
         content_length_str = lower_headers.get("content-length")
-        if content_length_str is not None:
+        if content_length_str is not None and body is not None:
             try:
                 declared = int(content_length_str)
             except (ValueError, TypeError):
                 raise ValueError(
                     f"Invalid Content-Length header value: {content_length_str!r}"
                 )
-            actual = len(body) if body is not None else 0
+            actual = len(body)
             if declared != actual:
                 raise ValueError(
                     f"Content-Length mismatch: header says {declared}, "
