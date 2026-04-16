@@ -281,7 +281,7 @@ class Budgeter:
         for ev in evidence["items"]:
             if hasattr(ev, "text"):
                 # EvidenceItem object — create a copy-like proxy
-                from .evidence_pack import EvidenceItem
+                from tokenpak.compression.evidence_pack import EvidenceItem
 
                 new_ev = EvidenceItem(
                     src=ev.src,

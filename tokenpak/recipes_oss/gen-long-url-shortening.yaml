@@ -1,0 +1,11 @@
+name: gen-long-url-shortening
+category: general
+description: Truncate long URLs to their origin + path (strip query strings and fragments).
+pattern:
+  match: any
+action:
+  operations:
+  - type: regex_replace
+    pattern: https?://[^\s\"'<>]{120,}
+    replacement: '[URL]'
+  compression_hint: 0.03

@@ -1,0 +1,16 @@
+name: js-import-dedup
+category: javascript
+description: Remove duplicate ES module import statements.
+pattern:
+  match: extension
+  extensions:
+  - .js
+  - .jsx
+  - .ts
+  - .tsx
+  - .mjs
+  - .cjs
+action:
+  operations:
+  - type: js_import_dedup
+  compression_hint: 0.05

@@ -1,0 +1,17 @@
+name: js-react-prop-types-compression
+category: javascript
+description: Compress verbose React PropTypes declarations to a single summary comment.
+pattern:
+  match: extension
+  extensions:
+  - .jsx
+  - .js
+  keywords:
+  - PropTypes
+action:
+  operations:
+  - type: regex_replace
+    pattern: (\w+)\.propTypes\s*=\s*\{[^}]{200,}\};
+    replacement: \1.propTypes = { /* ... */ };
+    flags: dotall
+  compression_hint: 0.25

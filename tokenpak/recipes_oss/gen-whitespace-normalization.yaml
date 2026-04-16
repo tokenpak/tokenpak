@@ -1,0 +1,17 @@
+name: gen-whitespace-normalization
+category: general
+description: 'Normalize excessive whitespace: collapse multiple spaces/tabs to one, trim trailing whitespace from lines.'
+pattern:
+  match: any
+action:
+  operations:
+  - type: regex_replace
+    pattern: '[ \t]+'
+    replacement: ' '
+    scope: inline
+  - type: regex_replace
+    pattern: '[ \t]+$'
+    replacement: ''
+    scope: line
+    flags: multiline
+  compression_hint: 0.05

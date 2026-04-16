@@ -81,10 +81,10 @@ class TokenPakAdapter(ABC):
 
     DEFAULT_TIMEOUT_S: float = 120.0
 
-    def __init__(self, base_url: str, api_key: str, timeout_s: float | None = None) -> None:
+    def __init__(self, base_url: str, api_key: str = "", timeout_s: float | None = None) -> None:
         if not base_url:
             raise TokenPakConfigError("base_url must not be empty.")
-        if not api_key:
+        if not api_key and self.provider_name not in ("claude_cli", "generic"):
             raise TokenPakConfigError("api_key must not be empty.")
 
         self.base_url = base_url.rstrip("/")

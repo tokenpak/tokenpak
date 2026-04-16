@@ -37,10 +37,10 @@ def __getattr__(name: str):
         "watchdog": lambda: __import__("tokenpak.proxy.proxy_watchdog", fromlist=[""]),
         # Budgeting
         "Budgeter": lambda: __import__("tokenpak.telemetry.budgeter", fromlist=["Budgeter"]).Budgeter,
-        "BudgetBlock": lambda: __import__("tokenpak.telemetry.budget", fromlist=["BudgetBlock"]).BudgetBlock,
+        "BudgetBlock": lambda: __import__("tokenpak.telemetry.budget_allocator", fromlist=["BudgetBlock"]).BudgetBlock,
         # Telemetry — CompletionTracker re-exported from tokenpak.telemetry
         "TelemetryCollector": lambda: __import__("tokenpak.telemetry.collector", fromlist=["TelemetryCollector"]).TelemetryCollector,
-        "CacheManager": lambda: __import__("tokenpak.telemetry.cache", fromlist=["CacheStore"]).CacheStore,
+        "CacheManager": lambda: __import__("tokenpak.cache.cache_manager", fromlist=["CacheManager"]).CacheManager,
         "CompletionTracker": lambda: __import__("tokenpak.telemetry", fromlist=["CompletionTracker"]).CompletionTracker,
         # Token utilities
         "count_tokens": lambda: __import__("tokenpak.telemetry.tokens", fromlist=["count_tokens"]).count_tokens,

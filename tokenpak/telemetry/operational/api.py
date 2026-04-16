@@ -13,9 +13,22 @@ RBAC integration added (2026-03-18):
 import os
 
 from flask import Flask, jsonify, request
-from tokenpak_operational_health import HealthChecker
-from tokenpak_operational_metrics import METRICS
-from tokenpak_operational_pruning import PruneJob, load_retention_config
+
+try:
+    from tokenpak_operational_health import HealthChecker
+except ImportError:
+    HealthChecker = None
+
+try:
+    from tokenpak_operational_metrics import METRICS
+except ImportError:
+    METRICS = None
+
+try:
+    from tokenpak_operational_pruning import PruneJob, load_retention_config
+except ImportError:
+    PruneJob = None
+    load_retention_config = None
 
 from .rbac_auth import init_rbac, require_auth, require_permission
 from .rbac_core import Permission
@@ -34,15 +47,23 @@ CONFIG_PATH = "~/.tokenpak/config/telemetry.json"
 # Override via environment variables if needed
 DB_PATH = os.environ.get("TOKENPAK_DB_PATH", DB_PATH)
 RBAC_DB_PATH = os.environ.get("TOKENPAK_RBAC_DB_PATH", RBAC_DB_PATH)
-CONFIG_PATH = os.environ.get("TOKENPAK_CONFIG", CONFIG_PATH)
+CONFIG_PATH = os.environ.get("TOKENPAK_TELEMETRY_CONFIG", CONFIG_PATH)
 
 # ---------------------------------------------------------------------------
 # Services
 # ---------------------------------------------------------------------------
 
-health_checker = HealthChecker(os.path.expanduser(DB_PATH))
-retention_config = load_retention_config(os.path.expanduser(CONFIG_PATH))
-prune_job = PruneJob(os.path.expanduser(DB_PATH), retention_config)
+def _require_operational_extras():
+    if HealthChecker is None or PruneJob is None:
+        raise NotImplementedError(
+            "Operational API requires tokenpak-operational extras: "
+            "pip install tokenpak[operational]"
+        )
+
+# Defer service init — only create when extras are available
+health_checker = HealthChecker(os.path.expanduser(DB_PATH)) if HealthChecker else None
+retention_config = load_retention_config(os.path.expanduser(CONFIG_PATH)) if load_retention_config else None
+prune_job = PruneJob(os.path.expanduser(DB_PATH), retention_config) if PruneJob and retention_config else None
 
 # RBAC — registers before_request hook + attaches store to app
 rbac_store = init_rbac(app, RBAC_DB_PATH)

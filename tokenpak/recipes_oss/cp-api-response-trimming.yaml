@@ -1,0 +1,20 @@
+name: cp-api-response-trimming
+category: common_patterns
+description: 'Trim large API JSON response bodies: keep first 3 items of arrays, truncate long strings.'
+pattern:
+  match: content
+  keywords:
+  - '"status":'
+  - '"data":'
+  - '"results":'
+  - '"items":'
+action:
+  operations:
+  - type: json_array_truncate
+    max_items: 3
+    ellipsis_element:
+      _truncated: true
+  - type: json_string_truncate
+    max_length: 200
+    suffix: '...'
+  compression_hint: 0.6
