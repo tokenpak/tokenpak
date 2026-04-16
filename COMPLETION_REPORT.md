@@ -2,14 +2,14 @@
 
 **Status**: ✅ COMPLETE  
 **Date**: 2026-03-10  
-**Task**: Implement deterministic term-card resolver for proxy_v4 request handling  
+**Task**: Implement deterministic term-card resolver for tokenpak.proxy request handling  
 **Commit**: `e0ee5c1` (P1 TokenPak Runtime Term-Card Resolver)
 
 ---
 
 ## Executive Summary
 
-Successfully implemented a **deterministic term-card resolver** that integrates glossary data into TokenPak's proxy_v4 request handling. The resolver:
+Successfully implemented a **deterministic term-card resolver** that integrates glossary data into TokenPak's tokenpak.proxy request handling. The resolver:
 
 - Extracts glossary terms from user queries (matching canonical terms + aliases)
 - Injects short-form glossary snippets into system prompts
@@ -41,7 +41,7 @@ Successfully implemented a **deterministic term-card resolver** that integrates 
 | `TermCardSnippet` | Short-form card for injection |
 | `TermResolution` | Result object (canonical_ids, snippets, ambiguity_info, injection_text) |
 
-### 2. Proxy Integration: `proxy_v4.py` Changes
+### 2. Proxy Integration: `tokenpak.proxy.py` Changes
 
 **Modifications**:
 - Added feature imports (safe fallback if semantic layer unavailable)
@@ -159,7 +159,7 @@ assert "Did you mean" in result.ambiguity_question
 
 ---
 
-## Integration with proxy_v4
+## Integration with tokenpak.proxy
 
 ### Feature Flag (Safe Rollout)
 ```bash
@@ -239,7 +239,7 @@ def inject_vault_context(body_bytes, adapter=None):
 | `test_term_resolver.py` | 500 | Unit tests (19) |
 | `test_proxy_integration.py` | 400 | Integration tests (13) |
 | `README.md` | 300 | Complete documentation |
-| `proxy_v4.py` | +80 | Integration (feature flag, resolver init, injection) |
+| `tokenpak.proxy.py` | +80 | Integration (feature flag, resolver init, injection) |
 | **Total** | **~2000** | **Production-ready** |
 
 ---
@@ -255,14 +255,14 @@ python3 -m pytest tokenpak/agent/semantic/ -v
 
 ### Test Proxy Integration
 ```bash
-python3 -c "import proxy_v4; print('✅ proxy_v4 imports successfully')"
-# Result: ✅ proxy_v4 imports successfully
+python3 -c "import tokenpak.proxy; print('✅ tokenpak.proxy imports successfully')"
+# Result: ✅ tokenpak.proxy imports successfully
 ```
 
 ### Verify Feature Flag
 ```bash
 TOKENPAK_TERM_RESOLVER_ENABLED=1 python3 -c \
-  "import proxy_v4; print('Term resolver:', proxy_v4.TERM_RESOLVER is not None)"
+  "import tokenpak.proxy; print('Term resolver:', tokenpak.proxy.TERM_RESOLVER is not None)"
 # Result: Term resolver: True
 ```
 
@@ -344,4 +344,4 @@ TOKENPAK_TERM_RESOLVER_ENABLED=1 python3 -c \
 - ✅ Production-ready
 - ✅ Commit: `e0ee5c1`
 
-The deterministic term-card resolver is fully integrated into proxy_v4, feature-flagged for safe rollout, and thoroughly tested. Ready for deployment.
+The deterministic term-card resolver is fully integrated into tokenpak.proxy, feature-flagged for safe rollout, and thoroughly tested. Ready for deployment.

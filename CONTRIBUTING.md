@@ -165,7 +165,6 @@ The following paths exist for backward compatibility or are development artifact
 | Path | Status | What it is |
 |---|---|---|
 | `proxy.py` (repo root) | **Runtime entry point** — do not replace | The server process that `tokenpak start` launches. It imports from `tokenpak.proxy.*`. It's being incrementally migrated into the modular tree; add new proxy features to `tokenpak/proxy/` instead. |
-| `proxy_v4.py` | **Legacy shim** — do not add to | Re-exports globals from the old monolith so legacy tests can still be collected. Treat as read-only. |
 | `proxy.py.bak*` | **Development artifacts** — ignore | Working backups from active hot-patching sessions. Not part of the canonical tree. |
 | `tokenpak/runtime/proxy.py` | **Compatibility shim** — do not add to | Bridges the old monolith symbols to their new modular homes. New proxy code goes in `tokenpak/proxy/`. |
 | `tokenpak/_internal/` | **Private internals** — do not import | Implementation details used inside the package only. The public API is `tokenpak/__init__.py`. |

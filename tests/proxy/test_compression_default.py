@@ -20,13 +20,13 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Path to the standalone proxy_v4.py (lives at repo root)
+# Path to the standalone proxy.py (lives at repo root)
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_PROXY_V4_PATH = _REPO_ROOT / "proxy_v4.py"
+_PROXY_PATH = _REPO_ROOT / "proxy.py"
 
 # ---------------------------------------------------------------------------
-# Fixture: load proxy_v4 as an isolated module with no env-var overrides
+# Fixture: load proxy as an isolated module with no env-var overrides
 # ---------------------------------------------------------------------------
 _COMPRESSION_ENV_KEYS = (
     "TOKENPAK_COMPACT",
@@ -71,19 +71,19 @@ def _reload_config_loader():
 
 @pytest.fixture(scope="module")
 def pv4():
-    """Load proxy_v4.py with no compression-related env vars and no config file."""
+    """Load proxy.py with no compression-related env vars and no config file."""
     stashed, old_cfg = _set_clean_env()
 
     # Remove cached module if present from a prior run
     sys.modules.pop(_MOD_NAME, None)
 
-    spec = importlib.util.spec_from_file_location(_MOD_NAME, _PROXY_V4_PATH)
+    spec = importlib.util.spec_from_file_location(_MOD_NAME, _PROXY_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[_MOD_NAME] = mod
     try:
         spec.loader.exec_module(mod)
     except Exception as exc:
-        pytest.skip(f"proxy_v4.py failed to load: {exc}")
+        pytest.skip(f"proxy.py failed to load: {exc}")
 
     yield mod
 
@@ -115,11 +115,11 @@ def _make_anthropic_payload(history: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Tests — proxy_v4 defaults (standalone file)
+# Tests — proxy defaults (standalone file)
 # ---------------------------------------------------------------------------
 
 class TestProxyV4Defaults:
-    """Verify TRIX-01 constant flip in proxy_v4.py."""
+    """Verify TRIX-01 constant flip in proxy.py."""
 
     def test_compact_threshold_is_1500(self, pv4):
         """COMPACT_THRESHOLD_TOKENS must default to 1500 (was 4500 pre-flip)."""

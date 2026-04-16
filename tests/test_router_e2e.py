@@ -1,4 +1,4 @@
-"""End-to-end tests for classifier-first router in proxy_v4.
+"""End-to-end tests for classifier-first router in tokenpak.proxy.
 
 Verifies the complete flow:
   1. Extract user text from request
@@ -17,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-# Add proxy_v4 location to path
+# Add proxy location to path
 sys.path.insert(0, str(Path.home()))
 
 from tokenpak.proxy.intent_policy import known_intents

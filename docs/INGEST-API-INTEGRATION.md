@@ -1,8 +1,8 @@
-# TokenPak Ingest API Integration into proxy_v4.py
+# TokenPak Ingest API Integration into tokenpak.proxy.py
 
 ## Overview
 
-The ingest API has been successfully migrated from the legacy standalone modules into `proxy_v4.py`. This provides a unified proxy server that handles:
+The ingest API has been successfully migrated from the legacy standalone modules into `tokenpak.proxy.py`. This provides a unified proxy server that handles:
 
 - LLM request forwarding and optimization (v3/v1beta endpoints)
 - Ollama proxy (ollama-proxy routes)
@@ -178,7 +178,7 @@ All errors follow a consistent JSON structure:
 
 ---
 
-## Integration with proxy_v4.py
+## Integration with tokenpak.proxy.py
 
 ### Routing
 
@@ -206,7 +206,7 @@ Run the full test suite:
 
 ```bash
 cd /home/trix/Projects/tokenpak
-python3 -m pytest tests/test_ingest_proxy_v4.py -v
+python3 -m pytest tests/test_ingest_tokenpak.proxy.py -v
 ```
 
 Tests cover:
@@ -283,7 +283,7 @@ print(resp.json())  # {"status": "ok", "ids": [...]}
 
 ## Implementation Details
 
-### File Structure in proxy_v4.py
+### File Structure in tokenpak.proxy.py
 
 1. **Handler methods** (class ForwardProxyHandler):
    - `_ingest(path)` — Router for /ingest endpoints
@@ -303,7 +303,7 @@ print(resp.json())  # {"status": "ok", "ids": [...]}
 
 ### From Legacy API
 
-The legacy API used FastAPI and ran as a standalone service. The proxy_v4 integration:
+The legacy API used FastAPI and ran as a standalone service. The tokenpak.proxy integration:
 
 - ✅ Preserves all endpoint behavior
 - ✅ Reuses the same storage format (JSONL)

@@ -26,7 +26,7 @@ from io import BytesIO
 
 # Mock the proxy module before importing
 class MockRequestHandler:
-    """Simulated HTTP request handler matching proxy_v4.py ProxyRequestHandler"""
+    """Simulated HTTP request handler matching tokenpak.proxy ProxyRequestHandler"""
     
     def __init__(self, path, method="GET"):
         self.path = path

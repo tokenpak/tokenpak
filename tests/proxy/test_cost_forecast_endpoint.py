@@ -32,16 +32,18 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Bootstrap: add project root to sys.path so `import proxy` works
+# Bootstrap: load the monolith proxy.py via importlib (no sys.path mutation)
 # ---------------------------------------------------------------------------
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-cci11-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
-import proxy as _proxy  # noqa: E402
+import importlib.util as _ilu  # noqa: E402
+_spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
+_proxy = _ilu.module_from_spec(_spec)
+sys.modules.setdefault("proxy", _proxy)
+_spec.loader.exec_module(_proxy)
 
 
 # ---------------------------------------------------------------------------

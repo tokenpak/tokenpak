@@ -83,7 +83,7 @@ Key patterns:
 | `module '_test_pv4_proxy_auth_no_token' has no attribute 'PROXY_AUTH_TOKEN'` | 8 |
 | `'CompressionStats' object has no attribute 'stats_from_file'` | 7 |
 | `module 'tokenpak.runtime.proxy' has no attribute '_rate_buckets'` | 5 |
-| `module 'proxy_v4' has no attribute '_ws_handler'` | 5 |
+| `module 'tokenpak.proxy' has no attribute '_ws_handler'` | 5 |
 | other | 21 |
 
 ### Category 4: Signature mismatch / TypeError (58 failures)

@@ -8,8 +8,8 @@ Tests:
 4. regenerate_token overwrites old token
 5. get_token raises FileNotFoundError when file missing
 6. get_token returns token when file exists
-7. _serve_dashboard returns 401 on missing token (proxy_v4)
-8. _serve_dashboard returns 401 on wrong token (proxy_v4)
+7. _serve_dashboard returns 401 on missing token (proxy)
+8. _serve_dashboard returns 401 on wrong token (proxy)
 """
 
 import os
@@ -85,7 +85,7 @@ def test_get_token_returns_token_when_exists(tmp_token_file):
 
 
 # ---------------------------------------------------------------------------
-# proxy_v4 dashboard auth tests (unit — no network)
+# proxy dashboard auth tests (unit — no network)
 # ---------------------------------------------------------------------------
 
 class FakeAddress:
@@ -120,7 +120,7 @@ def _make_handler(path="/dashboard", auth_enabled=True):
     Minimal shim that calls _serve_dashboard on ForwardProxyHandler.
     We monkeypatch DASHBOARD_AUTH_ENABLED so we can test both states.
     """
-    import proxy_v4 as p4
+    import proxy as p4
     handler = object.__new__(p4.ForwardProxyHandler)
     handler.path = path
     handler.client_address = ("127.0.0.1", 54321)
@@ -139,7 +139,7 @@ def _make_handler(path="/dashboard", auth_enabled=True):
 
 def test_dashboard_returns_401_missing_token(tmp_token_file):
     """Missing ?token param → 401."""
-    import proxy_v4 as p4
+    import proxy as p4
     import tokenpak.token_manager as tm
 
     handler = _make_handler("/dashboard")
@@ -152,7 +152,7 @@ def test_dashboard_returns_401_missing_token(tmp_token_file):
 
 def test_dashboard_returns_401_wrong_token(tmp_token_file):
     """Wrong ?token param → 401."""
-    import proxy_v4 as p4
+    import proxy as p4
     import tokenpak.token_manager as tm
 
     handler = _make_handler("/dashboard?token=wrongtoken12345678901234567890")

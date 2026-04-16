@@ -127,12 +127,12 @@ TokenPak includes proxy-mode support for Google Vertex AI via the generative AI 
 
 | TokenPak | Google SDK | Python | Status | Notes |
 |----------|-----------|--------|--------|-------|
-| v1.0+ | 0.45+ | 3.10+ | ⚠️ | Beta. Implemented in proxy_v4.py; limited real-world testing |
+| v1.0+ | 0.45+ | 3.10+ | ⚠️ | Beta. Implemented in tokenpak.proxy.py; limited real-world testing |
 | v1.0+ | <0.45 | 3.10+ | 🔲 | Not tested; API shape may differ |
 
 ### Implementation Notes
 
-- **Location:** `tokenpak/proxy_v4.py` (provider routing layer)
+- **Location:** `tokenpak/tokenpak.proxy.py` (provider routing layer)
 - **Integration type:** Proxy mode (HTTP request translation)
 - **Supported models:** Gemini models via Vertex AI API
 - **Token tracking:** Google SDK provides token counts in `usage_metadata`
@@ -203,7 +203,7 @@ TokenPak requires **Python 3.10+** (as of v1.0).
 
 ## Proxy Mode Provider Support
 
-The TokenPak proxy (`proxy_v4.py`) supports routing to these providers:
+The TokenPak proxy (`tokenpak.proxy.py`) supports routing to these providers:
 
 | Provider | Status | Notes |
 |----------|--------|-------|

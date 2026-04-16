@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 from itertools import combinations
 
-# Mock proxy_v4 SESSION
+# Mock proxy SESSION
 SESSION = {}
 
-proxy_v4 = type('proxy_v4', (), {
+proxy_state = type('proxy_state', (), {
     'SESSION': SESSION,
 })()
 
@@ -53,7 +53,7 @@ assert len(MODULES) == 16, f"Expected 16 modules, got {len(MODULES)}"
 def reset_session():
     """Reset SESSION before each test."""
     yield
-    proxy_v4.SESSION.clear()
+    proxy_state.SESSION.clear()
 
 
 def init_modules(enabled_modules=None):
@@ -61,11 +61,11 @@ def init_modules(enabled_modules=None):
     if enabled_modules is None:
         enabled_modules = MODULES
     
-    proxy_v4.SESSION.clear()
+    proxy_state.SESSION.clear()
     
     for module in MODULES:
         enabled = module in enabled_modules
-        proxy_v4.SESSION[module] = {
+        proxy_state.SESSION[module] = {
             "enabled": enabled,
             "call_count": 0,
             "error_count": 0,
@@ -85,103 +85,103 @@ class TestIndividualModuleToggles:
         # Enable only cache
         init_modules(["cache_module"])
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == True
-        assert proxy_v4.SESSION["compression_module"]["enabled"] == False
+        assert proxy_state.SESSION["cache_module"]["enabled"] == True
+        assert proxy_state.SESSION["compression_module"]["enabled"] == False
     
     def test_compression_module_toggle(self):
         """Test compression module can be toggled independently."""
         init_modules(["compression_module"])
         
-        assert proxy_v4.SESSION["compression_module"]["enabled"] == True
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == False
+        assert proxy_state.SESSION["compression_module"]["enabled"] == True
+        assert proxy_state.SESSION["cache_module"]["enabled"] == False
     
     def test_circuit_breaker_module_toggle(self):
         """Test circuit breaker module can be toggled independently."""
         init_modules(["circuit_breaker_module"])
         
-        assert proxy_v4.SESSION["circuit_breaker_module"]["enabled"] == True
+        assert proxy_state.SESSION["circuit_breaker_module"]["enabled"] == True
         # All others disabled
         for module in MODULES:
             if module != "circuit_breaker_module":
-                assert proxy_v4.SESSION[module]["enabled"] == False
+                assert proxy_state.SESSION[module]["enabled"] == False
     
     def test_failover_module_toggle(self):
         """Test failover module can be toggled independently."""
         init_modules(["failover_module"])
         
-        assert proxy_v4.SESSION["failover_module"]["enabled"] == True
+        assert proxy_state.SESSION["failover_module"]["enabled"] == True
     
     def test_budgeter_module_toggle(self):
         """Test budgeter module can be toggled independently."""
         init_modules(["budgeter_module"])
         
-        assert proxy_v4.SESSION["budgeter_module"]["enabled"] == True
+        assert proxy_state.SESSION["budgeter_module"]["enabled"] == True
     
     def test_cost_tracker_module_toggle(self):
         """Test cost tracker module can be toggled independently."""
         init_modules(["cost_tracker_module"])
         
-        assert proxy_v4.SESSION["cost_tracker_module"]["enabled"] == True
+        assert proxy_state.SESSION["cost_tracker_module"]["enabled"] == True
     
     def test_token_counter_module_toggle(self):
         """Test token counter module can be toggled independently."""
         init_modules(["token_counter_module"])
         
-        assert proxy_v4.SESSION["token_counter_module"]["enabled"] == True
+        assert proxy_state.SESSION["token_counter_module"]["enabled"] == True
     
     def test_rate_limiter_module_toggle(self):
         """Test rate limiter module can be toggled independently."""
         init_modules(["rate_limiter_module"])
         
-        assert proxy_v4.SESSION["rate_limiter_module"]["enabled"] == True
+        assert proxy_state.SESSION["rate_limiter_module"]["enabled"] == True
     
     def test_schema_registry_module_toggle(self):
         """Test schema registry module can be toggled independently."""
         init_modules(["schema_registry_module"])
         
-        assert proxy_v4.SESSION["schema_registry_module"]["enabled"] == True
+        assert proxy_state.SESSION["schema_registry_module"]["enabled"] == True
     
     def test_vault_injector_module_toggle(self):
         """Test vault injector module can be toggled independently."""
         init_modules(["vault_injector_module"])
         
-        assert proxy_v4.SESSION["vault_injector_module"]["enabled"] == True
+        assert proxy_state.SESSION["vault_injector_module"]["enabled"] == True
     
     def test_prompt_builder_module_toggle(self):
         """Test prompt builder module can be toggled independently."""
         init_modules(["prompt_builder_module"])
         
-        assert proxy_v4.SESSION["prompt_builder_module"]["enabled"] == True
+        assert proxy_state.SESSION["prompt_builder_module"]["enabled"] == True
     
     def test_telemetry_collector_module_toggle(self):
         """Test telemetry collector module can be toggled independently."""
         init_modules(["telemetry_collector_module"])
         
-        assert proxy_v4.SESSION["telemetry_collector_module"]["enabled"] == True
+        assert proxy_state.SESSION["telemetry_collector_module"]["enabled"] == True
     
     def test_cache_poison_remover_module_toggle(self):
         """Test cache poison remover module can be toggled independently."""
         init_modules(["cache_poison_remover_module"])
         
-        assert proxy_v4.SESSION["cache_poison_remover_module"]["enabled"] == True
+        assert proxy_state.SESSION["cache_poison_remover_module"]["enabled"] == True
     
     def test_adaptive_selector_module_toggle(self):
         """Test adaptive selector module can be toggled independently."""
         init_modules(["adaptive_selector_module"])
         
-        assert proxy_v4.SESSION["adaptive_selector_module"]["enabled"] == True
+        assert proxy_state.SESSION["adaptive_selector_module"]["enabled"] == True
     
     def test_audit_logger_module_toggle(self):
         """Test audit logger module can be toggled independently."""
         init_modules(["audit_logger_module"])
         
-        assert proxy_v4.SESSION["audit_logger_module"]["enabled"] == True
+        assert proxy_state.SESSION["audit_logger_module"]["enabled"] == True
     
     def test_health_monitor_module_toggle(self):
         """Test health monitor module can be toggled independently."""
         init_modules(["health_monitor_module"])
         
-        assert proxy_v4.SESSION["health_monitor_module"]["enabled"] == True
+        assert proxy_state.SESSION["health_monitor_module"]["enabled"] == True
 
 
 # ============================================================================
@@ -195,11 +195,11 @@ class TestMultiModuleCombinations:
         """Test cache and compression modules work together."""
         init_modules(["cache_module", "compression_module"])
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == True
-        assert proxy_v4.SESSION["compression_module"]["enabled"] == True
+        assert proxy_state.SESSION["cache_module"]["enabled"] == True
+        assert proxy_state.SESSION["compression_module"]["enabled"] == True
         
         # Count enabled modules
-        enabled = sum(1 for m in MODULES if proxy_v4.SESSION[m]["enabled"])
+        enabled = sum(1 for m in MODULES if proxy_state.SESSION[m]["enabled"])
         assert enabled == 2
     
     def test_all_budget_modules_together(self):
@@ -208,9 +208,9 @@ class TestMultiModuleCombinations:
         init_modules(budget_modules)
         
         for module in budget_modules:
-            assert proxy_v4.SESSION[module]["enabled"] == True
+            assert proxy_state.SESSION[module]["enabled"] == True
         
-        enabled = sum(1 for m in MODULES if proxy_v4.SESSION[m]["enabled"])
+        enabled = sum(1 for m in MODULES if proxy_state.SESSION[m]["enabled"])
         assert enabled == 3
     
     def test_reliability_modules_together(self):
@@ -219,7 +219,7 @@ class TestMultiModuleCombinations:
         init_modules(reliability)
         
         for module in reliability:
-            assert proxy_v4.SESSION[module]["enabled"] == True
+            assert proxy_state.SESSION[module]["enabled"] == True
 
 
 # ============================================================================
@@ -234,7 +234,7 @@ class TestSessionEntriesValidation:
         init_modules(["cache_module"])
         
         # Only modules should be in SESSION
-        for key, value in proxy_v4.SESSION.items():
+        for key, value in proxy_state.SESSION.items():
             assert key in MODULES
     
     def test_session_has_expected_keys_for_all_modules(self):
@@ -243,15 +243,15 @@ class TestSessionEntriesValidation:
         
         # Should have all modules
         for module in MODULES:
-            assert module in proxy_v4.SESSION
-            assert proxy_v4.SESSION[module]["enabled"] == True
+            assert module in proxy_state.SESSION
+            assert proxy_state.SESSION[module]["enabled"] == True
     
     def test_session_entries_have_required_fields(self):
         """Test each SESSION entry has required fields."""
         init_modules(["cache_module", "compression_module"])
         
         for module in MODULES:
-            entry = proxy_v4.SESSION[module]
+            entry = proxy_state.SESSION[module]
             assert "enabled" in entry
             assert "call_count" in entry
             assert "error_count" in entry
@@ -262,7 +262,7 @@ class TestSessionEntriesValidation:
         init_modules(["cache_module"])
         
         # Every entry should correspond to a known module
-        for key in proxy_v4.SESSION.keys():
+        for key in proxy_state.SESSION.keys():
             assert key in MODULES, f"Orphaned entry: {key}"
     
     def test_disabled_module_entries_marked_disabled(self):
@@ -272,9 +272,9 @@ class TestSessionEntriesValidation:
         # All others should be marked disabled
         for module in MODULES:
             if module == "cache_module":
-                assert proxy_v4.SESSION[module]["enabled"] == True
+                assert proxy_state.SESSION[module]["enabled"] == True
             else:
-                assert proxy_v4.SESSION[module]["enabled"] == False
+                assert proxy_state.SESSION[module]["enabled"] == False
 
 
 # ============================================================================
@@ -288,42 +288,42 @@ class TestFailOpenBehavior:
         """Test cache module fails open."""
         init_modules(["cache_module"])
         
-        proxy_v4.SESSION["cache_module"]["error_count"] += 1
+        proxy_state.SESSION["cache_module"]["error_count"] += 1
         
         # Should still have fail_open set to True
-        assert proxy_v4.SESSION["cache_module"]["fail_open"] == True
+        assert proxy_state.SESSION["cache_module"]["fail_open"] == True
     
     def test_all_modules_fail_open(self):
         """Test all modules have fail_open enabled."""
         init_modules(MODULES)
         
         for module in MODULES:
-            assert proxy_v4.SESSION[module]["fail_open"] == True
+            assert proxy_state.SESSION[module]["fail_open"] == True
     
     def test_module_failure_doesnt_cascade(self):
         """Test module failure doesn't affect other modules."""
         init_modules(MODULES)
         
         # Simulate cache module failure
-        proxy_v4.SESSION["cache_module"]["error_count"] += 1
+        proxy_state.SESSION["cache_module"]["error_count"] += 1
         
         # Other modules should still be operational
         for module in MODULES:
             if module != "cache_module":
-                assert proxy_v4.SESSION[module]["call_count"] == 0
-                assert proxy_v4.SESSION[module]["error_count"] == 0
+                assert proxy_state.SESSION[module]["call_count"] == 0
+                assert proxy_state.SESSION[module]["error_count"] == 0
     
     def test_multiple_module_failures_isolated(self):
         """Test multiple module failures are isolated."""
         init_modules(MODULES)
         
         # Simulate failures in multiple modules
-        proxy_v4.SESSION["cache_module"]["error_count"] += 1
-        proxy_v4.SESSION["compression_module"]["error_count"] += 1
+        proxy_state.SESSION["cache_module"]["error_count"] += 1
+        proxy_state.SESSION["compression_module"]["error_count"] += 1
         
         # All modules should still be marked fail_open
         for module in MODULES:
-            assert proxy_v4.SESSION[module]["fail_open"] == True
+            assert proxy_state.SESSION[module]["fail_open"] == True
 
 
 # ============================================================================
@@ -338,16 +338,16 @@ class TestCallCounting:
         init_modules(["cache_module"])
         
         # Simulate module call
-        proxy_v4.SESSION["cache_module"]["call_count"] += 1
+        proxy_state.SESSION["cache_module"]["call_count"] += 1
         
-        assert proxy_v4.SESSION["cache_module"]["call_count"] == 1
+        assert proxy_state.SESSION["cache_module"]["call_count"] == 1
     
     def test_disabled_module_not_called(self):
         """Test disabled module remains uncalled."""
         init_modules(["cache_module"])  # Only enable cache
         
         # Compression module should not be called
-        assert proxy_v4.SESSION["compression_module"]["call_count"] == 0
+        assert proxy_state.SESSION["compression_module"]["call_count"] == 0
     
     def test_module_calls_accumulate(self):
         """Test module calls accumulate."""
@@ -355,22 +355,22 @@ class TestCallCounting:
         
         # Simulate multiple calls
         for i in range(10):
-            proxy_v4.SESSION["cache_module"]["call_count"] += 1
+            proxy_state.SESSION["cache_module"]["call_count"] += 1
         
-        assert proxy_v4.SESSION["cache_module"]["call_count"] == 10
+        assert proxy_state.SESSION["cache_module"]["call_count"] == 10
     
     def test_module_calls_independent(self):
         """Test module calls are independently tracked."""
         init_modules(MODULES)
         
         # Increment different modules
-        proxy_v4.SESSION["cache_module"]["call_count"] += 5
-        proxy_v4.SESSION["compression_module"]["call_count"] += 3
-        proxy_v4.SESSION["circuit_breaker_module"]["call_count"] += 2
+        proxy_state.SESSION["cache_module"]["call_count"] += 5
+        proxy_state.SESSION["compression_module"]["call_count"] += 3
+        proxy_state.SESSION["circuit_breaker_module"]["call_count"] += 2
         
-        assert proxy_v4.SESSION["cache_module"]["call_count"] == 5
-        assert proxy_v4.SESSION["compression_module"]["call_count"] == 3
-        assert proxy_v4.SESSION["circuit_breaker_module"]["call_count"] == 2
+        assert proxy_state.SESSION["cache_module"]["call_count"] == 5
+        assert proxy_state.SESSION["compression_module"]["call_count"] == 3
+        assert proxy_state.SESSION["circuit_breaker_module"]["call_count"] == 2
 
 
 # ============================================================================
@@ -384,23 +384,23 @@ class TestToggleSwitching:
         """Test enabling module at runtime."""
         init_modules([])  # Start with no modules
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == False
+        assert proxy_state.SESSION["cache_module"]["enabled"] == False
         
         # Enable it
-        proxy_v4.SESSION["cache_module"]["enabled"] = True
+        proxy_state.SESSION["cache_module"]["enabled"] = True
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == True
+        assert proxy_state.SESSION["cache_module"]["enabled"] == True
     
     def test_disable_module_dynamically(self):
         """Test disabling module at runtime."""
         init_modules(["cache_module"])
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == True
+        assert proxy_state.SESSION["cache_module"]["enabled"] == True
         
         # Disable it
-        proxy_v4.SESSION["cache_module"]["enabled"] = False
+        proxy_state.SESSION["cache_module"]["enabled"] = False
         
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == False
+        assert proxy_state.SESSION["cache_module"]["enabled"] == False
     
     def test_toggle_multiple_modules(self):
         """Test toggling multiple modules."""
@@ -408,15 +408,15 @@ class TestToggleSwitching:
         init_modules(["cache_module"])
         
         # Add compression
-        proxy_v4.SESSION["compression_module"]["enabled"] = True
-        assert proxy_v4.SESSION["compression_module"]["enabled"] == True
+        proxy_state.SESSION["compression_module"]["enabled"] = True
+        assert proxy_state.SESSION["compression_module"]["enabled"] == True
         
         # Remove cache
-        proxy_v4.SESSION["cache_module"]["enabled"] = False
-        assert proxy_v4.SESSION["cache_module"]["enabled"] == False
+        proxy_state.SESSION["cache_module"]["enabled"] = False
+        assert proxy_state.SESSION["cache_module"]["enabled"] == False
         
         # Should only have compression now
-        enabled = [m for m in MODULES if proxy_v4.SESSION[m]["enabled"]]
+        enabled = [m for m in MODULES if proxy_state.SESSION[m]["enabled"]]
         assert enabled == ["compression_module"]
     
     def test_toggle_preserves_call_counts(self):
@@ -424,13 +424,13 @@ class TestToggleSwitching:
         init_modules(["cache_module"])
         
         # Make some calls
-        proxy_v4.SESSION["cache_module"]["call_count"] += 5
+        proxy_state.SESSION["cache_module"]["call_count"] += 5
         
         # Disable module
-        proxy_v4.SESSION["cache_module"]["enabled"] = False
+        proxy_state.SESSION["cache_module"]["enabled"] = False
         
         # Call count should be preserved
-        assert proxy_v4.SESSION["cache_module"]["call_count"] == 5
+        assert proxy_state.SESSION["cache_module"]["call_count"] == 5
 
 
 # ============================================================================
@@ -444,28 +444,28 @@ class TestErrorHandlingPerModule:
         """Test module error count increments."""
         init_modules(["cache_module"])
         
-        proxy_v4.SESSION["cache_module"]["error_count"] += 1
+        proxy_state.SESSION["cache_module"]["error_count"] += 1
         
-        assert proxy_v4.SESSION["cache_module"]["error_count"] == 1
+        assert proxy_state.SESSION["cache_module"]["error_count"] == 1
     
     def test_multiple_module_error_counts_independent(self):
         """Test error counts are independent per module."""
         init_modules(["cache_module", "compression_module"])
         
-        proxy_v4.SESSION["cache_module"]["error_count"] += 2
-        proxy_v4.SESSION["compression_module"]["error_count"] += 3
+        proxy_state.SESSION["cache_module"]["error_count"] += 2
+        proxy_state.SESSION["compression_module"]["error_count"] += 3
         
-        assert proxy_v4.SESSION["cache_module"]["error_count"] == 2
-        assert proxy_v4.SESSION["compression_module"]["error_count"] == 3
+        assert proxy_state.SESSION["cache_module"]["error_count"] == 2
+        assert proxy_state.SESSION["compression_module"]["error_count"] == 3
     
     def test_error_rate_calculation(self):
         """Test error rate calculation."""
         init_modules(["cache_module"])
         
-        proxy_v4.SESSION["cache_module"]["call_count"] = 100
-        proxy_v4.SESSION["cache_module"]["error_count"] = 5
+        proxy_state.SESSION["cache_module"]["call_count"] = 100
+        proxy_state.SESSION["cache_module"]["error_count"] = 5
         
-        error_rate = proxy_v4.SESSION["cache_module"]["error_count"] / proxy_v4.SESSION["cache_module"]["call_count"]
+        error_rate = proxy_state.SESSION["cache_module"]["error_count"] / proxy_state.SESSION["cache_module"]["call_count"]
         
         assert error_rate == 0.05  # 5%
 
@@ -488,19 +488,19 @@ class TestComprehensiveMatrix:
         init_modules(module_subset)
         
         # Verify enabled count
-        enabled_count = sum(1 for m in MODULES if proxy_v4.SESSION[m]["enabled"])
+        enabled_count = sum(1 for m in MODULES if proxy_state.SESSION[m]["enabled"])
         assert enabled_count == len(module_subset)
         
         # Verify all enabled modules are in subset
         for module in module_subset:
-            assert proxy_v4.SESSION[module]["enabled"] == True
+            assert proxy_state.SESSION[module]["enabled"] == True
     
     def test_16_modules_all_present(self):
         """Test all 16 modules are present in session."""
         init_modules(MODULES)
         
         for module in MODULES:
-            assert module in proxy_v4.SESSION
+            assert module in proxy_state.SESSION
     
     def test_no_modules_leaves_clean_session(self):
         """Test disabling all modules leaves proper state."""
@@ -508,7 +508,7 @@ class TestComprehensiveMatrix:
         
         # All modules should be disabled
         for module in MODULES:
-            assert proxy_v4.SESSION[module]["enabled"] == False
+            assert proxy_state.SESSION[module]["enabled"] == False
 
 
 if __name__ == "__main__":

@@ -22,10 +22,10 @@ from io import BytesIO
 import tempfile
 from pathlib import Path
 
-# Ensure we can import proxy_v4
+# Ensure we can import tokenpak.proxy
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Before importing proxy_v4, set all toggle env vars to OFF for isolation
+# Before importing tokenpak.proxy, set all toggle env vars to OFF for isolation
 _TOGGLE_ENV_VARS = [
     "TOKENPAK_SEMANTIC_CACHE",
     "TOKENPAK_PREFIX_REGISTRY",
@@ -60,11 +60,11 @@ os.environ.setdefault("TOKENPAK_COMPACT", "1")
 # ===========================
 
 class TestToggleCombinations(unittest.TestCase):
-    """Test that proxy_v4.py correctly reads all 16 toggle env vars."""
+    """Test that tokenpak.proxy.py correctly reads all 16 toggle env vars."""
 
     def test_all_toggles_off_by_default(self):
         """Verify all 16 toggles are OFF by default (no explicit configuration)."""
-        # Clear toggle vars for the duration of this check — profile presets applied
+        # Clear toggle vars for the duration of this check -- profile presets applied
         # by importing tokenpak.proxy.server (e.g. TOKENPAK_TRACE=true from "balanced"
         # profile) must not mask the true default-off behavior.
         with patch.dict(os.environ, {var: "" for var in _TOGGLE_ENV_VARS}):
@@ -155,7 +155,7 @@ class TestSessionTracking(unittest.TestCase):
 
     def test_session_dict_structure(self):
         """Verify SESSION dict pattern has expected keys."""
-        # Mock a SESSION dict like proxy_v4 would create
+        # Mock a SESSION dict like tokenpak.proxy would create
         session = {
             "requests": 0,
             "input_tokens": 0,
@@ -274,7 +274,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_toggle_parsing_logic(self):
         """Test: Toggle env vars use consistent parsing logic."""
-        # Test the standard parsing pattern used in proxy_v4
+        # Test the standard parsing pattern used in tokenpak.proxy
         test_values = [
             ("0", False),
             ("1", True),
@@ -292,7 +292,7 @@ class TestFailOpenBehavior(unittest.TestCase):
 
     def test_capsule_builder_pattern(self):
         """Test: Optional component pattern (can be None)."""
-        # Simulate the pattern used in proxy_v4
+        # Simulate the pattern used in tokenpak.proxy
         try:
             component = None  # Could be initialized or None
         except ImportError:

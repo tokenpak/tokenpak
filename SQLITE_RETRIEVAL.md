@@ -2,7 +2,7 @@
 
 ## Overview
 
-`proxy_v4` now supports two vault retrieval backends:
+`tokenpak.proxy` now supports two vault retrieval backends:
 
 | Backend | Default | Best For |
 |---------|---------|----------|
@@ -11,7 +11,7 @@
 
 ## Enabling SQLite Backend
 
-Set the environment variable before starting `proxy_v4`:
+Set the environment variable before starting `tokenpak.proxy`:
 
 ```bash
 export TOKENPAK_RETRIEVAL_BACKEND=sqlite
@@ -36,7 +36,7 @@ TOKENPAK_RETRIEVAL_BACKEND=sqlite
 
 ### Key Takeaways
 
-- **Warm reload** (no index change): SQLite is **~1100× faster**. This is the primary win — `proxy_v4` checks for index updates every 5 minutes. With `json_blocks`, every check re-scans all block files. With SQLite, it's a single mtime comparison.
+- **Warm reload** (no index change): SQLite is **~1100× faster**. This is the primary win — `tokenpak.proxy` checks for index updates every 5 minutes. With `json_blocks`, every check re-scans all block files. With SQLite, it's a single mtime comparison.
 - **Cold load** (DB not yet built): SQLite is slower on first build. The DB file is persisted at `<vault_index>/retrieval.db`.
 - **Search latency**: SQLite is ~1.5–2× slower than in-memory BM25. Acceptable for vault injection (non-critical path).
 
@@ -78,7 +78,7 @@ Only blocks that changed (new/deleted) are reprocessed — unchanged blocks are 
 
 ## Fallback Behaviour
 
-If the SQLite backend fails to import or errors on build, `proxy_v4` automatically falls back to `json_blocks`:
+If the SQLite backend fails to import or errors on build, `tokenpak.proxy` automatically falls back to `json_blocks`:
 
 ```
 ⚠️  SQLite retrieval backend unavailable (<error>), falling back to json_blocks
@@ -99,6 +99,6 @@ tokenpak_vault_blocks <N>
 
 | File | Change |
 |------|--------|
-| `proxy_v4.py` | Added `TOKENPAK_RETRIEVAL_BACKEND` env var + backend-aware `VAULT_INDEX` init |
+| `tokenpak.proxy.py` | Added `TOKENPAK_RETRIEVAL_BACKEND` env var + backend-aware `VAULT_INDEX` init |
 | `tokenpak/agent/vault/sqlite_retrieval.py` | New SQLite backend module |
 | `benchmark_retrieval.py` | New benchmark script |

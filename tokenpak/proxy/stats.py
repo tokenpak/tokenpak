@@ -9,7 +9,7 @@ Provides a thread-safe StatsCollector class that tracks:
   - Vault search cache hit/miss rates
   - Latest request latency
 
-Usage (in proxy_v4.py):
+Usage:
     from tokenpak.proxy.stats import STATS
 
     STATS.record_request(model="anthropic/claude-3-5-sonnet",

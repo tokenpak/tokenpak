@@ -34,10 +34,10 @@ from unittest.mock import patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# Repo root + path to the standalone proxy_v4.py
+# Repo root + path to the standalone proxy.py
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_PROXY_V4_PATH = _REPO_ROOT / "proxy_v4.py"
+_PROXY_PATH = _REPO_ROOT / "proxy.py"
 
 _ENV_KEYS = ["TOKENPAK_PROXY_AUTH_TOKEN", "TOKENPAK_CONFIG"]
 _TEST_TOKEN = "s3cr3t-test-t0ken"
@@ -68,7 +68,7 @@ def _restore_env(stashed):
 
 def _load_proxy_module(mod_name: str) -> object:
     sys.modules.pop(mod_name, None)
-    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_V4_PATH)
+    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
@@ -106,7 +106,7 @@ _MOD_WITH_TOKEN = "_test_pv4_proxy_auth_with_token"
 
 @pytest.fixture(scope="module")
 def proxy_no_token():
-    """proxy_v4 loaded with TOKENPAK_PROXY_AUTH_TOKEN unset."""
+    """proxy loaded with TOKENPAK_PROXY_AUTH_TOKEN unset."""
     stashed = _stash_env()
     os.environ["TOKENPAK_CONFIG"] = "/tmp/_tokenpak_test_nonexistent_TRIX07.yaml"
     _reload_config_loader()
@@ -114,7 +114,7 @@ def proxy_no_token():
         mod = _load_proxy_module(_MOD_NO_TOKEN)
     except Exception as exc:
         _restore_env(stashed)
-        pytest.skip(f"proxy_v4.py failed to load: {exc}")
+        pytest.skip(f"proxy.py failed to load: {exc}")
     port = 18780
     server = _start_server(mod, "127.0.0.1", port)
     yield mod, port
@@ -125,7 +125,7 @@ def proxy_no_token():
 
 @pytest.fixture(scope="module")
 def proxy_with_token():
-    """proxy_v4 loaded with TOKENPAK_PROXY_AUTH_TOKEN=_TEST_TOKEN."""
+    """proxy loaded with TOKENPAK_PROXY_AUTH_TOKEN=_TEST_TOKEN."""
     stashed = _stash_env()
     os.environ["TOKENPAK_CONFIG"] = "/tmp/_tokenpak_test_nonexistent_TRIX07.yaml"
     os.environ["TOKENPAK_PROXY_AUTH_TOKEN"] = _TEST_TOKEN
@@ -134,7 +134,7 @@ def proxy_with_token():
         mod = _load_proxy_module(_MOD_WITH_TOKEN)
     except Exception as exc:
         _restore_env(stashed)
-        pytest.skip(f"proxy_v4.py failed to load: {exc}")
+        pytest.skip(f"proxy.py failed to load: {exc}")
     port = 18781
     server = _start_server(mod, "127.0.0.1", port)
     yield mod, port
@@ -314,7 +314,7 @@ class TestProxyAuthUnit:
     def test_hmac_compare_digest_used(self):
         """Verify the implementation calls hmac.compare_digest, not ==."""
         import ast
-        src = _PROXY_V4_PATH.read_text()
+        src = _PROXY_PATH.read_text()
         tree = ast.parse(src)
         found = False
         for node in ast.walk(tree):
@@ -324,7 +324,7 @@ class TestProxyAuthUnit:
                         and isinstance(func.value, ast.Name) and func.value.id == "hmac"):
                     found = True
                     break
-        assert found, "hmac.compare_digest() not found in proxy_v4.py source"
+        assert found, "hmac.compare_digest() not found in proxy.py source"
 
     # ------------------------------------------------------------------
     # 10. Token value never logged — check no f-string/log includes PROXY_AUTH_TOKEN
@@ -332,7 +332,7 @@ class TestProxyAuthUnit:
     def test_token_not_logged(self):
         """PROXY_AUTH_TOKEN must not appear in any log/print statement."""
         import ast
-        src = _PROXY_V4_PATH.read_text()
+        src = _PROXY_PATH.read_text()
         # Search for any string literal containing the env var name next to logging calls
         # Simple heuristic: PROXY_AUTH_TOKEN should only appear in its assignment line
         # and in _check_proxy_auth body (as a variable reference, not its value).

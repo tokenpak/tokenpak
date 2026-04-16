@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
-# Patch watchdog before any proxy_v4 imports
+# Patch watchdog before any proxy imports
 # ---------------------------------------------------------------------------
 if "watchdog.events" not in sys.modules:
     _wde = MagicMock()
@@ -327,7 +327,7 @@ class TestClassifyIntentIntegration:
         """_classify_intent populates _semantic_meta dict when alias matches."""
         # Import (watchdog already patched at module level)
         import importlib.util
-        pv4_path = _REPO_ROOT / "proxy_v4.py"
+        pv4_path = _REPO_ROOT / "proxy.py"
         spec = importlib.util.spec_from_file_location("_pv4_semantic_test", pv4_path)
         mod = importlib.util.module_from_spec(spec)
         # Don't exec full module (heavy); just test _classify_intent in isolation

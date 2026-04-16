@@ -24,10 +24,10 @@ from pathlib import Path
 import pytest
 
 # ---------------------------------------------------------------------------
-# Repo root + path to the standalone proxy_v4.py
+# Repo root + path to the standalone proxy.py
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_PROXY_V4_PATH = _REPO_ROOT / "proxy_v4.py"
+_PROXY_PATH = _REPO_ROOT / "proxy.py"
 
 
 def _reload_config_loader():
@@ -86,7 +86,7 @@ class TestBudgetControllerCheck:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests: proxy_v4 HTTP enforcement
+# Integration tests: proxy HTTP enforcement
 # ---------------------------------------------------------------------------
 
 _ENV_KEYS = (
@@ -114,7 +114,7 @@ def _restore_env(stashed):
 
 def _load_proxy_module(mod_name: str) -> object:
     sys.modules.pop(mod_name, None)
-    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_V4_PATH)
+    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
@@ -185,7 +185,7 @@ class TestBudgetEnforcementHTTP:
 
     @pytest.fixture(scope="class")
     def pv4_budget_set(self):
-        """Load proxy_v4 with BUDGET_MONTHLY_USD=0.01."""
+        """Load proxy with BUDGET_MONTHLY_USD=0.01."""
         stashed = _stash_env()
         os.environ["TOKENPAK_CONFIG"] = "/tmp/_tokenpak_test_nonexistent_TRIX02.yaml"
         os.environ["TOKENPAK_BUDGET_MONTHLY_USD"] = "0.01"
@@ -195,7 +195,7 @@ class TestBudgetEnforcementHTTP:
             mod = _load_proxy_module(_MOD_BUDGET_SET)
         except Exception as exc:
             _restore_env(stashed)
-            pytest.skip(f"proxy_v4.py failed to load: {exc}")
+            pytest.skip(f"proxy.py failed to load: {exc}")
 
         yield mod
 
@@ -288,7 +288,7 @@ class TestBudgetEnforcementHTTP:
             mod = _load_proxy_module(_MOD_BUDGET_UNSET)
         except Exception as exc:
             _restore_env(stashed)
-            pytest.skip(f"proxy_v4.py failed to load: {exc}")
+            pytest.skip(f"proxy.py failed to load: {exc}")
 
         # Verify module constant
         assert mod.BUDGET_MONTHLY_USD is None

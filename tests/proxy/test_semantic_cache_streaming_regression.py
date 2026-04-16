@@ -42,21 +42,21 @@ import pytest
 pytestmark = pytest.mark.needs_cali_env
 
 # ---------------------------------------------------------------------------
-# Bootstrap: import the top-level proxy.py
+# Bootstrap: load the monolith proxy.py via importlib (no sys.path mutation)
 # ---------------------------------------------------------------------------
-# The proxy is not a package module — it is a standalone script in the project
-# root. We add the project root to sys.path and import it directly.
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent  # /home/cali/tokenpak
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Set env vars BEFORE importing proxy so the module-level _cfg() calls pick them up.
 os.environ.setdefault("TOKENPAK_SEMANTIC_CACHE", "0")   # keep disabled by default
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-ccg16-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")       # skip vault startup
 
-import proxy as _proxy  # noqa: E402 — intentional late import after env setup
+import importlib.util as _ilu  # noqa: E402
+_spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
+_proxy = _ilu.module_from_spec(_spec)
+sys.modules.setdefault("proxy", _proxy)
+_spec.loader.exec_module(_proxy)
 
 # ---------------------------------------------------------------------------
 # Fixture paths
@@ -206,7 +206,7 @@ def proxy_and_stub():
 
     # Patch SEMANTIC_CACHE_ENABLED and _get_sem_cache at module level
     with patch.object(_proxy, "SEMANTIC_CACHE_ENABLED", True), \
-         patch("proxy._get_sem_cache", return_value=_mock_cache):
+         patch.object(_proxy, "_get_sem_cache", return_value=_mock_cache):
 
         # Start proxy
         proxy_server = _proxy.ThreadedHTTPServer(("127.0.0.1", proxy_port), _proxy.ForwardProxyHandler)
@@ -262,7 +262,7 @@ class TestCaseA_CacheMissHit:
         proxy_port, stub, mock_cache, real_cache, stub_port = proxy_and_stub
 
         # Use real cache for this test
-        with patch("proxy._get_sem_cache", return_value=real_cache):
+        with patch.object(_proxy, "_get_sem_cache", return_value=real_cache):
             body = _make_anthropic_body(stream=False, content="What is the capital of France?")
             stub.request_count = 0
 
@@ -413,7 +413,7 @@ class TestCaseE_JsonCacheNotServedToStreamingClient:
         assert not sse_lookup.hit, "JSON cache entry must not be served to SSE clients (CCG-15 cross-format guard)"
 
         # Now send a streaming request with the same query
-        with patch("proxy._get_sem_cache", return_value=real_cache):
+        with patch.object(_proxy, "_get_sem_cache", return_value=real_cache):
             _proxy.SESSION.pop("phase_semantic_cache", None)
             streaming_body = json.dumps({
                 "model": "claude-sonnet-4-6",

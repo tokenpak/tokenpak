@@ -23,7 +23,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
-# Patch watchdog name collision BEFORE importing proxy_v4.
+# Patch watchdog name collision BEFORE importing proxy.
 # tokenpak/watchdog.py shadows the installed watchdog package.
 # ---------------------------------------------------------------------------
 if "watchdog.events" not in sys.modules:
@@ -34,24 +34,24 @@ if "watchdog.observers" not in sys.modules:
     sys.modules["watchdog.observers"] = MagicMock()
 
 # ---------------------------------------------------------------------------
-# Load proxy_v4 as isolated module (lives at repo root, not a package)
+# Load proxy as isolated module (lives at repo root, not a package)
 # ---------------------------------------------------------------------------
-_PROXY_V4_PATH = Path(__file__).parent.parent / "proxy_v4.py"
+_PROXY_PATH = Path(__file__).parent.parent / "proxy.py"
 
 
-def _load_proxy_v4() -> ModuleType:
-    mod_name = "_test_pv4_classifier"
+def _load_proxy() -> ModuleType:
+    mod_name = "_test_proxy_classifier"
     if mod_name in sys.modules:
         return sys.modules[mod_name]
-    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_V4_PATH)
+    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
-_pv4 = _load_proxy_v4()
-_classify_intent = _pv4._classify_intent
+_proxy = _load_proxy()
+_classify_intent = _proxy._classify_intent
 
 # ---------------------------------------------------------------------------
 # Import tokenpak modules (they work without watchdog collision)

@@ -1,7 +1,7 @@
 """
 tests/test_proxy_error_paths.py
 
-Integration regression tests for BUG-002 error paths (proxy_v4.py).
+Integration regression tests for BUG-002 error paths (proxy.py).
 
 Commit b2e95eb fixed three critical uncaught exception paths:
 
@@ -93,24 +93,24 @@ def _mock_https_conn_factory(body: bytes | None = None) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# Import proxy_v4 as a standalone module (it lives outside the package)
+# Import proxy as a standalone module (it lives at repo root)
 # ---------------------------------------------------------------------------
 
-_PROXY_V4_PATH = Path(__file__).parent.parent / "proxy_v4.py"
+_PROXY_PATH = Path(__file__).parent.parent / "proxy.py"
 
 
 @pytest.fixture(scope="module")
 def pv4():
     """
-    Load proxy_v4.py as a Python module once for the entire test session.
+    Load proxy.py as a Python module once for the entire test session.
     The background ollama-health daemon thread is harmless (it's a daemon and
     catches all connection errors internally).
     """
-    mod_name = "_test_proxy_v4"
+    mod_name = "_test_proxy"
     if mod_name in sys.modules:
         return sys.modules[mod_name]
 
-    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_V4_PATH)
+    spec = importlib.util.spec_from_file_location(mod_name, _PROXY_PATH)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
@@ -124,7 +124,7 @@ def pv4():
 @pytest.fixture(scope="module")
 def proxy_server(pv4):
     """
-    Start proxy_v4's ThreadedHTTPServer on a free port.
+    Start proxy's ThreadedHTTPServer on a free port.
     Yields the port number; shuts down after the module tests finish.
     """
     port = _free_port()
@@ -144,7 +144,7 @@ def _post_via_proxy(port: int, payload: bytes, timeout: int = 10) -> tuple[int, 
     """
     POST `payload` to http://127.0.0.1:{port}/v1/messages (reverse-proxy endpoint).
 
-    proxy_v4's do_POST routes /v1/... through _reverse_proxy() which targets
+    proxy's do_POST routes /v1/... through _reverse_proxy() which targets
     https://api.anthropic.com — an INTERCEPT_HOST — so the full pipeline runs.
     """
     req = urllib_request.Request(
@@ -179,7 +179,7 @@ class TestC1TmpUnwritable:
 
     Fix: that line was removed entirely.  These tests verify:
       (a) The proxy completes requests even when /tmp is blocked.
-      (b) proxy_v4 never attempts to open /tmp/proxy_debug.log at all.
+      (b) proxy never attempts to open /tmp/proxy_debug.log at all.
     """
 
     def test_proxy_completes_with_tmp_permission_blocked(self, pv4, proxy_server):
@@ -200,7 +200,7 @@ class TestC1TmpUnwritable:
         assert status == 200, f"Expected 200, got {status}: {body[:200]}"
 
     def test_no_debug_log_open_during_pipeline(self, pv4, proxy_server):
-        """Verify proxy_v4 never opens /tmp/proxy_debug.log during a request."""
+        """Verify proxy never opens /tmp/proxy_debug.log during a request."""
         payload = _chat_payload(400)
         mock_conn = _mock_https_conn_factory()
         debug_opens: list[str] = []
@@ -218,7 +218,7 @@ class TestC1TmpUnwritable:
 
         assert status == 200
         assert not debug_opens, (
-            f"proxy_v4 opened debug file(s) that should not exist: {debug_opens}"
+            f"proxy opened debug file(s) that should not exist: {debug_opens}"
         )
 
 
@@ -387,7 +387,7 @@ class TestC3MonitorLogFails:
     def test_session_requests_increments_despite_monitor_failure(self, pv4, proxy_server):
         """
         SESSION['requests'] must still increment even when Monitor.log() raises.
-        In proxy_v4, the SESSION update code runs AFTER the Monitor.log try/except,
+        In proxy, the SESSION update code runs AFTER the Monitor.log try/except,
         so it is unaffected by SQLite failures.
         """
         before = pv4.SESSION["requests"]

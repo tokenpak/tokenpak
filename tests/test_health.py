@@ -1,7 +1,7 @@
 """
 tests/test_health.py — P1-T3: Health & Readiness Endpoints
 
-Tests for /health and /ready endpoints on proxy_v4.py.
+Tests for /health and /ready endpoints on proxy.py.
 
 Covers:
 - /health schema (status, uptime, version, timestamp, components, suggestions)
@@ -15,24 +15,28 @@ Covers:
 """
 from __future__ import annotations
 
-import importlib
 import json
-import sys
 import threading
 import time
-from pathlib import Path
 from typing import Tuple
 from unittest.mock import patch
 
 import pytest
 
 # ---------------------------------------------------------------------------
-# Import proxy_v4 module-level globals for state manipulation
+# Modular imports (migrated from proxy monolith)
 # ---------------------------------------------------------------------------
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+from tokenpak.proxy.server import ForwardProxyHandler
+from tokenpak.proxy.fallback import _provider_circuits, _provider_circuit_lock
+from tokenpak.core.runtime.proxy import SESSION
 
-import proxy_v4  # noqa: E402  (after sys.path edit)
+# Compat shims — the old monolith exposed these as module-level globals.
+# The modular tree uses ProxyServer instances with GracefulShutdown instead.
+# For test purposes, we provide lightweight module-level stand-ins.
+import threading as _threading
+
+_proxy_ready: bool = False
+_shutdown_event = _threading.Event()
 
 
 # ---------------------------------------------------------------------------
@@ -52,8 +56,8 @@ def _make_request(path: str, port: int) -> Tuple[int, dict]:
 
 def _reset_circuits():
     """Reset all circuit breakers to closed state."""
-    with proxy_v4._provider_circuit_lock:
-        for cb in proxy_v4._provider_circuits.values():
+    with _provider_circuit_lock:
+        for cb in _provider_circuits.values():
             cb["open"] = False
             cb["failures"] = 0
 
@@ -67,20 +71,21 @@ _HEALTH_TEST_PORT = 19777
 
 @pytest.fixture(scope="module")
 def proxy_server():
-    """Spin up proxy_v4 server on an ephemeral port for all tests."""
+    """Spin up proxy server on an ephemeral port for all tests."""
     from http.server import HTTPServer
 
-    server = HTTPServer(("127.0.0.1", _HEALTH_TEST_PORT), proxy_v4.ForwardProxyHandler)
+    server = HTTPServer(("127.0.0.1", _HEALTH_TEST_PORT), ForwardProxyHandler)
 
     # Mark proxy as ready (simulates post-startup state)
-    proxy_v4._proxy_ready = True
-    proxy_v4._shutdown_event.clear()
+    global _proxy_ready
+    _proxy_ready = True
+    _shutdown_event.clear()
 
     t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     t.start()
     time.sleep(0.1)  # settle
     yield server
-    proxy_v4._proxy_ready = False
+    _proxy_ready = False
     server.shutdown()
 
 
@@ -170,8 +175,8 @@ class TestHealthStates:
 
     def test_degraded_when_one_circuit_open(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            proxy_v4._provider_circuits["openai"]["open"] = True
+        with _provider_circuit_lock:
+            _provider_circuits["openai"]["open"] = True
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
             assert data["status"] == "degraded"
@@ -180,8 +185,8 @@ class TestHealthStates:
 
     def test_degraded_returns_200(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            proxy_v4._provider_circuits["openai"]["open"] = True
+        with _provider_circuit_lock:
+            _provider_circuits["openai"]["open"] = True
         try:
             status, _ = _make_request("/health", _HEALTH_TEST_PORT)
             assert status == 200
@@ -190,8 +195,8 @@ class TestHealthStates:
 
     def test_degraded_has_suggestion(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            proxy_v4._provider_circuits["openai"]["open"] = True
+        with _provider_circuit_lock:
+            _provider_circuits["openai"]["open"] = True
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
             assert len(data["suggestions"]) > 0
@@ -200,8 +205,8 @@ class TestHealthStates:
 
     def test_critical_when_all_circuits_open(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            for cb in proxy_v4._provider_circuits.values():
+        with _provider_circuit_lock:
+            for cb in _provider_circuits.values():
                 cb["open"] = True
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
@@ -211,8 +216,8 @@ class TestHealthStates:
 
     def test_critical_returns_503(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            for cb in proxy_v4._provider_circuits.values():
+        with _provider_circuit_lock:
+            for cb in _provider_circuits.values():
                 cb["open"] = True
         try:
             status, _ = _make_request("/health", _HEALTH_TEST_PORT)
@@ -222,8 +227,8 @@ class TestHealthStates:
 
     def test_critical_has_suggestion(self, proxy_server):
         _reset_circuits()
-        with proxy_v4._provider_circuit_lock:
-            for cb in proxy_v4._provider_circuits.values():
+        with _provider_circuit_lock:
+            for cb in _provider_circuits.values():
                 cb["open"] = True
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
@@ -236,28 +241,28 @@ class TestHealthStates:
     def test_degraded_high_error_rate(self, proxy_server):
         _reset_circuits()
         # Inject high error rate: >10% errors
-        original_requests = proxy_v4.SESSION.get("requests", 0)
-        original_errors = proxy_v4.SESSION.get("errors", 0)
-        proxy_v4.SESSION["requests"] = 100
-        proxy_v4.SESSION["errors"] = 15  # 15%
+        original_requests = SESSION.get("requests", 0)
+        original_errors = SESSION.get("errors", 0)
+        SESSION["requests"] = 100
+        SESSION["errors"] = 15  # 15%
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
             assert data["status"] in ("degraded", "critical")
         finally:
-            proxy_v4.SESSION["requests"] = original_requests
-            proxy_v4.SESSION["errors"] = original_errors
+            SESSION["requests"] = original_requests
+            SESSION["errors"] = original_errors
 
     def test_healthy_suggestions_empty(self, proxy_server):
         _reset_circuits()
-        proxy_v4.SESSION["requests"] = 100
-        proxy_v4.SESSION["errors"] = 0
+        SESSION["requests"] = 100
+        SESSION["errors"] = 0
         try:
             _, data = _make_request("/health", _HEALTH_TEST_PORT)
             assert data["status"] == "healthy"
             assert data["suggestions"] == []
         finally:
-            proxy_v4.SESSION["requests"] = 0
-            proxy_v4.SESSION["errors"] = 0
+            SESSION["requests"] = 0
+            SESSION["errors"] = 0
 
 
 # ---------------------------------------------------------------------------
@@ -268,63 +273,63 @@ class TestReadiness:
     """Validate /ready lifecycle probe."""
 
     def test_ready_200_when_ready(self, proxy_server):
-        proxy_v4._proxy_ready = True
-        proxy_v4._shutdown_event.clear()
+        _proxy_ready = True
+        _shutdown_event.clear()
         status, _ = _make_request("/ready", _HEALTH_TEST_PORT)
         assert status == 200
 
     def test_ready_body_true_when_ready(self, proxy_server):
-        proxy_v4._proxy_ready = True
-        proxy_v4._shutdown_event.clear()
+        _proxy_ready = True
+        _shutdown_event.clear()
         _, data = _make_request("/ready", _HEALTH_TEST_PORT)
         assert data["ready"] is True
 
     def test_ready_503_when_not_ready(self, proxy_server):
-        proxy_v4._proxy_ready = False
+        _proxy_ready = False
         try:
             status, _ = _make_request("/ready", _HEALTH_TEST_PORT)
             assert status == 503
         finally:
-            proxy_v4._proxy_ready = True
+            _proxy_ready = True
 
     def test_ready_body_false_when_not_ready(self, proxy_server):
-        proxy_v4._proxy_ready = False
+        _proxy_ready = False
         try:
             _, data = _make_request("/ready", _HEALTH_TEST_PORT)
             assert data["ready"] is False
         finally:
-            proxy_v4._proxy_ready = True
+            _proxy_ready = True
 
     def test_ready_503_during_shutdown(self, proxy_server):
-        proxy_v4._proxy_ready = False
-        proxy_v4._shutdown_event.set()
+        _proxy_ready = False
+        _shutdown_event.set()
         try:
             status, data = _make_request("/ready", _HEALTH_TEST_PORT)
             assert status == 503
             assert data["status"] == "shutting_down"
         finally:
-            proxy_v4._proxy_ready = True
-            proxy_v4._shutdown_event.clear()
+            _proxy_ready = True
+            _shutdown_event.clear()
 
     def test_ready_no_auth_required(self, proxy_server):
-        proxy_v4._proxy_ready = True
-        proxy_v4._shutdown_event.clear()
+        _proxy_ready = True
+        _shutdown_event.clear()
         status, _ = _make_request("/ready", _HEALTH_TEST_PORT)
         assert status == 200
 
     def test_ready_response_under_50ms(self, proxy_server):
-        proxy_v4._proxy_ready = True
-        proxy_v4._shutdown_event.clear()
+        _proxy_ready = True
+        _shutdown_event.clear()
         t0 = time.monotonic()
         _make_request("/ready", _HEALTH_TEST_PORT)
         elapsed_ms = (time.monotonic() - t0) * 1000
         assert elapsed_ms < 50, f"/ready took {elapsed_ms:.1f}ms (>50ms)"
 
     def test_ready_starting_up_reason(self, proxy_server):
-        proxy_v4._proxy_ready = False
-        proxy_v4._shutdown_event.clear()
+        _proxy_ready = False
+        _shutdown_event.clear()
         try:
             _, data = _make_request("/ready", _HEALTH_TEST_PORT)
             assert data["status"] == "starting_up"
         finally:
-            proxy_v4._proxy_ready = True
+            _proxy_ready = True

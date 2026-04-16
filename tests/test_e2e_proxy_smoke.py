@@ -1,4 +1,4 @@
-"""E2E Proxy Smoke Tests — Complete request/response cycle through proxy_v4.
+"""E2E Proxy Smoke Tests — Complete request/response cycle through tokenpak.proxy.
 
 Tests verify:
 - Real HTTP requests to live proxy on port 8766 (mocked via pytest-httpserver)
@@ -16,7 +16,7 @@ from unittest.mock import patch, MagicMock
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, Optional, List
 
-# Mock proxy_v4 structures (avoiding full import to prevent circular dependencies)
+# Mock proxy structures (avoiding full import to prevent circular dependencies)
 SESSION = {}
 
 @dataclass
@@ -38,22 +38,22 @@ class TraceStorage:
     def __init__(self, max_traces: int = 10):
         self.max_traces = max_traces
         self.traces = []
-    
+
     def store(self, trace: StageTrace):
         self.traces.append(trace)
         if len(self.traces) > self.max_traces:
             self.traces = self.traces[-self.max_traces:]
-    
+
     def get_last(self) -> Optional[StageTrace]:
         return self.traces[-1] if self.traces else None
-    
+
     def get_by_id(self, request_id: str) -> Optional[StageTrace]:
         return None
-    
+
     def get_all(self) -> List[StageTrace]:
         return self.traces
 
-proxy_v4 = type('proxy_v4', (), {
+proxy_state = type('proxy_state', (), {
     'SESSION': SESSION,
     'StageTrace': StageTrace,
     'TraceStorage': TraceStorage,
@@ -110,7 +110,7 @@ def mock_http_server(monkeypatch):
 def reset_session():
     """Reset SESSION before each test."""
     yield
-    proxy_v4.SESSION.clear()
+    proxy_state.SESSION.clear()
 
 
 # ============================================================================
@@ -123,8 +123,8 @@ class TestProxyRequestResponseRoundtrip:
     def test_proxy_handles_completion_request(self, mock_http_server):
         """Test completion request round-trip."""
         # Setup
-        proxy_v4.SESSION.clear()
-        proxy_v4.SESSION.update({
+        proxy_state.SESSION.clear()
+        proxy_state.SESSION.update({
             "total_input_tokens": 0,
             "total_output_tokens": 0,
             "request_count": 0,
@@ -138,21 +138,21 @@ class TestProxyRequestResponseRoundtrip:
         }
         
         # Simulate proxy pipeline (simplified)
-        proxy_v4.SESSION["request_count"] = 1
-        proxy_v4.SESSION["total_input_tokens"] = 10
-        proxy_v4.SESSION["total_output_tokens"] = 20
+        proxy_state.SESSION["request_count"] = 1
+        proxy_state.SESSION["total_input_tokens"] = 10
+        proxy_state.SESSION["total_output_tokens"] = 20
         
         # Verify session updated
-        assert proxy_v4.SESSION["request_count"] == 1
-        assert proxy_v4.SESSION["total_input_tokens"] == 10
-        assert proxy_v4.SESSION["total_output_tokens"] == 20
+        assert proxy_state.SESSION["request_count"] == 1
+        assert proxy_state.SESSION["total_input_tokens"] == 10
+        assert proxy_state.SESSION["total_output_tokens"] == 20
     
     def test_proxy_handles_streaming_response(self):
         """Test SSE streaming response handling."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         # Simulate streaming via trace storage
-        trace = proxy_v4.StageTrace(
+        trace = proxy_state.StageTrace(
             name="stream_handler",
             enabled=True,
             input_tokens=5,
@@ -167,7 +167,7 @@ class TestProxyRequestResponseRoundtrip:
     
     def test_proxy_headers_preserved_in_response(self):
         """Test that response headers are properly preserved."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         # Setup response headers trace
         headers = {
@@ -176,9 +176,9 @@ class TestProxyRequestResponseRoundtrip:
             "cache-control": "no-cache",
         }
         
-        proxy_v4.SESSION["response_headers"] = headers
+        proxy_state.SESSION["response_headers"] = headers
         
-        assert proxy_v4.SESSION["response_headers"]["x-trace-id"] == "trace_12345"
+        assert proxy_state.SESSION["response_headers"]["x-trace-id"] == "trace_12345"
 
 
 # ============================================================================
@@ -190,7 +190,7 @@ class TestModuleFiring:
     
     def test_session_tracks_module_execution(self):
         """Test SESSION dict records module execution."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         # Simulate module initialization (16 modules)
         modules = [
@@ -213,27 +213,27 @@ class TestModuleFiring:
         ]
         
         for module in modules:
-            proxy_v4.SESSION[module] = {"status": "active", "calls": 0}
+            proxy_state.SESSION[module] = {"status": "active", "calls": 0}
         
-        assert len(proxy_v4.SESSION) >= 16
-        assert all(m in proxy_v4.SESSION for m in modules)
+        assert len(proxy_state.SESSION) >= 16
+        assert all(m in proxy_state.SESSION for m in modules)
     
     def test_module_execution_increments_counters(self):
         """Test that module execution increments counters."""
-        proxy_v4.SESSION.clear()
-        proxy_v4.SESSION["cache_module"] = {"calls": 0}
-        proxy_v4.SESSION["compression_module"] = {"calls": 0}
+        proxy_state.SESSION.clear()
+        proxy_state.SESSION["cache_module"] = {"calls": 0}
+        proxy_state.SESSION["compression_module"] = {"calls": 0}
         
         # Simulate module calls
-        proxy_v4.SESSION["cache_module"]["calls"] += 1
-        proxy_v4.SESSION["compression_module"]["calls"] += 1
+        proxy_state.SESSION["cache_module"]["calls"] += 1
+        proxy_state.SESSION["compression_module"]["calls"] += 1
         
-        assert proxy_v4.SESSION["cache_module"]["calls"] == 1
-        assert proxy_v4.SESSION["compression_module"]["calls"] == 1
+        assert proxy_state.SESSION["cache_module"]["calls"] == 1
+        assert proxy_state.SESSION["compression_module"]["calls"] == 1
     
     def test_all_16_modules_present_after_init(self):
         """Test all 16 modules initialized."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         # Initialize all modules
         module_list = [
@@ -244,9 +244,9 @@ class TestModuleFiring:
         ]
         
         for name in module_list:
-            proxy_v4.SESSION[f"{name}_module"] = {"enabled": True}
+            proxy_state.SESSION[f"{name}_module"] = {"enabled": True}
         
-        enabled_modules = [k for k, v in proxy_v4.SESSION.items() if v.get("enabled")]
+        enabled_modules = [k for k, v in proxy_state.SESSION.items() if v.get("enabled")]
         assert len(enabled_modules) == 16
 
 
@@ -259,7 +259,7 @@ class TestResponseValidation:
     
     def test_response_headers_valid(self):
         """Test response has required headers."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         response_headers = {
             "content-type": "application/json",
@@ -272,7 +272,7 @@ class TestResponseValidation:
     
     def test_response_status_code_success(self):
         """Test successful response status code."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         status_code = 200
         assert 200 <= status_code < 300
@@ -314,33 +314,33 @@ class TestErrorHandling:
     
     def test_proxy_handles_malformed_request(self):
         """Test proxy handles malformed requests gracefully."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         # Malformed body (missing required fields)
         body = {}
         
         # Should not crash
         try:
-            proxy_v4.SESSION["error_count"] = 0
-            proxy_v4.SESSION["error_count"] += 1
-            assert proxy_v4.SESSION["error_count"] == 1
+            proxy_state.SESSION["error_count"] = 0
+            proxy_state.SESSION["error_count"] += 1
+            assert proxy_state.SESSION["error_count"] == 1
         except Exception as e:
             pytest.fail(f"Proxy should handle error gracefully: {e}")
     
     def test_proxy_handles_timeout(self):
         """Test proxy handles upstream timeout."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
-        proxy_v4.SESSION["timeout_errors"] = 0
-        proxy_v4.SESSION["timeout_errors"] += 1
+        proxy_state.SESSION["timeout_errors"] = 0
+        proxy_state.SESSION["timeout_errors"] += 1
         
-        assert proxy_v4.SESSION["timeout_errors"] == 1
+        assert proxy_state.SESSION["timeout_errors"] == 1
     
     def test_proxy_tracks_error_metrics(self):
         """Test proxy tracks error metrics."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
-        proxy_v4.SESSION["errors"] = {
+        proxy_state.SESSION["errors"] = {
             "malformed_request": 0,
             "timeout": 0,
             "rate_limited": 0,
@@ -348,11 +348,11 @@ class TestErrorHandling:
         }
         
         # Increment error counters
-        proxy_v4.SESSION["errors"]["timeout"] += 1
-        proxy_v4.SESSION["errors"]["rate_limited"] += 2
+        proxy_state.SESSION["errors"]["timeout"] += 1
+        proxy_state.SESSION["errors"]["rate_limited"] += 2
         
-        assert proxy_v4.SESSION["errors"]["timeout"] == 1
-        assert proxy_v4.SESSION["errors"]["rate_limited"] == 2
+        assert proxy_state.SESSION["errors"]["timeout"] == 1
+        assert proxy_state.SESSION["errors"]["rate_limited"] == 2
 
 
 # ============================================================================
@@ -364,14 +364,14 @@ class TestPipelineTracing:
     
     def test_trace_storage_initialization(self):
         """Test TraceStorage initializes correctly."""
-        ts = proxy_v4.TraceStorage(max_traces=10)
+        ts = proxy_state.TraceStorage(max_traces=10)
         assert ts.get_all() == []
     
     def test_trace_storage_store_and_retrieve(self):
         """Test storing and retrieving traces."""
-        ts = proxy_v4.TraceStorage(max_traces=10)
+        ts = proxy_state.TraceStorage(max_traces=10)
         
-        trace = proxy_v4.StageTrace(
+        trace = proxy_state.StageTrace(
             name="test_stage",
             enabled=True,
             input_tokens=100,
@@ -387,10 +387,10 @@ class TestPipelineTracing:
     
     def test_trace_storage_max_capacity(self):
         """Test TraceStorage respects max_traces."""
-        ts = proxy_v4.TraceStorage(max_traces=3)
+        ts = proxy_state.TraceStorage(max_traces=3)
         
         for i in range(5):
-            trace = proxy_v4.StageTrace(
+            trace = proxy_state.StageTrace(
                 name=f"stage_{i}",
                 input_tokens=i*10,
                 output_tokens=i*20,
@@ -410,30 +410,30 @@ class TestPerformanceMetrics:
     
     def test_request_timing_tracked(self):
         """Test request timing is tracked."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
         start_time = time.time()
         # Simulate request processing
         time.sleep(0.01)
         duration_ms = (time.time() - start_time) * 1000
         
-        proxy_v4.SESSION["request_duration_ms"] = duration_ms
+        proxy_state.SESSION["request_duration_ms"] = duration_ms
         
-        assert proxy_v4.SESSION["request_duration_ms"] > 0
+        assert proxy_state.SESSION["request_duration_ms"] > 0
     
     def test_throughput_metrics_accumulated(self):
         """Test throughput metrics are accumulated."""
-        proxy_v4.SESSION.clear()
+        proxy_state.SESSION.clear()
         
-        proxy_v4.SESSION["total_requests"] = 0
-        proxy_v4.SESSION["total_bytes_processed"] = 0
+        proxy_state.SESSION["total_requests"] = 0
+        proxy_state.SESSION["total_bytes_processed"] = 0
         
         for i in range(5):
-            proxy_v4.SESSION["total_requests"] += 1
-            proxy_v4.SESSION["total_bytes_processed"] += 1024
+            proxy_state.SESSION["total_requests"] += 1
+            proxy_state.SESSION["total_bytes_processed"] += 1024
         
-        assert proxy_v4.SESSION["total_requests"] == 5
-        assert proxy_v4.SESSION["total_bytes_processed"] == 5120
+        assert proxy_state.SESSION["total_requests"] == 5
+        assert proxy_state.SESSION["total_bytes_processed"] == 5120
     
     def test_latency_percentiles_tracked(self):
         """Test latency percentiles are tracked."""

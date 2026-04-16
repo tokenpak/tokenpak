@@ -52,22 +52,24 @@ import pytest
 pytestmark = pytest.mark.needs_cali_env
 
 # ---------------------------------------------------------------------------
-# Bootstrap: import proxy.py from the project root
+# Bootstrap: load the monolith proxy.py via importlib (no sys.path mutation)
 # ---------------------------------------------------------------------------
 
-_PROJECT_ROOT = Path(__file__).parent.parent.parent  # /home/cali/tokenpak
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _SUE_PROJECT_ROOT = Path("/home/sue/tokenpak")
-
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 # Set env vars BEFORE importing proxy so module-level _cfg() calls pick them up.
 os.environ.setdefault("TOKENPAK_SEMANTIC_CACHE", "0")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-sk-ccg17-dummy-not-real")
 os.environ.setdefault("TOKENPAK_VAULT_INDEX", "0")
 
-import proxy as _proxy  # noqa: E402
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("proxy", _PROJECT_ROOT / "proxy.py")
+_proxy = _ilu.module_from_spec(_spec)
+sys.modules.setdefault("proxy", _proxy)
+_spec.loader.exec_module(_proxy)
 
+from tokenpak.proxy.config import SEMANTIC_CACHE_ENABLED  # noqa: E402,F401
 from tokenpak.runtime.providers import Provider  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -186,7 +188,7 @@ def recording_proxy():
     stub_thread.start()
 
     with patch.object(_proxy, "SEMANTIC_CACHE_ENABLED", False), \
-         patch("proxy.detect_provider", return_value=Provider.ANTHROPIC):
+         patch.object(_proxy, "detect_provider", return_value=Provider.ANTHROPIC):
 
         proxy_server = _proxy.ThreadedHTTPServer(
             ("127.0.0.1", proxy_port), _proxy.ForwardProxyHandler

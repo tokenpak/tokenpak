@@ -1,5 +1,5 @@
 """
-Tests for WebSocket proxy support in proxy_v4.py.
+Tests for WebSocket proxy support in proxy.py (tokenpak.proxy).
 
 Covers:
   1. test_ws_connect_and_stream          — mock upstream, verify chunks received
@@ -81,7 +81,7 @@ class TestWsConnectAndStream(unittest.TestCase):
     """Mock upstream; verify SSE chunks arrive over WebSocket."""
 
     def test_ws_connect_and_stream(self):
-        import proxy_v4
+        import proxy
 
         port = _free_port()
         sse_body = b"data: {\"type\": \"content_block_delta\"}\n\ndata: {\"type\": \"message_stop\"}\n\n"
@@ -92,9 +92,9 @@ class TestWsConnectAndStream(unittest.TestCase):
         received: list[str] = []
         close_codes: list[int] = []
 
-        with patch("proxy_v4.compact_request_body", return_value=(b'{"model":"claude-sonnet-4-6","messages":[],"stream":true}', 10, 10, 0)):
+        with patch("proxy.compact_request_body", return_value=(b'{"model":"claude-sonnet-4-6","messages":[],"stream":true}', 10, 10, 0)):
             with patch("http.client.HTTPSConnection", return_value=mock_conn):
-                _start_test_ws_server(proxy_v4._ws_handler, port)
+                _start_test_ws_server(proxy._ws_handler, port)
 
                 async def _client():
                     import websockets
@@ -121,7 +121,7 @@ class TestWsCompressionApplied(unittest.TestCase):
     """Verify compact_request_body is called and compressed body is forwarded."""
 
     def test_ws_compression_applied(self):
-        import proxy_v4
+        import proxy
 
         port = _free_port()
         # Build a large payload that would warrant compression
@@ -140,9 +140,9 @@ class TestWsCompressionApplied(unittest.TestCase):
             # Return a smaller "compressed" body
             return compressed_payload, 5, 100, 0
 
-        with patch("proxy_v4.compact_request_body", side_effect=_mock_compact):
+        with patch("proxy.compact_request_body", side_effect=_mock_compact):
             with patch("http.client.HTTPSConnection", return_value=mock_conn):
-                _start_test_ws_server(proxy_v4._ws_handler, port)
+                _start_test_ws_server(proxy._ws_handler, port)
 
                 async def _client():
                     import websockets
@@ -170,7 +170,7 @@ class TestWsDisconnectOnUpstreamError(unittest.TestCase):
     """Upstream 500 must result in WebSocket close code 1011."""
 
     def test_ws_disconnect_on_upstream_error(self):
-        import proxy_v4
+        import proxy
 
         port = _free_port()
         mock_resp = _make_sse_response(500, b'{"error": "internal server error"}')
@@ -179,9 +179,9 @@ class TestWsDisconnectOnUpstreamError(unittest.TestCase):
 
         close_codes: list[int] = []
 
-        with patch("proxy_v4.compact_request_body", return_value=(b'{"model":"x","messages":[],"stream":true}', 5, 5, 0)):
+        with patch("proxy.compact_request_body", return_value=(b'{"model":"x","messages":[],"stream":true}', 5, 5, 0)):
             with patch("http.client.HTTPSConnection", return_value=mock_conn):
-                _start_test_ws_server(proxy_v4._ws_handler, port)
+                _start_test_ws_server(proxy._ws_handler, port)
 
                 async def _client():
                     import websockets
@@ -210,11 +210,11 @@ class TestWsMaxConnections(unittest.TestCase):
     """Fill connections to limit; the next one must be rejected (close 1008)."""
 
     def test_ws_max_connections(self):
-        import proxy_v4
+        import proxy
 
         # Temporarily lower the limit to 2 for testing
-        original_max = proxy_v4.WS_MAX_CONNECTIONS
-        proxy_v4.WS_MAX_CONNECTIONS = 2
+        original_max = proxy.WS_MAX_CONNECTIONS
+        proxy.WS_MAX_CONNECTIONS = 2
 
         port = _free_port()
 
@@ -229,18 +229,18 @@ class TestWsMaxConnections(unittest.TestCase):
                 await websocket.close(1008, "Not found")
                 return
 
-            with proxy_v4._ws_active_connections_lock:
-                if proxy_v4._ws_active_connections >= proxy_v4.WS_MAX_CONNECTIONS:
+            with proxy._ws_active_connections_lock:
+                if proxy._ws_active_connections >= proxy.WS_MAX_CONNECTIONS:
                     await websocket.close(1008, "Too many connections")
                     return
-                proxy_v4._ws_active_connections += 1
+                proxy._ws_active_connections += 1
             try:
                 await asyncio.wait_for(websocket.recv(), timeout=5.0)
             except Exception:
                 pass
             finally:
-                with proxy_v4._ws_active_connections_lock:
-                    proxy_v4._ws_active_connections -= 1
+                with proxy._ws_active_connections_lock:
+                    proxy._ws_active_connections -= 1
 
         _start_test_ws_server(_hanging_handler, port)
 
@@ -275,8 +275,8 @@ class TestWsMaxConnections(unittest.TestCase):
         try:
             asyncio.run(_run())
         finally:
-            proxy_v4.WS_MAX_CONNECTIONS = original_max
-            proxy_v4._ws_active_connections = 0
+            proxy.WS_MAX_CONNECTIONS = original_max
+            proxy._ws_active_connections = 0
 
         self.assertTrue(len(close_codes) > 0, "Should have a close code for the rejected connection")
         self.assertEqual(close_codes[0], 1008, f"Expected 1008 (policy violation), got {close_codes[0]}")
@@ -290,10 +290,10 @@ class TestWsInvalidUpgradeRejected(unittest.TestCase):
     """Plain HTTP GET to WS server returns 400 (not a WebSocket upgrade)."""
 
     def test_ws_invalid_upgrade_rejected(self):
-        import proxy_v4
+        import proxy
 
         port = _free_port()
-        _start_test_ws_server(proxy_v4._ws_handler, port)
+        _start_test_ws_server(proxy._ws_handler, port)
 
         # Send plain HTTP GET (no Upgrade header)
         conn = HTTPConnection("127.0.0.1", port, timeout=5)
@@ -313,7 +313,7 @@ class TestWsReconnectAfterCleanClose(unittest.TestCase):
     """Connect, stream, close 1000, then reconnect successfully."""
 
     def test_ws_reconnect_after_clean_close(self):
-        import proxy_v4
+        import proxy
 
         port = _free_port()
         mock_resp = _make_sse_response(200, b"data: {\"type\": \"message_stop\"}\n\n")
@@ -323,9 +323,9 @@ class TestWsReconnectAfterCleanClose(unittest.TestCase):
         close_codes: list[int] = []
         connection_count = [0]
 
-        with patch("proxy_v4.compact_request_body", return_value=(b'{"model":"x","messages":[],"stream":true}', 5, 5, 0)):
+        with patch("proxy.compact_request_body", return_value=(b'{"model":"x","messages":[],"stream":true}', 5, 5, 0)):
             with patch("http.client.HTTPSConnection", return_value=mock_conn):
-                _start_test_ws_server(proxy_v4._ws_handler, port)
+                _start_test_ws_server(proxy._ws_handler, port)
 
                 async def _client():
                     import websockets

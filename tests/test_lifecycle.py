@@ -36,10 +36,32 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+# ---------------------------------------------------------------------------
+# Modular imports (migrated from proxy monolith)
+# ---------------------------------------------------------------------------
+from tokenpak.proxy.server import ForwardProxyHandler
+from tokenpak.proxy.startup import run_startup_checks
+from tokenpak.core.runtime.proxy import SESSION
 
-import proxy_v4  # noqa: E402
+# Compat shims — the old monolith exposed these as module-level globals.
+# The modular tree uses ProxyServer.shutdown (GracefulShutdown) instead.
+_proxy_ready: bool = False
+_shutdown_event = threading.Event()
+_active_request_count: int = 0
+
+
+def _startup_preflight(port: int) -> None:
+    """Compat shim for _startup_preflight.
+
+    Delegates to the modular ``run_startup_checks`` and calls ``sys.exit(1)``
+    if the critical check (port availability) fails, matching the old behaviour.
+    """
+    all_ok, warnings = run_startup_checks(port)
+    if not all_ok:
+        # Print error info the way the old monolith did
+        for w in warnings:
+            print(w)
+        sys.exit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -73,15 +95,15 @@ def proxy_port():
 
 @pytest.fixture
 def live_proxy(proxy_port):
-    """Start a proxy_v4 server on a free port; mark ready; yield; stop."""
-    server = HTTPServer(("127.0.0.1", proxy_port), proxy_v4.ForwardProxyHandler)
-    proxy_v4._proxy_ready = True
-    proxy_v4._shutdown_event.clear()
+    """Start a proxy server on a free port; mark ready; yield; stop."""
+    server = HTTPServer(("127.0.0.1", proxy_port), ForwardProxyHandler)
+    _proxy_ready = True
+    _shutdown_event.clear()
     t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     t.start()
     time.sleep(0.05)
     yield server, proxy_port
-    proxy_v4._proxy_ready = False
+    _proxy_ready = False
     server.shutdown()
 
 
@@ -95,7 +117,7 @@ class TestStartup:
     def test_startup_preflight_passes_free_port(self, proxy_port):
         """_startup_preflight should not raise/exit on a free port."""
         try:
-            proxy_v4._startup_preflight(proxy_port)
+            _startup_preflight(proxy_port)
         except SystemExit:
             pytest.fail("_startup_preflight raised SystemExit on a free port")
 
@@ -108,7 +130,7 @@ class TestStartup:
         blocker.listen(1)
         try:
             with pytest.raises(SystemExit) as exc_info:
-                proxy_v4._startup_preflight(proxy_port)
+                _startup_preflight(proxy_port)
             assert exc_info.value.code == 1
         finally:
             blocker.close()
@@ -121,7 +143,7 @@ class TestStartup:
         blocker.listen(1)
         try:
             with pytest.raises(SystemExit):
-                proxy_v4._startup_preflight(proxy_port)
+                _startup_preflight(proxy_port)
         finally:
             blocker.close()
         captured = capsys.readouterr()
@@ -130,16 +152,16 @@ class TestStartup:
 
     def test_ready_flag_initially_false(self):
         """_proxy_ready must be False before server starts."""
-        original = proxy_v4._proxy_ready
-        proxy_v4._proxy_ready = False
-        assert proxy_v4._proxy_ready is False
-        proxy_v4._proxy_ready = original
+        original = _proxy_ready
+        _proxy_ready = False
+        assert _proxy_ready is False
+        _proxy_ready = original
 
     @pytest.mark.needs_proxy
     def test_ready_true_after_server_starts(self, live_proxy):
         """After live_proxy fixture sets _proxy_ready, flag should be True."""
         _, _ = live_proxy
-        assert proxy_v4._proxy_ready is True
+        assert _proxy_ready is True
 
     @pytest.mark.needs_proxy
     def test_ready_endpoint_200_after_start(self, live_proxy):
@@ -162,35 +184,35 @@ class TestShutdown:
         """Simulating shutdown: _proxy_ready → False, _shutdown_event set."""
         server, port = live_proxy
         # Simulate signal handler
-        proxy_v4._proxy_ready = False
-        proxy_v4._shutdown_event.set()
+        _proxy_ready = False
+        _shutdown_event.set()
         try:
             status, data = _get("/ready", port)
             assert status == 503
             assert data["ready"] is False
             assert data["status"] == "shutting_down"
         finally:
-            proxy_v4._proxy_ready = True
-            proxy_v4._shutdown_event.clear()
+            _proxy_ready = True
+            _shutdown_event.clear()
 
     @pytest.mark.needs_proxy
     def test_ready_503_during_shutdown(self, live_proxy):
         """GET /ready → 503 during shutdown."""
         server, port = live_proxy
-        proxy_v4._shutdown_event.set()
-        proxy_v4._proxy_ready = False
+        _shutdown_event.set()
+        _proxy_ready = False
         try:
             status, _ = _get("/ready", port)
             assert status == 503
         finally:
-            proxy_v4._proxy_ready = True
-            proxy_v4._shutdown_event.clear()
+            _proxy_ready = True
+            _shutdown_event.clear()
 
     @pytest.mark.needs_proxy
     def test_active_request_counter_increments(self, live_proxy):
         """ThreadedHTTPServer must track _active_request_count."""
         server, port = live_proxy
-        before = proxy_v4._active_request_count
+        before = _active_request_count
         assert isinstance(before, int)
         assert before >= 0
 
@@ -210,9 +232,9 @@ class TestShutdown:
     @pytest.mark.needs_proxy
     def test_no_orphan_after_shutdown(self, proxy_port):
         """After server.shutdown(), nothing should be listening on the port."""
-        server = HTTPServer(("127.0.0.1", proxy_port), proxy_v4.ForwardProxyHandler)
-        proxy_v4._proxy_ready = True
-        proxy_v4._shutdown_event.clear()
+        server = HTTPServer(("127.0.0.1", proxy_port), ForwardProxyHandler)
+        _proxy_ready = True
+        _shutdown_event.clear()
         t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         t.start()
         time.sleep(0.1)
@@ -229,8 +251,8 @@ class TestShutdown:
         assert was_up, "Server never came up — test inconclusive"
 
         # Now shut it down
-        proxy_v4._proxy_ready = False
-        proxy_v4._shutdown_event.set()
+        _proxy_ready = False
+        _shutdown_event.set()
         server.shutdown()
         server.server_close()
         time.sleep(0.2)
@@ -245,7 +267,7 @@ class TestShutdown:
         except (ConnectionRefusedError, OSError):
             still_up = False
         finally:
-            proxy_v4._shutdown_event.clear()
+            _shutdown_event.clear()
 
         assert not still_up, "Port still accepting connections after shutdown — socket not released"
 
@@ -268,13 +290,13 @@ class TestKillRecovery:
         port = _free_port()
         try:
             with patch.object(Path, "home", return_value=tmp_path):
-                proxy_v4._startup_preflight(port)
+                _startup_preflight(port)
         except SystemExit:
             pytest.fail("Pre-flight should not exit on stale PID file")
 
     def test_session_resets_on_module_load(self):
         """SESSION['start_time'] should be a recent timestamp (module init)."""
-        start = proxy_v4.SESSION["start_time"]
+        start = SESSION["start_time"]
         assert isinstance(start, float)
         # Should be within the last hour (this test runs soon after import)
         assert time.time() - start < 3600, "SESSION start_time looks stale"
@@ -282,10 +304,10 @@ class TestKillRecovery:
     def test_active_count_zero_at_start(self):
         """_active_request_count must be 0 on fresh module state."""
         # Reset to known state
-        original = proxy_v4._active_request_count
-        proxy_v4._active_request_count = 0
-        assert proxy_v4._active_request_count == 0
-        proxy_v4._active_request_count = original
+        original = _active_request_count
+        _active_request_count = 0
+        assert _active_request_count == 0
+        _active_request_count = original
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +324,7 @@ class TestFailureModes:
         blocker.listen(1)
         try:
             with pytest.raises(SystemExit) as exc:
-                proxy_v4._startup_preflight(proxy_port)
+                _startup_preflight(proxy_port)
             assert exc.value.code == 1
         finally:
             blocker.close()
@@ -314,7 +336,7 @@ class TestFailureModes:
         blocker.listen(1)
         try:
             with pytest.raises(SystemExit):
-                proxy_v4._startup_preflight(proxy_port)
+                _startup_preflight(proxy_port)
         finally:
             blocker.close()
         out = capsys.readouterr().out
