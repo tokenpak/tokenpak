@@ -75,3 +75,9 @@ elo_ratings.json
 *LAUNCH_CHECKLIST*.md
 build/
 proxy.py.bak*
+
+# Large generated artifacts (never track)
+coverage.json
+coverage_report.txt
+benchmark.json
+bandit-baseline.json
