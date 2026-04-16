@@ -36,6 +36,10 @@ def __getattr__(name: str):
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
         "watchdog": lambda: __import__("tokenpak.proxy.proxy_watchdog", fromlist=[""]),
         "extensions": lambda: __import__("tokenpak.core.extensions", fromlist=[""]),
+        # Compression engines (lazy to avoid 2-4s startup penalty)
+        "CompressionEngine": lambda: __import__("tokenpak.compression.engines.base", fromlist=["CompactionEngine"]).CompactionEngine,
+        "HeuristicEngine": lambda: __import__("tokenpak.compression.engines.heuristic", fromlist=["HeuristicEngine"]).HeuristicEngine,
+        "get_engine": lambda: __import__("tokenpak.compression.engines", fromlist=["get_engine"]).get_engine,
         # Budgeting
         "Budgeter": lambda: __import__("tokenpak.telemetry.budgeter", fromlist=["Budgeter"]).Budgeter,
         "BudgetBlock": lambda: __import__("tokenpak.telemetry.budget_allocator", fromlist=["BudgetBlock"]).BudgetBlock,
@@ -76,19 +80,8 @@ def __getattr__(name: str):
     raise AttributeError(f"module 'tokenpak' has no attribute {name!r}")
 
 # All public names are available lazily via __getattr__ above.
-# CompressionEngine / HeuristicEngine / get_engine need graceful degradation — handle here.
-try:
-    from tokenpak.compression.engines import get_engine
-    from tokenpak.compression.engines.base import CompactionEngine as CompressionEngine
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
-except ImportError:
-    def get_engine(*args, **kwargs):
-        raise NotImplementedError(
-            "Compression engines require tokenpak-pro Enterprise license. "
-            "Install: pip install tokenpak-pro"
-        )
-    CompressionEngine = None
-    HeuristicEngine = None
+# CompressionEngine / HeuristicEngine / get_engine are in the lazy map.
+# No eager imports here — this was the source of a 2-4s startup penalty.
 
 # ---------------------------------------------------------------------------
 # Public API declaration

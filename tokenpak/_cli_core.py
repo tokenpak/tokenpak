@@ -1404,19 +1404,8 @@ def cmd_serve(args):
             shutdown_timeout=shutdown_timeout,
         )
     except Exception as e:
-        # Fallback for legacy proxy.py deployments
-        try:
-            import sys
-
-            proxy_path = str(Path.home() / ".tokenpak" / "data")
-            if proxy_path not in sys.path:
-                sys.path.insert(0, proxy_path)
-            import proxy
-
-            proxy.run_proxy(args.port)
-        except Exception:
-            print(f"Serve mode unavailable: {e}")
-            print("Run the existing proxy directly if needed.")
+        print(f"Serve mode unavailable: {e}")
+        print("Run the existing proxy directly if needed.")
 
 
 def cmd_benchmark(args):

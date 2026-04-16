@@ -19,7 +19,8 @@ from tokenpak.proxy.adapters import build_default_registry
 try:
     from tokenpak.core.config_loader import get as _cfg
 
-    print("📄 Config: ~/.tokenpak/config.yaml (env vars override)")
+    import logging as _logging
+    _logging.getLogger("tokenpak.proxy.config").info("Config: ~/.tokenpak/config.yaml (env vars override)")
 except ImportError:
     # Fallback: env-only mode (no config_loader available)
     def _cfg(key, default=None, env_var=None, cast=None):
@@ -31,7 +32,8 @@ except ImportError:
                 return cast(val) if cast else val
         return default
 
-    print("📄 Config: env vars only (config_loader not available)")
+    import logging as _logging
+    _logging.getLogger("tokenpak.proxy.config").info("Config: env vars only (config_loader not available)")
 
 # ---------------------------------------------------------------------------
 # Named Workflow Profiles — TOKENPAK_PROFILE sets sensible flag bundles

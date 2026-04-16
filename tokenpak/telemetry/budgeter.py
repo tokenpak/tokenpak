@@ -359,9 +359,11 @@ class Budgeter:
         if total_used <= self.total_tokens:
             return components  # Already within budget
 
-        print(
-            f"[Budgeter] Over budget: {total_used}/{self.total_tokens} tokens. "
-            f"Applying trim policy..."
+        import logging as _logging
+        _log = _logging.getLogger("tokenpak.telemetry.budgeter")
+        _log.info(
+            "Over budget: %d/%d tokens. Applying trim policy...",
+            total_used, self.total_tokens,
         )
 
         trim_actions = {
@@ -383,15 +385,15 @@ class Budgeter:
                 total_used = self._total_used(components)
                 saved = before - total_used
                 if saved > 0:
-                    print(
-                        f"[Budgeter]   {action_name}: saved {saved} tokens "
-                        f"(now {total_used}/{self.total_tokens})"
+                    _log.info(
+                        "  %s: saved %d tokens (now %d/%d)",
+                        action_name, saved, total_used, self.total_tokens,
                     )
 
         if total_used > self.total_tokens:
-            print(
-                f"[Budgeter] WARNING: Still over budget after all trim actions "
-                f"({total_used}/{self.total_tokens}). Hard truncation on evidence."
+            _log.warning(
+                "Still over budget after all trim actions (%d/%d). Hard truncation on evidence.",
+                total_used, self.total_tokens,
             )
             # Emergency: drop evidence entirely except top 1 item
             evidence = components.get("evidence")

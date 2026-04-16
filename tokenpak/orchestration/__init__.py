@@ -7,12 +7,18 @@ unless actually needed.  Most callers import specific submodules directly
 
 
 def __getattr__(name: str):
-    if name == "ErrorNormalizer":
-        from .error_normalizer import ErrorNormalizer
-        return ErrorNormalizer
-    if name == "RetryEngine":
-        from .retry import RetryEngine
-        return RetryEngine
+    _map = {
+        "ErrorNormalizer": lambda: __import__("tokenpak.orchestration.error_normalizer", fromlist=["ErrorNormalizer"]).ErrorNormalizer,
+        "RetryEngine": lambda: __import__("tokenpak.orchestration.retry", fromlist=["RetryEngine"]).RetryEngine,
+        "HandoffManager": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffManager"]).HandoffManager,
+        "HandoffBlock": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffBlock"]).HandoffBlock,
+        "HandoffStatus": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffStatus"]).HandoffStatus,
+        "HandoffWire": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["HandoffWire"]).HandoffWire,
+        "TokenPak": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["TokenPak"]).TokenPak,
+        "ContextRef": lambda: __import__("tokenpak.orchestration.handoff", fromlist=["ContextRef"]).ContextRef,
+    }
+    if name in _map:
+        return _map[name]()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

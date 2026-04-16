@@ -74,3 +74,4 @@ elo_ratings.json
 *COVERAGE_GAPS*.md
 *LAUNCH_CHECKLIST*.md
 build/
+proxy.py.bak*

@@ -36,10 +36,6 @@ def _get_router():
     with _ROUTER_LOCK:
         if _ROUTER_INSTANCE is None:
             try:
-                sys.path.insert(
-                    0,
-                    str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi"),
-                )
                 from tokenpak.compression.pipeline import CompressionPipeline
                 from tokenpak.compression.recipes import RecipeEngine
                 from tokenpak.compression.slot_filler import SlotFiller
@@ -671,9 +667,6 @@ def _apply_budget(components: Dict[str, Any], total_tokens: Optional[int] = None
     except Exception:
         budget_total = total_tokens or 100_000
     try:
-        sys.path.insert(
-            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
-        )
         from tokenpak.telemetry.budgeter import Budgeter
 
         b = Budgeter()

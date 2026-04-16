@@ -60,6 +60,8 @@ __all__ = [
     "CompanionConfig",
 ]
 
+from .config import CompanionConfig  # noqa: E402,F401
+
 
 def launch(args: "list[str] | None" = None) -> "int":
     """Launch Claude Code with the companion active.

@@ -399,9 +399,6 @@ def _skeletonize_block(content: str, file_ext: str) -> str:
     if not lang:
         return content
     try:
-        sys.path.insert(
-            0, str(Path.home() / "vault" / "01_PROJECTS" / "tokenpak" / "packages" / "pypi")
-        )
         from tokenpak.skeleton_extractor import extract_skeleton
 
         return extract_skeleton(content, lang)
