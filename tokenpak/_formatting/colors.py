@@ -14,6 +14,11 @@ class Color:
     YELLOW = "\033[33m"
     RED = "\033[31m"
     DIM = "\033[2m"
+    WHITE = "\033[37m"
+    # Brand palette (24-bit truecolor)
+    TEAL = "\033[38;2;0;181;173m"           # primary accent
+    PASTEL_YELLOW = "\033[38;2;255;236;153m"  # secondary accent
+    LIGHT_GRAY = "\033[38;2;180;180;180m"   # tertiary / muted text
 
 
 def supports_color(stream=None) -> bool:

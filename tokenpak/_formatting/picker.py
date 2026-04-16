@@ -30,6 +30,11 @@ except ImportError:
 
 from .colors import Color, paint, supports_color
 
+# Brand accent — all picker highlights use teal
+_ACCENT = Color.TEAL
+_ACCENT2 = Color.PASTEL_YELLOW
+_MUTED = Color.LIGHT_GRAY
+
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -216,25 +221,23 @@ def pick(
             if title:
                 buf.append(f"  {paint(title, Color.BOLD, color)}\n")
             if subtitle:
-                buf.append(f"  {paint(subtitle, Color.DIM, color)}\n")
+                buf.append(f"  {paint(subtitle, _MUTED, color)}\n")
             if filterable and filter_text:
-                buf.append(f"  {paint('Filter:', Color.DIM, color)} {filter_text}_\n")
+                buf.append(f"  {paint('Filter:', _MUTED, color)} {filter_text}_\n")
             buf.append("\n")
 
             # Scroll indicator (top)
             if scroll_top > 0:
-                buf.append(f"  {paint(f'  ... {scroll_top} more above', Color.DIM, color)}\n")
+                buf.append(f"  {paint(f'  ... {scroll_top} more above', _MUTED, color)}\n")
 
             # Option rows
             window = visible[scroll_top:scroll_bot]
             for vi, (_, val, label) in enumerate(window, start=scroll_top):
-                # Truncate long labels
-                max_label = term_w - 8
-                display = label[:max_label] + "..." if len(label) > max_label else label
+                display = label
 
                 if vi == idx:
-                    prefix = paint("> ", Color.CYAN, color)
-                    line = paint(display, Color.CYAN, color)
+                    prefix = paint("> ", _ACCENT, color)
+                    line = paint(display, _ACCENT, color)
                     buf.append(f"  {prefix}{line}\n")
                 else:
                     buf.append(f"    {display}\n")
@@ -242,13 +245,13 @@ def pick(
             # Scroll indicator (bottom)
             if scroll_bot < len(visible):
                 remaining = len(visible) - scroll_bot
-                buf.append(f"  {paint(f'  ... {remaining} more below', Color.DIM, color)}\n")
+                buf.append(f"  {paint(f'  ... {remaining} more below', _MUTED, color)}\n")
 
             buf.append("\n")
 
             # Footer / key hints
             if footer:
-                buf.append(f"  {paint(footer, Color.DIM, color)}\n")
+                buf.append(f"  {paint(footer, _MUTED, color)}\n")
             else:
                 hints = ["[arrows] navigate", "[enter] select"]
                 if back_label:
@@ -256,7 +259,7 @@ def pick(
                 if filterable:
                     hints.append("[type] filter")
                 hints.append("[q] quit")
-                buf.append(f"  {paint('  '.join(hints), Color.DIM, color)}\n")
+                buf.append(f"  {paint('  '.join(hints), _MUTED, color)}\n")
 
             sys.stdout.write("".join(buf))
             sys.stdout.flush()
@@ -298,3 +301,71 @@ def pick(
         # Show cursor
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
+
+
+# ---------------------------------------------------------------------------
+# Text input prompt
+# ---------------------------------------------------------------------------
+
+
+def prompt_input(
+    label: str,
+    *,
+    header: str = "",
+    placeholder: str = "",
+) -> Optional[str]:
+    """Prompt user to type a text value. Returns string or None on cancel.
+
+    Shows *label* with a blinking cursor.  The user types freely, Enter
+    confirms, Escape cancels.
+    """
+    if not _HAS_TERMIOS or not sys.stdin.isatty():
+        raise PickerUnavailable("Text input requires a TTY")
+
+    color = supports_color()
+    text = ""
+
+    try:
+        while True:
+            buf = ["\033[2J\033[H"]  # clear + home
+            if header:
+                buf.append(header)
+                buf.append("\n")
+            buf.append(f"  {paint(label, Color.BOLD, color)}\n")
+            if placeholder and not text:
+                buf.append(f"  {paint(placeholder, _MUTED, color)}\n\n")
+            buf.append(f"\n  > {text}_\n")
+            buf.append(f"\n  {paint('[enter] confirm  [esc] cancel', _MUTED, color)}\n")
+            sys.stdout.write("".join(buf))
+            sys.stdout.flush()
+
+            key = getch()
+            if key == "enter":
+                return text.strip() if text.strip() else None
+            elif key in ("escape", "quit"):
+                return None
+            elif key == "backspace":
+                text = text[:-1]
+            elif len(key) == 1 and key.isprintable():
+                text += key
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Confirm dialog
+# ---------------------------------------------------------------------------
+
+
+def confirm(
+    message: str,
+    *,
+    header: str = "",
+) -> bool:
+    """Show a yes/no confirmation. Returns True if confirmed."""
+    result = pick(
+        message,
+        [("yes", "Yes, continue"), ("no", "No, go back")],
+        header=header,
+    )
+    return result == "yes"
