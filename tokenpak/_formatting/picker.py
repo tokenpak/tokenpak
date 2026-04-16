@@ -110,6 +110,7 @@ def pick(
     footer: str = "",
     filterable: bool = False,
     back_label: Optional[str] = None,
+    search_aliases: Optional[dict[str, list[str]]] = None,
 ) -> Optional[str]:
     """Arrow-key single-select picker.
 
@@ -164,23 +165,31 @@ def pick(
 
     try:
         while True:
-            # Apply filter
+            # Apply filter (matches label text + search aliases)
             if filterable and filter_text:
                 ft_lower = filter_text.lower()
-                visible = [
-                    (i, val, label)
-                    for i, (val, label) in enumerate(all_options)
-                    if ft_lower in label.lower() or val == _BACK_SENTINEL
-                ]
+                _aliases = search_aliases or {}
+                visible = []
+                for i, (val, label) in enumerate(all_options):
+                    if val == _BACK_SENTINEL:
+                        visible.append((i, val, label))
+                    elif ft_lower in label.lower():
+                        visible.append((i, val, label))
+                    elif ft_lower in val.lower():
+                        visible.append((i, val, label))
+                    elif any(ft_lower in a.lower() for a in _aliases.get(val, [])):
+                        visible.append((i, val, label))
             else:
                 visible = [(i, val, label) for i, (val, label) in enumerate(all_options)]
 
             if not visible:
-                # Filter matches nothing — keep showing all with filter text
-                visible = [(i, val, label) for i, (val, label) in enumerate(all_options)]
+                # No matches — show "no results" message instead of all options
+                pass  # visible stays empty, handled in render
 
             # Clamp index
-            if idx >= len(visible):
+            if len(visible) == 0:
+                idx = 0
+            elif idx >= len(visible):
                 idx = len(visible) - 1
             if idx < 0:
                 idx = 0
@@ -225,6 +234,21 @@ def pick(
             if filterable and filter_text:
                 buf.append(f"  {paint('Filter:', _MUTED, color)} {filter_text}_\n")
             buf.append("\n")
+
+            # No results message
+            if not visible:
+                buf.append(f"  {paint('No matching commands found', _MUTED, color)}\n\n")
+                buf.append(f"  {paint('[esc] clear search', _MUTED, color)}\n")
+                sys.stdout.write("".join(buf))
+                sys.stdout.flush()
+                key = getch()
+                if key in ("escape", "backspace"):
+                    filter_text = ""
+                elif key == "quit":
+                    return None
+                elif key == "backspace":
+                    filter_text = filter_text[:-1]
+                continue
 
             # Scroll indicator (top)
             if scroll_top > 0:

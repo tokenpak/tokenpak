@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Interactive branded command menu — ``tokenpak`` / ``tokenpak menu``.
 
-Full arrow-key navigable menu with:
-- Brand colors: teal accent, pastel yellow, light gray, white
-- Category -> command -> detail/options -> execute flow
-- Text input prompts for commands that need values
-- No CLI syntax knowledge required
+Task-first design: the home screen shows what users want to *do*, not
+internal categories.  Simple commands execute immediately; complex ones
+open section menus, detail pickers, or input prompts.
+
+Design spec: tokenpak CLI Menu + Branding Spec (v1)
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from tokenpak._formatting.colors import Color, paint, supports_color
 from tokenpak._formatting.picker import (
     PickerUnavailable,
     _BACK_SENTINEL,
-    confirm,
     getch,
     pick,
     prompt_input,
@@ -28,414 +27,99 @@ from tokenpak._formatting.picker import (
 # Brand header
 # ---------------------------------------------------------------------------
 
-def _branded_header() -> str:
-    """Lowercase 'tokenpak' — 'token' in white, 'pak' in teal."""
+def _header() -> str:
+    c = supports_color()
     try:
         from tokenpak import __version__
     except ImportError:
         __version__ = "?"
-
-    c = supports_color()
     token = paint("token", Color.WHITE + Color.BOLD, c)
     pak = paint("pak", Color.TEAL + Color.BOLD, c)
     ver = paint(f"v{__version__}", Color.LIGHT_GRAY, c)
     tagline = paint("LLM Proxy with Context Compression", Color.LIGHT_GRAY, c)
-
     return f"\n  {token}{pak}  {ver}\n  {tagline}\n"
 
 
 # ---------------------------------------------------------------------------
-# Command detail configs
+# Live status strip
 # ---------------------------------------------------------------------------
 
-# Each command maps to a dict describing how to interact with it.
-#   "detail"  — longer description shown on the command detail screen
-#   "type"    — "run" | "flags" | "subcommands" | "input"
-#   "options" — list of (flag_string, label) for flags/subcommands
-#   "input_label" — prompt text for input-type commands
-
-_COMMAND_CONFIGS: dict[str, dict] = {
-    # ── Getting Started ──
-    "start": {
-        "detail": "Start the tokenpak proxy on your machine. Routes API requests through compression and cost tracking.",
-        "type": "flags",
-        "options": [
-            ("", "Start with defaults"),
-            ("--port 8766", "Custom port"),
-            ("--workers 4", "Multi-core (4 workers)"),
-            ("--safe", "Safe mode (no compression)"),
-        ],
-    },
-    "stop": {
-        "detail": "Stop the running tokenpak proxy.",
-        "type": "run",
-    },
-    "restart": {
-        "detail": "Restart the proxy with current configuration.",
-        "type": "run",
-    },
-    "demo": {
-        "detail": "See compression in action on sample data. No API key needed.",
-        "type": "flags",
-        "options": [
-            ("", "Run default demo"),
-            ("--category python", "Python code samples"),
-            ("--category javascript", "JavaScript samples"),
-            ("--category markdown", "Markdown documents"),
-            ("--category config", "Config files"),
-            ("--seed", "Seed demo data"),
-            ("--clear", "Clear demo data"),
-        ],
-    },
-    "cost": {
-        "detail": "View how much you've spent on API calls. Tracks per-model, per-session costs.",
-        "type": "flags",
-        "options": [
-            ("", "Today's spend"),
-            ("--week", "This week's spend"),
-            ("--month", "This month's spend"),
-            ("--by-model", "Breakdown by model"),
-            ("--export-csv", "Export to CSV"),
-        ],
-    },
-    "status": {
-        "detail": "Check proxy health, compression stats, and savings summary at a glance.",
-        "type": "flags",
-        "options": [
-            ("", "Quick status"),
-            ("--full", "Full detail"),
-            ("--by-model", "By model breakdown"),
-            ("--json", "JSON output"),
-        ],
-    },
-    "logs": {
-        "detail": "Show recent proxy log output.",
-        "type": "flags",
-        "options": [
-            ("", "Last 50 lines"),
-            ("-n 100", "Last 100 lines"),
-            ("-n 500", "Last 500 lines"),
-        ],
-    },
-    # ── Indexing ──
-    "index": {
-        "detail": "Index a directory so tokenpak can inject relevant context into your prompts automatically.",
-        "type": "input",
-        "input_label": "Directory path to index:",
-        "input_placeholder": "e.g. ~/projects/myapp",
-    },
-    "search": {
-        "detail": "Search your indexed content using hybrid BM25 + semantic retrieval.",
-        "type": "input",
-        "input_label": "Search query:",
-        "input_placeholder": "e.g. authentication middleware",
-    },
-    # ── Configuration ──
-    "route": {
-        "detail": "Manage model routing rules. Route requests to different providers based on model, token count, or prefix.",
-        "type": "subcommands",
-        "options": [
-            ("list", "View all routing rules"),
-            ("add", "Add a new routing rule"),
-            ("test", "Test which rule matches"),
-        ],
-    },
-    "recipe": {
-        "detail": "Manage compression recipes. Recipes define how different content types are compressed.",
-        "type": "subcommands",
-        "options": [
-            ("create", "Create a new recipe"),
-            ("validate", "Validate recipe YAML"),
-            ("test", "Test recipe on input"),
-            ("benchmark", "Benchmark recipe speed"),
-        ],
-    },
-    "template": {
-        "detail": "Manage prompt templates for reusable, optimized prompts.",
-        "type": "run",
-    },
-    "budget": {
-        "detail": "Set daily or monthly API spend limits. Hard-stops requests when budget is exceeded.",
-        "type": "subcommands",
-        "options": [
-            ("status", "View current budget"),
-            ("set", "Set budget limits"),
-            ("history", "View spend history"),
-        ],
-    },
-    "alerts": {
-        "detail": "Configure and test alert delivery channels (webhook, Slack).",
-        "type": "subcommands",
-        "options": [
-            ("test --channel webhook", "Test webhook alert"),
-            ("test --channel slack", "Test Slack alert"),
-        ],
-    },
-    "goals": {
-        "detail": "Set and track savings goals to measure tokenpak's impact.",
-        "type": "run",
-    },
-    "config": {
-        "detail": "View, edit, validate, and sync your tokenpak configuration.",
-        "type": "subcommands",
-        "options": [
-            ("show", "View current config"),
-            ("validate", "Validate config file"),
-            ("init", "Create default config"),
-            ("migrate", "Migrate legacy config"),
-            ("path", "Show config file path"),
-        ],
-    },
-    "explain": {
-        "detail": "Explain what each workflow profile does (safe, balanced, aggressive, agentic).",
-        "type": "run",
-    },
-    # ── Versioning ──
-    "version": {
-        "detail": "Show tokenpak version information.",
-        "type": "run",
-    },
-    "update": {
-        "detail": "Update tokenpak to the latest version.",
-        "type": "run",
-    },
-    # ── Operations ──
-    "benchmark": {
-        "detail": "Run compression benchmarks to measure performance on your workloads.",
-        "type": "run",
-    },
-    "calibrate": {
-        "detail": "Auto-detect optimal worker count for your machine's CPU and memory.",
-        "type": "input",
-        "input_label": "Directory to calibrate against:",
-        "input_placeholder": "e.g. ~/projects/myapp",
-    },
-    "doctor": {
-        "detail": "Run comprehensive diagnostics and optionally auto-fix issues.",
-        "type": "flags",
-        "options": [
-            ("", "Run diagnostics"),
-            ("--fix", "Diagnose and auto-fix"),
-            ("--verbose", "Verbose output"),
-            ("--claude-code", "Check Claude Code setup"),
-        ],
-    },
-    "diagnose": {
-        "detail": "Full health check across config, vault, cache, proxy, and disk.",
-        "type": "flags",
-        "options": [
-            ("", "Run health check"),
-            ("--verbose", "Verbose output"),
-            ("--json", "JSON output"),
-        ],
-    },
-    "dashboard": {
-        "detail": "Open a live real-time dashboard showing proxy health, requests, and savings.",
-        "type": "flags",
-        "options": [
-            ("", "Local dashboard"),
-            ("--fleet", "Fleet-wide view"),
-        ],
-    },
-    "timeline": {
-        "detail": "View your savings trend over time as a chart.",
-        "type": "flags",
-        "options": [
-            ("", "Last 7 days"),
-            ("--days 30", "Last 30 days"),
-            ("--chart", "With chart"),
-        ],
-    },
-    "attribution": {
-        "detail": "See savings broken down by agent, skill, or model.",
-        "type": "run",
-    },
-    "models": {
-        "detail": "View per-model usage efficiency and cost breakdown.",
-        "type": "run",
-    },
-    "forecast": {
-        "detail": "Project your cost burn rate and when you'll hit budget limits.",
-        "type": "flags",
-        "options": [
-            ("--period 7d", "7-day forecast"),
-            ("--period 30d", "30-day forecast"),
-            ("--period 90d", "90-day forecast"),
-        ],
-    },
-    "debug": {
-        "detail": "Toggle verbose debug logging on or off.",
-        "type": "subcommands",
-        "options": [
-            ("on", "Enable debug logging"),
-            ("off", "Disable debug logging"),
-        ],
-    },
-    "learn": {
-        "detail": "View or reset patterns tokenpak has learned from your usage.",
-        "type": "run",
-    },
-    "vault-health": {
-        "detail": "Check vault index integrity and repair if needed.",
-        "type": "run",
-    },
-    "fleet": {
-        "detail": "View status of all machines in your proxy fleet.",
-        "type": "run",
-    },
-    "aggregate": {
-        "detail": "Aggregate request data across multiple machines.",
-        "type": "run",
-    },
-    "requests": {
-        "detail": "Browse recent API requests in real-time.",
-        "type": "run",
-    },
-    # ── Companion ──
-    "claude": {
-        "detail": "Launch Claude Code with the tokenpak companion active for budget tracking and context optimization.",
-        "type": "run",
-    },
-    "codex": {
-        "detail": "Launch Codex with the tokenpak companion active.",
-        "type": "run",
-    },
-    "test": {
-        "detail": "Run an interactive A/B test comparing direct API calls vs tokenpak-optimized calls.",
-        "type": "run",
-    },
-    "prove": {
-        "detail": "Run scriptable A/B value proof tests across models and scenarios.",
-        "type": "run",
-    },
-    # ── Advanced ──
-    "trigger": {
-        "detail": "Manage event-driven triggers that fire actions on specific conditions.",
-        "type": "run",
-    },
-    "macro": {
-        "detail": "Create and manage reusable macro sequences.",
-        "type": "run",
-    },
-    "fingerprint": {
-        "detail": "Manage content fingerprints used for change detection and cache invalidation.",
-        "type": "run",
-    },
-    "agent": {
-        "detail": "Coordinate multi-agent workflows with locks and registries.",
-        "type": "run",
-    },
-    "lock": {
-        "detail": "Manage file locks for safe concurrent access.",
-        "type": "run",
-    },
-    "run": {
-        "detail": "Schedule and execute macro runs.",
-        "type": "run",
-    },
-    "replay": {
-        "detail": "Inspect and re-run previously captured API sessions.",
-        "type": "run",
-    },
-    "audit": {
-        "detail": "View and manage the enterprise audit log.",
-        "type": "run",
-    },
-    "compliance": {
-        "detail": "Generate compliance reports for your API usage.",
-        "type": "run",
-    },
-    "validate": {
-        "detail": "Validate a tokenpak JSON file against the schema.",
-        "type": "run",
-    },
-    "config-check": {
-        "detail": "Validate your proxy configuration file for errors.",
-        "type": "run",
-    },
-    "diff": {
-        "detail": "Show what changed in context between requests.",
-        "type": "run",
-    },
-    "stats": {
-        "detail": "Show registry and cache statistics.",
-        "type": "run",
-    },
-    "serve": {
-        "detail": "Start the proxy server directly (low-level alternative to 'start').",
-        "type": "flags",
-        "options": [
-            ("", "Start with defaults"),
-            ("--port 8766", "Custom port"),
-            ("--safe", "Safe mode"),
-            ("--telemetry", "Enable telemetry server"),
-        ],
-    },
-    "retrieval": {
-        "detail": "Inspect and test the hybrid BM25 + vector search retrieval system.",
-        "type": "run",
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# Menu helpers
-# ---------------------------------------------------------------------------
-
-def _build_category_options() -> list[tuple[str, str]]:
-    from tokenpak._cli_core import _COMMAND_GROUPS
-
+def _status_strip() -> str:
+    """Build live status strip from proxy + local state."""
     c = supports_color()
-    options = []
-    for group_name, cmds in _COMMAND_GROUPS.items():
-        count = len(cmds)
-        name = paint(group_name, Color.PASTEL_YELLOW, c)
-        cnt = paint(f"{count} commands", Color.LIGHT_GRAY, c)
-        options.append((group_name, f"{name}  {cnt}"))
-    return options
+    parts = []
+
+    # Proxy status
+    proxy_status = "Stopped"
+    proxy_color = Color.LIGHT_GRAY
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("http://127.0.0.1:8766/health", timeout=1)
+        if resp.status == 200:
+            proxy_status = "Running"
+            proxy_color = Color.SUCCESS
+    except Exception:
+        pass
+
+    parts.append(paint("Proxy:", Color.LIGHT_GRAY, c) + " " + paint(proxy_status, proxy_color, c))
+
+    # Today's spend
+    try:
+        import urllib.request, json as _json
+        resp = urllib.request.urlopen("http://127.0.0.1:8766/stats", timeout=1)
+        data = _json.loads(resp.read())
+        cost = data.get("cost", 0)
+        saved = data.get("cost_saved", 0)
+        parts.append(paint("Today:", Color.LIGHT_GRAY, c) + " " + paint(f"${cost:.2f}", Color.WHITE, c))
+        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint(f"${saved:.2f}", Color.PASTEL_YELLOW, c))
+    except Exception:
+        parts.append(paint("Today:", Color.LIGHT_GRAY, c) + " " + paint("$0.00", Color.WHITE, c))
+        parts.append(paint("Saved:", Color.LIGHT_GRAY, c) + " " + paint("$0.00", Color.LIGHT_GRAY, c))
+
+    return "  " + "   ".join(parts)
 
 
-def _build_command_options(group_name: str) -> list[tuple[str, str]]:
-    from tokenpak._cli_core import _COMMAND_GROUPS
+# ---------------------------------------------------------------------------
+# Command execution
+# ---------------------------------------------------------------------------
 
-    c = supports_color()
-    cmds = _COMMAND_GROUPS.get(group_name, [])
-    options = []
-    for cmd, desc in cmds:
-        cmd_styled = paint(f"{cmd:<16}", Color.WHITE, c)
-        desc_styled = paint(desc, Color.LIGHT_GRAY, c)
-        options.append((cmd, f"{cmd_styled}{desc_styled}"))
-    return options
-
-
-def _execute_command(cmd_name: str, extra_args: str = "") -> None:
-    """Execute a CLI command, optionally with extra arguments."""
-    full_cmd = f"tokenpak {cmd_name}" + (f" {extra_args}" if extra_args else "")
-
+def _exec(cmd: str, args: str = "") -> None:
+    """Execute a tokenpak command and show output."""
+    full = f"tokenpak {cmd}" + (f" {args}" if args else "")
     c = supports_color()
     sys.stdout.write("\033[2J\033[H")
-    sys.stdout.write(f"\n  {paint('Running:', Color.LIGHT_GRAY, c)} {paint(full_cmd, Color.TEAL, c)}\n")
+    sys.stdout.write(f"\n  {_header_compact()}\n")
+    sys.stdout.write(f"  {paint(full, Color.TEAL, c)}\n")
     sys.stdout.write(f"  {paint(chr(0x2500) * 40, Color.LIGHT_GRAY, c)}\n\n")
     sys.stdout.write("\033[?25h")
     sys.stdout.flush()
 
-    original_argv = sys.argv[:]
+    original = sys.argv[:]
     try:
-        argv = ["tokenpak", cmd_name]
-        if extra_args:
-            argv.extend(extra_args.split())
+        argv = ["tokenpak", cmd]
+        if args:
+            argv.extend(args.split())
         sys.argv = argv
         from tokenpak._cli_core import main as cli_main
         cli_main()
     except SystemExit:
         pass
     except Exception as exc:
-        print(f"\n  {paint('Error:', Color.RED, c)} {exc}")
+        print(f"\n  {paint('Something went wrong', Color.ERROR, c)}\n")
+        print(f"  {exc}\n")
+        print(f"  {paint('Try: tokenpak doctor', Color.LIGHT_GRAY, c)}")
     finally:
-        sys.argv = original_argv
+        sys.argv = original
 
 
-def _wait_for_key() -> None:
+def _header_compact() -> str:
+    c = supports_color()
+    token = paint("token", Color.WHITE + Color.BOLD, c)
+    pak = paint("pak", Color.TEAL + Color.BOLD, c)
+    return f"{token}{pak}"
+
+
+def _wait() -> None:
     c = supports_color()
     sys.stdout.write(f"\n  {paint('Press any key to return...', Color.LIGHT_GRAY, c)}")
     sys.stdout.flush()
@@ -445,74 +129,232 @@ def _wait_for_key() -> None:
         pass
 
 
-def _show_command_detail(cmd_name: str, header: str) -> Optional[str]:
-    """Show command detail screen with executable options. Returns None to go back."""
+def _result_screen(header: str, title: str, message: str,
+                   next_actions: list[tuple[str, str]]) -> Optional[str]:
+    """Show result with next action suggestions. Returns selected action value or None."""
+    c = supports_color()
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.write(f"{header}\n\n")
+    sys.stdout.write(f"  {paint(title, Color.PASTEL_YELLOW, c)}\n\n")
+    sys.stdout.write(f"  {message}\n\n")
+
+    if next_actions:
+        next_actions.append((_BACK_SENTINEL, paint("Back", Color.LIGHT_GRAY, c)))
+        return pick(
+            paint("Next:", Color.LIGHT_GRAY, c),
+            next_actions,
+            header="",
+        )
+    _wait()
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Home menu items
+# ---------------------------------------------------------------------------
+
+_HOME_ITEMS = [
+    ("start_proxy",       "Start proxy"),
+    ("run_demo",          "Run demo"),
+    ("check_health",      "Check proxy health"),
+    ("view_spend",        "View spend & savings"),
+    ("configure",         "Configure TokenPak"),
+    ("companion",         "Companion tools"),
+    ("diagnose",          "Diagnose problems"),
+    ("browse_all",        "Browse all commands"),
+]
+
+# Search aliases: map home item values + raw CLI commands to extra search terms
+_SEARCH_ALIASES: dict[str, list[str]] = {
+    "start_proxy":  ["start", "proxy", "run", "launch", "serve"],
+    "run_demo":     ["demo", "sample", "example", "test compression"],
+    "check_health": ["status", "health", "ping", "alive"],
+    "view_spend":   ["cost", "spend", "savings", "budget", "money", "price", "usage"],
+    "configure":    ["config", "settings", "setup", "edit", "route", "recipe", "budget"],
+    "companion":    ["claude", "codex", "session", "capsule", "journal", "mcp"],
+    "diagnose":     ["doctor", "diag", "fix", "repair", "debug", "health check"],
+    "browse_all":   ["all", "commands", "search", "find", "list"],
+}
+
+
+# ---------------------------------------------------------------------------
+# Section menus
+# ---------------------------------------------------------------------------
+
+def _section_demo(hdr: str) -> None:
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Run demo", Color.PASTEL_YELLOW, c),
+            [
+                ("",                      "Run default demo"),
+                ("--category python",     "Python sample"),
+                ("--category javascript", "JavaScript sample"),
+                ("--category markdown",   "Markdown sample"),
+                ("--category config",     "Config sample"),
+                ("--seed",                "Seed demo data"),
+                ("--clear",               "Reset demo data"),
+            ],
+            header=hdr,
+            subtitle="See TokenPak compression in action using safe local data.",
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        if choice == "--clear":
+            # Confirm destructive action
+            confirm_opts = [("yes", "Yes, reset demo data"), ("no", "No, go back")]
+            ans = pick("Reset demo data?", confirm_opts, header=hdr,
+                       subtitle="This will remove current demo artifacts and recreate defaults.")
+            if ans != "yes":
+                continue
+        _exec("demo", choice)
+        _wait()
+
+
+def _section_spend(hdr: str) -> None:
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Spend & savings", Color.PASTEL_YELLOW, c),
+            [
+                ("",             "Today"),
+                ("--week",       "This week"),
+                ("--month",      "This month"),
+                ("--by-model",   "By model"),
+                ("--export-csv", "Export CSV"),
+            ],
+            header=hdr,
+            subtitle="View usage, spend, and estimated savings.",
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        _exec("cost", choice)
+        _wait()
+
+
+def _section_configure(hdr: str) -> None:
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Configure TokenPak", Color.PASTEL_YELLOW, c),
+            [
+                ("show",     "View current config"),
+                ("validate", "Validate config"),
+                ("init",     "Create default config"),
+                ("migrate",  "Migrate legacy config"),
+                ("path",     "Show config file path"),
+            ],
+            header=hdr,
+            subtitle="View, validate, or change your configuration.",
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        _exec("config", choice)
+        _wait()
+
+
+def _section_companion(hdr: str) -> None:
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Companion tools", Color.PASTEL_YELLOW, c),
+            [
+                ("claude",       "Launch Claude companion"),
+                ("codex",        "Launch Codex companion"),
+            ],
+            header=hdr,
+            subtitle="Launch AI coding tools with tokenpak optimization active.",
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        _exec(choice)
+        _wait()
+
+
+def _section_diagnose(hdr: str) -> None:
+    c = supports_color()
+    while True:
+        choice = pick(
+            paint("Diagnose problems", Color.PASTEL_YELLOW, c),
+            [
+                ("",              "Run diagnostics"),
+                ("--fix",         "Diagnose and auto-fix"),
+                ("--verbose",     "Verbose diagnostics"),
+                ("--claude-code", "Check companion setup"),
+            ],
+            header=hdr,
+            subtitle="Find and fix issues with your tokenpak setup.",
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        _exec("doctor", choice)
+        _wait()
+
+
+def _section_browse_all(hdr: str) -> None:
+    """Flat searchable list of all commands."""
     from tokenpak._cli_core import _COMMAND_GROUPS
 
     c = supports_color()
-    cfg = _COMMAND_CONFIGS.get(cmd_name, {"detail": "", "type": "run"})
-    detail = cfg.get("detail", "")
-    cmd_type = cfg.get("type", "run")
+    all_cmds = []
+    all_aliases: dict[str, list[str]] = {}
+    for group_name, cmds in _COMMAND_GROUPS.items():
+        for cmd, desc in cmds:
+            label = (
+                paint(f"{cmd:<16}", Color.WHITE, c)
+                + paint(desc, Color.LIGHT_GRAY, c)
+            )
+            all_cmds.append((cmd, label))
+            all_aliases[cmd] = [group_name.lower(), desc.lower()]
 
-    # ── Type: run (no options needed) ──
-    if cmd_type == "run":
-        # Show detail, offer to run or go back
-        options = [
-            ("run", paint("Run", Color.TEAL, c) + "  " + paint(f"tokenpak {cmd_name}", Color.LIGHT_GRAY, c)),
-            (_BACK_SENTINEL, paint("< Back", Color.LIGHT_GRAY, c)),
-        ]
-        cmd_title = paint(cmd_name, Color.TEAL + Color.BOLD, c)
-        subtitle = detail if detail else ""
-        choice = pick(cmd_title, options, header=header, subtitle=subtitle)
-        if choice == "run":
-            _execute_command(cmd_name)
-            _wait_for_key()
-        return None
-
-    # ── Type: flags (pick one flag set to run with) ──
-    if cmd_type == "flags":
-        flag_options = cfg.get("options", [])
-        items = []
-        for flag_str, label in flag_options:
-            items.append((flag_str, label))
-        items.append((_BACK_SENTINEL, paint("< Back", Color.LIGHT_GRAY, c)))
-
-        cmd_title = paint(cmd_name, Color.TEAL + Color.BOLD, c)
-        choice = pick(cmd_title, items, header=header, subtitle=detail, back_label=None)
+    while True:
+        choice = pick(
+            "All commands",
+            all_cmds,
+            header=hdr,
+            subtitle="Type to search",
+            filterable=True,
+            back_label="Back",
+            search_aliases=all_aliases,
+        )
         if choice is None or choice == _BACK_SENTINEL:
-            return None
-        _execute_command(cmd_name, choice)
-        _wait_for_key()
-        return None
+            return
+        _exec(choice)
+        _wait()
 
-    # ── Type: subcommands ──
-    if cmd_type == "subcommands":
-        sub_options = cfg.get("options", [])
-        items = [(sub, label) for sub, label in sub_options]
-        items.append((_BACK_SENTINEL, paint("< Back", Color.LIGHT_GRAY, c)))
 
-        cmd_title = paint(cmd_name, Color.TEAL + Color.BOLD, c)
-        choice = pick(cmd_title, items, header=header, subtitle=detail)
-        if choice is None or choice == _BACK_SENTINEL:
-            return None
-        _execute_command(cmd_name, choice)
-        _wait_for_key()
-        return None
+# ---------------------------------------------------------------------------
+# Home screen — immediate-execute commands
+# ---------------------------------------------------------------------------
 
-    # ── Type: input (needs text before running) ──
-    if cmd_type == "input":
-        input_label = cfg.get("input_label", f"Enter value for {cmd_name}:")
-        placeholder = cfg.get("input_placeholder", "")
-        value = prompt_input(input_label, header=header, placeholder=placeholder)
-        if value:
-            _execute_command(cmd_name, value)
-            _wait_for_key()
-        return None
+_IMMEDIATE = {"start_proxy", "check_health"}
 
-    # Fallback
-    _execute_command(cmd_name)
-    _wait_for_key()
-    return None
+
+def _handle_home_item(item: str, hdr: str) -> None:
+    """Dispatch a home menu item."""
+    if item == "start_proxy":
+        _exec("start")
+        _wait()
+    elif item == "run_demo":
+        _section_demo(hdr)
+    elif item == "check_health":
+        _exec("status")
+        _wait()
+    elif item == "view_spend":
+        _section_spend(hdr)
+    elif item == "configure":
+        _section_configure(hdr)
+    elif item == "companion":
+        _section_companion(hdr)
+    elif item == "diagnose":
+        _section_diagnose(hdr)
+    elif item == "browse_all":
+        _section_browse_all(hdr)
 
 
 # ---------------------------------------------------------------------------
@@ -522,39 +364,54 @@ def _show_command_detail(cmd_name: str, header: str) -> Optional[str]:
 def run_menu() -> None:
     """Launch the interactive branded menu."""
     try:
-        header = _branded_header()
+        hdr = _header()
 
         while True:
-            # ── Screen 1: Category picker ──
-            categories = _build_category_options()
+            # Build home screen with status strip
+            status = _status_strip()
+
+            c = supports_color()
+            home_options = []
+            for val, label in _HOME_ITEMS:
+                home_options.append((val, label))
+
+            # Show CLI command hint on the right for each item
+            _CMD_HINTS = {
+                "start_proxy":  "tokenpak start",
+                "run_demo":     "tokenpak demo",
+                "check_health": "tokenpak status",
+                "view_spend":   "tokenpak cost",
+                "configure":    "tokenpak config",
+                "companion":    "tokenpak claude",
+                "diagnose":     "tokenpak doctor",
+                "browse_all":   "",
+            }
+            styled_options = []
+            for val, label in home_options:
+                hint = _CMD_HINTS.get(val, "")
+                if hint:
+                    styled = (
+                        f"{label:<26}"
+                        + paint(hint, Color.LIGHT_GRAY, c)
+                    )
+                else:
+                    styled = label
+                styled_options.append((val, styled))
+
             choice = pick(
-                "Select a category:",
-                categories,
-                header=header,
-                subtitle="Navigate with arrows, type to filter",
+                "What do you want to do?",
+                styled_options,
+                header=hdr + "\n" + status + "\n",
+                subtitle="Type to search all commands",
                 filterable=True,
+                search_aliases=_SEARCH_ALIASES,
+                footer="[enter] select   [/] search   [esc] back   [q] quit",
             )
 
             if choice is None:
                 break
 
-            # ── Screen 2: Command picker within category ──
-            while True:
-                cmd_options = _build_command_options(choice)
-                selected = pick(
-                    paint(f"{choice}:", Color.PASTEL_YELLOW, supports_color()),
-                    cmd_options,
-                    header=header,
-                    subtitle="Select a command",
-                    back_label="Back",
-                    filterable=True,
-                )
-
-                if selected is None or selected == _BACK_SENTINEL:
-                    break
-
-                # ── Screen 3: Command detail ──
-                _show_command_detail(selected, header)
+            _handle_home_item(choice, hdr)
 
     except PickerUnavailable:
         print("Interactive menu requires a terminal.")
