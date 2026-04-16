@@ -16,11 +16,13 @@ from typing import Dict, Optional
 from tokenpak.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
 
 # Standard model pricing (USD per million tokens)
-# Updated for Q1 2026 standard rates
+# Canonical source: tokenpak/telemetry/data/pricing_catalog.json
+# This inline table is for analytics display; sync with catalog when
+# updating prices.  Last synced: 2026-04-15.
 MODEL_PRICING = {
     "gpt-4": {"input": 30.0, "output": 60.0},
     "gpt-4-turbo": {"input": 10.0, "output": 30.0},
-    "gpt-4o": {"input": 5.0, "output": 15.0},
+    "gpt-4o": {"input": 2.50, "output": 10.0},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4-vision": {"input": 10.0, "output": 30.0},
     "claude-3-opus": {"input": 15.0, "output": 75.0},
@@ -29,8 +31,15 @@ MODEL_PRICING = {
     "claude-3-5-opus": {"input": 18.0, "output": 90.0},
     "claude-3-5-sonnet": {"input": 3.0, "output": 15.0},
     "claude-3-5-haiku": {"input": 0.80, "output": 4.0},
+    "claude-opus-4-5": {"input": 15.0, "output": 75.0},
+    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
+    "claude-haiku-4-5": {"input": 0.80, "output": 4.0},
     "claude-4": {"input": 5.0, "output": 25.0},
     "gemini-pro": {"input": 0.50, "output": 1.50},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini-2-flash": {"input": 0.075, "output": 0.30},
     "llama-2-70b": {"input": 0.75, "output": 1.00},
 }
 

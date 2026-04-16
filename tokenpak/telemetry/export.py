@@ -1,33 +1,31 @@
-"""tokenpak.telemetry.export — telemetry export utilities."""
+"""tokenpak.telemetry.export — DEPRECATED stub.
+
+The TelemetryExporter class was never implemented.  Actual export
+functionality lives in:
+
+  - tokenpak.dashboard.export_csv.CSVExporter  (CSV export)
+  - tokenpak.telemetry.cost.CostEngine          (cost queries)
+
+This module is kept only to avoid breaking any external code that
+may reference MAX_EXPORT_ROWS.  Remove after 2026-07-15.
+"""
+
 from __future__ import annotations
 
-from typing import Optional
+import warnings
 
 MAX_EXPORT_ROWS = 10_000
 
-
-def _parse_date(ts: Optional[str]) -> str:
-    """Normalise an ISO date string to YYYY-MM-DD, or return '' on failure."""
-    if not ts:
-        return ""
-    try:
-        return ts[:10]
-    except Exception:
-        return ""
+__all__ = ["MAX_EXPORT_ROWS"]
 
 
-class TelemetryExporter:
-    """Export telemetry data to CSV / JSON."""
-
-    def __init__(self, db_path: str = "", max_rows: int = MAX_EXPORT_ROWS) -> None:
-        self.db_path = db_path
-        self.max_rows = max_rows
-
-    def export_csv(self, output_path: str, period: Optional[str] = None) -> int:
-        raise NotImplementedError
-
-    def export_json(self, output_path: str, period: Optional[str] = None) -> int:
-        raise NotImplementedError
-
-
-__all__ = ["MAX_EXPORT_ROWS", "_parse_date", "TelemetryExporter"]
+def __getattr__(name: str):
+    if name == "TelemetryExporter":
+        warnings.warn(
+            "TelemetryExporter is deprecated and was never implemented. "
+            "Use tokenpak.dashboard.export_csv.CSVExporter instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        raise ImportError("TelemetryExporter was removed; use CSVExporter")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

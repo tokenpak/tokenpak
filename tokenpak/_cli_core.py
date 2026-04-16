@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TokenPak CLI with parallel processing and optimized batch operations."""
+"""TokenPak CLI — canonical implementation.
+
+This is the single source of truth for all CLI commands.  The ``cli/``
+package re-exports everything from this module for backward compatibility.
+Entry points (pyproject.toml) resolve through ``cli/__init__.py`` -> here.
+"""
 
 import argparse
 import difflib

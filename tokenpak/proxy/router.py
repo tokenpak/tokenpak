@@ -35,23 +35,27 @@ def should_intercept(url: str) -> bool:
 
 
 # Model cost per million tokens (input/output)
+# Canonical source: tokenpak/telemetry/data/pricing_catalog.json
+# This inline table is kept for zero-import fast-path estimation.
+# Sync with catalog when updating prices.  Last synced: 2026-04-15.
 MODEL_COSTS = {
     # Anthropic models
     "claude-opus-4-5": {"input": 15.0, "output": 75.0},
     "claude-opus-4-6": {"input": 15.0, "output": 75.0},
     "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
     "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.8, "output": 4.0},
-    "claude-haiku-4-5": {"input": 0.8, "output": 4.0},
+    "claude-haiku-3-5": {"input": 0.80, "output": 4.0},
+    "claude-haiku-4-5": {"input": 0.80, "output": 4.0},
     # OpenAI models
-    "gpt-4o": {"input": 5.0, "output": 15.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
+    "gpt-4o": {"input": 2.50, "output": 10.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4-turbo": {"input": 10.0, "output": 30.0},
     "gpt-4": {"input": 30.0, "output": 60.0},
-    "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
+    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
     # Google models
-    "gemini-pro": {"input": 0.5, "output": 1.5},
-    "gemini-1.5-pro": {"input": 3.5, "output": 10.5},
+    "gemini-pro": {"input": 0.50, "output": 1.50},
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
+    "gemini-2-flash": {"input": 0.075, "output": 0.30},
     # OpenAI Codex subscription models (gpt-5.x-codex series, OAuth-only)
     "gpt-5.1-codex-mini": {"input": 1.5, "output": 6.0},
     "gpt-5.2-codex": {"input": 3.0, "output": 12.0},
