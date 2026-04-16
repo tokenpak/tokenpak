@@ -62,6 +62,7 @@ from .passthrough import (
 from .stats import CompressionStats
 from .degradation import get_degradation_tracker, DegradationEventType
 from .circuit_breaker import get_circuit_breaker_registry, get_rate_limit_registry, provider_from_url
+from .error_response import normalize_upstream_error
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
 from tokenpak.telemetry.monitoring.request_logger import log_request, new_request_id as _new_request_id
@@ -906,39 +907,52 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
-                    self.send_response(resp.status_code)
-                    has_content_type = False
-                    has_cache_control = False
-                    for h_key, h_val in resp.headers.items():
-                        h_lower = h_key.lower()
-                        if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
-                            continue
-                        if h_lower == "content-type":
-                            has_content_type = True
-                        if h_lower == "cache-control":
-                            has_cache_control = True
-                        self.send_header(h_key, h_val)
-                    # SSE-required headers: enforce even if upstream omits them
-                    if not has_content_type:
-                        self.send_header("Content-Type", "text/event-stream")
-                    if not has_cache_control:
-                        self.send_header("Cache-Control", "no-cache")
-                    # Always disable nginx buffering for streaming
-                    self.send_header("X-Accel-Buffering", "no")
-                    # Propagate request ID to client for correlation
-                    self.send_header("X-Request-ID", _req_id)
-                    self.end_headers()
+                    if resp.status_code >= 400:
+                        # Upstream error on a streaming request — normalize to canonical JSON
+                        _raw_err = b"".join(resp.iter_bytes(chunk_size=4096))
+                        _norm_err_body = normalize_upstream_error(
+                            resp.status_code, _raw_err, provider_from_url(target_url)
+                        )
+                        self.send_response(resp.status_code)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Content-Length", str(len(_norm_err_body)))
+                        self.send_header("X-Request-ID", _req_id)
+                        self.end_headers()
+                        self.wfile.write(_norm_err_body)
+                    else:
+                        self.send_response(resp.status_code)
+                        has_content_type = False
+                        has_cache_control = False
+                        for h_key, h_val in resp.headers.items():
+                            h_lower = h_key.lower()
+                            if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                                continue
+                            if h_lower == "content-type":
+                                has_content_type = True
+                            if h_lower == "cache-control":
+                                has_cache_control = True
+                            self.send_header(h_key, h_val)
+                        # SSE-required headers: enforce even if upstream omits them
+                        if not has_content_type:
+                            self.send_header("Content-Type", "text/event-stream")
+                        if not has_cache_control:
+                            self.send_header("Cache-Control", "no-cache")
+                        # Always disable nginx buffering for streaming
+                        self.send_header("X-Accel-Buffering", "no")
+                        # Propagate request ID to client for correlation
+                        self.send_header("X-Request-ID", _req_id)
+                        self.end_headers()
 
-                    for chunk in resp.iter_bytes(chunk_size=4096):
-                        if not chunk:
-                            continue
-                        try:
-                            self.wfile.write(chunk)
-                            self.wfile.flush()
-                        except (BrokenPipeError, ConnectionResetError):
-                            break
-                        if should_log and is_messages:
-                            sse_buffer += chunk
+                        for chunk in resp.iter_bytes(chunk_size=4096):
+                            if not chunk:
+                                continue
+                            try:
+                                self.wfile.write(chunk)
+                                self.wfile.flush()
+                            except (BrokenPipeError, ConnectionResetError):
+                                break
+                            if should_log and is_messages:
+                                sse_buffer += chunk
 
                 if should_log and is_messages and sse_buffer:
                     sse_usage = extract_sse_tokens(sse_buffer)
@@ -949,12 +963,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # ── Non-streaming path ────────────────────────────────────
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
+                # Normalize upstream 4xx/5xx to canonical error envelope before
+                # sending headers so we can set the correct Content-Type.
+                resp_body = resp.content
+                _is_upstream_error = resp.status_code >= 400
+                if _is_upstream_error:
+                    resp_body = normalize_upstream_error(
+                        resp.status_code, resp_body, provider_from_url(target_url)
+                    )
+
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
                     if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
                         continue
+                    if _is_upstream_error and h_lower == "content-type":
+                        continue  # overridden below
                     self.send_header(h_key, h_val)
+                if _is_upstream_error:
+                    self.send_header("Content-Type", "application/json")
                 # Debug header: stable prefix hash for cache determinism verification.
                 # Emitted for all messages requests (not just intercepted hosts)
                 # so integration tests and local stubs can verify determinism.
@@ -966,7 +993,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("X-Request-ID", _req_id)
                 self.end_headers()
 
-                resp_body = resp.content
                 self.wfile.write(resp_body)
                 self.wfile.flush()
 
