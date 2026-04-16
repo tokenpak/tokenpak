@@ -130,11 +130,25 @@ class DegradationTracker:
     # ------------------------------------------------------------------
 
     def is_degraded(self) -> bool:
-        """True if there was a degradation event in the last 10 minutes."""
+        """True if there was a runtime degradation event in the last 10 minutes.
+
+        Startup warnings with recovered=True are excluded — they indicate the
+        server started successfully despite the warning and do not represent
+        ongoing degradation.
+        """
         with self._lock:
-            if not self._events:
+            # Exclude startup warnings that were handled gracefully (recovered=True).
+            # These are informational; the server is still fully functional.
+            degrading_events = [
+                e for e in self._events
+                if not (
+                    e.event_type == DegradationEventType.STARTUP_WARNING
+                    and e.recovered
+                )
+            ]
+            if not degrading_events:
                 return False
-            last = self._events[-1]
+            last = degrading_events[-1]
         try:
             ts = datetime.fromisoformat(last.timestamp)
             age = (datetime.now(timezone.utc) - ts).total_seconds()

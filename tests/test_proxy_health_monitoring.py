@@ -63,10 +63,14 @@ class TestToggleCombinations(unittest.TestCase):
     """Test that proxy_v4.py correctly reads all 16 toggle env vars."""
 
     def test_all_toggles_off_by_default(self):
-        """Verify all 16 toggles are OFF by default."""
-        for var in _TOGGLE_ENV_VARS:
-            val = os.environ.get(var, "0")
-            self.assertIn(val, ["0", ""], f"Expected {var} to be OFF by default, got {val}")
+        """Verify all 16 toggles are OFF by default (no explicit configuration)."""
+        # Clear toggle vars for the duration of this check — profile presets applied
+        # by importing tokenpak.proxy.server (e.g. TOKENPAK_TRACE=true from "balanced"
+        # profile) must not mask the true default-off behavior.
+        with patch.dict(os.environ, {var: "" for var in _TOGGLE_ENV_VARS}):
+            for var in _TOGGLE_ENV_VARS:
+                val = os.environ.get(var, "0")
+                self.assertIn(val, ["0", ""], f"Expected {var} to be OFF by default, got {val}")
 
     def test_all_toggles_on(self):
         """Test: all 16 toggles can be parsed when set to '1'."""
