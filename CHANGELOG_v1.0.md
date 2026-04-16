@@ -69,7 +69,7 @@ First stable, production-ready release of TokenPak.
 - **`RoutingLedger`** — tracks routing decisions for debugging and optimization
 
 #### Integrations
-- **OCP Protocol v1** — OpenClaw compatibility for Codex OAuth routing
+- **TPK Protocol v1** — OpenClaw compatibility for Codex OAuth routing
 - **LlamaIndex integration** — drop-in connector for LlamaIndex-based agents
 - **Phase 5 integration** — `HeartbeatIngest` + `QueryBriefing` modules
 
@@ -166,7 +166,7 @@ Internal beta release. Not distributed publicly.
 - Phase 5a ingest API implementation
 - Cache efficiency layer with deterministic retrieval
 - Architecture validated against real OpenAI and Anthropic API workloads
-- OCP Protocol design validated
+- TPK Protocol design validated
 
 ### Notes
 - Used internally to validate architecture before v1.0; not a public release

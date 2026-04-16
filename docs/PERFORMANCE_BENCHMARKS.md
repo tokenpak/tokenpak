@@ -35,7 +35,7 @@ Duration: 93.13s
 
 ## Production Metrics (7-day rolling)
 
-From `~/.openclaw/workspace/.ocp/monitor.db`:
+From `~/.openclaw/workspace/~/.tokenpak/monitor.db`:
 
 | Metric | Value |
 |--------|-------|

@@ -211,7 +211,7 @@ A trace shows:
 
 ## Database
 
-All telemetry is stored in a local SQLite database (default: `.ocp/monitor.db`).
+All telemetry is stored in a local SQLite database (default: `~/.tokenpak/monitor.db`).
 
 ```bash
 # Custom location

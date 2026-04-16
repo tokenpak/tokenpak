@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""EvidencePack — extractive spans with provenance for OCP Phase 2.
+"""EvidencePack — extractive spans with provenance .
 
 Replaces full-chunk memory dumps with compact evidence items:
   - Old: 10 chunks × 300 tokens/chunk = 3,000 tokens

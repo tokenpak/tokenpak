@@ -80,7 +80,7 @@ All CLI commands are zero-token (no LLM calls):
 ### Developer Experience
 
 - **Full type hints** — 100% typed public API
-- **OCP Protocol v1** — OpenClaw compatibility for Codex OAuth routing
+- **TPK Protocol v1** — OpenClaw compatibility for Codex OAuth routing
 - **LlamaIndex integration** — drop-in connector for LlamaIndex-based agents
 - **Docker support** — `Dockerfile` and `docker-compose.yml` included
 - **CI pipeline** — lint, format, benchmark gates, determinism tests on every PR

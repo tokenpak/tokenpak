@@ -151,7 +151,7 @@ All env vars override config file values. **Env vars take priority.**
 | `TOKENPAK_MODE` | `hybrid` | Compression mode: `strict`, `hybrid`, `aggressive` |
 | `TOKENPAK_COMPACT` | `1` | Master compression switch (`0` to disable) |
 | `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `4500` | Min tokens before compression activates |
-| `TOKENPAK_DB` | `.ocp/monitor.db` | SQLite telemetry database path |
+| `TOKENPAK_DB` | `~/.tokenpak/monitor.db` | SQLite telemetry database path |
 | `TOKENPAK_STATS_FOOTER` | `0` | Append savings summary to responses |
 | `TOKENPAK_DEBUG` | `0` | Enable debug logging |
 | `TOKENPAK_METRICS_ENABLED` | `0` | Opt-in anonymous usage metrics |

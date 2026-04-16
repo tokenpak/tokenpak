@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Budgeter — token allocation and trim policy for OCP Phase 2.
+"""Budgeter — token allocation and trim policy.
 
 Enforces a hard token budget across context buckets:
   STATE_JSON  8-15%   critical

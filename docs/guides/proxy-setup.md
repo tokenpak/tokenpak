@@ -213,7 +213,7 @@ Override any config value with env vars:
 | `TOKENPAK_MODE` | `hybrid` | Compression mode |
 | `TOKENPAK_COMPACT` | `1` | Master compression switch (0/1) |
 | `TOKENPAK_COMPACT_THRESHOLD_TOKENS` | `4500` | Min tokens to trigger compression |
-| `TOKENPAK_DB` | `.ocp/monitor.db` | Database path |
+| `TOKENPAK_DB` | `~/.tokenpak/monitor.db` | Database path |
 
 ---
 

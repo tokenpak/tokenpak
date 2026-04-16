@@ -1070,8 +1070,8 @@ if primary and is_tp(primary.split("/", 1)[0]):
 **Fix:**
 ```bash
 # Backup broken package and restore from main repo
-mv ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak.broken
-cp -r ~/tokenpak ~/vault/Projects/ocp-protocol/packages/pypi/tokenpak
+mv ~/vault/Projects/tokenpak/packages/pypi/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak.broken
+cp -r ~/tokenpak ~/vault/Projects/tokenpak/packages/pypi/tokenpak
 python3 -c "from tokenpak.agent.proxy import server; print('✅ Import works')"
 ```
 

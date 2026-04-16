@@ -31,7 +31,7 @@ CONFIG_KEYS_WITH_DEFAULTS = {
     "TOKENPAK_MODE": "hybrid",
     "TOKENPAK_COMPACT": "1",
     "TOKENPAK_COMPACT_THRESHOLD_TOKENS": "4500",
-    "TOKENPAK_DB": ".ocp/monitor.db",
+    "TOKENPAK_DB": "~/.tokenpak/monitor.db",
     "TOKENPAK_ASYNC_PROXY": "0",
     "TOKENPAK_CONCURRENCY": "100",
     # Failover defaults

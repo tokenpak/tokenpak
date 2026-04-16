@@ -58,7 +58,7 @@ To opt out (default): don't set `TOKENPAK_METRICS_ENABLED`, or set it to `0`.
 
 ### Schema
 
-Telemetry is stored in SQLite at `~/.tokenpak/telemetry.db` (and an agent-level DB at `.ocp/monitor.db`).
+Telemetry is stored in SQLite at `~/.tokenpak/telemetry.db` (and an agent-level DB at `~/.tokenpak/monitor.db`).
 
 **Core tables:**
 

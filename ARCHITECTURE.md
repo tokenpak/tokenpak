@@ -1,7 +1,7 @@
 ---
 title: "TokenPak Architecture v2 — Universal Content Compiler"
 type: spec
-project: "[[Projects/ocp-protocol/overview]]"
+project: "[[Projects/tokenpak/overview]]"
 created: 2026-02-20
 author: Trix
 status: active

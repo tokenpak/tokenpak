@@ -256,7 +256,7 @@ rm ~/.tokenpak/stats.db            # nuclear option
 | Data | Location |
 |------|----------|
 | Configuration | `~/.tokenpak/config.json` |
-| Session database | `.ocp/monitor.db` (or `TOKENPAK_DB` env var) |
+| Session database | `~/.tokenpak/monitor.db` (or `TOKENPAK_DB` env var) |
 | Vault index | `.tokenpak/registry.db` |
 | Calibration profile | `~/.tokenpak/calibration.json` |
 | Recipes | `~/.tokenpak/recipes/` |

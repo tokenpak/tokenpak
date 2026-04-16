@@ -6843,15 +6843,15 @@ def paths(self) -> list[str]
 Lightweight file-based registry for CANON blocks.
 
 Stores canonical block wire text at:
-  .ocp/blocks/BLOCK_ID@vN.ocpb
+  .tokenpak/blocks/BLOCK_ID@vN.tpkb
 
 Tracks versions in manifest:
-  .ocp/blocks/manifest.json  →  {block_id: {hash, version}}
+  .tokenpak/blocks/manifest.json  →  {block_id: {hash, version}}
 
 #### `__init__`
 
 ```python
-def __init__(self, base_dir: str = '.ocp') -> Any
+def __init__(self, base_dir: str = '.tokenpak') -> Any
 ```
 
 - **Returns:** `Any`
@@ -6881,16 +6881,16 @@ def read_block_content(self, block_id: str, version_str: str) -> Optional[str]
 ```
 
 - **Returns:** `Optional[str]`
-- **Description:** Read stored .ocpb content for a block/version pair.
+- **Description:** Read stored .tpkb content for a block/version pair.
 
 ### `tokenpak.assembler.ContextAssembler`
 
 **Bases:** object
 
-Assembles OCP wire-format context payloads.
+Assembles TPK wire-format context payloads.
 
   Session state (which blocks have been sent at which version) is
-  persisted to .ocp/state/session_<id>.state.json so it survives
+  persisted to .tokenpak/state/session_<id>.state.json so it survives
   across turns without holding all context in memory.
 
   Usage:
@@ -6914,7 +6914,7 @@ TOOLS=@TOOLS#v1"
 #### `__init__`
 
 ```python
-def __init__(self, session_id: str, base_dir: str = '.ocp') -> Any
+def __init__(self, session_id: str, base_dir: str = '.tokenpak') -> Any
 ```
 
 - **Returns:** `Any`
@@ -6953,7 +6953,7 @@ def assemble_full_payload(self, required_blocks: Dict[str, Tuple[str, Optional[s
 ```
 
 - **Returns:** `str`
-- **Description:** Build the complete OCP payload: CANON section + optional STATE_JSON.
+- **Description:** Build the complete TPK payload: CANON section + optional STATE_JSON.
 
 #### `session_summary`
 
@@ -11062,15 +11062,15 @@ def extract_spans_batch(self, chunks: List[dict], query: str, max_tokens_each: i
 
 **Bases:** object
 
-Manages compact JSON session state for OCP protocol.
+Manages compact JSON session state for TPK protocol.
 
-Persists to: .ocp/state/session_<id>.state.json
+Persists to: .tokenpak/state/session_<id>.state.json
 Wire format: compact JSON (no whitespace), prefixed with STATE_JSON:
 
 #### `__init__`
 
 ```python
-def __init__(self, session_id: str, base_dir: str = '.ocp') -> Any
+def __init__(self, session_id: str, base_dir: str = '.tokenpak') -> Any
 ```
 
 - **Returns:** `Any`
@@ -11189,7 +11189,7 @@ def to_wire_section(self) -> str
 #### `from_wire`
 
 ```python
-def from_wire(cls, wire_text: str, session_id: str, base_dir: str = '.ocp') -> 'StateManager'
+def from_wire(cls, wire_text: str, session_id: str, base_dir: str = '.tokenpak') -> 'StateManager'
 ```
 
 - **Returns:** `'StateManager'`

@@ -252,7 +252,7 @@ import type {
 ## Links
 
 - [Full documentation](https://github.com/tokenpak/tokenpak/blob/main/README.md)
-- [OCP Protocol spec](https://github.com/kaywhy331/ocp-protocol)
+- [TPK Protocol spec](https://github.com/kaywhy331/tokenpak)
 - [Python package (PyPI)](https://pypi.org/project/tokenpak/)
 - [Issue tracker](https://github.com/tokenpak/tokenpak/issues)
 
