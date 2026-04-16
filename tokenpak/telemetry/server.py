@@ -146,7 +146,7 @@ class IngestResponse(BaseModel):
 
 
 def create_app(
-    db_path: str = "telemetry.db",
+    db_path: str = "",
     storage: Optional[TelemetryDB] = None,
     pipeline: Optional[TelemetryPipeline] = None,
     rollups: Optional[Any] = None,
@@ -160,6 +160,9 @@ def create_app(
         rollups: Optional pre-constructed RollupEngine instance (for testing).
     """
     app = FastAPI(title="TokenPak Telemetry", version="1.1.0")
+    if not db_path:
+        from tokenpak.core.paths import get_db_path
+        db_path = str(get_db_path("telemetry.db"))
     _storage = storage or TelemetryDB(db_path)
     _pipeline = pipeline or TelemetryPipeline(storage=_storage)
     app.state.storage = _storage

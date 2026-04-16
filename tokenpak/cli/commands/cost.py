@@ -15,10 +15,8 @@ from typing import Optional
 # DB helpers
 # ---------------------------------------------------------------------------
 
-_MONITOR_DB = os.environ.get(
-    "TOKENPAK_DB",
-    os.path.expanduser("~/.tokenpak/data/monitor.db"),
-)
+from tokenpak.core.paths import get_db_path as _get_db_path
+_MONITOR_DB = str(_get_db_path("monitor.db"))
 
 SEP = "────────────────────────────────────────"
 

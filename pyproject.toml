@@ -6,15 +6,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tokenpak"
-version = "1.0.2"
+dynamic = ["version"]
+# version sourced from tokenpak/__init__.py via [tool.setuptools.dynamic]
 description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "Kevin Yang", email = "kaywhy331@gmail.com" },
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
 ]
 maintainers = [
-    { name = "Kevin Yang", email = "kaywhy331@gmail.com" },
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
 ]
 keywords = [
     "llm",
@@ -34,7 +35,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -123,9 +124,12 @@ include = [
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
-    "runtime/*.py",
     "recipes_oss/*.yaml",
+    "routing/model_tiers.json",
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "tokenpak.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = [

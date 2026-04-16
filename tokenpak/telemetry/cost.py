@@ -301,8 +301,9 @@ class CostEngine:
     _FALLBACK_INPUT_RATE = 3.00  # USD/1K (sonnet-tier estimate)
     _FALLBACK_OUTPUT_RATE = 15.00
 
-    def __init__(self, db_path: str = "telemetry.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = ""):
+        from tokenpak.core.paths import get_db_path
+        self.db_path = db_path or str(get_db_path("telemetry.db"))
         self._lock = threading.Lock()
         self._pricing_cache: dict[tuple, Pricing] = {}
         self._init_db()

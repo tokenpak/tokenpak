@@ -44,11 +44,9 @@ logger = logging.getLogger(__name__)
 # Latency histogram bucket boundaries in milliseconds
 _LATENCY_BUCKETS_MS = [50, 100, 250, 500, 1000, 2500, 5000, 10000]
 
-# Default telemetry DB path (matches telemetry/api.py logic)
-_DEFAULT_DB_PATH = Path(
-    os.environ.get("TOKENPAK_DB_PATH", "")
-    or str(Path(__file__).parent.parent.parent / "telemetry.db")
-)
+# Default telemetry DB path — centralized resolution
+from tokenpak.core.paths import get_db_path as _get_db_path
+_DEFAULT_DB_PATH = _get_db_path("telemetry.db")
 
 
 # ---------------------------------------------------------------------------

@@ -34,7 +34,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # Constants
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DB = Path.home() / ".tokenpak" / "data" / "monitor.db"
+from tokenpak.core.paths import get_db_path as _get_db_path
+_DEFAULT_DB = _get_db_path("monitor.db")
 _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 500
 

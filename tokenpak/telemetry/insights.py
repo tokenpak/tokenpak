@@ -82,8 +82,9 @@ class InsightEngine:
         thresholds: Override default thresholds dict.
     """
 
-    def __init__(self, db_path: str = "telemetry.db", thresholds: Optional[dict] = None):
-        self.db_path = db_path
+    def __init__(self, db_path: str = "", thresholds: Optional[dict] = None):
+        from tokenpak.core.paths import get_db_path
+        self.db_path = db_path or str(get_db_path("telemetry.db"))
         self.thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._cache: Optional[List[Insight]] = None
         self._cache_at: float = 0.0
@@ -496,7 +497,7 @@ class InsightEngine:
 # ---------------------------------------------------------------------------
 # Convenience function
 # ---------------------------------------------------------------------------
-def generate_insights(db_path: str = "telemetry.db", days: int = 7) -> List[Insight]:
+def generate_insights(db_path: str = "", days: int = 7) -> List[Insight]:
     """
     Generate insights from telemetry data.
 

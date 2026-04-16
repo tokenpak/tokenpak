@@ -40,7 +40,7 @@ app = Flask(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-DB_PATH = "~/.tokenpak/data/monitor.db"
+DB_PATH = "~/.tokenpak/monitor.db"
 RBAC_DB_PATH = "~/.tokenpak/data/rbac.db"
 CONFIG_PATH = "~/.tokenpak/config/telemetry.json"
 

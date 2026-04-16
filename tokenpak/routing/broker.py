@@ -39,7 +39,7 @@ UPGRADE_ACCEPTANCE_FLOOR = 0.50  # below this → upgrade
 DOWNGRADE_COOLDOWN = 10
 
 # Default path for model tiers
-DEFAULT_TIERS_PATH = str(Path(__file__).parent.parent / "model_tiers.json")
+DEFAULT_TIERS_PATH = str(Path(__file__).parent / "model_tiers.json")
 
 
 # ---------------------------------------------------------------------------
