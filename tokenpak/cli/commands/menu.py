@@ -125,24 +125,92 @@ _INPUT_COMMANDS: dict[str, dict] = {
     "config-check": {"label": "Config file to check:", "placeholder": "e.g. ~/.tokenpak/config.yaml"},
 }
 
-# Commands that need a subcommand picked first
-_SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str]]] = {
-    "route":       [("list", "View routing rules"), ("add", "Add a rule"), ("test", "Test a rule")],
-    "budget":      [("status", "View budget"), ("set", "Set limits"), ("history", "Spend history")],
-    "config":      [("show", "View config"), ("validate", "Validate"), ("init", "Create default"), ("migrate", "Migrate legacy"), ("path", "Config path")],
-    "recipe":      [("create", "Create recipe"), ("validate", "Validate recipe"), ("test", "Test recipe"), ("benchmark", "Benchmark recipe")],
-    "template":    [("list", "List templates"), ("add", "Add template"), ("show", "Show template"), ("remove", "Remove template")],
-    "debug":       [("on", "Enable debug"), ("off", "Disable debug"), ("status", "Debug status")],
-    "learn":       [("status", "View patterns"), ("reset", "Reset patterns")],
-    "trigger":     [("list", "List triggers"), ("add", "Add trigger"), ("remove", "Remove trigger")],
-    "macro":       [("list", "List macros"), ("create", "Create macro"), ("run", "Run macro"), ("show", "Show macro")],
-    "fingerprint": [("sync", "Sync fingerprints"), ("cache", "View cache"), ("clear-cache", "Clear cache")],
-    "lock":        [("list", "List locks"), ("claim", "Claim lock"), ("release", "Release lock")],
-    "agent":       [("list", "List agents"), ("register", "Register agent"), ("locks", "View locks")],
-    "retrieval":   [("status", "Retrieval status"), ("test", "Test retrieval")],
-    "prove":       [("run", "Run value proof"), ("list", "List scenarios"), ("providers", "Show providers")],
-    "alerts":      [("test --channel webhook", "Test webhook"), ("test --channel slack", "Test Slack")],
-    "fleet":       [("", "Show fleet status")],
+# Commands that need a subcommand picked first.
+# Each subcommand can optionally have an "input" key for args it needs.
+_SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str, dict]]] = {
+    # (subcommand_args, display_label, input_config)
+    # input_config: {} means no input needed; {"label": ..., "placeholder": ...} means prompt first
+    "route": [
+        ("list",    "View routing rules",  {}),
+        ("add",     "Add a rule",          {}),
+        ("test",    "Test a rule",         {"label": "Prompt text:", "placeholder": "e.g. Explain this code"}),
+        ("remove",  "Remove a rule",       {"label": "Rule ID:", "placeholder": ""}),
+    ],
+    "budget": [
+        ("status",  "View budget",    {}),
+        ("set",     "Set limits",     {}),
+        ("history", "Spend history",  {}),
+    ],
+    "config": [
+        ("show",     "View config",      {}),
+        ("validate", "Validate",         {}),
+        ("init",     "Create default",   {}),
+        ("migrate",  "Migrate legacy",   {}),
+        ("path",     "Config path",      {}),
+    ],
+    "recipe": [
+        ("create",    "Create recipe",    {"label": "Recipe name:", "placeholder": "e.g. my-legal-cleanup"}),
+        ("validate",  "Validate recipe",  {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
+        ("test",      "Test recipe",      {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
+        ("benchmark", "Benchmark recipe", {"label": "Recipe file:", "placeholder": "e.g. ./my-recipe.yaml"}),
+    ],
+    "template": [
+        ("list",   "List templates",   {}),
+        ("add",    "Add template",     {"label": "Template name:", "placeholder": "e.g. code-review"}),
+        ("show",   "Show template",    {"label": "Template name:", "placeholder": ""}),
+        ("remove", "Remove template",  {"label": "Template name:", "placeholder": ""}),
+    ],
+    "debug": [
+        ("on",     "Enable debug",  {}),
+        ("off",    "Disable debug", {}),
+        ("status", "Debug status",  {}),
+    ],
+    "learn": [
+        ("status", "View patterns", {}),
+        ("reset",  "Reset patterns", {}),
+    ],
+    "trigger": [
+        ("list",   "List triggers",  {}),
+        ("add",    "Add trigger",    {}),
+        ("remove", "Remove trigger", {"label": "Trigger ID:", "placeholder": ""}),
+    ],
+    "macro": [
+        ("list",   "List macros",  {}),
+        ("create", "Create macro", {}),
+        ("run",    "Run macro",    {"label": "Macro name:", "placeholder": ""}),
+        ("show",   "Show macro",   {"label": "Macro name:", "placeholder": ""}),
+    ],
+    "fingerprint": [
+        ("sync",        "Sync fingerprints", {}),
+        ("cache",       "View cache",        {}),
+        ("clear-cache", "Clear cache",       {}),
+    ],
+    "lock": [
+        ("list",    "List locks",    {}),
+        ("claim",   "Claim lock",    {"label": "File path:", "placeholder": ""}),
+        ("release", "Release lock",  {"label": "File path:", "placeholder": ""}),
+    ],
+    "agent": [
+        ("list",       "List agents",    {}),
+        ("register",   "Register agent", {"label": "Agent name:", "placeholder": ""}),
+        ("locks",      "View locks",     {}),
+    ],
+    "retrieval": [
+        ("status", "Retrieval status", {}),
+        ("test",   "Test retrieval",   {"label": "Search query:", "placeholder": "e.g. authentication"}),
+    ],
+    "prove": [
+        ("run",       "Run value proof",  {}),
+        ("list",      "List scenarios",   {}),
+        ("providers", "Show providers",   {}),
+    ],
+    "alerts": [
+        ("test --channel webhook", "Test webhook", {}),
+        ("test --channel slack",   "Test Slack",   {}),
+    ],
+    "fleet": [
+        ("", "Show fleet status", {}),
+    ],
 }
 
 
@@ -150,7 +218,7 @@ def _exec_interactive(cmd: str, hdr: str) -> None:
     """Smart execution — prompts for input/subcommand if needed, then runs."""
     c = supports_color()
 
-    # Check if command needs text input
+    # Check if command needs text input at top level
     if cmd in _INPUT_COMMANDS:
         cfg = _INPUT_COMMANDS[cmd]
         value = prompt_input(cfg["label"], header=hdr, placeholder=cfg.get("placeholder", ""))
@@ -163,15 +231,35 @@ def _exec_interactive(cmd: str, hdr: str) -> None:
     if cmd in _SUBCOMMAND_COMMANDS:
         subs = _SUBCOMMAND_COMMANDS[cmd]
         label = _POLISHED_LABELS.get(cmd, cmd)
+        display_options = [(sub_args, display) for sub_args, display, _ in subs]
         choice = pick(
             paint(label, Color.PASTEL_YELLOW, c),
-            subs,
+            display_options,
             header=hdr,
             back_label="Back",
         )
         if choice is None or choice == _BACK_SENTINEL:
             return
-        _exec(cmd, choice)
+
+        # Find the input config for the selected subcommand
+        input_cfg = {}
+        for sub_args, _, cfg in subs:
+            if sub_args == choice:
+                input_cfg = cfg
+                break
+
+        # If the subcommand itself needs input, prompt for it
+        if input_cfg:
+            value = prompt_input(
+                input_cfg["label"],
+                header=hdr,
+                placeholder=input_cfg.get("placeholder", ""),
+            )
+            if not value:
+                return
+            _exec(cmd, f"{choice} {value}")
+        else:
+            _exec(cmd, choice)
         return
 
     # No special handling needed — run directly
