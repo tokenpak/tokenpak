@@ -175,6 +175,76 @@ def test_main_passes_through_extra_args(tmp_path):
                 assert "test prompt" in exec_list
 
 
+# ---------------------------------------------------------------------------
+# _prefix_session_name
+# ---------------------------------------------------------------------------
+
+def test_prefix_session_name_no_flag():
+    """When no --name/-n flag is present, injects a default name."""
+    result = launcher._prefix_session_name(["--no-update-notifier"])
+    assert "--name" in result
+    idx = result.index("--name")
+    assert result[idx + 1].startswith(launcher._SESSION_PREFIX)
+
+
+def test_prefix_session_name_long_flag():
+    """--name VALUE gets the session prefix prepended to VALUE."""
+    result = launcher._prefix_session_name(["--name", "my-session"])
+    idx = result.index("--name")
+    assert result[idx + 1] == f"{launcher._SESSION_PREFIX} my-session"
+
+
+def test_prefix_session_name_short_flag():
+    """-n VALUE gets the session prefix prepended to VALUE."""
+    result = launcher._prefix_session_name(["-n", "my-session"])
+    idx = result.index("-n")
+    assert result[idx + 1] == f"{launcher._SESSION_PREFIX} my-session"
+
+
+def test_prefix_session_name_equals_form():
+    """--name=VALUE form gets the session prefix prepended."""
+    result = launcher._prefix_session_name(["--name=my-session"])
+    assert any(a == f"--name={launcher._SESSION_PREFIX} my-session" for a in result)
+
+
+def test_prefix_session_name_does_not_mutate_input():
+    """Input list is not mutated."""
+    original = ["--name", "original"]
+    launcher._prefix_session_name(original)
+    assert original == ["--name", "original"]
+
+
+# ---------------------------------------------------------------------------
+# main() — proxy detection exception path
+# ---------------------------------------------------------------------------
+
+def test_main_proxy_detection_exception_path(tmp_path):
+    """When httpx raises, proxy detection falls through without setting ANTHROPIC_BASE_URL."""
+    run_dir = tmp_path / "run"
+    journal_dir = tmp_path / "journal"
+
+    import httpx as _httpx
+
+    with patch.dict(os.environ, {
+        "TOKENPAK_COMPANION_JOURNAL_DIR": str(journal_dir),
+        "TOKENPAK_COMPANION_PROXY_URL": "",  # no explicit proxy
+    }):
+        with patch.object(CompanionConfig, "run_dir", new_callable=lambda: property(lambda self: run_dir)):
+            run_dir.mkdir(parents=True, exist_ok=True)
+            with patch("tokenpak.companion.launcher.os.execvpe") as mock_exec:
+                with patch.object(_httpx, "get", side_effect=Exception("connection refused")):
+                    captured_env = {}
+
+                    def capture_exec(cmd, args, env):
+                        captured_env.update(env)
+
+                    mock_exec.side_effect = capture_exec
+                    launcher.main([])
+
+    # ANTHROPIC_BASE_URL should NOT be set when httpx raises
+    assert "ANTHROPIC_BASE_URL" not in captured_env
+
+
 def test_main_banner_written_to_stderr(tmp_path, capsys):
     """launcher.main() prints a startup banner to stderr."""
     run_dir = tmp_path / "run"
