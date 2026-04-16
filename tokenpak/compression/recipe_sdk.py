@@ -12,7 +12,7 @@ Usage (CLI layer in cli.py):
 
 Programmatic usage::
 
-    from tokenpak.agent.recipe_sdk import RecipeSDK
+    from tokenpak.compression.recipe_sdk import RecipeSDK
     sdk = RecipeSDK()
     sdk.validate("my_recipe.yaml")
     result = sdk.test("my_recipe.yaml", input_text="...")
@@ -400,7 +400,7 @@ class RecipeSDK:
             text = _default_sample_for_category(raw.get("category", "general"))
 
         # Pattern matching check
-        from tokenpak.agent.compression.recipes import CompressionRecipe
+        from tokenpak.compression.recipes import CompressionRecipe
 
         recipe_obj = CompressionRecipe.from_dict(raw, source=str(path))
         pattern_match = recipe_obj.matches(filename=filename_hint, content_sample=text[:2000])

@@ -3,8 +3,13 @@
 
 from __future__ import annotations
 
-from tokenpak.agent.cli.commands.teacher import run_teacher_cmd
+from tokenpak.compression.teacher.builder import build_teacher_pack
 
 
 if __name__ == "__main__":
-    run_teacher_cmd(["generate"])
+    result = build_teacher_pack(
+        source_roots=["~/.tokenpak/vault"],
+        command_roots=["~/.tokenpak/commands"],
+        output_root="~/.tokenpak/teacher-output",
+    )
+    print(f"Generated {result.recipe_count} recipes -> {result.output_dir}")

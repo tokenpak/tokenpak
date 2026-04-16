@@ -85,9 +85,9 @@ ACTIVE_PROFILE: str = os.environ.get("TOKENPAK_PROFILE", "balanced").lower()
 if ACTIVE_PROFILE in _PROFILE_PRESETS:
     for _pk, _pv in _PROFILE_PRESETS[ACTIVE_PROFILE].items():
         os.environ.setdefault(_pk, _pv)
-    print(f"🎛️  Profile: {ACTIVE_PROFILE} (use TOKENPAK_PROFILE=safe|balanced|aggressive|agentic)")
+    _logging.getLogger("tokenpak.proxy.config").info("Profile: %s", ACTIVE_PROFILE)
 else:
-    print(f"⚠️  Unknown TOKENPAK_PROFILE={ACTIVE_PROFILE!r} — ignoring, using env vars as-is")
+    _logging.getLogger("tokenpak.proxy.config").warning("Unknown TOKENPAK_PROFILE=%r — ignoring", ACTIVE_PROFILE)
     ACTIVE_PROFILE = "custom"
 
 PROXY_PORT = _cfg("port", 8766, "TOKENPAK_PORT", int)
@@ -216,11 +216,11 @@ try:
     _plugin_registry.discover()
     _loaded = _plugin_registry.get_plugins()
     if _loaded:
-        print(f"  🔌 Plugin system: {len(_loaded)} plugin(s) loaded: {[p.name for p in _loaded]}")
+        _logging.getLogger("tokenpak.proxy.config").info("Plugin system: %d plugin(s) loaded", len(_loaded))
     else:
-        print("  🔌 Plugin system: no plugins configured")
+        _logging.getLogger("tokenpak.proxy.config").info("Plugin system: no plugins configured")
 except Exception as _plugin_init_err:
-    print(f"  ⚠️ Plugin system init failed (disabled): {_plugin_init_err}")
+    _logging.getLogger("tokenpak.proxy.config").warning("Plugin system init failed (disabled): %s", _plugin_init_err)
     _plugin_registry = None
 
 
@@ -231,9 +231,9 @@ if CACHE_REGISTRY_ENABLED:
         from tokenpak.cache.registry import CacheRegistry
 
         _cache_registry = CacheRegistry()
-        print(f"  🗄️  Cache registry initialized: {_cache_registry.names()}")
+        _logging.getLogger("tokenpak.proxy.config").info("Cache registry initialized")
     except Exception as _cr_init_err:
-        print(f"  ⚠️ Cache registry init failed (disabled): {_cr_init_err}")
+        _logging.getLogger("tokenpak.proxy.config").warning("Cache registry init failed: %s", _cr_init_err)
         CACHE_REGISTRY_ENABLED = False
 
 # Upstream
@@ -243,15 +243,23 @@ QUERY_EXPANSION_ENABLED: bool = _cfg(
     "features.query_expansion", True, "TOKENPAK_QUERY_EXPANSION_ENABLED", bool
 )
 
-# Connection pool manager — one pool per upstream host, reused across requests
-# Replaces per-request http.client.HTTPSConnection in _proxy_to() for ~100-150ms savings
-_POOL_MANAGER = urllib3.PoolManager(
-    num_pools=10,
-    maxsize=10,
-    retries=False,  # We handle retries ourselves
-    timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
-    cert_reqs="CERT_REQUIRED",
-)
+# Legacy pool manager — only used by the monolith proxy.py.
+# The modular proxy uses httpx via connection_pool.py.
+# Lazy-init to avoid creating TCP connections on module import.
+_POOL_MANAGER = None
+
+def get_pool_manager():
+    """Get or create the urllib3 pool manager (lazy init)."""
+    global _POOL_MANAGER
+    if _POOL_MANAGER is None:
+        _POOL_MANAGER = urllib3.PoolManager(
+            num_pools=10,
+            maxsize=10,
+            retries=False,
+            timeout=urllib3.Timeout(connect=10.0, read=UPSTREAM_TIMEOUT),
+            cert_reqs="CERT_REQUIRED",
+        )
+    return _POOL_MANAGER
 
 # Validation gate
 VALIDATION_GATE_ENABLED: bool = _cfg(
@@ -440,7 +448,7 @@ if CUSTOM_PROVIDERS:
         UPSTREAM_ROUTES[_route_key] = _cp.endpoint
 
     _custom_names = ", ".join(cp.name for cp in CUSTOM_PROVIDERS)
-    print(f"  🔗 Custom providers: {_custom_names}")
+    _logging.getLogger("tokenpak.proxy.config").info("Custom providers: %s", _custom_names)
 
 # Build the display string for startup banners
 PROVIDER_DISPLAY = get_provider_display_list(ADAPTER_REGISTRY, CUSTOM_PROVIDERS)

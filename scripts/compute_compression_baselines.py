@@ -13,7 +13,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tokenpak.agent.compression import CompressionPipeline
+from tokenpak.compression.pipeline import CompressionPipeline
 
 def compute_payload_size(payload):
     """Compute size of a payload (in bytes when JSON-encoded)"""

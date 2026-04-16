@@ -384,9 +384,10 @@ def _ollama_health_loop() -> None:
         time.sleep(check_interval)
 
 
-# Start health checker thread on module load
-_ollama_health_thread = threading.Thread(target=_ollama_health_loop, daemon=True)
-_ollama_health_thread.start()
+# Start health checker thread only when Ollama is enabled (opt-in)
+if os.environ.get("TOKENPAK_OLLAMA_ENABLED", "0") == "1":
+    _ollama_health_thread = threading.Thread(target=_ollama_health_loop, daemon=True)
+    _ollama_health_thread.start()
 
 
 # ===========================================================================

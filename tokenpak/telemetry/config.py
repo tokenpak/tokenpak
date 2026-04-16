@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 class ServerConfig(BaseModel):
     """Server configuration."""
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 17888
     cors_origins: List[str] = ["*"]
 

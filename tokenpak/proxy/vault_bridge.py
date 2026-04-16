@@ -436,7 +436,7 @@ def _init_singletons() -> None:
         # --- Term Resolver ---
         _TERM_RESOLVER_AVAILABLE = False
         try:
-            from tokenpak.agent.semantic import TermResolver, TermResolverConfig  # type: ignore[assignment]
+            from tokenpak.vault.semantic import TermResolver, TermResolverConfig  # type: ignore[assignment]
 
             _TERM_RESOLVER_AVAILABLE = True
         except ImportError:

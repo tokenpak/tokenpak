@@ -35,7 +35,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from tokenpak.agent.agentic import MemoryPromoter
+    from tokenpak.orchestration.memory_promoter import MemoryPromoter
     
     promoter = MemoryPromoter()
     affected = promoter.cleanup_expired()

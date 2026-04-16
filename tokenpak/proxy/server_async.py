@@ -987,7 +987,7 @@ class _AsyncTCPProxy:
 
 async def run_async_proxy(
     proxy_server,
-    host: str = "0.0.0.0",
+    host: str = "127.0.0.1",
     port: int = PROXY_PORT,
     shutdown_event: Optional[asyncio.Event] = None,
 ) -> None:
@@ -1065,7 +1065,7 @@ async def run_async_proxy(
 
 def start_async_proxy_in_thread(
     proxy_server,
-    host: str = "0.0.0.0",
+    host: str = "127.0.0.1",
     port: int = PROXY_PORT,
     shutdown_event: Optional[threading.Event] = None,
 ) -> threading.Thread:

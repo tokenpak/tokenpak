@@ -112,7 +112,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 
 def run(port: int = DEFAULT_PORT):
     """Start the monitor server (blocking)."""
-    server = ThreadedHTTPServer(("0.0.0.0", port), MonitorHandler)
+    server = ThreadedHTTPServer(("127.0.0.1", port), MonitorHandler)
     print(f"TokenPak Monitor → http://localhost:{port}/")
     print("Press Ctrl+C to stop.")
     try:

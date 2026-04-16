@@ -6,13 +6,14 @@ FROM python:3.11-slim as builder
 
 WORKDIR /build
 
-# Copy requirements first (Docker layer caching)
-COPY requirements.txt .
+# Copy package files first (Docker layer caching)
+COPY pyproject.toml README.md LICENSE ./
+COPY tokenpak/ tokenpak/
 
-# Install dependencies in a virtual environment
+# Install in a virtual environment
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip setuptools && \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+    /opt/venv/bin/pip install --no-cache-dir ".[serve]"
 
 # ============================================
 # Final stage (multi-stage build for size)
@@ -43,12 +44,9 @@ EXPOSE 8766
 # Switch to non-root user
 USER tokenpak
 
-# Health check (Docker native health check)
-# Uses /ready — returns 200 only when fully initialised and accepting requests.
-# Allows 60s start-period so CI images don't fail before server finishes boot.
+# Health check — uses Python (curl not available in slim image)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:${TOKENPAK_PORT}/ready || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:${TOKENPAK_PORT}/health', timeout=5)" || exit 1
 
-# Start proxy (use proxy.py as entry point)
-# Note: assumes proxy.py has a main() that starts the server
-CMD ["python", "-m", "tokenpak.cli", "proxy", "--port", "8766"]
+# Start proxy — reads port from TOKENPAK_PORT env var
+CMD ["python", "-m", "tokenpak.cli", "proxy"]

@@ -1356,7 +1356,7 @@ def cmd_serve(args):
             print(f"[warn] Ingest router not loaded: {_ingest_err}")
         workers = getattr(args, "workers", 1)
         print(f"Starting TokenPak telemetry server on port {args.port} (workers={workers})")
-        uvicorn.run(app, host="0.0.0.0", port=args.port, workers=workers)
+        uvicorn.run(app, host="127.0.0.1", port=args.port, workers=workers)
         return
     if getattr(args, "ingest", False):
         import uvicorn

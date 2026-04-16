@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Dict, List
 
 # Configuration
-PROXY_PORT = 8766
+PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
 PROXY_PID_FILE = Path.home() / ".tokenpak" / "proxy.pid"
 WATCHDOG_LOG = Path.home() / ".tokenpak" / "watchdog.log"
 COOLDOWNS_FILE = Path.home() / ".tokenpak" / "cooldowns.json"

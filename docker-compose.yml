@@ -2,8 +2,6 @@
 # Quick start: docker compose up -d
 # With Redis cache: docker compose --profile with-cache up -d
 
-version: '3.8'
-
 services:
   tokenpak:
     build:
@@ -21,7 +19,8 @@ services:
       # Log verbosity: debug | info | warning | error
       TOKENPAK_LOG_LEVEL: "${TOKENPAK_LOG_LEVEL:-info}"
       # Enable Prometheus-compatible metrics endpoint (/metrics)
-      TOKENPAK_ENABLE_METRICS: "${TOKENPAK_ENABLE_METRICS:-true}"
+      TOKENPAK_METRICS_ENABLED: "${TOKENPAK_METRICS_ENABLED:-true}"
+      TOKENPAK_CONFIG: "/home/tokenpak/.tokenpak/config.yaml"
 
       # --- Python Settings ---
       PYTHONUNBUFFERED: "1"
@@ -29,7 +28,7 @@ services:
     volumes:
       # Config file (optional — uses defaults if not present)
       # Copy config/tokenpak.config.json.example → config/tokenpak.config.json and edit
-      - ./config/tokenpak.config.json:/app/config/tokenpak.config.json:ro
+      - ./config/config.yaml:/home/tokenpak/.tokenpak/config.yaml:ro
 
       # Persistent logs (survives container restarts)
       - tokenpak-logs:/app/logs
@@ -38,7 +37,7 @@ services:
       - tokenpak-cache:/app/cache
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8766/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
