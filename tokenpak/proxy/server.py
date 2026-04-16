@@ -615,6 +615,51 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 timestamp=datetime.now().strftime("%H:%M:%S"),
             )
 
+        # ── Claude Code backend delegation ─────────────────────────────
+        # X-TokenPak-Backend: claude-code → route through Claude Code CLI
+        # instead of forwarding to Anthropic API. This uses subscription
+        # billing (OAuth) instead of API keys.
+        _backend_header = ""
+        for _bk, _bv in self.headers.items():
+            if _bk.lower() == "x-tokenpak-backend":
+                _backend_header = _bv.strip().lower()
+                break
+        if _backend_header == "claude-code" and body:
+            try:
+                from tokenpak.sdk.openclaw import execute_via_claude_code
+                body_data = json.loads(body)
+                oc_session = ""
+                for _sk, _sv in self.headers.items():
+                    if _sk.lower() == "x-openclaw-session":
+                        oc_session = _sv.strip()
+                        break
+                if not oc_session:
+                    oc_session = f"oc_{hash(str(body_data.get('messages', [])[:1])) & 0xFFFFFFFF:08x}"
+                result = execute_via_claude_code(
+                    openclaw_session=oc_session,
+                    messages=body_data.get("messages", []),
+                    model=body_data.get("model", "claude-sonnet-4-6"),
+                    system=body_data.get("system", ""),
+                    max_tokens=body_data.get("max_tokens", 4096),
+                )
+                if result.get("type") == "error":
+                    err_body = json.dumps(result).encode()
+                    self.send_response(500)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(err_body)))
+                    self.end_headers()
+                    self.wfile.write(err_body)
+                else:
+                    self._send_json(result)
+            except Exception as _cc_err:
+                import logging as _logging
+                _logging.getLogger(__name__).error("claude-code backend error: %s", _cc_err)
+                self._send_json(
+                    {"error": {"type": "backend_error", "message": str(_cc_err)}},
+                    status=500,
+                )
+            return
+
         # Route classification and policy lookup
         _route = _classify_route(self.path, self.headers)
         _policy = get_policy(_route)
