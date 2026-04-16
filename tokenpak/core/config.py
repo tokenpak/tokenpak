@@ -1,8 +1,16 @@
-"""TokenPak Agent Config — persistent key/value config stored in ~/.tokenpak/config.json.
+"""TokenPak Agent Config — runtime-mutable toggles stored in ~/.tokenpak/config.json.
 
-Env vars always take priority over the config file.
-Config file values are read fresh on each call (no process-lifetime caching needed
-since this is called only once per proxy request for the footer toggle).
+This module handles a small set of runtime-mutable toggles (stats_footer, debug,
+capsule_builder, metrics.enabled). These can be changed without restarting the proxy.
+
+Precedence order (highest wins):
+  1. Environment variable (TOKENPAK_STATS_FOOTER, TOKENPAK_DEBUG, etc.)
+  2. JSON overrides (~/.tokenpak/config.json) — runtime-mutable
+  3. YAML config (~/.tokenpak/config.yaml via config_loader.py) — for overlapping keys
+  4. Defaults (False for all toggles)
+
+The full proxy/routing/compression config is handled by config_loader.py (YAML).
+This module only handles the lightweight toggle layer.
 """
 
 from __future__ import annotations
@@ -38,13 +46,22 @@ def _save(data: dict[str, Any]) -> None:
 
 
 def get_config() -> dict[str, Any]:
-    """Return a merged view: env var overrides take priority over file values."""
-    data = _load()
+    """Return a merged view: env > JSON overrides > YAML config > defaults."""
+    # Start with YAML base (config_loader.py) for overlapping keys
+    try:
+        from tokenpak.core.config_loader import load_config as _load_yaml_config
+        base = _load_yaml_config()
+    except Exception:
+        base = {}
+    # JSON overrides on top
+    json_data = _load()
+    base.update(json_data)
+    # Env vars win
     for key, env_var in _ENV_OVERRIDES.items():
         env_val = os.environ.get(env_var)
         if env_val is not None:
-            data[key] = env_val not in ("0", "false", "False", "no")
-    return data
+            base[key] = env_val not in ("0", "false", "False", "no")
+    return base
 
 
 def set_config(key: str, value: Any) -> None:

@@ -51,13 +51,15 @@ from .request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 from .router import ProviderRouter, estimate_cost, INTERCEPT_HOSTS
 from .streaming import extract_sse_tokens
 from .passthrough import (
-    forward_headers,
     validate_auth,
     PassthroughConfig,
     CredentialPassthrough,
     _classify_route,
-    CLAUDE_CODE_HEADER_ALLOWLIST,
     LEGACY_HEADER_ALLOWLIST,
+)
+from .headers import (
+    forward_headers,
+    CLAUDE_CODE_HEADER_ALLOWLIST,
 )
 from .stats import CompressionStats
 from .degradation import get_degradation_tracker, DegradationEventType
@@ -617,6 +619,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         _route = _classify_route(self.path, self.headers)
         _policy = get_policy(_route)
         _source_platform = _policy["platform_tag"]
+        _is_byte_preserved = _policy.get("body") == "byte_preserved"
 
         # Platform adapter detection (feature-flagged via TOKENPAK_PLATFORM_ADAPTERS, default ON)
         _adapters_enabled = os.environ.get("TOKENPAK_PLATFORM_ADAPTERS", "1") != "0"
@@ -722,11 +725,33 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass  # fail-open: never break a request over telemetry
 
-            try:
-                data = json.loads(body)
-                is_streaming = data.get("stream", False)
-            except Exception:
-                pass
+            if _is_byte_preserved:
+                # Byte-preserved path (Claude Code): detect streaming from raw
+                # bytes only — never json.loads/json.dumps the body.
+                # Use the modular pipeline for vault injection (byte splice)
+                # but skip compression entirely to preserve Anthropic billing routing.
+                is_streaming = b'"stream":true' in body or b'"stream": true' in body
+                try:
+                    from tokenpak.proxy.pipeline import process_request as _pipeline_run
+                    from tokenpak.proxy.request import ProxyRequest as _PReq
+                    _pr = _PReq(
+                        method="POST",
+                        url=target_url,
+                        headers=dict(self.headers),
+                        body=body,
+                        source_platform=_source_platform,
+                    )
+                    _result = _pipeline_run(_pr, _policy, route=_route, client_has_auth=True)
+                    body = _result.request.body
+                except Exception:
+                    pass  # fail-open: vault injection failure must never break a request
+            else:
+                # READ-ONLY parse — body bytes must NOT be reconstructed from this dict
+                try:
+                    data = json.loads(body)
+                    is_streaming = data.get("stream", False)
+                except Exception:
+                    pass
 
             # Google streaming is signalled by URL, not body: path contains
             # streamGenerateContent or query param ?alt=sse.
@@ -736,7 +761,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             ):
                 is_streaming = True
 
-            if ps.request_hook:
+            if ps.request_hook and not _is_byte_preserved:
                 try:
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
                         body, model, trace

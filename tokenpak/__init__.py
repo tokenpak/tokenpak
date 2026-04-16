@@ -35,6 +35,7 @@ def __getattr__(name: str):
         "connectors": lambda: __import__("tokenpak.sources", fromlist=[""]),
         "proxy": lambda: __import__("tokenpak.proxy", fromlist=[""]),
         "watchdog": lambda: __import__("tokenpak.proxy.proxy_watchdog", fromlist=[""]),
+        "extensions": lambda: __import__("tokenpak.core.extensions", fromlist=[""]),
         # Budgeting
         "Budgeter": lambda: __import__("tokenpak.telemetry.budgeter", fromlist=["Budgeter"]).Budgeter,
         "BudgetBlock": lambda: __import__("tokenpak.telemetry.budget_allocator", fromlist=["BudgetBlock"]).BudgetBlock,
