@@ -1505,7 +1505,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
+        self.send_header("Connection", "close")
         self.end_headers()
 
         def _sse(event: str, data: dict) -> None:
@@ -1566,9 +1566,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # 6. message_stop
         _sse("message_stop", {"type": "message_stop"})
 
-        # Final empty data line to signal end of stream
+        # Signal end of stream and close connection
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
+        try:
+            self.wfile.close()
+        except Exception:
+            pass
 
     def _send_json(self, data: dict) -> None:
         body = json.dumps(data, indent=2).encode()
