@@ -112,6 +112,72 @@ def _exec(cmd: str, args: str = "") -> None:
         sys.argv = original
 
 
+# ---------------------------------------------------------------------------
+# Interactive command dispatch — prompts for required args before running
+# ---------------------------------------------------------------------------
+
+# Commands that need a text input before executing
+_INPUT_COMMANDS: dict[str, dict] = {
+    "index":        {"label": "Directory to index:", "placeholder": "e.g. ~/projects/myapp"},
+    "search":       {"label": "Search query:", "placeholder": "e.g. authentication middleware"},
+    "calibrate":    {"label": "Directory to calibrate:", "placeholder": "e.g. ~/projects/myapp"},
+    "validate":     {"label": "File to validate:", "placeholder": "e.g. ./output.tokpak"},
+    "config-check": {"label": "Config file to check:", "placeholder": "e.g. ~/.tokenpak/config.yaml"},
+}
+
+# Commands that need a subcommand picked first
+_SUBCOMMAND_COMMANDS: dict[str, list[tuple[str, str]]] = {
+    "route":       [("list", "View routing rules"), ("add", "Add a rule"), ("test", "Test a rule")],
+    "budget":      [("status", "View budget"), ("set", "Set limits"), ("history", "Spend history")],
+    "config":      [("show", "View config"), ("validate", "Validate"), ("init", "Create default"), ("migrate", "Migrate legacy"), ("path", "Config path")],
+    "recipe":      [("create", "Create recipe"), ("validate", "Validate recipe"), ("test", "Test recipe"), ("benchmark", "Benchmark recipe")],
+    "template":    [("list", "List templates"), ("add", "Add template"), ("show", "Show template"), ("remove", "Remove template")],
+    "debug":       [("on", "Enable debug"), ("off", "Disable debug"), ("status", "Debug status")],
+    "learn":       [("status", "View patterns"), ("reset", "Reset patterns")],
+    "trigger":     [("list", "List triggers"), ("add", "Add trigger"), ("remove", "Remove trigger")],
+    "macro":       [("list", "List macros"), ("create", "Create macro"), ("run", "Run macro"), ("show", "Show macro")],
+    "fingerprint": [("sync", "Sync fingerprints"), ("cache", "View cache"), ("clear-cache", "Clear cache")],
+    "lock":        [("list", "List locks"), ("claim", "Claim lock"), ("release", "Release lock")],
+    "agent":       [("list", "List agents"), ("register", "Register agent"), ("locks", "View locks")],
+    "retrieval":   [("status", "Retrieval status"), ("test", "Test retrieval")],
+    "prove":       [("run", "Run value proof"), ("list", "List scenarios"), ("providers", "Show providers")],
+    "alerts":      [("test --channel webhook", "Test webhook"), ("test --channel slack", "Test Slack")],
+    "fleet":       [("", "Show fleet status")],
+}
+
+
+def _exec_interactive(cmd: str, hdr: str) -> None:
+    """Smart execution — prompts for input/subcommand if needed, then runs."""
+    c = supports_color()
+
+    # Check if command needs text input
+    if cmd in _INPUT_COMMANDS:
+        cfg = _INPUT_COMMANDS[cmd]
+        value = prompt_input(cfg["label"], header=hdr, placeholder=cfg.get("placeholder", ""))
+        if not value:
+            return
+        _exec(cmd, value)
+        return
+
+    # Check if command needs a subcommand picked
+    if cmd in _SUBCOMMAND_COMMANDS:
+        subs = _SUBCOMMAND_COMMANDS[cmd]
+        label = _POLISHED_LABELS.get(cmd, cmd)
+        choice = pick(
+            paint(label, Color.PASTEL_YELLOW, c),
+            subs,
+            header=hdr,
+            back_label="Back",
+        )
+        if choice is None or choice == _BACK_SENTINEL:
+            return
+        _exec(cmd, choice)
+        return
+
+    # No special handling needed — run directly
+    _exec(cmd)
+
+
 def _header_compact() -> str:
     c = supports_color()
     token = paint("token", Color.WHITE + Color.BOLD, c)
@@ -405,7 +471,7 @@ def _section_browse_all(hdr: str) -> None:
         if choice == "__toggle__":
             show_all = not show_all
             continue
-        _exec(choice)
+        _exec_interactive(choice, hdr)
         _wait()
 
 
