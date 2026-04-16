@@ -196,6 +196,11 @@ def _calculate_fleet_savings(
     if period and period in period_map:
         where_clause = "WHERE timestamp >= datetime('now', ?)"
         params = [period_map[period]]
+    elif period and period.endswith("h_custom"):
+        # Custom hour filter from --days/--hours flags
+        hours = int(period.replace("h_custom", ""))
+        where_clause = "WHERE timestamp >= datetime('now', ?)"
+        params = [f"-{hours} hours"]
 
     # Check if 'route' column exists in the requests table (legacy DBs lack it)
     col_names = {r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()}
@@ -439,6 +444,8 @@ def run(
     as_json: bool = False,
     no_meme: bool = False,
     db_path: Optional[str] = None,
+    days: int = 0,
+    hours: int = 0,
 ) -> None:
     """Print savings-first status to stdout.
 
@@ -448,6 +455,8 @@ def run(
       --by-provider  Breakdown by provider (Anthropic, OpenAI, etc.)
       --minimal      One-line summary
       --json         Machine-readable JSON dump
+      --days N       Filter to last N days
+      --hours N      Filter to last N hours (combinable with --days)
     """
     if as_json:
         return _run_json(proxy_base=proxy_base, db_path=db_path)
@@ -465,8 +474,13 @@ def run(
     proxy_up = health is not None
     session = stats.get("session", {}) if stats else {}
 
-    # --- Fetch DB data (historical / all-time) ---
-    savings_all = _calculate_fleet_savings(db_path=db_path, period=None)
+    # --- Fetch DB data (historical, with optional time filter) ---
+    total_hours = days * 24 + hours
+    if total_hours > 0:
+        db_period = f"{total_hours}h_custom"
+    else:
+        db_period = None  # all time
+    savings_all = _calculate_fleet_savings(db_path=db_path, period=db_period)
 
     version = _get_version()
 
@@ -510,7 +524,15 @@ def run(
         injected_tok = 0
         injection_hits = 0
         uptime_s = 0
-        source_label = "all time"
+        if total_hours > 0:
+            parts = []
+            if days > 0:
+                parts.append(f"{days}d")
+            if hours > 0:
+                parts.append(f"{hours}h")
+            source_label = f"last {' '.join(parts)}"
+        else:
+            source_label = "all time"
 
     # --- Compute attribution ---
     tp_compression_usd = 0.0
@@ -1031,6 +1053,8 @@ if HAS_CLICK:
     @click.option("--json", "as_json", is_flag=True, help="Full JSON data dump")
     @click.option("--no-meme", is_flag=True, help="Suppress tagline")
     @click.option("--db", "db_path", default=None, help="Monitor DB path override")
+    @click.option("--days", default=0, type=int, help="Filter to last N days (combinable with --hours)")
+    @click.option("--hours", default=0, type=int, help="Filter to last N hours (combinable with --days)")
     def status_cmd(
         proxy: str,
         full: bool,
@@ -1039,20 +1063,25 @@ if HAS_CLICK:
         as_json: bool,
         no_meme: bool,
         db_path: Optional[str],
+        days: int,
+        hours: int,
     ) -> None:
         """Show savings report (default) or full technical status.
 
         Default output leads with dollar savings — the number that matters.
         Use --full for the legacy technical output.
+        Use --days and --hours to filter to a specific time window.
 
         Examples:
 
         \\b
-          tokenpak status               # savings-first (v3)
-          tokenpak status --full        # legacy technical output
-          tokenpak status --minimal     # one-liner for scripts
-          tokenpak status --json        # machine-readable
-          tokenpak status --no-meme     # suppress tagline
+          tokenpak status                     # savings-first (all time)
+          tokenpak status --days 1            # last 24 hours
+          tokenpak status --hours 6           # last 6 hours
+          tokenpak status --days 1 --hours 6  # last 30 hours
+          tokenpak status --full              # legacy technical output
+          tokenpak status --minimal           # one-liner for scripts
+          tokenpak status --json              # machine-readable
         """
         run(
             proxy_base=proxy,
@@ -1062,4 +1091,6 @@ if HAS_CLICK:
             as_json=as_json,
             no_meme=no_meme,
             db_path=db_path,
+            days=days,
+            hours=hours,
         )
