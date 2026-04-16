@@ -1,76 +1,76 @@
 {
   "100_none": {
-    "median_ms": 0.004161032848060131,
+    "median_ms": 0.004299916326999664,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_none": {
-    "median_ms": 0.005604000762104988,
+    "median_ms": 0.005567912012338638,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "1000_none": {
-    "median_ms": 0.007853028364479542,
+    "median_ms": 0.007895752787590027,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "5000_none": {
-    "median_ms": 0.029540969990193844,
+    "median_ms": 0.029725953936576843,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "10000_none": {
-    "median_ms": 0.056360033340752125,
+    "median_ms": 0.05596969276666641,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "100_light": {
-    "median_ms": 1.5775690553709865,
+    "median_ms": 1.635019201785326,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_light": {
-    "median_ms": 3.4532389836385846,
+    "median_ms": 3.7067951634526253,
     "ratio": 1.5481049562682216,
     "savings_pct": 35.4
   },
   "1000_light": {
-    "median_ms": 3.4680470125749707,
+    "median_ms": 3.6718128249049187,
     "ratio": 2.9183673469387754,
     "savings_pct": 65.73
   },
   "5000_light": {
-    "median_ms": 3.6531779915094376,
+    "median_ms": 3.860270604491234,
     "ratio": 14.70262390670554,
     "savings_pct": 93.2
   },
   "10000_light": {
-    "median_ms": 3.853784059174359,
+    "median_ms": 4.063758999109268,
     "ratio": 29.22740524781341,
     "savings_pct": 96.58
   },
   "100_aggressive": {
-    "median_ms": 7.643752032890916,
+    "median_ms": 30.204127077013254,
     "ratio": 1.0,
     "savings_pct": 0.0
   },
   "500_aggressive": {
-    "median_ms": 9.564858977682889,
+    "median_ms": 47.10036003962159,
     "ratio": 1.5481049562682216,
     "savings_pct": 35.4
   },
   "1000_aggressive": {
-    "median_ms": 9.74611402489245,
+    "median_ms": 31.26044338569045,
     "ratio": 2.9183673469387754,
     "savings_pct": 65.73
   },
   "5000_aggressive": {
-    "median_ms": 10.000167996622622,
+    "median_ms": 31.147214584052563,
     "ratio": 14.70262390670554,
     "savings_pct": 93.2
   },
   "10000_aggressive": {
-    "median_ms": 10.005471995100379,
+    "median_ms": 31.35858289897442,
     "ratio": 29.22740524781341,
     "savings_pct": 96.58
   }

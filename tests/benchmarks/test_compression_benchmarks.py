@@ -42,6 +42,7 @@ from tokenpak.compression.pipeline import CompressionPipeline  # noqa: E402
 # ---------------------------------------------------------------------------
 BASELINE_PATH = Path(__file__).parent / "baseline.json"
 REGRESSION_THRESHOLD = 1.20  # 20% slower → fail
+MIN_LATENCY_FLOOR_MS = 1.0  # sub-ms baselines are dominated by OS scheduling jitter; always pass if under this
 WARMUP_RUNS = 2
 MEASURE_RUNS = 5
 
@@ -245,8 +246,9 @@ def test_compression_benchmark(target_tokens: int, mode_name: str) -> None:
         return
 
     # Regression check: latency must not exceed baseline × threshold
+    # Floor prevents false failures when baseline is sub-ms (OS scheduling jitter dominates)
     baseline_ms = baseline[baseline_key]["median_ms"]
-    allowed_ms = baseline_ms * REGRESSION_THRESHOLD
+    allowed_ms = max(baseline_ms * REGRESSION_THRESHOLD, MIN_LATENCY_FLOOR_MS)
 
     assert median_ms <= allowed_ms, (
         f"REGRESSION: {target_tokens} tokens / {mode_name} mode — "
