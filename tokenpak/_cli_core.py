@@ -2256,6 +2256,9 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=False)
 
     # ── Progressive disclosure: help + aliases ────────────────────────────────
+    p_menu = sub.add_parser("menu", help="Interactive command browser (arrow-key navigation)")
+    p_menu.set_defaults(func=lambda args: __import__("tokenpak.cli.commands.menu", fromlist=["run_menu"]).run_menu())
+
     p_help = sub.add_parser("help", help="Show all commands grouped by category")
     p_help.add_argument("cmd_name", nargs="?", default=None, help="Command name for detailed help")
     p_help.add_argument(
@@ -4030,8 +4033,20 @@ def main():
         print(f"tokenpak {_ver}")
         sys.exit(0)
 
+    # ── Intercept bare invocation: launch interactive menu on TTY ──────────────
+    if len(sys.argv) == 1:
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            try:
+                from tokenpak.cli.commands.menu import run_menu
+                run_menu()
+            except Exception:
+                _print_quick_help()
+        else:
+            _print_quick_help()
+        sys.exit(0)
+
     # ── Intercept bare --help / -h for progressive disclosure ─────────────────
-    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ("--help", "-h")):
+    if len(sys.argv) == 2 and sys.argv[1] in ("--help", "-h"):
         _print_quick_help()
         sys.exit(0)
 
@@ -4068,6 +4083,7 @@ def main():
         "last",
         "prune",
         "retrieval",
+        "menu",
         # Stub commands (advertised in help/registry, not yet implemented)
         "license",
         "plan",

@@ -20,80 +20,21 @@ import os
 import shutil
 import subprocess
 import sys
-import termios
 import time
-import tty
 from pathlib import Path
 from typing import Optional
 
 import httpx
 
+from tokenpak._formatting.picker import getch as _getch, pick as _shared_pick
 
-# ═══════════════════════════════════════════════════════════════════════
-# Arrow-key interactive picker
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def _getch() -> str:
-    """Read a single keypress, returning a named action."""
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        if ch == "\x1b":
-            ch2 = sys.stdin.read(1)
-            if ch2 == "[":
-                ch3 = sys.stdin.read(1)
-                return {"A": "up", "B": "down"}.get(ch3, "")
-        if ch in ("\r", "\n"):
-            return "enter"
-        if ch in ("q", "\x03"):  # q or Ctrl-C
-            return "quit"
-        return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+_TEST_HEADER = "\n  \033[1mtokenpak test\033[0m\n"
 
 
 def _pick(title: str, options: list[tuple[str, str]],
           subtitle: str = "") -> Optional[str]:
-    """Arrow-key single-select picker.
-
-    Args:
-        title: Heading text.
-        options: List of (value, display_label) tuples.
-        subtitle: Optional line below title.
-
-    Returns:
-        Selected value, or None if user quits.
-    """
-    if not options:
-        return None
-    idx = 0
-    while True:
-        sys.stdout.write("\033[2J\033[H")  # clear screen
-        sys.stdout.write(f"\n  \033[1mtokenpak test\033[0m\n\n")
-        sys.stdout.write(f"  {title}\n")
-        if subtitle:
-            sys.stdout.write(f"  \033[2m{subtitle}\033[0m\n")
-        sys.stdout.write("\n")
-        for i, (_, label) in enumerate(options):
-            if i == idx:
-                sys.stdout.write(f"  \033[36m> {label}\033[0m\n")
-            else:
-                sys.stdout.write(f"    {label}\n")
-        sys.stdout.write(f"\n  \033[2m[arrows] navigate  [enter] select  [q] quit\033[0m\n")
-        sys.stdout.flush()
-
-        key = _getch()
-        if key == "up":
-            idx = (idx - 1) % len(options)
-        elif key == "down":
-            idx = (idx + 1) % len(options)
-        elif key == "enter":
-            return options[idx][0]
-        elif key == "quit":
-            return None
+    """Thin wrapper around the shared picker with test-command branding."""
+    return _shared_pick(title, options, subtitle=subtitle, header=_TEST_HEADER)
 
 
 # ═══════════════════════════════════════════════════════════════════════
