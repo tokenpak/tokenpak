@@ -79,7 +79,9 @@ def _init() -> None:
             description="Token compression ratio",
         )
     except Exception:
-        _ENABLED = False
+        # Do not set _ENABLED = False — record_request guards via `_tracer is None`.
+        # Clearing _ENABLED here breaks tests that patch _tracer externally after a
+        # failed _init() call (the patch.object never gets a chance to run).
         _tracer = None
 
 
