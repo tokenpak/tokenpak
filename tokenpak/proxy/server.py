@@ -354,6 +354,33 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # silence access log
         pass
 
+    def send_error(self, code, message=None, explain=None):
+        # Override the stdlib HTML error page. Every client hitting this
+        # proxy is expecting an API-style JSON error, and leaking the
+        # default HTML to a chat bot or SDK produces garbage output.
+        try:
+            short, long = self.responses.get(code, ("Unknown", "Unknown"))
+        except Exception:
+            short, long = "Error", ""
+        body = json.dumps({
+            "error": {
+                "type": "proxy_error",
+                "code": code,
+                "message": message or short,
+                "detail": explain or long,
+            }
+        }).encode("utf-8")
+        try:
+            self.send_response(code, message or short)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD" and code >= 200 and code not in (204, 304):
+                self.wfile.write(body)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # CONNECT tunnelling (HTTPS MITM passthrough)
     # ------------------------------------------------------------------
