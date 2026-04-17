@@ -316,6 +316,136 @@ def _apply_claude_code(proxy_url: str) -> ApplyResult:
         )
 
 
+def _apply_continue(proxy_url: str) -> ApplyResult:
+    """Add tokenpak-* model entries to ~/.continue/config.json.
+
+    Continue.dev reads its model list from ~/.continue/config.{json,yaml}.
+    We target config.json because it doesn't require a YAML parser in the
+    stdlib-only companion. If only config.yaml exists we fall back to
+    print-only with a helpful error rather than clobber the user's YAML.
+    """
+    import datetime
+    import shutil as _shutil
+
+    continue_dir = Path.home() / ".continue"
+    config_json = continue_dir / "config.json"
+    config_yaml = continue_dir / "config.yaml"
+
+    # If user only has YAML, don't clobber it — prompt to convert or edit manually.
+    if not config_json.exists() and config_yaml.exists():
+        return ApplyResult(
+            ok=False,
+            summary="Found config.yaml; tokenpak auto-apply only writes config.json.",
+            error="yaml_config_present",
+            rollback_cmd=f"edit {config_yaml} manually using the printed snippet",
+        )
+
+    bak: Optional[Path] = None
+    try:
+        continue_dir.mkdir(parents=True, exist_ok=True)
+        if config_json.exists():
+            bak = config_json.with_suffix(".json.bak")
+            _shutil.copy2(config_json, bak)
+            import json as _json
+            try:
+                config = _json.loads(config_json.read_text(encoding="utf-8"))
+            except Exception as exc:
+                return ApplyResult(
+                    ok=False,
+                    summary="Could not parse existing config.json.",
+                    error=str(exc),
+                    backup_path=str(bak),
+                )
+        else:
+            config = {}
+
+        models = config.setdefault("models", [])
+        if not isinstance(models, list):
+            return ApplyResult(
+                ok=False,
+                summary="config.json 'models' field is not a list — refusing to touch.",
+                error="models_not_list",
+                backup_path=str(bak) if bak else None,
+            )
+
+        openai_base = proxy_url.rstrip("/") + "/v1"
+        tp_entries = [
+            {
+                "title": "tokenpak-sonnet",
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-6",
+                "apiBase": proxy_url,
+            },
+            {
+                "title": "tokenpak-opus",
+                "provider": "anthropic",
+                "model": "claude-opus-4-7",
+                "apiBase": proxy_url,
+            },
+            {
+                "title": "tokenpak-gpt4o",
+                "provider": "openai",
+                "model": "gpt-4o",
+                "apiBase": openai_base,
+            },
+        ]
+
+        changes: list[str] = []
+        existing_titles = {m.get("title") for m in models if isinstance(m, dict)}
+        for entry in tp_entries:
+            title = entry["title"]
+            # If a previous tokenpak-* entry exists, replace in place
+            replaced = False
+            for i, m in enumerate(models):
+                if isinstance(m, dict) and m.get("title") == title:
+                    if m == entry:
+                        break  # already identical
+                    models[i] = entry
+                    changes.append(f"updated model: {title}")
+                    replaced = True
+                    break
+            if title not in existing_titles and not replaced:
+                models.append(entry)
+                changes.append(f"added model: {title}")
+
+        if not changes:
+            return ApplyResult(
+                ok=True,
+                summary="Continue.dev already configured — no changes.",
+                backup_path=str(bak) if bak else None,
+            )
+
+        # Atomic write
+        import json as _json2
+        tmp = config_json.with_suffix(".json.tmp")
+        tmp.write_text(_json2.dumps(config, indent=2), encoding="utf-8")
+        os.replace(tmp, config_json)
+
+        rollback = (
+            f"cp {bak} {config_json}" if bak
+            else f"remove the tokenpak-* entries from {config_json}"
+        )
+        return ApplyResult(
+            ok=True,
+            summary=f"Updated {config_json} ({len(changes)} change{'s' if len(changes) != 1 else ''}).",
+            changes=changes,
+            backup_path=str(bak) if bak else None,
+            rollback_cmd=rollback,
+        )
+    except Exception as exc:
+        if bak is not None and config_json.exists():
+            try:
+                _shutil.copy2(bak, config_json)
+            except Exception:
+                pass
+        return ApplyResult(
+            ok=False,
+            summary="Continue.dev apply failed (rollback attempted).",
+            error=str(exc),
+            backup_path=str(bak) if bak else None,
+        )
+
+
 # Dynamic registry — add a new client by appending one Integration here.
 INTEGRATIONS: list[Integration] = [
     Integration(
@@ -346,6 +476,7 @@ INTEGRATIONS: list[Integration] = [
         kind="client",
         detector=lambda: _detect_vscode_extension("continue.continue"),
         instructions=_instr_continue,
+        applier=_apply_continue,
     ),
     Integration(
         key="aider",
