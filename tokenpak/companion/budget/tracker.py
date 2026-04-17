@@ -19,47 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 
-# Model costs (USD per 1M tokens).
-# Anthropic: cache-read discount = 10% of input price.
-# OpenAI: cached input = 50% of input price.
-_MODEL_COSTS: dict[str, dict[str, float]] = {
-    # ── Anthropic ──────────────────────────────────────────────
-    # Claude Opus — $15 input / $75 output / $1.50 cache-read
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0, "cached": 1.50},
-    "claude-opus-4-5": {"input": 15.0, "output": 75.0, "cached": 1.50},
-    # Claude Sonnet — $3 input / $15 output / $0.30 cache-read
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cached": 0.30},
-    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0, "cached": 0.30},
-    # Claude Haiku — $0.80 input / $4 output / $0.08 cache-read
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.0, "cached": 0.08},
-    "claude-haiku-3-5": {"input": 0.80, "output": 4.0, "cached": 0.08},
-    # Short-form / legacy keys (matched by substring in _resolve_rates)
-    "opus":   {"input": 15.0, "output": 75.0, "cached": 1.50},
-    "sonnet": {"input": 3.0,  "output": 15.0, "cached": 0.30},
-    "haiku":  {"input": 0.80, "output": 4.0,  "cached": 0.08},
-
-    # ── OpenAI ─────────────────────────────────────────────────
-    # GPT-4o — $2.50 input / $10 output / $1.25 cached
-    "gpt-4o":      {"input": 2.50, "output": 10.0, "cached": 1.25},
-    # GPT-4o mini — $0.15 input / $0.60 output / $0.075 cached
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60, "cached": 0.075},
-    # o3 — $10 input / $40 output / $5 cached
-    "o3":          {"input": 10.0, "output": 40.0, "cached": 5.0},
-    # o3-mini — $1.10 input / $4.40 output / $0.55 cached
-    "o3-mini":     {"input": 1.10, "output": 4.40, "cached": 0.55},
-    # o4-mini — $1.10 input / $4.40 output / $0.55 cached
-    "o4-mini":     {"input": 1.10, "output": 4.40, "cached": 0.55},
-    # o1 — $15 input / $60 output / $7.50 cached
-    "o1":          {"input": 15.0, "output": 60.0, "cached": 7.50},
-    # o1-mini — $1.10 input / $4.40 output / $0.55 cached
-    "o1-mini":     {"input": 1.10, "output": 4.40, "cached": 0.55},
-    # GPT-4.1 — $2.00 input / $8.00 output / $0.50 cached
-    "gpt-4.1":     {"input": 2.0, "output": 8.0, "cached": 0.50},
-    # GPT-4.1 mini — $0.40 input / $1.60 output / $0.10 cached
-    "gpt-4.1-mini": {"input": 0.40, "output": 1.60, "cached": 0.10},
-    # GPT-4.1 nano — $0.10 input / $0.40 output / $0.025 cached
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40, "cached": 0.025},
-}
+from tokenpak.models import get_rates as _registry_get_rates
 
 
 @dataclass
@@ -198,23 +158,7 @@ class BudgetTracker:
 def _resolve_rates(model: str) -> dict[str, float]:
     """Match a model name to its pricing rates.
 
-    Resolution order:
-    1. Exact match (e.g. "claude-sonnet-4-6", "gpt-4o")
-    2. Prefix match for versioned names (e.g. "gpt-4o-2024-08-06")
-    3. Substring match for short-form names (e.g. "sonnet", "4o")
-    4. Default: sonnet rates (Anthropic) or gpt-4o rates (OpenAI)
-
-    Provider detection: models starting with "gpt-", "o1", "o3", or "o4"
-    default to gpt-4o rates; all others default to sonnet.
+    Delegates to the dynamic model registry for resolution with family
+    inference and provider-aware defaults.
     """
-    if model in _MODEL_COSTS:
-        return _MODEL_COSTS[model]
-    model_lower = model.lower()
-    # Prefix match first (longer keys win — sort descending by length)
-    for key in sorted(_MODEL_COSTS, key=len, reverse=True):
-        if model_lower.startswith(key) or key in model_lower:
-            return _MODEL_COSTS[key]
-    # Provider-aware default
-    if model_lower.startswith(("gpt-", "o1", "o3", "o4")):
-        return _MODEL_COSTS["gpt-4o"]
-    return _MODEL_COSTS["sonnet"]
+    return _registry_get_rates(model)

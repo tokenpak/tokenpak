@@ -15,9 +15,9 @@ class TestEstimateCost:
         assert abs(cost - 18.0) < 0.001
 
     def test_known_model_haiku(self):
-        # 1M input + 1M output = $0.25 + $1.25 = $1.50
+        # 1M input + 1M output = $0.80 + $4.00 = $4.80
         cost = estimate_cost("claude-haiku-3-5", 1_000_000, 1_000_000)
-        assert abs(cost - 1.50) < 0.001
+        assert abs(cost - 4.80) < 0.001
 
     def test_known_model_gpt4o(self):
         cost = estimate_cost("gpt-4o", 1_000_000, 1_000_000)
@@ -28,22 +28,23 @@ class TestEstimateCost:
         assert abs(cost - 0.375) < 0.001
 
     def test_known_model_codex(self):
+        # 1M input + 1M output = $1.50 + $6.00 = $7.50
         cost = estimate_cost("codex", 1_000_000, 1_000_000)
-        assert abs(cost - 15.0) < 0.001
+        assert abs(cost - 7.50) < 0.001
 
     def test_generic_fallback_model(self):
-        # Unknown model → fallback: $1/1M input, $3/1M output
+        # Unknown model → registry default: $3/1M input, $15/1M output (sonnet-class)
         cost = estimate_cost("unknown-model-xyz", 1_000_000, 1_000_000)
-        assert abs(cost - 4.0) < 0.001
+        assert abs(cost - 18.0) < 0.001
 
     def test_zero_tokens(self):
         cost = estimate_cost("gpt-4o", 0, 0)
         assert cost == 0.0
 
     def test_small_request(self):
-        # 100 prompt + 50 completion for haiku
+        # 100 prompt + 50 completion for haiku ($0.80/$4.00 per MTok)
         cost = estimate_cost("claude-haiku-3-5", 100, 50)
-        expected = (100 * 0.25 + 50 * 1.25) / 1_000_000
+        expected = (100 * 0.80 + 50 * 4.00) / 1_000_000
         assert abs(cost - expected) < 1e-10
 
     def test_prefix_match(self):
@@ -81,8 +82,9 @@ class TestRecordRequest:
         assert summary["total_requests"] == 2
 
     def test_fallback_model(self, tracker):
+        # Unknown model → registry default: $3/$15 (sonnet-class) = $18
         cost = tracker.record_request("totally-unknown-model", 1_000_000, 1_000_000)
-        assert abs(cost - 4.0) < 0.001
+        assert abs(cost - 18.0) < 0.001
 
 
 class TestGetSummary:

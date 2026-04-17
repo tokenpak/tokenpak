@@ -465,42 +465,7 @@ def run_budget_cmd(args) -> None:
 # Budget Intelligence
 # ---------------------------------------------------------------------------
 
-_MODEL_TIER_MAP: dict[str, str] = {
-    # Expensive → mid → cheap ordering
-    "claude-opus": "expensive",
-    "claude-opus-4": "expensive",
-    "claude-sonnet": "mid",
-    "claude-sonnet-4": "mid",
-    "gpt-4": "expensive",
-    "gpt-4o": "mid",
-    "gemini-pro": "mid",
-    "claude-haiku": "cheap",
-    "claude-haiku-4": "cheap",
-    "gpt-3.5": "cheap",
-    "gpt-4o-mini": "cheap",
-    "gemini-flash": "cheap",
-}
-
-_CHEAPER_MODEL_MAP: dict[str, str] = {
-    "claude-opus": "claude-sonnet",
-    "claude-opus-4": "claude-sonnet-4",
-    "claude-sonnet": "claude-haiku",
-    "claude-sonnet-4": "claude-haiku-4",
-    "gpt-4": "gpt-4o-mini",
-    "gpt-4o": "gpt-4o-mini",
-    "gemini-pro": "gemini-flash",
-}
-
-_COST_REDUCTION_ESTIMATE: dict[str, float] = {
-    # Fraction of cost saved when switching to cheaper model
-    "claude-opus": 0.80,
-    "claude-opus-4": 0.80,
-    "claude-sonnet": 0.75,
-    "claude-sonnet-4": 0.75,
-    "gpt-4": 0.85,
-    "gpt-4o": 0.75,
-    "gemini-pro": 0.70,
-}
+from tokenpak.models import get_cheaper_alternative as _registry_get_cheaper
 
 
 def _get_model_daily_avg(days: int = 7) -> list[dict]:
@@ -589,14 +554,9 @@ def _generate_suggestions(burn: dict, model_breakdown: list[dict]) -> list[str]:
     for entry in model_breakdown:
         model_key = entry["model"].lower()
         # Find matching tier key
-        match = None
-        for k in _CHEAPER_MODEL_MAP:
-            if k in model_key:
-                match = k
-                break
-        if match and entry["daily_avg"] > 0.01:
-            cheaper = _CHEAPER_MODEL_MAP[match]
-            reduction = _COST_REDUCTION_ESTIMATE.get(match, 0.70)
+        alt_result = _registry_get_cheaper(entry["model"])
+        if alt_result and entry["daily_avg"] > 0.01:
+            cheaper, reduction = alt_result
             savings = entry["daily_avg"] * reduction
             suggestions.append(
                 f"Switch {entry['model']} → {cheaper} on low-priority queries "

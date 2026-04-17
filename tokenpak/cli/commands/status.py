@@ -30,26 +30,12 @@ try:
 except ImportError:
     HAS_CLICK = False
 
-# Import pricing module for per-model rates
+# Import pricing from the dynamic model registry
 try:
-    from tokenpak.telemetry.pricing import MODEL_RATES, DEFAULT_RATE, get_rates
+    from tokenpak.models import get_rates
 except ImportError:
-    MODEL_RATES = {
-        "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
-        "claude-opus-4-6": {"input": 15.0, "cached": 1.50, "output": 75.0},
-        "claude-sonnet-4-5": {"input": 3.0, "cached": 0.30, "output": 15.0},
-        "claude-sonnet-4-6": {"input": 3.0, "cached": 0.30, "output": 15.0},
-        "claude-haiku-4-5": {"input": 0.80, "cached": 0.08, "output": 4.0},
-        "claude-haiku-4-6": {"input": 0.80, "cached": 0.08, "output": 4.0},
-        "gpt-4o": {"input": 2.50, "cached": 1.25, "output": 10.0},
-        "gpt-4o-mini": {"input": 0.15, "cached": 0.075, "output": 0.60},
-    }
-    DEFAULT_RATE = {"input": 3.0, "cached": 0.30, "output": 15.0}
-
     def get_rates(model: Optional[str] = None) -> dict:
-        if not model:
-            return DEFAULT_RATE
-        return MODEL_RATES.get(model, DEFAULT_RATE)
+        return {"input": 3.0, "cached": 0.30, "output": 15.0}
 
 
 # ---------------------------------------------------------------------------

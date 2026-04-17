@@ -176,8 +176,8 @@ def _suggest_model(requested: str) -> Optional[str]:
     """Return the closest known model name for a given (possibly wrong) model string."""
     import sys as _sys
 
-    _mod = _sys.modules[__name__]
-    _known = list(getattr(_mod, "MODEL_COSTS", {}).keys())
+    from tokenpak.models import known_models
+    _known = known_models()
     if not _known or not requested:
         return None
     req_l = requested.lower()

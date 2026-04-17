@@ -1,37 +1,36 @@
-"""pricing.py — Model pricing rates and savings calculations.
+"""pricing_rates.py — Model pricing rates and savings calculations.
 
-Provides hardcoded rates for major AI models and utilities to compute
-compression + cache savings from proxy stats.
+Delegates to ``tokenpak.models`` for all model pricing lookups.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-# Pricing per million tokens (input, cached, output)
-# Format: {"input": price, "cached": price, "output": price}
+from tokenpak.models import get_rates as _registry_get_rates
 
-MODEL_RATES = {
-    "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
-    "claude-opus-4-6": {"input": 15.0, "cached": 1.50, "output": 75.0},
-    "claude-sonnet-4-5": {"input": 3.0, "cached": 0.30, "output": 15.0},
-    "claude-sonnet-4-6": {"input": 3.0, "cached": 0.30, "output": 15.0},
-    "claude-haiku-4-5": {"input": 0.80, "cached": 0.08, "output": 4.0},
-    "claude-haiku-4-6": {"input": 0.80, "cached": 0.08, "output": 4.0},
-    "gpt-4o": {"input": 2.50, "cached": 1.25, "output": 10.0},
-    "gpt-4o-mini": {"input": 0.15, "cached": 0.075, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "cached": 5.0, "output": 30.0},
-}
+# Default rates (kept for backward compatibility — same as registry default)
+DEFAULT_RATE = {"input": 3.0, "cached": 0.30, "output": 15.0}
 
-# Default rates (use for unknown models)
-DEFAULT_RATE = {"input": 3.0, "cached": 0.30, "output": 15.0}  # sonnet default
+# Backward-compatible dict — populated from the model registry at import time.
+def _build_model_rates() -> dict[str, dict[str, float]]:
+    from tokenpak.models import get_registry
+    result: dict[str, dict[str, float]] = {}
+    for info in get_registry().all_models():
+        result[info.model_id] = {
+            "input": info.input_per_mtok,
+            "cached": info.cache_read_per_mtok if info.cache_read_per_mtok is not None else info.input_per_mtok * 0.1,
+            "output": info.output_per_mtok,
+        }
+    return result
+
+
+MODEL_RATES: dict[str, dict[str, float]] = _build_model_rates()
 
 
 def get_rates(model: Optional[str] = None) -> dict:
-    """Get pricing rates for a model. Falls back to DEFAULT_RATE if not found."""
-    if not model:
-        return DEFAULT_RATE
-    return MODEL_RATES.get(model, DEFAULT_RATE)
+    """Get pricing rates for a model. Delegates to the dynamic model registry."""
+    return _registry_get_rates(model)
 
 
 def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
@@ -367,8 +366,9 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
 
     # Estimate cost without tokenpak from raw input tokens
     default_model = "claude-sonnet-4-6"
-    in_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("input", DEFAULT_RATE)
-    out_rate = MODEL_RATES.get(default_model, DEFAULT_RATE).get("output", DEFAULT_RATE)
+    _rates = get_rates(default_model)
+    in_rate = _rates.get("input", 3.0)
+    out_rate = _rates.get("output", 15.0)
     cost_without = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000
 
     # Estimate per-component savings
@@ -384,8 +384,9 @@ def calculate_savings_from_proxy_stats(stats: dict, by_model: dict) -> dict:
     for model, mstats in by_model.items():
         m_in = mstats.get("input_tokens", 0)
         m_out = mstats.get("output_tokens", 0)
-        m_in_rate = MODEL_RATES.get(model, {}).get("input", DEFAULT_RATE)
-        m_out_rate = MODEL_RATES.get(model, {}).get("output", DEFAULT_RATE)
+        _m_rates = get_rates(model)
+        m_in_rate = _m_rates.get("input", 3.0)
+        m_out_rate = _m_rates.get("output", 15.0)
         m_cost_without = (m_in * m_in_rate + m_out * m_out_rate) / 1_000_000
         m_cost_with = mstats.get("cost", 0.0)
         per_model[model] = {

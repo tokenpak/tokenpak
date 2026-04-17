@@ -22,22 +22,8 @@ from typing import Any, Dict, Optional
 # Cache savings estimation
 # Transferred from monolith (TPK-CONSOLIDATION-A2c, lines 3287–3326)
 # CACHE_COST_MULTIPLIERS lives in telemetry/cost.py (added in A2a);
-# MODEL_COSTS is inlined here for zero-import savings estimation.
+# Model costs loaded from dynamic registry (zero heavy deps).
 # ---------------------------------------------------------------------------
-
-_MODEL_COSTS_LOCAL = {
-    "claude-opus-4-5": {"input": 15.0, "output": 75.0},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
-    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.8, "output": 4.0},
-    "claude-haiku-4-5": {"input": 0.8, "output": 4.0},
-    "gpt-4o": {"input": 5.0, "output": 15.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
-    "gemini-2-flash": {"input": 0.1, "output": 0.4},
-    "gemini-3-pro-preview": {"input": 1.25, "output": 5.0},
-    "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
-}
 
 # Per-provider cache read multipliers (fraction of input cost charged for cached tokens)
 _CACHE_READ_MULTIPLIERS_LOCAL = {
@@ -72,13 +58,10 @@ def estimate_cache_savings(provider: Any, cache_read_tokens: int, model: str = "
     if cache_read_tokens <= 0:
         return 0.0
 
-    # Get input cost per token (USD per token)
-    input_cost_per_mtok = 3.0  # default ($3/MTok)
-    model_lower = (model or "").lower()
-    for key, costs in _MODEL_COSTS_LOCAL.items():
-        if key in model_lower:
-            input_cost_per_mtok = costs["input"]
-            break
+    # Get input cost per token from dynamic registry
+    from tokenpak.models import get_model_costs
+    costs = get_model_costs(model) if model else {"input": 3.0}
+    input_cost_per_mtok = costs["input"]
     input_cost_per_tok = input_cost_per_mtok / 1_000_000
 
     # Resolve read multiplier — try Provider enum first, fall back to string name

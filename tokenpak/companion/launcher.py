@@ -79,6 +79,14 @@ def main(args: list[str] | None = None) -> int:
     # Route through tokenpak proxy for compression/caching/dedup.
     # Auto-detect if proxy is running when no explicit proxy_url is set.
     env = os.environ.copy()
+
+    # Bare mode: strip Claude Code native context layers so an external
+    # gateway (e.g. OpenClaw) can inject its own tools/history/memory.
+    if config.bare:
+        env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+        env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+        env["CLAUDE_CODE_SKIP_PROMPT_HISTORY"] = "1"
+
     proxy_url = config.proxy_url
     if not proxy_url:
         default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
@@ -97,8 +105,9 @@ def main(args: list[str] | None = None) -> int:
     meme = random.choice(MEME_LINES)
 
     print(file=sys.stderr)
+    bare_tag = " \u2022 Bare: ON" if config.bare else ""
     print(f"  \U0001f4e6 Token{_TEAL}Pak{_RESET} Companion", file=sys.stderr)
-    print(f"     {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{_RESET}", file=sys.stderr)
+    print(f"     {_DIM}Ready \u2022 Mode: {mode} \u2022 Budget: {budget}{bare_tag}{_RESET}", file=sys.stderr)
     if proxy_url:
         print(f"     {_DIM}Proxy active \u2192 {proxy_url}{_RESET}", file=sys.stderr)
     print(file=sys.stderr)
@@ -116,8 +125,13 @@ def main(args: list[str] | None = None) -> int:
     if config.mcp_enabled:
         claude_args.extend(["--mcp-config", mcp_config_path])
 
-    claude_args.extend(["--append-system-prompt-file", prompt_path])
-    claude_args.extend(["--settings", settings_path])
+    if config.bare:
+        # Bare mode: skip system prompt, settings/hooks overlay, and bypass
+        # permissions — the external gateway (OpenClaw) owns those layers.
+        claude_args.append("--dangerously-skip-permissions")
+    else:
+        claude_args.extend(["--append-system-prompt-file", prompt_path])
+        claude_args.extend(["--settings", settings_path])
 
     # Pass through any user-provided args
     claude_args.extend(args)

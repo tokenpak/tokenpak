@@ -15,6 +15,12 @@ TOKENPAK_COMPANION_HOOKS        Enable hook pipeline (default: 1)
 TOKENPAK_COMPANION_MCP          Enable MCP server (default: 1)
 TOKENPAK_COMPANION_SHOW_COST    Show cost estimates in TUI (default: 1)
 TOKENPAK_COMPANION_PRUNE_THRESHOLD  Token count above which pruning is suggested (default: 50000)
+TOKENPAK_COMPANION_BARE         Strip Claude Code native context (default: 0)
+                                Disables CLAUDE.md, auto memory, prompt history,
+                                system prompt injection, settings/hooks overlay,
+                                and bypasses permissions. Keeps MCP + --resume/
+                                --continue. Designed for OpenClaw adapter where
+                                the gateway injects its own tools and history.
 """
 
 from __future__ import annotations
@@ -41,6 +47,7 @@ class CompanionConfig:
     mcp_enabled: bool = True
     show_cost: bool = True
     prune_threshold: int = 50_000
+    bare: bool = False
 
     # Session-scoped (set at launch, immutable after)
     session_id: str = ""
@@ -74,6 +81,7 @@ class CompanionConfig:
             prune_threshold=int(
                 os.environ.get("TOKENPAK_COMPANION_PRUNE_THRESHOLD", "50000")
             ),
+            bare=_bool("TOKENPAK_COMPANION_BARE", False),
         )
 
     def profile_overrides(self) -> None:

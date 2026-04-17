@@ -34,36 +34,7 @@ def should_intercept(url: str) -> bool:
     return False
 
 
-# Model cost per million tokens (input/output)
-# Canonical source: tokenpak/telemetry/data/pricing_catalog.json
-# This inline table is kept for zero-import fast-path estimation.
-# Sync with catalog when updating prices.  Last synced: 2026-04-15.
-MODEL_COSTS = {
-    # Anthropic models
-    "claude-opus-4-5": {"input": 15.0, "output": 75.0},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
-    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.80, "output": 4.0},
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.0},
-    # OpenAI models
-    "gpt-4o": {"input": 2.50, "output": 10.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
-    "gpt-4": {"input": 30.0, "output": 60.0},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    # Google models
-    "gemini-pro": {"input": 0.50, "output": 1.50},
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.0},
-    "gemini-2-flash": {"input": 0.075, "output": 0.30},
-    # OpenAI Codex subscription models (gpt-5.x-codex series, OAuth-only)
-    "gpt-5.1-codex-mini": {"input": 1.5, "output": 6.0},
-    "gpt-5.2-codex": {"input": 3.0, "output": 12.0},
-    "gpt-5.3-codex": {"input": 3.0, "output": 12.0},
-    "gpt-5.3-codex-spark": {"input": 1.5, "output": 6.0},
-}
-
-# Default costs for unknown models
+# Default costs for unknown models (used as fallback if registry unavailable)
 DEFAULT_COSTS = {"input": 3.0, "output": 15.0}
 
 
@@ -271,13 +242,9 @@ def estimate_cost(
     Returns:
         Estimated cost in dollars
     """
-    # Find matching cost entry
-    costs = DEFAULT_COSTS
-    model_lower = model.lower()
-    for key, cost_entry in MODEL_COSTS.items():
-        if key in model_lower:
-            costs = cost_entry
-            break
+    # Get costs from dynamic registry
+    from tokenpak.models import get_model_costs
+    costs = get_model_costs(model) if model else DEFAULT_COSTS
 
     # Calculate regular input (excluding cache tokens)
     regular_input = max(0, input_tokens - cache_read_tokens - cache_creation_tokens)

@@ -1555,83 +1555,14 @@ def _log_failover_event(
     )
 
 
-# Model name translation table: Anthropic model id → provider-specific id.
-# Same model, different API surface name.  No model substitution.
-_MODEL_TRANSLATION: Dict[str, Dict[str, str]] = {
-    # Claude 3.5 Sonnet
-    "claude-3-5-sonnet-20241022": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    "claude-3-5-sonnet-latest": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    # Claude 3.5 Haiku
-    "claude-3-5-haiku-20241022": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    "claude-3-5-haiku-latest": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    # Claude 3 Opus
-    "claude-3-opus-20240229": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-    "claude-3-opus-latest": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-    # Claude 3 Sonnet
-    "claude-3-sonnet-20240229": {
-        "bedrock": "anthropic.claude-3-sonnet-20240229-v1:0",
-        "vertex": "claude-3-sonnet@20240229",
-    },
-    # Claude 3 Haiku
-    "claude-3-haiku-20240307": {
-        "bedrock": "anthropic.claude-3-haiku-20240307-v1:0",
-        "vertex": "claude-3-haiku@20240307",
-    },
-    # Claude 4 Sonnet (claude-sonnet-4-5 / claude-sonnet-4-6 shorthand)
-    "claude-sonnet-4-5": {
-        "bedrock": "anthropic.claude-sonnet-4-5-20251101-v1:0",
-        "vertex": "claude-sonnet-4-5@20251101",
-    },
-    "claude-sonnet-4-6": {
-        "bedrock": "anthropic.claude-sonnet-4-6-20260101-v1:0",
-        "vertex": "claude-sonnet-4-6@20260101",
-    },
-    "claude-opus-4-6": {
-        "bedrock": "anthropic.claude-opus-4-6-20260101-v1:0",
-        "vertex": "claude-opus-4-6@20260101",
-    },
-    # Aliases / shorthand used by Claude Code CLI
-    "sonnet": {
-        "bedrock": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-        "vertex": "claude-3-5-sonnet@20241022",
-    },
-    "haiku": {
-        "bedrock": "anthropic.claude-3-5-haiku-20241022-v1:0",
-        "vertex": "claude-3-5-haiku@20241022",
-    },
-    "opus": {
-        "bedrock": "anthropic.claude-3-opus-20240229-v1:0",
-        "vertex": "claude-3-opus@20240229",
-    },
-}
-
-
 def _translate_model(model_id: str, provider: str) -> str:
+    """Translate an Anthropic model id to the provider-specific model id.
+
+    Delegates to the dynamic model registry — handles any model including
+    newly released ones via family-based inference.
     """
-    Translate an Anthropic model id to the provider-specific model id.
-    Returns the original model_id if no mapping exists (pass-through).
-    Never substitutes a different model family — only maps same model to provider API name.
-    """
-    entry = _MODEL_TRANSLATION.get(model_id, {})
-    return entry.get(provider, model_id)
+    from tokenpak.models import translate_model
+    return translate_model(model_id, provider)
 
 
 def _build_failover_url(provider: str, original_url: str, model: str) -> str:
@@ -2323,8 +2254,8 @@ def _suggest_model(requested: str) -> Optional[str]:
     """Return the closest known model name for a given (possibly wrong) model string."""
     import sys as _sys
 
-    _mod = _sys.modules[__name__]
-    _known = list(getattr(_mod, "MODEL_COSTS", {}).keys())
+    from tokenpak.models import known_models
+    _known = known_models()
     if not _known or not requested:
         return None
     req_l = requested.lower()
@@ -4107,18 +4038,10 @@ def _compute_similarity(text1: str, text2: str) -> Optional[float]:
 def _shadow_provider_model(shadow_provider: str) -> Tuple[str, str]:
     """Map a shadow provider string to (upstream_url, model_name).
 
-    Returns ("", "") if the provider is unknown (fail-open: shadow silently skipped).
+    Delegates to the dynamic model registry. Returns ("", "") if unknown.
     """
-    p = shadow_provider.lower().strip()
-    if p in ("anthropic-haiku", "haiku"):
-        return ("https://api.anthropic.com/v1/messages", "claude-haiku-4-5-20251001")
-    if p in ("anthropic-sonnet", "sonnet"):
-        return ("https://api.anthropic.com/v1/messages", "claude-sonnet-4-6")
-    if p in ("gemini-flash", "gemini-2-flash"):
-        return ("", "")  # Gemini not supported yet — skip silently
-    if p.startswith("ollama-"):
-        return ("", "")  # Ollama not supported yet — skip silently
-    return ("", "")
+    from tokenpak.models import get_shadow_target
+    return get_shadow_target(shadow_provider)
 
 
 def _run_shadow_request(
@@ -4821,23 +4744,10 @@ def update_last_request(
 # ---------------------------------------------------------------------------
 # Cost estimation
 # ---------------------------------------------------------------------------
-MODEL_COSTS = {
-    "claude-opus-4-5": {"input": 15.0, "output": 75.0},
-    "claude-opus-4-6": {"input": 15.0, "output": 75.0},
-    "claude-sonnet-4-5": {"input": 3.0, "output": 15.0},
-    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
-    "claude-haiku-3-5": {"input": 0.8, "output": 4.0},
-    "claude-haiku-4-5": {"input": 0.8, "output": 4.0},
-    "gpt-4o": {"input": 5.0, "output": 15.0},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
-    "gpt-5.2-codex": {"input": 2.0, "output": 8.0},
-    "gpt-5.3-codex": {"input": 2.0, "output": 8.0},
-    "gpt-5.3-codex-spark": {"input": 0.5, "output": 2.0},
-    "gpt-5.1-codex-mini": {"input": 0.5, "output": 2.0},
-    "gemini-2-flash": {"input": 0.1, "output": 0.4},
-    "gemini-3-pro-preview": {"input": 1.25, "output": 5.0},
-    "gemini-3-flash-preview": {"input": 0.1, "output": 0.4},
-}
+def _get_model_costs(model: str) -> dict[str, float]:
+    """Get model costs from the dynamic registry."""
+    from tokenpak.models import get_model_costs
+    return get_model_costs(model)
 
 
 # ---------------------------------------------------------------------------
@@ -4871,13 +4781,10 @@ def estimate_cache_savings(
     """
     if cache_read_tokens <= 0:
         return 0.0
-    
-    # Get input cost per token
-    input_cost_per_mtok = 3.0  # default
-    for key, costs in MODEL_COSTS.items():
-        if key in model.lower():
-            input_cost_per_mtok = costs["input"]
-            break
+
+    # Get input cost per token from dynamic registry
+    costs = _get_model_costs(model) if model else {"input": 3.0}
+    input_cost_per_mtok = costs["input"]
     input_cost_per_tok = input_cost_per_mtok / 1_000_000
     
     # Get cache read multiplier
@@ -4926,21 +4833,13 @@ def _format_tui_savings_tape(
 
 
 def estimate_cost(model, input_tokens, output_tokens, cache_read=0, cache_creation=0):
-    for key, costs in MODEL_COSTS.items():
-        if key in model.lower():
-            regular_input = max(0, input_tokens - cache_read - cache_creation)
-            return (
-                regular_input * costs["input"]
-                + cache_read * costs["input"] * 0.1
-                + cache_creation * costs["input"] * 1.25
-                + output_tokens * costs["output"]
-            ) / 1_000_000
+    costs = _get_model_costs(model) if model else {"input": 3.0, "output": 15.0}
     regular_input = max(0, input_tokens - cache_read - cache_creation)
     return (
-        regular_input * 3.0
-        + cache_read * 3.0 * 0.1
-        + cache_creation * 3.0 * 1.25
-        + output_tokens * 15.0
+        regular_input * costs["input"]
+        + cache_read * costs["input"] * 0.1
+        + cache_creation * costs["input"] * 1.25
+        + output_tokens * costs["output"]
     ) / 1_000_000
 
 

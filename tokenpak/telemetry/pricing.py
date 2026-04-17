@@ -443,3 +443,21 @@ def compute_baseline_cost(model: str, raw_input_tokens: int) -> float:
         return 0.0
 
     return raw_input_tokens * pricing.input_per_token
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible re-exports from pricing_rates.py
+# Tests and some consumers import MODEL_RATES, DEFAULT_RATE, get_rates etc.
+# from this module.  Delegate to the pricing_rates module (which in turn
+# delegates to the dynamic model registry).
+# ---------------------------------------------------------------------------
+
+from tokenpak.telemetry.pricing_rates import (  # noqa: E402, F401
+    get_rates,
+    estimate_savings,
+    calculate_request_cost,
+    calculate_request_cost_baseline,
+    get_price,
+    MODEL_RATES,
+    DEFAULT_RATE,
+)

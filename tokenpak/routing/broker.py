@@ -38,7 +38,7 @@ UPGRADE_ACCEPTANCE_FLOOR = 0.50  # below this → upgrade
 # Cooldown: after a rejected downgrade, skip N transactions before trying again
 DOWNGRADE_COOLDOWN = 10
 
-# Default path for model tiers
+# Default path for model tiers (kept for backward compat — not used when registry is available)
 DEFAULT_TIERS_PATH = str(Path(__file__).parent / "model_tiers.json")
 
 
@@ -67,11 +67,18 @@ class RoutingDecision:
 
 
 def _load_tiers(tiers_path: str = DEFAULT_TIERS_PATH) -> Dict[str, int]:
-    """Load model cost tiers from JSON. Returns empty dict on failure."""
+    """Load model cost tiers from the dynamic model registry.
+
+    Falls back to reading model_tiers.json if the registry is unavailable.
+    """
     try:
-        return json.loads(Path(tiers_path).read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {}
+        from tokenpak.models import get_all_tiers
+        return get_all_tiers()
+    except ImportError:
+        try:
+            return json.loads(Path(tiers_path).read_text())
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
 
 
 def get_tier(model: str, tiers: Dict[str, int]) -> int:

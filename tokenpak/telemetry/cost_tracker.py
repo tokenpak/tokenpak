@@ -15,44 +15,14 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
-# ---------------------------------------------------------------------------
-# Model pricing table (per 1M tokens, USD)
-# Canonical source: tokenpak/telemetry/data/pricing_catalog.json
-# This inline subset is kept for fast-path cost logging without loading
-# the full catalog.  Sync with catalog when updating prices.
-# Last synced: 2026-04-15.
-# ---------------------------------------------------------------------------
-
-MODEL_COSTS: dict[str, dict[str, float]] = {
-    "claude-opus-4-5": {"input": 15.00, "output": 75.00},
-    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-haiku-3-5": {"input": 0.80, "output": 4.00},
-    "claude-haiku-4-5": {"input": 0.80, "output": 4.00},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gemini-2-flash": {"input": 0.075, "output": 0.30},
-    "codex": {"input": 1.50, "output": 6.00},
-    "gpt-5.2-codex": {"input": 3.00, "output": 12.00},
-    "gpt-5.3-codex": {"input": 3.00, "output": 12.00},
-    # Generic fallback (used when model not in table)
-    "_fallback": {"input": 1.00, "output": 3.00},
-}
-
-
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
-    """Return estimated cost in USD for the given model and token counts."""
-    # Exact match
-    costs = MODEL_COSTS.get(model)
-    if costs is None:
-        # Prefix/substring match (e.g. "claude-sonnet-4-5-20241022" → claude-sonnet-4-5)
-        for key, c in MODEL_COSTS.items():
-            if key != "_fallback" and (model.startswith(key) or key in model):
-                costs = c
-                break
-    if costs is None:
-        costs = MODEL_COSTS["_fallback"]
+    """Return estimated cost in USD for the given model and token counts.
+
+    Delegates to the dynamic model registry — no hardcoded model list.
+    """
+    from tokenpak.models import get_model_costs
+
+    costs = get_model_costs(model)
     return (prompt_tokens * costs["input"] + completion_tokens * costs["output"]) / 1_000_000
 
 

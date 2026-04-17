@@ -43,34 +43,17 @@ class RoutingError(Exception):
 # Built-in defaults
 # ---------------------------------------------------------------------------
 
-#: Sensible out-of-the-box model → provider mappings.
-DEFAULT_ROUTES: Dict[str, str] = {
-    # OpenAI
-    "gpt-4o": "openai",
-    "gpt-4o-mini": "openai",
-    "gpt-4-turbo": "openai",
-    "gpt-4": "openai",
-    "gpt-3.5-turbo": "openai",
-    "o1": "openai",
-    "o1-mini": "openai",
-    "o3-mini": "openai",
-    # Anthropic
-    "claude-3-5-sonnet-20241022": "anthropic",
-    "claude-3-5-haiku-20241022": "anthropic",
-    "claude-3-opus-20240229": "anthropic",
-    "claude-3-sonnet-20240229": "anthropic",
-    "claude-3-haiku-20240307": "anthropic",
-    "claude-sonnet-4-5": "anthropic",
-    "claude-sonnet-4-6": "anthropic",
-    "claude-opus-4-5": "anthropic",
-    "claude-opus-4-6": "anthropic",
-    # Google
-    "gemini-pro": "google",
-    "gemini-1.5-pro": "google",
-    "gemini-1.5-flash": "google",
-    "gemini-2.0-flash": "google",
-    "gemini-2.5-pro": "google",
-}
+def _build_default_routes() -> Dict[str, str]:
+    """Build default routes from the dynamic model registry."""
+    try:
+        from tokenpak.models import get_default_routes
+        return get_default_routes()
+    except ImportError:
+        return {}
+
+
+#: Sensible out-of-the-box model → provider mappings (loaded from registry).
+DEFAULT_ROUTES: Dict[str, str] = _build_default_routes()
 
 
 # ---------------------------------------------------------------------------

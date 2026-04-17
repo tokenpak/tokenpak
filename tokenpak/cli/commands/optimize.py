@@ -26,51 +26,8 @@ _MONITOR_DB = os.environ.get(
 )
 SEP = "────────────────────────────────────────"
 
-# Model pricing table (per 1M tokens, USD — input/output)
-MODEL_COSTS: Dict[str, Dict[str, float]] = {
-    "claude-opus-4-5": {"input": 15.00, "output": 75.00},
-    "claude-opus-4-6": {"input": 15.00, "output": 75.00},
-    "claude-sonnet-4-5": {"input": 3.00, "output": 15.00},
-    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
-    "claude-haiku-3-5": {"input": 0.25, "output": 1.25},
-    "claude-haiku-4-5": {"input": 0.25, "output": 1.25},
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gemini-2-flash": {"input": 0.075, "output": 0.30},
-    "gemini-pro": {"input": 1.25, "output": 5.00},
-    "codex": {"input": 3.00, "output": 12.00},
-    "_fallback": {"input": 1.00, "output": 3.00},
-}
-
-# Cheaper alternatives: model → [(alt_model, savings_pct_approx, reason)]
-MODEL_ALTERNATIVES: Dict[str, List[Tuple[str, int, str]]] = {
-    "claude-opus-4-5": [
-        ("claude-sonnet-4-5", 80, "similar quality for most tasks"),
-        ("claude-haiku-3-5", 95, "best for simple/structured tasks"),
-    ],
-    "claude-opus-4-6": [
-        ("claude-sonnet-4-6", 80, "similar quality for most tasks"),
-        ("claude-haiku-4-5", 95, "best for simple/structured tasks"),
-    ],
-    "claude-sonnet-4-5": [
-        ("claude-haiku-3-5", 75, "great for structured/simple tasks"),
-        ("gpt-4o-mini", 85, "suitable for lightweight prompts"),
-    ],
-    "claude-sonnet-4-6": [
-        ("claude-haiku-4-5", 75, "great for structured/simple tasks"),
-        ("gpt-4o-mini", 85, "suitable for lightweight prompts"),
-    ],
-    "gpt-4o": [
-        ("gpt-4o-mini", 90, "good for simple tasks"),
-        ("gemini-2-flash", 97, "fast responses, very low cost"),
-    ],
-    "gemini-pro": [
-        ("gemini-2-flash", 90, "fast responses"),
-    ],
-    "codex": [
-        ("claude-haiku-3-5", 75, "good for structured code tasks"),
-    ],
-}
+from tokenpak.models import get_model_costs as _get_model_costs
+from tokenpak.models import get_cheaper_alternative as _get_cheaper_alternative
 
 # Compression mode thresholds
 COMPRESSION_MODES = {
@@ -111,7 +68,7 @@ def _fmt_cost(c: float) -> str:
 
 def _model_cost_per_request(model: str, avg_input: float, avg_output: float) -> float:
     """Estimate average cost per request given token averages."""
-    p = MODEL_COSTS.get(model, MODEL_COSTS["_fallback"])
+    p = _get_model_costs(model)
     return (avg_input * p["input"] + avg_output * p["output"]) / 1_000_000
 
 
@@ -197,25 +154,20 @@ def _analyze_model(session: Dict[str, Any]) -> Dict[str, Any]:
         current_model = health.get("model", "claude-sonnet-4-6")
         cost_per_req = total_cost / requests if requests else 0.0
 
-    # Find best cheaper alternative
-    alts = MODEL_ALTERNATIVES.get(current_model, [])
+    # Find best cheaper alternative from the dynamic model registry
     best_alt = None
     best_savings_pct = 0
     best_alt_cost = 0.0
 
-    if alts and avg_input > 0:
-        for alt_name, savings_pct, reason in alts:
-            alt_cost = _model_cost_per_request(alt_name, avg_input, avg_output)
-            if alt_cost < cost_per_req:
-                if savings_pct > best_savings_pct:
-                    best_savings_pct = savings_pct
-                    best_alt = (alt_name, savings_pct, reason)
-                    best_alt_cost = alt_cost
-    elif alts:
-        alt_name, savings_pct, reason = alts[0]
-        best_alt = (alt_name, savings_pct, reason)
-        best_alt_cost = cost_per_req * (1 - savings_pct / 100)
-        best_savings_pct = savings_pct
+    alt_result = _get_cheaper_alternative(current_model)
+    if alt_result:
+        alt_name, savings_frac = alt_result
+        savings_pct = int(savings_frac * 100)
+        alt_cost = _model_cost_per_request(alt_name, avg_input, avg_output) if avg_input > 0 else cost_per_req * (1 - savings_frac)
+        if avg_input == 0 or alt_cost < cost_per_req:
+            best_alt = (alt_name, savings_pct, "dynamic tier step-down")
+            best_alt_cost = alt_cost
+            best_savings_pct = savings_pct
 
     return {
         "current_model": current_model,
