@@ -109,7 +109,19 @@ class Integration:
     kind: str               # "client" (binary/app) | "sdk" (python lib)
     detector: Callable[[], Optional[str]]
     instructions: Callable[[str], str]  # proxy_url -> multi-line instructions
+    applier: Optional[Callable[[str], "ApplyResult"]] = None  # None = print-only
     notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ApplyResult:
+    """Outcome of an --apply run for a single client."""
+    ok: bool
+    summary: str                              # one-line human summary
+    changes: list[str] = field(default_factory=list)
+    backup_path: Optional[str] = None         # where the old config was preserved
+    error: Optional[str] = None               # populated when ok=False
+    rollback_cmd: Optional[str] = None        # if ok=True but user wants to revert
 
 
 def _instr_claude_code(proxy_url: str) -> str:
@@ -219,6 +231,91 @@ def _instr_codex(proxy_url: str) -> str:
     )
 
 
+# ---------------------------------------------------------------------------
+# Appliers — per-client logic to actually modify config. Each takes the
+# proxy_url and returns an ApplyResult. Clients without an applier will
+# fall through to a print-only response when --apply is used.
+# ---------------------------------------------------------------------------
+
+
+def _apply_claude_code(proxy_url: str) -> ApplyResult:
+    """Write ANTHROPIC_BASE_URL + TOKENPAK_PROFILE into Claude Code settings.json.
+
+    Cribs from tokenpak/cli/commands/install.py which already has atomic-write
+    + backup logic. Always backs up the existing settings.json first so users
+    can revert with `cp ~/.claude/settings.json.bak ~/.claude/settings.json`.
+    """
+    try:
+        from tokenpak.cli.commands.install import (
+            _atomic_write_settings,
+            _backup_settings,
+            _read_settings,
+            _settings_path,
+            auto_detect_mode,
+            MODE_PROFILE_MAP,
+        )
+    except Exception as exc:  # pragma: no cover — import failure
+        return ApplyResult(
+            ok=False,
+            summary="Claude Code install helpers unavailable",
+            error=str(exc),
+        )
+
+    bak: Optional[Path] = None
+    try:
+        bak = _backup_settings()
+        settings = _read_settings()
+        env = settings.setdefault("env", {})
+        prev_base = env.get("ANTHROPIC_BASE_URL")
+        prev_profile = env.get("TOKENPAK_PROFILE")
+
+        mode = auto_detect_mode()
+        profile = MODE_PROFILE_MAP.get(mode, "balanced")
+
+        env["ANTHROPIC_BASE_URL"] = proxy_url
+        env["TOKENPAK_PROFILE"] = profile
+        _atomic_write_settings(settings)
+
+        changes: list[str] = []
+        if prev_base != proxy_url:
+            changes.append(f"env.ANTHROPIC_BASE_URL: {prev_base or '(unset)'} → {proxy_url}")
+        if prev_profile != profile:
+            changes.append(
+                f"env.TOKENPAK_PROFILE: {prev_profile or '(unset)'} → {profile} "
+                f"(detected mode: {mode})"
+            )
+        if not changes:
+            return ApplyResult(
+                ok=True,
+                summary="Claude Code already configured — no changes.",
+                backup_path=str(bak) if bak else None,
+            )
+
+        settings_p = _settings_path()
+        rollback = f"cp {bak} {settings_p}" if bak else f"edit {settings_p} manually"
+        return ApplyResult(
+            ok=True,
+            summary=f"Updated {settings_p} ({len(changes)} change{'s' if len(changes) != 1 else ''}).",
+            changes=changes,
+            backup_path=str(bak) if bak else None,
+            rollback_cmd=rollback,
+        )
+    except Exception as exc:
+        # Best-effort rollback if we have a backup
+        try:
+            if bak is not None:
+                from tokenpak.cli.commands.install import restore_backup
+                restore_backup(bak)
+        except Exception:
+            pass
+        return ApplyResult(
+            ok=False,
+            summary="Claude Code apply failed (rollback attempted).",
+            error=str(exc),
+            backup_path=str(bak) if bak else None,
+        )
+
+
 # Dynamic registry — add a new client by appending one Integration here.
 INTEGRATIONS: list[Integration] = [
     Integration(
@@ -227,6 +324,7 @@ INTEGRATIONS: list[Integration] = [
         kind="client",
         detector=_detect_claude_cli,
         instructions=_instr_claude_code,
+        applier=_apply_claude_code,
     ),
     Integration(
         key="cursor",
@@ -350,19 +448,43 @@ def _render_one(integration: Integration, proxy_url: str) -> str:
     return "\n".join(lines)
 
 
+def _render_apply(integration: Integration, result: ApplyResult) -> str:
+    """Format an ApplyResult for human display."""
+    lines: list[str] = [""]
+    lines.append(f"  TOKENPAK integrate — {integration.label}  (--apply)")
+    lines.append("  " + "─" * 40)
+    badge = "✅ Applied" if result.ok else "✖ Failed"
+    lines.append(f"  {badge}: {result.summary}")
+    if result.changes:
+        lines.append("")
+        lines.append("  Changes:")
+        for c in result.changes:
+            lines.append(f"    • {c}")
+    if result.backup_path:
+        lines.append("")
+        lines.append(f"  Backup    {result.backup_path}")
+    if result.rollback_cmd:
+        lines.append(f"  Rollback  {result.rollback_cmd}")
+    if result.error:
+        lines.append("")
+        lines.append(f"  Error     {result.error}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def run_integrate(args: argparse.Namespace) -> int:
     """CLI handler for `tokenpak integrate`."""
     proxy_url = getattr(args, "proxy_url", None) or DEFAULT_PROXY_URL
-
-    if getattr(args, "apply", False):
-        print(
-            "integrate: --apply is not yet implemented — "
-            "instructions below are safe to paste manually."
-        )
-        print()
-
+    apply_mode = bool(getattr(args, "apply", False))
     client = getattr(args, "client", None)
     show_all = getattr(args, "all", False)
+
+    # --apply without a specific client is a no-op (ambiguous) — treat as list.
+    if apply_mode and not client and not show_all:
+        print("integrate: --apply requires a specific client (e.g. `tokenpak integrate claude-code --apply`).")
+        print()
+        print(_render_listing(proxy_url))
+        return 2
 
     if show_all:
         for integration in INTEGRATIONS:
@@ -381,6 +503,29 @@ def run_integrate(args: argparse.Namespace) -> int:
             f"Known clients: {known}",
         )
         return 2
+
+    if apply_mode:
+        if integration.applier is None:
+            # Graceful fallback — print instructions + a note that auto-apply
+            # isn't available for this client yet.
+            print(_render_one(integration, proxy_url))
+            kind_note = (
+                "SDKs don't have a config file to write — use the snippet above."
+                if integration.kind == "sdk"
+                else "Auto-apply not supported for this client yet — paste the "
+                     "instructions above manually."
+            )
+            print(f"  (--apply: {kind_note})")
+            print()
+            return 0
+        try:
+            result = integration.applier(proxy_url)
+        except Exception as exc:  # pragma: no cover — applier should never raise
+            result = ApplyResult(
+                ok=False, summary="applier raised unexpectedly", error=str(exc),
+            )
+        print(_render_apply(integration, result))
+        return 0 if result.ok else 1
 
     print(_render_one(integration, proxy_url))
     return 0
