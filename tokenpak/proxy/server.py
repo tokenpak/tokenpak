@@ -110,9 +110,54 @@ def _upstream_retry_backoff(attempt: int) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Per-provider outbound concurrency limiter — smooths concurrent bursts from
+# multiple clients (e.g. 5 companion sessions at once) so we don't hammer the
+# upstream with N simultaneous large streams, which correlates with upstream
+# drops. Each provider has its own bounded semaphore; requests wait briefly
+# for a slot instead of piling on, with a timeout that returns 503 rather
+# than hanging forever.
+# ---------------------------------------------------------------------------
+_UPSTREAM_CONCURRENCY: int = int(os.environ.get("TOKENPAK_UPSTREAM_CONCURRENCY", "3"))
+_UPSTREAM_ACQUIRE_TIMEOUT: float = float(
+    os.environ.get("TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT", "30")
+)
+
+import threading as _threading
+
+_upstream_semaphores: Dict[str, _threading.BoundedSemaphore] = {}
+_upstream_sem_lock = _threading.Lock()
+_upstream_inflight: Dict[str, int] = {}
+
+
+def _get_upstream_semaphore(provider: str) -> _threading.BoundedSemaphore:
+    """Return (lazily creating) the per-provider outbound concurrency semaphore."""
+    key = provider or "_unknown"
+    with _upstream_sem_lock:
+        sem = _upstream_semaphores.get(key)
+        if sem is None:
+            sem = _threading.BoundedSemaphore(_UPSTREAM_CONCURRENCY)
+            _upstream_semaphores[key] = sem
+            _upstream_inflight[key] = 0
+    return sem
+
+
+def _upstream_inflight_delta(provider: str, delta: int) -> int:
+    """Adjust and return the in-flight counter for a provider (diagnostic only)."""
+    key = provider or "_unknown"
+    with _upstream_sem_lock:
+        _upstream_inflight[key] = max(0, _upstream_inflight.get(key, 0) + delta)
+        return _upstream_inflight[key]
+
+
+def get_upstream_inflight_snapshot() -> Dict[str, int]:
+    """Return a snapshot of current in-flight counts, for /health exposure."""
+    with _upstream_sem_lock:
+        return dict(_upstream_inflight)
+
+
+# ---------------------------------------------------------------------------
 # Codex OAuth credentials — read from ~/.codex/auth.json (cached, file-mtime-based)
 # ---------------------------------------------------------------------------
-import threading as _threading
 
 _CODEX_AUTH_PATH = os.path.expanduser("~/.codex/auth.json")
 _CODEX_CREDS_CACHE: dict = {"mtime": 0.0, "access_token": "", "account_id": ""}
@@ -493,6 +538,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._send_json({
                 "enabled": registry.enabled,
                 "circuit_breakers": registry.all_statuses(),
+                "upstream_concurrency": {
+                    "limit_per_provider": _UPSTREAM_CONCURRENCY,
+                    "acquire_timeout_seconds": _UPSTREAM_ACQUIRE_TIMEOUT,
+                    "in_flight": get_upstream_inflight_snapshot(),
+                },
             })
             return
         if path == "/stats":
@@ -1081,6 +1131,41 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # which the CLI's SSE reader surfaces as "Unterminated string".
         _client_headers_sent = False
 
+        # ── Outbound concurrency gate ────────────────────────────────────
+        # Bounded semaphore per upstream provider. When the limit is
+        # saturated (e.g. 5 companion sessions all firing at once and
+        # TOKENPAK_UPSTREAM_CONCURRENCY=3), extra requests wait briefly
+        # here instead of piling onto Anthropic simultaneously. Blocks
+        # for up to TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT seconds, then 503s.
+        _sem_provider = _upstream_provider or provider_from_url(target_url)
+        _upstream_sem = _get_upstream_semaphore(_sem_provider)
+        _sem_acquired = False
+        if _upstream_sem.acquire(timeout=_UPSTREAM_ACQUIRE_TIMEOUT):
+            _sem_acquired = True
+            _upstream_inflight_delta(_sem_provider, +1)
+        else:
+            # Saturated — fail fast rather than piling on upstream
+            err_body = json.dumps({
+                "error": {
+                    "type": "upstream_concurrency_exhausted",
+                    "message": (
+                        f"Too many concurrent requests to '{_sem_provider}' "
+                        f"(>{_UPSTREAM_CONCURRENCY} in flight). Retry shortly."
+                    ),
+                    "hint": (
+                        "Raise TOKENPAK_UPSTREAM_CONCURRENCY or reduce the "
+                        "number of concurrent companion sessions."
+                    ),
+                }
+            }).encode()
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(err_body)))
+            self.send_header("Retry-After", "5")
+            self.end_headers()
+            self.wfile.write(err_body)
+            return
+
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
             _cb_success = False  # track whether request succeeded for circuit breaker
@@ -1553,6 +1638,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     self.wfile.write(err)
             except Exception:
                 pass
+        finally:
+            # Release the outbound concurrency slot no matter how we exit.
+            if _sem_acquired:
+                try:
+                    _upstream_sem.release()
+                    _upstream_inflight_delta(_sem_provider, -1)
+                except ValueError:
+                    # BoundedSemaphore raises if released more times than acquired;
+                    # swallow to keep the handler fail-safe.
+                    pass
 
     def _handle_count_tokens(self) -> None:
         """CCG-05: Handle POST /v1/messages/count_tokens — compute token count locally.
