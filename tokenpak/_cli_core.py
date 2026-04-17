@@ -706,37 +706,40 @@ def cmd_start(args):
         except (ProcessLookupError, ValueError):
             pid_path.unlink(missing_ok=True)
 
-    # Find proxy — prefer bundled runtime/ first, then canonical proxy.py
-    candidates = [
-        Path(__file__).resolve().parent / "runtime" / "proxy.py",  # bundled (pip install)
-        Path(__file__).resolve().parent.parent / "proxy.py",       # canonical
-        Path.home() / "tokenpak" / "proxy.py",                     # canonical home
-    ]
-    proxy_path = None
-    for c in candidates:
-        if c.exists():
-            proxy_path = c
-            break
-
-    if not proxy_path:
-        print("Error: proxy.py not found. Falling back to legacy server.")
-        import types
-
-        serve_args = types.SimpleNamespace(port=port, telemetry=False, ingest=False, workers=1)
-        cmd_serve(serve_args)
-        return
-
-    # Launch proxy.py as a background process
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
-    proc = subprocess.Popen(
-        [sys.executable, str(proxy_path)],
-        env=env,
-        cwd=str(proxy_path.parent),
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+
+    if os.environ.get("TOKENPAK_USE_MONOLITH") == "1":
+        candidates = [
+            Path(__file__).resolve().parent / "runtime" / "proxy.py",
+            Path(__file__).resolve().parent.parent / "proxy.py",
+            Path.home() / "tokenpak" / "proxy.py",
+        ]
+        proxy_path = next((c for c in candidates if c.exists()), None)
+        if not proxy_path:
+            print("Error: proxy.py not found. Falling back to legacy server.")
+            import types
+
+            serve_args = types.SimpleNamespace(port=port, telemetry=False, ingest=False, workers=1)
+            cmd_serve(serve_args)
+            return
+        proc = subprocess.Popen(
+            [sys.executable, str(proxy_path)],
+            env=env,
+            cwd=str(proxy_path.parent),
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "tokenpak.proxy.server"],
+            env=env,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     pid_path.parent.mkdir(parents=True, exist_ok=True)
     pid_path.write_text(str(proc.pid))
 
