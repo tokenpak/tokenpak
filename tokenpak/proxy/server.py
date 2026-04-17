@@ -362,12 +362,6 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             short, long = self.responses.get(code, ("Unknown", "Unknown"))
         except Exception:
             short, long = "Error", ""
-        if code >= 400:
-            try:
-                with open("/tmp/tokenpak-4xx.log", "a") as _f:
-                    _f.write(f"{datetime.now(timezone.utc).isoformat()} {code} {self.command} {self.path} ua={self.headers.get('User-Agent','-')} host={self.headers.get('Host','-')}\n")
-            except Exception:
-                pass
         body = json.dumps({
             "error": {
                 "type": "proxy_error",
