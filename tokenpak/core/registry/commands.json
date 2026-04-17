@@ -510,6 +510,36 @@
       "usage": "/tokenpak vault [status|encrypt|rotate-key]",
       "detail": "Manages encrypted vault storage, key rotation, and block-level access control.",
       "related": ["index", "audit", "compliance"]
+    },
+    {
+      "command": "models",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Show model usage and token stats from the monitor DB",
+      "aliases": [],
+      "usage": "/tokenpak models [MODEL] [--raw]",
+      "detail": "Per-model breakdown of request count, token usage, cache hit rate, compression savings, cost, and average latency. Optionally filter by model name (partial match).",
+      "related": ["cost", "savings", "metrics"]
+    },
+    {
+      "command": "report",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Generate and display daily savings report",
+      "aliases": [],
+      "usage": "/tokenpak report [--markdown] [--json]",
+      "detail": "Generates a daily savings summary showing token reductions, cost saved, and model efficiency. Output as terminal (default), markdown, or JSON.",
+      "related": ["savings", "cost", "metrics"]
+    },
+    {
+      "command": "goals",
+      "tier": "pro",
+      "category": "Visibility",
+      "description": "Manage savings goals and track progress",
+      "aliases": [],
+      "usage": "/tokenpak goals [list|add|edit|delete|detail|export]",
+      "detail": "Define token or cost savings targets and monitor progress with pace tracking (ahead/on-track/behind). Supports goal history and comparison.",
+      "related": ["savings", "budget", "report"]
     }
   ]
 }
