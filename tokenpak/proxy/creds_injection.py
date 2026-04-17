@@ -58,6 +58,38 @@ def _get_header_ci(headers: Mapping[str, str], name: str) -> Optional[str]:
     return None
 
 
+# Header names that signal "the client supplied its own credential".
+# Any non-empty value here means the request already has auth the
+# router should not disturb unless explicitly asked to.
+_CLIENT_CRED_HEADERS = ("x-api-key", "authorization")
+
+
+def _client_has_credentials(headers: Mapping[str, str]) -> bool:
+    """True if the inbound request already carries real auth.
+
+    We treat obviously-placeholder values (``custom-local``, empty
+    strings, ``placeholder``) as "no credential" so OpenClaw-style
+    clients that send a marker don't bypass the router. Real OAuth
+    tokens and API keys are never this short/generic.
+    """
+    for header in _CLIENT_CRED_HEADERS:
+        value = _get_header_ci(headers, header) or ""
+        value = value.strip()
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in ("custom-local", "placeholder", "none", "null"):
+            continue
+        if header == "authorization":
+            # Require a real-looking bearer — "Bearer " alone is
+            # effectively empty.
+            parts = value.split(None, 1)
+            if len(parts) < 2 or not parts[1].strip():
+                continue
+        return True
+    return False
+
+
 def maybe_inject(
     fwd_headers: dict[str, str],
     target_url: str,
@@ -65,12 +97,36 @@ def maybe_inject(
 ) -> bool:
     """Inject a router-chosen credential into ``fwd_headers``.
 
-    Returns True only on full success. The caller should then skip
-    any hardcoded auth-injection it would otherwise do. On any
-    failure, returns False and leaves ``fwd_headers`` untouched —
-    the caller continues with its existing behavior.
+    Policy (Kevin 2026-04-17, "explicit-only override"):
+
+    * If the client sent an explicit tokenpak header (``X-Tokenpak-
+      Credential`` or ``X-Tokenpak-Caller``), run the router — the
+      client explicitly asked for it.
+    * Else if the client sent no credentials at all (no ``x-api-key``
+      and no ``Authorization``), run the router — it has to pick
+      something or the upstream will reject.
+    * Else pass through unchanged. An agent that sent its own valid
+      credential gets to keep it; we only take over when asked.
+
+    Returns True only on full success (router decided + secret
+    resolved + headers injected). Any decline, ambiguity, unresolvable
+    secret, or exception returns False with ``fwd_headers`` unchanged.
     """
     if not enabled():
+        return False
+
+    try:
+        explicit_tag = _get_header_ci(client_headers, _HEADER_EXPLICIT_TAG)
+        caller_identity = _get_header_ci(client_headers, _HEADER_CALLER)
+        has_tokenpak_hint = bool(explicit_tag or caller_identity)
+        client_has_creds = _client_has_credentials(client_headers)
+    except Exception as exc:
+        log.warning("creds router header inspection failed, passthrough: %s", exc)
+        return False
+
+    # Explicit-only override: if the client brought its own creds and
+    # didn't ask tokenpak to route, don't touch the request.
+    if client_has_creds and not has_tokenpak_hint:
         return False
 
     try:
@@ -92,8 +148,8 @@ def maybe_inject(
             return False
         ctx = RouteContext(
             destination_host=dest_host,
-            caller_identity=_get_header_ci(client_headers, _HEADER_CALLER),
-            explicit_tag=_get_header_ci(client_headers, _HEADER_EXPLICIT_TAG),
+            caller_identity=caller_identity,
+            explicit_tag=explicit_tag,
         )
     except Exception as exc:  # defensive: any failure prepping context → passthrough
         log.warning("creds router context prep failed, passthrough: %s", exc)

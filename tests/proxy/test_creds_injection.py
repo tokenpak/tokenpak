@@ -163,6 +163,112 @@ credential = "test-cred"
     assert "Authorization" not in fwd  # we don't double-set for api_key kind
 
 
+# ── policy: explicit-only override ──────────────────────────────────
+
+
+def test_client_supplied_api_key_passes_through_without_hint(monkeypatch):
+    """Client has its own key + no tokenpak header → router must not run."""
+    # Guard: if the router ran we'd crash because this id doesn't exist.
+    calls = {"count": 0}
+
+    def _boom(_ctx):
+        calls["count"] += 1
+        raise AssertionError("router must not run when client brought own creds")
+
+    monkeypatch.setattr("tokenpak.creds.router.select", _boom)
+    with _flag_on():
+        fwd = {"x-api-key": "client-provided"}
+        result = creds_injection.maybe_inject(
+            fwd, "https://api.anthropic.com/x", {"x-api-key": "sk-ant-real"}
+        )
+    assert result is False
+    assert fwd == {"x-api-key": "client-provided"}
+    assert calls["count"] == 0
+
+
+def test_client_bearer_passes_through_without_hint(monkeypatch):
+    monkeypatch.setattr(
+        "tokenpak.creds.router.select",
+        lambda _: (_ for _ in ()).throw(AssertionError("router ran")),
+    )
+    with _flag_on():
+        fwd = {}
+        result = creds_injection.maybe_inject(
+            fwd, "https://api.openai.com/v1/chat", {"Authorization": "Bearer sk-real-key"}
+        )
+    assert result is False
+
+
+def test_placeholder_credentials_do_not_block_router(monkeypatch):
+    """OpenClaw-style placeholder auth should NOT count as real client creds."""
+    cred = _fake_cred("fallback", platform="anthropic", kind=KIND_API_KEY)
+    monkeypatch.setattr(
+        "tokenpak.creds.router.select",
+        lambda _ctx: RouteDecision(cred, "test", "platform-default"),
+    )
+    monkeypatch.setattr(
+        "tokenpak.creds.providers.resolve_secret", lambda c: "REAL-SECRET"
+    )
+
+    with _flag_on():
+        fwd = {"x-api-key": "custom-local"}  # the real-world OpenClaw placeholder
+        result = creds_injection.maybe_inject(
+            fwd, "https://api.anthropic.com/x", {"x-api-key": "custom-local"}
+        )
+    assert result is True
+    assert fwd.get("x-api-key") == "REAL-SECRET"
+
+
+def test_explicit_tag_overrides_client_creds(monkeypatch):
+    """An X-Tokenpak-Credential header means 'take over' even with own key."""
+    cred = _fake_cred("chosen", platform="anthropic", kind=KIND_API_KEY)
+    monkeypatch.setattr("tokenpak.creds.router.discover_all", lambda: [cred])
+    monkeypatch.setattr(
+        "tokenpak.creds.providers.resolve_secret", lambda c: "FROM-ROUTER"
+    )
+
+    with _flag_on():
+        fwd = {"x-api-key": "client-own-key"}
+        result = creds_injection.maybe_inject(
+            fwd,
+            "https://api.anthropic.com/x",
+            {"x-api-key": "client-own-key", "X-Tokenpak-Credential": "chosen"},
+        )
+    assert result is True
+    assert fwd.get("x-api-key") == "FROM-ROUTER"
+
+
+def test_caller_hint_alone_lets_router_run(monkeypatch, tmp_path):
+    """An X-Tokenpak-Caller header (rule-driven routing) also signals intent."""
+    rt = tmp_path / "routes.toml"
+    rt.write_text(
+        """
+[[routes]]
+callers = ["agent-x"]
+destinations = ["api.anthropic.com"]
+credential = "rule-picked"
+"""
+    )
+    monkeypatch.setattr(router, "ROUTES_PATH", rt)
+
+    cred = _fake_cred("rule-picked", platform="anthropic", kind=KIND_API_KEY)
+    monkeypatch.setattr("tokenpak.creds.router.discover_all", lambda: [cred])
+    monkeypatch.setattr(
+        "tokenpak.creds.providers.resolve_secret", lambda c: "PICKED"
+    )
+
+    with _flag_on():
+        # Client has its own key AND sends X-Tokenpak-Caller → router runs.
+        fwd = {"x-api-key": "client-key"}
+        result = creds_injection.maybe_inject(
+            fwd,
+            "https://api.anthropic.com/x",
+            {"x-api-key": "client-key", "X-Tokenpak-Caller": "agent-x"},
+        )
+    assert result is True
+    assert fwd.get("x-api-key") == "PICKED"
+
+
 def test_unresolvable_secret_fails_open(monkeypatch):
     cred = _fake_cred("resolvable-id")
 
