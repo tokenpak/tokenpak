@@ -300,6 +300,140 @@ def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Vault access — exposes V1/V4/V6/V8 Free features as MCP tools.
+# Lazy-imports VaultIndex so companion startup stays fast even without a vault.
+# ---------------------------------------------------------------------------
+
+import os as _os
+
+_VAULT_INDEX_SINGLETON: Any = None
+_VAULT_INDEX_ATTEMPTED: bool = False
+
+
+def _vault_dir_candidates() -> list[Path]:
+    """Where to look for a .tokenpak/ index directory, in priority order."""
+    env = _os.environ.get("TOKENPAK_VAULT_DIR")
+    out: list[Path] = []
+    if env:
+        out.append(Path(env))
+    out.extend([
+        Path.home() / "vault" / ".tokenpak",
+        Path.home() / ".tokenpak" / "vault",
+    ])
+    return out
+
+
+def _get_vault_index() -> Any:
+    """Return a loaded VaultIndex singleton or None if no index is available."""
+    global _VAULT_INDEX_SINGLETON, _VAULT_INDEX_ATTEMPTED
+    if _VAULT_INDEX_SINGLETON is not None:
+        return _VAULT_INDEX_SINGLETON
+    if _VAULT_INDEX_ATTEMPTED:
+        return None
+    _VAULT_INDEX_ATTEMPTED = True
+    try:
+        from tokenpak.vault.retrieval.vault_index import VaultIndex
+    except Exception:
+        return None
+    for cand in _vault_dir_candidates():
+        if not (cand / "index.json").exists():
+            continue
+        try:
+            vi = VaultIndex(str(cand))
+            vi.maybe_reload()
+            if vi.available:
+                _VAULT_INDEX_SINGLETON = vi
+                return vi
+        except Exception:
+            continue
+    return None
+
+
+def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
+    """Search the vault by BM25 and return top-K blocks with scores."""
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return json.dumps({"error": "query is required"})
+    try:
+        limit = int(args.get("limit", 5))
+    except (TypeError, ValueError):
+        limit = 5
+    limit = max(1, min(20, limit))
+
+    vi = _get_vault_index()
+    if vi is None:
+        return json.dumps({
+            "error": "vault_index_unavailable",
+            "hint": (
+                "No .tokenpak/index.json found. Run `tokenpak index <path>` "
+                "or set TOKENPAK_VAULT_DIR to point at the index directory."
+            ),
+        })
+
+    try:
+        results = vi.search(query, top_k=limit)
+    except Exception as exc:
+        return json.dumps({"error": f"search_failed: {exc}"})
+
+    out = []
+    for block, score in results:
+        block_id = block.get("block_id") or block.get("id") or ""
+        out.append({
+            "block_id": block_id,
+            "path": block.get("path", ""),
+            "score": round(float(score), 3),
+            "tokens": int(block.get("tokens", 0) or 0),
+            "preview": (block.get("title") or block.get("summary") or "")[:200],
+        })
+    return json.dumps({"query": query, "count": len(out), "results": out}, indent=2)
+
+
+def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
+    """Fetch a full vault block by block_id (exact) or path substring."""
+    block_id = str(args.get("block_id", "")).strip()
+    path_hint = str(args.get("path", "")).strip()
+    if not block_id and not path_hint:
+        return json.dumps({"error": "provide block_id or path"})
+
+    vi = _get_vault_index()
+    if vi is None:
+        return json.dumps({"error": "vault_index_unavailable"})
+
+    target_id: str | None = None
+    if block_id and block_id in vi.blocks:
+        target_id = block_id
+    elif path_hint:
+        # Fall back to substring match on paths
+        for bid, meta in vi.blocks.items():
+            if path_hint in (meta.get("path", "") or "") or path_hint in bid:
+                target_id = bid
+                break
+
+    if target_id is None:
+        return json.dumps({
+            "error": "block_not_found",
+            "block_id": block_id or None,
+            "path": path_hint or None,
+        })
+
+    # Read content from the blocks dir (VaultIndex stores metadata-only in memory)
+    try:
+        blocks_dir = Path(vi.tokenpak_dir) / "blocks"
+        content_path = blocks_dir / f"{target_id}.txt"
+        content = content_path.read_text(errors="replace") if content_path.exists() else ""
+    except Exception as exc:
+        return json.dumps({"error": f"read_failed: {exc}"})
+
+    meta = vi.blocks.get(target_id, {})
+    return json.dumps({
+        "block_id": target_id,
+        "path": meta.get("path", ""),
+        "tokens": int(meta.get("tokens", 0) or 0),
+        "content": content,
+    }, indent=2)
+
+
+# ---------------------------------------------------------------------------
 # Tool registry — add new tools here
 # ---------------------------------------------------------------------------
 
@@ -376,5 +510,40 @@ TOOLS: list[ToolDef] = [
         description="Get companion status, session stats, and configuration.",
         input_schema={"type": "object", "properties": {}},
         handler=_handle_session_info,
+    ),
+    ToolDef(
+        name="vault_search",
+        description=(
+            "Search the indexed vault by BM25 and return top-K matching blocks "
+            "with relevance scores. Use when the user references project docs, "
+            "code, or knowledge stored in the local vault. The proxy also "
+            "auto-injects vault context, but this tool lets you query "
+            "explicitly (e.g. narrowing to a specific concept)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (words or phrase)"},
+                "limit": {"type": "integer", "description": "Max results (default 5, max 20)", "default": 5},
+            },
+            "required": ["query"],
+        },
+        handler=_handle_vault_search,
+    ),
+    ToolDef(
+        name="vault_retrieve",
+        description=(
+            "Fetch the full content of a specific vault block by block_id "
+            "(exact match, from vault_search results) or by path substring "
+            "(first match). Returns content + metadata."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "block_id": {"type": "string", "description": "Exact block_id from vault_search"},
+                "path": {"type": "string", "description": "Path substring to match (alternative to block_id)"},
+            },
+        },
+        handler=_handle_vault_retrieve,
     ),
 ]
