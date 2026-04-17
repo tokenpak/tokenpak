@@ -245,8 +245,15 @@ def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
-    """Return companion status and session stats."""
-    return json.dumps({
+    """Environment snapshot: merges local companion state with proxy status.
+
+    Companion-local fields (session_id, call_count, config) stay in-process
+    since they describe the companion's own process. Proxy-owned state
+    (version, uptime, mode, cache_ttl, vault, session counters) comes from
+    /tpk/v1/session/info. Proxy-down returns the local-only view with a
+    "proxy" block indicating the degradation.
+    """
+    local = {
         "companion_version": "0.1.0",
         "session_id": state.session_id,
         "call_count": state.call_count,
@@ -256,11 +263,16 @@ def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
             "hooks_enabled": state.config.hooks_enabled,
             "prune_threshold": state.config.prune_threshold,
         },
-        "budget": {
-            "session_cost": state.budget_tracker.session_cost,
-            "session_requests": state.budget_tracker.session_requests,
-        },
-    }, indent=2)
+    }
+    status, proxy_info = _proxy_get("/tpk/v1/session/info")
+    if status == 200:
+        local["proxy"] = proxy_info
+    elif status == 0:
+        local["proxy"] = {"error": "proxy_unreachable",
+                          "detail": proxy_info.get("detail", "")}
+    else:
+        local["proxy"] = proxy_info
+    return json.dumps(local, indent=2)
 
 
 # ---------------------------------------------------------------------------

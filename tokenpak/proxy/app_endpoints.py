@@ -136,6 +136,11 @@ def try_handle_get(handler: Any) -> bool:
         _handle_capsule_get(handler, session_id, qs)
         return True
 
+    # ── /tpk/v1/session/info ─ proxy-side environment snapshot ─────────
+    if path == "/tpk/v1/session/info":
+        _handle_session_info_get(handler)
+        return True
+
     _send_error(handler, 404, "not_found", f"unknown app endpoint: {path}")
     return True
 
@@ -608,6 +613,50 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
         "path": str(match),
         "tokens_est": tokens_est,
         "content": content or "",
+    })
+
+
+def _handle_session_info_get(handler: Any) -> None:
+    """Proxy-side snapshot of process state + vault + active session counters."""
+    from tokenpak import __version__ as _version
+    proxy_server = getattr(handler.server, "proxy_server", None)
+    uptime = 0.0
+    session_stats: dict[str, Any] = {}
+    if proxy_server is not None:
+        sess = getattr(proxy_server, "session", {}) or {}
+        start = sess.get("start_time")
+        if start:
+            uptime = time.time() - start
+        session_stats = {
+            "requests": int(sess.get("requests", 0) or 0),
+            "input_tokens": int(sess.get("input_tokens", 0) or 0),
+            "output_tokens": int(sess.get("output_tokens", 0) or 0),
+            "cost_usd": round(float(sess.get("cost", 0.0) or 0.0), 6),
+            "cost_saved_usd": round(float(sess.get("cost_saved", 0.0) or 0.0), 6),
+            "errors": int(sess.get("errors", 0) or 0),
+        }
+    vault_info: dict[str, Any] = {"available": False, "blocks": 0}
+    try:
+        from tokenpak.proxy.vault_bridge import get_vault_index
+        vi = get_vault_index()
+        if vi is not None and getattr(vi, "available", False):
+            vault_info = {
+                "available": True,
+                "blocks": len(getattr(vi, "blocks", {}) or {}),
+            }
+    except Exception:
+        pass
+    compilation_mode = os.environ.get("TOKENPAK_MODE", "hybrid")
+    profile = os.environ.get("TOKENPAK_PROFILE", "balanced")
+    cache_ttl = os.environ.get("TOKENPAK_CACHE_TTL", "5m").strip() or "5m"
+    _send_json(handler, 200, {
+        "version": _version,
+        "uptime_s": round(uptime, 1),
+        "mode": compilation_mode,
+        "profile": profile,
+        "cache_ttl": cache_ttl,
+        "session": session_stats,
+        "vault": vault_info,
     })
 
 
