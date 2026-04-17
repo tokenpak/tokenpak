@@ -322,6 +322,7 @@ def _print_quick_help():
         "  vault        Vault index health diagnostic and repair\n"
         "  diff         Show context changes (Pro)\n"
         "  prune        Prune old audit log entries\n"
+        "  version      Show current version\n"
         "\n"
         "Run `tokenpak help` for all commands.\n"
         "Run `tokenpak <command> --help` for command details."
