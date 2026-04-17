@@ -2741,7 +2741,7 @@ def _cmd_status_legacy(args):
 
         # Budget tracking (local DB)
         try:
-            from .telemetry.budgeter import BudgetTracker
+            from tokenpak.telemetry.costs.budget_tracker import BudgetTracker
 
             tracker = BudgetTracker()
             budget_rows = []
@@ -3537,12 +3537,17 @@ def cmd_update(args):
         latest = None
 
     from tokenpak import __version__ as current_ver
+    from packaging.version import Version as _PV
 
     print(f"  Current : {current_ver}")
     if latest:
         print(f"  Latest  : {latest}")
-        if latest == current_ver:
+        if _PV(current_ver) == _PV(latest):
             print("  ✓ Already up to date!")
+            if not force:
+                return
+        elif _PV(current_ver) > _PV(latest):
+            print(f"  → Local version is newer than PyPI ({current_ver} > {latest})")
             if not force:
                 return
         else:
@@ -4092,7 +4097,20 @@ def main():
             from .telemetry.query import get_savings_report
 
             # Get uptime from proxy (if running)
-            uptime_str = "4h 23m"  # Placeholder; would fetch from proxy in production
+            try:
+                import urllib.request as _urlreq
+                _proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+                with _urlreq.urlopen(f"{_proxy_base}/health", timeout=3) as _r:
+                    _hdata = json.loads(_r.read())
+                _uptime_s = _hdata.get("uptime_seconds")
+                if _uptime_s is not None:
+                    _h, _rem = divmod(int(_uptime_s), 3600)
+                    _m = _rem // 60
+                    uptime_str = f"{_h}h {_m:02d}m" if _h else f"{_m}m"
+                else:
+                    uptime_str = "unknown"
+            except Exception:
+                uptime_str = "unknown"
             report = get_savings_report(days=1)
 
             # Compact savings summary
@@ -4906,7 +4924,7 @@ def cmd_goals_list(args):
     goals_list = manager.list_goals()
 
     if not goals_list:
-        print("No goals defined. Create one with: tokenpak goals --add")
+        print("No goals defined. Create one with: tokenpak goals add")
         return
 
     print(f"\n{'GOAL NAME':<30} {'TYPE':<12} {'PROGRESS':<30} {'STATUS':<12}")

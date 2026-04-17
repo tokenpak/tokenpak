@@ -113,9 +113,14 @@ def _calculate_data() -> DailySavingsData:
 
     # Extract stats
     health_stats = health.get("stats", {})
-    uptime_s = time.time() - health_stats.get("start_time", time.time())
-    uptime_h = int(uptime_s // 3600)
-    uptime_m = int((uptime_s % 3600) // 60)
+    start_time = health_stats.get("start_time")
+    if start_time is None:
+        uptime_h = "unknown"
+        uptime_m = 0
+    else:
+        uptime_s = max(0, time.time() - start_time)
+        uptime_h = int(uptime_s // 3600)
+        uptime_m = int((uptime_s % 3600) // 60)
 
     # Requests and errors
     requests = stats.get("requests", 0)
