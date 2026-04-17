@@ -35,7 +35,7 @@ def _render_summary(s: dict[str, Any]) -> str:
     )
     lines.append("")
     if s["tier"] == _lic.TIER_FREE:
-        lines.append("  You are on the Free tier. All OSS features are available.")
+        lines.append("  You are on the Free tier. All Free-tier features are available.")
         lines.append("  Upgrade path: https://tokenpak.ai/pricing   (coming soon)")
         lines.append("")
     elif s["status"] == "pending_validation":
@@ -66,7 +66,7 @@ def run_plan(args: argparse.Namespace) -> int:
             "current": s,
             "plans": [
                 {"tier": _lic.TIER_FREE, "label": _lic.describe_tier(_lic.TIER_FREE),
-                 "price": "$0", "blurb": "Full OSS feature set — proxy, vault, compression, dashboard."},
+                 "price": "$0", "blurb": "Full Free-tier feature set — proxy, vault, compression, dashboard."},
                 {"tier": _lic.TIER_PRO, "label": _lic.describe_tier(_lic.TIER_PRO),
                  "price": "TBD", "blurb": "Code/log/JSON compression, smart routing, session telemetry, trace + replay."},
                 {"tier": _lic.TIER_TEAM, "label": _lic.describe_tier(_lic.TIER_TEAM),
