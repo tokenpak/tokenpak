@@ -1603,7 +1603,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # sees a well-formed frame instead of raw HTTP bytes.
                     if is_streaming:
                         try:
+                            # Prepend `\n\n` to terminate any partial SSE frame
+                            # that was in flight when upstream disconnected. Without
+                            # this, the partial `data: {...` line runs into our
+                            # synthetic `event: error` header and the CLI's SSE
+                            # parser surfaces it as "Unterminated string". Extra
+                            # blank lines between frames are legal per the SSE spec
+                            # and harmless when the upstream cut off cleanly.
                             _sse_err = (
+                                "\n\n"
                                 "event: error\n"
                                 "data: " + json.dumps({
                                     "type": "error",
