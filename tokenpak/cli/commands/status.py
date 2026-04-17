@@ -706,6 +706,22 @@ def run(
         avg_lat = session.get("avg_latency_ms", 0)
         if avg_lat > 0:
             latency_str = f"{avg_lat:.0f}ms"
+    # Fallback: proxy's in-memory session dict may not expose avg_latency_ms
+    # (/stats endpoint omits it on some builds). Query monitor.db for recent
+    # per-request latency when the in-memory value is absent.
+    if latency_str == "n/a":
+        try:
+            _conn = _connect_db(db_path)
+            if _conn is not None:
+                _row = _conn.execute(
+                    "SELECT AVG(latency_ms) FROM requests "
+                    "WHERE latency_ms IS NOT NULL AND latency_ms > 0 "
+                    "AND timestamp >= datetime('now', '-1 hour')"
+                ).fetchone()
+                if _row and _row[0]:
+                    latency_str = f"{_row[0]:.0f}ms (db)"
+        except Exception:
+            pass
     print(f"     Uptime               {uptime_str:>10}")
     print(f"     Proxy overhead       {latency_str:>10}")
 
