@@ -28,16 +28,28 @@ tokenpak start
 
 ### Minute 3: Point your app at the proxy
 
-Change your LLM client's base URL to `http://localhost:8766`. That's it. No other code changes.
+Run the one-shot configurator for your tool:
+
+```bash
+tokenpak integrate                    # list clients + detection status
+tokenpak integrate claude-code --apply    # writes ~/.claude/settings.json
+tokenpak integrate cursor --apply         # writes Cursor settings.json
+tokenpak integrate continue --apply       # writes ~/.continue/config.json
+tokenpak integrate aider --apply          # writes ~/.aider.conf.yml
+```
+
+Every `--apply` backs up the existing config and prints a rollback command.
+For clients without auto-apply (Cline, SDKs), `tokenpak integrate <client>` prints the exact snippet to paste.
 
 ### Minute 4: See your savings
 
 ```bash
 tokenpak demo     # see compression in action on a sample prompt
 tokenpak cost     # view today's spend and tokens saved
+tokenpak status   # live snapshot: requests, cache hit rate, models used
 ```
 
-That's it. Every request is now compressed automatically.
+That's it. Every request is now routed through tokenpak.
 
 ---
 
@@ -171,10 +183,33 @@ If the health check fails, restart with `tokenpak restart`.
 ## What Do I Do Next?
 
 - **Check your savings:** `tokenpak cost --week`
+- **Audit a prompt file:** `tokenpak optimize --file my-prompt.md` (reports whitespace bloat, repeated phrases, verbose phrasings with concrete replacements)
+- **Compress a sample:** `echo "long text here" | tokenpak compress` (works offline, no proxy required)
+- **License info:** `tokenpak license` (OSS Free by default) / `tokenpak plan` (list tiers)
 - **Tune compression:** See [compression.md](./compression.md) for aggressiveness settings
 - **Index your vault:** `tokenpak index ~/your-docs` for semantic search at zero token cost
 - **Full CLI reference:** [cli-reference.md](./cli-reference.md) — all commands explained
 - **API reference:** [api-reference.md](./api-reference.md) — SDK classes and methods
+- **REST API (companion/external dashboards):** [api-tpk-v1.md](./api-tpk-v1.md)
+
+---
+
+## Companion MCP tools (in Claude Code, Cursor, etc.)
+
+When you launch Claude Code with `tokenpak claude`, the agent gets 9 MCP tools it can call mid-conversation:
+
+| tool | what it does |
+|------|--------------|
+| `estimate_tokens` | Token count for text or a file |
+| `check_budget` | Remaining daily + session cost |
+| `vault_search` | BM25 search over your indexed vault |
+| `vault_retrieve` | Full content of a specific vault block |
+| `prune_context` | Head/tail truncate verbose text to a token budget |
+| `load_capsule` | Load a saved session memory capsule |
+| `journal_read` / `journal_write` | Per-session notes |
+| `session_info` | Current process + proxy state |
+
+All tools call the proxy's REST API (`/tpk/v1/*`) so your data lives in exactly one place. See [api-tpk-v1.md](./api-tpk-v1.md) for the underlying endpoints.
 
 ---
 

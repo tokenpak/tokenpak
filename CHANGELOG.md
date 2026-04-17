@@ -6,6 +6,34 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added (2026-04-17 — companion/proxy REST architecture)
+- **Proxy `/tpk/v1/*` REST API** (`tokenpak/proxy/app_endpoints.py`) — nine endpoints for proxy-owned resources, distinct from the `/v1/*` LLM passthrough:
+  - `GET /tpk/v1/health` — version, uptime, vault status
+  - `GET /tpk/v1/vault/search?q=&limit=` — BM25 search over the vault
+  - `GET /tpk/v1/vault/block/{block_id}` — full block content
+  - `GET /tpk/v1/budget` — session + daily cost snapshot
+  - `GET /tpk/v1/journal/sessions?limit=` — recent companion sessions
+  - `GET /tpk/v1/journal/{session_id}?entry_type=&limit=` — journal entries
+  - `POST /tpk/v1/journal/{session_id}/entry` — add journal entry
+  - `POST /tpk/v1/compress` — head/tail truncate to max_tokens
+  - `POST /tpk/v1/optimize` — offline prompt linter report
+  - `POST /tpk/v1/tokens/estimate` — token count for text/file
+  - `GET /tpk/v1/capsules`, `GET /tpk/v1/capsules/{id}` — memory capsules
+  - `GET /tpk/v1/session/info` — proxy environment snapshot
+  - Localhost-only auth by default; optional `X-TPK-Key` header if `TOKENPAK_PROXY_KEY` is set
+- **Companion MCP tools now HTTP-call the proxy** — all 9 tools (vault_search, vault_retrieve, check_budget, journal_read, journal_write, prune_context, load_capsule, estimate_tokens, session_info) route through `/tpk/v1/*`. Single source of truth for state; no more duplicate VaultIndex / budget tracker.
+- **`tokenpak integrate`** — GTM friction-kill: one command to point your LLM client at the proxy. Print-mode for all 9 supported clients (Claude Code, Cursor, Cline, Continue.dev, Aider, Codex CLI, OpenAI SDK, Anthropic SDK, LiteLLM). `--apply` mode writes configs for clients with stable config formats: Claude Code (`~/.claude/settings.json`), Cursor (platform-specific settings.json), Continue.dev (`~/.continue/config.json`), Aider (`~/.aider.conf.yml`). Always backs up before writing and prints a rollback command.
+- **`tokenpak license` / `plan` / `activate` / `deactivate`** — Free-tier defaults today, Pro/Team/Enterprise surface ready. 52 gated features cataloged in `tokenpak/licensing/_GATES` (single `is_feature_enabled(name)` choke point). License stored at `~/.tokenpak/license.json`.
+- **`tokenpak compress`** — real implementation (was a paywall stub): runs offline, detects JSON messages for dedup, supports `--file`, stdin, `--json`, `--verbose`.
+- **`tokenpak optimize`** — real implementation (was a paywall stub): offline prompt linter reporting whitespace bloat, repeated phrases, verbose phrasings. `--file` / stdin / `--json` modes. Dispatches to session-level optimizer when no input is given.
+- **1h `cache_control` TTL support in proxy** (`tokenpak/proxy/prompt_builder.py:_cache_control_dict()`) — read from `TOKENPAK_CACHE_TTL` env var. Set `1h` to emit `{"type":"ephemeral","ttl":"1h"}` on all cache_control markers, extending Anthropic's 5-min default to 1h. Worth the 2x write cost for cron traffic that fires at 30-min intervals.
+- **Agent-cycle wiring** (`vault: 06_RUNTIME/scripts/agent-claude-worker.sh`) — cron cycles now route through the local tokenpak proxy (`ANTHROPIC_BASE_URL=http://127.0.0.1:8766`) AND attach the companion (mcp + settings + system-prompt). Overrides: `CYCLE_PROXY_BYPASS=1`, `CYCLE_COMPANION_BYPASS=1`, `TOKENPAK_PROXY_BASE_URL`.
+- **Monitor SQLite writer re-wired** — `Monitor` class in `tokenpak/proxy/monitor.py` was orphaned after TPK-CONSOLIDATION (wrote to JSONL logs only, never SQLite). `ProxyServer.__init__` now instantiates `Monitor(~/.tokenpak/monitor.db)` and the request handler calls `.log()` after token parsing.
+- **Companion hook budget-block writes `companion_savings`** (`tokenpak/companion/hooks/pre_send.py`) — when the budget gate blocks a request, the estimated tokens really are avoided; entry_type matches what `tokenpak status` Prompt-side plane expects.
+
+### Changed (2026-04-17)
+- **Auto-discover models instead of seed catalog only** (`tokenpak/models/_discovery.py`) — `auto_start_if_enabled()` now opts IN when an API key is present (was opt-in via `TOKENPAK_MODEL_DISCOVERY=1`). Family-rule inference in `_families.py` already handles unseen models (e.g. `claude-opus-4-7` → opus tier pricing) with no seed edit required.
+
 ### Changed
 - **Compression now enabled by default** — `ENABLE_COMPACTION`, `BUDGET_CONTROLLER_ENABLED` default to `True`; `COMPACT_THRESHOLD_TOKENS` defaults to `1500` (was `4500`). To restore the legacy passthrough behavior, use `tokenpak serve --safe`. (TRIX-01 / pmgtm)
 
