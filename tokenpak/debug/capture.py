@@ -12,6 +12,9 @@ Usage (via environment variables):
 Blob storage:
     ~/.tokenpak/debug/<trace_id>.enc   — encrypted blobs
     ~/.tokenpak/debug/<trace_id>.hash  — hash-only records
+
+Blob wire format (encrypted):
+    [4 bytes magic "TPKD"][1 byte version 0x01][12 bytes nonce][16 bytes GCM tag][ciphertext]
 """
 
 from __future__ import annotations
@@ -28,8 +31,15 @@ from typing import Any
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_DEBUG_DIR = Path.home() / ".tokenpak" / "debug"
-_KEY_FILE = _DEBUG_DIR / ".key"
+_BLOB_DIR = Path.home() / ".tokenpak" / "debug"
+_KEY_FILE = _BLOB_DIR / ".key"
+
+_MAGIC = b"TPKD"
+_VERSION = b"\x01"
+_HEADER_LEN = 5   # magic(4) + version(1)
+_NONCE_LEN = 12
+_TAG_LEN = 16
+_MIN_BLOB_LEN = _HEADER_LEN + _NONCE_LEN + _TAG_LEN  # 33
 
 
 # ── CaptureMode ───────────────────────────────────────────────────────────────
@@ -51,6 +61,11 @@ class CaptureMode(enum.Enum):
         return _map.get(raw, cls.OFF)
 
 
+def get_capture_mode() -> CaptureMode:
+    """Return the current capture mode from the environment."""
+    return CaptureMode.from_env()
+
+
 # ── Key management ────────────────────────────────────────────────────────────
 
 
@@ -65,7 +80,7 @@ def _load_or_generate_key() -> bytes:
             )
         return raw
 
-    _DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    _BLOB_DIR.mkdir(parents=True, exist_ok=True)
     if _KEY_FILE.exists():
         raw = bytes.fromhex(_KEY_FILE.read_text().strip())
         if len(raw) != 32:
@@ -82,20 +97,28 @@ def _load_or_generate_key() -> bytes:
 # ── AES-256-GCM encrypt / decrypt ─────────────────────────────────────────────
 
 
-def encrypt_blob(plaintext: bytes, key: bytes | None = None) -> bytes:
-    """Encrypt *plaintext* with AES-256-GCM; return ``nonce + tag + ciphertext``.
+def _to_bytes(value: Any) -> bytes:
+    """Serialize *value* to bytes for encryption/hashing."""
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode()
+    return json.dumps(value).encode()
 
-    The layout on disk is:
-        [12 bytes nonce][16 bytes GCM tag][ciphertext]
-    The ``cryptography`` library's AESGCM.encrypt() returns
-    ``ciphertext + tag``, so we split accordingly.
+
+def encrypt_blob(plaintext: Any, key: bytes | None = None) -> bytes:
+    """Encrypt *plaintext* with AES-256-GCM.
+
+    The blob wire format is:
+        [4 bytes magic "TPKD"][1 byte version 0x01][12 bytes nonce][16 bytes GCM tag][ciphertext]
 
     Args:
-        plaintext: Raw bytes to encrypt.
+        plaintext: Data to encrypt.  Dicts/lists are JSON-serialised; strings
+                   are UTF-8 encoded; bytes are passed through unchanged.
         key: 32-byte AES key.  Loaded from env / key-file if *None*.
 
     Returns:
-        Encrypted bytes (nonce + tag + ciphertext).
+        Encrypted bytes with magic header.
     """
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -104,56 +127,75 @@ def encrypt_blob(plaintext: bytes, key: bytes | None = None) -> bytes:
     if len(key) != 32:
         raise ValueError("Key must be 32 bytes")
 
-    nonce = secrets.token_bytes(12)
+    data = _to_bytes(plaintext)
+    nonce = secrets.token_bytes(_NONCE_LEN)
     aesgcm = AESGCM(key)
     # AESGCM.encrypt returns ciphertext || tag (16 bytes)
-    ct_with_tag = aesgcm.encrypt(nonce, plaintext, None)
-    # Store as: nonce (12) + tag (16) + ciphertext
-    tag = ct_with_tag[-16:]
-    ciphertext = ct_with_tag[:-16]
-    return nonce + tag + ciphertext
+    ct_with_tag = aesgcm.encrypt(nonce, data, None)
+    tag = ct_with_tag[-_TAG_LEN:]
+    ciphertext = ct_with_tag[:-_TAG_LEN]
+    return _MAGIC + _VERSION + nonce + tag + ciphertext
 
 
-def decrypt_blob(blob: bytes, key: bytes | None = None) -> bytes:
+def decrypt_blob(blob: bytes, key: bytes | None = None) -> Any:
     """Decrypt a blob produced by :func:`encrypt_blob`.
 
     Args:
-        blob: Encrypted bytes (nonce + tag + ciphertext).
+        blob: Encrypted bytes with magic header.
         key: 32-byte AES key.  Loaded from env / key-file if *None*.
 
     Returns:
-        Decrypted plaintext bytes.
+        Decrypted value — a dict/list if the payload was JSON, otherwise raw bytes.
+
+    Raises:
+        ValueError: On bad magic, blob too short, or decryption failure.
     """
+    from cryptography.exceptions import InvalidTag
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    if len(blob) < _HEADER_LEN or blob[:4] != _MAGIC:
+        raise ValueError(
+            f"Bad magic: expected {_MAGIC!r}, got {blob[:4]!r}"
+        )
+    if len(blob) < _MIN_BLOB_LEN:
+        raise ValueError(
+            f"Blob too short to be a valid encrypted record "
+            f"(got {len(blob)} bytes, need >= {_MIN_BLOB_LEN})"
+        )
 
     if key is None:
         key = _load_or_generate_key()
-    if len(blob) < 28:  # 12 nonce + 16 tag
-        raise ValueError("Blob too short to be a valid encrypted record")
 
-    nonce = blob[:12]
-    tag = blob[12:28]
-    ciphertext = blob[28:]
+    nonce = blob[_HEADER_LEN : _HEADER_LEN + _NONCE_LEN]
+    tag = blob[_HEADER_LEN + _NONCE_LEN : _HEADER_LEN + _NONCE_LEN + _TAG_LEN]
+    ciphertext = blob[_HEADER_LEN + _NONCE_LEN + _TAG_LEN :]
+
     aesgcm = AESGCM(key)
-    # Reconstruct ciphertext || tag for decrypt
-    return aesgcm.decrypt(nonce, ciphertext + tag, None)
+    try:
+        plaintext = aesgcm.decrypt(nonce, ciphertext + tag, None)
+    except InvalidTag as exc:
+        raise ValueError("Decryption failed: authentication tag mismatch") from exc
+
+    try:
+        return json.loads(plaintext.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return plaintext
 
 
 # ── Hash-only mode ────────────────────────────────────────────────────────────
 
 
-def hash_blob(content: bytes | str) -> str:
+def hash_blob(content: Any) -> str:
     """Return ``sha256:<hex>`` of *content* without storing the body.
 
     Args:
-        content: Bytes or string to hash.
+        content: Bytes, string, or JSON-serialisable value to hash.
 
     Returns:
         String of the form ``sha256:<64-hex-chars>``.
     """
-    if isinstance(content, str):
-        content = content.encode()
-    digest = hashlib.sha256(content).hexdigest()
+    data = _to_bytes(content)
+    digest = hashlib.sha256(data).hexdigest()
     return f"sha256:{digest}"
 
 
@@ -168,7 +210,7 @@ def _build_record(
     mode: CaptureMode = CaptureMode.ENCRYPTED,
 ) -> dict[str, Any]:
     """Build a capture record dict (plaintext JSON before encryption)."""
-    meta = {
+    meta: dict[str, Any] = {
         "trace_id": trace_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mode": mode.value,
@@ -180,13 +222,13 @@ def _build_record(
         req_body = json.dumps(request, default=str)
         resp_body = json.dumps(response, default=str)
         return {
-            **meta,
+            "meta": meta,
             "request_hash": hash_blob(req_body),
             "response_hash": hash_blob(resp_body),
         }
     else:
         return {
-            **meta,
+            "meta": meta,
             "request": request,
             "response": response,
         }
@@ -201,10 +243,11 @@ def capture(
     response: dict[str, Any],
     metadata: dict[str, Any] | None = None,
     mode: CaptureMode | None = None,
+    key: bytes | None = None,
 ) -> Path | None:
     """Capture a request/response pair according to *mode*.
 
-    Does nothing when mode is OFF.  Writes to ``~/.tokenpak/debug/``.
+    Does nothing when mode is OFF.  Writes to ``_BLOB_DIR``.
 
     Args:
         trace_id: Unique identifier for this trace (used as filename).
@@ -212,6 +255,7 @@ def capture(
         response: Response dict (will be JSON-serialised).
         metadata: Optional extra fields merged into blob header.
         mode: Override capture mode; reads ``TOKENPAK_DEBUG_CAPTURE`` env if *None*.
+        key: Override the AES key used for encrypted mode.
 
     Returns:
         Path to the written file, or *None* if capture is disabled.
@@ -221,18 +265,17 @@ def capture(
     if mode == CaptureMode.OFF:
         return None
 
-    _DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+    _BLOB_DIR.mkdir(parents=True, exist_ok=True)
     record = _build_record(trace_id, request, response, metadata, mode)
 
     if mode == CaptureMode.HASH_ONLY:
-        dest = _DEBUG_DIR / f"{trace_id}.hash"
+        dest = _BLOB_DIR / f"{trace_id}.hash"
         dest.write_text(json.dumps(record, indent=2))
         return dest
 
     # ENCRYPTED mode
-    plaintext = json.dumps(record, indent=2).encode()
-    blob = encrypt_blob(plaintext)
-    dest = _DEBUG_DIR / f"{trace_id}.enc"
+    blob = encrypt_blob(record, key=key)
+    dest = _BLOB_DIR / f"{trace_id}.enc"
     dest.write_bytes(blob)
     return dest
 
@@ -247,7 +290,7 @@ def list_captures(debug_dir: Path | None = None) -> list[dict[str, Any]]:
     For hash-only captures, ``timestamp`` is also included (parsed from the
     JSON header without decrypting encrypted blobs).
     """
-    base = debug_dir or _DEBUG_DIR
+    base = debug_dir or _BLOB_DIR
     if not base.exists():
         return []
 
@@ -266,7 +309,8 @@ def list_captures(debug_dir: Path | None = None) -> list[dict[str, Any]]:
         if p.suffix == ".hash":
             try:
                 data = json.loads(p.read_text())
-                entry["timestamp"] = data.get("timestamp", "")
+                meta = data.get("meta", data)
+                entry["timestamp"] = meta.get("timestamp", "")
             except Exception:
                 entry["timestamp"] = ""
         results.append(entry)
@@ -294,7 +338,7 @@ def export_capture(
         FileNotFoundError: If no capture exists for *trace_id*.
         ValueError: On decryption failure.
     """
-    base = debug_dir or _DEBUG_DIR
+    base = debug_dir or _BLOB_DIR
     enc_path = base / f"{trace_id}.enc"
     hash_path = base / f"{trace_id}.hash"
 
@@ -303,8 +347,7 @@ def export_capture(
 
     if enc_path.exists():
         blob = enc_path.read_bytes()
-        plaintext = decrypt_blob(blob, key=key)
-        return json.loads(plaintext.decode())
+        return decrypt_blob(blob, key=key)
 
     raise FileNotFoundError(
         f"No capture found for trace_id={trace_id!r} in {base}"
