@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from ..config import CompanionConfig
 
@@ -300,57 +300,60 @@ def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Vault access — exposes V1/V4/V6/V8 Free features as MCP tools.
-# Lazy-imports VaultIndex so companion startup stays fast even without a vault.
+# Proxy REST client — thin HTTP wrapper used by vault_* (and future) tools.
+# Per 2026-04-17 architecture: proxy owns the state, companion calls it.
 # ---------------------------------------------------------------------------
 
 import os as _os
-
-_VAULT_INDEX_SINGLETON: Any = None
-_VAULT_INDEX_ATTEMPTED: bool = False
-
-
-def _vault_dir_candidates() -> list[Path]:
-    """Where to look for a .tokenpak/ index directory, in priority order."""
-    env = _os.environ.get("TOKENPAK_VAULT_DIR")
-    out: list[Path] = []
-    if env:
-        out.append(Path(env))
-    out.extend([
-        Path.home() / "vault" / ".tokenpak",
-        Path.home() / ".tokenpak" / "vault",
-    ])
-    return out
+import urllib.error as _url_err
+import urllib.parse as _url_parse
+import urllib.request as _url_req
 
 
-def _get_vault_index() -> Any:
-    """Return a loaded VaultIndex singleton or None if no index is available."""
-    global _VAULT_INDEX_SINGLETON, _VAULT_INDEX_ATTEMPTED
-    if _VAULT_INDEX_SINGLETON is not None:
-        return _VAULT_INDEX_SINGLETON
-    if _VAULT_INDEX_ATTEMPTED:
-        return None
-    _VAULT_INDEX_ATTEMPTED = True
+def _proxy_base_url() -> str:
+    return _os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+
+
+def _proxy_get(path: str, params: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+    """GET against the local proxy's /tp/v1/* app API.
+
+    Returns (status_code, json_body). Never raises — network/parse errors
+    become (0, {"error": ..., "detail": ...}) so tool handlers can
+    degrade gracefully.
+    """
+    url = _proxy_base_url().rstrip("/") + path
+    if params:
+        url = f"{url}?{_url_parse.urlencode({k: v for k, v in params.items() if v is not None})}"
+    req = _url_req.Request(url, method="GET")
+    key = _os.environ.get("TOKENPAK_PROXY_KEY", "").strip()
+    if key:
+        req.add_header("X-TP-Key", key)
     try:
-        from tokenpak.vault.retrieval.vault_index import VaultIndex
-    except Exception:
-        return None
-    for cand in _vault_dir_candidates():
-        if not (cand / "index.json").exists():
-            continue
+        with _url_req.urlopen(req, timeout=5.0) as resp:
+            body = resp.read()
+            try:
+                return resp.status, json.loads(body.decode("utf-8"))
+            except Exception as exc:
+                return resp.status, {"error": "invalid_json", "detail": str(exc)}
+    except _url_err.HTTPError as exc:
         try:
-            vi = VaultIndex(str(cand))
-            vi.maybe_reload()
-            if vi.available:
-                _VAULT_INDEX_SINGLETON = vi
-                return vi
+            data = json.loads(exc.read().decode("utf-8"))
         except Exception:
-            continue
-    return None
+            data = {"error": f"http_{exc.code}", "detail": str(exc)}
+        return exc.code, data
+    except Exception as exc:
+        return 0, {"error": "proxy_unreachable", "detail": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Vault access — exposes V1/V4/V6/V8 Free features as MCP tools.
+# Thin HTTP wrappers over the proxy's /tp/v1/vault/* endpoints so the
+# companion does NOT hold its own VaultIndex instance.
+# ---------------------------------------------------------------------------
 
 
 def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
-    """Search the vault by BM25 and return top-K blocks with scores."""
+    """Search the vault via the proxy's /tp/v1/vault/search endpoint."""
     query = str(args.get("query", "")).strip()
     if not query:
         return json.dumps({"error": "query is required"})
@@ -360,77 +363,41 @@ def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
         limit = 5
     limit = max(1, min(20, limit))
 
-    vi = _get_vault_index()
-    if vi is None:
+    status, body = _proxy_get("/tp/v1/vault/search", {"q": query, "limit": limit})
+    if status == 0:
         return json.dumps({
-            "error": "vault_index_unavailable",
-            "hint": (
-                "No .tokenpak/index.json found. Run `tokenpak index <path>` "
-                "or set TOKENPAK_VAULT_DIR to point at the index directory."
-            ),
+            "error": "proxy_unreachable",
+            "detail": body.get("detail", "is the tokenpak proxy running? try `tokenpak start`"),
         })
-
-    try:
-        results = vi.search(query, top_k=limit)
-    except Exception as exc:
-        return json.dumps({"error": f"search_failed: {exc}"})
-
-    out = []
-    for block, score in results:
-        block_id = block.get("block_id") or block.get("id") or ""
-        out.append({
-            "block_id": block_id,
-            "path": block.get("path", ""),
-            "score": round(float(score), 3),
-            "tokens": int(block.get("tokens", 0) or 0),
-            "preview": (block.get("title") or block.get("summary") or "")[:200],
-        })
-    return json.dumps({"query": query, "count": len(out), "results": out}, indent=2)
+    if status >= 400:
+        return json.dumps(body)
+    # Pass through the proxy's response shape as-is; it already matches our contract.
+    return json.dumps(body, indent=2)
 
 
 def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
-    """Fetch a full vault block by block_id (exact) or path substring."""
+    """Fetch a vault block via the proxy's /tp/v1/vault/block/{id} endpoint."""
     block_id = str(args.get("block_id", "")).strip()
     path_hint = str(args.get("path", "")).strip()
     if not block_id and not path_hint:
         return json.dumps({"error": "provide block_id or path"})
 
-    vi = _get_vault_index()
-    if vi is None:
-        return json.dumps({"error": "vault_index_unavailable"})
+    # If only a path hint is given, resolve via search first to get an exact id.
+    if not block_id and path_hint:
+        status, body = _proxy_get("/tp/v1/vault/search", {"q": path_hint, "limit": 1})
+        if status == 0:
+            return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
+        results = body.get("results") or []
+        if not results:
+            return json.dumps({"error": "block_not_found", "path": path_hint})
+        block_id = results[0].get("block_id") or ""
 
-    target_id: str | None = None
-    if block_id and block_id in vi.blocks:
-        target_id = block_id
-    elif path_hint:
-        # Fall back to substring match on paths
-        for bid, meta in vi.blocks.items():
-            if path_hint in (meta.get("path", "") or "") or path_hint in bid:
-                target_id = bid
-                break
-
-    if target_id is None:
-        return json.dumps({
-            "error": "block_not_found",
-            "block_id": block_id or None,
-            "path": path_hint or None,
-        })
-
-    # Read content from the blocks dir (VaultIndex stores metadata-only in memory)
-    try:
-        blocks_dir = Path(vi.tokenpak_dir) / "blocks"
-        content_path = blocks_dir / f"{target_id}.txt"
-        content = content_path.read_text(errors="replace") if content_path.exists() else ""
-    except Exception as exc:
-        return json.dumps({"error": f"read_failed: {exc}"})
-
-    meta = vi.blocks.get(target_id, {})
-    return json.dumps({
-        "block_id": target_id,
-        "path": meta.get("path", ""),
-        "tokens": int(meta.get("tokens", 0) or 0),
-        "content": content,
-    }, indent=2)
+    status, body = _proxy_get(f"/tp/v1/vault/block/{_url_parse.quote(block_id, safe='')}")
+    if status == 0:
+        return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
+    if status >= 400:
+        return json.dumps(body)
+    return json.dumps(body, indent=2)
 
 
 # ---------------------------------------------------------------------------
