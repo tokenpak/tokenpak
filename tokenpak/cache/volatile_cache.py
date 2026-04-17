@@ -15,12 +15,27 @@ Key properties:
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _make_key(key: Any) -> str:
+    """Normalize *key* to a hashable string.
+
+    Accepts str (pass-through), dict/list/tuple (JSON-serialised, sorted
+    keys), or anything else (str()-coerced).  Prevents ``TypeError:
+    unhashable type: 'dict'`` when callers pass rich request objects as keys.
+    """
+    if isinstance(key, str):
+        return key
+    if isinstance(key, (dict, list, tuple)):
+        return json.dumps(key, sort_keys=True, separators=(",", ":"), default=str)
+    return str(key)
 
 _DEFAULT_TTL = 270.0  # 4.5 minutes — aligns with proxy injection cache
 _DEFAULT_MAX_SIZE = 1000
@@ -55,49 +70,53 @@ class VolatileCache:
     # Public API
     # ------------------------------------------------------------------
 
-    def is_cached(self, key: str) -> bool:
+    def is_cached(self, key: Any) -> bool:
         """Return True if *key* exists and has not expired."""
+        k = _make_key(key)
         with self._lock:
-            entry = self._store.get(key)
+            entry = self._store.get(k)
             if entry is None:
                 return False
             value, expires_at = entry
             if time.monotonic() > expires_at:
-                del self._store[key]
+                del self._store[k]
                 return False
             return True
 
-    def retrieve(self, key: str) -> Optional[Any]:
+    def retrieve(self, key: Any) -> Optional[Any]:
         """Return the cached value or None if missing / expired."""
+        k = _make_key(key)
         with self._lock:
-            entry = self._store.get(key)
+            entry = self._store.get(k)
             if entry is None:
                 return None
             value, expires_at = entry
             if time.monotonic() > expires_at:
-                del self._store[key]
+                del self._store[k]
                 return None
             return value
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: Any, default: Any = None) -> Any:
         v = self.retrieve(key)
         return v if v is not None else default
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    def set(self, key: Any, value: Any, ttl: Optional[float] = None) -> None:
         """Store *value* under *key* with an optional per-entry TTL override."""
+        k = _make_key(key)
         expires_at = time.monotonic() + (ttl if ttl is not None else self._ttl)
         with self._lock:
             # If at capacity, drop the oldest entry
-            if len(self._store) >= self._max_size and key not in self._store:
+            if len(self._store) >= self._max_size and k not in self._store:
                 oldest_key = next(iter(self._store))
                 del self._store[oldest_key]
                 logger.debug("[VolatileCache:%s] evicted oldest key=%s", self._name, oldest_key)
-            self._store[key] = (value, expires_at)
+            self._store[k] = (value, expires_at)
 
-    def invalidate(self, key: str) -> bool:
+    def invalidate(self, key: Any) -> bool:
         """Remove *key*. Returns True if it was present."""
+        k = _make_key(key)
         with self._lock:
-            return self._store.pop(key, None) is not None
+            return self._store.pop(k, None) is not None
 
     def sweep(self) -> int:
         """Remove all expired entries. Returns count removed."""
