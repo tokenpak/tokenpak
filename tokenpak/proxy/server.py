@@ -45,6 +45,7 @@ from urllib.parse import urlparse
 import httpx
 
 from .connection_pool import ConnectionPool, PoolConfig, get_global_pool
+from .creds_injection import maybe_inject as _creds_router_inject
 from .route_policy import get_policy, platform_tag, ROUTE_POLICIES
 from .request import ROUTE_CLAUDE_CODE, ROUTE_OPENCLAW, ROUTE_SDK
 
@@ -965,11 +966,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if body is not None:
             fwd_headers["Content-Length"] = str(len(body))
 
-        # ── Codex OAuth credential injection ─────────────────────────
+        # ── Router-based credential injection (feature-flagged) ──────
+        # When TOKENPAK_CREDS_ROUTER_ENABLED=1, select a credential via
+        # the creds router and inject it. On any failure this is a
+        # no-op; the legacy Codex-auth path below then runs unchanged.
+        _router_injected = False
+        try:
+            _router_injected = _creds_router_inject(
+                fwd_headers, target_url, dict(self.headers)
+            )
+        except Exception:
+            _router_injected = False  # fail-open
+
+        # ── Codex OAuth credential injection (legacy default path) ───
         # OpenAI Codex (Responses API) routes need OAuth token from
         # ~/.codex/auth.json — similar to how Claude Code uses subscription auth.
         _upstream_provider = provider_from_url(target_url)
-        if _upstream_provider == "openai" and (
+        if not _router_injected and _upstream_provider == "openai" and (
             "/v1/responses" in target_url
             or "codex" in target_url.lower()
             or "codex" in model.lower()
@@ -987,6 +1000,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     fwd_headers.setdefault("originator", "codex_cli_rs")
             except Exception:
                 pass  # fail-open: codex credential loading must not break requests
+
+        # The router injected the credential — still set the Codex-specific
+        # beta/originator headers so ChatGPT backend routes the request.
+        if _router_injected and _upstream_provider == "openai" and (
+            "/v1/responses" in target_url
+            or "codex" in target_url.lower()
+            or "codex" in model.lower()
+        ):
+            fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
+            fwd_headers.setdefault("originator", "codex_cli_rs")
 
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
