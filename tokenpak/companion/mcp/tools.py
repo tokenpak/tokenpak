@@ -18,6 +18,11 @@ from typing import Any, Callable
 
 from ..config import CompanionConfig
 
+# Default input-rate for cost estimation when no model hint is available.
+# Matches pre_send.py's fallback (sonnet input rate). Kept local rather than
+# imported so tools.py has no cross-module coupling with the hook.
+_COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK = 3.0
+
 
 @dataclass
 class CompanionState:
@@ -133,6 +138,25 @@ def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
             if session_id in p.stem:
                 content = load_capsule(str(p))
                 if content:
+                    # Record a savings event. Conservative: we don't know the
+                    # raw-context baseline the capsule replaces, so log the
+                    # capsule size as the delivered cost but 0 tokens_avoided.
+                    # The *event* is still useful for by_tool counts.
+                    if state.session_id:
+                        try:
+                            capsule_tokens = len(content) // 4
+                            state.journal_store.record_savings(
+                                session_id=state.session_id,
+                                tool="load_capsule",
+                                tokens_avoided=0,
+                                cost_avoided_usd=0.0,
+                                extra={
+                                    "capsule_session": p.stem,
+                                    "capsule_tokens_est": capsule_tokens,
+                                },
+                            )
+                        except Exception:
+                            pass
                     return content
         return json.dumps({"error": f"No capsule found for session {session_id}"})
 
@@ -177,6 +201,23 @@ def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
         text = f"{head}\n\n[... {elided:,} chars elided ...]\n\n{tail}"
 
     pruned_tokens_est = len(text) // 4
+    tokens_avoided = max(0, original_tokens_est - pruned_tokens_est)
+    cost_avoided = tokens_avoided * _COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK / 1_000_000
+
+    # Persist the savings so `tokenpak status` can attribute prompt-side value.
+    # Best-effort: never fail the tool call on journal write errors.
+    if tokens_avoided > 0 and state.session_id:
+        try:
+            state.journal_store.record_savings(
+                session_id=state.session_id,
+                tool="prune_context",
+                tokens_avoided=tokens_avoided,
+                cost_avoided_usd=cost_avoided,
+                extra={"max_tokens": max_tokens},
+            )
+        except Exception:
+            pass
+
     return json.dumps({
         "pruned_text": text,
         "original_tokens": original_tokens_est,

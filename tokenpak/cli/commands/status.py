@@ -188,13 +188,21 @@ def _calculate_fleet_savings(
         where_clause = "WHERE timestamp >= datetime('now', ?)"
         params = [f"-{hours} hours"]
 
-    # Check if 'route' column exists in the requests table (legacy DBs lack it)
+    # Cache attribution: prefer the new `cache_origin` column (platform-agnostic).
+    # Legacy DBs without it get conservative treatment in the per-row math below.
     col_names = {r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()}
-    has_route = "route" in col_names
+    has_origin = "cache_origin" in col_names
 
-    route_expr = (
-        "COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' THEN cache_read_tokens ELSE 0 END), 0)"
-        if has_route
+    # Proxy-owned cache reads (tokenpak gets credit only for these)
+    proxy_cr_expr = (
+        "COALESCE(SUM(CASE WHEN COALESCE(cache_origin, 'unknown') = 'proxy' THEN cache_read_tokens ELSE 0 END), 0)"
+        if has_origin
+        else "0"
+    )
+    # Client-owned cache reads (upstream client placed cache_control)
+    client_cr_expr = (
+        "COALESCE(SUM(CASE WHEN COALESCE(cache_origin, 'unknown') = 'client' THEN cache_read_tokens ELSE 0 END), 0)"
+        if has_origin
         else "0"
     )
 
@@ -211,7 +219,8 @@ def _calculate_fleet_savings(
                 COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens,
                 COALESCE(SUM(protected_tokens), 0) AS protected_tokens,
                 COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost,
-                {route_expr} AS client_managed_cache_read
+                {proxy_cr_expr}  AS proxy_managed_cache_read,
+                {client_cr_expr} AS client_managed_cache_read
             FROM requests
             {where_clause}
             GROUP BY model
@@ -262,20 +271,17 @@ def _calculate_fleet_savings(
         cache_create = row["cache_creation_tokens"]
         compressed_tok = row["compressed_tokens"]  # tokens removed by compression
 
-        # Attribution: separate proxy-managed cache reads (tokenpak caused) from
-        # client-managed reads (Claude Code caused — tokenpak just observed).
-        #
-        # When the DB has a 'route' column, rows tagged 'claude-code' are
-        # client-managed.  When the column is missing (legacy DB), ALL traffic
-        # flowed through the byte-preserved passthrough proxy, meaning Claude
-        # Code's own cache_control headers caused the cache hits — not tokenpak.
-        # In that case, conservatively attribute all cache reads to Claude Code.
-        if has_route:
-            client_managed_cr = row["client_managed_cache_read"] if "client_managed_cache_read" in row.keys() else 0
+        # Attribution is platform-agnostic: rows log `cache_origin` as
+        # 'proxy' (tokenpak placed the cache_control markers), 'client' (upstream
+        # client did — any passthrough platform), or 'unknown' (pre-migration
+        # rows; conservatively treated as client so we never over-claim).
+        if has_origin:
+            proxy_managed_cr = row["proxy_managed_cache_read"] if "proxy_managed_cache_read" in row.keys() else 0
+            client_managed_cr = max(0, cache_read - proxy_managed_cr)
         else:
-            # No route column → assume all cache is client-managed (Claude Code)
+            # Legacy rows without origin → all observed cache attributed to client
+            proxy_managed_cr = 0
             client_managed_cr = cache_read
-        proxy_managed_cr = max(0, cache_read - client_managed_cr)
 
         # "Without TokenPak" cost: what you'd pay if tokenpak hadn't compressed.
         # - Compressed tokens would have been sent at full input rate
@@ -520,23 +526,68 @@ def run(
         else:
             source_label = "all time"
 
-    # --- Compute attribution ---
+    # --- Split cache reads by origin (proxy-owned vs client-owned) ---
+    # Prefer the live stats breakdown when the proxy is up; fall back to
+    # conservative "unknown → client" so we never over-claim.
+    if stats and isinstance(stats.get("cache_read_by_origin"), dict):
+        origin = stats["cache_read_by_origin"]
+        cache_proxy_tok = int(origin.get("proxy", 0) or 0)
+        cache_client_tok = int(origin.get("client", 0) or 0)
+        cache_unknown_tok = int(origin.get("unknown", 0) or 0)
+    else:
+        cache_proxy_tok = 0
+        cache_client_tok = cache_read_tok
+        cache_unknown_tok = 0
+
+    # --- Compute wire-side (proxy) attribution ---
+    # Tokenpak only claims credit for:
+    #   - tokens it compressed away (saved_tok)
+    #   - cache reads it actually caused (proxy-owned markers)
     tp_compression_usd = 0.0
-    total_cache_usd = 0.0
+    proxy_cache_usd = 0.0
     if total_reqs > 0:
         total_billed_input = sent_tok + cache_read_tok
         avg_input_rate = (cost / (total_billed_input / 1_000_000)) if total_billed_input > 0 else 3.0
         avg_input_rate = min(avg_input_rate, 20.0)
         tp_compression_usd = (saved_tok / 1_000_000) * avg_input_rate
-        total_cache_usd = (cache_read_tok / 1_000_000) * avg_input_rate * 0.9
+        proxy_cache_usd = (cache_proxy_tok / 1_000_000) * avg_input_rate * 0.9
 
     # TokenPak compression %: tokens avoided out of what would have been sent
     raw_input = sent_tok + saved_tok
     tp_compression_pct = (saved_tok / raw_input * 100) if raw_input > 0 else 0.0
 
-    # Cache %: cache_read out of total input handled by provider
+    # Cache %: cache_read out of total input handled by provider (observability)
     total_input_handled = sent_tok + cache_read_tok
     provider_cache_pct = (cache_read_tok / total_input_handled * 100) if total_input_handled > 0 else 0.0
+
+    # --- Companion (prompt-side) savings ---
+    # Tokens avoided before the wire via prune_context / load_capsule / etc.
+    # Lives in the companion's journal.db — separate plane from the proxy.
+    companion_tokens_avoided = 0
+    companion_usd = 0.0
+    try:
+        from pathlib import Path as _P
+        _companion_db = _P(os.path.expanduser("~/.tokenpak/companion/journal.db"))
+        if _companion_db.exists() and session.get("start_time"):
+            _since = float(session["start_time"])
+            _c = sqlite3.connect(str(_companion_db))
+            try:
+                _rows = _c.execute(
+                    "SELECT metadata_json FROM entries "
+                    "WHERE entry_type = 'companion_savings' AND timestamp >= ?",
+                    (_since,),
+                ).fetchall()
+            finally:
+                _c.close()
+            for (_meta,) in _rows:
+                try:
+                    _m = json.loads(_meta or "{}")
+                    companion_tokens_avoided += int(_m.get("tokens_avoided", 0) or 0)
+                    companion_usd += float(_m.get("cost_avoided_usd", 0.0) or 0.0)
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
     # --- TokenPak cache attribution ---
     # tokenpak actively manages cache behavior via:
@@ -567,16 +618,23 @@ def run(
     print(SEP)
 
     # --- 1. VALUE CREATED ---
-    tp_total_usd = tp_compression_usd + total_cache_usd
+    # Split honestly: prompt-side (companion, pre-wire) vs wire-side (proxy).
+    # Wire-side credits only proxy-caused savings — cache hits placed by the
+    # upstream client (byte-preserved passthrough) are shown under Cache as
+    # observability, not here.
+    wire_side_usd = tp_compression_usd + proxy_cache_usd
+    tp_total_usd = companion_usd + wire_side_usd
     print()
     print(f"  💰 Value Created ({source_label})")
-    print(f"     Total saved           {_fmt_cost(tp_total_usd):>10}")
-    print(f"       Compression         {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
-    print(f"       Cache management    {_fmt_cost(total_cache_usd):>10}   {tp_cache_hit_rate:.0f}% hit rate")
+    print(f"     Total saved                {_fmt_cost(tp_total_usd):>10}")
+    print(f"       Prompt-side (companion)  {_fmt_cost(companion_usd):>10}   {_fmt_num(companion_tokens_avoided)} tokens avoided pre-send")
+    print(f"       Wire-side (proxy)        {_fmt_cost(wire_side_usd):>10}   compression + proxy-managed cache")
     if saved_tok > 0:
-        print(f"     Tokens compressed    {_fmt_num(saved_tok):>10}   of {_fmt_num(raw_input)} input")
+        print(f"         Compression          {_fmt_cost(tp_compression_usd):>10}   {tp_compression_pct:4.1f}% token reduction")
+    if cache_proxy_tok > 0:
+        print(f"         Proxy cache          {_fmt_cost(proxy_cache_usd):>10}   {_fmt_num(cache_proxy_tok)} tokens")
     if injected_tok > 0:
-        print(f"     Vault injected       {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
+        print(f"     Vault injected         {_fmt_num(injected_tok):>10}   across {injection_hits} requests")
 
     # --- 2. TRAFFIC ---
     print()
@@ -586,12 +644,22 @@ def run(
     print(f"     Output tokens        {_fmt_num(output_tok):>10}")
     print(f"     Cost                 {_fmt_cost(cost):>10}")
 
-    # --- 3. CACHE ---
+    # --- 3. CACHE (observed) ---
+    # Cache reads happen regardless of tokenpak — they're shown here as
+    # observability. Attribution (who placed the cache_control markers) is
+    # displayed below so you can see which hits tokenpak actually caused.
     print()
     total_cache_handled = sent_tok + cache_read_tok
-    print(f"  🔄 Cache")
+    print(f"  🔄 Cache activity (observed)")
     print(f"     Token cache rate     {provider_cache_pct:>9.0f}%   {_fmt_num(cache_read_tok)} of {_fmt_num(total_cache_handled)} input tokens")
     print(f"     Request hit rate     {tp_cache_hit_rate:>9.0f}%   {tp_cache_hits:,} of {tp_cache_hits + tp_cache_misses:,} requests")
+    if cache_read_tok > 0 or cache_proxy_tok or cache_client_tok or cache_unknown_tok:
+        print(
+            f"     Origin               "
+            f"  client: {_fmt_num(cache_client_tok)}"
+            f"  proxy: {_fmt_num(cache_proxy_tok)}"
+            f"  unknown: {_fmt_num(cache_unknown_tok)}"
+        )
     if tp_cache_misses_prevented > 0:
         print(f"     Schema normalized    {tp_cache_misses_prevented:>10}   tool changes absorbed")
     if cache:

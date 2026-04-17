@@ -190,6 +190,77 @@ class JournalStore:
             for r in rows
         ]
 
+    def record_savings(
+        self,
+        session_id: str,
+        tool: str,
+        tokens_avoided: int,
+        cost_avoided_usd: float,
+        model_hint: Optional[str] = None,
+        extra: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Persist a companion-layer savings event (prompt-side, pre-wire).
+
+        Savings here are tokens that never reached the provider because a
+        companion tool (prune_context, load_capsule, …) replaced or compressed
+        content before it was sent. Keep this platform-agnostic: `tool` is a
+        free-form identifier, not an enum.
+        """
+        meta = {
+            "tool": tool,
+            "tokens_avoided": int(max(0, tokens_avoided)),
+            "cost_avoided_usd": float(max(0.0, cost_avoided_usd)),
+        }
+        if model_hint:
+            meta["model_hint"] = model_hint
+        if extra:
+            meta.update(extra)
+        self.add_entry(
+            session_id=session_id,
+            entry_type="companion_savings",
+            content=f"{tool}: -{meta['tokens_avoided']:,} tokens (~${meta['cost_avoided_usd']:.4f})",
+            metadata=meta,
+        )
+
+    def session_savings(self, session_id: str) -> dict[str, Any]:
+        """Aggregate companion savings for a session.
+
+        Returns: {tokens_avoided, cost_avoided_usd, by_tool: {tool: {...}}}
+        Reads from entries table; no caching — caller decides frequency.
+        """
+        import json
+        conn = sqlite3.connect(str(self._db_path))
+        try:
+            rows = conn.execute(
+                "SELECT metadata_json FROM entries "
+                "WHERE session_id = ? AND entry_type = 'companion_savings'",
+                (session_id,),
+            ).fetchall()
+        finally:
+            conn.close()
+        total_tokens = 0
+        total_cost = 0.0
+        by_tool: dict[str, dict[str, Any]] = {}
+        for (meta_json,) in rows:
+            try:
+                m = json.loads(meta_json or "{}")
+            except Exception:
+                continue
+            tool = m.get("tool", "unknown")
+            tok = int(m.get("tokens_avoided", 0) or 0)
+            cost = float(m.get("cost_avoided_usd", 0.0) or 0.0)
+            total_tokens += tok
+            total_cost += cost
+            bucket = by_tool.setdefault(tool, {"tokens_avoided": 0, "cost_avoided_usd": 0.0, "events": 0})
+            bucket["tokens_avoided"] += tok
+            bucket["cost_avoided_usd"] += cost
+            bucket["events"] += 1
+        return {
+            "tokens_avoided": total_tokens,
+            "cost_avoided_usd": round(total_cost, 6),
+            "by_tool": by_tool,
+        }
+
     def recent_sessions(self, limit: int = 10) -> list[SessionRecord]:
         """List recent sessions, newest first."""
         conn = sqlite3.connect(str(self._db_path))

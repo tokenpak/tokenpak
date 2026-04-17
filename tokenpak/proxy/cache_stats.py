@@ -42,56 +42,33 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
         conn = sqlite3.connect(str(db_path))
         cur = conn.cursor()
 
-        # Get overall stats — exclude client-managed routes (e.g. claude-code)
-        # from tokenpak-attributed savings.  Cache reads are still reported for
-        # observability but savings_usd only counts proxy-managed caching.
-        cur.execute("""
+        # Detect whether cache_origin column exists (added by monitor._init_db).
+        # Pre-migration rows (legacy) lack origin signal → treated as 'unknown'.
+        col_names = {r[1] for r in cur.execute("PRAGMA table_info(requests)").fetchall()}
+        has_origin = "cache_origin" in col_names
+        origin_expr = "COALESCE(cache_origin, 'unknown')" if has_origin else "'unknown'"
+
+        # Overall stats: cache reads are observed regardless of origin; savings
+        # are attributed only to proxy-owned cache markers.  unknown → no
+        # tokenpak credit (conservative).
+        cur.execute(f"""
             SELECT
                 COUNT(*) as total_requests,
                 SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as cache_hits,
                 COALESCE(SUM(cache_read_tokens), 0) as total_cache_read,
                 COALESCE(SUM(cache_creation_tokens), 0) as total_cache_creation,
-                COALESCE(SUM(CASE WHEN cache_provider IS NOT NULL AND COALESCE(route, '') != 'claude-code' THEN cache_estimated_savings ELSE 0 END), 0) as total_savings,
-                COALESCE(SUM(CASE WHEN COALESCE(route, '') = 'claude-code' AND cache_read_tokens > 0 THEN cache_read_tokens ELSE 0 END), 0) as client_managed_cache_read
+                COALESCE(SUM(CASE WHEN {origin_expr} = 'client'  THEN cache_read_tokens ELSE 0 END), 0) as cache_read_client,
+                COALESCE(SUM(CASE WHEN {origin_expr} = 'proxy'   THEN cache_read_tokens ELSE 0 END), 0) as cache_read_proxy,
+                COALESCE(SUM(CASE WHEN {origin_expr} = 'unknown' THEN cache_read_tokens ELSE 0 END), 0) as cache_read_unknown
             FROM requests
             WHERE timestamp >= ?
         """, (cutoff,))
         overall = cur.fetchone()
-
-        # Get per-provider stats — only count proxy-managed savings
-        cur.execute("""
-            SELECT
-                cache_provider,
-                COUNT(*) as requests,
-                SUM(CASE WHEN cache_read_tokens > 0 THEN 1 ELSE 0 END) as hits,
-                COALESCE(SUM(cache_read_tokens), 0) as read_tokens,
-                COALESCE(SUM(cache_creation_tokens), 0) as creation_tokens,
-                COALESCE(SUM(CASE WHEN COALESCE(route, '') != 'claude-code' THEN cache_estimated_savings ELSE 0 END), 0) as savings
-            FROM requests
-            WHERE timestamp >= ? AND cache_provider IS NOT NULL AND cache_provider != ''
-            GROUP BY cache_provider
-        """, (cutoff,))
-        per_provider = cur.fetchall()
-
         conn.close()
 
         total_requests = overall[0] or 0
         cache_hits = overall[1] or 0
         hit_rate = (cache_hits / total_requests) if total_requests > 0 else 0.0
-
-        provider_stats: Dict[str, Any] = {}
-        for row in per_provider:
-            provider_name = row[0] or "unknown"
-            provider_requests = row[1] or 0
-            provider_hits = row[2] or 0
-            provider_stats[provider_name] = {
-                "requests": provider_requests,
-                "cache_hits": provider_hits,
-                "hit_rate": round((provider_hits / provider_requests) if provider_requests > 0 else 0.0, 4),
-                "cache_read_tokens": row[3] or 0,
-                "cache_creation_tokens": row[4] or 0,
-                "estimated_savings_usd": round(row[5] or 0.0, 6),
-            }
 
         return {
             "total_requests": total_requests,
@@ -99,9 +76,12 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "hit_rate": round(hit_rate, 4),
             "cache_read_tokens": overall[2] or 0,
             "cache_creation_tokens": overall[3] or 0,
-            "estimated_savings_usd": round(overall[4] or 0.0, 6),
-            "client_managed_cache_read_tokens": overall[5] or 0,
-            "per_provider": provider_stats,
+            "cache_read_by_origin": {
+                "client":  overall[4] or 0,
+                "proxy":   overall[5] or 0,
+                "unknown": overall[6] or 0,
+            },
+            "per_provider": {},
         }
     except Exception as e:
         # Fail gracefully — return empty stats if DB query fails
@@ -111,8 +91,7 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "hit_rate": 0.0,
             "cache_read_tokens": 0,
             "cache_creation_tokens": 0,
-            "estimated_savings_usd": 0.0,
-            "client_managed_cache_read_tokens": 0,
+            "cache_read_by_origin": {"client": 0, "proxy": 0, "unknown": 0},
             "per_provider": {},
             "error": str(e),
         }
