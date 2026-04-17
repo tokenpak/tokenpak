@@ -113,17 +113,16 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
-    """Check remaining budget for this session/day."""
-    tracker = state.budget_tracker
-    est = tracker.estimate(input_tokens=0)
-    return json.dumps({
-        "session_cost_usd": est.session_total_usd,
-        "daily_cost_usd": est.daily_total_usd,
-        "daily_budget_usd": est.daily_budget_usd,
-        "remaining_usd": est.budget_remaining_usd,
-        "session_requests": tracker.session_requests,
-        "budget_set": est.daily_budget_usd > 0,
-    }, indent=2)
+    """Check remaining budget via proxy /tp/v1/budget."""
+    status, body = _proxy_get("/tp/v1/budget")
+    if status == 0:
+        return json.dumps({
+            "error": "proxy_unreachable",
+            "detail": body.get("detail", "is the tokenpak proxy running?"),
+        })
+    if status >= 400:
+        return json.dumps(body)
+    return json.dumps(body, indent=2)
 
 
 def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
@@ -227,43 +226,35 @@ def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_journal_read(state: CompanionState, args: dict[str, Any]) -> str:
-    """Read journal entries for the current or a past session."""
-    target = args.get("session_id", state.session_id)
+    """Read journal entries via proxy /tp/v1/journal/*."""
+    target = args.get("session_id") or state.session_id
     entry_type = args.get("entry_type")
     limit = args.get("limit", 20)
 
     if not target:
         # List recent sessions
-        sessions = state.journal_store.recent_sessions(limit=10)
-        return json.dumps({
-            "sessions": [
-                {
-                    "session_id": s.session_id,
-                    "project_dir": s.project_dir,
-                    "total_requests": s.total_requests,
-                    "total_cost_usd": s.total_cost_usd,
-                    "entry_count": s.entry_count,
-                }
-                for s in sessions
-            ]
-        }, indent=2)
+        status, body = _proxy_get("/tp/v1/journal/sessions", {"limit": 10})
+    else:
+        params: dict[str, Any] = {"limit": limit}
+        if entry_type:
+            params["entry_type"] = entry_type
+        status, body = _proxy_get(
+            f"/tp/v1/journal/{_url_parse.quote(target, safe='')}",
+            params,
+        )
 
-    entries = state.journal_store.get_entries(target, entry_type=entry_type, limit=limit)
-    return json.dumps({
-        "session_id": target,
-        "entries": [
-            {
-                "timestamp": e.timestamp,
-                "type": e.entry_type,
-                "content": e.content,
-            }
-            for e in entries
-        ],
-    }, indent=2)
+    if status == 0:
+        return json.dumps({
+            "error": "proxy_unreachable",
+            "detail": body.get("detail", ""),
+        })
+    if status >= 400:
+        return json.dumps(body)
+    return json.dumps(body, indent=2)
 
 
 def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
-    """Add a note to the current session journal."""
+    """Add a note to the current session journal via proxy POST."""
     content = args.get("content", "")
     if not content:
         return json.dumps({"error": "No content provided"})
@@ -272,12 +263,18 @@ def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
     if not session_id:
         return json.dumps({"error": "No active session"})
 
-    state.journal_store.add_entry(
-        session_id=session_id,
-        entry_type="user",
-        content=content,
+    status, body = _proxy_post(
+        f"/tp/v1/journal/{_url_parse.quote(session_id, safe='')}/entry",
+        {"content": content, "entry_type": "user"},
     )
-    return json.dumps({"status": "ok", "session_id": session_id})
+    if status == 0:
+        return json.dumps({
+            "error": "proxy_unreachable",
+            "detail": body.get("detail", ""),
+        })
+    if status >= 400:
+        return json.dumps(body)
+    return json.dumps(body)
 
 
 def _handle_session_info(state: CompanionState, args: dict[str, Any]) -> str:
@@ -314,8 +311,8 @@ def _proxy_base_url() -> str:
     return _os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
 
 
-def _proxy_get(path: str, params: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
-    """GET against the local proxy's /tp/v1/* app API.
+def _proxy_request(method: str, path: str, params: Optional[dict[str, Any]] = None, body: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+    """HTTP call against the local proxy's /tp/v1/* app API.
 
     Returns (status_code, json_body). Never raises — network/parse errors
     become (0, {"error": ..., "detail": ...}) so tool handlers can
@@ -324,25 +321,38 @@ def _proxy_get(path: str, params: Optional[dict[str, Any]] = None) -> tuple[int,
     url = _proxy_base_url().rstrip("/") + path
     if params:
         url = f"{url}?{_url_parse.urlencode({k: v for k, v in params.items() if v is not None})}"
-    req = _url_req.Request(url, method="GET")
+    data: Optional[bytes] = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+    req = _url_req.Request(url, method=method, data=data)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
     key = _os.environ.get("TOKENPAK_PROXY_KEY", "").strip()
     if key:
         req.add_header("X-TP-Key", key)
     try:
         with _url_req.urlopen(req, timeout=5.0) as resp:
-            body = resp.read()
+            raw = resp.read()
             try:
-                return resp.status, json.loads(body.decode("utf-8"))
+                return resp.status, json.loads(raw.decode("utf-8"))
             except Exception as exc:
                 return resp.status, {"error": "invalid_json", "detail": str(exc)}
     except _url_err.HTTPError as exc:
         try:
-            data = json.loads(exc.read().decode("utf-8"))
+            parsed = json.loads(exc.read().decode("utf-8"))
         except Exception:
-            data = {"error": f"http_{exc.code}", "detail": str(exc)}
-        return exc.code, data
+            parsed = {"error": f"http_{exc.code}", "detail": str(exc)}
+        return exc.code, parsed
     except Exception as exc:
         return 0, {"error": "proxy_unreachable", "detail": str(exc)}
+
+
+def _proxy_get(path: str, params: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+    return _proxy_request("GET", path, params=params)
+
+
+def _proxy_post(path: str, body: Optional[dict[str, Any]] = None, params: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
+    return _proxy_request("POST", path, params=params, body=body)
 
 
 # ---------------------------------------------------------------------------
