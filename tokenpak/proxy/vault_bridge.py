@@ -12,7 +12,10 @@ import threading
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .request import ProxyRequest
 
 from .config import (
     _cfg,
@@ -534,13 +537,15 @@ CAPSULE_BUILDER = _LazyAlias(get_capsule_builder)  # type: ignore[assignment]
 
 
 def inject_vault_context(
-    body_bytes: bytes, adapter=None
+    body_bytes: bytes, adapter=None, *, request: "Optional[ProxyRequest]" = None
 ) -> "tuple[bytes, int, list[str]]":
     """
     Search vault index for relevant context and inject into the system prompt.
     Optionally resolves glossary terms and injects term cards.
     Returns (new_body_bytes, injected_tokens, source_refs).
     """
+    if request is not None:
+        body_bytes = request.body
     # Lazy imports for proxy-layer dependencies (transferred to subpackages in A2c)
     from tokenpak.proxy.adapters.utils import _detect_adapter, extract_query_signal
     try:

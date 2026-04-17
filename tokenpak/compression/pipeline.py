@@ -12,7 +12,10 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from tokenpak.proxy.request import ProxyRequest
 
 from .dedup import dedup_messages
 from .alias_compressor import AliasCompressor, AliasResult
@@ -265,11 +268,15 @@ def compact_text(text: str) -> str:
     return t
 
 
-def compact_request_body(body_bytes: bytes, adapter=None) -> Tuple[bytes, int, int, int]:
+def compact_request_body(
+    body_bytes: bytes, adapter=None, *, request: "Optional[ProxyRequest]" = None
+) -> Tuple[bytes, int, int, int]:
     """
     Style-contract-aware compaction.
     Returns (new_body_bytes, sent_tokens, original_tokens, protected_token_count).
     """
+    if request is not None:
+        body_bytes = request.body
     from tokenpak.proxy.config import (  # lazy import
         COMPILATION_MODE,
         COMPACT_THRESHOLD_TOKENS,

@@ -120,7 +120,7 @@ def stage_vault_injection(
     # vault_bridge returns (body, tokens, sources) — 3 values.
     # The monolith version returns 4 (+ raw_injection_text).
     # Handle both during the migration.
-    ret = inject_vault_context(request.body, adapter=adapter)
+    ret = inject_vault_context(request.body, adapter=adapter, request=request)
     if len(ret) == 4:
         body, injected_tokens, injected_sources, injection_text = ret
     else:

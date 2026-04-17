@@ -132,7 +132,9 @@ def _find_system_array_close(body: bytes) -> int:
     return -1  # "system" key not found
 
 
-def _byte_inject_system_block(body: bytes, injection_text: str) -> bytes:
+def _byte_inject_system_block(
+    body: bytes, injection_text: str, *, request: "Optional[ProxyRequest]" = None
+) -> bytes:
     """Inject a text block into the system array via byte splicing.
 
     Finds the closing ] of the "system" array and inserts a new block
@@ -141,6 +143,8 @@ def _byte_inject_system_block(body: bytes, injection_text: str) -> bytes:
 
     Returns the original body unchanged if injection fails for any reason.
     """
+    if request is not None:
+        body = request.body
     if not injection_text:
         return body
 

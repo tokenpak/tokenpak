@@ -839,12 +839,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 try:
                     from tokenpak.proxy.pipeline import process_request as _pipeline_run
                     from tokenpak.proxy.request import ProxyRequest as _PReq
+                    from tokenpak.proxy.request_pipeline import _resolve_session_id as _rsi
                     _pr = _PReq(
                         method="POST",
                         url=target_url,
                         headers=dict(self.headers),
                         body=body,
                         source_platform=_source_platform,
+                        session_id=_rsi(self.headers, model),
                     )
                     _result = _pipeline_run(_pr, _policy, route=_route, client_has_auth=True)
                     body = _result.request.body
@@ -1205,6 +1207,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Normalize upstream 4xx/5xx to canonical error envelope before
                 # sending headers so we can set the correct Content-Type.
                 resp_body = resp.content
+                try:
+                    from tokenpak.proxy.request import ProxyResponse as _PResp
+                    _upstream_response = _PResp(
+                        status_code=resp.status_code,
+                        headers=dict(resp.headers),
+                        body=resp_body,
+                    )
+                except Exception:
+                    _upstream_response = None  # type: ignore[assignment]
                 _is_upstream_error = resp.status_code >= 400
                 if _is_upstream_error:
                     resp_body = normalize_upstream_error(
