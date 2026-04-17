@@ -7387,10 +7387,11 @@ def _build_compress_parser(sub):
     p_compress.add_argument(
         "--json", action="store_true", help="Output as machine-readable JSON"
     )
-    p_compress.set_defaults(func=lambda args: print(
-        "Compression requires running proxy. Start with: tokenpak serve\n"
-        "Then: tokenpak demo to see compression in action."
-    ))
+    def _compress_dispatch(args):
+        from tokenpak.cli.commands.compress_cmd import run_compress
+        return run_compress(args)
+
+    p_compress.set_defaults(func=_compress_dispatch)
     return p_compress
 
 
