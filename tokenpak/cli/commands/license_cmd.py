@@ -27,7 +27,7 @@ def _render_summary(s: dict[str, Any]) -> str:
     if s.get("has_key"):
         lines.append(f"  Key       stored ({s['license_path']})")
     else:
-        lines.append(f"  Key       (none — OSS Free)")
+        lines.append(f"  Key       (none — Free tier)")
     lines.append("")
     lines.append(
         f"  Gated features enabled: {s['enabled_gated_count']} / "
@@ -82,7 +82,7 @@ def run_plan(args: argparse.Namespace) -> int:
     print(f"  You are on:  {s['tier_label']}  (status: {s['status']})")
     print("")
     print("  Available plans:")
-    print("    Free (OSS)     Proxy, vault, compression, web dashboard,")
+    print("    Free     Proxy, vault, compression, web dashboard,")
     print("                   savings tracking. $0. Always available.")
     print("    Pro            Code/log/JSON compression, smart routing,")
     print("                   session telemetry, trace & replay, CSV/JSON")
@@ -126,7 +126,7 @@ def run_deactivate(args: argparse.Namespace) -> int:
     """`tokenpak deactivate` — revert to Free."""
     removed = _lic.deactivate()
     if removed:
-        print("  ✅ License removed. Reverted to Free (OSS).")
+        print("  ✅ License removed. Reverted to Free.")
     else:
         print("  (no license was installed — already on Free)")
     return 0

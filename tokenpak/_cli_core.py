@@ -6355,7 +6355,7 @@ def cmd_demo(args):
 
     # ── List all (optionally filtered by category)
     summary = engine.summary()
-    print("TokenPak OSS — Baked-in Compression Recipes")
+    print("TokenPak — Baked-in Compression Recipes")
     print("=" * 50)
     print(f"Total recipes: {summary['total']}")
     print()

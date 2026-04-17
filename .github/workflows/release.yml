@@ -1,4 +1,4 @@
-name: Release TokenPak OSS
+name: Release TokenPak
 
 on:
   push:

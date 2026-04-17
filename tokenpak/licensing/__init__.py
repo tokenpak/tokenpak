@@ -277,7 +277,7 @@ def is_feature_enabled(feature: str, *, lic: Optional[License] = None) -> bool:
 def describe_tier(tier: str) -> str:
     """Human-readable tier label."""
     return {
-        TIER_FREE: "Free (OSS)",
+        TIER_FREE: "Free",
         TIER_PRO: "Pro",
         TIER_TEAM: "Team",
         TIER_ENTERPRISE: "Enterprise",
