@@ -43,8 +43,9 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -98,6 +99,15 @@ class PoolConfig:
     connect_timeout: float = 10.0
     read_timeout: float = 300.0
     http2: bool = True
+    # Per-session upstream client pool — used when the caller passes a
+    # session_key to stream()/request(). Each unique session_key gets its
+    # own httpx.Client (and thus its own HTTP/2 connection to upstream),
+    # which mirrors the native-CLI topology where each CLI process holds
+    # its own persistent connection and therefore its own concurrency slot
+    # at the provider. Idle clients are reaped after session_client_idle_s
+    # and the total pool is capped at session_client_max (LRU evict).
+    session_client_max: int = 32
+    session_client_idle_seconds: float = 300.0
 
     @classmethod
     def from_env(cls) -> "PoolConfig":
@@ -107,6 +117,10 @@ class PoolConfig:
             max_keepalive_connections=int(os.environ.get("TOKENPAK_POOL_MAX_KEEPALIVE", "10")),
             keepalive_expiry=float(os.environ.get("TOKENPAK_POOL_KEEPALIVE_EXPIRY", "30")),
             http2=os.environ.get("TOKENPAK_HTTP2", "1") != "0",
+            session_client_max=int(os.environ.get("TOKENPAK_SESSION_CLIENTS_MAX", "32")),
+            session_client_idle_seconds=float(
+                os.environ.get("TOKENPAK_SESSION_CLIENT_IDLE_SECS", "300")
+            ),
         )
 
 
@@ -178,6 +192,11 @@ class ConnectionPool:
         self._lock = threading.Lock()
         self._metrics = PoolMetrics()
         self._metrics_lock = threading.Lock()
+        # Per-session client pool: key = (netloc, session_key), value =
+        # (client, last_used_monotonic). Separate lock keeps session lookups
+        # off the main pool lock's critical path.
+        self._session_clients: Dict[tuple, tuple] = {}
+        self._session_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Client management
@@ -227,6 +246,52 @@ class ConnectionPool:
                 self._clients[netloc] = self._make_client()
             return self._clients[netloc]
 
+    def _get_session_client(self, netloc: str, session_key: str) -> httpx.Client:
+        """
+        Return a dedicated ``httpx.Client`` for ``(netloc, session_key)``.
+
+        Gives each logical session its own upstream HTTP/2 connection — so
+        two concurrent sessions get two independent concurrency slots at the
+        provider instead of sharing one multiplexed connection. Idle clients
+        are reaped; pool is capped at ``session_client_max`` (LRU-evicted).
+        """
+        cfg = self._config
+        now = time.monotonic() if hasattr(time, "monotonic") else time.time()
+        key = (netloc, session_key)
+        with self._session_lock:
+            # Reap idle clients
+            idle_cutoff = now - cfg.session_client_idle_seconds
+            stale_keys = [
+                k for k, (_, last) in self._session_clients.items() if last < idle_cutoff
+            ]
+            for k in stale_keys:
+                client, _ = self._session_clients.pop(k)
+                try:
+                    client.close()
+                except Exception:
+                    pass
+
+            entry = self._session_clients.get(key)
+            if entry is not None:
+                client, _ = entry
+                self._session_clients[key] = (client, now)
+                return client
+
+            # Enforce cap — LRU-evict oldest
+            while len(self._session_clients) >= cfg.session_client_max:
+                oldest_key = min(
+                    self._session_clients.items(), key=lambda kv: kv[1][1]
+                )[0]
+                client, _ = self._session_clients.pop(oldest_key)
+                try:
+                    client.close()
+                except Exception:
+                    pass
+
+            client = self._make_client()
+            self._session_clients[key] = (client, now)
+            return client
+
     # ------------------------------------------------------------------
     # Public request interface
     # ------------------------------------------------------------------
@@ -238,6 +303,7 @@ class ConnectionPool:
         *,
         content: Optional[bytes] = None,
         headers: Optional[dict] = None,
+        session_key: Optional[str] = None,
     ) -> httpx.Response:
         """
         Send a non-streaming HTTP request via the pool.
@@ -263,7 +329,11 @@ class ConnectionPool:
         """
         parsed = httpx.URL(url)
         netloc = parsed.host
-        client = self._get_client(netloc)
+        client = (
+            self._get_session_client(netloc, session_key)
+            if session_key
+            else self._get_client(netloc)
+        )
 
         with self._metrics_lock:
             self._metrics.total_requests += 1
@@ -300,6 +370,7 @@ class ConnectionPool:
         *,
         content: Optional[bytes] = None,
         headers: Optional[dict] = None,
+        session_key: Optional[str] = None,
     ):
         """
         Send a streaming HTTP request via the pool.
@@ -318,7 +389,11 @@ class ConnectionPool:
         """
         parsed = httpx.URL(url)
         netloc = parsed.host
-        client = self._get_client(netloc)
+        client = (
+            self._get_session_client(netloc, session_key)
+            if session_key
+            else self._get_client(netloc)
+        )
 
         with self._metrics_lock:
             self._metrics.total_requests += 1
@@ -365,6 +440,23 @@ class ConnectionPool:
                 except Exception:
                     pass
             self._clients.clear()
+        with self._session_lock:
+            for client, _ in self._session_clients.values():
+                try:
+                    client.close()
+                except Exception:
+                    pass
+            self._session_clients.clear()
+
+    def session_client_snapshot(self) -> Dict[str, Any]:
+        """Return a diagnostic snapshot of the per-session client pool."""
+        with self._session_lock:
+            return {
+                "count": len(self._session_clients),
+                "cap": self._config.session_client_max,
+                "idle_secs": self._config.session_client_idle_seconds,
+                "keys": [f"{netloc}::{sk}" for (netloc, sk) in self._session_clients],
+            }
 
     def __repr__(self) -> str:
         providers = self.active_providers

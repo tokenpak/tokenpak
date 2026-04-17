@@ -535,6 +535,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/circuit-breakers":
             registry = get_circuit_breaker_registry()
+            try:
+                _sess_pool_info = ps._connection_pool.session_client_snapshot()
+            except Exception:
+                _sess_pool_info = {"count": 0, "cap": 0, "idle_secs": 0.0, "keys": []}
             self._send_json({
                 "enabled": registry.enabled,
                 "circuit_breakers": registry.all_statuses(),
@@ -543,6 +547,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     "acquire_timeout_seconds": _UPSTREAM_ACQUIRE_TIMEOUT,
                     "in_flight": get_upstream_inflight_snapshot(),
                 },
+                "session_client_pool": _sess_pool_info,
             })
             return
         if path == "/stats":
@@ -1131,6 +1136,26 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # which the CLI's SSE reader surfaces as "Unterminated string".
         _client_headers_sent = False
 
+        # ── Per-session upstream client key ──────────────────────────────
+        # Derive a stable identifier for this incoming connection so the
+        # connection pool can hand us a dedicated httpx.Client (and thus a
+        # dedicated HTTP/2 connection to upstream) for this session. This
+        # mirrors the native Claude CLI topology, where each CLI process
+        # maintains its own persistent upstream connection — so N concurrent
+        # companion sessions get N independent concurrency slots at the
+        # provider instead of multiplexing into one. Prefer an explicit
+        # session header if the client sent one; else fall back to the
+        # (ip, port) tuple of the incoming TCP connection, which is unique
+        # per TCP connection from each CLI process.
+        _session_key: Optional[str] = None
+        for _h in ("x-tokenpak-session-id", "x-session-id", "x-correlation-id"):
+            _val = self.headers.get(_h)
+            if _val:
+                _session_key = _val.strip()
+                break
+        if not _session_key and self.client_address:
+            _session_key = f"{self.client_address[0]}:{self.client_address[1]}"
+
         # ── Outbound concurrency gate ────────────────────────────────────
         # Bounded semaphore per upstream provider. When the limit is
         # saturated (e.g. 5 companion sessions all firing at once and
@@ -1183,7 +1208,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
                     _stream_retry = False
                     try:
-                        with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
+                        with pool.stream(method, target_url, content=body, headers=fwd_headers, session_key=_session_key) as resp:
                             if (
                                 _is_retryable_upstream_status(resp.status_code)
                                 and not _stream_wrote_to_client
@@ -1270,7 +1295,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = None
                 for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
                     try:
-                        resp = pool.request(method, target_url, content=body, headers=fwd_headers)
+                        resp = pool.request(method, target_url, content=body, headers=fwd_headers, session_key=_session_key)
                         if (
                             _is_retryable_upstream_status(resp.status_code)
                             and _ustream_attempt < MAX_UPSTREAM_RETRIES - 1
