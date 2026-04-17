@@ -4,23 +4,20 @@
 # Codex Stop hook — session/turn closeout, journal persistence.
 #
 # Reads JSON from stdin with: session_id, transcript_path, cwd,
-# hook_event_name, model, assistant_message.
+# hook_event_name, model, stop_hook_active, last_assistant_message.
 #
 # Actions:
-#   - Writes closeout journal entry with assistant summary
+#   - Writes closeout journal entry
 #   - Records final cost estimate to budget tracker
 #   - Always exits 0 (never blocks Stop)
 # ──────────────────────────────────────────────────────────────
 
-# Read stdin
 INPUT=$(cat)
 
-# Quick exit if companion disabled
 [ "${TOKENPAK_COMPANION_ENABLED:-1}" = "0" ] && exit 0
 
 JOURNAL_DIR="${TOKENPAK_COMPANION_JOURNAL_DIR:-$HOME/.tokenpak/companion}"
 
-# Parse JSON fields
 if command -v jq >/dev/null 2>&1; then
     SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
     TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
@@ -33,7 +30,6 @@ fi
 
 [ -z "$SESSION_ID" ] && exit 0
 
-# Estimate final session size from transcript
 TOKENS=0
 if [ -n "$TRANSCRIPT" ] && [ -f "$TRANSCRIPT" ]; then
     FILE_SIZE=$(stat -c%s "$TRANSCRIPT" 2>/dev/null || stat -f%z "$TRANSCRIPT" 2>/dev/null || echo 0)
@@ -42,7 +38,6 @@ fi
 
 TOKENS_FMT=$(printf '%d' "$TOKENS" | rev | sed 's/.\{3\}/&,/g' | rev | sed 's/^,//')
 
-# Write closeout journal entry
 JOURNAL_DB="$JOURNAL_DIR/journal.db"
 if [ -f "$JOURNAL_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
     TIMESTAMP=$(date +%s)
@@ -50,33 +45,28 @@ if [ -f "$JOURNAL_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
         "INSERT OR IGNORE INTO entries (session_id, timestamp, entry_type, content, metadata_json)
          VALUES ('$SESSION_ID', $TIMESTAMP, 'auto', 'session stopped (~${TOKENS_FMT} total tokens, model: ${MODEL:-unknown})', '{}');" 2>/dev/null
 
-    # Update session end time if sessions table exists
     sqlite3 "$JOURNAL_DB" \
         "UPDATE sessions SET ended_at = $TIMESTAMP, total_requests = (
              SELECT COUNT(*) FROM entries WHERE session_id = '$SESSION_ID' AND entry_type = 'auto'
          ) WHERE session_id = '$SESSION_ID';" 2>/dev/null
 fi
 
-# Record final cost estimate to budget tracker
 BUDGET_DB="$JOURNAL_DIR/budget.db"
 if [ -f "$BUDGET_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
-    # Resolve model rate (same logic as pre_send)
+    # Rate lookup shares the same TSV snapshot as pre_send (single source).
+    RATES_FILE="${TOKENPAK_COMPANION_RATES_FILE:-$HOME/.tokenpak/companion/run/model_rates.tsv}"
     RATE=3
-    case "${MODEL:-}" in
-        gpt-4o-mini*)  RATE=0 ;;
-        gpt-4o*)       RATE=3 ;;
-        gpt-4.1-nano*) RATE=0 ;;
-        gpt-4.1-mini*) RATE=0 ;;
-        gpt-4.1*)      RATE=2 ;;
-        o3-mini*)      RATE=1 ;;
-        o4-mini*)      RATE=1 ;;
-        o1-mini*)      RATE=1 ;;
-        o3*)           RATE=10 ;;
-        o1*)           RATE=15 ;;
-        *opus*)        RATE=15 ;;
-        *sonnet*)      RATE=3 ;;
-        *haiku*)       RATE=1 ;;
-    esac
+    if [ -n "$MODEL" ] && [ -f "$RATES_FILE" ]; then
+        RATE=$(awk -F'\t' -v m="$MODEL" '$1 == m { print $2; exit }' "$RATES_FILE" 2>/dev/null)
+        if [ -z "$RATE" ]; then
+            RATE=$(awk -F'\t' -v m="$MODEL" '
+                BEGIN { best_len = 0; best = "" }
+                index(m, $1) == 1 && length($1) > best_len { best_len = length($1); best = $2 }
+                END { if (best != "") print best }
+            ' "$RATES_FILE" 2>/dev/null)
+        fi
+        [ -z "$RATE" ] && RATE=3
+    fi
 
     COST_MICRO=$((TOKENS * RATE / 1000))
     COST_DOLLARS="$((COST_MICRO / 1000)).$(printf '%06d' $((COST_MICRO % 1000000)))"

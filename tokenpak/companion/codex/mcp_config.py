@@ -51,10 +51,13 @@ def register(
         sys.executable, "-m", "tokenpak.companion.mcp.server",
     ]
 
-    # Pass companion env vars to the MCP server process
+    # Pass companion env vars to the MCP server process.
+    # Codex documents `--env KEY=VALUE` (space-separated); insert before "--".
     if env_vars:
+        insert_at = cmd.index("--")
         for k, v in env_vars.items():
-            cmd.insert(4, f"--env={k}={v}")  # insert before "--"
+            cmd[insert_at:insert_at] = ["--env", f"{k}={v}"]
+            insert_at += 2
 
     try:
         result = subprocess.run(

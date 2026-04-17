@@ -2,8 +2,10 @@
 """Install TokenPak skills into the Codex skills directory.
 
 Skills are copied from the bundled ``skills/`` directory to
-``~/.codex/skills/``.  Existing TokenPak skills are overwritten
-to ensure they stay up to date; non-TokenPak skills are untouched.
+``~/.codex/skills/``.  The set of skills is discovered at runtime by
+globbing for ``SKILL.md`` — no hardcoded enumeration (see
+``feedback_always_dynamic.md``).  Uninstall uses the same glob so the
+two halves can never drift.
 """
 
 from __future__ import annotations
@@ -13,44 +15,39 @@ from pathlib import Path
 
 
 _BUNDLED_SKILLS = Path(__file__).parent / "skills"
+_DEFAULT_TARGET = Path.home() / ".codex" / "skills"
 
-# All TokenPak skill folder names
-_SKILL_NAMES = [
-    "tokenpak-start-session",
-    "tokenpak-load-memory",
-    "tokenpak-budget-aware-implementation",
-    "tokenpak-large-refactor-mode",
-    "tokenpak-retrospective",
-]
+
+def bundled_skill_names() -> list[str]:
+    """Return the names of all skills shipped with this package.
+
+    A directory under :data:`_BUNDLED_SKILLS` counts as a skill only if
+    it contains a ``SKILL.md`` file.
+    """
+    if not _BUNDLED_SKILLS.exists():
+        return []
+    return sorted(
+        p.name
+        for p in _BUNDLED_SKILLS.iterdir()
+        if p.is_dir() and (p / "SKILL.md").exists()
+    )
 
 
 def install_skills(target_dir: Path | None = None) -> list[Path]:
     """Copy bundled skills to the Codex skills directory.
 
-    Args:
-        target_dir: Override for the skills directory.  Defaults to
-                    ``~/.codex/skills/``.
-
-    Returns:
-        List of paths to installed skill directories.
+    Existing tokenpak skills are replaced so updates propagate; other
+    skills in the target directory are untouched.
     """
-    if target_dir is None:
-        target_dir = Path.home() / ".codex" / "skills"
-
-    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir or _DEFAULT_TARGET
+    target.mkdir(parents=True, exist_ok=True)
 
     installed: list[Path] = []
-    for name in _SKILL_NAMES:
+    for name in bundled_skill_names():
         src = _BUNDLED_SKILLS / name
-        dst = target_dir / name
-
-        if not src.exists():
-            continue
-
-        # Replace existing TokenPak skill (keeps it updated)
+        dst = target / name
         if dst.exists():
             shutil.rmtree(dst)
-
         shutil.copytree(src, dst)
         installed.append(dst)
 
@@ -58,11 +55,21 @@ def install_skills(target_dir: Path | None = None) -> list[Path]:
 
 
 def list_installed_skills(target_dir: Path | None = None) -> list[str]:
-    """Return names of installed TokenPak skills."""
-    if target_dir is None:
-        target_dir = Path.home() / ".codex" / "skills"
+    """Return the bundled skills currently present in the target dir."""
+    target = target_dir or _DEFAULT_TARGET
+    return [name for name in bundled_skill_names() if (target / name).exists()]
 
-    return [
-        name for name in _SKILL_NAMES
-        if (target_dir / name).exists()
-    ]
+
+def uninstall_skills(target_dir: Path | None = None) -> list[str]:
+    """Remove every bundled tokenpak skill from the target dir.
+
+    Returns the names that were actually removed.
+    """
+    target = target_dir or _DEFAULT_TARGET
+    removed: list[str] = []
+    for name in bundled_skill_names():
+        dst = target / name
+        if dst.exists():
+            shutil.rmtree(dst)
+            removed.append(name)
+    return removed

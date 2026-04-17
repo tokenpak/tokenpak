@@ -1869,12 +1869,26 @@ def cmd_claude(args):
 
 
 def cmd_codex(args):
-    """Launch Codex with tokenpak companion active."""
+    """Launch Codex with tokenpak companion active.
+
+    Also routes the ``doctor`` and ``uninstall`` subcommands when they
+    appear as the first positional argument.
+    """
     import os
+    import sys
     if getattr(args, "budget", None) is not None:
         os.environ["TOKENPAK_COMPANION_BUDGET"] = str(args.budget)
+    forwarded = list(args.args)
+    if forwarded and forwarded[0] == "doctor":
+        from .companion.codex.doctor import main as doctor_main
+        sys.exit(doctor_main(forwarded[1:]))
+    if forwarded and forwarded[0] == "uninstall":
+        from .companion.codex.uninstall import main as uninstall_main
+        sys.exit(uninstall_main(forwarded[1:]))
+    if getattr(args, "install_only", False):
+        forwarded = ["--install-only", *forwarded]
     from .companion.codex import launch
-    launch(args=list(args.args))
+    launch(args=forwarded)
 
 
 def cmd_test(args):
@@ -2051,6 +2065,9 @@ def _build_codex_parser(sub):
             "then launches Codex with any user-provided arguments.\n\n"
             "Examples:\n"
             "  tokenpak codex\n"
+            "  tokenpak codex --install-only    # set up without launching Codex\n"
+            "  tokenpak codex doctor            # verify installation\n"
+            "  tokenpak codex uninstall         # reverse installation\n"
             "  tokenpak codex --budget 5.00\n"
             '  tokenpak codex "Fix the login bug"\n'
             "  tokenpak codex --model o3 -s workspace-write"
@@ -2065,9 +2082,14 @@ def _build_codex_parser(sub):
         help="Daily spend cap in USD; sets TOKENPAK_COMPANION_BUDGET env var",
     )
     p.add_argument(
+        "--install-only",
+        action="store_true",
+        help="Run setup (MCP, hooks, AGENTS.md, skills) and exit without launching codex",
+    )
+    p.add_argument(
         "args",
         nargs=argparse.REMAINDER,
-        help="Arguments forwarded verbatim to codex",
+        help="Arguments forwarded verbatim to codex (or `doctor` / `uninstall`)",
     )
     p.set_defaults(func=cmd_codex)
 

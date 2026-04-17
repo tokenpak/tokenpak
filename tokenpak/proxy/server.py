@@ -1015,7 +1015,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         has_cache_control = False
                         for h_key, h_val in resp.headers.items():
                             h_lower = h_key.lower()
-                            if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                            if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"):
                                 continue
                             if h_lower == "content-type":
                                 has_content_type = True
@@ -1065,7 +1065,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
-                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length"):
+                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"):
                         continue
                     if _is_upstream_error and h_lower == "content-type":
                         continue  # overridden below
@@ -2291,6 +2291,17 @@ def main() -> None:
 """, flush=True)
 
     ps = ProxyServer(host=host, port=port)
+
+    # Start background model discovery if enabled (TOKENPAK_MODEL_DISCOVERY=1).
+    # Discovery polls provider /v1/models endpoints and persists to
+    # ~/.tokenpak/data/discovered_models.json for offline visibility.
+    # Pricing/inference for unseen models always works via family rules,
+    # so this is purely supplementary.
+    try:
+        from tokenpak.models._discovery import auto_start_if_enabled
+        auto_start_if_enabled()
+    except Exception:
+        pass  # discovery is optional; never block proxy startup
 
     def _handle_sighup(signum: int, frame) -> None:  # type: ignore[type-arg]
         """Hot-reload dynamic config from environment variables (no restart needed)."""

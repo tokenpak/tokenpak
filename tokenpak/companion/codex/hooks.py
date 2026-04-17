@@ -8,51 +8,61 @@ two hooks:
 - **UserPromptSubmit** → token estimation, budget gating, journal seed
 - **Stop** → session closeout, journal summary, cost recording
 
-Hooks must be enabled in config.toml::
-
-    [features]
-    codex_hooks = true
+Hooks must be enabled via the ``codex_hooks`` feature flag.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 
-# Hook script paths relative to this file
 _HOOKS_DIR = Path(__file__).parent
 _PRE_SEND_HOOK = _HOOKS_DIR / "hooks_pre_send.sh"
 _STOP_HOOK = _HOOKS_DIR / "hooks_stop.sh"
 
+# Substring used to identify tokenpak-owned hook commands across merges.
+TOKENPAK_HOOK_MARKER = "tokenpak"
+
+# Events the companion owns. Add more here and they'll flow through
+# install / merge / uninstall without further code changes.
+def _tokenpak_hook_events() -> dict[str, dict]:
+    """Return {event_name: hook_group} for every event the companion installs."""
+    return {
+        "UserPromptSubmit": {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"bash {_PRE_SEND_HOOK}",
+                    "timeout": 10,
+                    "statusMessage": "tokenpak: estimating cost...",
+                }
+            ]
+        },
+        "Stop": {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": f"bash {_STOP_HOOK}",
+                    "timeout": 15,
+                    "statusMessage": "tokenpak: closing session...",
+                }
+            ]
+        },
+    }
+
 
 def generate_hooks_json() -> dict:
-    """Build the hooks.json structure for Codex companion hooks."""
+    """Build the hooks.json structure matching Codex's documented schema.
+
+    Codex expects::
+
+        {"hooks": {"<EventName>": [{"hooks": [{command...}]}]}}
+    """
     return {
-        "hooks": [
-            {
-                "event": "UserPromptSubmit",
-                "commands": [
-                    {
-                        "type": "command",
-                        "command": f"bash {_PRE_SEND_HOOK}",
-                        "timeout": 10,
-                        "statusMessage": "tokenpak: estimating cost...",
-                    }
-                ],
-            },
-            {
-                "event": "Stop",
-                "commands": [
-                    {
-                        "type": "command",
-                        "command": f"bash {_STOP_HOOK}",
-                        "timeout": 15,
-                        "statusMessage": "tokenpak: closing session...",
-                    }
-                ],
-            },
-        ]
+        "hooks": {event: [group] for event, group in _tokenpak_hook_events().items()}
     }
 
 
@@ -60,14 +70,14 @@ def install_hooks(target: str = "global") -> Path:
     """Write hooks.json to the appropriate Codex config directory.
 
     Args:
-        target: "global" for ~/.codex/hooks.json, or a repo path for
-                <repo>/.codex/hooks.json.
+        target: ``"global"`` for ``~/.codex/hooks.json``, or a repo path
+                for ``<repo>/.codex/hooks.json``.
 
     Returns:
         Path to the written hooks.json file.
 
-    If hooks.json already exists and contains non-tokenpak hooks, the
-    tokenpak hooks are merged in rather than overwriting.
+    Existing non-tokenpak hooks are preserved; tokenpak entries are
+    replaced idempotently.
     """
     if target == "global":
         hooks_dir = Path.home() / ".codex"
@@ -83,7 +93,7 @@ def install_hooks(target: str = "global") -> Path:
         try:
             existing = json.loads(hooks_path.read_text())
             merged = _merge_hooks(existing, new_hooks)
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, TypeError):
             merged = new_hooks
     else:
         merged = new_hooks
@@ -95,69 +105,71 @@ def install_hooks(target: str = "global") -> Path:
 def _merge_hooks(existing: dict, new: dict) -> dict:
     """Merge tokenpak hooks into existing hooks.json without clobbering.
 
-    Replaces any existing tokenpak hooks (identified by command path
-    containing 'tokenpak') and preserves all other hooks.
+    Handles both the Codex-native shape
+    (``{"hooks": {"Event": [{"hooks": [...]}]}}``) and the legacy
+    pre-v1 shape we previously wrote; legacy entries are discarded.
+
+    Non-tokenpak hooks — identified by the absence of
+    :data:`TOKENPAK_HOOK_MARKER` in the command string — are preserved.
     """
-    existing_entries = existing.get("hooks", [])
-    new_entries = new.get("hooks", [])
+    existing_hooks = existing.get("hooks")
+    new_hooks = new.get("hooks", {})
 
-    # Index new hooks by event
-    new_by_event: dict[str, dict] = {}
-    for entry in new_entries:
-        new_by_event[entry["event"]] = entry
+    preserved: dict[str, list[dict]] = {}
 
-    merged: list[dict] = []
-    seen_events: set[str] = set()
+    if isinstance(existing_hooks, dict):
+        for event, groups in existing_hooks.items():
+            if not isinstance(groups, list):
+                continue
+            kept_groups: list[dict] = []
+            for group in groups:
+                if not isinstance(group, dict):
+                    continue
+                commands = group.get("hooks", [])
+                non_tokenpak = [
+                    c
+                    for c in commands
+                    if isinstance(c, dict)
+                    and TOKENPAK_HOOK_MARKER not in c.get("command", "")
+                ]
+                if non_tokenpak:
+                    kept = {**group, "hooks": non_tokenpak}
+                    kept_groups.append(kept)
+            if kept_groups:
+                preserved[event] = kept_groups
+    # Legacy array-shaped hooks: we drop them silently (schema mismatch
+    # means Codex never ran them anyway).
 
-    for entry in existing_entries:
-        event = entry.get("event", "")
-        if event in new_by_event:
-            # Filter out old tokenpak commands, keep others
-            existing_cmds = entry.get("commands", [])
-            non_tokenpak = [
-                c for c in existing_cmds
-                if "tokenpak" not in c.get("command", "")
-            ]
-            # Merge: non-tokenpak existing + new tokenpak
-            combined_cmds = non_tokenpak + new_by_event[event].get("commands", [])
-            merged.append({**entry, "commands": combined_cmds})
-            seen_events.add(event)
-        else:
-            merged.append(entry)
+    merged_hooks: dict[str, list[dict]] = {}
+    for event, groups in preserved.items():
+        merged_hooks.setdefault(event, []).extend(groups)
+    for event, groups in new_hooks.items():
+        merged_hooks.setdefault(event, []).extend(groups)
 
-    # Add any new events not in existing
-    for event, entry in new_by_event.items():
-        if event not in seen_events:
-            merged.append(entry)
-
-    return {"hooks": merged}
+    return {"hooks": merged_hooks}
 
 
 def ensure_hooks_feature_enabled() -> bool:
-    """Check and enable the codex_hooks feature in config.toml.
+    """Enable the ``codex_hooks`` feature via ``codex features enable``.
 
-    Returns True if the feature is or was successfully enabled.
+    Uses the Codex-native command rather than hand-writing config.toml,
+    so we inherit any future config-schema changes for free. Idempotent:
+    calling on an already-enabled feature still returns True.
     """
-    config_path = Path.home() / ".codex" / "config.toml"
-
-    if config_path.exists():
-        content = config_path.read_text()
-        if "codex_hooks" in content:
-            # Already configured (enabled or disabled) — don't override
-            return "codex_hooks = true" in content or 'codex_hooks = true' in content
-    else:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        content = ""
-
-    # Append the feature flag
-    if "[features]" in content:
-        # Add under existing [features] section
-        content = content.replace(
-            "[features]",
-            "[features]\ncodex_hooks = true",
+    try:
+        result = subprocess.run(
+            ["codex", "features", "enable", "codex_hooks"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
-    else:
-        content += "\n[features]\ncodex_hooks = true\n"
-
-    config_path.write_text(content)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        print(f"tokenpak: codex not available: {exc}", file=sys.stderr)
+        return False
+    if result.returncode != 0:
+        print(
+            f"tokenpak: failed to enable codex_hooks feature: {result.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return False
     return True

@@ -205,6 +205,19 @@ def stop_discovery() -> None:
 
 
 def auto_start_if_enabled() -> None:
-    """Auto-start discovery if TOKENPAK_MODEL_DISCOVERY=1."""
-    if os.environ.get("TOKENPAK_MODEL_DISCOVERY", "0") == "1":
+    """Auto-start discovery unless explicitly disabled.
+
+    Default: enabled when an API key is present for at least one provider.
+    Set TOKENPAK_MODEL_DISCOVERY=0 to force-disable.
+    """
+    flag = os.environ.get("TOKENPAK_MODEL_DISCOVERY", "").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return
+    if flag in ("1", "true", "yes", "on"):
         start_discovery()
+        return
+    # Auto-mode: enable if any provider has credentials available
+    for cfg in _PROVIDER_ENDPOINTS.values():
+        if os.environ.get(cfg.get("api_key_env", ""), ""):
+            start_discovery()
+            return
