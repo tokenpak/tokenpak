@@ -2223,7 +2223,6 @@ def _build_stub_parsers(sub):
         "audit": "Enterprise audit log management (not yet implemented)",
         "compliance": "Generate compliance reports (not yet implemented)",
         "watch": "Live terminal savings dashboard (not yet implemented — use `tokenpak dashboard` instead)",
-        "integrate": "Client-specific setup guides (not yet implemented — see README for integration docs)",
     }
 
     def _make_stub(name, desc):
@@ -2235,6 +2234,42 @@ def _build_stub_parsers(sub):
     for name, desc in _STUBS.items():
         p = sub.add_parser(name, help=desc)
         p.set_defaults(func=_make_stub(name, desc))
+
+    # ── `integrate` — real implementation (Free GTM feature) ─────────────────
+    p_integrate = sub.add_parser(
+        "integrate",
+        help="Show setup instructions for LLM clients (Claude Code, Cursor, Cline, Continue, Aider, SDKs)",
+        description=(
+            "Show one-step setup instructions for pointing your LLM client at tokenpak.\n\n"
+            "Examples:\n"
+            "  tokenpak integrate                # list detected clients + SDKs\n"
+            "  tokenpak integrate cursor         # show Cursor setup\n"
+            "  tokenpak integrate claude-code    # show Claude Code setup\n"
+            "  tokenpak integrate --all          # dump instructions for every client"
+        ),
+    )
+    p_integrate.add_argument(
+        "client", nargs="?", default=None,
+        help="Client key: claude-code | cursor | cline | continue | aider | codex | openai-sdk | anthropic-sdk | litellm",
+    )
+    p_integrate.add_argument(
+        "--all", action="store_true",
+        help="Show instructions for every supported client",
+    )
+    p_integrate.add_argument(
+        "--proxy-url", default=None,
+        help=f"Override the printed proxy URL (default: $TOKENPAK_PROXY_URL or http://localhost:8766)",
+    )
+    p_integrate.add_argument(
+        "--apply", action="store_true",
+        help="(reserved) auto-write config files — not yet implemented, prints safe instructions instead",
+    )
+
+    def _integrate_dispatch(args):
+        from tokenpak.cli.commands.integrate import run_integrate
+        return run_integrate(args)
+
+    p_integrate.set_defaults(func=_integrate_dispatch)
 
 
 def build_parser():
