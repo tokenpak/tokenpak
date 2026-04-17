@@ -216,7 +216,15 @@ def _calculate_fleet_savings(
                 COALESCE(SUM(output_tokens), 0) AS output_tokens,
                 COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
                 COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-                COALESCE(SUM(compressed_tokens), 0) AS compressed_tokens,
+                -- Attribute compressed_tokens only to proxy-caused compression.
+                -- For byte-preserved passthrough traffic (cache_origin='client' or
+                -- NULL/unknown) the stored compressed_tokens is legacy accounting
+                -- that reflects input-minus-sent delta, not real savings — per the
+                -- project_tokenpak_status_attribution contract.
+                {("COALESCE(SUM(CASE WHEN cache_origin = 'proxy' "
+                  "THEN compressed_tokens ELSE 0 END), 0)"
+                  if has_origin else "0")
+                } AS compressed_tokens,
                 COALESCE(SUM(protected_tokens), 0) AS protected_tokens,
                 COALESCE(SUM(estimated_cost), 0.0) AS estimated_cost,
                 {proxy_cr_expr}  AS proxy_managed_cache_read,

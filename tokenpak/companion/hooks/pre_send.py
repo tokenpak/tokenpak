@@ -87,6 +87,18 @@ def main() -> int:
 
     # Budget gate — block if over budget
     if over_budget:
+        # Blocking the request means the full estimated tokens never went to
+        # the provider — record that as a real prompt-side saving so
+        # `tokenpak status` Prompt-side plane reports it honestly.
+        try:
+            _journal_savings(
+                session_id or f"budget-block-{os.getpid()}-{int(time.time())}",
+                tool="budget_gate",
+                tokens_avoided=tokens_est,
+                cost_avoided_usd=cost_est,
+            )
+        except Exception:
+            pass  # never fail the block decision on journal error
         msg = f"tokenpak: budget exceeded (${daily_total:.2f} / ${budget:.2f} daily)"
         print(msg, file=sys.stderr)
         print(json.dumps({
@@ -139,6 +151,50 @@ def _get_daily_total() -> float:
         return row[0] if row else 0.0
     except Exception:
         return 0.0
+
+
+def _journal_savings(
+    session_id: str, tool: str, tokens_avoided: int, cost_avoided_usd: float
+) -> None:
+    """Record a prompt-side savings entry matching the status attribution contract.
+
+    Writes entry_type='companion_savings' with metadata {tool, tokens_avoided,
+    cost_avoided_usd} so ``tokenpak status`` Prompt-side plane reports it.
+    Kept inline (no import of journal.store) to preserve the ultra-lean
+    hot-path discipline of the hook.
+    """
+    db_path = Path(os.environ.get(
+        "TOKENPAK_COMPANION_JOURNAL_DIR",
+        str(Path.home() / ".tokenpak" / "companion"),
+    )) / "journal.db"
+    try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                entry_type TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        meta = {
+            "tool": tool,
+            "tokens_avoided": int(max(0, tokens_avoided)),
+            "cost_avoided_usd": float(max(0.0, cost_avoided_usd)),
+        }
+        conn.execute(
+            "INSERT INTO entries (session_id, timestamp, entry_type, content, metadata_json) VALUES (?, ?, ?, ?, ?)",
+            (session_id, time.time(), "companion_savings",
+             f"{tool}: -{meta['tokens_avoided']:,} tokens (~${meta['cost_avoided_usd']:.4f})",
+             json.dumps(meta)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # never fail the hook
 
 
 def _journal_write(session_id: str, tokens_est: int, cost_est: float) -> None:
