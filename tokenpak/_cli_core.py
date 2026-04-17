@@ -2581,6 +2581,7 @@ def build_parser():
     _build_codex_parser(sub)
     _build_prove_parser(sub)
     _build_test_parser(sub)
+    _build_telemetry_parser(sub)
 
     # --- Stub parsers for commands advertised in help/registry but not yet wired ---
     _build_stub_parsers(sub)
@@ -7707,6 +7708,55 @@ def _build_retrieval_parser(sub):
 
     p_ret.set_defaults(func=lambda a: p_ret.print_help())
     return p_ret
+
+
+# ---------------------------------------------------------------------------
+# Telemetry export command
+# ---------------------------------------------------------------------------
+
+
+def _build_telemetry_parser(sub):
+    """Build the telemetry command parser with export subcommand."""
+    p = sub.add_parser("telemetry", help="Telemetry data tools")
+    tsub = p.add_subparsers(dest="telemetry_cmd", required=True)
+
+    p_export = tsub.add_parser("export", help="Export telemetry event data to JSON or CSV")
+    p_export.add_argument(
+        "--format",
+        dest="format",
+        choices=["json", "csv"],
+        default="json",
+        help="Output format (default: json)",
+    )
+    p_export.add_argument(
+        "--since",
+        dest="since",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Only include events on or after this date",
+    )
+    p_export.add_argument(
+        "--until",
+        dest="until",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Only include events on or before this date",
+    )
+    p_export.add_argument(
+        "--provider",
+        dest="provider",
+        default=None,
+        help="Filter to a specific provider name",
+    )
+    p_export.set_defaults(func=_cmd_telemetry_export)
+
+    p.set_defaults(func=lambda a: p.print_help())
+    return p
+
+
+def _cmd_telemetry_export(args):
+    from tokenpak.cli.commands.telemetry import cmd_telemetry_export
+    cmd_telemetry_export(args)
 
 
 if __name__ == "__main__":
