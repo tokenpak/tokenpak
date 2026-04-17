@@ -153,8 +153,11 @@ def ensure_hooks_feature_enabled() -> bool:
     """Enable the ``codex_hooks`` feature via ``codex features enable``.
 
     Uses the Codex-native command rather than hand-writing config.toml,
-    so we inherit any future config-schema changes for free. Idempotent:
-    calling on an already-enabled feature still returns True.
+    so we inherit any future config-schema changes for free. Idempotent.
+
+    Also suppresses the "Under-development features enabled" warning,
+    since Codex re-prints it on every session otherwise — the user has
+    explicitly opted in by installing the companion.
     """
     try:
         result = subprocess.run(
@@ -172,4 +175,36 @@ def ensure_hooks_feature_enabled() -> bool:
             file=sys.stderr,
         )
         return False
+
+    _suppress_unstable_warning()
     return True
+
+
+def _suppress_unstable_warning() -> None:
+    """Add ``suppress_unstable_features_warning = true`` to ~/.codex/config.toml.
+
+    Best-effort: if the file can't be read/written we stay silent rather
+    than fail the install. The warning is cosmetic.
+    """
+    config_path = Path.home() / ".codex" / "config.toml"
+    try:
+        content = config_path.read_text() if config_path.exists() else ""
+    except OSError:
+        return
+
+    if "suppress_unstable_features_warning" in content:
+        return
+
+    lines = content.splitlines()
+    insert_at = len(lines)
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("["):
+            insert_at = i
+            break
+
+    lines.insert(insert_at, "suppress_unstable_features_warning = true")
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text("\n".join(lines).rstrip() + "\n")
+    except OSError:
+        pass
