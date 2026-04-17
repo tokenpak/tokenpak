@@ -316,6 +316,222 @@ def _apply_claude_code(proxy_url: str) -> ApplyResult:
         )
 
 
+def _cursor_settings_path() -> Optional[Path]:
+    """Return the platform's Cursor user settings.json path IF Cursor is installed.
+
+    Detection requires the Cursor User/ directory to already exist — Cursor
+    creates it on first launch. Returning None means "Cursor not installed
+    here"; callers should refuse to apply rather than creating config files
+    for an app that isn't present.
+    """
+    import sys as _sys
+    home = Path.home()
+    candidates: list[Path] = []
+    if _sys.platform == "darwin":
+        candidates.append(home / "Library/Application Support/Cursor/User/settings.json")
+    elif _sys.platform == "win32":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            candidates.append(Path(appdata) / "Cursor" / "User" / "settings.json")
+    else:  # linux + everything else
+        candidates.append(home / ".config/Cursor/User/settings.json")
+        candidates.append(home / ".config/cursor/User/settings.json")
+    # Only return a path where the Cursor User/ dir already exists — that's
+    # proof Cursor has been launched at least once on this host.
+    for p in candidates:
+        if p.parent.exists():
+            return p
+    return None
+
+
+def _apply_cursor(proxy_url: str) -> ApplyResult:
+    """Write cursor.general.openaiBaseUrl + anthropic equivalents into Cursor settings.json.
+
+    Cursor stores user settings in a VS Code-style settings.json. Keys vary
+    across Cursor versions — we only touch the documented widely-supported
+    ones (`cursor.general.*`). We never touch the user's API key; the user
+    must set that themselves through Cursor's UI.
+    """
+    import shutil as _shutil
+
+    settings_path = _cursor_settings_path()
+    if settings_path is None:
+        return ApplyResult(
+            ok=False,
+            summary="Cursor install not detected (no User/settings.json path found).",
+            error="cursor_not_found",
+        )
+
+    bak: Optional[Path] = None
+    try:
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        if settings_path.exists():
+            bak = settings_path.with_suffix(".json.bak")
+            _shutil.copy2(settings_path, bak)
+            import json as _json
+            try:
+                config = _json.loads(settings_path.read_text(encoding="utf-8"))
+                if not isinstance(config, dict):
+                    config = {}
+            except Exception as exc:
+                return ApplyResult(
+                    ok=False,
+                    summary="Could not parse existing Cursor settings.json.",
+                    error=str(exc),
+                    backup_path=str(bak),
+                )
+        else:
+            config = {}
+
+        # Keys Cursor respects at time of writing. Harmless if the user's
+        # Cursor version ignores one — they'll still be in the file.
+        new_keys = {
+            "cursor.general.openaiBaseUrl": proxy_url.rstrip("/") + "/v1",
+            "cursor.general.anthropicBaseUrl": proxy_url,
+        }
+        changes: list[str] = []
+        for k, v in new_keys.items():
+            prev = config.get(k)
+            if prev != v:
+                config[k] = v
+                changes.append(f"{k}: {prev or '(unset)'} → {v}")
+
+        if not changes:
+            return ApplyResult(
+                ok=True,
+                summary="Cursor already configured — no changes.",
+                backup_path=str(bak) if bak else None,
+            )
+
+        import json as _json2
+        tmp = settings_path.with_suffix(".json.tmp")
+        tmp.write_text(_json2.dumps(config, indent=2), encoding="utf-8")
+        os.replace(tmp, settings_path)
+
+        rollback = (
+            f"cp {bak} {settings_path}" if bak
+            else f"remove cursor.general.openaiBaseUrl / anthropicBaseUrl from {settings_path}"
+        )
+        return ApplyResult(
+            ok=True,
+            summary=f"Updated {settings_path} ({len(changes)} key{'s' if len(changes) != 1 else ''}). "
+                    f"Your API key must still be set in Cursor's UI.",
+            changes=changes,
+            backup_path=str(bak) if bak else None,
+            rollback_cmd=rollback,
+        )
+    except Exception as exc:
+        if bak is not None and settings_path.exists():
+            try:
+                _shutil.copy2(bak, settings_path)
+            except Exception:
+                pass
+        return ApplyResult(
+            ok=False,
+            summary="Cursor apply failed (rollback attempted).",
+            error=str(exc),
+            backup_path=str(bak) if bak else None,
+        )
+
+
+def _apply_cline(proxy_url: str) -> ApplyResult:
+    """Cline stores API config in VS Code globalState (LevelDB).
+
+    We can't reliably read/write that from a CLI without opening a lock on
+    the user's live VS Code instance. This applier reports that clearly
+    rather than silently pretending to succeed.
+    """
+    return ApplyResult(
+        ok=False,
+        summary="Cline stores API config in VS Code globalState (not a JSON file).",
+        error="cline_globalstate_not_writable_externally",
+        rollback_cmd=(
+            "Set manually: open the Cline panel in VS Code (gear icon) →"
+            f" Provider: Anthropic → Base URL: {proxy_url} → API Key: your own"
+        ),
+    )
+
+
+def _apply_aider(proxy_url: str) -> ApplyResult:
+    """Write Aider config to ~/.aider.conf.yml (simple key:value YAML).
+
+    Aider accepts a yaml config with api-base entries per provider. We only
+    set the base URLs — the user keeps their own API keys in ~/.aider.conf.yml
+    or env vars.
+    """
+    import shutil as _shutil
+
+    conf = Path.home() / ".aider.conf.yml"
+    openai_base = proxy_url.rstrip("/") + "/v1"
+
+    bak: Optional[Path] = None
+    try:
+        existing = ""
+        if conf.exists():
+            bak = conf.with_suffix(".yml.bak")
+            _shutil.copy2(conf, bak)
+            existing = conf.read_text(encoding="utf-8")
+
+        # Simple key-rewrite over the YAML text. Aider's config is flat, so we
+        # can safely do line-level matching for the two keys we manage without
+        # needing a YAML parser. Any key we didn't write gets preserved.
+        lines = existing.splitlines() if existing else []
+        managed_keys = {
+            "openai-api-base": openai_base,
+            "anthropic-api-base": proxy_url,
+        }
+        seen: dict[str, int] = {}
+        for i, line in enumerate(lines):
+            stripped = line.lstrip()
+            for key in managed_keys:
+                if stripped.startswith(f"{key}:"):
+                    lines[i] = f"{key}: {managed_keys[key]}"
+                    seen[key] = i
+                    break
+
+        changes: list[str] = []
+        for key, val in managed_keys.items():
+            if key not in seen:
+                lines.append(f"{key}: {val}")
+                changes.append(f"added {key}: {val}")
+            else:
+                changes.append(f"set {key}: {val}")
+
+        new_text = "\n".join(lines).strip() + "\n"
+        if new_text == existing:
+            return ApplyResult(
+                ok=True,
+                summary="Aider already configured — no changes.",
+                backup_path=str(bak) if bak else None,
+            )
+
+        tmp = conf.with_suffix(".yml.tmp")
+        tmp.write_text(new_text, encoding="utf-8")
+        os.replace(tmp, conf)
+
+        rollback = f"cp {bak} {conf}" if bak else f"remove openai-api-base / anthropic-api-base from {conf}"
+        return ApplyResult(
+            ok=True,
+            summary=f"Updated {conf} ({len(changes)} change{'s' if len(changes) != 1 else ''}). "
+                    f"Your API key must still be set (env var or --api-key).",
+            changes=changes,
+            backup_path=str(bak) if bak else None,
+            rollback_cmd=rollback,
+        )
+    except Exception as exc:
+        if bak is not None:
+            try:
+                _shutil.copy2(bak, conf)
+            except Exception:
+                pass
+        return ApplyResult(
+            ok=False,
+            summary="Aider apply failed (rollback attempted).",
+            error=str(exc),
+            backup_path=str(bak) if bak else None,
+        )
+
+
 def _apply_continue(proxy_url: str) -> ApplyResult:
     """Add tokenpak-* model entries to ~/.continue/config.json.
 
@@ -462,6 +678,7 @@ INTEGRATIONS: list[Integration] = [
         kind="client",
         detector=_detect_cursor_app,
         instructions=_instr_cursor,
+        applier=_apply_cursor,
     ),
     Integration(
         key="cline",
@@ -469,6 +686,7 @@ INTEGRATIONS: list[Integration] = [
         kind="client",
         detector=lambda: _detect_vscode_extension("saoudrizwan.claude-dev"),
         instructions=_instr_cline,
+        applier=_apply_cline,
     ),
     Integration(
         key="continue",
@@ -484,6 +702,7 @@ INTEGRATIONS: list[Integration] = [
         kind="client",
         detector=_detect_aider,
         instructions=_instr_aider,
+        applier=_apply_aider,
     ),
     Integration(
         key="codex",
