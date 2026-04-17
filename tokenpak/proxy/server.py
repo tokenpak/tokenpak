@@ -68,6 +68,7 @@ from .error_response import normalize_upstream_error
 from .startup import run_startup_checks, format_startup_report
 from tokenpak import __version__ as _tokenpak_version
 from tokenpak.telemetry.monitoring.request_logger import log_request, new_request_id as _new_request_id
+from tokenpak.proxy.monitor import Monitor as _DbMonitor
 from tokenpak.sdk.registry import detect_platform
 from tokenpak.core.config import get_stats_footer_enabled
 from tokenpak.dashboard.export_api import ExportAPI
@@ -1166,6 +1167,31 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
 
+                # Persist to monitor.db so `tokenpak status`, dashboards, and
+                # cross-session reporting see this request. Async write queue
+                # keeps this call <0.1ms. Fail-open.
+                if ps.monitor is not None:
+                    try:
+                        ps.monitor.log(
+                            model=model,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            cost=cost,
+                            latency_ms=latency_ms,
+                            status_code=_resp_status,
+                            endpoint=target_url,
+                            compilation_mode=ps.compilation_mode,
+                            protected_tokens=protected_tokens,
+                            compressed_tokens=sent_input_tokens,
+                            injected_tokens=0,
+                            injected_sources="",
+                            cache_read_tokens=cache_read_tokens,
+                            cache_creation_tokens=cache_creation_tokens,
+                            would_have_saved=int(saved),
+                        )
+                    except Exception:
+                        pass  # DB errors must never break the request
+
                 # Record cache telemetry
                 try:
                     _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
@@ -1871,6 +1897,18 @@ class ProxyServer:
         self._compression_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats()
+
+        # SQLite request ledger — writes to ~/.tokenpak/monitor.db (symlink target).
+        # Powers `tokenpak status`, `savings`, dashboards. Async write queue keeps
+        # per-request cost <0.1ms. Fail-open: any DB error never breaks the proxy.
+        try:
+            _db_path = os.environ.get(
+                "TOKENPAK_DB",
+                os.path.expanduser("~/.tokenpak/monitor.db"),
+            )
+            self.monitor: Optional[_DbMonitor] = _DbMonitor(_db_path)
+        except Exception:
+            self.monitor = None
 
     # ------------------------------------------------------------------
     # Lifecycle
