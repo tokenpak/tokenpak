@@ -150,6 +150,33 @@ def try_handle_post(handler: Any) -> bool:
         _handle_journal_post(handler, session_id, body)
         return True
 
+    # ── POST /tp/v1/compress ────────────────────────────────────────────
+    if path == "/tp/v1/compress":
+        body = _read_json_body(handler)
+        if body is None:
+            _send_error(handler, 400, "invalid_json")
+            return True
+        _handle_compress(handler, body)
+        return True
+
+    # ── POST /tp/v1/optimize ────────────────────────────────────────────
+    if path == "/tp/v1/optimize":
+        body = _read_json_body(handler)
+        if body is None:
+            _send_error(handler, 400, "invalid_json")
+            return True
+        _handle_optimize(handler, body)
+        return True
+
+    # ── POST /tp/v1/tokens/estimate ─────────────────────────────────────
+    if path == "/tp/v1/tokens/estimate":
+        body = _read_json_body(handler)
+        if body is None:
+            _send_error(handler, 400, "invalid_json")
+            return True
+        _handle_tokens_estimate(handler, body)
+        return True
+
     _send_error(handler, 404, "not_found", f"POST {path} not implemented yet")
     return True
 
@@ -410,3 +437,117 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
         _send_error(handler, 500, "journal_write_failed", str(exc))
         return
     _send_json(handler, 200, {"status": "ok", "session_id": session_id, "entry_type": entry_type})
+
+
+# ---------------------------------------------------------------------------
+# Pure-function endpoints — compress / optimize / tokens estimate.
+# Stateless transformers; easy to extend with Pro-tier engines later.
+# ---------------------------------------------------------------------------
+
+_COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK = 3.0
+
+
+def _handle_compress(handler: Any, body: dict[str, Any]) -> None:
+    """Head/tail truncate to fit max_tokens; record savings to journal when
+    session_id is provided."""
+    text = str(body.get("text", ""))
+    try:
+        max_tokens = int(body.get("max_tokens", 2000))
+    except (TypeError, ValueError):
+        max_tokens = 2000
+    max_tokens = max(50, max_tokens)
+    session_id = str(body.get("session_id", "")).strip()
+
+    if not text:
+        _send_error(handler, 400, "missing_text")
+        return
+
+    original_chars = len(text)
+    original_tokens_est = max(1, original_chars // 4)
+    max_chars = max_tokens * 4
+    pruned = text
+    if len(text) > max_chars:
+        head_len = int(max_chars * 0.6)
+        tail_len = int(max_chars * 0.3)
+        head = text[:head_len].rsplit(" ", 1)[0] if " " in text[:head_len] else text[:head_len]
+        tail = text[-tail_len:].split(" ", 1)[-1] if " " in text[-tail_len:] else text[-tail_len:]
+        elided = original_chars - len(head) - len(tail)
+        pruned = f"{head}\n\n[... {elided:,} chars elided ...]\n\n{tail}"
+
+    pruned_tokens_est = max(1, len(pruned) // 4)
+    tokens_avoided = max(0, original_tokens_est - pruned_tokens_est)
+    cost_avoided = tokens_avoided * _COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK / 1_000_000
+
+    # Record savings on the proxy side so `tokenpak status` attributes
+    # prompt-side value, matching the companion's prior behavior.
+    if tokens_avoided > 0 and session_id:
+        try:
+            store = _get_journal_store()
+            store.record_savings(
+                session_id=session_id,
+                tool="prune_context",
+                tokens_avoided=tokens_avoided,
+                cost_avoided_usd=cost_avoided,
+                extra={"max_tokens": max_tokens},
+            )
+        except Exception:
+            pass  # never fail the tool call
+
+    reduction_pct = round((1 - pruned_tokens_est / original_tokens_est) * 100, 1)
+    _send_json(handler, 200, {
+        "pruned_text": pruned,
+        "original_tokens": original_tokens_est,
+        "pruned_tokens": pruned_tokens_est,
+        "tokens_avoided": tokens_avoided,
+        "cost_avoided_usd": round(cost_avoided, 6),
+        "reduction_pct": reduction_pct,
+    })
+
+
+def _handle_optimize(handler: Any, body: dict[str, Any]) -> None:
+    """Run the offline prompt-optimization analyzer."""
+    text = str(body.get("text", ""))
+    if not text.strip():
+        _send_error(handler, 400, "missing_text")
+        return
+    source = str(body.get("source", "<http>"))
+    try:
+        from tokenpak.cli.commands.optimize_prompt import analyze
+        report = analyze(text, source=source)
+    except Exception as exc:
+        _send_error(handler, 500, "optimize_failed", str(exc))
+        return
+    _send_json(handler, 200, report.to_dict())
+
+
+def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:
+    text = str(body.get("text", ""))
+    file_path = str(body.get("file_path", "")).strip()
+    if file_path:
+        p = Path(file_path)
+        if not p.exists():
+            _send_error(handler, 404, "file_not_found", file_path)
+            return
+        try:
+            text = p.read_text(errors="replace")
+        except Exception as exc:
+            _send_error(handler, 500, "file_read_failed", str(exc))
+            return
+    if not text:
+        _send_error(handler, 400, "missing_text")
+        return
+    chars = len(text)
+    try:
+        from tokenpak.telemetry.tokens import count_tokens
+        CHUNK = 100_000
+        if chars <= CHUNK:
+            tokens = count_tokens(text)
+        else:
+            tokens = sum(count_tokens(text[i:i + CHUNK]) for i in range(0, chars, CHUNK))
+    except Exception:
+        tokens = max(1, chars // 4)
+    _send_json(handler, 200, {
+        "chars": chars,
+        "tokens": int(tokens),
+        "chars_per_token": round(chars / max(1, tokens), 2),
+    })

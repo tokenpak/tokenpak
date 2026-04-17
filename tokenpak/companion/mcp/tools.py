@@ -75,10 +75,29 @@ class ToolDef:
 
 
 def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
-    """Estimate token count for text or a file."""
+    """Estimate tokens via proxy /tp/v1/tokens/estimate."""
     text = args.get("text", "")
     file_path = args.get("file_path", "")
+    body: dict[str, Any] = {}
+    if file_path:
+        body["file_path"] = file_path
+    elif text:
+        body["text"] = text
+    else:
+        return json.dumps({"error": "provide text or file_path"})
 
+    status, resp = _proxy_post("/tp/v1/tokens/estimate", body)
+    if status == 0:
+        return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
+    if status >= 400:
+        return json.dumps(resp)
+    return json.dumps(resp)
+
+
+def _handle_estimate_tokens_legacy_unused(state: CompanionState, args: dict[str, Any]) -> str:
+    """Legacy in-process estimator kept for reference; no longer registered."""
+    text = args.get("text", "")
+    file_path = args.get("file_path", "")
     if file_path:
         p = Path(file_path)
         if p.exists():
@@ -87,11 +106,9 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
             return json.dumps({"error": f"File not found: {file_path}"})
 
     chars = len(text)
-
-    # Tiktoken with chunking for large texts (avoids OOM / LRU cache thrashing)
     try:
         from tokenpak.telemetry.tokens import count_tokens
-        CHUNK = 100_000  # chars per chunk — keeps LRU cache effective
+        CHUNK = 100_000
         if chars <= CHUNK:
             tokens = count_tokens(text)
         else:
@@ -174,55 +191,22 @@ def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
-    """Summarize verbose content to reduce token count.
-
-    This is the heuristic-only path.  It truncates and deduplicates rather
-    than doing LLM summarization (which would cost tokens).
-    """
+    """Compress verbose content via proxy /tp/v1/compress."""
     text = args.get("text", "")
-    max_tokens = args.get("max_tokens", 2000)
-
     if not text:
         return json.dumps({"error": "No text provided"})
-
-    original_chars = len(text)
-    original_tokens_est = original_chars // 4
-
-    # Strategy: truncate to max_tokens * 4 chars with word boundary
-    max_chars = max_tokens * 4
-    if len(text) > max_chars:
-        # Keep first 60% and last 30%, elide middle
-        head_len = int(max_chars * 0.6)
-        tail_len = int(max_chars * 0.3)
-        head = text[:head_len].rsplit(" ", 1)[0] if " " in text[:head_len] else text[:head_len]
-        tail = text[-tail_len:].split(" ", 1)[-1] if " " in text[-tail_len:] else text[-tail_len:]
-        elided = original_chars - len(head) - len(tail)
-        text = f"{head}\n\n[... {elided:,} chars elided ...]\n\n{tail}"
-
-    pruned_tokens_est = len(text) // 4
-    tokens_avoided = max(0, original_tokens_est - pruned_tokens_est)
-    cost_avoided = tokens_avoided * _COMPANION_DEFAULT_INPUT_RATE_USD_PER_MTOK / 1_000_000
-
-    # Persist the savings so `tokenpak status` can attribute prompt-side value.
-    # Best-effort: never fail the tool call on journal write errors.
-    if tokens_avoided > 0 and state.session_id:
-        try:
-            state.journal_store.record_savings(
-                session_id=state.session_id,
-                tool="prune_context",
-                tokens_avoided=tokens_avoided,
-                cost_avoided_usd=cost_avoided,
-                extra={"max_tokens": max_tokens},
-            )
-        except Exception:
-            pass
-
-    return json.dumps({
-        "pruned_text": text,
-        "original_tokens": original_tokens_est,
-        "pruned_tokens": pruned_tokens_est,
-        "reduction_pct": round((1 - pruned_tokens_est / max(original_tokens_est, 1)) * 100, 1),
-    })
+    body = {
+        "text": text,
+        "max_tokens": args.get("max_tokens", 2000),
+    }
+    if state.session_id:
+        body["session_id"] = state.session_id  # proxy records savings to journal
+    status, resp = _proxy_post("/tp/v1/compress", body)
+    if status == 0:
+        return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
+    if status >= 400:
+        return json.dumps(resp)
+    return json.dumps(resp)
 
 
 def _handle_journal_read(state: CompanionState, args: dict[str, Any]) -> str:
