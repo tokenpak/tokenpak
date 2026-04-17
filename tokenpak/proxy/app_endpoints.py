@@ -125,6 +125,17 @@ def try_handle_get(handler: Any) -> bool:
         _handle_journal_get(handler, session_id, qs)
         return True
 
+    # ── /tp/v1/capsules ─ list available capsules ─────────────────────
+    if path == "/tp/v1/capsules":
+        _handle_capsules_list(handler, qs)
+        return True
+
+    # ── /tp/v1/capsules/{session_id} ─ load a specific capsule ────────
+    if path.startswith("/tp/v1/capsules/"):
+        session_id = path[len("/tp/v1/capsules/"):]
+        _handle_capsule_get(handler, session_id, qs)
+        return True
+
     _send_error(handler, 404, "not_found", f"unknown app endpoint: {path}")
     return True
 
@@ -518,6 +529,86 @@ def _handle_optimize(handler: Any, body: dict[str, Any]) -> None:
         _send_error(handler, 500, "optimize_failed", str(exc))
         return
     _send_json(handler, 200, report.to_dict())
+
+
+def _handle_capsules_list(handler: Any, qs: dict[str, list[str]]) -> None:
+    """List available capsules in the companion capsule directory."""
+    try:
+        limit = int(qs.get("limit", ["10"])[0])
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(100, limit))
+    capsule_dir = _companion_dir() / "capsules"
+    if not capsule_dir.exists():
+        _send_json(handler, 200, {"capsules": [], "message": "No capsules stored yet."})
+        return
+    items = []
+    files = sorted(capsule_dir.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)
+    for p in files[:limit]:
+        try:
+            st = p.stat()
+            items.append({
+                "session_id": p.stem,
+                "size_bytes": st.st_size,
+                "modified": st.st_mtime,
+            })
+        except OSError:
+            continue
+    _send_json(handler, 200, {"capsules": items})
+
+
+def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]]) -> None:
+    """Return a specific capsule's content (first match on session_id substring)."""
+    if not session_id:
+        _send_error(handler, 400, "missing_session_id")
+        return
+    capsule_dir = _companion_dir() / "capsules"
+    if not capsule_dir.exists():
+        _send_error(handler, 404, "capsule_not_found", session_id)
+        return
+    try:
+        from tokenpak.companion.capsules.builder import load_capsule
+    except Exception as exc:
+        _send_error(handler, 500, "capsule_module_unavailable", str(exc))
+        return
+    match = None
+    for p in capsule_dir.glob("*.md"):
+        if session_id in p.stem:
+            match = p
+            break
+    if match is None:
+        _send_error(handler, 404, "capsule_not_found", session_id)
+        return
+    try:
+        content = load_capsule(str(match))
+    except Exception as exc:
+        _send_error(handler, 500, "capsule_load_failed", str(exc))
+        return
+    tokens_est = max(1, len(content or "") // 4)
+
+    # Also record a "load_capsule" savings event if the caller identified
+    # their session via ?session_id= or X-TP-Session header (preserves the
+    # old in-process behavior where the companion wrote this to journal).
+    caller_sid = qs.get("caller_session_id", [""])[0] or handler.headers.get("X-TP-Session", "")
+    if caller_sid:
+        try:
+            store = _get_journal_store()
+            store.record_savings(
+                session_id=caller_sid,
+                tool="load_capsule",
+                tokens_avoided=0,
+                cost_avoided_usd=0.0,
+                extra={"capsule_session": match.stem, "capsule_tokens_est": tokens_est},
+            )
+        except Exception:
+            pass
+
+    _send_json(handler, 200, {
+        "session_id": match.stem,
+        "path": str(match),
+        "tokens_est": tokens_est,
+        "content": content or "",
+    })
 
 
 def _handle_tokens_estimate(handler: Any, body: dict[str, Any]) -> None:

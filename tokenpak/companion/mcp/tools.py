@@ -143,51 +143,34 @@ def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
-    """Load a memory capsule from a prior session."""
-    session_id = args.get("session_id", "")
-    capsule_dir = state.config.journal_dir / "capsules"
+    """Load / list memory capsules via proxy /tp/v1/capsules*."""
+    session_id = str(args.get("session_id", "")).strip()
+    if not session_id:
+        status, body = _proxy_get("/tp/v1/capsules", {"limit": 10})
+        if status == 0:
+            return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
+        if status >= 400:
+            return json.dumps(body)
+        return json.dumps(body, indent=2)
 
-    if session_id:
-        # Load specific capsule
-        from ..capsules.builder import load_capsule
-        for p in capsule_dir.glob("*.md"):
-            if session_id in p.stem:
-                content = load_capsule(str(p))
-                if content:
-                    # Record a savings event. Conservative: we don't know the
-                    # raw-context baseline the capsule replaces, so log the
-                    # capsule size as the delivered cost but 0 tokens_avoided.
-                    # The *event* is still useful for by_tool counts.
-                    if state.session_id:
-                        try:
-                            capsule_tokens = len(content) // 4
-                            state.journal_store.record_savings(
-                                session_id=state.session_id,
-                                tool="load_capsule",
-                                tokens_avoided=0,
-                                cost_avoided_usd=0.0,
-                                extra={
-                                    "capsule_session": p.stem,
-                                    "capsule_tokens_est": capsule_tokens,
-                                },
-                            )
-                        except Exception:
-                            pass
-                    return content
-        return json.dumps({"error": f"No capsule found for session {session_id}"})
-
-    # List available capsules
-    if not capsule_dir.exists():
-        return json.dumps({"capsules": [], "message": "No capsules stored yet."})
-
-    capsules = []
-    for p in sorted(capsule_dir.glob("*.md"), key=lambda x: x.stat().st_mtime, reverse=True)[:10]:
-        capsules.append({
-            "session_id": p.stem,
-            "size_bytes": p.stat().st_size,
-            "modified": p.stat().st_mtime,
-        })
-    return json.dumps({"capsules": capsules}, indent=2)
+    # Carry the CALLER's session_id so the proxy can attribute the
+    # load_capsule savings event to the right session journal.
+    params = {}
+    if state.session_id:
+        params["caller_session_id"] = state.session_id
+    status, body = _proxy_get(
+        f"/tp/v1/capsules/{_url_parse.quote(session_id, safe='')}",
+        params,
+    )
+    if status == 0:
+        return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
+    if status >= 400:
+        return json.dumps(body)
+    # Preserve the old behavior of returning the capsule CONTENT as a bare
+    # string when a specific session was requested.
+    if isinstance(body, dict) and "content" in body:
+        return body["content"]
+    return json.dumps(body)
 
 
 def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
