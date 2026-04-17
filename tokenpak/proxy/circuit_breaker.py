@@ -410,6 +410,11 @@ class CircuitBreakerConfig:
     failure_threshold: int = 5   # failures in window before tripping
     recovery_timeout: float = 60.0  # seconds before OPEN → HALF_OPEN
     window_seconds: float = 60.0    # rolling failure counting window
+    # Also require failures/(failures+successes) in the window to be at least
+    # this ratio before tripping. Prevents false trips when upstream has a
+    # minority failure rate (e.g. 15% Server disconnected) but is otherwise
+    # serving fine. Set to 0.0 to disable the ratio gate (pure-threshold mode).
+    min_failure_ratio: float = 0.5
 
     @classmethod
     def from_env(cls) -> "CircuitBreakerConfig":
@@ -418,6 +423,7 @@ class CircuitBreakerConfig:
             failure_threshold=int(os.environ.get("TOKENPAK_CB_FAILURE_THRESHOLD", "5")),
             recovery_timeout=float(os.environ.get("TOKENPAK_CB_RECOVERY_TIMEOUT", "60")),
             window_seconds=float(os.environ.get("TOKENPAK_CB_WINDOW_SECONDS", "60")),
+            min_failure_ratio=float(os.environ.get("TOKENPAK_CB_MIN_FAILURE_RATIO", "0.5")),
         )
 
 
@@ -439,6 +445,7 @@ class CircuitBreaker:
         self._lock = threading.Lock()
         self._state: CircuitState = CircuitState.CLOSED
         self._failure_times: deque = deque()
+        self._success_times: deque = deque()
         self._opened_at: float = 0.0
         self._probe_in_flight: bool = False
         self._total_trips: int = 0
@@ -470,7 +477,12 @@ class CircuitBreaker:
     def record_success(self) -> None:
         """Record a successful response. Resets circuit if in HALF_OPEN."""
         with self._lock:
+            now = time.monotonic()
             self._total_successes += 1
+            self._success_times.append(now)
+            cutoff = now - self._config.window_seconds
+            while self._success_times and self._success_times[0] < cutoff:
+                self._success_times.popleft()
             if self._state == CircuitState.HALF_OPEN:
                 self._state = CircuitState.CLOSED
                 self._failure_times.clear()
@@ -492,7 +504,16 @@ class CircuitBreaker:
             cutoff = now - self._config.window_seconds
             while self._failure_times and self._failure_times[0] < cutoff:
                 self._failure_times.popleft()
-            if len(self._failure_times) >= self._config.failure_threshold:
+            while self._success_times and self._success_times[0] < cutoff:
+                self._success_times.popleft()
+            fails = len(self._failure_times)
+            successes = len(self._success_times)
+            total = fails + successes
+            ratio = (fails / total) if total > 0 else 1.0
+            if (
+                fails >= self._config.failure_threshold
+                and ratio >= self._config.min_failure_ratio
+            ):
                 self._state = CircuitState.OPEN
                 self._opened_at = now
                 self._total_trips += 1
@@ -506,7 +527,17 @@ class CircuitBreaker:
         """Return a status dict for the /health endpoint."""
         with self._lock:
             now = time.monotonic()
+            cutoff = now - self._config.window_seconds
+            while self._success_times and self._success_times[0] < cutoff:
+                self._success_times.popleft()
+            while self._failure_times and self._failure_times[0] < cutoff:
+                self._failure_times.popleft()
             failures_in_window = len(self._failure_times)
+            successes_in_window = len(self._success_times)
+            total_in_window = failures_in_window + successes_in_window
+            failure_ratio = (
+                failures_in_window / total_in_window if total_in_window > 0 else 0.0
+            )
             time_until_probe: Optional[float] = None
             if self._state == CircuitState.OPEN:
                 remaining = self._config.recovery_timeout - (now - self._opened_at)
@@ -514,7 +545,10 @@ class CircuitBreaker:
             return {
                 "state": self._state.value,
                 "failures_in_window": failures_in_window,
+                "successes_in_window": successes_in_window,
+                "failure_ratio": round(failure_ratio, 3),
                 "failure_threshold": self._config.failure_threshold,
+                "min_failure_ratio": self._config.min_failure_ratio,
                 "time_until_probe_seconds": time_until_probe,
                 "total_trips": self._total_trips,
                 "total_successes": self._total_successes,
@@ -526,6 +560,7 @@ class CircuitBreaker:
         with self._lock:
             self._state = CircuitState.CLOSED
             self._failure_times.clear()
+            self._success_times.clear()
             self._probe_in_flight = False
             self._opened_at = 0.0
 

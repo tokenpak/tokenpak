@@ -83,6 +83,33 @@ from tokenpak.telemetry.footer import render_footer_oneline
 from tokenpak.cache.telemetry import CacheMetrics, get_collector as _get_cache_collector
 
 # ---------------------------------------------------------------------------
+# Upstream retry configuration — transparent retry on transient 5xx and
+# protocol errors so the Claude CLI never sees the mid-stream disconnects
+# Anthropic currently produces at ~15% on large requests.
+# ---------------------------------------------------------------------------
+MAX_UPSTREAM_RETRIES: int = int(os.environ.get("TOKENPAK_UPSTREAM_RETRIES", "3"))
+
+_RETRYABLE_UPSTREAM_EXCEPTIONS: tuple = (
+    httpx.RemoteProtocolError,
+    httpx.LocalProtocolError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+)
+
+
+def _is_retryable_upstream_status(status_code: int) -> bool:
+    return status_code in (502, 503, 504)
+
+
+def _upstream_retry_backoff(attempt: int) -> float:
+    # 0.2s, 0.6s, 1.8s — bounded
+    return min(2.5, 0.2 * (3 ** attempt))
+
+
+# ---------------------------------------------------------------------------
 # Codex OAuth credentials — read from ~/.codex/auth.json (cached, file-mtime-based)
 # ---------------------------------------------------------------------------
 import threading as _threading
@@ -264,6 +291,13 @@ def _new_session() -> Dict[str, Any]:
         # Anthropic prompt caching stats
         "cache_read_tokens": 0,
         "cache_creation_tokens": 0,
+        # Per-origin cache attribution — who placed the cache_control markers.
+        #   client  = byte-preserved passthrough; upstream client (CC/Codex/etc.) owns them
+        #   proxy   = proxy modified the body; tokenpak owns them
+        #   unknown = attribution signal unavailable; treated as client for display
+        "cache_read_client": 0,
+        "cache_read_proxy": 0,
+        "cache_read_unknown": 0,
     }
 
 
@@ -1011,6 +1045,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers.setdefault("OpenAI-Beta", "responses=experimental")
             fwd_headers.setdefault("originator", "codex_cli_rs")
 
+        # Tracks whether response headers have been committed to the client.
+        # When True, the global except handler must NOT call send_response()
+        # again — doing so produces garbage bytes after the HTTP response
+        # already started (e.g. `HTTP/1.0 200\n...SSE...HTTP/1.0 502\n...`),
+        # which the CLI's SSE reader surfaces as "Unterminated string".
+        _client_headers_sent = False
+
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
             _cb_success = False  # track whether request succeeded for circuit breaker
@@ -1018,55 +1059,89 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             output_tokens = 0
             if is_streaming:
                 # ── Streaming (SSE) path ──────────────────────────────────
-                # Use pool.stream() so the connection is kept alive after SSE ends
+                # Use pool.stream() so the connection is kept alive after SSE ends.
+                # Retry transient upstream failures BEFORE any bytes are written
+                # to the client — once the SSE stream has started flowing to the
+                # CLI it's no longer safe to retry (would cause `Unterminated
+                # string` JSON parse errors in the client's SSE reader).
                 sse_buffer = b""
-                with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
-                    if resp.status_code >= 400:
-                        # Upstream error on a streaming request — normalize to canonical JSON
-                        _raw_err = b"".join(resp.iter_bytes(chunk_size=4096))
-                        _norm_err_body = normalize_upstream_error(
-                            resp.status_code, _raw_err, provider_from_url(target_url)
-                        )
-                        self.send_response(resp.status_code)
-                        self.send_header("Content-Type", "application/json")
-                        self.send_header("Content-Length", str(len(_norm_err_body)))
-                        self.send_header("X-Request-ID", _req_id)
-                        self.end_headers()
-                        self.wfile.write(_norm_err_body)
-                    else:
-                        self.send_response(resp.status_code)
-                        has_content_type = False
-                        has_cache_control = False
-                        for h_key, h_val in resp.headers.items():
-                            h_lower = h_key.lower()
-                            if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"):
-                                continue
-                            if h_lower == "content-type":
-                                has_content_type = True
-                            if h_lower == "cache-control":
-                                has_cache_control = True
-                            self.send_header(h_key, h_val)
-                        # SSE-required headers: enforce even if upstream omits them
-                        if not has_content_type:
-                            self.send_header("Content-Type", "text/event-stream")
-                        if not has_cache_control:
-                            self.send_header("Cache-Control", "no-cache")
-                        # Always disable nginx buffering for streaming
-                        self.send_header("X-Accel-Buffering", "no")
-                        # Propagate request ID to client for correlation
-                        self.send_header("X-Request-ID", _req_id)
-                        self.end_headers()
+                _stream_wrote_to_client = False
+                for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
+                    _stream_retry = False
+                    try:
+                        with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
+                            if (
+                                _is_retryable_upstream_status(resp.status_code)
+                                and not _stream_wrote_to_client
+                                and _ustream_attempt < MAX_UPSTREAM_RETRIES - 1
+                            ):
+                                # Drain body to release the pooled connection, then retry
+                                for _ in resp.iter_bytes(chunk_size=4096):
+                                    pass
+                                _stream_retry = True
+                            elif resp.status_code >= 400:
+                                # Non-retryable upstream error — normalize to canonical JSON
+                                _raw_err = b"".join(resp.iter_bytes(chunk_size=4096))
+                                _norm_err_body = normalize_upstream_error(
+                                    resp.status_code, _raw_err, provider_from_url(target_url)
+                                )
+                                _stream_wrote_to_client = True
+                                _client_headers_sent = True
+                                self.send_response(resp.status_code)
+                                self.send_header("Content-Type", "application/json")
+                                self.send_header("Content-Length", str(len(_norm_err_body)))
+                                self.send_header("X-Request-ID", _req_id)
+                                self.end_headers()
+                                self.wfile.write(_norm_err_body)
+                            else:
+                                _stream_wrote_to_client = True
+                                _client_headers_sent = True
+                                self.send_response(resp.status_code)
+                                has_content_type = False
+                                has_cache_control = False
+                                for h_key, h_val in resp.headers.items():
+                                    h_lower = h_key.lower()
+                                    if h_lower in ("connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"):
+                                        continue
+                                    if h_lower == "content-type":
+                                        has_content_type = True
+                                    if h_lower == "cache-control":
+                                        has_cache_control = True
+                                    self.send_header(h_key, h_val)
+                                # SSE-required headers: enforce even if upstream omits them
+                                if not has_content_type:
+                                    self.send_header("Content-Type", "text/event-stream")
+                                if not has_cache_control:
+                                    self.send_header("Cache-Control", "no-cache")
+                                # Always disable nginx buffering for streaming
+                                self.send_header("X-Accel-Buffering", "no")
+                                # Propagate request ID to client for correlation
+                                self.send_header("X-Request-ID", _req_id)
+                                self.end_headers()
 
-                        for chunk in resp.iter_bytes(chunk_size=4096):
-                            if not chunk:
-                                continue
-                            try:
-                                self.wfile.write(chunk)
-                                self.wfile.flush()
-                            except (BrokenPipeError, ConnectionResetError):
-                                break
-                            if should_log and is_messages:
-                                sse_buffer += chunk
+                                for chunk in resp.iter_bytes(chunk_size=4096):
+                                    if not chunk:
+                                        continue
+                                    try:
+                                        self.wfile.write(chunk)
+                                        self.wfile.flush()
+                                    except (BrokenPipeError, ConnectionResetError):
+                                        break
+                                    if should_log and is_messages:
+                                        sse_buffer += chunk
+                    except _RETRYABLE_UPSTREAM_EXCEPTIONS:
+                        # Once we've committed to writing to the client, can't retry —
+                        # the CLI's SSE parser would see a truncated-then-restarted stream.
+                        if _stream_wrote_to_client:
+                            raise
+                        if _ustream_attempt >= MAX_UPSTREAM_RETRIES - 1:
+                            raise
+                        _stream_retry = True
+
+                    if _stream_retry:
+                        time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                        continue
+                    break
 
                 if should_log and is_messages and sse_buffer:
                     sse_usage = extract_sse_tokens(sse_buffer)
@@ -1075,7 +1150,30 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
-                resp = pool.request(method, target_url, content=body, headers=fwd_headers)
+                # Retry on transient upstream failures (RemoteProtocolError,
+                # Server disconnected, 502/503/504). Safe because the client
+                # has not yet received any bytes at this point.
+                resp = None
+                for _ustream_attempt in range(MAX_UPSTREAM_RETRIES):
+                    try:
+                        resp = pool.request(method, target_url, content=body, headers=fwd_headers)
+                        if (
+                            _is_retryable_upstream_status(resp.status_code)
+                            and _ustream_attempt < MAX_UPSTREAM_RETRIES - 1
+                        ):
+                            try:
+                                resp.close()
+                            except Exception:
+                                pass
+                            time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                            continue
+                        break
+                    except _RETRYABLE_UPSTREAM_EXCEPTIONS:
+                        if _ustream_attempt >= MAX_UPSTREAM_RETRIES - 1:
+                            raise
+                        time.sleep(_upstream_retry_backoff(_ustream_attempt))
+                        continue
+                assert resp is not None
 
                 # Normalize upstream 4xx/5xx to canonical error envelope before
                 # sending headers so we can set the correct Content-Type.
@@ -1086,6 +1184,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         resp.status_code, resp_body, provider_from_url(target_url)
                     )
 
+                _client_headers_sent = True
                 self.send_response(resp.status_code)
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
@@ -1178,6 +1277,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 saved = max(0, input_tokens - sent_input_tokens)
                 cost_saved = max(0.0, cost_without - cost)
 
+                # Cache attribution: who placed the cache_control markers that
+                # produced these cache_read_tokens. Byte-preserved → client did;
+                # otherwise the proxy touched the body and owns the markers.
+                _cache_origin = "client" if _is_byte_preserved else "proxy"
+
                 with ps._session_lock:
                     ps.session["requests"] += 1
                     ps.session["input_tokens"] += input_tokens
@@ -1189,6 +1293,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cost_saved"] += cost_saved
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
+                    ps.session[f"cache_read_{_cache_origin}"] += cache_read_tokens
 
                 # Persist to monitor.db so `tokenpak status`, dashboards, and
                 # cross-session reporting see this request. Async write queue
@@ -1205,12 +1310,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             endpoint=target_url,
                             compilation_mode=ps.compilation_mode,
                             protected_tokens=protected_tokens,
-                            compressed_tokens=sent_input_tokens,
+                            compressed_tokens=max(0, input_tokens - sent_input_tokens),
                             injected_tokens=0,
                             injected_sources="",
                             cache_read_tokens=cache_read_tokens,
                             cache_creation_tokens=cache_creation_tokens,
                             would_have_saved=int(saved),
+                            cache_origin=_cache_origin,
                         )
                     except Exception:
                         pass  # DB errors must never break the request
@@ -1367,19 +1473,46 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 f"    → {user_detail}"
             )
             try:
-                err = json.dumps({
-                    "error": {
-                        "type": "proxy_error",
-                        "message": user_detail,
-                        "detail": exc_msg,
-                        "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
-                    }
-                }).encode()
-                self.send_response(502)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(err)))
-                self.end_headers()
-                self.wfile.write(err)
+                if _client_headers_sent:
+                    # Response already started — can't send a new HTTP response.
+                    # For SSE streams, emit a synthetic `event: error` (Anthropic's
+                    # canonical mid-stream error signal) so the CLI's SSE reader
+                    # sees a well-formed frame instead of raw HTTP bytes.
+                    if is_streaming:
+                        try:
+                            _sse_err = (
+                                "event: error\n"
+                                "data: " + json.dumps({
+                                    "type": "error",
+                                    "error": {
+                                        "type": "overloaded_error",
+                                        "message": (
+                                            f"Upstream connection dropped mid-stream "
+                                            f"({exc_type}). Retry the request."
+                                        ),
+                                    },
+                                }) + "\n\n"
+                            ).encode("utf-8")
+                            self.wfile.write(_sse_err)
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError, OSError):
+                            pass
+                    # Non-streaming: headers+partial body already flushed; nothing
+                    # safe to append. Just let the connection close.
+                else:
+                    err = json.dumps({
+                        "error": {
+                            "type": "proxy_error",
+                            "message": user_detail,
+                            "detail": exc_msg,
+                            "hint": "Run `tokenpak doctor` for diagnostics or `tokenpak status` for recent errors.",
+                        }
+                    }).encode()
+                    self.send_response(502)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(err)))
+                    self.end_headers()
+                    self.wfile.write(err)
             except Exception:
                 pass
 
@@ -2204,9 +2337,15 @@ class ProxyServer:
         }
 
     def stats(self) -> dict:
+        s = self.session
         return {
-            "session": self.session,
+            "session": s,
             "compilation_mode": self.compilation_mode,
+            "cache_read_by_origin": {
+                "client": s.get("cache_read_client", 0),
+                "proxy": s.get("cache_read_proxy", 0),
+                "unknown": s.get("cache_read_unknown", 0),
+            },
         }
 
     def session_stats(self) -> dict:
