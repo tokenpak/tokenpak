@@ -54,19 +54,23 @@ def main() -> int:
 
     session_id = hook_input.get("session_id", "")
     transcript_path = hook_input.get("transcript_path", "")
+    prompt_text = hook_input.get("prompt", "") or ""
 
     # Check if companion is enabled
     if os.environ.get("TOKENPAK_COMPANION_ENABLED", "1").lower() in ("0", "false", "no"):
         return 0
 
-    # Token estimation: file size / 4 (instant, no parsing)
+    # Token estimation: transcript size + prompt text, both // 4 (instant).
+    # Cron/one-shot `--print` invocations have no transcript on the first hook
+    # fire — fall back to the prompt text so we still journal the cycle.
     tokens_est = 0
     if transcript_path:
         try:
-            file_size = os.path.getsize(transcript_path)
-            tokens_est = file_size // 4
+            tokens_est += os.path.getsize(transcript_path) // 4
         except OSError:
             pass
+    if prompt_text:
+        tokens_est += len(prompt_text) // 4
 
     # Cost estimation
     cost_est = tokens_est * _DEFAULT_INPUT_RATE / 1_000_000
@@ -94,9 +98,13 @@ def main() -> int:
         }))
         return 2
 
-    # Journal write (best-effort, non-blocking)
-    if session_id and tokens_est > 0:
-        _journal_write(session_id, tokens_est, cost_est)
+    # Journal write (best-effort, non-blocking). Log even when tokens_est is 0
+    # so we still record that a cycle fired — useful for detecting silent
+    # failures. Fabricate a session_id from PID+time if hook_input lacks one
+    # (e.g. some older Claude CLI builds omit it in --print mode).
+    if not session_id:
+        session_id = f"anon-{os.getpid()}-{int(time.time())}"
+    _journal_write(session_id, tokens_est, cost_est)
 
     # Cost estimate to stderr (visible in TUI)
     if tokens_est > 0 and os.environ.get("TOKENPAK_COMPANION_SHOW_COST", "1") != "0":
