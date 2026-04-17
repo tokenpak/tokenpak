@@ -3211,7 +3211,7 @@ def _build_alerts_cmd_parser(sub):
 def _build_debug_parser(sub):
     """Build debug mode subcommand parser."""
     p_debug = sub.add_parser("debug", help="Toggle verbose debug logging or manage captured traces")
-    dsub = p_debug.add_subparsers(dest="debug_cmd", required=True)
+    dsub = p_debug.add_subparsers(dest="debug_cmd", required=False)
 
     dsub.add_parser("on", help="Enable debug mode").set_defaults(func=cmd_debug_on)
     dsub.add_parser("off", help="Disable debug mode").set_defaults(func=cmd_debug_off)
@@ -3225,6 +3225,7 @@ def _build_debug_parser(sub):
     p_export.add_argument("trace_id", help="Trace ID to export")
     p_export.add_argument("--json", action="store_true", dest="json_out", help="Output as JSON")
     p_export.set_defaults(func=cmd_debug_export)
+    p_debug.set_defaults(func=lambda a: p_debug.print_help())
 
 
 def cmd_debug_on(args):
@@ -3325,11 +3326,12 @@ def cmd_debug_export(args):
 def _build_learn_parser(sub):
     """Build `tokenpak learn` subcommand parser."""
     p_learn = sub.add_parser("learn", help="Show or reset learned patterns from telemetry")
-    lsub = p_learn.add_subparsers(dest="learn_cmd", required=True)
+    lsub = p_learn.add_subparsers(dest="learn_cmd", required=False)
     lsub.add_parser("status", help="Show learned patterns summary").set_defaults(
         func=cmd_learn_status
     )
     lsub.add_parser("reset", help="Clear all learned data").set_defaults(func=cmd_learn_reset)
+    p_learn.set_defaults(func=lambda a: p_learn.print_help())
 
 
 def cmd_learn_status(args):
@@ -3360,7 +3362,7 @@ def _build_user_template_parser(sub):
     )
 
     p_tmpl = sub.add_parser("template", help="Manage local user prompt templates")
-    tsub = p_tmpl.add_subparsers(dest="template_cmd", required=True)
+    tsub = p_tmpl.add_subparsers(dest="template_cmd", required=False)
 
     # list
     tsub.add_parser("list", help="List all saved templates").set_defaults(func=cmd_template_list)
@@ -3394,6 +3396,7 @@ def _build_user_template_parser(sub):
         help="Variable substitution (repeatable)",
     )
     p_use.set_defaults(func=cmd_template_use)
+    p_tmpl.set_defaults(func=lambda a: p_tmpl.print_help())
 
 
 # ── Version Control Commands ──────────────────────────────────────────────────
@@ -4046,6 +4049,8 @@ def main():
         "plan",
         "activate",
         "deactivate",
+        "init",
+        "monitor",
     }
     # If user asks --help on an unrecognised command, just show that command's usage + exit 0
     if (
@@ -4069,12 +4074,8 @@ def main():
         else:
             # Check for a semantically confusing command
             _COMMAND_HINTS = {
-                "compress": "→ Compression happens automatically through the proxy.\n   Run `tokenpak demo` to see it in action.",
-                "run": "→ Use `tokenpak serve` to start the proxy, or `tokenpak serve` for a quick alias.",
                 "proxy": "→ Use `tokenpak serve` to start the proxy on localhost:8766.",
                 "kill": "→ Use `tokenpak stop` to stop the running proxy.",
-                "test": "→ Use `tokenpak demo` to test compression, or `tokenpak doctor` to test installation.",
-                "config": "→ Use `tokenpak config-check <file>` to validate config.\n   Or `tokenpak setup` to interactively create config.",
             }
             hint = _COMMAND_HINTS.get(raw_cmd)
             if hint:
@@ -5287,7 +5288,7 @@ def _build_cost_parser(sub):
 
 def _build_budget_parser(sub):
     p_budget = sub.add_parser("budget", help="Manage budget limits")
-    bsub = p_budget.add_subparsers(dest="budget_cmd", required=True)
+    bsub = p_budget.add_subparsers(dest="budget_cmd", required=False)
 
     p_set = bsub.add_parser("set", help="Configure budget limits")
     p_set.add_argument("--daily", type=float, metavar="USD", help="Daily spend limit in USD")
@@ -5311,6 +5312,7 @@ def _build_budget_parser(sub):
     p_hist.add_argument("--limit", type=int, default=20)
     p_hist.add_argument("--month", action="store_true", help="Show this month")
     p_hist.set_defaults(func=cmd_budget_history)
+    p_budget.set_defaults(func=lambda a: p_budget.print_help())
 
 
 def _build_forecast_parser(sub):
@@ -5419,7 +5421,7 @@ def cmd_lock_renew(args):
 
 def _build_lock_parser(sub):
     p_lock = sub.add_parser("lock", help="File lock management for multi-agent coordination")
-    lsub = p_lock.add_subparsers(dest="lock_cmd", required=True)
+    lsub = p_lock.add_subparsers(dest="lock_cmd", required=False)
 
     # claim
     p_claim = lsub.add_parser("claim", help="Claim a lock on a file or directory")
@@ -5463,6 +5465,7 @@ def _build_lock_parser(sub):
     )
     p_renew.add_argument("--agent", default=None, help="Agent id override")
     p_renew.set_defaults(func=cmd_lock_renew)
+    p_lock.set_defaults(func=lambda a: p_lock.print_help())
 
 
 # ── agent lock/unlock/locks commands ─────────────────────────────────────────
@@ -5650,7 +5653,7 @@ def cmd_agent_handoff(args):
 
 def _build_agent_parser(sub):
     p_agent = sub.add_parser("agent", help="Agent coordination (locks, registry, capabilities)")
-    asub = p_agent.add_subparsers(dest="agent_cmd", required=True)
+    asub = p_agent.add_subparsers(dest="agent_cmd", required=False)
 
     # --- Lock commands ---
     p_lock = asub.add_parser("lock", help="Claim a file lock")
@@ -5753,6 +5756,7 @@ def _build_agent_parser(sub):
 
     he = hsub.add_parser("expire", help="Expire stale handoffs")
     he.set_defaults(func=cmd_agent_handoff)
+    p_agent.set_defaults(func=lambda a: p_agent.print_help())
 
 
 # ── Replay commands ───────────────────────────────────────────────────────────
@@ -6001,7 +6005,7 @@ def _build_demo_parser(sub):
     p_recipe = sub.add_parser(
         "recipe", help="Custom recipe development tooling (create/test/validate/benchmark)"
     )
-    rsub2 = p_recipe.add_subparsers(dest="recipe_cmd", required=True)
+    rsub2 = p_recipe.add_subparsers(dest="recipe_cmd", required=False)
 
     # recipe create
     p_rcreate = rsub2.add_parser("create", help="Scaffold a new custom recipe YAML file")
@@ -6069,6 +6073,7 @@ def _build_demo_parser(sub):
         "--runs", type=int, default=5, help="Repetitions per sample for timing (default: 5)"
     )
     p_rbench.set_defaults(func=cmd_recipe_benchmark)
+    p_recipe.set_defaults(func=lambda a: p_recipe.print_help())
 
     # ── Demo ───────────────────────────────────────────────────────────────────
     p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
@@ -6468,7 +6473,7 @@ def _build_diff_parser(sub):
 
 def _build_run_parser(sub):
     p_run = sub.add_parser("run", help="Schedule and manage macro runs")
-    rsub = p_run.add_subparsers(dest="run_cmd", required=True)
+    rsub = p_run.add_subparsers(dest="run_cmd", required=False)
 
     # run <name> --cron "<expr>"
     p_cron = rsub.add_parser("cron", help="Schedule a macro on a cron expression")
@@ -6499,6 +6504,7 @@ def _build_run_parser(sub):
     p_cancel = rsub.add_parser("cancel", help="Cancel a scheduled macro run")
     p_cancel.add_argument("id", help="Schedule ID to cancel")
     p_cancel.set_defaults(func=cmd_run_cancel)
+    p_run.set_defaults(func=lambda a: p_run.print_help())
 
 
 # ── macro: Premade macro CLI ──────────────────────────────────────────────────
@@ -6753,7 +6759,7 @@ def _build_macro_parser(sub):
     p_macro = sub.add_parser(
         "macro", help="Premade macros, user-defined YAML macros, and script hooks"
     )
-    msub = p_macro.add_subparsers(dest="macro_cmd", required=True)
+    msub = p_macro.add_subparsers(dest="macro_cmd", required=False)
 
     # macro list
     msub.add_parser("list", help="List all macros (premade + user-defined)").set_defaults(
@@ -6842,6 +6848,7 @@ def _build_macro_parser(sub):
         "hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)"
     )
     p_hook_install.set_defaults(func=cmd_macro_hooks)
+    p_macro.set_defaults(func=lambda a: p_macro.print_help())
 
 
 # ── Fingerprint commands ──────────────────────────────────────────────────────
@@ -6849,7 +6856,7 @@ def _build_macro_parser(sub):
 
 def _build_fingerprint_parser(sub):
     p_fp = sub.add_parser("fingerprint", help="Fingerprint sync and cache management")
-    fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=True)
+    fpsub = p_fp.add_subparsers(dest="fingerprint_cmd", required=False)
 
     # fingerprint sync
     p_sync = fpsub.add_parser("sync", help="Generate and sync a fingerprint, receive directives")
@@ -6882,6 +6889,7 @@ def _build_fingerprint_parser(sub):
         "--yes", "-y", action="store_true", default=False, help="Skip confirmation prompt"
     )
     p_clear.set_defaults(func=cmd_fingerprint_clear_cache)
+    p_fp.set_defaults(func=lambda a: p_fp.print_help())
 
 
 def cmd_fingerprint_sync(args):
@@ -7151,7 +7159,7 @@ def cmd_vault_health(args):
             sys.exit(2)
 
     else:
-        print("Unknown vault-health subcommand. Use 'repair'.")
+        print("Unknown vault subcommand. Use 'repair'.")
         sys.exit(1)
 
 
@@ -7271,46 +7279,26 @@ def cmd_fleet(args):
 
 
 def _build_vault_health_parser(sub):
-    """Build the vault-health command parser."""
-    p_vh = sub.add_parser(
-        "vault-health",
-        help="Vault index health diagnostic and repair",
-        description=(
-            "Diagnose and repair the vault index, which stores compressed context blocks.\n"
-            "Run this when you notice stale entries or corruption in your cache.\n\n"
-            "Example:\n"
-            "  tokenpak vault-health repair    # Auto-fix corrupted entries"
-        ),
-    )
-
-    vhsub = p_vh.add_subparsers(dest="vault_health_cmd", required=True)
-
-    # vault-health repair
-    p_repair = vhsub.add_parser("repair", help="Check and rebuild stale vault index")
-    p_repair.set_defaults(func=cmd_vault_health)
-
-    p_vh.set_defaults(func=cmd_vault_health)
-
-    # Short alias: 'vault' → same as 'vault-health'
+    """Build the vault/vault-health command parser (vault-health is an alias for vault)."""
     p_vault = sub.add_parser(
         "vault",
+        aliases=["vault-health"],
         help="Vault index health diagnostic and repair",
         description=(
             "Check the health of your vault index and repair stale or corrupted entries.\n"
             "The vault index stores compressed context blocks and metadata about requests.\n\n"
             "Subcommands:\n"
-            "  repair     Check and rebuild stale vault index entries\n"
-            "  status     Show vault index health statistics\n\n"
+            "  repair     Check and rebuild stale vault index entries\n\n"
             "Example:\n"
             "  tokenpak vault repair    # Auto-fix corrupted entries\n"
-            "  tokenpak vault status    # Show compression block statistics"
+            "  tokenpak vault-health repair  # Same via alias"
         ),
     )
     vaultsub = p_vault.add_subparsers(dest="vault_health_cmd", required=False)
-    p_vault_repair = vaultsub.add_parser("repair", help="Repair vault index")
-    p_vault_repair.set_defaults(func=cmd_vault_health)
+    p_repair = vaultsub.add_parser("repair", help="Check and rebuild stale vault index")
+    p_repair.set_defaults(func=cmd_vault_health)
     p_vault.set_defaults(func=cmd_vault_health)
-    return p_vh
+    return p_vault
 
 
 def _build_fleet_parser(sub):
@@ -7672,7 +7660,7 @@ def _build_retrieval_parser(sub):
     """Build the retrieval command parser."""
     p_ret = sub.add_parser("retrieval", help="Inspect and test the hybrid retrieval system")
     p_ret.add_argument("--json", action="store_true", help="Output as JSON")
-    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=True)
+    rsub = p_ret.add_subparsers(dest="retrieval_cmd", required=False)
 
     # retrieval status
     p_status = rsub.add_parser("status", help="Show retrieval config and index stats")
