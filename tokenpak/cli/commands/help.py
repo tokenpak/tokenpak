@@ -48,7 +48,7 @@ _INTERMEDIATE_COMMANDS = {
 # Registry loader
 # ─────────────────────────────────────────────
 
-_REGISTRY_PATH = Path(__file__).parent.parent.parent / "registry" / "commands.json"
+_REGISTRY_PATH = Path(__file__).parent.parent.parent / "core" / "registry" / "commands.json"
 
 
 def _load_registry() -> list[dict]:

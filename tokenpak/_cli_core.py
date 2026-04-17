@@ -1240,68 +1240,8 @@ def cmd_models(args):
         print(f"💰 Total Cost: ${total_cost:.4f} | Compressed: {total_compressed:,} tokens saved")
         return
 
-    # Fallback to JSONL-based ModelAnalyzer
-    from .telemetry.models import ModelAnalyzer
-
-    analyzer = ModelAnalyzer()
-    model_stats = analyzer.load_from_file(limit=1000)
-
-    if not model_stats:
-        print("No model usage data yet. Run some requests through the proxy.")
-        return
-
-    sorted_models = sorted(model_stats.values(), key=lambda s: s.requests, reverse=True)
-
-    if target_model:
-        matching = [m for m in sorted_models if target_model.lower() in m.model_name.lower()]
-        if not matching:
-            print(f"No data found for model matching '{target_model}'")
-            return
-        for stats in matching:
-            costs = stats._cost_metrics()
-            print(f"Model: {stats.model_name}")
-            print("─" * 60)
-            print(f"Requests: {stats.requests} | Tokens: {stats.input_tokens + stats.output_tokens:,}")
-            print(f"Cost: ${costs['sent']:.2f} | Saved: ${costs['saved']:.2f} | Net: ${costs['net']:.2f}")
-            print()
-        return
-
-    if getattr(args, "raw", False):
-        data = {"models": [s.to_dict() for s in sorted_models], "summary": analyzer.get_summary()}
-        print(json.dumps(data, indent=2))
-        return
-
-    summary = analyzer.get_summary()
-    if summary["total_requests"] == 0:
-        print("No model usage data yet.")
-        return
-
-    print("TokenPak Models Dashboard")
-    print("=" * 100)
-    print(f"{'Model':<30} {'Requests':>10} {'Tokens Sent':>14} {'Cache%':>8} {'Saved':>10} {'Efficiency':>12}")
-    print("─" * 100)
-
-    for stats in sorted_models:
-        if stats.requests == 0:
-            continue
-        costs = stats._cost_metrics()
-        model_short = stats.model_name[:28]
-        print(
-            f"{model_short:<30} {stats.requests:>10} {stats.input_tokens + stats.output_tokens:>14,} "
-            f"{stats._cache_hit_rate():>7.0f}% ${costs['saved']:>9.2f} {stats._compression_efficiency():>11.0f}%"
-        )
-
-    print("─" * 100)
-    total_tokens = summary["total_tokens_sent"]
-    print(
-        f"{'TOTAL':<30} {summary['total_requests']:>10} {total_tokens:>14,} "
-        f"{summary['overall_cache_hit_rate']:>7.0f}% ${summary['total_cost_saved']:>9.2f} "
-        f"{summary['overall_compression_efficiency']:>11.0f}%"
-    )
-    print()
-    print(
-        f"💰 Total Cost: ${summary['total_cost_sent']:.2f} sent | ${summary['total_cost_saved']:.2f} saved | ${summary['total_cost_net']:.2f} net"
-    )
+    # No monitor DB data — emit a clear user-facing message instead of crashing
+    print("No model data available — monitor DB is empty or not yet populated.")
 
 
 def _apply_safe_mode_defaults() -> None:
