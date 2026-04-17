@@ -2216,10 +2216,6 @@ def _build_stub_parsers(sub):
     instead of a traceback.
     """
     _STUBS = {
-        "license": "Show license and edition info (not yet implemented — OSS edition has no license gate)",
-        "plan": "Show current tier, expiry, seats, and features (not yet implemented)",
-        "activate": "Activate a Pro/Team/Enterprise license key (not yet implemented)",
-        "deactivate": "Remove license and revert to OSS (not yet implemented)",
         "audit": "Enterprise audit log management (not yet implemented)",
         "compliance": "Generate compliance reports (not yet implemented)",
         "watch": "Live terminal savings dashboard (not yet implemented — use `tokenpak dashboard` instead)",
@@ -2234,6 +2230,45 @@ def _build_stub_parsers(sub):
     for name, desc in _STUBS.items():
         p = sub.add_parser(name, help=desc)
         p.set_defaults(func=_make_stub(name, desc))
+
+    # ── License commands (Free OSS tier, Pro-ready surface) ──────────────────
+    p_license = sub.add_parser(
+        "license",
+        help="Show license and tier info (Free, Pro, Team, Enterprise)",
+    )
+    p_license.add_argument("--json", dest="as_json", action="store_true",
+                           help="Machine-readable JSON output")
+    p_license.set_defaults(func=lambda args: __import__(
+        "tokenpak.cli.commands.license_cmd", fromlist=["run_license"]
+    ).run_license(args))
+
+    p_plan = sub.add_parser(
+        "plan",
+        help="List available plans and your current tier",
+    )
+    p_plan.add_argument("--json", dest="as_json", action="store_true",
+                        help="Machine-readable JSON output")
+    p_plan.set_defaults(func=lambda args: __import__(
+        "tokenpak.cli.commands.license_cmd", fromlist=["run_plan"]
+    ).run_plan(args))
+
+    p_activate = sub.add_parser(
+        "activate",
+        help="Store a Pro/Team/Enterprise license key",
+    )
+    p_activate.add_argument("key", nargs="?", default="", help="Your license key")
+    p_activate.add_argument("--email", default="", help="Optional email for the license")
+    p_activate.set_defaults(func=lambda args: __import__(
+        "tokenpak.cli.commands.license_cmd", fromlist=["run_activate"]
+    ).run_activate(args))
+
+    p_deactivate = sub.add_parser(
+        "deactivate",
+        help="Remove stored license and revert to Free (OSS)",
+    )
+    p_deactivate.set_defaults(func=lambda args: __import__(
+        "tokenpak.cli.commands.license_cmd", fromlist=["run_deactivate"]
+    ).run_deactivate(args))
 
     # ── `integrate` — real implementation (Free GTM feature) ─────────────────
     p_integrate = sub.add_parser(
