@@ -14,8 +14,8 @@ File format (TOML)::
     kind = "api_key"
     key = "sk-ant-..."
 
-``tokenpak creds add/remove/edit`` write this file. The MVP here only
-reads — the write surface ships in the next slice.
+``tokenpak creds add`` / ``tokenpak creds remove`` write this file;
+this module only reads (shared by discovery + doctor).
 
 Perms are expected to be 0600; ``creds doctor`` flags looser perms.
 """

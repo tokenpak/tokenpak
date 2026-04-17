@@ -2108,13 +2108,16 @@ def _build_creds_parser(sub):
         "creds",
         help="Discover credentials across platforms + doctor",
         description=(
-            "Inspect credentials tokenpak can see from all registered providers\n"
-            "(Codex CLI, Claude CLI, env vars, ~/.tokenpak/credentials.toml,\n"
-            "OpenClaw agent profiles).\n\n"
-            "Read-only MVP — no routing changes yet.\n\n"
+            "Inspect and manage credentials tokenpak can see from all registered\n"
+            "providers (Codex CLI, Claude CLI, env vars, ~/.tokenpak/credentials.toml,\n"
+            "OpenClaw agent profiles). Proxy routing changes in the next slice.\n\n"
             "Examples:\n"
-            "  tokenpak creds list      # show all discovered credentials\n"
-            "  tokenpak creds doctor    # detect expired, cohabitation, orphan-oauth"
+            "  tokenpak creds list                       # show all discovered credentials\n"
+            "  tokenpak creds doctor                     # detect expired, cohabitation, orphan-oauth\n"
+            "  tokenpak creds add                        # BYOK entry (interactive)\n"
+            "  tokenpak creds add --id openai-work \\\n"
+            "       --platform openai --kind api_key --key sk-...\n"
+            "  tokenpak creds remove openai-work"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

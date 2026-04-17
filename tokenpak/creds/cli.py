@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from .doctor import Issue, run as doctor_run
 from .model import Credential, KIND_OAUTH
 from .providers import discover_all
+from . import store
 
 
 def _age_or_expiry(cred: Credential, now: int) -> str:
@@ -102,6 +103,163 @@ def cmd_doctor(args) -> int:
     return 1 if errors else 0
 
 
+def cmd_add(args: list[str]) -> int:
+    """Add or replace a BYOK credential in ~/.tokenpak/credentials.toml.
+
+    Flags fill in non-interactively; whatever's missing is prompted on
+    a TTY. On non-TTY stdin with missing flags we fail instead of
+    hanging.
+    """
+    parsed = _parse_kv_flags(
+        args,
+        known=("--id", "--platform", "--kind", "--key", "--token", "--scope", "--account"),
+    )
+    if parsed is None:
+        print(
+            "usage: tokenpak creds add --id X --platform Y --kind (api_key|bearer) "
+            "--key Z [--scope host,host] [--account label]",
+            file=sys.stderr,
+        )
+        return 2
+
+    cred_id = parsed.get("--id") or _prompt("id", required=True)
+    if not cred_id:
+        return 2
+    try:
+        store.validate_id(cred_id)
+    except ValueError as exc:
+        print(f"tokenpak creds add: {exc}", file=sys.stderr)
+        return 2
+
+    # Refuse to shadow a credential another provider already owns; the
+    # BYOK file is for user-pasted secrets only.
+    conflicts = [c for c in discover_all() if c.id == cred_id and c.provider != "user-config"]
+    if conflicts:
+        other = conflicts[0]
+        print(
+            f"tokenpak creds add: id {cred_id!r} already exists via "
+            f"provider {other.provider} ({other.source}) — pick a different id",
+            file=sys.stderr,
+        )
+        return 2
+
+    platform = (parsed.get("--platform") or _prompt("platform (openai|anthropic|google|xai|...)", required=True) or "").lower()
+    if not platform:
+        return 2
+
+    kind = (parsed.get("--kind") or _prompt("kind (api_key|bearer)", default="api_key")).lower()
+    if kind not in ("api_key", "bearer"):
+        print(f"tokenpak creds add: kind must be api_key or bearer, got {kind!r}", file=sys.stderr)
+        return 2
+
+    secret_flag = "--key" if kind == "api_key" else "--token"
+    secret = parsed.get(secret_flag) or parsed.get("--key") or parsed.get("--token")
+    if not secret:
+        secret = _prompt_secret(f"{secret_flag.lstrip('-')} (input hidden)", required=True)
+    if not secret:
+        return 2
+
+    scope_raw = parsed.get("--scope") or _prompt("scope hosts (comma-separated, optional)", default="")
+    scope_hosts = [h.strip() for h in scope_raw.split(",") if h.strip()]
+
+    account_hint = parsed.get("--account")
+
+    entry: dict = {"platform": platform, "kind": kind}
+    if kind == "api_key":
+        entry["key"] = secret
+    else:
+        entry["token"] = secret
+    if scope_hosts:
+        entry["scope_hosts"] = scope_hosts
+    if account_hint:
+        entry["account_hint"] = account_hint
+
+    store.add(cred_id, entry)
+    print(f"added {cred_id} ({platform}, {kind}) to {store.CONFIG_PATH}")
+    return 0
+
+
+def cmd_remove(args: list[str]) -> int:
+    """Remove a credential from credentials.toml. Does not touch other providers."""
+    if not args or args[0].startswith("-"):
+        print("usage: tokenpak creds remove <id>", file=sys.stderr)
+        return 2
+    cred_id = args[0]
+
+    owned_here = {
+        c.id for c in discover_all() if c.provider == "user-config"
+    }
+    if cred_id not in owned_here:
+        # Check whether another provider owns it so we can point the user elsewhere.
+        other = next((c for c in discover_all() if c.id == cred_id), None)
+        if other:
+            print(
+                f"tokenpak creds remove: {cred_id} is owned by provider "
+                f"{other.provider} ({other.source}) — remove it there instead",
+                file=sys.stderr,
+            )
+        else:
+            print(f"tokenpak creds remove: no credential named {cred_id!r}", file=sys.stderr)
+        return 1
+
+    if store.remove(cred_id):
+        print(f"removed {cred_id} from {store.CONFIG_PATH}")
+        return 0
+    print(f"tokenpak creds remove: {cred_id} not in {store.CONFIG_PATH}", file=sys.stderr)
+    return 1
+
+
+def _parse_kv_flags(args: list[str], known: tuple[str, ...]) -> "dict[str, str] | None":
+    """Tiny argparse-free flag parser. Returns None on parse error."""
+    out: dict[str, str] = {}
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok == "--":
+            i += 1
+            continue
+        if tok.startswith("--"):
+            if "=" in tok:
+                name, _, val = tok.partition("=")
+            elif i + 1 < len(args):
+                name, val = tok, args[i + 1]
+                i += 1
+            else:
+                return None
+            if name not in known:
+                return None
+            out[name] = val
+            i += 1
+            continue
+        return None
+    return out
+
+
+def _prompt(label: str, default: str = "", required: bool = False) -> str:
+    if not sys.stdin.isatty():
+        if required:
+            print(f"tokenpak creds add: missing required field {label!r}", file=sys.stderr)
+        return default
+    suffix = f" [{default}]" if default else ""
+    try:
+        raw = input(f"  {label}{suffix}: ").strip()
+    except EOFError:
+        return default
+    return raw or default
+
+
+def _prompt_secret(label: str, required: bool = False) -> str:
+    if not sys.stdin.isatty():
+        if required:
+            print(f"tokenpak creds add: missing required secret {label!r}", file=sys.stderr)
+        return ""
+    import getpass
+    try:
+        return getpass.getpass(f"  {label}: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
     sub = args[0] if args else "list"
@@ -111,9 +269,13 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_list(rest)
     if sub == "doctor":
         return cmd_doctor(rest)
+    if sub == "add":
+        return cmd_add(rest)
+    if sub in ("remove", "rm"):
+        return cmd_remove(rest)
 
     print(f"tokenpak creds: unknown subcommand {sub!r}", file=sys.stderr)
-    print("usage: tokenpak creds [list|doctor]", file=sys.stderr)
+    print("usage: tokenpak creds [list|doctor|add|remove]", file=sys.stderr)
     return 2
 
 
