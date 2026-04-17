@@ -245,6 +245,7 @@ _COMMAND_GROUPS = {
     "Companion": [
         ("claude", "Launch with Claude Code"),
         ("codex", "Launch with Codex"),
+        ("creds", "Discover credentials + doctor"),
         ("test", "Interactive A/B test"),
         ("prove", "A/B value proof"),
     ],
@@ -2095,6 +2096,36 @@ def _build_codex_parser(sub):
     p.set_defaults(func=cmd_codex)
 
 
+def cmd_creds(args):
+    """Discover and inspect credentials across platforms."""
+    import sys
+    from .creds.cli import main as creds_main
+    sys.exit(creds_main(list(args.args)))
+
+
+def _build_creds_parser(sub):
+    p = sub.add_parser(
+        "creds",
+        help="Discover credentials across platforms + doctor",
+        description=(
+            "Inspect credentials tokenpak can see from all registered providers\n"
+            "(Codex CLI, Claude CLI, env vars, ~/.tokenpak/credentials.toml,\n"
+            "OpenClaw agent profiles).\n\n"
+            "Read-only MVP — no routing changes yet.\n\n"
+            "Examples:\n"
+            "  tokenpak creds list      # show all discovered credentials\n"
+            "  tokenpak creds doctor    # detect expired, cohabitation, orphan-oauth"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument(
+        "args",
+        nargs=argparse.REMAINDER,
+        help="Subcommand + args (list | doctor)",
+    )
+    p.set_defaults(func=cmd_creds)
+
+
 def _build_prove_parser(sub):
     p = sub.add_parser(
         "prove",
@@ -2542,6 +2573,7 @@ def build_parser():
     _build_retrieval_parser(sub)
     _build_claude_parser(sub)
     _build_codex_parser(sub)
+    _build_creds_parser(sub)
     _build_prove_parser(sub)
     _build_test_parser(sub)
     _build_telemetry_parser(sub)
