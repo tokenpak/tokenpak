@@ -7419,10 +7419,36 @@ def _build_optimize_parser(sub):
     p_optimize.add_argument(
         "--show-diff", action="store_true", help="Show before/after token counts"
     )
-    p_optimize.set_defaults(func=lambda args: print(
-        "Optimization available for premium subscribers.\n"
-        "Run: tokenpak demo to see compression capabilities."
-    ))
+    p_optimize.add_argument(
+        "--json", dest="as_json", action="store_true",
+        help="Machine-readable JSON output",
+    )
+
+    def _optimize_dispatch(args):
+        # File-mode or stdin-mode → prompt analyzer.
+        # No file and no stdin → delegate to the session-level analyzer
+        # in tokenpak.cli.commands.optimize.
+        import sys
+        from tokenpak.cli.commands.optimize_prompt import run_optimize_prompt
+        if getattr(args, "file", None) or not sys.stdin.isatty():
+            return run_optimize_prompt(args)
+        try:
+            from tokenpak.cli.commands.optimize import run_optimize as _session
+            _session(
+                verbose=getattr(args, "verbose", False),
+                as_json=getattr(args, "as_json", False),
+                apply=False,
+            )
+            return 0
+        except Exception as exc:  # pragma: no cover — fallback path
+            print(f"optimize: session analyzer unavailable ({exc})", file=sys.stderr)
+            print(
+                "Tip: pass --file <path> to analyze a prompt file instead.",
+                file=sys.stderr,
+            )
+            return 1
+
+    p_optimize.set_defaults(func=_optimize_dispatch)
     return p_optimize
 
 
