@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -80,6 +81,33 @@ from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _cache_control_dict() -> dict[str, Any]:
+    """Return the cache_control dict, honoring TOKENPAK_CACHE_TTL env var.
+
+    Accepts "5m" (Anthropic default ephemeral TTL, implicit) or "1h" (explicit
+    extended TTL, billed at 2x write / 0.1x read). Any other value falls back
+    to default (no explicit ttl key).
+
+    Extended 1h caching trades a 25% higher write cost for keeping the cache
+    warm across request gaps longer than 5 minutes — worthwhile for cron
+    cycles that fire every 30 min and would otherwise always cache-miss.
+    """
+    ttl = os.environ.get("TOKENPAK_CACHE_TTL", "").strip().lower()
+    if ttl == "1h":
+        return {"type": "ephemeral", "ttl": "1h"}
+    return {"type": "ephemeral"}
+
+
+def _has_cache_control(blk: dict[str, Any]) -> bool:
+    """Return True if a block already has our cache_control marker.
+
+    Compares by type (not full equality) so changing TOKENPAK_CACHE_TTL
+    across restarts doesn't cause us to skip re-marking with the new TTL.
+    """
+    cc = blk.get("cache_control") if isinstance(blk, dict) else None
+    return isinstance(cc, dict) and cc.get("type") == "ephemeral"
 
 # ---------------------------------------------------------------------------
 # Heuristics for detecting dynamic content in system blocks
@@ -149,8 +177,9 @@ def _mark_last_block_cacheable(
     for i in range(len(result) - 1, -1, -1):
         blk = result[i]
         if isinstance(blk, dict) and blk.get("type") == "text":
-            if blk.get("cache_control") != {"type": "ephemeral"}:
-                result[i] = dict(blk, cache_control={"type": "ephemeral"})
+            cc = _cache_control_dict()
+            if blk.get("cache_control") != cc:
+                result[i] = dict(blk, cache_control=cc)
             return result
 
     return result
@@ -167,10 +196,12 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
     msg = dict(message)
     content = msg.get("content")
 
+    cc = _cache_control_dict()
+
     if isinstance(content, str):
         if content.strip():
             msg["content"] = [
-                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                {"type": "text", "text": content, "cache_control": cc}
             ]
             marked = True
         return msg, marked
@@ -182,8 +213,8 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
     for i in range(len(content_out) - 1, -1, -1):
         block = content_out[i]
         if isinstance(block, dict) and block.get("type") == "text":
-            if block.get("cache_control") != {"type": "ephemeral"}:
-                content_out[i] = dict(block, cache_control={"type": "ephemeral"})
+            if block.get("cache_control") != cc:
+                content_out[i] = dict(block, cache_control=cc)
                 marked = True
             msg["content"] = content_out
             return msg, marked
@@ -205,12 +236,14 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
 
     changed = False
 
+    cc = _cache_control_dict()
+
     # Breakpoint 1: last stable system block
     system = data.get("system")
     if isinstance(system, str):
         if system.strip():
             data["system"] = [
-                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+                {"type": "text", "text": system, "cache_control": cc}
             ]
             changed = True
             _stats.record_breakpoint("system_last", True)
@@ -239,8 +272,8 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
         idx = len(tools_out) - 1
         last_tool = tools_out[idx]
         if isinstance(last_tool, dict):
-            if last_tool.get("cache_control") != {"type": "ephemeral"}:
-                tools_out[idx] = dict(last_tool, cache_control={"type": "ephemeral"})
+            if last_tool.get("cache_control") != cc:
+                tools_out[idx] = dict(last_tool, cache_control=cc)
                 data["tools"] = tools_out
                 changed = True
                 _stats.record_breakpoint("tools_last", True)
@@ -347,7 +380,7 @@ def inject_with_cache_boundary(
 
     if isinstance(system, str):
         data["system"] = [
-            {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": system, "cache_control": _cache_control_dict()},
             volatile_block,
         ]
     elif isinstance(system, list):
@@ -468,13 +501,13 @@ class PromptBuilder:
                 last_stable_idx = n_stable - 1
                 blk = dict(system[last_stable_idx])
                 if blk.get("type") == "text":
-                    blk["cache_control"] = {"type": "ephemeral"}
+                    blk["cache_control"] = _cache_control_dict()
                     system = list(system)
                     system[last_stable_idx] = blk
                     body["system"] = system
         elif isinstance(system, str) and system.strip():
             body["system"] = [
-                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+                {"type": "text", "text": system, "cache_control": _cache_control_dict()}
             ]
 
         return json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -993,7 +1026,7 @@ class DeterministicPromptPack:
                 {
                     "type": "text",
                     "text": stable_text,
-                    "cache_control": {"type": "ephemeral"},
+                    "cache_control": _cache_control_dict(),
                 }
             )
 
