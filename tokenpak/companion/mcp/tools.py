@@ -75,7 +75,7 @@ class ToolDef:
 
 
 def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
-    """Estimate tokens via proxy /tp/v1/tokens/estimate."""
+    """Estimate tokens via proxy /tpk/v1/tokens/estimate."""
     text = args.get("text", "")
     file_path = args.get("file_path", "")
     body: dict[str, Any] = {}
@@ -86,7 +86,7 @@ def _handle_estimate_tokens(state: CompanionState, args: dict[str, Any]) -> str:
     else:
         return json.dumps({"error": "provide text or file_path"})
 
-    status, resp = _proxy_post("/tp/v1/tokens/estimate", body)
+    status, resp = _proxy_post("/tpk/v1/tokens/estimate", body)
     if status == 0:
         return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
     if status >= 400:
@@ -130,8 +130,8 @@ def _handle_estimate_tokens_legacy_unused(state: CompanionState, args: dict[str,
 
 
 def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
-    """Check remaining budget via proxy /tp/v1/budget."""
-    status, body = _proxy_get("/tp/v1/budget")
+    """Check remaining budget via proxy /tpk/v1/budget."""
+    status, body = _proxy_get("/tpk/v1/budget")
     if status == 0:
         return json.dumps({
             "error": "proxy_unreachable",
@@ -143,10 +143,10 @@ def _handle_check_budget(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
-    """Load / list memory capsules via proxy /tp/v1/capsules*."""
+    """Load / list memory capsules via proxy /tpk/v1/capsules*."""
     session_id = str(args.get("session_id", "")).strip()
     if not session_id:
-        status, body = _proxy_get("/tp/v1/capsules", {"limit": 10})
+        status, body = _proxy_get("/tpk/v1/capsules", {"limit": 10})
         if status == 0:
             return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
         if status >= 400:
@@ -159,7 +159,7 @@ def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
     if state.session_id:
         params["caller_session_id"] = state.session_id
     status, body = _proxy_get(
-        f"/tp/v1/capsules/{_url_parse.quote(session_id, safe='')}",
+        f"/tpk/v1/capsules/{_url_parse.quote(session_id, safe='')}",
         params,
     )
     if status == 0:
@@ -174,7 +174,7 @@ def _handle_load_capsule(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
-    """Compress verbose content via proxy /tp/v1/compress."""
+    """Compress verbose content via proxy /tpk/v1/compress."""
     text = args.get("text", "")
     if not text:
         return json.dumps({"error": "No text provided"})
@@ -184,7 +184,7 @@ def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
     }
     if state.session_id:
         body["session_id"] = state.session_id  # proxy records savings to journal
-    status, resp = _proxy_post("/tp/v1/compress", body)
+    status, resp = _proxy_post("/tpk/v1/compress", body)
     if status == 0:
         return json.dumps({"error": "proxy_unreachable", "detail": resp.get("detail", "")})
     if status >= 400:
@@ -193,20 +193,20 @@ def _handle_prune_context(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_journal_read(state: CompanionState, args: dict[str, Any]) -> str:
-    """Read journal entries via proxy /tp/v1/journal/*."""
+    """Read journal entries via proxy /tpk/v1/journal/*."""
     target = args.get("session_id") or state.session_id
     entry_type = args.get("entry_type")
     limit = args.get("limit", 20)
 
     if not target:
         # List recent sessions
-        status, body = _proxy_get("/tp/v1/journal/sessions", {"limit": 10})
+        status, body = _proxy_get("/tpk/v1/journal/sessions", {"limit": 10})
     else:
         params: dict[str, Any] = {"limit": limit}
         if entry_type:
             params["entry_type"] = entry_type
         status, body = _proxy_get(
-            f"/tp/v1/journal/{_url_parse.quote(target, safe='')}",
+            f"/tpk/v1/journal/{_url_parse.quote(target, safe='')}",
             params,
         )
 
@@ -231,7 +231,7 @@ def _handle_journal_write(state: CompanionState, args: dict[str, Any]) -> str:
         return json.dumps({"error": "No active session"})
 
     status, body = _proxy_post(
-        f"/tp/v1/journal/{_url_parse.quote(session_id, safe='')}/entry",
+        f"/tpk/v1/journal/{_url_parse.quote(session_id, safe='')}/entry",
         {"content": content, "entry_type": "user"},
     )
     if status == 0:
@@ -279,7 +279,7 @@ def _proxy_base_url() -> str:
 
 
 def _proxy_request(method: str, path: str, params: Optional[dict[str, Any]] = None, body: Optional[dict[str, Any]] = None) -> tuple[int, dict[str, Any]]:
-    """HTTP call against the local proxy's /tp/v1/* app API.
+    """HTTP call against the local proxy's /tpk/v1/* app API.
 
     Returns (status_code, json_body). Never raises — network/parse errors
     become (0, {"error": ..., "detail": ...}) so tool handlers can
@@ -296,7 +296,7 @@ def _proxy_request(method: str, path: str, params: Optional[dict[str, Any]] = No
         req.add_header("Content-Type", "application/json")
     key = _os.environ.get("TOKENPAK_PROXY_KEY", "").strip()
     if key:
-        req.add_header("X-TP-Key", key)
+        req.add_header("X-TPK-Key", key)
     try:
         with _url_req.urlopen(req, timeout=5.0) as resp:
             raw = resp.read()
@@ -324,13 +324,13 @@ def _proxy_post(path: str, body: Optional[dict[str, Any]] = None, params: Option
 
 # ---------------------------------------------------------------------------
 # Vault access — exposes V1/V4/V6/V8 Free features as MCP tools.
-# Thin HTTP wrappers over the proxy's /tp/v1/vault/* endpoints so the
+# Thin HTTP wrappers over the proxy's /tpk/v1/vault/* endpoints so the
 # companion does NOT hold its own VaultIndex instance.
 # ---------------------------------------------------------------------------
 
 
 def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
-    """Search the vault via the proxy's /tp/v1/vault/search endpoint."""
+    """Search the vault via the proxy's /tpk/v1/vault/search endpoint."""
     query = str(args.get("query", "")).strip()
     if not query:
         return json.dumps({"error": "query is required"})
@@ -340,7 +340,7 @@ def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
         limit = 5
     limit = max(1, min(20, limit))
 
-    status, body = _proxy_get("/tp/v1/vault/search", {"q": query, "limit": limit})
+    status, body = _proxy_get("/tpk/v1/vault/search", {"q": query, "limit": limit})
     if status == 0:
         return json.dumps({
             "error": "proxy_unreachable",
@@ -353,7 +353,7 @@ def _handle_vault_search(state: CompanionState, args: dict[str, Any]) -> str:
 
 
 def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
-    """Fetch a vault block via the proxy's /tp/v1/vault/block/{id} endpoint."""
+    """Fetch a vault block via the proxy's /tpk/v1/vault/block/{id} endpoint."""
     block_id = str(args.get("block_id", "")).strip()
     path_hint = str(args.get("path", "")).strip()
     if not block_id and not path_hint:
@@ -361,7 +361,7 @@ def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
 
     # If only a path hint is given, resolve via search first to get an exact id.
     if not block_id and path_hint:
-        status, body = _proxy_get("/tp/v1/vault/search", {"q": path_hint, "limit": 1})
+        status, body = _proxy_get("/tpk/v1/vault/search", {"q": path_hint, "limit": 1})
         if status == 0:
             return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
         results = body.get("results") or []
@@ -369,7 +369,7 @@ def _handle_vault_retrieve(state: CompanionState, args: dict[str, Any]) -> str:
             return json.dumps({"error": "block_not_found", "path": path_hint})
         block_id = results[0].get("block_id") or ""
 
-    status, body = _proxy_get(f"/tp/v1/vault/block/{_url_parse.quote(block_id, safe='')}")
+    status, body = _proxy_get(f"/tpk/v1/vault/block/{_url_parse.quote(block_id, safe='')}")
     if status == 0:
         return json.dumps({"error": "proxy_unreachable", "detail": body.get("detail", "")})
     if status >= 400:

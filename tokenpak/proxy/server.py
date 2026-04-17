@@ -491,10 +491,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         ps = self.server.proxy_server
         path = self.path
 
-        # App-level /tp/v1/* endpoints — proxy-owned resources (vault, budget,
+        # App-level /tpk/v1/* endpoints — proxy-owned resources (vault, budget,
         # journal, …) exposed over REST so the companion + external tools can
         # consume them without reaching into the Python package.
-        # Registered BEFORE health so shutdown doesn't steal /tp/v1/health.
+        # Registered BEFORE health so shutdown doesn't steal /tpk/v1/health.
         try:
             from tokenpak.proxy.app_endpoints import try_handle_get as _tp_try_get
             if _tp_try_get(self):
@@ -502,7 +502,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         except Exception as _exc:
             # App endpoint dispatch must never break the LLM passthrough.
             import sys as _sys
-            print(f"[tokenpak] /tp/v1 dispatch error: {_exc}", file=_sys.stderr)
+            print(f"[tokenpak] /tpk/v1 dispatch error: {_exc}", file=_sys.stderr)
 
         # Always allow /health during shutdown (needed for health-check polling)
         if path == "/health" or path.startswith("/health?"):
@@ -660,7 +660,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         ps = self.server.proxy_server
 
-        # App-level /tp/v1/* POST endpoints — reserved for future compress,
+        # App-level /tpk/v1/* POST endpoints — reserved for future compress,
         # optimize, budget event, journal write, etc. See app_endpoints.py.
         try:
             from tokenpak.proxy.app_endpoints import try_handle_post as _tp_try_post
@@ -668,7 +668,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 return
         except Exception as _exc:
             import sys as _sys
-            print(f"[tokenpak] /tp/v1 POST dispatch error: {_exc}", file=_sys.stderr)
+            print(f"[tokenpak] /tpk/v1 POST dispatch error: {_exc}", file=_sys.stderr)
 
         if ps.shutdown.is_shutting_down and (
             self.path.startswith("http") or self.path.startswith("/v1/")

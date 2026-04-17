@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""App-level REST endpoints under ``/tp/v1/*``.
+"""App-level REST endpoints under ``/tpk/v1/*``.
 
 These are the tokenpak-APP API routes — distinct from the ``/v1/*`` LLM
 passthrough that Anthropic/OpenAI clients hit. The app API is what the
@@ -14,7 +14,7 @@ Architectural contract (per Kevin's 2026-04-17 design call):
 
 Authentication (localhost-only by default):
     - Requests must arrive from 127.0.0.1 / ::1 unless ``TOKENPAK_PROXY_KEY``
-      is set, in which case an ``X-TP-Key`` header must match.
+      is set, in which case an ``X-TPK-Key`` header must match.
     - No CORS / cross-origin story today; GTM is single-host dev use.
 
 Error shape:
@@ -39,7 +39,7 @@ from urllib.parse import parse_qs, urlparse
 
 
 def _is_authorized(handler: Any) -> bool:
-    """Check localhost + optional X-TP-Key header."""
+    """Check localhost + optional X-TPK-Key header."""
     # Localhost gate — reject non-loopback by default
     client_ip = getattr(handler, "client_address", ("", 0))[0] or ""
     if client_ip not in ("127.0.0.1", "::1", "localhost", ""):
@@ -48,7 +48,7 @@ def _is_authorized(handler: Any) -> bool:
     key = os.environ.get("TOKENPAK_PROXY_KEY", "").strip()
     if not key:
         return True
-    return handler.headers.get("X-TP-Key", "") == key
+    return handler.headers.get("X-TPK-Key", "") == key
 
 
 # ---------------------------------------------------------------------------
@@ -78,61 +78,61 @@ def _send_error(handler: Any, status: int, code: str, detail: str = "") -> None:
 
 
 def try_handle_get(handler: Any) -> bool:
-    """If handler.path starts with /tp/v1/, handle it and return True.
+    """If handler.path starts with /tpk/v1/, handle it and return True.
 
     Return False to let the default dispatch continue.
     """
     parsed = urlparse(handler.path)
     path = parsed.path
-    if not path.startswith("/tp/v1/"):
+    if not path.startswith("/tpk/v1/"):
         return False
 
     if not _is_authorized(handler):
-        _send_error(handler, 401, "unauthorized", "localhost-only; set X-TP-Key if TOKENPAK_PROXY_KEY is configured")
+        _send_error(handler, 401, "unauthorized", "localhost-only; set X-TPK-Key if TOKENPAK_PROXY_KEY is configured")
         return True
 
     qs = parse_qs(parsed.query or "")
 
-    # ── /tp/v1/health ────────────────────────────────────────────────────
-    if path == "/tp/v1/health":
+    # ── /tpk/v1/health ────────────────────────────────────────────────────
+    if path == "/tpk/v1/health":
         _handle_health(handler)
         return True
 
-    # ── /tp/v1/vault/search?q=...&limit=N ───────────────────────────────
-    if path == "/tp/v1/vault/search":
+    # ── /tpk/v1/vault/search?q=...&limit=N ───────────────────────────────
+    if path == "/tpk/v1/vault/search":
         _handle_vault_search(handler, qs)
         return True
 
-    # ── /tp/v1/vault/block/{block_id} ───────────────────────────────────
-    if path.startswith("/tp/v1/vault/block/"):
-        block_id = path[len("/tp/v1/vault/block/"):]
+    # ── /tpk/v1/vault/block/{block_id} ───────────────────────────────────
+    if path.startswith("/tpk/v1/vault/block/"):
+        block_id = path[len("/tpk/v1/vault/block/"):]
         _handle_vault_block(handler, block_id)
         return True
 
-    # ── /tp/v1/budget ────────────────────────────────────────────────────
-    if path == "/tp/v1/budget":
+    # ── /tpk/v1/budget ────────────────────────────────────────────────────
+    if path == "/tpk/v1/budget":
         _handle_budget_get(handler, qs)
         return True
 
-    # ── /tp/v1/journal/sessions ─────────────────────────────────────────
-    if path == "/tp/v1/journal/sessions":
+    # ── /tpk/v1/journal/sessions ─────────────────────────────────────────
+    if path == "/tpk/v1/journal/sessions":
         _handle_journal_sessions(handler, qs)
         return True
 
-    # ── /tp/v1/journal/{session_id} ─────────────────────────────────────
-    if path.startswith("/tp/v1/journal/"):
-        session_id = path[len("/tp/v1/journal/"):]
+    # ── /tpk/v1/journal/{session_id} ─────────────────────────────────────
+    if path.startswith("/tpk/v1/journal/"):
+        session_id = path[len("/tpk/v1/journal/"):]
         _handle_journal_get(handler, session_id, qs)
         return True
 
-    # ── /tp/v1/capsules ─ list available capsules ─────────────────────
-    if path == "/tp/v1/capsules":
+    # ── /tpk/v1/capsules ─ list available capsules ─────────────────────
+    if path == "/tpk/v1/capsules":
         _handle_capsules_list(handler, qs)
         return True
 
-    # ── /tp/v1/capsules/{session_id} ─ load a specific capsule ────────
-    if path.startswith("/tp/v1/capsules/"):
-        session_id = path[len("/tp/v1/capsules/"):]
+    # ── /tpk/v1/capsules/{session_id} ─ load a specific capsule ────────
+    if path.startswith("/tpk/v1/capsules/"):
+        session_id = path[len("/tpk/v1/capsules/"):]
         _handle_capsule_get(handler, session_id, qs)
         return True
 
@@ -144,16 +144,16 @@ def try_handle_post(handler: Any) -> bool:
     """POST dispatch for app endpoints that accept a body."""
     parsed = urlparse(handler.path)
     path = parsed.path
-    if not path.startswith("/tp/v1/"):
+    if not path.startswith("/tpk/v1/"):
         return False
 
     if not _is_authorized(handler):
         _send_error(handler, 401, "unauthorized")
         return True
 
-    # ── POST /tp/v1/journal/{session_id}/entry ──────────────────────────
-    if path.startswith("/tp/v1/journal/") and path.endswith("/entry"):
-        session_id = path[len("/tp/v1/journal/"):-len("/entry")]
+    # ── POST /tpk/v1/journal/{session_id}/entry ──────────────────────────
+    if path.startswith("/tpk/v1/journal/") and path.endswith("/entry"):
+        session_id = path[len("/tpk/v1/journal/"):-len("/entry")]
         body = _read_json_body(handler)
         if body is None:
             _send_error(handler, 400, "invalid_json", "request body must be JSON")
@@ -161,8 +161,8 @@ def try_handle_post(handler: Any) -> bool:
         _handle_journal_post(handler, session_id, body)
         return True
 
-    # ── POST /tp/v1/compress ────────────────────────────────────────────
-    if path == "/tp/v1/compress":
+    # ── POST /tpk/v1/compress ────────────────────────────────────────────
+    if path == "/tpk/v1/compress":
         body = _read_json_body(handler)
         if body is None:
             _send_error(handler, 400, "invalid_json")
@@ -170,8 +170,8 @@ def try_handle_post(handler: Any) -> bool:
         _handle_compress(handler, body)
         return True
 
-    # ── POST /tp/v1/optimize ────────────────────────────────────────────
-    if path == "/tp/v1/optimize":
+    # ── POST /tpk/v1/optimize ────────────────────────────────────────────
+    if path == "/tpk/v1/optimize":
         body = _read_json_body(handler)
         if body is None:
             _send_error(handler, 400, "invalid_json")
@@ -179,8 +179,8 @@ def try_handle_post(handler: Any) -> bool:
         _handle_optimize(handler, body)
         return True
 
-    # ── POST /tp/v1/tokens/estimate ─────────────────────────────────────
-    if path == "/tp/v1/tokens/estimate":
+    # ── POST /tpk/v1/tokens/estimate ─────────────────────────────────────
+    if path == "/tpk/v1/tokens/estimate":
         body = _read_json_body(handler)
         if body is None:
             _send_error(handler, 400, "invalid_json")
