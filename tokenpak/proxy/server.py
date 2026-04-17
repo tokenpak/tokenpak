@@ -110,12 +110,15 @@ def _upstream_retry_backoff(attempt: int) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Per-provider outbound concurrency limiter — smooths concurrent bursts from
-# multiple clients (e.g. 5 companion sessions at once) so we don't hammer the
-# upstream with N simultaneous large streams, which correlates with upstream
-# drops. Each provider has its own bounded semaphore; requests wait briefly
-# for a slot instead of piling on, with a timeout that returns 503 rather
-# than hanging forever.
+# Per-(provider, session) outbound concurrency limiter.
+#
+# With session-isolated upstream clients, each session holds its own HTTP/2
+# connection to the provider, so each session gets its own independent
+# concurrency slot. This semaphore now caps parallelism *within* each
+# session (mirroring the native-CLI topology where one CLI process talks
+# on one connection, which typically allows a small number of multiplexed
+# streams). Keying by (provider, session_key) prevents session A's burst
+# from blocking session B.
 # ---------------------------------------------------------------------------
 _UPSTREAM_CONCURRENCY: int = int(os.environ.get("TOKENPAK_UPSTREAM_CONCURRENCY", "3"))
 _UPSTREAM_ACQUIRE_TIMEOUT: float = float(
@@ -124,14 +127,21 @@ _UPSTREAM_ACQUIRE_TIMEOUT: float = float(
 
 import threading as _threading
 
-_upstream_semaphores: Dict[str, _threading.BoundedSemaphore] = {}
+_upstream_semaphores: Dict[tuple, _threading.BoundedSemaphore] = {}
 _upstream_sem_lock = _threading.Lock()
-_upstream_inflight: Dict[str, int] = {}
+_upstream_inflight: Dict[tuple, int] = {}
 
 
-def _get_upstream_semaphore(provider: str) -> _threading.BoundedSemaphore:
-    """Return (lazily creating) the per-provider outbound concurrency semaphore."""
-    key = provider or "_unknown"
+def _get_upstream_semaphore(
+    provider: str, session_key: Optional[str] = None
+) -> _threading.BoundedSemaphore:
+    """Return (lazily creating) the per-(provider, session) concurrency semaphore.
+
+    When session_key is None, falls back to a single shared semaphore per
+    provider (legacy behavior) — used for callers that haven't opted into
+    session isolation.
+    """
+    key = (provider or "_unknown", session_key or "_shared")
     with _upstream_sem_lock:
         sem = _upstream_semaphores.get(key)
         if sem is None:
@@ -141,18 +151,24 @@ def _get_upstream_semaphore(provider: str) -> _threading.BoundedSemaphore:
     return sem
 
 
-def _upstream_inflight_delta(provider: str, delta: int) -> int:
-    """Adjust and return the in-flight counter for a provider (diagnostic only)."""
-    key = provider or "_unknown"
+def _upstream_inflight_delta(
+    provider: str, delta: int, session_key: Optional[str] = None
+) -> int:
+    """Adjust and return the in-flight counter for (provider, session)."""
+    key = (provider or "_unknown", session_key or "_shared")
     with _upstream_sem_lock:
         _upstream_inflight[key] = max(0, _upstream_inflight.get(key, 0) + delta)
         return _upstream_inflight[key]
 
 
 def get_upstream_inflight_snapshot() -> Dict[str, int]:
-    """Return a snapshot of current in-flight counts, for /health exposure."""
+    """Return a snapshot of current in-flight counts, for /health exposure.
+
+    Keyed as ``"<provider>::<session>"`` for JSON-friendliness. The
+    legacy shared path appears under ``"<provider>::_shared"``.
+    """
     with _upstream_sem_lock:
-        return dict(_upstream_inflight)
+        return {f"{prov}::{sess}": n for (prov, sess), n in _upstream_inflight.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +491,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         ps = self.server.proxy_server
         path = self.path
 
+        # App-level /tp/v1/* endpoints — proxy-owned resources (vault, budget,
+        # journal, …) exposed over REST so the companion + external tools can
+        # consume them without reaching into the Python package.
+        # Registered BEFORE health so shutdown doesn't steal /tp/v1/health.
+        try:
+            from tokenpak.proxy.app_endpoints import try_handle_get as _tp_try_get
+            if _tp_try_get(self):
+                return
+        except Exception as _exc:
+            # App endpoint dispatch must never break the LLM passthrough.
+            import sys as _sys
+            print(f"[tokenpak] /tp/v1 dispatch error: {_exc}", file=_sys.stderr)
+
         # Always allow /health during shutdown (needed for health-check polling)
         if path == "/health" or path.startswith("/health?"):
             from urllib.parse import parse_qs, urlparse as _urlparse
@@ -630,6 +659,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         ps = self.server.proxy_server
+
+        # App-level /tp/v1/* POST endpoints — reserved for future compress,
+        # optimize, budget event, journal write, etc. See app_endpoints.py.
+        try:
+            from tokenpak.proxy.app_endpoints import try_handle_post as _tp_try_post
+            if _tp_try_post(self):
+                return
+        except Exception as _exc:
+            import sys as _sys
+            print(f"[tokenpak] /tp/v1 POST dispatch error: {_exc}", file=_sys.stderr)
+
         if ps.shutdown.is_shutting_down and (
             self.path.startswith("http") or self.path.startswith("/v1/")
         ):
@@ -1163,11 +1203,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # here instead of piling onto Anthropic simultaneously. Blocks
         # for up to TOKENPAK_UPSTREAM_ACQUIRE_TIMEOUT seconds, then 503s.
         _sem_provider = _upstream_provider or provider_from_url(target_url)
-        _upstream_sem = _get_upstream_semaphore(_sem_provider)
+        _upstream_sem = _get_upstream_semaphore(_sem_provider, _session_key)
         _sem_acquired = False
         if _upstream_sem.acquire(timeout=_UPSTREAM_ACQUIRE_TIMEOUT):
             _sem_acquired = True
-            _upstream_inflight_delta(_sem_provider, +1)
+            _upstream_inflight_delta(_sem_provider, +1, _session_key)
         else:
             # Saturated — fail fast rather than piling on upstream
             err_body = json.dumps({
@@ -1676,7 +1716,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if _sem_acquired:
                 try:
                     _upstream_sem.release()
-                    _upstream_inflight_delta(_sem_provider, -1)
+                    _upstream_inflight_delta(_sem_provider, -1, _session_key)
                 except ValueError:
                     # BoundedSemaphore raises if released more times than acquired;
                     # swallow to keep the handler fail-safe.
