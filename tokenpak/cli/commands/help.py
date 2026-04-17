@@ -77,18 +77,20 @@ def _group_commands(commands: list[dict]) -> dict[str, list[dict]]:
 
 def print_essential_help() -> None:
     """Print essential commands only (default view for new users)."""
+    n = len(_load_registry())
     print("TokenPak — LLM Proxy with Context Compression\n")
     print("Essential Commands:\n")
     for cmd, desc in _ESSENTIAL_COMMANDS.items():
         print(f"  {cmd:<14} {desc}")
     print()
     print("Run `tokenpak help --more` for intermediate commands.")
-    print("Run `tokenpak help --all` for all 93 commands.")
+    print(f"Run `tokenpak help --all` for all {n} commands.")
     print("Run `tokenpak help <command>` for details on any command.")
 
 
 def print_intermediate_help() -> None:
     """Print essential + intermediate commands."""
+    n = len(_load_registry())
     print("TokenPak — LLM Proxy with Context Compression\n")
 
     print("Essential Commands:\n")
@@ -122,7 +124,7 @@ def print_intermediate_help() -> None:
         print(f"  {cmd:<14} {desc}")
     print()
 
-    print("Run `tokenpak help --all` for all 93 commands.")
+    print(f"Run `tokenpak help --all` for all {n} commands.")
     print("Run `tokenpak help <command>` for details on any command.")
 
 
