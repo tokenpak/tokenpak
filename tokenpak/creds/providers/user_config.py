@@ -83,6 +83,31 @@ def discover() -> list[Credential]:
     return creds
 
 
+def resolve(cred: Credential) -> "str | None":
+    """Re-read credentials.toml and return the secret for ``cred.id``.
+
+    We never cache the secret in memory — discovery returns a
+    :class:`Credential` without the value, and resolution happens on
+    demand. That way a ``creds remove`` is effective immediately.
+    """
+    if not CONFIG_PATH.exists():
+        return None
+    try:
+        data = tomllib.loads(CONFIG_PATH.read_text())
+    except Exception:
+        return None
+    entries = data.get("creds") or {}
+    if not isinstance(entries, dict):
+        return None
+    body = entries.get(cred.id) or {}
+    # Prefer kind-appropriate field, fall back to whichever is present.
+    if cred.kind == "oauth" or cred.kind == "bearer":
+        value = body.get("token") or body.get("key")
+    else:
+        value = body.get("key") or body.get("token")
+    return value if isinstance(value, str) and value else None
+
+
 def config_perms_ok() -> bool:
     """Return True iff credentials.toml has owner-only perms (or is absent).
 

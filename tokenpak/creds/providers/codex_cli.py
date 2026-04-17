@@ -45,6 +45,24 @@ def _decode_jwt_exp(jwt: str) -> "tuple[int | None, str | None]":
         return None, None
 
 
+def resolve(cred: Credential) -> "str | None":
+    """Return the current access_token from Codex's auth.json.
+
+    We re-read the file every call so token rotation (owned by Codex
+    CLI) is picked up without a cache. mtime-caching belongs in the
+    caller if needed.
+    """
+    path = Path(cred.secret_ref) if cred.secret_ref else _codex_home() / "auth.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    access = (data.get("tokens") or {}).get("access_token")
+    return access if isinstance(access, str) and access else None
+
+
 def discover() -> list[Credential]:
     auth_path = _codex_home() / "auth.json"
     if not auth_path.exists():

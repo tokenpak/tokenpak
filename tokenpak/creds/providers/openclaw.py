@@ -46,6 +46,28 @@ def _kind_from_profile(profile_type: str) -> str:
     return "api_key" if profile_type == "api_key" else "bearer"
 
 
+def resolve(cred: Credential) -> "str | None":
+    """Secret refs look like ``openclaw:<agent>:<profile_id>``."""
+    ref = cred.secret_ref or ""
+    if not ref.startswith("openclaw:"):
+        return None
+    _, agent, profile_id = ref.split(":", 2)
+    path = AGENTS_ROOT / agent / "agent" / "auth-profiles.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    profile = (data.get("profiles") or {}).get(profile_id) or {}
+    # Field name depends on type — accept whichever is present.
+    for field_name in ("access", "accessToken", "token", "key"):
+        value = profile.get(field_name)
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
 def discover() -> list[Credential]:
     if not AGENTS_ROOT.exists():
         return []

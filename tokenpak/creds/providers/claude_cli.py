@@ -18,6 +18,18 @@ PROVIDER_NAME = "claude-cli"
 CREDS_PATH = Path.home() / ".claude" / ".credentials.json"
 
 
+def resolve(cred: Credential) -> "str | None":
+    path = Path(cred.secret_ref) if cred.secret_ref else CREDS_PATH
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    token = (data.get("claudeAiOauth") or {}).get("accessToken")
+    return token if isinstance(token, str) and token else None
+
+
 def discover() -> list[Credential]:
     if not CREDS_PATH.exists():
         return []

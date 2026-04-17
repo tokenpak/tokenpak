@@ -103,6 +103,76 @@ def cmd_doctor(args) -> int:
     return 1 if errors else 0
 
 
+def cmd_route(args: list[str]) -> int:
+    """Dry-run the router: show which credential would serve a request.
+
+    Takes one positional: the destination host. Optional flags model
+    the caller identity and an explicit tag. No network calls, no
+    side effects.
+    """
+    from .router import RouteContext, select, AmbiguousRoute, NoRoute
+
+    if not args or args[0].startswith("-"):
+        print(
+            "usage: tokenpak creds route <dest-host> [--caller X] [--tag ID]",
+            file=sys.stderr,
+        )
+        return 2
+
+    dest = args[0]
+    kv = _parse_kv_flags(args[1:], known=("--caller", "--tag"))
+    if kv is None:
+        print("tokenpak creds route: bad flags (try --caller X --tag Y)", file=sys.stderr)
+        return 2
+
+    ctx = RouteContext(
+        destination_host=dest,
+        caller_identity=kv.get("--caller"),
+        explicit_tag=kv.get("--tag"),
+    )
+
+    try:
+        decision = select(ctx)
+    except AmbiguousRoute as exc:
+        print(f"[AMBIGUOUS] {exc}", file=sys.stderr)
+        return 1
+    except NoRoute as exc:
+        print(f"[NO ROUTE] {exc}", file=sys.stderr)
+        return 1
+
+    cred = decision.credential
+    print(
+        f"[{decision.layer.upper()}] {cred.id}  "
+        f"platform={cred.platform}  kind={cred.kind}  "
+        f"refresh={cred.refresh_owner}  source={cred.source}"
+    )
+    print(f"  reason: {decision.reason}")
+    return 0
+
+
+def cmd_test(args: list[str]) -> int:
+    """Live-verify one credential by making a cheap platform-specific call."""
+    from .tester import test
+
+    if not args or args[0].startswith("-"):
+        print("usage: tokenpak creds test <id>", file=sys.stderr)
+        return 2
+    cred_id = args[0]
+
+    creds = [c for c in discover_all() if c.id == cred_id]
+    if not creds:
+        print(f"tokenpak creds test: no credential named {cred_id!r}", file=sys.stderr)
+        return 1
+    cred = creds[0]
+
+    result = test(cred)
+    status_tag = "OK" if result.ok else ("SKIP" if not result.supported else "FAIL")
+    print(f"[{status_tag}] {cred.id} ({cred.platform})  {result.detail}")
+    if not result.supported:
+        return 0  # "no probe" isn't an error
+    return 0 if result.ok else 1
+
+
 def cmd_add(args: list[str]) -> int:
     """Add or replace a BYOK credential in ~/.tokenpak/credentials.toml.
 
@@ -273,9 +343,13 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_add(rest)
     if sub in ("remove", "rm"):
         return cmd_remove(rest)
+    if sub == "test":
+        return cmd_test(rest)
+    if sub == "route":
+        return cmd_route(rest)
 
     print(f"tokenpak creds: unknown subcommand {sub!r}", file=sys.stderr)
-    print("usage: tokenpak creds [list|doctor|add|remove]", file=sys.stderr)
+    print("usage: tokenpak creds [list|doctor|add|remove|test|route]", file=sys.stderr)
     return 2
 
 

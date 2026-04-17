@@ -2108,16 +2108,22 @@ def _build_creds_parser(sub):
         "creds",
         help="Discover credentials across platforms + doctor",
         description=(
-            "Inspect and manage credentials tokenpak can see from all registered\n"
-            "providers (Codex CLI, Claude CLI, env vars, ~/.tokenpak/credentials.toml,\n"
-            "OpenClaw agent profiles). Proxy routing changes in the next slice.\n\n"
+            "Inspect, manage, and dry-run-route credentials tokenpak can see from\n"
+            "all registered providers (Codex CLI, Claude CLI, env vars,\n"
+            "~/.tokenpak/credentials.toml, OpenClaw agent profiles).\n\n"
+            "Proxy fast-path integration still deferred — `creds route` is a\n"
+            "dry-run (what would I pick) with no side effects.\n\n"
             "Examples:\n"
-            "  tokenpak creds list                       # show all discovered credentials\n"
-            "  tokenpak creds doctor                     # detect expired, cohabitation, orphan-oauth\n"
-            "  tokenpak creds add                        # BYOK entry (interactive)\n"
-            "  tokenpak creds add --id openai-work \\\n"
-            "       --platform openai --kind api_key --key sk-...\n"
-            "  tokenpak creds remove openai-work"
+            "  tokenpak creds list                                  # show all\n"
+            "  tokenpak creds doctor                                # hazards\n"
+            "  tokenpak creds add                                   # BYOK (interactive)\n"
+            "  tokenpak creds add --id openai-work --platform openai \\\n"
+            "       --kind api_key --key sk-...\n"
+            "  tokenpak creds remove openai-work\n"
+            "  tokenpak creds test openai-work                      # cheap live probe\n"
+            "  tokenpak creds route api.anthropic.com               # what'd I pick?\n"
+            "  tokenpak creds route api.openai.com --caller openclaw:main:* \\\n"
+            "       --tag codex-personal"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

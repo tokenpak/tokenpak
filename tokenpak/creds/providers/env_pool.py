@@ -33,6 +33,22 @@ def _platform_from_prefix(prefix: str) -> str:
     return p or "unknown"
 
 
+def resolve(cred: Credential) -> "str | None":
+    """Secret refs look like ``VARNAME`` (single key) or ``VARNAME#N`` (pool index)."""
+    ref = cred.secret_ref or ""
+    if not ref:
+        return None
+    if "#" in ref:
+        var, _, idx_str = ref.partition("#")
+        value = os.environ.get(var, "")
+        keys = [k.strip() for k in value.split(",") if k.strip()]
+        try:
+            return keys[int(idx_str)]
+        except (IndexError, ValueError):
+            return None
+    return os.environ.get(ref) or None
+
+
 def discover() -> list[Credential]:
     creds: list[Credential] = []
     for var, value in os.environ.items():

@@ -55,3 +55,31 @@ def discover_all() -> list[Credential]:
 
     creds.sort(key=lambda c: (c.platform, c.provider, c.id))
     return creds
+
+
+def resolve_secret(cred: Credential) -> "str | None":
+    """Fetch the actual secret string for ``cred``.
+
+    Dispatches on ``cred.provider`` — each built-in provider module
+    exposes a module-level ``resolve(cred)`` function. Returns None
+    when the secret can't be read (file missing, env var unset, etc.)
+    rather than raising, so callers can report "credential not
+    resolvable" without a traceback in their logs.
+    """
+    from . import codex_cli, claude_cli, env_pool, user_config, openclaw
+
+    resolvers = {
+        codex_cli.PROVIDER_NAME: codex_cli.resolve,
+        claude_cli.PROVIDER_NAME: claude_cli.resolve,
+        env_pool.PROVIDER_NAME: env_pool.resolve,
+        user_config.PROVIDER_NAME: user_config.resolve,
+        openclaw.PROVIDER_NAME: openclaw.resolve,
+    }
+    resolver = resolvers.get(cred.provider)
+    if resolver is None:
+        return None
+    try:
+        return resolver(cred)
+    except Exception as exc:
+        log.warning("resolve failed for %s (%s): %s", cred.id, cred.provider, exc)
+        return None
