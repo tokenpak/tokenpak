@@ -3595,7 +3595,10 @@ def _build_user_template_parser(sub):
         help="Variable substitution (repeatable)",
     )
     p_use.set_defaults(func=cmd_template_use)
-    p_tmpl.set_defaults(func=lambda a: p_tmpl.print_help())
+    p_tmpl.set_defaults(func=_bare_help(
+        "template", "Manage local user prompt templates",
+        ["list", "add", "show", "remove", "use"],
+    ))
 
 
 # ── Version Control Commands ──────────────────────────────────────────────────
@@ -4113,7 +4116,7 @@ def _build_update_parser(sub):
 
 def _build_config_mgmt_parser(sub):
     p = sub.add_parser("config", help="Config management (sync, pull, validate)")
-    csub = p.add_subparsers(dest="config_cmd", required=True)
+    csub = p.add_subparsers(dest="config_cmd", required=False)
 
     # sync
     p_sync = csub.add_parser("sync", help="Sync config from canonical source")
@@ -4177,9 +4180,24 @@ def _build_config_mgmt_parser(sub):
         help="Print what would change without writing",
     )
     p_migrate.set_defaults(func=cmd_config_migrate)
+    p.set_defaults(func=_bare_help(
+        "config", "Manage configuration files",
+        ["sync", "pull", "validate", "show", "init", "path", "migrate"],
+        exit_nonzero=True,
+    ))
 
 
 # ── End Version Control Commands ──────────────────────────────────────────────
+
+
+def _bare_help(name, description, subs, exit_nonzero=False):
+    def _help(args):
+        print(f"tokenpak {name}: {description}")
+        print(f"Subcommands: {', '.join(subs)}")
+        print(f"\nRun 'tokenpak {name} <subcommand> --help' for details.")
+        if exit_nonzero:
+            sys.exit(1)
+    return _help
 
 
 def main():
@@ -4535,7 +4553,7 @@ def cmd_route_disable(args):
 
 def _build_route_parser(sub):
     p_route = sub.add_parser("route", help="Manage manual model routing rules")
-    rsub = p_route.add_subparsers(dest="route_cmd", required=True)
+    rsub = p_route.add_subparsers(dest="route_cmd", required=False)
 
     # Common --routes flag
     _routes_flag = dict(
@@ -4612,6 +4630,11 @@ def _build_route_parser(sub):
     p_dis.add_argument("id", help="Rule ID")
     p_dis.add_argument("--routes", default=None, help="Path to routes.yaml")
     p_dis.set_defaults(func=cmd_route_disable)
+    p_route.set_defaults(func=_bare_help(
+        "route", "Manage manual model routing rules",
+        ["list", "add", "remove", "test", "enable", "disable"],
+        exit_nonzero=True,
+    ))
 
 
 # ── Trigger commands ──────────────────────────────────────────────────────────
@@ -4855,7 +4878,7 @@ def cmd_trigger_hook(args):
 
 def _build_trigger_parser(sub):
     p_trig = sub.add_parser("trigger", help="Manage event triggers")
-    tsub = p_trig.add_subparsers(dest="trigger_cmd", required=True)
+    tsub = p_trig.add_subparsers(dest="trigger_cmd", required=False)
 
     p_list = tsub.add_parser("list", help="List all triggers")
     p_list.add_argument(
@@ -4918,6 +4941,11 @@ def _build_trigger_parser(sub):
     p_watch = tsub.add_parser("watch", help="Start file watcher for file:changed events")
     p_watch.add_argument("paths", nargs="*", help="Paths to watch (default: .)")
     p_watch.set_defaults(func=cmd_trigger_watch)
+    p_trig.set_defaults(func=_bare_help(
+        "trigger", "Manage event triggers",
+        ["list", "add", "remove", "test", "log", "daemon", "fire", "hook", "watch"],
+        exit_nonzero=True,
+    ))
 
 
 def cmd_trigger_watch(args):
@@ -5958,7 +5986,10 @@ def _build_agent_parser(sub):
 
     he = hsub.add_parser("expire", help="Expire stale handoffs")
     he.set_defaults(func=cmd_agent_handoff)
-    p_agent.set_defaults(func=lambda a: p_agent.print_help())
+    p_agent.set_defaults(func=_bare_help(
+        "agent", "Agent coordination (locks, registry, capabilities)",
+        ["lock", "unlock", "locks", "list", "register", "deregister", "heartbeat", "match", "prune", "handoff"],
+    ))
 
 
 # ── Replay commands ───────────────────────────────────────────────────────────
@@ -6275,7 +6306,10 @@ def _build_demo_parser(sub):
         "--runs", type=int, default=5, help="Repetitions per sample for timing (default: 5)"
     )
     p_rbench.set_defaults(func=cmd_recipe_benchmark)
-    p_recipe.set_defaults(func=lambda a: p_recipe.print_help())
+    p_recipe.set_defaults(func=_bare_help(
+        "recipe", "Custom recipe development tooling",
+        ["create", "validate", "test", "benchmark"],
+    ))
 
     # ── Demo ───────────────────────────────────────────────────────────────────
     p_demo = sub.add_parser("demo", help="Show OSS compression recipes and apply to sample input")
@@ -7138,7 +7172,10 @@ def _build_macro_parser(sub):
         "hook_name", help="Hook name (on_request, on_response, on_error, on_budget_alert)"
     )
     p_hook_install.set_defaults(func=cmd_macro_hooks)
-    p_macro.set_defaults(func=lambda a: p_macro.print_help())
+    p_macro.set_defaults(func=_bare_help(
+        "macro", "Premade macros, user-defined YAML macros, and script hooks",
+        ["list", "create", "run", "show", "delete", "install", "hooks"],
+    ))
 
 
 # ── Fingerprint commands ──────────────────────────────────────────────────────
