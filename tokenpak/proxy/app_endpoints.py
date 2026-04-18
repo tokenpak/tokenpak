@@ -141,6 +141,11 @@ def try_handle_get(handler: Any) -> bool:
         _handle_session_info_get(handler)
         return True
 
+    # ── /tpk/v1/models ─ known models from the registry ──────────────
+    if path == "/tpk/v1/models":
+        _handle_models_list(handler, qs)
+        return True
+
     _send_error(handler, 404, "not_found", f"unknown app endpoint: {path}")
     return True
 
@@ -614,6 +619,47 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
         "tokens_est": tokens_est,
         "content": content or "",
     })
+
+
+def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
+    """Return known models (seed + discovered + inferred via family rules).
+
+    Used by OpenClaw adapter + external tools to stay in sync with the
+    model registry. Query params:
+      ?provider=anthropic   filter to one provider (optional)
+    """
+    filter_provider = (qs.get("provider", [""])[0] or "").strip().lower()
+    try:
+        from tokenpak.models import get_registry
+        reg = get_registry()
+        models = reg.all_models()
+    except Exception as exc:
+        _send_error(handler, 500, "registry_unavailable", str(exc))
+        return
+
+    out = []
+    for m in models:
+        if filter_provider and (m.provider or "").lower() != filter_provider:
+            continue
+        out.append({
+            "id": m.model_id,
+            "provider": m.provider,
+            "tier": m.tier,
+            "input_per_mtok": m.input_per_mtok,
+            "output_per_mtok": m.output_per_mtok,
+            "cache_read_per_mtok": m.cache_read_per_mtok,
+            "cache_write_per_mtok": m.cache_write_per_mtok,
+            "source": m.source,
+            "aliases": list(m.aliases or []),
+        })
+    # Sort: seed first (canonical), then discovered, then inferred; then
+    # within group by id descending so the newest naming (e.g. opus-4-7)
+    # bubbles up ahead of older (-4-6).
+    _src_order = {"seed": 0, "discovered": 1, "inferred": 2}
+    out.sort(key=lambda m: (_src_order.get(m["source"], 9), -ord(m["id"][-1:] or "0")))
+    out.sort(key=lambda m: m["id"], reverse=True)
+    out.sort(key=lambda m: _src_order.get(m["source"], 9))
+    _send_json(handler, 200, {"count": len(out), "models": out})
 
 
 def _handle_session_info_get(handler: Any) -> None:
