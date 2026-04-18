@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TokenPak — local LLM proxy that cuts token spend 30–50%, zero config. Works with Claude Code, Cursor, Aider, and more.">
+  <title>TokenPak — Cut your LLM token spend by 30–50%, zero config</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+</head>
+<body>
+
+<header>
+  <nav>
+    <span class="logo">TokenPak</span>
+    <a href="#demo">Demo</a>
+    <a href="#install">Install</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/tokenpak/tokenpak/blob/main/docs/quickstart.md">Docs</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ── Hero ──────────────────────────────────────────── -->
+  <section id="hero">
+    <h1>Cut your LLM token spend by 30–50%, zero config</h1>
+    <p class="tagline">
+      TokenPak is a local proxy that compresses your LLM context before it hits the API —
+      fewer tokens, lower cost, same results. No code changes. No cloud. No credentials stored.
+    </p>
+    <a href="#install" class="cta-btn">pip install tokenpak</a>
+  </section>
+
+  <!-- ── 30-second demo ────────────────────────────────── -->
+  <section id="demo">
+    <h2>30-second demo</h2>
+<pre><code>pip install tokenpak
+tokenpak serve                          # start proxy at localhost:8766
+tokenpak integrate claude-code --apply  # wire Claude Code to the proxy</code></pre>
+<pre><code>✅ Applied: Updated ~/.claude/settings.json (2 changes).</code></pre>
+    <p>Verify it's working:</p>
+<pre><code>tokenpak demo</code></pre>
+<pre><code>┌──────────────────────────────────────────────────────┐
+│  TokenPak — Live Compression Demo                    │
+├──────────────────────────────────────────────────────┤
+│  Scenario              DevOps agent (config + logs)  │
+│  Savings drivers                      dedup + alias  │
+├──────────────────────────────────────────────────────┤
+│  Original                                747 tokens  │
+│  Compressed                              502 tokens  │
+│  Saved                          245 tokens  (32.8%)  │
+│  Cost saved (est.)                $0.00073 per call  │
+├──────────────────────────────────────────────────────┤
+│  Stages: dedup, alias, segmentize, directives        │
+└──────────────────────────────────────────────────────┘</code></pre>
+  </section>
+
+  <!-- ── Works with ────────────────────────────────────── -->
+  <section id="works-with">
+    <h2>Works with</h2>
+    <ul class="client-list">
+      <li>Claude Code</li>
+      <li>Cursor</li>
+      <li>Cline</li>
+      <li>Continue.dev</li>
+      <li>Aider</li>
+      <li>OpenAI SDK</li>
+      <li>Anthropic SDK</li>
+      <li>LiteLLM</li>
+      <li>Codex</li>
+    </ul>
+    <p style="margin-top:0.75rem; font-size:0.9rem; color:var(--muted);">
+      Run <code>tokenpak integrate</code> to see the full client list with per-client setup guides.
+    </p>
+  </section>
+
+  <!-- ── Install ───────────────────────────────────────── -->
+  <section id="install">
+    <h2>Install</h2>
+<pre><code>pip install tokenpak</code></pre>
+    <p>Requires Python 3.10+. No external dependencies for core functionality.</p>
+    <p>
+      → <a href="https://github.com/tokenpak/tokenpak/blob/main/docs/quickstart.md">docs/quickstart.md</a>
+      — virtual-env setup and per-client configuration<br>
+      → <a href="https://github.com/tokenpak/tokenpak/blob/main/docs/api-tpk-v1.md">docs/api-tpk-v1.md</a>
+      — API reference for <code>/tpk/v1</code>
+    </p>
+  </section>
+
+  <!-- ── What's included (Free) ────────────────────────── -->
+  <section id="included">
+    <h2>What's included (Free)</h2>
+    <ul class="features">
+      <li><strong>Context compression</strong> — 30–50% token reduction on real agent workloads, &lt;50ms latency</li>
+      <li><strong>Client integration</strong> — one command wires Claude Code, Cursor, Aider, and 6 other clients</li>
+      <li><strong>Model routing</strong> — send requests to the right model automatically, with fallback rules</li>
+      <li><strong>Cost tracking</strong> — per model, per session, per agent; local SQLite, zero cloud</li>
+      <li><strong>Vault indexing + semantic search</strong> — index your codebase; search without an LLM call</li>
+      <li><strong>CLI + proxy server</strong> — <code>tokenpak serve</code>, <code>tokenpak cost</code>, <code>tokenpak savings</code></li>
+      <li><strong>A/B testing and replay/debug</strong> — compare compression configs, replay past requests</li>
+      <li><strong>50 built-in compression recipes</strong> — YAML, fully customizable</li>
+    </ul>
+    <p style="margin-top:0.9rem; font-size:0.88rem; color:var(--muted);">
+      80%+ of operations cost zero tokens.
+    </p>
+  </section>
+
+  <!-- ── Pricing ────────────────────────────────────────── -->
+  <section id="pricing">
+    <h2>Pricing</h2>
+    <div class="pricing-cards">
+      <div class="pricing-card">
+        <h3>Free</h3>
+        <div class="price">$0</div>
+        <p>Proxy, vault, compression, dashboard. Everything above — no limits, no expiry.</p>
+      </div>
+      <div class="pricing-card">
+        <h3>Pro</h3>
+        <div class="price">TBD</div>
+        <p>Code/log/JSON compression, smart routing, session telemetry, trace + replay.</p>
+      </div>
+      <div class="pricing-card">
+        <h3>Team</h3>
+        <div class="price">TBD</div>
+        <p>Budget enforcement, OAuth, real-time stats API, shared vault, handoff system.</p>
+      </div>
+      <div class="pricing-card">
+        <h3>Enterprise</h3>
+        <div class="price">TBD</div>
+        <p>A/B testing, shadow mode, regression detection, FinOps + audit pages, DLP/PII.</p>
+      </div>
+    </div>
+    <p>
+      Pro/Team/Enterprise pricing is being finalized. → <a href="pricing.html">Full feature comparison</a><br>
+      Questions? <a href="mailto:hello@tokenpak.ai">hello@tokenpak.ai</a>
+    </p>
+  </section>
+
+  <!-- ── Support ────────────────────────────────────────── -->
+  <section id="support">
+    <h2>Support</h2>
+    <ul class="support-list">
+      <li>
+        <strong>Docs:</strong>
+        <a href="https://github.com/tokenpak/tokenpak/blob/main/docs/quickstart.md">quickstart</a>
+        ·
+        <a href="https://github.com/tokenpak/tokenpak/blob/main/docs/api-tpk-v1.md">API reference</a>
+      </li>
+      <li>
+        <strong>Issues:</strong>
+        <a href="https://github.com/tokenpak/tokenpak/issues">github.com/tokenpak/tokenpak/issues</a>
+      </li>
+      <li>
+        <strong>Discussions:</strong>
+        <a href="https://github.com/tokenpak/tokenpak/discussions">github.com/tokenpak/tokenpak/discussions</a>
+      </li>
+      <li>
+        <strong>Email:</strong>
+        <a href="mailto:hello@tokenpak.ai">hello@tokenpak.ai</a>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <div>
+    TokenPak — <a href="https://github.com/tokenpak/tokenpak/blob/main/LICENSE">MIT License</a>
+    — <a href="https://github.com/tokenpak/tokenpak">GitHub</a>
+    — <a href="https://pypi.org/project/tokenpak/">PyPI</a>
+  </div>
+</footer>
+
+</body>
+</html>

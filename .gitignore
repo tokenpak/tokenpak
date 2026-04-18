@@ -52,8 +52,8 @@ monitor.db
 .DS_Store
 *.icloud
 
-# Docs build
-site/
+# Docs build (mkdocs outputs to docs_site/ — see mkdocs.yml)
+docs_site/
 docs/_build/
 
 # Local state
