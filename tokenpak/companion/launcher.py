@@ -228,6 +228,23 @@ def _write_settings(config: CompanionConfig) -> str:
     if companion_glob not in allow:
         allow.append(companion_glob)
 
+    # Auto-add common workspace dirs to additionalDirectories when the
+    # user hasn't configured them. Applies to fleet hosts whose user-
+    # level ``~/.claude/settings.json`` is bare (e.g. ``{env: {...}}``
+    # only) — without this, workspace agents can't reach their vault
+    # checkout or OpenClaw state dir and every cycle trips the sandbox.
+    # Only adds dirs that actually exist on this host — no phantom paths.
+    add_dirs = permissions.setdefault("additionalDirectories", [])
+    for candidate in (
+        Path.home() / "vault",
+        Path.home() / ".openclaw",
+        Path.home() / ".openclaw-governor",
+    ):
+        if candidate.is_dir():
+            candidate_str = str(candidate)
+            if candidate_str not in add_dirs:
+                add_dirs.append(candidate_str)
+
     # Install pre-send hook — companion-owned for this launch context.
     # Replaces any existing UserPromptSubmit entry (companion hooks are
     # authoritative here; user-level hooks would conflict with budget
