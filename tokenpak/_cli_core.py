@@ -6222,60 +6222,148 @@ def _build_demo_parser(sub):
 
 
 def _run_compression_demo():
-    """Show live compression on a sample prompt with before/after token counts."""
-    from tokenpak.compression.engines.base import CompactionHints
-    from tokenpak.compression.engines.heuristic import HeuristicEngine
-    from tokenpak.telemetry.tokens import count_tokens
+    """Show live compression on a realistic DevOps agent conversation fixture."""
+    from tokenpak.compression.pipeline import CompressionPipeline
 
-    SAMPLE_PROMPT = """\
-You are a helpful assistant. Please help me understand the following documentation.
+    # Fixture: DevOps agent diagnosing a startup failure.
+    # Savings drivers: dedup (config file read twice), alias (long hostnames / paths 3+ times).
+    # Content is original, written for this demo — no third-party rights.
+    _CONFIG_YAML = (
+        "# /etc/myapp/config.yaml\n"
+        "database:\n"
+        "  host: postgres-primary.internal.company.com\n"
+        "  port: 5432\n"
+        "  name: myapp_production\n"
+        "  pool_size: 20\n"
+        "  connection_timeout: 30\n"
+        "cache:\n"
+        "  host: redis-cluster.internal.company.com\n"
+        "  port: 6379\n"
+        "  ttl: 3600\n"
+        "  max_connections: 50\n"
+        "logging:\n"
+        "  level: INFO\n"
+        "  file: /var/log/myapp/application.log\n"
+        "  max_size: 100MB\n"
+        "  rotate: daily\n"
+        "app:\n"
+        "  port: 8080\n"
+        "  workers: 4\n"
+        "  timeout: 60\n"
+        "  environment: production"
+    )
 
-The TokenPak library provides a comprehensive, all-inclusive solution for managing
-token budgets in large language model applications. It includes multiple compression
-strategies, various caching mechanisms, and detailed telemetry tools for monitoring
-usage and costs across all your API calls. The library has been carefully designed
-to be extremely easy to use out of the box while also providing powerful, advanced
-functionality for more sophisticated users who need fine-grained control.
+    _LOG_LINES = (
+        "2026-04-17 06:01:02 INFO  myapp v2.4.1 starting up\n"
+        "2026-04-17 06:01:02 INFO  Loading /etc/myapp/config.yaml\n"
+        "2026-04-17 06:01:02 INFO  Config loaded: database.host=postgres-primary.internal.company.com\n"
+        "2026-04-17 06:01:02 INFO  Config loaded: cache.host=redis-cluster.internal.company.com\n"
+        "2026-04-17 06:01:03 INFO  Connecting to postgres-primary.internal.company.com:5432\n"
+        "2026-04-17 06:01:03 ERROR Connection refused: postgres-primary.internal.company.com:5432\n"
+        "2026-04-17 06:01:03 ERROR DB init failed — pool_size=20 pool could not be established\n"
+        "2026-04-17 06:01:03 FATAL Startup aborted: see /var/log/myapp/application.log for details"
+    )
 
-By compressing content intelligently before it reaches the model, you can fit more
-relevant information into fewer tokens, which reduces API costs significantly and
-can improve response quality in many cases. The heuristic engine utilizes rule-based
-text processing techniques to remove redundant, repetitive, and low-signal content
-while carefully preserving the most important, critical information that the model
-actually needs in order to produce high-quality, accurate results every time.
+    MESSAGES = [
+        {
+            "role": "system",
+            "content": (
+                "You are a DevOps support agent for myapp. Diagnose and resolve startup failures.\n"
+                "When a service fails, always:\n"
+                "1. Read /etc/myapp/config.yaml for configuration\n"
+                "2. Check /var/log/myapp/application.log for errors\n"
+                "3. Verify connectivity to postgres-primary.internal.company.com\n"
+                "4. Verify connectivity to redis-cluster.internal.company.com\n"
+                "Never restart without identifying root cause first."
+            ),
+        },
+        {"role": "user", "content": "myapp failed to start this morning. Please diagnose."},
+        {
+            "role": "assistant",
+            "content": (
+                "I'll diagnose the startup failure. Reading /etc/myapp/config.yaml first.\n"
+                '<tool_call>read_file("/etc/myapp/config.yaml")</tool_call>'
+            ),
+        },
+        {"role": "tool", "content": _CONFIG_YAML},
+        {
+            "role": "assistant",
+            "content": (
+                "Config shows database.host=postgres-primary.internal.company.com and "
+                "cache.host=redis-cluster.internal.company.com. Now checking "
+                "/var/log/myapp/application.log.\n"
+                '<tool_call>read_file("/var/log/myapp/application.log", tail=50)</tool_call>'
+            ),
+        },
+        {"role": "tool", "content": _LOG_LINES},
+        {
+            "role": "assistant",
+            "content": (
+                "Root cause: /var/log/myapp/application.log shows connection refused to "
+                "postgres-primary.internal.company.com:5432. The config at "
+                "/etc/myapp/config.yaml looks correct. Check that the host is reachable "
+                "and port 5432 is open."
+            ),
+        },
+        {
+            "role": "user",
+            "content": "The host is reachable. Could the config be wrong? Please re-read /etc/myapp/config.yaml.",
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "Re-reading /etc/myapp/config.yaml to verify.\n"
+                '<tool_call>read_file("/etc/myapp/config.yaml")</tool_call>'
+            ),
+        },
+        {"role": "tool", "content": _CONFIG_YAML},  # second read → dedup
+        {
+            "role": "assistant",
+            "content": (
+                "/etc/myapp/config.yaml is unchanged. The connection_timeout is 30s and pool_size "
+                "is 20. If postgres-primary.internal.company.com is reachable, verify that port "
+                "5432 is not blocked and the myapp_production database exists. Also confirm "
+                "redis-cluster.internal.company.com is accessible — startup requires both."
+            ),
+        },
+    ]
 
-This approach is fully deterministic, meaning that for any given input you will
-always receive the same compressed output each and every single time you run it,
-regardless of when or how many times the compression is applied.
+    pipeline = CompressionPipeline(enable_instruction_table=False)
+    result = pipeline.run(MESSAGES)
 
-Question: How does TokenPak save tokens and money?"""
+    saved = result.tokens_saved
+    raw = result.tokens_raw
+    after = result.tokens_after
+    pct = result.savings_pct
 
-    engine = HeuristicEngine()
-    hints = CompactionHints(target_tokens=120)
-    compressed = engine.compact(SAMPLE_PROMPT, hints)
+    # Cost at Claude claude-sonnet-4-6 input list price ($3.00 / 1M tokens)
+    cost_per_token = 3.00 / 1_000_000
+    cost_saved = saved * cost_per_token
 
-    tokens_in = count_tokens(SAMPLE_PROMPT)
-    tokens_out = count_tokens(compressed)
-    savings_pct = (1 - tokens_out / tokens_in) * 100 if tokens_in > 0 else 0
-
-    # Estimate cost savings at gpt-4o rates ($2.50 / 1M input tokens)
-    cost_per_token = 2.50 / 1_000_000
-    cost_saved = (tokens_in - tokens_out) * cost_per_token
+    W = 56
+    def _row(label, value):
+        # W chars total: │(1) + 2 spaces + label + pad + value + 2 spaces + │(1) = W
+        pad = W - 6 - len(label) - len(value)
+        pad = max(pad, 1)
+        print(f"│  {label}{' ' * pad}{value}  │")
 
     print()
-    print("  TokenPak Compression Demo")
-    print("  " + "─" * 46)
+    print("┌" + "─" * (W - 2) + "┐")
+    _row("TokenPak — Live Compression Demo", "")
+    print("├" + "─" * (W - 2) + "┤")
+    _row("Scenario", "DevOps agent (config + logs)")
+    _row("Savings drivers", "dedup + alias")
+    print("├" + "─" * (W - 2) + "┤")
+    _row("Original", f"{raw:,} tokens")
+    _row("Compressed", f"{after:,} tokens")
+    _row("Saved", f"{saved:,} tokens  ({pct:.1f}%)")
+    _row("Cost saved (est.)", f"${cost_saved:.5f} per call")
+    print("├" + "─" * (W - 2) + "┤")
+    stages_str = ", ".join(result.stages_run)
+    print("│  Stages: " + stages_str + " " * (W - 12 - len(stages_str)) + "│")
+    print("└" + "─" * (W - 2) + "┘")
     print()
-    print(f"  Original prompt:    {tokens_in:,} tokens")
-    print(f"  Compressed:         {tokens_out:,} tokens")
-    print(f"  Savings:            {savings_pct:.0f}% fewer tokens")
-    print(f"  Cost saved (est.):  ${cost_saved:.4f} per call @ gpt-4o rates")
-    print()
-    print("  ── Compressed output (first 300 chars) ──────────────────────")
-    preview = compressed[:300].strip().replace("\n", "\n  ")
-    print(f"  {preview}{'...' if len(compressed) > 300 else ''}")
-    print()
-    print("  Try it with your own content:")
+    print("  Try it with your own traffic:")
     print("    tokenpak serve        → start the proxy (zero-config)")
     print("    tokenpak cost         → track your real savings")
     print("    tokenpak demo --list  → browse 50 built-in compression recipes")

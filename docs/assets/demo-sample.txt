@@ -1,0 +1,20 @@
+
+┌──────────────────────────────────────────────────────┐
+│  TokenPak — Live Compression Demo                    │
+├──────────────────────────────────────────────────────┤
+│  Scenario              DevOps agent (config + logs)  │
+│  Savings drivers                      dedup + alias  │
+├──────────────────────────────────────────────────────┤
+│  Original                                747 tokens  │
+│  Compressed                              502 tokens  │
+│  Saved                          245 tokens  (32.8%)  │
+│  Cost saved (est.)                $0.00073 per call  │
+├──────────────────────────────────────────────────────┤
+│  Stages: dedup, alias, segmentize, directives        │
+└──────────────────────────────────────────────────────┘
+
+  Try it with your own traffic:
+    tokenpak serve        → start the proxy (zero-config)
+    tokenpak cost         → track your real savings
+    tokenpak demo --list  → browse 50 built-in compression recipes
+

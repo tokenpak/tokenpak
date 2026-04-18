@@ -318,8 +318,27 @@ tokenpak savings [--days N]    # token savings summary (rolling window)
 
 ```bash
 tokenpak compress --file <file> # dry-run compression
-tokenpak demo [--verbose]      # see pipeline on real data
-tokenpak debug on              # capture raw/compressed pairs
+tokenpak demo                   # live savings demo (DevOps agent scenario, >30% savings)
+tokenpak demo --list            # browse 50 built-in compression recipes
+tokenpak debug on               # capture raw/compressed pairs
+```
+
+Sample output (`tokenpak demo`):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  TokenPak — Live Compression Demo                    │
+├──────────────────────────────────────────────────────┤
+│  Scenario              DevOps agent (config + logs)  │
+│  Savings drivers                      dedup + alias  │
+├──────────────────────────────────────────────────────┤
+│  Original                                747 tokens  │
+│  Compressed                              502 tokens  │
+│  Saved                          245 tokens  (32.8%)  │
+│  Cost saved (est.)                $0.00073 per call  │
+├──────────────────────────────────────────────────────┤
+│  Stages: dedup, alias, segmentize, directives        │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Vault & Indexing
