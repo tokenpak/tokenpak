@@ -330,6 +330,22 @@ def _print_quick_help():
     )
 
 
+def _fetch_proxy_uptime(timeout: float = 0.5) -> str:
+    try:
+        import urllib.request as _urlreq
+        proxy_base = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
+        with _urlreq.urlopen(f"{proxy_base}/health", timeout=timeout) as _r:
+            _hdata = json.loads(_r.read())
+        uptime_s = _hdata.get("uptime_seconds")
+        if uptime_s is not None:
+            h, rem = divmod(int(uptime_s), 3600)
+            m = rem // 60
+            return f"{h}h {m:02d}m" if h else f"{m}m"
+        return "unknown"
+    except Exception:
+        return "unknown"
+
+
 def _print_full_help():
     """Print the power-user grouped help output (tier-aware)."""
     try:
@@ -4183,8 +4199,10 @@ def main():
                 from tokenpak.cli.commands.menu import run_menu
                 run_menu()
             except Exception:
+                print(f"Uptime: {_fetch_proxy_uptime()}")
                 _print_quick_help()
         else:
+            print(f"Uptime: {_fetch_proxy_uptime()}")
             _print_quick_help()
         sys.exit(0)
 
