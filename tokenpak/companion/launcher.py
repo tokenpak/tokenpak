@@ -190,35 +190,61 @@ def _write_mcp_config(config: CompanionConfig) -> str:
 
 
 def _write_settings(config: CompanionConfig) -> str:
-    """Write the settings overlay with hook configuration and permissions."""
+    """Write the settings overlay with hook configuration and permissions.
+
+    Claude Code's ``--settings <file>`` argument replaces the user-level
+    settings at ``~/.claude/settings.json`` wholesale — it does NOT merge.
+    So a minimal overlay file strips everything the user carefully
+    configured: allowed directories, custom permissions, attribution
+    defaults, effort level, etc. In particular, workspace agents (Suki,
+    Cali, Trix) rely on ``permissions.additionalDirectories`` to reach
+    ``~/vault`` and ``~/.openclaw`` from their workspace CWD — without it
+    the Claude Code path sandbox blocks every read even with
+    ``--permission-mode bypassPermissions`` (bypass skips prompts, not
+    path checks).
+
+    Load the user's ``~/.claude/settings.json`` as the base and layer the
+    companion's MCP permission + pre-send hook on top. Falls back to a
+    minimal dict when the user has no global settings.
+    """
     # Use the bash hook for speed (~30ms vs ~400ms for Python hook).
     # The bash hook does file-size token estimation, budget gating, and
     # stderr output without spawning a Python interpreter on every prompt.
     hook_script = Path(__file__).parent / "hooks" / "pre_send.sh"
     hook_cmd = f"bash {hook_script}"
 
-    settings: dict = {
-        "permissions": {
-            "allow": [
-                "mcp__tokenpak-companion__*",
-            ]
-        },
-    }
+    settings: dict = {}
+    user_settings_path = Path.home() / ".claude" / "settings.json"
+    if user_settings_path.is_file():
+        try:
+            settings = json.loads(user_settings_path.read_text())
+        except Exception:
+            settings = {}
 
+    # Ensure permissions.allow includes the companion's MCP glob
+    permissions = settings.setdefault("permissions", {})
+    allow = permissions.setdefault("allow", [])
+    companion_glob = "mcp__tokenpak-companion__*"
+    if companion_glob not in allow:
+        allow.append(companion_glob)
+
+    # Install pre-send hook — companion-owned for this launch context.
+    # Replaces any existing UserPromptSubmit entry (companion hooks are
+    # authoritative here; user-level hooks would conflict with budget
+    # gating + journal write-through).
     if config.hooks_enabled:
-        settings["hooks"] = {
-            "UserPromptSubmit": [
-                {
-                    "matcher": "",
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": hook_cmd,
-                        }
-                    ],
-                }
-            ],
-        }
+        hooks = settings.setdefault("hooks", {})
+        hooks["UserPromptSubmit"] = [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": hook_cmd,
+                    }
+                ],
+            }
+        ]
 
     path = config.run_dir / "settings.json"
     path.write_text(json.dumps(settings, indent=2))
