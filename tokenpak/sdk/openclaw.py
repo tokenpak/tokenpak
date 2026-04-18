@@ -32,6 +32,43 @@ from tokenpak.sdk.base import TokenPakAdapter
 
 
 _SESSION_MAP_PATH = Path.home() / ".tokenpak" / "openclaw_sessions.json"
+
+
+def _find_claude_binary() -> Optional[str]:
+    """Locate the Claude Code CLI.
+
+    The tokenpak proxy runs under systemd user units whose PATH is often
+    ``/usr/bin:/bin`` — it does NOT include npm/pip-user install dirs.
+    Mirrors the discovery walk in
+    ``~/vault/06_RUNTIME/scripts/agent-claude-worker.sh`` so fleet hosts
+    stay consistent without per-host env tweaks.
+
+    Override: ``TOKENPAK_CLAUDE_BIN`` env var (absolute path) wins.
+    """
+    override = os.environ.get("TOKENPAK_CLAUDE_BIN", "").strip()
+    if override and Path(override).is_file() and os.access(override, os.X_OK):
+        return override
+
+    # Fleet-standard candidate dirs, in precedence order. Matches
+    # agent-claude-worker.sh's discover_bin() walk.
+    import shutil as _shutil
+    home = Path.home()
+    candidates = [
+        home / ".npm-global" / "bin" / "claude",
+        home / ".local" / "bin" / "claude",
+        Path("/usr/local/bin/claude"),
+        Path("/usr/bin/claude"),
+        home / "bin" / "claude",
+    ]
+    for p in candidates:
+        if p.is_file() and os.access(p, os.X_OK):
+            return str(p)
+
+    # Last resort: PATH lookup (honors whatever env systemd gave us)
+    found = _shutil.which("claude")
+    if found:
+        return found
+    return None
 _SESSION_MAP: Optional[dict] = None
 
 
@@ -113,7 +150,13 @@ def execute_via_claude_code(
 
     # Build the command — use `claude` directly (not `tokenpak claude`)
     # to avoid the companion launcher re-setting ANTHROPIC_BASE_URL to the proxy.
-    cmd = ["claude"]
+    claude_bin = _find_claude_binary()
+    if claude_bin is None:
+        return _error_response(
+            "claude binary not found — install Claude Code CLI or set "
+            "TOKENPAK_CLAUDE_BIN to its absolute path"
+        )
+    cmd = [claude_bin]
     cmd.extend(["--model", model])
 
     if is_new:
