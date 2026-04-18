@@ -724,6 +724,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
             self._proxy_to(route.full_url, "POST")
+        elif self.path.startswith("/codex/"):
+            # ChatGPT Codex subscription backend. OpenClaw's
+            # tokenpak-openai-codex provider posts to /codex/responses
+            # with a placeholder bearer; _proxy_to_inner injects the real
+            # JWT from ~/.codex/auth.json (see lines 1142-1160) and
+            # rewrites the upstream to chatgpt.com/backend-api.
+            self._proxy_to(f"https://chatgpt.com/backend-api{self.path}", "POST")
         else:
             self.send_error(404)
 

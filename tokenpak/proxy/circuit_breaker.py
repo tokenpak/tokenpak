@@ -569,6 +569,10 @@ class CircuitBreaker:
 _PROVIDER_PATTERNS: List[tuple] = [
     ("anthropic.com", "anthropic"),
     ("openai.com", "openai"),
+    # ChatGPT Codex subscription — OAuth JWT → chatgpt.com/backend-api.
+    # Maps to the same circuit-breaker + injection logic as openai so
+    # `_proxy_to_inner`'s codex block triggers on chatgpt.com target URLs.
+    ("chatgpt.com", "openai"),
     ("googleapis.com", "google"),
     ("generativelanguage", "google"),
     ("azure.com", "azure"),

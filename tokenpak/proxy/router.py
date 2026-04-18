@@ -178,6 +178,11 @@ class ProviderRouter:
         # Path-based detection (highest priority)
         if "/v1/messages" in path:
             return "anthropic"
+        if "/codex/responses" in path or "/v1/codex/responses" in path:
+            # ChatGPT Codex backend path (OpenClaw's tokenpak-openai-codex
+            # provider posts here). Proxy injects the JWT from
+            # ~/.codex/auth.json and rewrites to chatgpt.com/backend-api.
+            return "openai-codex"
         if "/v1/responses" in path:
             # OpenAI Responses API — used by Codex subscription models
             return "openai-codex"
