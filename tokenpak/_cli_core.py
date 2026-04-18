@@ -2338,6 +2338,11 @@ def _build_stub_parsers(sub):
         "--proxy-url", default=None,
         help="Proxy URL to query (default: $TOKENPAK_PROXY_URL or http://localhost:8766)",
     )
+    p_oc_refresh.add_argument(
+        "--config-path", default=None,
+        help="Target a specific openclaw.json (default: refresh every install "
+             "discovered on this host — main, governor, etc.)",
+    )
 
     p_oc_detect = oc_sub.add_parser(
         "detect",
@@ -2346,11 +2351,15 @@ def _build_stub_parsers(sub):
 
     def _openclaw_dispatch(args):
         import os as _os
+        from pathlib import Path as _Path
         sub_cmd = getattr(args, "openclaw_cmd", None)
         if sub_cmd == "detect":
-            from tokenpak.sdk.openclaw import detect_openclaw
-            if detect_openclaw():
-                print("✅ OpenClaw detected")
+            from tokenpak.sdk.openclaw import discover_openclaw_configs
+            configs = discover_openclaw_configs()
+            if configs:
+                print(f"✅ OpenClaw detected ({len(configs)} install{'s' if len(configs) != 1 else ''})")
+                for p in configs:
+                    print(f"  · {p}")
                 return 0
             print("✗ OpenClaw not installed on this host")
             return 1
@@ -2361,27 +2370,39 @@ def _build_stub_parsers(sub):
                 or _os.environ.get("TOKENPAK_PROXY_URL")
                 or "http://localhost:8766"
             )
-            result = setup_openclaw(proxy_url=proxy_url)
+            cp = getattr(args, "config_path", None)
+            kwargs = {"proxy_url": proxy_url}
+            if cp:
+                kwargs["config_path"] = _Path(cp).expanduser()
+            result = setup_openclaw(**kwargs)
             if "error" in result:
                 print(f"✖ {result['error']}")
                 return 1
-            src = result.get("models_source", "?")
-            added = result.get("providers_added", [])
-            updated = result.get("providers_updated", [])
-            cc = result.get("claude_code_backend", False)
+            configs = result.get("configs", [])
             print("")
             print(f"  TOKENPAK openclaw refresh-models")
             print("  " + "─" * 40)
             print(f"  Proxy         {proxy_url}")
-            print(f"  Models source {src}")
-            if added:
-                print(f"  Providers +   {', '.join(added)}")
-            if updated:
-                print(f"  Providers ~   {', '.join(updated)}")
-            if cc:
-                print(f"  Backend       tokenpak-claude-code enabled")
-            if not (added or updated):
-                print(f"  No changes — OpenClaw already in sync.")
+            print(f"  Installs      {len(configs)}")
+            print("")
+            for cfg in configs:
+                print(f"  {cfg.get('path', '?')}")
+                if cfg.get("error"):
+                    print(f"    ✖ {cfg['error']}")
+                    continue
+                src = cfg.get("models_source", "?")
+                added = cfg.get("providers_added", [])
+                updated = cfg.get("providers_updated", [])
+                cc = cfg.get("claude_code_backend", False)
+                print(f"    Models source {src}")
+                if added:
+                    print(f"    Providers +   {', '.join(added)}")
+                if updated:
+                    print(f"    Providers ~   {', '.join(updated)}")
+                if cc:
+                    print(f"    Backend       tokenpak-claude-code enabled")
+                if not (added or updated):
+                    print(f"    No changes — already in sync.")
             print("")
             return 0
         # Default: print help for openclaw

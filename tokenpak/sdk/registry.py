@@ -57,7 +57,7 @@ def setup_platform(platform: Optional[str] = None, **kwargs) -> dict:
     if p == "openclaw":
         from tokenpak.sdk.openclaw import detect_openclaw, setup_openclaw
         if not detect_openclaw():
-            return {"error": "OpenClaw not installed (~/.openclaw/ not found)"}
+            return {"error": "No OpenClaw install detected on this host"}
         return setup_openclaw(**kwargs)
 
     if p in ("claude_cli", "generic"):

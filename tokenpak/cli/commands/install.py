@@ -154,18 +154,24 @@ def _setup_openclaw_if_present(proxy_url: str) -> None:
         print(f"  OpenClaw setup error: {result['error']}")
         return
 
-    added = result.get("providers_added", [])
-    updated = result.get("providers_updated", [])
-    claude_code = result.get("claude_code_backend", False)
-
-    if added:
-        print(f"  Added providers: {', '.join(added)}")
-    if updated:
-        print(f"  Updated providers: {', '.join(updated)}")
-    if claude_code:
-        print(f"  Claude Code backend: enabled (tokenpak-claude-code)")
-    if not added and not updated:
-        print(f"  All providers up to date.")
+    configs = result.get("configs", [])
+    for cfg in configs:
+        path = cfg.get("path", "?")
+        if cfg.get("error"):
+            print(f"  {path}: {cfg['error']}")
+            continue
+        added = cfg.get("providers_added", [])
+        updated = cfg.get("providers_updated", [])
+        claude_code = cfg.get("claude_code_backend", False)
+        bits = []
+        if added:
+            bits.append(f"+{len(added)} ({', '.join(added)})")
+        if updated:
+            bits.append(f"~{len(updated)} ({', '.join(updated)})")
+        if claude_code:
+            bits.append("claude-code backend")
+        summary = "; ".join(bits) or "up to date"
+        print(f"  {path}: {summary}")
 
 
 __all__ = [

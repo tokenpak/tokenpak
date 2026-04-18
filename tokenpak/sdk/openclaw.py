@@ -273,7 +273,46 @@ class OpenClawAdapter(TokenPakAdapter):
 # Setup — configure openclaw.json to route through tokenpak
 # ═══════════════════════════════════════════════════════════════════════
 
-_OPENCLAW_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
+
+def discover_openclaw_configs() -> list[Path]:
+    """Find every openclaw.json on this host.
+
+    Precedence (highest first — each layer short-circuits if it produces
+    at least one valid path):
+
+      1. ``OPENCLAW_CONFIG_PATH`` env var (what systemd units set per
+         instance — e.g. ``/home/sue/.openclaw-governor/openclaw.json``
+         for the governor). Honored as a single-target override.
+      2. Glob ``$HOME/.openclaw*/openclaw.json`` — picks up ``main``,
+         ``governor``, and any future siblings without code changes.
+      3. Legacy singleton ``$HOME/.openclaw/openclaw.json`` — safety net
+         in case neither env var nor glob matched.
+
+    Returns an empty list when nothing exists (caller handles).
+    """
+    env_path = os.environ.get("OPENCLAW_CONFIG_PATH")
+    if env_path:
+        p = Path(env_path).expanduser()
+        if p.is_file():
+            return [p]
+        # Env var set but file missing — surface nothing, let caller report.
+        return []
+
+    home = Path.home()
+    hits: list[Path] = []
+    seen: set[Path] = set()
+    for p in sorted(home.glob(".openclaw*/openclaw.json")):
+        rp = p.resolve()
+        if rp in seen:
+            continue
+        seen.add(rp)
+        hits.append(p)
+
+    if hits:
+        return hits
+
+    legacy = home / ".openclaw" / "openclaw.json"
+    return [legacy] if legacy.is_file() else []
 
 
 def _fetch_models_from_proxy(
@@ -375,8 +414,8 @@ _PROVIDER_TEMPLATES: dict[str, dict] = {
 
 
 def detect_openclaw() -> bool:
-    """Check if OpenClaw is installed and has a config file."""
-    return _OPENCLAW_CONFIG_PATH.exists()
+    """True when at least one openclaw.json is present on this host."""
+    return bool(discover_openclaw_configs())
 
 
 def _build_claude_code_provider(
@@ -426,25 +465,25 @@ def _build_claude_code_provider(
         result["providers_added"].append(name)
 
 
-def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
-    """Configure openclaw.json to route through tokenpak.
+def _setup_single_openclaw(
+    config_path: Path, proxy_url: str,
+) -> dict[str, Any]:
+    """Configure a single openclaw.json. Returns a result dict.
 
-    Adds/updates tokenpak-* provider entries. Preserves all existing
-    non-tokenpak configuration. Idempotent — safe to run repeatedly.
-
-    Args:
-        proxy_url: TokenPak proxy URL (default: http://localhost:8766).
-
-    Returns:
-        Dict with setup results: providers_added, providers_updated,
-        claude_code_backend (bool).
+    Factored out of setup_openclaw() so the multi-config orchestrator
+    can iterate every discovered install.
     """
-    result = {"providers_added": [], "providers_updated": [], "claude_code_backend": False}
+    result: dict[str, Any] = {
+        "path": str(config_path),
+        "providers_added": [],
+        "providers_updated": [],
+        "claude_code_backend": False,
+    }
 
-    if not _OPENCLAW_CONFIG_PATH.exists():
-        return {"error": f"OpenClaw config not found at {_OPENCLAW_CONFIG_PATH}"}
+    if not config_path.exists():
+        return {**result, "error": f"OpenClaw config not found at {config_path}"}
 
-    config = json.loads(_OPENCLAW_CONFIG_PATH.read_text())
+    config = json.loads(config_path.read_text())
 
     # Ensure models.providers exists
     if "models" not in config:
@@ -508,7 +547,15 @@ def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
     if "order" not in auth:
         auth["order"] = {}
 
-    for name in _PROVIDER_TEMPLATES:
+    # Auth profile set = every tokenpak-* provider we just
+    # templated + the dynamically-built tokenpak-claude-code (when
+    # present). Keeping the list derived from `providers` avoids a
+    # hardcoded enum and honors the always-build-dynamic rule.
+    auth_targets = [n for n in _PROVIDER_TEMPLATES]
+    if "tokenpak-claude-code" in providers:
+        auth_targets.append("tokenpak-claude-code")
+
+    for name in auth_targets:
         profile_key = f"{name}:manual"
         if profile_key not in auth["profiles"]:
             auth["profiles"][profile_key] = {
@@ -523,12 +570,69 @@ def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
         result["claude_code_backend"] = True
 
     # Atomic write
-    import tempfile
-    tmp = _OPENCLAW_CONFIG_PATH.with_suffix(".json.tmp")
+    tmp = config_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(config, indent=2))
-    os.replace(tmp, _OPENCLAW_CONFIG_PATH)
+    os.replace(tmp, config_path)
 
     return result
 
 
-__all__ = ["OpenClawAdapter", "execute_via_claude_code", "detect_openclaw", "setup_openclaw"]
+def setup_openclaw(
+    proxy_url: str = "http://localhost:8766",
+    config_path: Optional[Path] = None,
+) -> dict[str, Any]:
+    """Configure OpenClaw to route through tokenpak.
+
+    Adds/updates tokenpak-* provider entries in every openclaw.json on
+    the host. Preserves all existing non-tokenpak configuration and is
+    idempotent — safe to run repeatedly.
+
+    Args:
+        proxy_url: TokenPak proxy URL (default: http://localhost:8766).
+        config_path: Optional explicit openclaw.json to target. When
+            None (the default), iterates every install returned by
+            ``discover_openclaw_configs()`` so sibling instances like
+            a governor at ``~/.openclaw-governor/`` stay in sync.
+
+    Returns:
+        {
+          "configs": [
+            {"path": str, "providers_added": [...], "providers_updated": [...],
+             "claude_code_backend": bool, "models_source": str},
+            ...
+          ],
+          "total_added": int,
+          "total_updated": int,
+        }
+        Per-config entries may carry an "error" key if that instance
+        couldn't be updated.
+    """
+    if config_path is not None:
+        targets = [Path(config_path).expanduser()]
+    else:
+        targets = discover_openclaw_configs()
+
+    if not targets:
+        return {"error": "No OpenClaw install detected on this host"}
+
+    per_config: list[dict[str, Any]] = [
+        _setup_single_openclaw(t, proxy_url) for t in targets
+    ]
+
+    total_added = sum(len(c.get("providers_added", [])) for c in per_config)
+    total_updated = sum(len(c.get("providers_updated", [])) for c in per_config)
+
+    return {
+        "configs": per_config,
+        "total_added": total_added,
+        "total_updated": total_updated,
+    }
+
+
+__all__ = [
+    "OpenClawAdapter",
+    "execute_via_claude_code",
+    "detect_openclaw",
+    "discover_openclaw_configs",
+    "setup_openclaw",
+]
