@@ -622,23 +622,68 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
 
 
 def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
-    """Return known models (seed + discovered + inferred via family rules).
+    """Return known models = seed catalog + observed-in-traffic (monitor.db).
+
+    Observed-in-traffic models get resolved via family-rule inference so
+    their pricing is accurate even if they're not in the seed catalog.
+    This is what lets `claude-opus-4-7` show up in the list despite
+    never being hand-added — we saw real requests for it, and family
+    rules know it's opus-tier.
 
     Used by OpenClaw adapter + external tools to stay in sync with the
-    model registry. Query params:
-      ?provider=anthropic   filter to one provider (optional)
+    living reality of what's actually being used.
+
+    Query params:
+      ?provider=anthropic         filter to one provider
+      ?include_observed=0         exclude the monitor.db augmentation
     """
     filter_provider = (qs.get("provider", [""])[0] or "").strip().lower()
+    include_observed = (qs.get("include_observed", ["1"])[0] or "1") != "0"
+
     try:
         from tokenpak.models import get_registry
         reg = get_registry()
-        models = reg.all_models()
+        registered = list(reg.all_models())
     except Exception as exc:
         _send_error(handler, 500, "registry_unavailable", str(exc))
         return
 
+    known_ids = {m.model_id for m in registered}
+
+    # Augment from monitor.db observed-in-traffic models (opus-4-7 et al)
+    observed_ids: list[str] = []
+    if include_observed:
+        try:
+            import sqlite3 as _sq
+            db_path = os.environ.get(
+                "TOKENPAK_DB",
+                os.path.expanduser("~/.tokenpak/monitor.db"),
+            )
+            if os.path.exists(db_path):
+                c = _sq.connect(db_path)
+                rows = c.execute(
+                    "SELECT DISTINCT model FROM requests "
+                    "WHERE model IS NOT NULL AND model != '' "
+                    "  AND timestamp >= datetime('now', '-30 days')"
+                ).fetchall()
+                c.close()
+                observed_ids = [r[0] for r in rows if r[0] and r[0] not in known_ids]
+        except Exception:
+            pass
+
+    # Resolve observed IDs via registry (family rules populate pricing)
+    observed_resolved = []
+    for mid in observed_ids:
+        try:
+            info = reg.resolve(mid)
+            observed_resolved.append(info)
+        except Exception:
+            continue
+
+    all_models = registered + observed_resolved
+
     out = []
-    for m in models:
+    for m in all_models:
         if filter_provider and (m.provider or "").lower() != filter_provider:
             continue
         out.append({
@@ -652,13 +697,10 @@ def _handle_models_list(handler: Any, qs: dict[str, list[str]]) -> None:
             "source": m.source,
             "aliases": list(m.aliases or []),
         })
-    # Sort: seed first (canonical), then discovered, then inferred; then
-    # within group by id descending so the newest naming (e.g. opus-4-7)
-    # bubbles up ahead of older (-4-6).
+
+    # Sort: by source (seed → discovered → inferred/observed), then id desc
     _src_order = {"seed": 0, "discovered": 1, "inferred": 2}
-    out.sort(key=lambda m: (_src_order.get(m["source"], 9), -ord(m["id"][-1:] or "0")))
-    out.sort(key=lambda m: m["id"], reverse=True)
-    out.sort(key=lambda m: _src_order.get(m["source"], 9))
+    out.sort(key=lambda m: (_src_order.get(m["source"], 9), m["id"]))
     _send_json(handler, 200, {"count": len(out), "models": out})
 
 

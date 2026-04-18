@@ -2306,6 +2306,74 @@ def _build_stub_parsers(sub):
 
     p_integrate.set_defaults(func=_integrate_dispatch)
 
+    # ── `openclaw` — manage OpenClaw adapter sync ─────────────────────────
+    p_openclaw = sub.add_parser(
+        "openclaw",
+        help="Manage OpenClaw integration (refresh model list, detect, setup)",
+    )
+    oc_sub = p_openclaw.add_subparsers(dest="openclaw_cmd")
+
+    p_oc_refresh = oc_sub.add_parser(
+        "refresh-models",
+        help="Re-sync OpenClaw providers.models from the live tokenpak registry "
+             "(picks up new models like opus-4-7 without editing config)",
+    )
+    p_oc_refresh.add_argument(
+        "--proxy-url", default=None,
+        help="Proxy URL to query (default: $TOKENPAK_PROXY_URL or http://localhost:8766)",
+    )
+
+    p_oc_detect = oc_sub.add_parser(
+        "detect",
+        help="Check whether OpenClaw is installed on this host",
+    )
+
+    def _openclaw_dispatch(args):
+        import os as _os
+        sub_cmd = getattr(args, "openclaw_cmd", None)
+        if sub_cmd == "detect":
+            from tokenpak.sdk.openclaw import detect_openclaw
+            if detect_openclaw():
+                print("✅ OpenClaw detected")
+                return 0
+            print("✗ OpenClaw not installed on this host")
+            return 1
+        if sub_cmd == "refresh-models":
+            from tokenpak.sdk.openclaw import setup_openclaw
+            proxy_url = (
+                getattr(args, "proxy_url", None)
+                or _os.environ.get("TOKENPAK_PROXY_URL")
+                or "http://localhost:8766"
+            )
+            result = setup_openclaw(proxy_url=proxy_url)
+            if "error" in result:
+                print(f"✖ {result['error']}")
+                return 1
+            src = result.get("models_source", "?")
+            added = result.get("providers_added", [])
+            updated = result.get("providers_updated", [])
+            cc = result.get("claude_code_backend", False)
+            print("")
+            print(f"  TOKENPAK openclaw refresh-models")
+            print("  " + "─" * 40)
+            print(f"  Proxy         {proxy_url}")
+            print(f"  Models source {src}")
+            if added:
+                print(f"  Providers +   {', '.join(added)}")
+            if updated:
+                print(f"  Providers ~   {', '.join(updated)}")
+            if cc:
+                print(f"  Backend       tokenpak-claude-code enabled")
+            if not (added or updated):
+                print(f"  No changes — OpenClaw already in sync.")
+            print("")
+            return 0
+        # Default: print help for openclaw
+        p_openclaw.print_help()
+        return 0
+
+    p_openclaw.set_defaults(func=_openclaw_dispatch)
+
 
 def build_parser():
     parser = argparse.ArgumentParser(
@@ -4145,6 +4213,7 @@ def main():
         "alerts",
         "watch",
         "integrate",
+        "openclaw",
         "savings",
         "usage",
         "preview",

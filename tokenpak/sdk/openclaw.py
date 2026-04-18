@@ -275,7 +275,72 @@ class OpenClawAdapter(TokenPakAdapter):
 
 _OPENCLAW_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 
-# Provider templates — what tokenpak adds to openclaw.json
+
+def _fetch_models_from_proxy(
+    proxy_url: str,
+    provider: str,
+) -> list[dict] | None:
+    """Query /tpk/v1/models?provider=<provider> for the living model list.
+
+    Returns a list of openclaw-shaped dicts ({id, name, cost}) or None
+    when the proxy isn't reachable (caller falls back to the static
+    template list).
+    """
+    try:
+        import urllib.request
+        url = proxy_url.rstrip("/") + f"/tpk/v1/models?provider={provider}"
+        with urllib.request.urlopen(url, timeout=3.0) as resp:
+            if resp.status != 200:
+                return None
+            import json as _json
+            data = _json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+    out: list[dict] = []
+    for m in data.get("models", []):
+        mid = m.get("id") or ""
+        if not mid:
+            continue
+        # Display name: humanize "claude-opus-4-7" -> "Opus 4.7" for anthropic
+        display = _humanize_model_name(mid, provider)
+        out.append({
+            "id": mid,
+            "name": display,
+            "cost": {
+                "input": float(m.get("input_per_mtok", 0) or 0),
+                "output": float(m.get("output_per_mtok", 0) or 0),
+                "cacheRead": float(m.get("cache_read_per_mtok", 0) or 0),
+                "cacheWrite": float(m.get("cache_write_per_mtok", 0) or 0),
+            },
+        })
+    # Reverse-alpha so the newest naming (opus-4-7) floats above older (opus-4-6)
+    out.sort(key=lambda m: m["id"], reverse=True)
+    return out
+
+
+def _humanize_model_name(model_id: str, provider: str) -> str:
+    """Convert 'claude-opus-4-7' → 'Opus 4.7', 'gemini-2.5-pro' → 'Gemini 2.5 Pro'."""
+    if provider == "anthropic":
+        # claude-opus-4-7 -> ["claude", "opus", "4", "7"] -> "Opus 4.7"
+        parts = model_id.replace("claude-", "").split("-")
+        if len(parts) >= 3 and parts[0] in ("opus", "sonnet", "haiku"):
+            tier = parts[0].title()
+            ver_parts = parts[1:]
+            # Handle dated versions like "4-5-20251022"
+            if len(ver_parts) > 2 and ver_parts[-1].isdigit() and len(ver_parts[-1]) == 8:
+                ver_parts = ver_parts[:-1]
+            return f"{tier} {'.'.join(ver_parts)}"
+    if provider == "google":
+        # gemini-2.5-pro -> "Gemini 2.5 Pro"
+        return " ".join(p.title() if not p[0:1].isdigit() else p for p in model_id.split("-"))
+    return model_id
+
+
+# Provider templates — static fallback when the proxy REST API is
+# unreachable. Dynamic path (_fetch_models_from_proxy) is preferred so
+# models Anthropic ships after this code was written (opus-4-7,
+# sonnet-4-7, etc.) auto-appear without a tokenpak release.
 _PROVIDER_TEMPLATES: dict[str, dict] = {
     "tokenpak-anthropic": {
         "baseUrl": "http://localhost:8766",
@@ -389,20 +454,40 @@ def setup_openclaw(proxy_url: str = "http://localhost:8766") -> dict[str, Any]:
 
     providers = config["models"]["providers"]
 
-    # Add new tokenpak providers from templates. For existing providers,
-    # only update baseUrl — never inject models (they may use a different
-    # API format like codex-responses vs chat-completions).
+    # Per-provider which "family" to query from /tpk/v1/models
+    _PROVIDER_FAMILY = {
+        "tokenpak-anthropic": "anthropic",
+        "tokenpak-gemini": "google",
+    }
+
+    # Add/update tokenpak providers. Prefer the proxy's live model list
+    # over the static template so newly-released models (opus-4-7, etc.)
+    # flow into the OpenClaw selector automatically.
     for name, template in _PROVIDER_TEMPLATES.items():
+        live_models = None
+        family = _PROVIDER_FAMILY.get(name)
+        if family:
+            live_models = _fetch_models_from_proxy(proxy_url, family)
+
+        models_to_use = live_models if live_models else template["models"]
+
         if name in providers:
-            # Existing provider — only update baseUrl to current proxy
+            # Existing provider — refresh baseUrl + sync models
             providers[name]["baseUrl"] = proxy_url
+            existing_ids = {m.get("id") for m in providers[name].get("models", [])}
+            new_ids = {m["id"] for m in models_to_use}
+            if existing_ids != new_ids:
+                providers[name]["models"] = models_to_use
             result["providers_updated"].append(name)
         else:
-            # New provider — add with template models
+            # New provider — add with live (or template fallback) models
             provider_data = dict(template)
             provider_data["baseUrl"] = proxy_url
+            provider_data["models"] = models_to_use
             providers[name] = provider_data
             result["providers_added"].append(name)
+
+    result["models_source"] = "live-proxy-registry" if live_models is not None else "static-template"
 
     # Also update baseUrl for any tokenpak-* providers NOT in templates
     # (user-created ones like tokenpak-ollama-redpc)
