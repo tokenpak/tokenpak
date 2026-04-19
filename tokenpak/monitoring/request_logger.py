@@ -54,6 +54,24 @@ _LEVEL_ORDER = {LEVEL_DEBUG: 0, LEVEL_INFO: 1, LEVEL_WARN: 2}
 
 
 # ---------------------------------------------------------------------------
+# cache_origin enum (Constitution §5.3, Glossary `cache_origin`)
+# ---------------------------------------------------------------------------
+# Every request record MUST carry a cache_origin value. Overclaiming is worse
+# than admitting uncertainty, so unclassified requests use "unknown".
+CACHE_ORIGIN_CLIENT = "client"    # Provider-side cache hit (e.g. Anthropic cache_control)
+CACHE_ORIGIN_PROXY = "proxy"      # TokenPak-local cache hit
+CACHE_ORIGIN_NONE = "none"        # No cache involved; live provider call
+CACHE_ORIGIN_UNKNOWN = "unknown"  # Caller did not classify; do NOT infer optimistically
+
+_CACHE_ORIGIN_VALUES = frozenset({
+    CACHE_ORIGIN_CLIENT,
+    CACHE_ORIGIN_PROXY,
+    CACHE_ORIGIN_NONE,
+    CACHE_ORIGIN_UNKNOWN,
+})
+
+
+# ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
 
@@ -112,6 +130,7 @@ class RequestLogRecord:
         "latency_ms",
         "model",
         "provider",
+        "cache_origin",
         "extra",
     )
 
@@ -131,6 +150,7 @@ class RequestLogRecord:
         latency_ms: float = 0.0,
         model: str = "",
         provider: str = "",
+        cache_origin: str = CACHE_ORIGIN_UNKNOWN,
         extra: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.request_id = request_id
@@ -146,6 +166,12 @@ class RequestLogRecord:
         self.latency_ms = latency_ms
         self.model = model
         self.provider = provider
+        if cache_origin not in _CACHE_ORIGIN_VALUES:
+            raise ValueError(
+                f"cache_origin={cache_origin!r} is not one of {sorted(_CACHE_ORIGIN_VALUES)}. "
+                "Unclassified requests must pass cache_origin='unknown'."
+            )
+        self.cache_origin = cache_origin
         self.extra = extra or {}
 
     def to_dict(self) -> Dict[str, Any]:
@@ -160,6 +186,7 @@ class RequestLogRecord:
             "response_status": self.response_status,
             "response_body_size": self.response_body_size,
             "latency_ms": round(self.latency_ms, 2),
+            "cache_origin": self.cache_origin,
         }
         if self.model:
             d["model"] = self.model
@@ -387,9 +414,16 @@ class RequestLogger:
         latency_ms: float = 0.0,
         model: str = "",
         provider: str = "",
+        cache_origin: str = CACHE_ORIGIN_UNKNOWN,
         extra: Optional[Dict[str, Any]] = None,
     ) -> RequestLogRecord:
-        """Build a RequestLogRecord with current timestamp."""
+        """Build a RequestLogRecord with current timestamp.
+
+        ``cache_origin`` defaults to ``"unknown"`` — per Constitution §5.3, every
+        record must carry a value, and unclassified calls must not be optimistically
+        labeled as a cache hit. Callers that can classify should pass the explicit
+        value (``CACHE_ORIGIN_CLIENT`` / ``CACHE_ORIGIN_PROXY`` / ``CACHE_ORIGIN_NONE``).
+        """
         level = LEVEL_WARN if response_status >= 400 else LEVEL_INFO
         return RequestLogRecord(
             request_id=request_id,
@@ -405,6 +439,7 @@ class RequestLogger:
             latency_ms=latency_ms,
             model=model,
             provider=provider,
+            cache_origin=cache_origin,
             extra=extra,
         )
 
@@ -421,7 +456,10 @@ class RequestLogger:
             pass
 
     def log_dict(self, level: str = LEVEL_INFO, **kwargs) -> None:
-        """Convenience: log an arbitrary dict (debug/info/warn)."""
+        """Convenience: log an arbitrary dict (debug/info/warn).
+
+        ``cache_origin`` may be passed as a kwarg; it defaults to ``"unknown"``.
+        """
         record = RequestLogRecord(
             request_id=kwargs.pop("request_id", str(uuid.uuid4())),
             timestamp=datetime.now(timezone.utc).isoformat(),
@@ -437,6 +475,7 @@ class RequestLogger:
                 ("latency_ms", 0.0),
                 ("model", ""),
                 ("provider", ""),
+                ("cache_origin", CACHE_ORIGIN_UNKNOWN),
             ]},
             extra=kwargs,
         )
