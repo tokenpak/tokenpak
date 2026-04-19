@@ -11,6 +11,8 @@ Every TokenPak release — major, minor, or patch — must clear every gate in t
 
 "Release" means: a version tagged in git or published to PyPI. Local / development builds are not subject to all gates but must pass A1–A3.
 
+> **Companion documents:** this doc defines *what* must pass. [`11-release-workflow-overview.md`](11-release-workflow-overview.md) and 12–19 define *how* to run the release such that the gates pass.
+
 ---
 
 ## 1. Gate Categories

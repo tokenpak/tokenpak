@@ -23,6 +23,22 @@ Standards are ordered deliberately. Earlier documents set the constitutional fra
 | 09 | [Audit Rubric](09-audit-rubric.md) | What the auditor checks, how it scores, severity definitions. |
 | 10 | [Release Quality Bar](10-release-quality-bar.md) | The gates a release must pass. |
 
+### Release workflow (11–19)
+
+Descend from 10. Together they describe how a TokenPak release actually gets shipped.
+
+| # | Document | What it governs |
+|---|---|---|
+| 11 | [Release Workflow Overview](11-release-workflow-overview.md) | The master document. Pipeline, roles, go/no-go rules, links to runbooks. |
+| 12 | [Environments and Promotion Rules](12-environments-and-promotion-rules.md) | Local → dev → RC → PyPI, plus containers. Promotion criteria and drift policy. |
+| 13 | [Staging Validation Checklist](13-staging-validation-checklist.md) | The evidence-backed gate between RC and production. |
+| 14 | [Production Deployment Runbook](14-production-deployment-runbook.md) | Step-by-step SOP for tag → PyPI → GitHub release. |
+| 15 | [Post-Deploy Validation](15-post-deploy-validation.md) | Is the release actually healthy in production? |
+| 16 | [Rollback and Recovery Runbook](16-rollback-and-recovery-runbook.md) | Supersede vs yank; decision authority; exact commands. |
+| 17 | [Hotfix Workflow](17-hotfix-workflow.md) | The shortcut path for urgent fixes, and what it doesn't let you skip. |
+| 18 | [Release Communication Template](18-release-communication-template.md) | Pre-release, success, rollback, escalation, summary. |
+| 19 | [Release Log Template](19-release-log-template.md) | The audit trail, one file per release, kept forever. |
+
 ## Templates
 
 Canonical examples live in [`templates/`](templates/). Follow the template, then deviate only with justification.
@@ -44,7 +60,7 @@ Canonical examples live in [`templates/`](templates/). Follow the template, then
 
 **Running an audit:** [09-audit-rubric.md](09-audit-rubric.md) is the agent's prompt. The agent evaluates current TokenPak against 00–08 and produces a scored report.
 
-**Shipping a release:** [10-release-quality-bar.md](10-release-quality-bar.md) lists the gates. All must pass.
+**Shipping a release:** start at [11-release-workflow-overview.md](11-release-workflow-overview.md); it links to [10](10-release-quality-bar.md) for the gates and 12–19 for the runbooks.
 
 ## Status
 
