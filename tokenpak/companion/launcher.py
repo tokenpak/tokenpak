@@ -207,11 +207,21 @@ def _write_settings(config: CompanionConfig) -> str:
     companion's MCP permission + pre-send hook on top. Falls back to a
     minimal dict when the user has no global settings.
     """
-    # Use the bash hook for speed (~30ms vs ~400ms for Python hook).
-    # The bash hook does file-size token estimation, budget gating, and
-    # stderr output without spawning a Python interpreter on every prompt.
-    hook_script = Path(__file__).parent / "hooks" / "pre_send.sh"
-    hook_cmd = f"bash {hook_script}"
+    # Prefer the bash hook (~30ms) when available; fall back to the
+    # Python hook (~400ms) when only the .py is installed. When neither
+    # exists, hook_cmd stays None and the UserPromptSubmit entry is
+    # skipped below — avoids the 2026-04-18 regression where Claude Code
+    # logged "bash: ...: No such file or directory" on every prompt
+    # after the .sh file was stripped from a host.
+    hooks_dir = Path(__file__).parent / "hooks"
+    hook_sh = hooks_dir / "pre_send.sh"
+    hook_py = hooks_dir / "pre_send.py"
+    if hook_sh.is_file():
+        hook_cmd = f"bash {hook_sh}"
+    elif hook_py.is_file():
+        hook_cmd = f"python3 {hook_py}"
+    else:
+        hook_cmd = None
 
     settings: dict = {}
     user_settings_path = Path.home() / ".claude" / "settings.json"
@@ -249,7 +259,7 @@ def _write_settings(config: CompanionConfig) -> str:
     # Replaces any existing UserPromptSubmit entry (companion hooks are
     # authoritative here; user-level hooks would conflict with budget
     # gating + journal write-through).
-    if config.hooks_enabled:
+    if config.hooks_enabled and hook_cmd is not None:
         hooks = settings.setdefault("hooks", {})
         hooks["UserPromptSubmit"] = [
             {
