@@ -1,0 +1,205 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenpak"
+dynamic = ["version"]
+# version sourced from tokenpak/__init__.py via [tool.setuptools.dynamic]
+description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+]
+maintainers = [
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+]
+keywords = [
+    "llm",
+    "ai",
+    "proxy",
+    "token-optimization",
+    "openai",
+    "anthropic",
+    "compression",
+    "context",
+    "context-window",
+    "tokens",
+    "cost-tracking",
+    "routing",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.9.0",
+    "pyyaml>=6.0",
+    "click>=8.1.0",
+    "starlette>=0.36.0",
+    "uvicorn>=0.27.0",
+    "httpx>=0.26.0",
+    "h2>=3,<5",
+    "requests>=2.28.0",
+    "watchdog>=3.0.0",
+    "cryptography>=41.0.0",
+    "urllib3>=2.0.0",
+]
+
+[project.license]
+file = "LICENSE"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.12.0",
+    "black>=24.0.0",
+    "ruff>=0.2.0",
+]
+tokens = [
+    "tiktoken>=0.5.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+]
+otel = [
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
+]
+crewai = [
+    "crewai>=0.1.0",
+]
+autogen = [
+    "pyautogen>=0.2.0",
+]
+llamaindex = [
+    "llama-index-core>=0.10.0",
+]
+serve = [
+    "uvicorn>=0.27.0",
+    "starlette>=0.36.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+]
+telemetry = [
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "flask>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/tokenpak/tokenpak"
+Documentation = "https://github.com/tokenpak/tokenpak/blob/main/README.md"
+"Bug Reports" = "https://github.com/tokenpak/tokenpak/issues"
+"Source Code" = "https://github.com/tokenpak/tokenpak"
+Changelog = "https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md"
+
+[project.scripts]
+tokenpak = "tokenpak.cli:main"
+tokenpak-main = "tokenpak.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = [
+    ".",
+]
+include = [
+    "tokenpak*",
+]
+
+[tool.setuptools.package-data]
+tokenpak = [
+    "py.typed",
+    "recipes_oss/*.yaml",
+    "routing/model_tiers.json",
+    "config/schema.json",
+    "state_schema.json",
+    "models/data/*.json",
+    "telemetry/data/*.json",
+    "dashboard/templates/**/*",
+    "telemetry/dashboard/static/**/*",
+    "telemetry/dashboard/templates/**/*",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "tokenpak.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+python_files = [
+    "test_*.py",
+]
+norecursedirs = [
+    "tests/archive",
+    ".git",
+    "__pycache__",
+    "*.egg-info",
+    "dist",
+    "build",
+]
+markers = [
+    "quick: fast subset for CI and audit checks (<30s) — no live proxy or network",
+    "integration: integration tests requiring external services or running proxy",
+    "chaos: fault injection and chaos tests",
+    "slow: tests that take longer than 5 seconds",
+    "flaky: tests that may fail intermittently — run with --reruns",
+    "needs_proxy: test requires a running tokenpak proxy (starts ProxyServer or subprocess)",
+    "needs_webhook: test requires a live external API or webhook endpoint (e.g. ANTHROPIC_API_KEY)",
+    "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
+]
+timeout = 30
+
+[tool.black]
+line-length = 100
+target-version = [
+    "py310",
+    "py311",
+    "py312",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+]
+ignore = [
+    "E501",
+    "E701",
+    "E702",
+    "E402",
+    "E741",
+    "F841",
+]
+
+[tool.mypy]
+ignore_missing_imports = true

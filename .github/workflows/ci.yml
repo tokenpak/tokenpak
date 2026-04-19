@@ -1,0 +1,163 @@
+name: CI — Lint & Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'tokenpak/**'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
+      - 'pyproject.toml'
+      - 'docs/cli-reference.md'
+      - 'scripts/generate-cli-docs.py'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'tokenpak/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'docs/cli-reference.md'
+      - 'scripts/generate-cli-docs.py'
+  workflow_dispatch:
+
+jobs:
+  cli-docs-check:
+    name: CLI Docs Up-to-date
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check CLI docs are current
+        run: bash scripts/check-cli-docs.sh
+
+  docs-audit:
+    name: Doc Audit (soft warning)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run doc audit script
+        continue-on-error: true
+        run: bash scripts/audit-docs.sh
+
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Lint with Ruff
+        run: |
+          ruff check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            -m "not integration and not chaos and not slow" \
+            --junitxml=reports/test-results-py${{ matrix.python-version }}.xml \
+            --cov=tokenpak \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      - name: Run Phase 2 coverage tests (Tier-1 modules)
+        if: matrix.python-version == '3.11'
+        run: |
+          python -m pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
+            -v --tb=short \
+            --junitxml=reports/test-results-phase2-py${{ matrix.python-version }}.xml \
+            --cov=tokenpak.core.validation \
+            --cov=tokenpak.core.error_handling \
+            --cov=tokenpak.cache \
+            --cov-report=xml:coverage-tier1.xml \
+            --cov-report=term-missing \
+            -o addopts=""
+
+      - name: Check Tier-1 coverage gate (minimum 50%)
+        if: matrix.python-version == '3.11'
+        run: |
+          # Run pytest-cov on Tier-1 modules only, then enforce gate
+          pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
+            --cov=tokenpak.core.validation \
+            --cov=tokenpak.core.error_handling \
+            --cov=tokenpak.cache \
+            --cov-report=term-missing \
+            -q --tb=no
+          python -m coverage report \
+            --include='*/tokenpak/core/validation*,*/tokenpak/core/error_handling*,*/tokenpak/cache*' \
+            --fail-under=50 || {
+            echo "::error::Tier-1 coverage below 50% — Phase 2 coverage gate FAILED"
+            exit 1
+          }
+
+      - name: Check overall coverage (minimum 45%)
+        if: matrix.python-version == '3.11'
+        run: |
+          python -m coverage report --fail-under=45 || {
+            echo "::warning::Overall coverage below 45% baseline — monitoring (non-blocking)"
+            exit 0
+          }
+
+      - name: Upload coverage (Tier-1)
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          files: ./coverage.xml,./coverage-tier1.xml
+          fail_ci_if_error: false
+          flags: phase2-coverage
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: reports/test-results-py${{ matrix.python-version }}.xml
+          retention-days: 30
+
+      - name: Upload Phase 2 test results
+        if: always() && matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-phase2-py${{ matrix.python-version }}
+          path: reports/test-results-phase2-py${{ matrix.python-version }}.xml
+          retention-days: 30

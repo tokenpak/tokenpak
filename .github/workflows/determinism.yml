@@ -1,0 +1,47 @@
+name: Determinism Tests
+
+# Enforce 100% deterministic compilation:
+# Same input must always produce identical output.
+# Runs 3× in parallel to surface flaky non-determinism.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  determinism:
+    name: Determinism run ${{ matrix.run }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # let all 3 runs finish so we see all failures
+      matrix:
+        run: [1, 2, 3]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" || pip install -e . && pip install pytest
+
+      - name: Run determinism tests (run ${{ matrix.run }})
+        run: |
+          pytest tests/determinism/ -v --tb=long \
+            --junit-xml=test-results/determinism-run-${{ matrix.run }}.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-run-${{ matrix.run }}
+          path: test-results/

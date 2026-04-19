@@ -1,0 +1,20 @@
+# TokenPak Code Owners
+# These owners will be automatically requested for review on PRs.
+
+# Default owner for everything
+* @kaywhy331
+
+# Core proxy engine
+/tokenpak/proxy/ @kaywhy331
+/tokenpak/core/ @kaywhy331
+
+# Configuration and schemas
+/schemas/ @kaywhy331
+/tokenpak/config/ @kaywhy331
+
+# CI/CD
+/.github/workflows/ @kaywhy331
+
+# Documentation
+/docs/ @kaywhy331
+/*.md @kaywhy331
