@@ -39,11 +39,12 @@ TokenPak is a pip-distributed local tool plus optional container images. "Enviro
 |---|---|---|---|
 | **local** | Your dev checkout | You | `pip install -e .` |
 | **dev / CI** | The CI-tested tip of `main` | Contributors | CI matrix |
+| **development mirror** *(project-specific)* | A private git repository that holds the work-in-progress trunk. Daily commits land here; the public repo receives only release commits. See `21 §9` for projects that adopt this pattern. | Maintainers | (git, not a user-facing install channel) |
 | **staging / RC** | A release candidate built from a `rc*` tag, published to [Test PyPI](https://test.pypi.org) | Release reviewers | `pip install -i https://test.pypi.org/simple/ tokenpak==X.Y.ZrcN` |
 | **production** | A tagged release on [PyPI](https://pypi.org/project/tokenpak/) | All users | `pip install tokenpak==X.Y.Z` |
 | **container** (optional) | Container images corresponding to the tag, published to a registry referenced by `deployments/` | Users self-hosting | `docker pull …` / `kubectl apply -f deployments/k8s/` |
 
-Details + promotion rules: [`12-environments-and-promotion-rules.md`](12-environments-and-promotion-rules.md).
+Details + promotion rules: [`12-environments-and-promotion-rules.md`](12-environments-and-promotion-rules.md). The **development mirror** is optional — projects that do not use a second git remote treat it as a no-op and skip the corresponding promotion step in `14 §4` preconditions.
 
 ## 4. Roles and Ownership
 

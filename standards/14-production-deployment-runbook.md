@@ -41,6 +41,7 @@ Every one of these must be true before starting §6. Check them in order; stop i
 - [ ] A reviewer named in the release log is available for the next hour.
 - [ ] Credentials — PyPI token, container registry token — are present in the environment this runbook runs in (see §7 Secrets).
 - [ ] You are on the `main` branch, up to date with `github/main`, no uncommitted changes.
+- [ ] **If the project uses a development mirror (12 §1.6):** the staging→production promotion per `21 §9.4` is complete. Public `main` HEAD is the release commit authored by `TokenPak <hello@tokenpak.ai>`; the `vX.Y.Z` tag has already been pushed to `github`. The §6.1 tag step below is *already done* under this model and must be skipped (attempting to re-tag will fail). Otherwise: §6.1 runs as written.
 
 ## 5. Release artifact verification
 
@@ -80,6 +81,16 @@ All four smoke outputs must match expectations. If any does not, stop and consul
 Run these in order. Do not reorder. Do not improvise.
 
 ### 6.1 Tag the release
+
+**Skip this step if the project uses the development mirror model** (`12 §1.6`, `21 §9`). Under that model the tag is pushed as the final step of the promotion sequence (`21 §9.4` step 5), so by the time §4 preconditions pass the tag already exists on `github`. Verify with:
+
+```bash
+git ls-remote --tags github | grep -E "refs/tags/vX.Y.Z$"   # must match
+```
+
+and move to §6.2.
+
+**Otherwise** (single-repo projects):
 
 ```bash
 git tag -a vX.Y.Z -m "tokenpak X.Y.Z"

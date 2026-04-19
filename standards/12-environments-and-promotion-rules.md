@@ -55,18 +55,29 @@ TokenPak is a local tool. "Environment" means **release channel** — where a pa
 - **Allowed to:** Be referenced from the self-hosting READMEs in `deployments/`.
 - **Not allowed to:** Diverge in version from PyPI. Skip a PyPI release.
 
+### 1.6 Development mirror (optional, project-specific)
+
+- **What:** A private git repository that holds the continuously-integrated work-in-progress trunk. The public git repo receives only release commits. See `21 §9` for the full specification.
+- **Source of truth:** Its own `main` branch. Diverges from the public repo's `main` between releases by design; reconverges at each release via the `21 §9.4` promotion sequence.
+- **Allowed to:** Accept continuous development pushes. Host CI workflows (`.github/workflows/`). Carry fleet/internal commit identities. Accept force-pushes.
+- **Not allowed to:** Be referenced from user-facing docs. Contain PyPI artifacts. Serve as an install channel for anyone outside the maintainer group.
+
+Projects that do not adopt this pattern treat every reference to the development mirror as a no-op — the remaining four channels (Local, Dev/CI, Staging/RC, Production) work the same way.
+
 ## 2. Allowed Actions Per Channel
 
-| Action | local | dev/CI | staging/RC | production |
-|---|---|---|---|---|
-| Install from checkout | ✓ | — | — | — |
-| Install from Test PyPI | — | — | ✓ | — |
-| Install from PyPI | — | — | — | ✓ |
-| Run against real provider credentials | ✓ (your own) | ✗ (CI secrets only) | ✓ (validation creds) | ✓ (user creds) |
-| Modify monitor DB / state | ✓ | ✓ (test only) | ✓ (validation only) | ✓ (user's own) |
-| Publish a PyPI artifact | ✗ | ✗ | ✗ (Test PyPI only) | ✓ |
-| Push a tag | ✗ | ✗ | ✓ (rc tag) | ✓ (release tag) |
-| Be referenced from README | ✗ | ✗ | ✗ | ✓ |
+| Action | local | dev/CI | dev mirror | staging/RC | production |
+|---|---|---|---|---|---|
+| Install from checkout | ✓ | — | — | — | — |
+| Install from Test PyPI | — | — | — | ✓ | — |
+| Install from PyPI | — | — | — | — | ✓ |
+| Run against real provider credentials | ✓ (your own) | ✗ (CI secrets only) | ✓ (maintainer creds) | ✓ (validation creds) | ✓ (user creds) |
+| Modify monitor DB / state | ✓ | ✓ (test only) | ✓ (maintainer only) | ✓ (validation only) | ✓ (user's own) |
+| Publish a PyPI artifact | ✗ | ✗ | ✗ | ✗ (Test PyPI only) | ✓ |
+| Push a tag | ✗ | ✗ | ✓ (dev tags only) | ✓ (rc tag) | ✓ (release tag) |
+| Accept force-push | ✓ (local branches only) | ✗ (CI is read-only) | ✓ | ✗ | ✗ |
+| Carry fleet / internal commit identities | ✓ | ✗ | ✓ | ✗ | ✗ |
+| Be referenced from README | ✗ | ✗ | ✗ | ✗ | ✓ |
 
 ## 3. Promotion Criteria
 
@@ -96,11 +107,15 @@ Promotion to staging/RC requires:
 
 Go / no-go per `11 §7`. All answers yes. Then:
 
-- Tag: `git tag vX.Y.Z -m "…"`; `git push --tags`.
-- Build: `python -m build`.
-- Publish: `twine upload dist/*`.
-- Verify with a clean-venv install from real PyPI.
-- Post-deploy validation (`15`) starts.
+- **If the project uses a development mirror (`§1.6`):** first run the staging→production promotion per `21 §9.4`. That sequence produces a single release commit on the public `main` under the `TokenPak <hello@tokenpak.ai>` identity and pushes the tag. The steps below are then absorbed by §9.4 and must not be run a second time.
+- **If the project does not use a development mirror:** the traditional flow applies:
+  - Tag: `git tag vX.Y.Z -m "…"`; `git push --tags`.
+  - Build: `python -m build`.
+  - Publish: `twine upload dist/*`.
+  - Verify with a clean-venv install from real PyPI.
+  - Post-deploy validation (`15`) starts.
+
+In both cases the artifact promoted to PyPI is built from the `vX.Y.Z` tag and not from a branch head.
 
 ### 3.4 production → containers
 
