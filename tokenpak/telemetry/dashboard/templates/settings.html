@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Configure preferences, alerts, and system settings{% endblock %}
+{% block htmx_target %}settings{% endblock %}
+
+{% block content %}
+<div id="tp-settings-app" class="tp-settings-app">
+  <!-- Settings UI injected by settings-ui.js -->
+</div>
+{% endblock %}
+{lock scripts 
+{% block scripts %}
+<script src="/dashboard/static/js/settings-ui.js" defer></script>
+{% endblock %}

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TokenPak{% endblock %} — Telemetry Dashboard</title>
+  <link rel="stylesheet" href="/dashboard/static/css/design-tokens.css">
+  <link rel="stylesheet" href="/dashboard/static/css/components.css">
+  <link rel="stylesheet" href="/dashboard/static/css/layout-shell.css">
+  <link rel="stylesheet" href="/dashboard/static/css/dashboard.css">
+  <script src="/dashboard/static/js/htmx.min.js" defer></script>
+  <script src="/dashboard/static/js/chart.umd.min.js" defer></script>
+  <script src="/dashboard/static/js/drawer.js" defer></script>
+  <script src="/dashboard/static/js/toast.js" defer></script>
+</head>
+<body>
+<div class="dashboard-shell">
+  
+  <!-- Zone 1: Top Navigation Bar -->
+  <nav class="nav-bar">
+    <div class="nav-left">
+      <a href="/dashboard/" class="nav-logo">
+        <span class="nav-logo-icon">⚡</span>
+        <span>TokenPak</span>
+      </a>
+      <div class="nav-tabs">
+        <a href="/dashboard/finops" class="nav-tab {% if view == 'finops' %}active{% endif %}">
+          FinOps
+        </a>
+        <a href="/dashboard/engineering" class="nav-tab {% if view == 'engineering' %}active{% endif %}">
+          Engineering
+        </a>
+        <a href="/dashboard/audit" class="nav-tab {% if view == 'audit' %}active{% endif %}">
+          Audit
+        </a>
+      </div>
+    </div>
+    <div class="nav-right">
+      <button class="nav-icon" aria-label="Search" title="Search">
+        🔍
+      </button>
+      <button class="nav-icon" aria-label="Settings" title="Settings">
+        ⚙️
+      </button>
+      <div class="nav-avatar" title="User">
+        T
+      </div>
+    </div>
+  </nav>
+
+  <!-- Zone 2: Global Filter Bar (Sticky) -->
+  <div class="filter-bar">
+    <span class="filter-bar-label">Filters</span>
+    <div class="filter-controls">
+      <select class="filter-placeholder" id="days-filter" onchange="window.location.href=window.location.pathname+'?days='+this.value">
+        <option value="1" {% if days == 1 %}selected{% endif %}>Last 24h</option>
+        <option value="7" {% if days == 7 or not days %}selected{% endif %}>Last 7 days</option>
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+        <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+      </select>
+      <div class="filter-placeholder">All Models</div>
+      <div class="filter-placeholder">All Agents</div>
+      <button class="btn btn-sm btn-primary" onclick="refreshTelemetry(this)">
+        🔄 Refresh Data
+      </button>
+    </div>
+  </div>
+
+  <!-- Zone 3: Main Content Area -->
+  <main class="main-content">
+    <div class="main-content-inner"
+         id="main-content"
+         hx-get="/dashboard/{% block htmx_target %}finops{% endblock %}?days={{ days|default(7) }}&partial=1"
+         hx-trigger="load"
+         hx-swap="innerHTML"
+         hx-indicator="#global-spinner">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Zone 4: Context Drawer (Hidden by default) -->
+  <div class="drawer-overlay" data-drawer-close></div>
+  <aside class="context-drawer">
+    <div class="drawer-header">
+      <h2 class="drawer-title" id="drawer-title">Details</h2>
+      <button class="drawer-close" data-drawer-close aria-label="Close">×</button>
+    </div>
+    <div class="drawer-body" id="drawer-body">
+      <!-- Dynamic content loaded here -->
+      <p class="text-muted">Select an item to view details</p>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-secondary" data-drawer-close>Close</button>
+    </div>
+  </aside>
+
+  <!-- Zone 5: Toast Layer -->
+  <div class="toast-container" role="status" aria-live="polite"></div>
+
+</div>
+
+<script>
+// Refresh telemetry handler
+function refreshTelemetry(btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳ Refreshing...';
+  
+  fetch('/v1/telemetry/refresh', {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      TokenPakToast.success('Telemetry data refreshed');
+      btn.textContent = '✓ Refreshed';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '🔄 Refresh Data';
+        window.location.reload();
+      }, 1000);
+    })
+    .catch(err => {
+      TokenPakToast.error('Failed to refresh telemetry');
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh Data';
+    });
+}
+
+// Demo: Show toast on load (for testing)
+// window.addEventListener('DOMContentLoaded', () => {
+//   TokenPakToast.info('Dashboard loaded');
+// });
+</script>
+
+</body>
+</html>

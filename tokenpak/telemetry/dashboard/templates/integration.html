@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Integration{% endblock %}
+{% block page_title %}Integration{% endblock %}
+{% block page_subtitle %}Connect your proxy · verify ingest · embed dashboard{% endblock %}
+
+{% block content %}
+<div class="integration-grid">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Connection Status</div>
+        <div class="card-subtitle">Live ingest health</div>
+      </div>
+    </div>
+    <div class="card-body" id="integration-status">
+      <div class="status-row"><span class="status-dot status-unknown"></span><span class="status-label">Checking status…</span></div>
+      <div class="status-meta">Last ingest: <span id="status-last-ingest">—</span></div>
+      <div class="status-meta">Traces today: <span id="status-traces">—</span></div>
+      <div class="status-meta">Ingest rate: <span id="status-rate">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Ingest Endpoint</div>
+        <div class="card-subtitle">POST events to this URL</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-copy-target="ingest-url">Copy</button>
+    </div>
+    <div class="card-body">
+      <code class="code-block" id="ingest-url">http://localhost:17888/v1/telemetry/ingest</code>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Test Ingest (curl)</div>
+        <div class="card-subtitle">Smoke test your pipeline</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-copy-target="curl-example">Copy</button>
+    </div>
+    <div class="card-body">
+      <pre class="code-block" id="curl-example">curl -X POST http://localhost:17888/v1/telemetry/ingest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trace_id": "test-123",
+    "timestamp": "2026-02-27T12:00:00Z",
+    "provider": "anthropic",
+    "model": "claude-sonnet-4",
+    "final_input_tokens": 1000,
+    "output_tokens": 500,
+    "status": "success"
+  }'</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Proxy Configuration</div>
+        <div class="card-subtitle">Environment + config file options</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-copy-target="env-example">Copy</button>
+    </div>
+    <div class="card-body">
+      <pre class="code-block" id="env-example">TELEMETRY_ENDPOINT=http://localhost:17888/v1/telemetry/ingest
+
+telemetry_endpoint: "http://localhost:17888/v1/telemetry/ingest"</pre>
+      <div class="muted-note">Restart the proxy after updating config.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Pricing Catalog</div>
+        <div class="card-subtitle">Current model pricing metadata</div>
+      </div>
+      <a class="btn btn-secondary btn-sm" href="/v1/pricing" target="_blank">View Catalog</a>
+    </div>
+    <div class="card-body">
+      <div class="status-meta">Version: <span id="pricing-version">—</span></div>
+      <div class="status-meta">Models: <span id="pricing-models">—</span></div>
+      <div class="status-meta">Source: embedded</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Capture Settings</div>
+        <div class="card-subtitle">Privacy-sensitive toggles</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="toggle-row"><span>Store prompts</span><button class="toggle" data-toggle="prompts">Off</button></div>
+      <div class="toggle-row"><span>Store payloads</span><button class="toggle" data-toggle="payloads">Off</button></div>
+      <div class="toggle-row"><span>Debug mode</span><button class="toggle" data-toggle="debug">Off</button></div>
+      <div class="toggle-row"><span>Sampling rate</span><span class="pill">100%</span></div>
+      <div class="warn-note">⚠ Enabling prompt storage may expose sensitive data. Use with caution.</div>
+      <div class="muted-note">Changes may require a restart.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">API Authentication</div>
+        <div class="card-subtitle">Optional when auth is enabled</div>
+      </div>
+      <div class="action-group">
+        <button class="btn btn-secondary btn-sm" data-copy-target="api-key" disabled>Copy</button>
+        <button class="btn btn-secondary btn-sm" id="toggle-api-key" disabled>Show</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="status-meta">API Key: <span id="api-key">Auth disabled</span></div>
+      <div class="muted-note">Enable auth to generate keys.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Embed Dashboard</div>
+        <div class="card-subtitle">Share telemetry internally</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="embed-block">
+        <div class="embed-header">
+          <span>Web component</span>
+          <button class="btn btn-secondary btn-sm" data-copy-target="embed-web">Copy</button>
+        </div>
+        <pre class="code-block" id="embed-web"><script src="https://example.com/tokenpak-dashboard.js"></script>
+<tokenpak-dashboard data-source="https://example.com/dashboard"></tokenpak-dashboard></pre>
+      </div>
+      <div class="embed-block">
+        <div class="embed-header">
+          <span>iframe</span>
+          <button class="btn btn-secondary btn-sm" data-copy-target="embed-iframe">Copy</button>
+        </div>
+        <pre class="code-block" id="embed-iframe"><iframe src="https://example.com/dashboard?embed=1" width="100%" height="720" frameborder="0"></iframe></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Troubleshooting</div>
+        <div class="card-subtitle">Common integration fixes</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="run-diagnostics">Run diagnostics</button>
+    </div>
+    <div class="card-body">
+      <ul class="link-list">
+        <li><a href="https://docs.openclaw.ai" target="_blank">Traces not appearing?</a></li>
+        <li><a href="https://docs.openclaw.ai" target="_blank">Connection issues?</a></li>
+        <li><a href="/v1/health" target="_blank">View health JSON</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+<script src="/dashboard/static/js/integration.js" defer></script>
+{% endblock %}

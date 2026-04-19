@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+from setuptools import setup, find_packages
+
+setup(
+    name="tokenpak",
+    version="1.0.3",
+    description="Local proxy that compresses LLM context before it hits the API.",
+    long_description=open("README.md", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
+    author="TokenPak",
+    author_email="hello@tokenpak.ai",
+    url="https://github.com/tokenpak/tokenpak",
+    packages=find_packages(),
+    include_package_data=True,
+    python_requires=">=3.10",
+    license="Apache-2.0",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: Apache Software License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+    ],
+    entry_points={
+        "console_scripts": [
+            "tokenpak=tokenpak.cli:main",
+        ],
+    },
+    install_requires=[
+        "anthropic>=0.25.0",
+        "click>=8.0.0",
+        "cryptography>=41.0.0",
+        "fastapi>=0.100.0",
+        "flask>=2.0.0",
+        "h2>=4.0.0",
+        "litellm>=1.0.0",
+        "llmlingua>=0.1.0",
+        "openai>=1.0.0",
+        "pandas>=1.3.0",
+        "pydantic>=2.0.0",
+        "pyyaml>=5.4",
+        "requests>=2.28.0",
+        "rich>=13.0.0",
+        "scipy>=1.10.0",
+        "sentence-transformers>=2.2.0",
+        "tree-sitter-languages>=1.8.0",
+        "watchdog>=3.0.0",
+    ],
+)

@@ -1,0 +1,350 @@
+/**
+ * TokenPak Dashboard — Long-Session Comfort & Eye Care
+ *
+ * Addresses:
+ *  1. True dark mode reinforcement
+ *  2. Warm/night mode toggle (--tp-warm class on <body>)
+ *  3. Comfortable typography (14-15px body, line-height 1.5-1.6)
+ *  4. Spacious layout helpers
+ *  5. Reduced visual noise (no blinking/flashing)
+ *  6. Subtle shadows
+ *  7. Focus mode (body.tp-focus)
+ *  8. Auto-refresh indicator + pause button
+ *  9. prefers-reduced-motion reinforcement
+ * 10. Session timer widget
+ */
+
+/* ── 1 & 2. Warm mode color overrides ──────────────────────────────────────
+   Applied when <body class="tp-warm"> is toggled by eye-care.js
+   Shifts palette toward warmer, amber-tinted tones, reduces blue channel
+   ─────────────────────────────────────────────────────────────────────── */
+
+body.tp-warm {
+  --bg-page:     #0d0b08;   /* deep warm black */
+  --bg-section:  #17130d;
+  --bg-card:     #1e1810;
+  --bg-hover:    #26200f;
+  --bg-active:   #2e2814;
+
+  --text-primary:   #f0e8d0;  /* warm off-white */
+  --text-secondary: #c8bba3;
+  --text-muted:     #9a8e7a;
+  --text-disabled:  #6b6050;
+
+  --border-subtle:  #2a2218;
+  --border-default: #3d3020;
+  --border-strong:  #554230;
+
+  --color-primary:       #c7a35a;  /* warm gold instead of indigo */
+  --color-primary-hover: #d4b678;
+  --color-positive:      #5aa87a;  /* warm green */
+  --color-info:          #5a8abf;  /* desaturated blue */
+
+  --chart-blue:   #5a8abf;
+  --chart-purple: #9b7fc7;
+  --chart-cyan:   #5ab8c2;
+
+  /* Reduce pure blue in charts */
+  filter: none; /* individual elements use sepia/hue-rotate below */
+}
+
+/* Subtle warm tint on the entire page background */
+body.tp-warm::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 15, 0, 0.06);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── 3. Comfortable typography enforcement ──────────────────────────────── */
+
+body {
+  font-size: var(--font-size-base, 14px);     /* 14px min per spec */
+  line-height: var(--line-height-normal, 1.5); /* 1.5+ */
+  font-weight: var(--font-weight-normal, 400); /* not thin */
+}
+
+/* KPI numbers: extra legibility */
+.kpi-value, .metric-value, [class*="kpi"] .value {
+  font-weight: var(--font-weight-semibold, 600);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Table body text: bump to 14px */
+table td, table th {
+  font-size: max(var(--font-size-sm, 13px), 13px);
+  line-height: 1.5;
+}
+
+/* Off-white text enforcement (already via tokens, reinforce here) */
+body {
+  color: var(--text-primary, #f1f5f9);
+}
+
+/* ── 4. Spacious layout helpers ─────────────────────────────────────────── */
+
+/* Section separation: 32-48px gap */
+.dashboard-section + .dashboard-section,
+section + section {
+  margin-top: var(--space-xl, 32px);
+}
+
+/* Card padding: comfortable, not cramped */
+.card, .kpi-card, .stat-card, .metric-card {
+  padding: var(--space-lg, 24px);
+}
+
+/* Content density: balanced */
+.card + .card {
+  margin-top: var(--space-md, 16px);
+}
+
+/* ── 5. Reduced visual noise ────────────────────────────────────────────── */
+
+/* Hard ban on blink */
+* {
+  animation-iteration-count: var(--tp-anim-count, initial);
+}
+
+/* No blink/flash on any element (WCAG 2.3.1 flash limit) */
+@keyframes tp-no-blink { 0%, 100% { opacity: 1; } }
+
+/* Ensure nothing blinks */
+[style*="blink"], .blink, .flash {
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+/* ── 6. Subtle shadows only ─────────────────────────────────────────────── */
+
+/* Reinforce soft shadows on cards */
+.card, .kpi-card, .stat-card {
+  box-shadow: var(--shadow-1, 0 1px 2px rgba(0,0,0,0.3));
+}
+
+/* Hover: slightly more depth, still soft */
+.card:hover, .kpi-card:hover, .stat-card:hover {
+  box-shadow: var(--shadow-2, 0 2px 8px rgba(0,0,0,0.4));
+}
+
+/* No hard drop shadows on decorative elements */
+.chart-wrapper, .chart-container {
+  box-shadow: none;
+  filter: none;
+}
+
+/* ── 7. Focus mode ──────────────────────────────────────────────────────── */
+
+/* When body has .tp-focus:
+   - nav/sidebar fade to ghost
+   - filter bar collapses
+   - content area takes full width
+*/
+
+body.tp-focus .nav-sidebar,
+body.tp-focus .left-nav,
+body.tp-focus [class*="sidebar"] {
+  opacity: 0.08;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+body.tp-focus .filter-bar,
+body.tp-focus [class*="filter-bar"] {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease;
+}
+
+/* Focus mode exit button */
+#tp-focus-exit {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 9000;
+  padding: 6px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 10px);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: opacity 200ms ease;
+}
+
+body.tp-focus #tp-focus-exit {
+  display: block;
+}
+
+body.tp-focus .main-content,
+body.tp-focus main,
+body.tp-focus [role="main"] {
+  max-width: 100%;
+}
+
+/* ── 8. Auto-refresh indicator + pause ──────────────────────────────────── */
+
+/* Status bar: refresh indicator */
+#tp-refresh-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted);
+}
+
+#tp-refresh-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-positive, #10b981);
+  flex-shrink: 0;
+  transition: background 200ms ease;
+}
+
+#tp-refresh-indicator.paused {
+  background: var(--color-warning, #f59e0b);
+}
+
+/* Smooth data update: no jarring flash */
+.tp-data-updating {
+  opacity: 0.85;
+  transition: opacity 300ms ease;
+}
+
+.tp-data-updated {
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+/* Pause button */
+#tp-pause-refresh {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+#tp-pause-refresh:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+/* ── 9. prefers-reduced-motion ──────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Preserve opacity-only fades (critical for usability) */
+  .tp-data-updating,
+  .tp-data-updated,
+  #tp-focus-exit {
+    transition: none;
+  }
+}
+
+/* ── 10. Session timer ──────────────────────────────────────────────────── */
+
+#tp-session-timer {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.7;
+  transition: opacity 200ms ease;
+}
+
+#tp-session-timer:hover {
+  opacity: 1;
+}
+
+#tp-session-clock {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* Break reminder: gentle pulse after 30 min */
+#tp-break-nudge {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 10px);
+  font-size: var(--font-size-xs, 12px);
+  color: var(--text-muted);
+  animation: tp-break-fade 1s ease forwards;
+}
+
+@keyframes tp-break-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+#tp-break-nudge.visible {
+  display: flex;
+}
+
+#tp-break-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* ── Warm mode toggle button ────────────────────────────────────────────── */
+
+#tp-warm-toggle {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+#tp-warm-toggle:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+/* Focus mode toggle button */
+#tp-focus-toggle {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+#tp-focus-toggle:hover {
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}

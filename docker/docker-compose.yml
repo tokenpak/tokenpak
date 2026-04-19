@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  tokenpak:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${TOKENPAK_PORT:-8766}:8766"
+    environment:
+      - TOKENPAK_LOG_LEVEL=info
+      - TOKENPAK_PORT=8766
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - tokenpak-net
+
+networks:
+  tokenpak-net:
+    driver: bridge

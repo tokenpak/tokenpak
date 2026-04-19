@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}Audit{% endblock %}
+{% block page_title %}Audit{% endblock %}
+{% block page_subtitle %}Trace timeline · segment breakdown · hash chain · {{ days }}-day window{% endblock %}
+{% block htmx_target %}audit{% endblock %}
+
+{% block content %}
+{% include "audit_partial.html" %}
+{% endblock %}

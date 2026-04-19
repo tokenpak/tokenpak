@@ -1,0 +1,41 @@
+# TokenPak Budget Configuration
+# Controls token allocation across context buckets.
+# Loaded by Budgeter class in budgeter.py
+
+total_tokens: 12000
+
+buckets:
+  state:
+    min_pct: 8
+    max_pct: 15
+    priority: critical
+
+  recent:
+    min_pct: 10
+    max_pct: 20
+    priority: high
+
+  evidence:
+    min_pct: 50
+    max_pct: 70
+    priority: medium
+
+  tools:
+    min_pct: 0
+    max_pct: 25
+    priority: variable  # critical if tools needed, else low
+
+# Trim order: lower-priority items are trimmed first
+# when total token budget is exceeded.
+trim_order:
+  - older_history        # keep last 5 turns, drop earlier
+  - low_score_evidence   # drop bottom 20% by score
+  - verbose_evidence     # shorten spans to 30 tokens max
+  - nonessential_skills  # replace full schemas with refs only
+  - prose_background     # compress or translate background
+
+# Per-bucket thresholds (not in %: absolute token counts)
+thresholds:
+  evidence_keep_pct: 0.80          # keep top 80% by score
+  evidence_max_span_tokens: 30     # max tokens per span after verbosity trim
+  recent_keep_turns: 5             # keep this many recent turns

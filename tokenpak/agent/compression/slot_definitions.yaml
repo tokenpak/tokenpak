@@ -1,0 +1,129 @@
+# Slot definitions for canonical TokenPak intents.
+# Used by SlotFiller to parameterize intent classification.
+
+status:
+  description: "Query system or service status"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [proxy, router, vault, index, pipeline, server, agent, cache]
+    detail_level:
+      type: enum
+      required: false
+      default: summary
+      values: [summary, full, verbose]
+
+usage:
+  description: "Query token/cost/usage metrics"
+  slots:
+    period:
+      type: duration
+      required: false
+      default: "7d"
+    target:
+      type: entity
+      required: false
+      examples: [tokens, cost, budget, requests, sessions, models]
+    model:
+      type: entity
+      required: false
+      examples: [claude, gpt, sonnet, haiku, opus, gemini]
+
+debug:
+  description: "Debug, trace, or diagnose a problem"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [proxy, router, pipeline, vault, slot, recipe, compression, error, request]
+    period:
+      type: duration
+      required: false
+    detail_level:
+      type: enum
+      required: false
+      default: verbose
+      values: [summary, full, verbose]
+
+summarize:
+  description: "Summarize content or sessions"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [vault, session, conversation, file, project, changes, logs]
+    period:
+      type: duration
+      required: false
+
+plan:
+  description: "Plan or design a feature, task, or project"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [feature, task, sprint, project, architecture, schema, api, migration]
+    scope:
+      type: enum
+      required: false
+      default: standard
+      values: [minimal, standard, detailed]
+
+execute:
+  description: "Execute a command, script, or operation"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [script, command, task, pipeline, job, test, migration, build]
+    mode:
+      type: enum
+      required: false
+      default: standard
+      values: [dry_run, standard, force]
+
+explain:
+  description: "Explain a concept, code, or system"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [code, function, class, module, concept, algorithm, error, config]
+    depth:
+      type: enum
+      required: false
+      default: standard
+      values: [brief, standard, detailed]
+
+search:
+  description: "Search or find information"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [vault, file, code, function, class, module, docs, log]
+    period:
+      type: duration
+      required: false
+
+create:
+  description: "Create, generate, or build something"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: [file, function, class, module, test, config, schema, script, feature]
+    scope:
+      type: enum
+      required: false
+      default: standard
+      values: [minimal, standard, full]
+
+query:
+  description: "General query or question (default fallback intent)"
+  slots:
+    target:
+      type: entity
+      required: false
+      examples: []

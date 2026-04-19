@@ -1,0 +1,39 @@
+# TokenPak — Local Ollama Config
+# ================================
+# Run completely locally — no API key required.
+# Steps: 1) Install Ollama (https://ollama.ai)  2) ollama pull llama3  3) tokenpak start
+#
+# Best for: air-gapped environments, privacy-sensitive workloads, offline dev, zero cost
+
+port: 8766
+mode: hybrid
+
+compression:
+  enabled: true
+  threshold_tokens: 2000
+  max_chars: 100
+  cache_size: 1000
+
+features:
+  skeleton: true
+  shadow_reader: false    # Disabled — prefetch less useful for local latency
+  router: true
+  validation_gate: true
+  validation_gate_soft: true
+
+  semantic_cache: true    # Cache locally — no data leaves your machine
+  request_logger: false   # No logs (privacy) — set true for debugging
+  budget_controller: false  # No API billing for local models
+
+budget:
+  total_tokens: 999999    # Unlimited — no billing for local models
+
+upstream:
+  ollama: http://localhost:11434
+  ollama_timeout: 120
+  timeout: 300
+
+rate_limit_rpm: 999    # No API rate limits for local inference
+
+failover:
+  enabled: false

@@ -1,0 +1,56 @@
+# TokenPak — Mixed / Multi-Provider Smart Routing
+# ==================================================
+# Routes to the best provider based on model, cost, and availability.
+# Steps: 1) Set ANTHROPIC_API_KEY + OPENAI_API_KEY  2) tokenpak start
+#
+# Best for: production apps, cost optimization, high availability
+
+port: 8766
+mode: hybrid
+
+compression:
+  enabled: true
+  threshold_tokens: 4500
+  max_chars: 120
+  cache_size: 3000
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true                # REQUIRED for multi-provider routing
+  validation_gate: true
+  validation_gate_soft: true
+
+  semantic_cache: true        # Cache responses across all providers
+  salience_router: true       # Route important requests to better models
+  failure_memory: true        # Remember provider failures, auto-avoid flaky endpoints
+  request_logger: true        # Track which provider handled what
+  budget_controller: true     # Keep costs in check across all providers
+
+budget:
+  total_tokens: 20000
+  validation_gate_cap: 200000
+
+upstream:
+  timeout: 300
+  ollama: http://localhost:11434
+
+rate_limit_rpm: 60
+
+failover:
+  enabled: true
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY
+    - provider: openai
+      credential_env: OPENAI_API_KEY
+      model_map:
+        claude-opus-4-5: gpt-4o
+        claude-sonnet-4-5: gpt-4o-mini
+        claude-haiku-4-5: gpt-4o-mini
+    - provider: google
+      credential_env: GOOGLE_API_KEY
+      model_map:
+        claude-opus-4-5: gemini-1.5-pro
+        claude-sonnet-4-5: gemini-1.5-pro
+        claude-haiku-4-5: gemini-1.5-flash

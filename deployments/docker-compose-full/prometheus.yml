@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'tokenpak'
+    static_configs:
+      - targets: ['tokenpak:8766']
+    metrics_path: '/metrics'

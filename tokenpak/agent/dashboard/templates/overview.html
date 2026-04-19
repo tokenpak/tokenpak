@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Overview — TokenPak Dashboard{% endblock %}
+{% block nav_overview %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Overview</div>
+    <div class="page-subtitle">Usage summary for {{ query_date }}</div>
+  </div>
+  <form class="controls" style="margin:0" method="get">
+    <label>Date</label>
+    <input type="date" name="date" value="{{ query_date }}" max="{{ today }}">
+    <button class="btn" type="submit">Load</button>
+    {% if query_date != today %}
+    <a href="/dashboard" class="btn btn-ghost">Today</a>
+    {% endif %}
+  </form>
+</div>
+
+<div id="stat-cards"
+     hx-get="/dashboard/htmx/stats?date={{ query_date }}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML">
+  {% include "partials/stat_cards.html" %}
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-title">Top Agents Today</div>
+    <div id="top-users-table"
+         hx-get="/dashboard/htmx/top-users?date={{ query_date }}"
+         hx-trigger="revealed"
+         hx-swap="outerHTML">
+      {% include "partials/top_users.html" %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">7-Day Cache Hit Rate</div>
+    <div class="chart-wrap">
+      <canvas id="cacheChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const trends = {{ cache_trends | tojson }};
+  const labels = trends.map(t => t.timestamp);
+  const hitRates = trends.map(t => (t.hit_rate * 100).toFixed(1));
+  const ctx = document.getElementById('cacheChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Cache Hit %',
+        data: hitRates,
+        borderColor: '#6c8bff',
+        backgroundColor: 'rgba(108,139,255,0.12)',
+        fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#6c8bff',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { ticks: { color: '#7c8ba1', maxRotation: 45, font: { size: 11 } }, grid: { color: '#2e3347' } },
+        y: { ticks: { color: '#7c8ba1', callback: v => v + '%', font: { size: 11 } }, grid: { color: '#2e3347' }, min: 0, max: 100 }
+      },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + '%' } } }
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Time Series — TokenPak Dashboard{% endblock %}
+{% block nav_timeseries %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Time Series</div>
+    <div class="page-subtitle">{{ rollup_count }} buckets &middot; {{ window }}-min window &middot; {{ start_date }} &rarr; {{ end_date }}</div>
+  </div>
+</div>
+
+<form class="controls" method="get">
+  <label>Start</label>
+  <input type="date" name="start" value="{{ start_date }}">
+  <label>End</label>
+  <input type="date" name="end" value="{{ end_date }}">
+  <label>Window</label>
+  <select name="window">
+    {% for w in [1, 5, 15, 30, 60, 360, 1440] %}
+    <option value="{{ w }}" {% if w == window %}selected{% endif %}>
+      {% if w < 60 %}{{ w }}min{% elif w == 60 %}1hr{% elif w == 360 %}6hr{% else %}1day{% endif %}
+    </option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Apply</button>
+</form>
+
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title">Total Tokens per Bucket</div>
+  <div class="chart-wrap">
+    <canvas id="tokensChart"></canvas>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-title">Requests per Bucket</div>
+    <div class="chart-wrap">
+      <canvas id="requestsChart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Cache Tokens per Bucket</div>
+    <div class="chart-wrap">
+      <canvas id="cacheChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const labels   = {{ chart_labels | safe }};
+  const tokens   = {{ tokens_data | safe }};
+  const cache    = {{ cache_data | safe }};
+  const requests = {{ requests_data | safe }};
+
+  const gridColor = '#2e3347', tickColor = '#7c8ba1', tickFont = { size: 11 };
+  const commonScales = {
+    x: { ticks: { color: tickColor, maxRotation: 45, maxTicksLimit: 12, font: tickFont }, grid: { color: gridColor } },
+    y: { ticks: { color: tickColor, font: tickFont }, grid: { color: gridColor }, beginAtZero: true }
+  };
+
+  const tokensCtx = document.getElementById('tokensChart').getContext('2d');
+  new Chart(tokensCtx, {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Total Tokens', data: tokens, borderColor: '#6c8bff', backgroundColor: 'rgba(108,139,255,0.1)', fill: true, tension: 0.3, pointRadius: 2, pointBackgroundColor: '#6c8bff' }] },
+    options: { responsive: true, maintainAspectRatio: false, scales: commonScales, plugins: { legend: { display: false } } }
+  });
+
+  function barChart(id, label, data, color) {
+    const ctx = document.getElementById(id).getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label, data, backgroundColor: color + 'cc', borderColor: color, borderWidth: 1 }] },
+      options: { responsive: true, maintainAspectRatio: false, scales: commonScales, plugins: { legend: { display: false } } }
+    });
+  }
+  barChart('requestsChart', 'Requests', requests, '#fbbf24');
+  barChart('cacheChart', 'Cache Tokens', cache, '#4ade80');
+})();
+</script>
+{% endblock %}

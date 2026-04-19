@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ExtractionState",
+  "description": "State schema for extraction/query intent — schema, source, and output format.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "object",
+      "description": "Target extraction schema (field name → type description)",
+      "additionalProperties": {"type": "string"}
+    },
+    "source_type": {
+      "type": "string",
+      "description": "Type of input source (e.g. 'pdf', 'html', 'email', 'database', 'api')"
+    },
+    "output_format": {
+      "type": "string",
+      "description": "Desired output format (e.g. 'json', 'csv', 'markdown', 'dict')"
+    }
+  },
+  "required": ["schema", "source_type"],
+  "additionalProperties": false
+}

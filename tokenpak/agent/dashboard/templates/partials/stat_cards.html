@@ -1,0 +1,34 @@
+<div id="stat-cards" class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Requests</div>
+    <div class="stat-value stat-accent">{{ summary.total_requests }}</div>
+    <div class="stat-sub">{{ query_date }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Tokens</div>
+    <div class="stat-value">{{ "{:,}".format(summary.total_tokens) }}</div>
+    <div class="stat-sub">across all agents</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Cache Hit Rate</div>
+    <div class="stat-value {% if stats.cache_hit_pct >= 50 %}stat-green{% elif stats.cache_hit_pct >= 20 %}stat-amber{% else %}stat-accent{% endif %}">
+      {{ stats.cache_hit_pct }}%
+    </div>
+    <div class="stat-sub">of tokens from cache</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Avg Compression</div>
+    <div class="stat-value stat-green">{{ stats.compression_pct }}%</div>
+    <div class="stat-sub">token reduction</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Cost</div>
+    <div class="stat-value">${{ "%.4f"|format(stats.total_cost) }}</div>
+    <div class="stat-sub">estimated spend</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Unique Agents</div>
+    <div class="stat-value stat-amber">{{ summary.unique_agents }}</div>
+    <div class="stat-sub">active today</div>
+  </div>
+</div>

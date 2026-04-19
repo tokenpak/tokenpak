@@ -1,0 +1,23 @@
+{# Error state component #}
+
+{% macro error_state(title="Something went wrong", message="", retry_action="", tech_details="") %}
+<div class="error-state" role="alert">
+  <div class="error-icon">⚠</div>
+  <div class="error-title">{{ title }}</div>
+  {% if message %}
+  <div class="error-message">{{ message }}</div>
+  {% endif %}
+  <div class="error-actions">
+    {% if retry_action %}
+    <button class="btn btn-primary" onclick="{{ retry_action }}">Try Again</button>
+    {% endif %}
+    <a href="/dashboard" class="btn btn-secondary">Return to Dashboard</a>
+  </div>
+  {% if tech_details %}
+  <details class="error-details">
+    <summary>Technical Details</summary>
+    <pre>{{ tech_details }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}

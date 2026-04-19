@@ -1,0 +1,66 @@
+# TokenPak — Maximum Cost Saving Config
+# ========================================
+# Aggressive caching, compression, and cheap-first routing.
+# Steps: 1) Set ANTHROPIC_API_KEY (and optionally OPENAI_API_KEY)  2) tokenpak start
+#
+# Best for: high-volume apps, batch jobs, anything where bill size matters most
+# Trade-off: slightly slower (more pre-processing), but dramatically cheaper
+
+port: 8766
+
+# aggressive = maximum savings mode (most compression, cheapest-first routing)
+mode: aggressive
+
+compression:
+  enabled: true
+  # Compress anything over 1000 tokens — saves 30-60% on prompt costs
+  threshold_tokens: 1000
+  # Tighter compression — smaller prompts = cheaper requests
+  max_chars: 80
+  # Large cache — maximize reuse across many requests
+  cache_size: 10000
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true              # Routes to cheapest capable model
+  validation_gate: true
+  validation_gate_soft: true
+
+  # Cost-cutting features — all on
+  semantic_cache: true      # Cache similar requests — single biggest cost saver
+  prefix_registry: true     # Reuse system prompts — big savings on repeated calls
+  compression_dict: true    # Domain-specific compression dictionary
+  capsule_builder: true     # Build reusable context instead of resending it
+  salience_router: true     # Route low-importance requests to cheap models (e.g. Haiku)
+
+  # Budget protection
+  budget_controller: true   # Hard stop — never go over budget
+  request_logger: true      # Track spending per request
+
+budget:
+  # Tight budget — controller will block requests when hit
+  total_tokens: 8000
+  validation_gate_cap: 80000
+
+capsule:
+  min_chars: 200            # Build capsules for shorter content too
+  hot_window: 5             # Keep 5 capsules hot — maximize reuse
+
+upstream:
+  timeout: 300
+
+rate_limit_rpm: 60
+
+# Route to cheapest provider first, more capable as fallback
+failover:
+  enabled: true
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY
+    - provider: openai
+      credential_env: OPENAI_API_KEY
+      model_map:
+        claude-opus-4-5: gpt-4o-mini     # Downgrade expensive models when possible
+        claude-sonnet-4-5: gpt-4o-mini
+        claude-haiku-4-5: gpt-4o-mini

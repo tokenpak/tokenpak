@@ -1,0 +1,48 @@
+# TokenPak — Single User Config
+# ==============================
+# One person, one provider, basic caching.
+# Steps: 1) Set ANTHROPIC_API_KEY in your env  2) tokenpak start
+#
+# Best for: solo devs, personal projects, local experimentation
+
+port: 8766
+
+# hybrid = smart routing (recommended default)
+mode: hybrid
+
+compression:
+  enabled: true
+  # Compress prompts longer than this many tokens
+  threshold_tokens: 4500
+  # Max chars per compressed block
+  max_chars: 120
+  # LRU cache size for repeated compressions
+  cache_size: 2000
+
+features:
+  # Core features — leave these on
+  skeleton: true          # Structured response scaffolding
+  shadow_reader: true     # Background context prefetch
+  router: true            # Intelligent model routing
+  validation_gate: true   # Pre-flight request checks
+  validation_gate_soft: true  # Warn instead of hard-fail
+
+  # Optional — enable if needed
+  semantic_cache: false   # Semantic similarity caching (saves tokens on repeated questions)
+  request_logger: false   # Log all requests (useful for debugging)
+  budget_controller: false  # Hard token budget limits
+
+budget:
+  # Soft cap — proxy warns but doesn't block by default
+  total_tokens: 12000
+
+upstream:
+  # Request timeout in seconds
+  timeout: 300
+
+# Optional: failover to another provider if primary fails
+failover:
+  enabled: false
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY

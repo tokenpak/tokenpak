@@ -1,0 +1,393 @@
+{
+  "actual_cost": {
+    "term": "actual_cost",
+    "what": "Cost after compression — tokens actually sent to the provider × price.",
+    "who": "FinOps, budget owners",
+    "where": [
+      "finops dashboard",
+      "cost cards",
+      "billing reconciliation"
+    ],
+    "why": "Real cost figure; what you are billed for",
+    "how": "final_input_tokens × input_rate + output_tokens × output_rate",
+    "not_this": "Not baseline cost — actual reflects compressed token count",
+    "aliases": [
+      "actual",
+      "real cost",
+      "billed cost"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html",
+      "trust.js"
+    ]
+  },
+  "baseline_cost": {
+    "term": "baseline_cost",
+    "what": "Cost without compression — what you would have paid at full token count.",
+    "who": "FinOps, budget owners",
+    "where": [
+      "finops dashboard",
+      "cost cards",
+      "savings calculation"
+    ],
+    "why": "Reference point for measuring compression value",
+    "how": "raw_input_tokens × input_rate + output_tokens × output_rate",
+    "not_this": "Not actual spend — this is the counterfactual uncompressed cost",
+    "aliases": [
+      "baseline",
+      "uncompressed cost",
+      "full cost",
+      "original cost"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html",
+      "trust.js"
+    ]
+  },
+  "cache_tokens": {
+    "term": "cache_tokens",
+    "what": "Tokens served from provider cache rather than re-processed.",
+    "who": "Engineering, FinOps",
+    "where": [
+      "engineering dashboard",
+      "token composition chart"
+    ],
+    "why": "Cache hits reduce cost and latency; indicates efficient prompt structure",
+    "how": "Reported in provider API response as cache_read_input_tokens",
+    "not_this": "Not raw or final tokens — cache tokens are a subset of input tokens",
+    "aliases": [
+      "cache read tokens",
+      "cached input",
+      "prompt cache tokens"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "compression_ratio": {
+    "term": "compression_ratio",
+    "what": "How much smaller the compressed context is vs original (raw ÷ final).",
+    "who": "Engineering, ML teams",
+    "where": [
+      "engineering dashboard",
+      "compression explainer",
+      "token cards"
+    ],
+    "why": "Direct measure of compression efficiency",
+    "how": "raw_input_tokens / final_input_tokens",
+    "not_this": "Not savings % — ratio is token count, savings % is cost-based",
+    "aliases": [
+      "ratio",
+      "compression factor",
+      "token ratio"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html",
+      "compression-explainer.js"
+    ]
+  },
+  "cost_per_request": {
+    "term": "cost_per_request",
+    "what": "Average cost per API call in the selected period.",
+    "who": "FinOps, engineering managers",
+    "where": [
+      "finops dashboard",
+      "cost cards"
+    ],
+    "why": "Normalizes cost for workload comparison regardless of volume",
+    "how": "total_actual_cost / total_request_count",
+    "not_this": "Not baseline cost per request — uses actual (compressed) cost",
+    "aliases": [
+      "avg cost per call",
+      "cost per call",
+      "per-request cost"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html"
+    ]
+  },
+  "error_rate": {
+    "term": "error_rate",
+    "what": "Fraction of requests that resulted in an API error.",
+    "who": "Engineering, SRE",
+    "where": [
+      "engineering dashboard",
+      "error chart",
+      "audit log"
+    ],
+    "why": "Key reliability metric; high error rates indicate provider or config issues",
+    "how": "error_count / total_request_count",
+    "not_this": "Not retry rate — errors are final failures, retries may recover",
+    "aliases": [
+      "errors",
+      "failure rate",
+      "error %"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "estimated": {
+    "term": "estimated",
+    "what": "Calculated from token counts × model pricing — not yet billed.",
+    "who": "All users",
+    "where": [
+      "trust bar",
+      "data source badges",
+      "all cost metrics"
+    ],
+    "why": "Default mode before billing reconciliation is configured",
+    "how": "token_count × current_model_price_per_token",
+    "not_this": "Not reconciled — may differ from actual bill due to pricing changes",
+    "aliases": [
+      "unverified",
+      "computed",
+      "projected cost"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "trust.js"
+    ]
+  },
+  "final_tokens": {
+    "term": "final_tokens",
+    "what": "Tokens actually sent to the provider after compression.",
+    "who": "Engineering, FinOps",
+    "where": [
+      "engineering dashboard",
+      "token composition chart",
+      "billing"
+    ],
+    "why": "Determines actual cost; what the provider bills you for",
+    "how": "raw_tokens minus tokens removed/collapsed by compression pipeline",
+    "not_this": "Not raw tokens — final is after compression; always ≤ raw",
+    "aliases": [
+      "compressed tokens",
+      "sent tokens",
+      "billed tokens"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "latency_avg": {
+    "term": "latency_avg",
+    "what": "Mean end-to-end request duration in milliseconds.",
+    "who": "Engineering, product teams",
+    "where": [
+      "engineering dashboard",
+      "latency chart"
+    ],
+    "why": "Baseline performance metric; average experience across all requests",
+    "how": "SUM(duration_ms) / COUNT(requests)",
+    "not_this": "Not p95/p99 — average masks outliers; use percentiles for tail latency",
+    "aliases": [
+      "avg latency",
+      "mean latency",
+      "average response time"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "latency_p95": {
+    "term": "latency_p95",
+    "what": "95% of requests completed faster than this value (ms).",
+    "who": "Engineering, SRE",
+    "where": [
+      "engineering dashboard",
+      "latency chart"
+    ],
+    "why": "Captures tail latency; 1-in-20 requests were slower",
+    "how": "95th percentile of sorted duration_ms values",
+    "not_this": "Not average — p95 reveals slow outliers hidden by the mean",
+    "aliases": [
+      "p95",
+      "95th percentile",
+      "95th pct latency"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "latency_p99": {
+    "term": "latency_p99",
+    "what": "99% of requests completed faster than this value (ms).",
+    "who": "Engineering, SRE",
+    "where": [
+      "engineering dashboard",
+      "latency chart"
+    ],
+    "why": "Captures extreme tail latency; 1-in-100 requests were slower",
+    "how": "99th percentile of sorted duration_ms values",
+    "not_this": "Not p95 — p99 is stricter; worst-case user experience",
+    "aliases": [
+      "p99",
+      "99th percentile",
+      "99th pct latency"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "raw_tokens": {
+    "term": "raw_tokens",
+    "what": "Token count before any compression — full uncompressed context size.",
+    "who": "Engineering, ML teams",
+    "where": [
+      "engineering dashboard",
+      "token composition chart",
+      "compression explainer"
+    ],
+    "why": "Starting point for measuring compression effect",
+    "how": "Counted by tokenizer on the original prompt before pipeline",
+    "not_this": "Not final tokens — raw is pre-compression; final is post-compression",
+    "aliases": [
+      "uncompressed tokens",
+      "original tokens",
+      "input tokens (raw)"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "reconciled": {
+    "term": "reconciled",
+    "what": "Data verified against actual provider billing records.",
+    "who": "FinOps, accounting",
+    "where": [
+      "trust bar",
+      "data source badges",
+      "audit log"
+    ],
+    "why": "Highest trust level — confirms estimated costs match real charges",
+    "how": "Billing API response cross-checked against TokenPak event log",
+    "not_this": "Not estimated — reconciled data requires configured billing API",
+    "aliases": [
+      "verified",
+      "billed",
+      "confirmed"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "trust.js",
+      "finops_partial.html"
+    ]
+  },
+  "request_count": {
+    "term": "request_count",
+    "what": "Total API requests recorded in the selected time window.",
+    "who": "All users",
+    "where": [
+      "finops dashboard",
+      "engineering dashboard",
+      "audit log"
+    ],
+    "why": "Volume denominator used in rates, averages, and cost-per-request",
+    "how": "COUNT of tp_events in period WHERE status IN (success, retry)",
+    "not_this": "Not unique sessions — one session may generate many requests",
+    "aliases": [
+      "total requests",
+      "request volume",
+      "call count"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html",
+      "engineering_partial.html"
+    ]
+  },
+  "retry_rate": {
+    "term": "retry_rate",
+    "what": "Fraction of requests that required at least one retry.",
+    "who": "Engineering, SRE",
+    "where": [
+      "engineering dashboard",
+      "reliability section"
+    ],
+    "why": "Indicates transient failure rate; high retries increase latency and cost",
+    "how": "retry_count / total_request_count",
+    "not_this": "Not error rate — retried requests may ultimately succeed",
+    "aliases": [
+      "retries",
+      "retry %",
+      "retry frequency"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "engineering_partial.html"
+    ]
+  },
+  "savings": {
+    "term": "savings",
+    "what": "Money saved through compression — baseline minus actual cost.",
+    "who": "FinOps, executives",
+    "where": [
+      "finops dashboard",
+      "savings card",
+      "executive summary"
+    ],
+    "why": "Primary value metric for TokenPak",
+    "how": "baseline_cost − actual_cost",
+    "not_this": "Not cumulative lifetime savings — scoped to the selected date window",
+    "aliases": [
+      "cost savings",
+      "compression savings",
+      "delta cost"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html"
+    ]
+  },
+  "savings_pct": {
+    "term": "savings_pct",
+    "what": "Savings as a percentage of baseline — how efficient compression is.",
+    "who": "FinOps, executives",
+    "where": [
+      "finops dashboard",
+      "savings card",
+      "executive summary"
+    ],
+    "why": "Normalizes savings across different spend levels for comparison",
+    "how": "(baseline_cost − actual_cost) / baseline_cost × 100",
+    "not_this": "Not token reduction % — measures cost reduction, not token count reduction",
+    "aliases": [
+      "savings rate",
+      "savings percentage",
+      "reduction rate"
+    ],
+    "tier": 0,
+    "confidence": 1.0,
+    "source_refs": [
+      "finops_partial.html"
+    ]
+  }
+}

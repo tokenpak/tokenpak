@@ -1,0 +1,789 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TokenPak Dashboard — Motion Choreography & Transitions (Enhanced)
+   
+   Polished motion design that makes filter changes, drilldowns, and depth 
+   transitions feel like "zooming into data" rather than page switches.
+   
+   Performance targets:
+   - All animations 60fps (GPU-accelerated via transform & opacity)
+   - Filter reaction perceived <400ms
+   - Chart update perceived <500ms
+   - Number animations: 300-500ms (easing: cubic-bezier(.16,1,.3,1))
+   - No animations >500ms instant feels better than slow
+   - Smooth easing: cubic-bezier(.16,1,.3,1) per design spec
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Global Motion Preferences & Easing
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --tp-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --tp-ease-smooth: cubic-bezier(.4, 0, .2, 1);
+  --tp-ease-in: cubic-bezier(.8, 0, .2, 1);
+  
+  --tp-duration-instant: 150ms;
+  --tp-duration-quick: 200ms;
+  --tp-duration-normal: 300ms;
+  --tp-duration-slow: 400ms;
+  --tp-duration-fade: 250ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1. NUMBER VALUE TRANSITIONS (KPI Cards)
+   300-500ms smooth counting animation
+   ════════════════════════════════════════════════════════════════════════ */
+
+.stat-value {
+  transition: color var(--tp-duration-normal) var(--tp-ease-out),
+              transform var(--tp-duration-quick) var(--tp-ease-smooth);
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  display: inline-block;
+  will-change: contents;
+}
+
+@keyframes tp-number-count {
+  from {
+    opacity: 0.6;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stat-value.animating {
+  animation: tp-number-count var(--tp-duration-normal) var(--tp-ease-out) forwards;
+}
+
+@keyframes tp-stat-pulse {
+  0% { 
+    border-color: var(--tp-border);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+  50% { 
+    border-color: rgba(99, 102, 241, 0.8);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  }
+  100% { 
+    border-color: var(--tp-border);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+.stat-card.updating {
+  animation: tp-stat-pulse 400ms var(--tp-ease-smooth);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2. CHART TRANSITIONS (Fade In/Out)
+   150ms fade out, 200ms fade in
+   ════════════════════════════════════════════════════════════════════════ */
+
+.chart-canvas-wrapper {
+  position: relative;
+  transition: opacity var(--tp-duration-quick) var(--tp-ease-smooth);
+  will-change: opacity;
+}
+
+.chart-canvas-wrapper.fading-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chart-canvas-wrapper.fading-in {
+  animation: tp-fade-in var(--tp-duration-quick) var(--tp-ease-out) forwards;
+}
+
+@keyframes tp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tp-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.chart-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: background var(--tp-duration-normal) var(--tp-ease-smooth),
+              border-color var(--tp-duration-instant) var(--tp-ease-smooth);
+}
+
+.chart-container.loading {
+  background: rgba(99, 102, 241, 0.03);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+canvas {
+  transition: opacity var(--tp-duration-quick) var(--tp-ease-smooth),
+              filter var(--tp-duration-instant) var(--tp-ease-smooth);
+  will-change: opacity;
+}
+
+canvas.morphing {
+  opacity: 0;
+}
+
+canvas.morphing.visible {
+  opacity: 1;
+}
+
+canvas.hovering {
+  filter: brightness(1.1) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3. FILTER CHANGE ANIMATION
+   Total perceived time: <400ms
+   ════════════════════════════════════════════════════════════════════════ */
+
+.filter-bar {
+  transition: background var(--tp-duration-quick) var(--tp-ease-smooth);
+}
+
+@keyframes tp-filter-highlight {
+  0% { 
+    background: var(--tp-bg3);
+    border-color: var(--tp-border);
+    transform: scale(1);
+  }
+  50% { 
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--tp-accent);
+    transform: scale(1.01);
+  }
+  100% { 
+    background: var(--tp-bg3);
+    border-color: var(--tp-border);
+    transform: scale(1);
+  }
+}
+
+.filter-select.changing,
+.filter-select.changed,
+[data-filter-item].changing,
+[data-filter-item].changed {
+  animation: tp-filter-highlight var(--tp-duration-normal) var(--tp-ease-smooth);
+}
+
+@keyframes tp-content-fade-out {
+  from { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to { 
+    opacity: 0.4;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes tp-content-fade-in {
+  from { 
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chart-canvas-wrapper.reacting,
+.stat-card.reacting {
+  animation: tp-content-fade-out var(--tp-duration-instant) var(--tp-ease-smooth) forwards;
+  will-change: opacity, transform;
+}
+
+.chart-canvas-wrapper.reacting.ready,
+.stat-card.reacting.ready {
+  animation: tp-content-fade-in var(--tp-duration-quick) var(--tp-ease-out) forwards;
+}
+
+/* Skeleton loading state */
+.chart-canvas-wrapper.skeleton-loading::after,
+.stat-card.skeleton-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: tp-skeleton-shimmer 1.5s infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+@keyframes tp-skeleton-shimmer {
+  0% { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}
+
+@keyframes tp-skeleton-pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.skeleton-box {
+  background: var(--tp-bg3);
+  border-radius: 4px;
+  animation: tp-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4. DRILLDOWN "ZOOM" FEEL
+   Click pulse on element, zoom content feel
+   ════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tp-drill-pulse {
+  0% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.08);
+    opacity: 0.95;
+  }
+  100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes tp-drill-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tp-chart-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 0 rgba(99, 102, 241, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.4));
+  }
+}
+
+.chart-bar:hover,
+.chart-point:hover {
+  filter: brightness(1.2);
+  cursor: pointer;
+  transition: filter var(--tp-duration-instant) var(--tp-ease-smooth);
+}
+
+.chart-bar.drilling,
+.chart-point.drilling,
+[data-drillable].drilling {
+  animation: tp-drill-pulse var(--tp-duration-normal) var(--tp-ease-smooth);
+}
+
+.breadcrumb {
+  animation: tp-drill-zoom-in var(--tp-duration-normal) var(--tp-ease-out) forwards;
+  transform-origin: left center;
+  opacity: 0;
+}
+
+.breadcrumb.breadcrumb-appear {
+  animation: tp-drill-zoom-in var(--tp-duration-normal) var(--tp-ease-out) forwards;
+}
+
+.content.drilling,
+.dashboard-content.drilling {
+  animation: tp-drill-zoom-in var(--tp-duration-normal) var(--tp-ease-out) forwards;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5. DEPTH LEVEL TRANSITIONS
+   Slide in from right, dim previous levels
+   ════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tp-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tp-slide-out-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+[data-depth] {
+  will-change: opacity, transform;
+  transition: opacity var(--tp-duration-normal) var(--tp-ease-smooth);
+}
+
+.depth-level {
+  animation: tp-slide-in-right var(--tp-duration-normal) var(--tp-ease-out) forwards;
+}
+
+.depth-level.exiting {
+  animation: tp-slide-out-right var(--tp-duration-normal) var(--tp-ease-smooth) forwards;
+}
+
+.depth-level.dimmed,
+[data-depth].dimmed {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.depth-crumb {
+  font-size: 0.75rem;
+  color: var(--tp-fg2);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: color var(--tp-duration-instant) var(--tp-ease-smooth),
+              font-weight var(--tp-duration-instant) var(--tp-ease-smooth);
+  cursor: pointer;
+}
+
+.depth-crumb:hover {
+  color: var(--tp-accent);
+}
+
+.depth-crumb.active {
+  color: var(--tp-accent2);
+  font-weight: 600;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6. DRAWER TRANSITIONS
+   Slide in from right (300ms), slide out (250ms)
+   ════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tp-drawer-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tp-drawer-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes tp-overlay-fade-in {
+  from { opacity: 0; }
+  to { opacity: 0.4; }
+}
+
+@keyframes tp-overlay-fade-out {
+  from { opacity: 0.4; }
+  to { opacity: 0; }
+}
+
+.drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100vh;
+  width: 320px;
+  background: var(--tp-bg2);
+  border-left: 1px solid var(--tp-border);
+  box-shadow: -2px 0 16px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow-y: auto;
+  will-change: transform;
+  animation: tp-drawer-slide-in 300ms var(--tp-ease-out) forwards;
+}
+
+.drawer.slide-in {
+  animation: tp-drawer-slide-in 300ms var(--tp-ease-out) forwards;
+}
+
+.drawer.closing {
+  animation: tp-drawer-slide-out 250ms var(--tp-ease-smooth) forwards;
+}
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 999;
+  will-change: opacity;
+  animation: tp-overlay-fade-in 300ms var(--tp-ease-smooth) forwards;
+}
+
+.drawer-overlay.opening {
+  animation: tp-overlay-fade-in 300ms var(--tp-ease-smooth) forwards;
+}
+
+.drawer-overlay.closing {
+  animation: tp-overlay-fade-out 250ms var(--tp-ease-smooth) forwards;
+}
+
+@keyframes tp-drawer-content-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.drawer-content {
+  opacity: 0;
+  animation: tp-drawer-content-appear 200ms var(--tp-ease-out) 150ms forwards;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7. HOVER MICRO-INTERACTIONS
+   Card elevation, button scale, glow effects
+   ════════════════════════════════════════════════════════════════════════ */
+
+.stat-card,
+.chart-container,
+.table-card,
+.interactive {
+  transition: transform var(--tp-duration-instant) var(--tp-ease-smooth),
+              box-shadow var(--tp-duration-instant) var(--tp-ease-smooth),
+              border-color var(--tp-duration-instant) var(--tp-ease-smooth),
+              background var(--tp-duration-instant) var(--tp-ease-smooth);
+  will-change: transform, box-shadow;
+}
+
+.stat-card:hover,
+.chart-container:hover,
+.table-card:hover,
+.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.btn,
+.chart-action,
+.filter-chip {
+  transition: transform var(--tp-duration-instant) var(--tp-ease-smooth),
+              background var(--tp-duration-instant) var(--tp-ease-smooth),
+              border-color var(--tp-duration-instant) var(--tp-ease-smooth),
+              box-shadow var(--tp-duration-instant) var(--tp-ease-smooth);
+  will-change: transform;
+}
+
+.btn:hover,
+.chart-action:hover {
+  transform: scale(1.02);
+}
+
+.btn.primary:hover {
+  transform: scale(1.03);
+}
+
+.filter-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.filter-chip.active {
+  transform: translateY(-2px);
+}
+
+.nav a {
+  transition: all var(--tp-duration-instant) var(--tp-ease-smooth);
+}
+
+.nav a:hover {
+  transform: translateX(4px);
+  color: var(--tp-accent);
+}
+
+tbody tr {
+  transition: background var(--tp-duration-instant) var(--tp-ease-smooth),
+              transform var(--tp-duration-instant) var(--tp-ease-smooth);
+}
+
+tbody tr:hover,
+tbody tr.highlighted {
+  transform: translateY(-1px);
+  background: rgba(99, 102, 241, 0.05);
+  box-shadow: inset 0 -1px 0 rgba(99, 102, 241, 0.2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   8. MODE SWITCH ANIMATION
+   Smooth expand/collapse (300ms)
+   ════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tp-expand-down {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tp-collapse-up {
+  from {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.advanced-section {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height var(--tp-duration-normal) var(--tp-ease-smooth),
+              opacity var(--tp-duration-normal) var(--tp-ease-smooth),
+              transform var(--tp-duration-normal) var(--tp-ease-smooth);
+  will-change: max-height, opacity;
+}
+
+.advanced-section.visible {
+  animation: tp-expand-down var(--tp-duration-normal) var(--tp-ease-out) forwards;
+  max-height: 1000px;
+}
+
+.advanced-section.hiding {
+  animation: tp-collapse-up var(--tp-duration-normal) var(--tp-ease-smooth) forwards;
+}
+
+.mode-toggle {
+  transition: all var(--tp-duration-quick) var(--tp-ease-smooth);
+  will-change: transform;
+}
+
+.mode-toggle:hover {
+  transform: scale(1.05);
+}
+
+.mode-toggle.active {
+  background: var(--tp-accent);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   9. LOADING SKELETONS
+   Pulse and shimmer effects
+   ════════════════════════════════════════════════════════════════════════ */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--tp-bg3) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    var(--tp-bg3) 100%
+  );
+  background-size: 200% 100%;
+  animation: tp-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton.text-sm { height: 12px; border-radius: 2px; }
+.skeleton.text-md { height: 16px; border-radius: 2px; }
+.skeleton.text-lg { height: 20px; border-radius: 4px; }
+.skeleton.chart { height: 240px; border-radius: 8px; }
+.skeleton.card { height: 120px; border-radius: 8px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   10. REFRESH INDICATOR ANIMATION
+   Pulse on data refresh
+   ════════════════════════════════════════════════════════════════════════ */
+
+@keyframes tp-refresh-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  40% { opacity: 0.7; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes tp-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.refresh-badge {
+  animation: tp-refresh-pulse 600ms ease-in-out;
+}
+
+.refresh-badge.updating {
+  animation: tp-refresh-spin 1s linear infinite;
+}
+
+.refresh-timestamp {
+  animation: tp-fade-in var(--tp-duration-quick) var(--tp-ease-out) forwards;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   11. UTILITY ANIMATIONS
+   Reusable fade, slide, and other effects
+   ════════════════════════════════════════════════════════════════════════ */
+
+.fade-in {
+  animation: tp-fade-in var(--tp-duration-quick) var(--tp-ease-out) forwards;
+}
+
+.fade-out {
+  animation: tp-fade-out var(--tp-duration-instant) var(--tp-ease-smooth) forwards;
+}
+
+.slide-in-right {
+  animation: tp-slide-in-right var(--tp-duration-normal) var(--tp-ease-out) forwards;
+}
+
+.slide-out-right {
+  animation: tp-slide-out-right var(--tp-duration-normal) var(--tp-ease-smooth) forwards;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   12. PERFORMANCE: Will-change Hints
+   Applied selectively to avoid performance overhead
+   ════════════════════════════════════════════════════════════════════════ */
+
+.stat-value {
+  will-change: contents;
+}
+
+.chart-canvas-wrapper {
+  will-change: opacity;
+}
+
+.drawer {
+  will-change: transform;
+}
+
+/* Remove will-change when not animating */
+.stat-value:not(.animating) {
+  will-change: auto;
+}
+
+.chart-canvas-wrapper:not(.fading-in):not(.fading-out) {
+  will-change: auto;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   13. RESPONSIVE MOTION
+   Faster animations on mobile/low-performance devices
+   ════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  :root {
+    --tp-duration-normal: 200ms;
+    --tp-duration-slow: 300ms;
+  }
+
+  .stat-card:hover,
+  .chart-container:hover,
+  .table-card:hover {
+    transform: translateY(0);
+  }
+
+  .btn:hover {
+    transform: scale(1.01);
+  }
+
+  .drawer {
+    width: 100%;
+  }
+
+  .drawer,
+  .drawer-overlay {
+    animation-duration: 200ms;
+  }
+}
+
+/* Respect prefers-reduced-motion for animations */
+@media (prefers-color-scheme: dark) {
+  .chart-container.loading {
+    background: rgba(99, 102, 241, 0.05);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   14. DEPTH LEVEL UTILITIES
+   Z-index stacking for depth levels
+   ════════════════════════════════════════════════════════════════════════ */
+
+.depth-1 { z-index: 1; }
+.depth-2 { z-index: 100; }
+.depth-3 { z-index: 200; }
+.depth-4 { z-index: 300; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   15. TRANSITIONS FOR COMMON STATE CHANGES
+   ════════════════════════════════════════════════════════════════════════ */
+
+[hidden] {
+  display: none !important;
+}
+
+.visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.invisible {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.active {
+  pointer-events: auto;
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

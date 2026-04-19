@@ -1,0 +1,640 @@
+
+{# Trust & Transparency bar #}
+<div id="trust-bar-finops" data-trust-bar style="margin-bottom:var(--space-lg)"></div>
+<!-- FinOps Partial — refreshed by HTMX every 30s -->
+
+<!-- ── Trust Bar ───────────────────────────────────────────────────────── -->
+<div class="trust-bar">
+  <div class="trust-bar-left">
+    <span class="recon-status-slot recon-badge recon-warn">⚠ Estimated</span>
+    <span class="refresh-timestamp">Data as of: just now</span>
+  </div>
+  <div class="trust-bar-right">
+    <span class="pricing-version-slot"></span>
+    <button data-advanced-toggle onclick="toggleAdvancedMode()" title="Show calculation formulas">Advanced</button>
+  </div>
+</div>
+
+<!-- ── Stat Cards (trust-enhanced) ────────────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card" data-metric="total_cost">
+    <div class="stat-label">Total Cost (Actual) <span class="metric-info-icon" data-metric="total_cost">ⓘ</span></div>
+    <div class="stat-value" data-animate-number="true" data-format="currency">${{ "%.2f"|format(totals.total_actual_cost or 0) }}</div>
+    <div class="stat-delta">provider-reported · {{ days }}d</div>
+    <div class="formula-expansion">
+      <div class="formula-title">Formula</div>
+      <code class="formula-code">SUM(input_tokens × input_rate + output_tokens × output_rate)</code>
+      <div class="formula-inputs">
+        <div class="formula-row"><span class="formula-key">actual_cost:</span><span class="formula-val">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="stat-card" data-metric="total_savings">
+    <div class="stat-label">Total Savings <span class="metric-info-icon" data-metric="total_savings">ⓘ</span></div>
+    <div class="stat-value positive" data-animate-number="true" data-format="currency">${{ "%.2f"|format(totals.total_savings or 0) }}</div>
+    <div class="stat-delta">
+      {% set baseline = (totals.total_actual_cost or 0) + (totals.total_savings or 0) %}
+      {% if baseline > 0 %}{{ "%.1f"|format((totals.total_savings or 0) / baseline * 100) }}% reduction{% else %}—{% endif %}
+    </div>
+    <div class="formula-expansion">
+      <div class="formula-title">Formula</div>
+      <code class="formula-code">baseline_cost − actual_cost</code>
+      <div class="formula-inputs">
+        {% set baseline = (totals.total_actual_cost or 0) + (totals.total_savings or 0) %}
+        <div class="formula-row"><span class="formula-key">baseline:</span><span class="formula-val">${{ "%.4f"|format(baseline) }}</span></div>
+        <div class="formula-row"><span class="formula-key">actual:</span><span class="formula-val">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</span></div>
+        <div class="formula-row"><span class="formula-key">savings:</span><span class="formula-val">${{ "%.4f"|format(totals.total_savings or 0) }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="stat-card" data-metric="total_requests">
+    <div class="stat-label">Total Requests <span class="metric-info-icon" data-metric="total_requests">ⓘ</span></div>
+    <div class="stat-value accent" data-animate-number="true" data-format="number">{{ "{:,}".format(totals.total_requests or 0) }}</div>
+    <div class="stat-delta">{{ days }} days</div>
+  </div>
+  <div class="stat-card" data-metric="cost_per_request">
+    <div class="stat-label">Cost / Request <span class="metric-info-icon" data-metric="cost_per_request">ⓘ</span></div>
+    <div class="stat-value">
+      {% if totals.total_requests and totals.total_requests > 0 %}
+        ${{ "%.4f"|format((totals.total_actual_cost or 0) / totals.total_requests) }}
+      {% else %}—{% endif %}
+    </div>
+    <div class="stat-delta">avg per request</div>
+    <div class="formula-expansion">
+      <div class="formula-title">Formula</div>
+      <code class="formula-code">total_cost ÷ total_requests</code>
+    </div>
+  </div>
+</div>
+
+<!-- ── Chart 1: Baseline vs Actual Cost (full width) ──────────────────── -->
+<div class="chart-section">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Baseline vs Actual Cost</h3>
+        <span class="chart-subtitle">Dashed = baseline · Blue = actual · Green = savings · {{ days }} days</span>
+      </div>
+      <div class="chart-actions">
+        <button class="chart-action" data-chart-id="finops-baseline-actual" data-action="csv">CSV</button>
+        <button class="chart-action" data-chart-id="finops-baseline-actual" data-action="png">PNG</button>
+      </div>
+    </div>
+    <div class="chart-status"><span class="data-badge badge-estimated">⚠ Estimated</span></div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:240px;">
+      <canvas id="finops-baseline-actual" data-source="estimated"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;">
+        <p>No cost data for this period</p><p class="chart-empty-hint">Try expanding the date range</p>
+      </div>
+    </div>
+    <div class="chart-legend" id="legend-finops-baseline-actual"></div>
+  </div>
+</div>
+
+<!-- ── Charts 2 & 3: Provider + Model ─────────────────────────────────── -->
+<div class="charts-row-2col">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Cost by Provider</h3>
+        <span class="chart-subtitle">Click bar to filter dashboard</span>
+      </div>
+      <div class="chart-actions">
+        <button class="chart-action" data-chart-id="finops-cost-provider" data-action="csv">CSV</button>
+        <button class="chart-action" data-chart-id="finops-cost-provider" data-action="png">PNG</button>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:220px;">
+      <canvas id="finops-cost-provider"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No provider data yet</p></div>
+    </div>
+    <div class="chart-legend" id="legend-finops-cost-provider"></div>
+  </div>
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Cost by Model</h3>
+        <span class="chart-subtitle">Top 10 · Click to filter</span>
+      </div>
+      <div class="chart-actions">
+        <button class="chart-action" data-chart-id="finops-cost-model" data-action="csv">CSV</button>
+        <button class="chart-action" data-chart-id="finops-cost-model" data-action="png">PNG</button>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:220px;">
+      <canvas id="finops-cost-model"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No model data yet</p></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Charts 5 & 6: Savings by Model + Compression Gauge ─────────────── -->
+<div class="charts-row-2col" style="margin-top:var(--space-lg,1.5rem)">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Savings by Model</h3>
+        <span class="chart-subtitle">Top 5 · Sorted by savings · Click to filter</span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:180px;">
+      <canvas id="finops-savings-by-model"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;"><p>No savings by model yet</p></div>
+    </div>
+  </div>
+  <div class="chart-container" id="compression-gauge-card">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Compression %</h3>
+        <span class="chart-subtitle">Avg across all requests · refreshes every 30s</span>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:180px;">
+      <canvas id="finops-compression-gauge"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── Chart 4: Savings Over Time ─────────────────────────────────────── -->
+<div class="chart-section">
+  <div class="chart-container">
+    <div class="chart-header">
+      <div class="chart-header-text">
+        <h3 class="chart-title">Savings Over Time</h3>
+        <span class="chart-subtitle">ROI trend · Click to filter to date</span>
+      </div>
+      <div class="chart-header-controls">
+        <div class="toggle-group">
+          <button class="toggle-btn active" data-savings-mode="dollars">$</button>
+          <button class="toggle-btn" data-savings-mode="percent">%</button>
+          <button class="toggle-btn" data-savings-mode="tokens">Tokens</button>
+        </div>
+        <div class="chart-actions">
+          <button class="chart-action" data-chart-id="finops-savings-time" data-action="csv">CSV</button>
+          <button class="chart-action" data-chart-id="finops-savings-time" data-action="png">PNG</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-canvas-wrapper" style="position:relative;height:200px;">
+      <canvas id="finops-savings-time" data-source="estimated"></canvas>
+      <div class="chart-empty" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--text-muted);font-size:13px;">
+        <p>No savings data — compression may not be active</p>
+      </div>
+    </div>
+    <div class="chart-legend" id="legend-finops-savings-time"></div>
+  </div>
+</div>
+
+<!-- ── Cost Breakdown Tables ─────────────────────────────────────────── -->
+<div class="breakdown-tables-section">
+
+<!-- Tab nav -->
+<div class="breakdown-tabs" role="tablist" aria-label="Cost breakdown">
+  <button class="breakdown-tab active" role="tab" aria-selected="true" data-tab="provider" onclick="switchBreakdownTab('provider', this)">Provider</button>
+  <button class="breakdown-tab" role="tab" aria-selected="false" data-tab="model" onclick="switchBreakdownTab('model', this)">Model</button>
+  <button class="breakdown-tab" role="tab" aria-selected="false" data-tab="agent" onclick="switchBreakdownTab('agent', this)">Agent</button>
+</div>
+
+<!-- ── Provider Breakdown Table ──────────────────────────────────────── -->
+<div id="breakdown-provider" class="breakdown-pane" style="display:block">
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">Provider Breakdown</span>
+      <button class="table-export-btn" onclick="exportTableCSV('tbl-provider', 'provider-breakdown.csv')" title="Export CSV">↓ CSV</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table id="tbl-provider" class="rollup-table" data-sort-col="3" data-sort-dir="desc">
+      <thead>
+        <tr>
+          <th class="col-str" data-col="0" onclick="sortTable('tbl-provider',0)">Provider <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="1" onclick="sortTable('tbl-provider',1)">Requests <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="2" onclick="sortTable('tbl-provider',2)">Baseline <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="3" onclick="sortTable('tbl-provider',3)" aria-sort="descending">Actual Cost <span class="sort-icon sort-desc">▼</span></th>
+          <th class="col-num" data-col="4" onclick="sortTable('tbl-provider',4)">Savings <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="5" onclick="sortTable('tbl-provider',5)">Savings % <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="6" onclick="sortTable('tbl-provider',6)">Avg/Req <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="7" onclick="sortTable('tbl-provider',7)">Tokens (Raw→Final) <span class="sort-icon"></span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set total_cost_sum = (totals.total_actual_cost or 0) %}
+        {% set total_req_sum = (totals.total_requests or 0) %}
+        {% set total_sav_sum = (totals.total_savings or 0) %}
+        {% for row in by_provider %}
+        {% set row_cost = row.cost or 0 %}
+        {% set row_requests = row.requests or 0 %}
+        {% set row_savings = row.savings or 0 %}
+        {% set baseline = row_cost + row_savings %}
+        {% set avg_cost = (row_cost / row_requests) if row_requests > 0 else 0 %}
+        {% set savings_pct = (row_savings / baseline * 100) if baseline > 0 else 0 %}
+        {% set raw_tokens = row.avg_raw_tokens or 0 %}
+        {% set final_tokens = row.avg_final_tokens or 0 %}
+        <tr onclick="applyFilter('provider','{{ row.provider or '' }}')" style="cursor:pointer" title="Click to filter by this provider">
+          <td class="col-str"><span class="dim-pill">{{ row.provider or 'unknown' }}</span></td>
+          <td class="col-num" data-val="{{ row_requests }}">{{ "{:,}".format(row_requests|int) }}</td>
+          <td class="col-num" data-val="{{ baseline }}">${{ "%.4f"|format(baseline) }}</td>
+          <td class="col-num" data-val="{{ row_cost }}">${{ "%.4f"|format(row_cost) }}</td>
+          <td class="col-num positive" data-val="{{ row_savings }}">${{ "%.4f"|format(row_savings) }}</td>
+          <td class="col-num" data-val="{{ savings_pct }}">
+            <span class="savings-pct-badge" style="background:rgba(34,197,94,{{ [savings_pct/100*0.8,0.8]|min|round(2) }})">{{ "%.1f"|format(savings_pct) }}%</span>
+          </td>
+          <td class="col-num" data-val="{{ avg_cost }}">${{ "%.5f"|format(avg_cost) }}</td>
+          <td class="col-num" data-val="{{ raw_tokens }}">{{ "{:,.0f}".format(raw_tokens) }} → {{ "{:,.0f}".format(final_tokens) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="table-empty-state">No provider data for this period</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if by_provider %}
+      <tfoot>
+        {% set tot_baseline = (totals.total_actual_cost or 0) + (totals.total_savings or 0) %}
+        {% set tot_sav_pct = (totals.total_savings / tot_baseline * 100) if tot_baseline > 0 else 0 %}
+        <tr class="totals-row">
+          <td><strong>Total</strong></td>
+          <td class="col-num">{{ "{:,}".format((totals.total_requests or 0)|int) }}</td>
+          <td class="col-num">${{ "%.4f"|format(tot_baseline) }}</td>
+          <td class="col-num">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</td>
+          <td class="col-num positive">${{ "%.4f"|format(totals.total_savings or 0) }}</td>
+          <td class="col-num"><span class="savings-pct-badge" style="background:rgba(34,197,94,{{ [tot_sav_pct/100*0.8,0.8]|min|round(2) }})">{{ "%.1f"|format(tot_sav_pct) }}%</span></td>
+          <td class="col-num">${{ "%.5f"|format(totals.avg_cost or 0) }}</td>
+          <td class="col-num">{{ "{:,.0f}".format(totals.avg_raw_tokens or 0) }} → {{ "{:,.0f}".format(totals.avg_final_tokens or 0) }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Model Breakdown Table ──────────────────────────────────────────── -->
+<div id="breakdown-model" class="breakdown-pane" style="display:none">
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">Model Breakdown (Top 20)</span>
+      <button class="table-export-btn" onclick="exportTableCSV('tbl-model', 'model-breakdown.csv')" title="Export CSV">↓ CSV</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table id="tbl-model" class="rollup-table" data-sort-col="3" data-sort-dir="desc">
+      <thead>
+        <tr>
+          <th class="col-str" data-col="0" onclick="sortTable('tbl-model',0)">Model <span class="sort-icon"></span></th>
+          <th class="col-str" data-col="1" onclick="sortTable('tbl-model',1)">Provider <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="2" onclick="sortTable('tbl-model',2)">Requests <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="3" onclick="sortTable('tbl-model',3)" aria-sort="descending">Actual Cost <span class="sort-icon sort-desc">▼</span></th>
+          <th class="col-num" data-col="4" onclick="sortTable('tbl-model',4)">Savings <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="5" onclick="sortTable('tbl-model',5)">Tokens Raw <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="6" onclick="sortTable('tbl-model',6)">Tokens Final <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="7" onclick="sortTable('tbl-model',7)">Compression % <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="8" onclick="sortTable('tbl-model',8)">% of Total <span class="sort-icon"></span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set total_cost_sum = (totals.total_actual_cost or 0) %}
+        {% for row in by_model %}
+        {% set row_cost = row.cost or 0 %}
+        {% set row_requests = row.requests or 0 %}
+        {% set row_savings = row.savings or 0 %}
+        {% set raw_tokens = row.avg_raw_tokens or 0 %}
+        {% set final_tokens = row.avg_final_tokens or 0 %}
+        {% set compression_pct = ((raw_tokens - final_tokens) / raw_tokens * 100) if raw_tokens > 0 else 0 %}
+        {% set pct_of_total = (row_cost / total_cost_sum * 100) if total_cost_sum > 0 else 0 %}
+        <tr onclick="applyFilter('model','{{ row.model or '' }}')" style="cursor:pointer" title="Click to filter by this model">
+          <td class="col-str"><span class="dim-pill">{{ row.model or 'unknown' }}</span></td>
+          <td class="col-str">{{ row.provider or '—' }}</td>
+          <td class="col-num" data-val="{{ row_requests }}">{{ "{:,}".format(row_requests|int) }}</td>
+          <td class="col-num" data-val="{{ row_cost }}">${{ "%.4f"|format(row_cost) }}</td>
+          <td class="col-num positive" data-val="{{ row_savings }}">${{ "%.4f"|format(row_savings) }}</td>
+          <td class="col-num" data-val="{{ raw_tokens }}">{{ "{:,.0f}".format(raw_tokens) }}</td>
+          <td class="col-num" data-val="{{ final_tokens }}">{{ "{:,.0f}".format(final_tokens) }}</td>
+          <td class="col-num" data-val="{{ compression_pct }}">
+            {% if raw_tokens > 0 %}
+            <span class="savings-pct-badge" style="background:rgba(99,179,237,{{ [compression_pct/100*0.7,0.7]|min|round(2) }})">{{ "%.1f"|format(compression_pct) }}%</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="col-num accent" data-val="{{ pct_of_total }}">{{ "%.1f"|format(pct_of_total) }}%</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="table-empty-state">No model data for this period</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if by_model %}
+      <tfoot>
+        {% set tot_raw = totals.avg_raw_tokens or 0 %}
+        {% set tot_final = totals.avg_final_tokens or 0 %}
+        {% set tot_compression = ((tot_raw - tot_final) / tot_raw * 100) if tot_raw > 0 else 0 %}
+        <tr class="totals-row">
+          <td><strong>Total</strong></td>
+          <td>—</td>
+          <td class="col-num">{{ "{:,}".format((totals.total_requests or 0)|int) }}</td>
+          <td class="col-num">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</td>
+          <td class="col-num positive">${{ "%.4f"|format(totals.total_savings or 0) }}</td>
+          <td class="col-num">{{ "{:,.0f}".format(tot_raw) }}</td>
+          <td class="col-num">{{ "{:,.0f}".format(tot_final) }}</td>
+          <td class="col-num">{% if tot_raw > 0 %}<span class="savings-pct-badge" style="background:rgba(99,179,237,{{ [tot_compression/100*0.7,0.7]|min|round(2) }})">{{ "%.1f"|format(tot_compression) }}%</span>{% else %}—{% endif %}</td>
+          <td class="col-num accent">100%</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Agent Breakdown Table ──────────────────────────────────────────── -->
+<div id="breakdown-agent" class="breakdown-pane" style="display:none">
+  <div class="table-card">
+    <div class="table-card-header">
+      <span class="table-card-title">Agent Breakdown</span>
+      <button class="table-export-btn" onclick="exportTableCSV('tbl-agent', 'agent-breakdown.csv')" title="Export CSV">↓ CSV</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table id="tbl-agent" class="rollup-table" data-sort-col="2" data-sort-dir="desc">
+      <thead>
+        <tr>
+          <th class="col-str" data-col="0" onclick="sortTable('tbl-agent',0)">Agent ID <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="1" onclick="sortTable('tbl-agent',1)">Requests <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="2" onclick="sortTable('tbl-agent',2)" aria-sort="descending">Total Cost <span class="sort-icon sort-desc">▼</span></th>
+          <th class="col-num" data-col="3" onclick="sortTable('tbl-agent',3)">Avg Cost/Req <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="4" onclick="sortTable('tbl-agent',4)">Tokens Used <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="5" onclick="sortTable('tbl-agent',5)">Avg Req Size <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="6" onclick="sortTable('tbl-agent',6)">Savings <span class="sort-icon"></span></th>
+          <th class="col-num" data-col="7" onclick="sortTable('tbl-agent',7)">Compression % <span class="sort-icon"></span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in by_agent %}
+        {% set row_cost = row.cost or 0 %}
+        {% set row_requests = row.requests or 0 %}
+        {% set row_savings = row.savings or 0 %}
+        {% set raw_tokens = row.avg_raw_tokens or 0 %}
+        {% set final_tokens = row.avg_final_tokens or 0 %}
+        {% set avg_cost = (row_cost / row_requests) if row_requests > 0 else 0 %}
+        {% set avg_req_size = final_tokens %}
+        {% set compression_pct = ((raw_tokens - final_tokens) / raw_tokens * 100) if raw_tokens > 0 else 0 %}
+        <tr onclick="applyFilter('agent_id','{{ row.agent_id or '' }}')" style="cursor:pointer" title="Click to filter by this agent">
+          <td class="col-str"><span class="dim-pill">{{ row.agent_id or 'unknown' }}</span></td>
+          <td class="col-num" data-val="{{ row_requests }}">{{ "{:,}".format(row_requests|int) }}</td>
+          <td class="col-num" data-val="{{ row_cost }}">${{ "%.4f"|format(row_cost) }}</td>
+          <td class="col-num" data-val="{{ avg_cost }}">${{ "%.5f"|format(avg_cost) }}</td>
+          <td class="col-num" data-val="{{ final_tokens }}">{{ "{:,.0f}".format(final_tokens) }}</td>
+          <td class="col-num" data-val="{{ avg_req_size }}">{{ "{:,.0f}".format(avg_req_size) }}</td>
+          <td class="col-num positive" data-val="{{ row_savings }}">${{ "%.4f"|format(row_savings) }}</td>
+          <td class="col-num" data-val="{{ compression_pct }}">
+            {% if raw_tokens > 0 %}
+            <span class="savings-pct-badge" style="background:rgba(99,179,237,{{ [compression_pct/100*0.7,0.7]|min|round(2) }})">{{ "%.1f"|format(compression_pct) }}%</span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="table-empty-state">No agent data — agent IDs not tracked or no multi-agent setup</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if by_agent %}
+      <tfoot>
+        <tr class="totals-row">
+          <td><strong>Total</strong></td>
+          <td class="col-num">{{ "{:,}".format((totals.total_requests or 0)|int) }}</td>
+          <td class="col-num">${{ "%.4f"|format(totals.total_actual_cost or 0) }}</td>
+          <td class="col-num">${{ "%.5f"|format(totals.avg_cost or 0) }}</td>
+          <td class="col-num">{{ "{:,.0f}".format(totals.avg_final_tokens or 0) }}</td>
+          <td class="col-num">{{ "{:,.0f}".format(totals.avg_final_tokens or 0) }}</td>
+          <td class="col-num positive">${{ "%.4f"|format(totals.total_savings or 0) }}</td>
+          <td class="col-num">—</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+    </div>
+  </div>
+</div>
+
+</div>{# /breakdown-tables-section #}
+
+<style>
+/* ── Rollup Table Styles ─────────────────────────────────────── */
+.breakdown-tables-section { margin-top: var(--space-xl, 2rem); }
+
+.breakdown-tabs {
+  display: flex; gap: 0; border-bottom: 2px solid var(--border, #2a2a3a);
+  margin-bottom: 0;
+}
+.breakdown-tab {
+  padding: .5rem 1.25rem; background: none; border: none; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; cursor: pointer; font-size: .875rem; font-weight: 500;
+  color: var(--text-muted, #888); transition: color .15s, border-color .15s;
+}
+.breakdown-tab.active, .breakdown-tab[aria-selected="true"] {
+  color: var(--text, #fff); border-bottom-color: var(--accent, #60a5fa);
+}
+.breakdown-tab:hover { color: var(--text, #fff); }
+
+.rollup-table {
+  width: 100%; border-collapse: collapse; font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+.rollup-table thead th {
+  position: sticky; top: 0; background: var(--surface-2, #16161e); z-index: 2;
+  padding: .5rem .75rem; text-align: right; font-size: .75rem; font-weight: 600;
+  color: var(--text-muted, #888); white-space: nowrap; cursor: pointer;
+  border-bottom: 1px solid var(--border, #2a2a3a); user-select: none;
+}
+.rollup-table thead th.col-str { text-align: left; }
+.rollup-table thead th:hover { color: var(--text, #fff); }
+
+.rollup-table tbody tr { border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,.04)); }
+.rollup-table tbody tr:hover { background: var(--row-hover, rgba(255,255,255,.04)); }
+.rollup-table tbody tr:last-child { border-bottom: none; }
+
+.rollup-table td { padding: .45rem .75rem; text-align: right; vertical-align: middle; }
+.rollup-table td.col-str { text-align: left; }
+
+.rollup-table tfoot .totals-row { border-top: 2px solid var(--border, #2a2a3a); }
+.rollup-table tfoot td { padding: .5rem .75rem; text-align: right; font-size: .8rem; }
+.rollup-table tfoot td:first-child { text-align: left; }
+
+.sort-icon { font-size: .65rem; opacity: .5; }
+.sort-icon.sort-asc::after { content: "▲"; opacity: 1; }
+.sort-icon.sort-desc { opacity: 1; }
+
+.dim-pill {
+  display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; vertical-align: middle;
+}
+
+.savings-pct-badge {
+  display: inline-block; padding: .15rem .4rem; border-radius: 4px;
+  font-size: .75rem; font-weight: 600; color: var(--text, #fff);
+}
+
+.table-empty-state {
+  text-align: center; color: var(--text-muted, #888); padding: 2rem;
+}
+
+.table-card-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.table-export-btn {
+  font-size: .75rem; padding: .2rem .6rem; background: var(--surface-3, #1e1e2e);
+  border: 1px solid var(--border, #2a2a3a); border-radius: 4px; cursor: pointer;
+  color: var(--text-muted, #888); transition: color .15s;
+}
+.table-export-btn:hover { color: var(--text, #fff); }
+
+.positive { color: var(--color-savings, #4ade80); }
+.accent { color: var(--accent, #60a5fa); }
+</style>
+
+<script>
+(function () {
+  // Tab switching
+  window.switchBreakdownTab = function(tabId, btn) {
+    document.querySelectorAll('.breakdown-pane').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.breakdown-tab').forEach(b => {
+      b.classList.remove('active'); b.setAttribute('aria-selected', 'false');
+    });
+    const pane = document.getElementById('breakdown-' + tabId);
+    if (pane) pane.style.display = 'block';
+    if (btn) { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
+  };
+
+  // Sortable tables
+  window.sortTable = function(tableId, colIdx) {
+    const tbl = document.getElementById(tableId);
+    if (!tbl) return;
+    const tbody = tbl.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const th = tbl.querySelectorAll('thead th')[colIdx];
+    const isStr = th.classList.contains('col-str');
+    const curDir = tbl.dataset.sortDir === 'asc' && parseInt(tbl.dataset.sortCol) === colIdx ? 'desc' : 'asc';
+    tbl.dataset.sortDir = curDir; tbl.dataset.sortCol = colIdx;
+
+    // Update all sort icons
+    tbl.querySelectorAll('.sort-icon').forEach(s => { s.className = 'sort-icon'; s.textContent = ''; });
+    const icon = th.querySelector('.sort-icon');
+    if (icon) { icon.className = 'sort-icon ' + (curDir === 'asc' ? 'sort-asc' : 'sort-desc'); icon.textContent = curDir === 'asc' ? '▲' : '▼'; }
+    th.setAttribute('aria-sort', curDir === 'asc' ? 'ascending' : 'descending');
+
+    rows.sort((a, b) => {
+      const aCell = a.cells[colIdx]; const bCell = b.cells[colIdx];
+      if (!aCell || !bCell) return 0;
+      let aVal = aCell.dataset.val !== undefined ? parseFloat(aCell.dataset.val) : NaN;
+      let bVal = bCell.dataset.val !== undefined ? parseFloat(bCell.dataset.val) : NaN;
+      if (isStr || isNaN(aVal)) {
+        aVal = aCell.textContent.trim().toLowerCase();
+        bVal = bCell.textContent.trim().toLowerCase();
+        return curDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      return curDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  };
+
+  // Click-to-filter
+  window.applyFilter = function(dimension, value) {
+    if (!value) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(dimension) === value) {
+      url.searchParams.delete(dimension); // toggle off
+    } else {
+      url.searchParams.set(dimension, value);
+    }
+    window.location.href = url.toString();
+  };
+
+  // CSV export
+  window.exportTableCSV = function(tableId, filename) {
+    const tbl = document.getElementById(tableId);
+    if (!tbl) return;
+    const rows = [];
+    tbl.querySelectorAll('thead tr, tbody tr, tfoot tr').forEach(tr => {
+      const cells = Array.from(tr.querySelectorAll('th, td')).map(c => {
+        let v = c.textContent.trim().replace(/[▲▼]/g,'').trim();
+        if (v.includes(',') || v.includes('"')) v = '"' + v.replace(/"/g,'""') + '"';
+        return v;
+      });
+      rows.push(cells.join(','));
+    });
+    const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+})();
+</script>
+
+<script>
+(function () {
+  const costData       = {{ cost_timeseries | tojson }};
+  const savingsData    = {{ savings_timeseries | tojson }};
+  const byProvider     = {{ by_provider | tojson }};
+  const byModel        = {{ by_model | tojson }};
+  const byAgent        = {{ by_agent | tojson }};
+  const compressionPct = {{ savings_summary.compression_pct | default(0) }};
+  if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel, compressionPct);
+  else window.addEventListener('load', () => { if (window.TokenPakFinOps) TokenPakFinOps.init(costData, savingsData, byProvider, byModel, compressionPct); });
+  // Notify trust layer of refresh
+  if (window.TokenPakTrust) TokenPakTrust.setLastRefresh(Date.now());
+})();
+</script>
+
+
+<!-- Compression Summary (FinOps) -->
+<div id="compression-summary-finops"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.CompressionExplainer) {
+    const data = {
+      raw: Math.round(({{ total_cost|default(0) }} / 0.60) / 0.00015 * 100) / 100,
+      qmd: 0,
+      tokenpak: 0,
+      final: Math.round({{ total_cost|default(0) }} / 0.00015 * 100) / 100,
+      cost_raw: {{ total_cost|default(0) }} / 0.60,
+      cost_final: {{ total_cost|default(0) }},
+      savings: {{ total_savings|default(0) }},
+    };
+    CompressionExplainer.renderExplainer('compression-summary-finops', data);
+  }
+});
+</script>
+
+<!-- ── Savings Milestones Section ────────────────────────────────────── -->
+<section class="savings-section" aria-label="Savings Milestones">
+  <div class="stat-grid" id="savings-kpi-grid" style="margin-top:var(--space-lg)">
+    <div class="stat-card savings-card" data-metric="lifetime_savings">
+      <div class="stat-label">Lifetime Savings</div>
+      <div class="stat-value positive">${{ "%.4f"|format(savings_summary.lifetime_savings|default(0)) }}</div>
+    </div>
+    <div class="stat-card savings-card" data-metric="savings_30d">
+      <div class="stat-label">Savings — 30 Days</div>
+      <div class="stat-value positive">${{ "%.4f"|format(savings_summary.savings_30d|default(0)) }}</div>
+      <div class="stat-delta trend-indicator">
+        {% if savings_summary.trend_pct is defined %}{% if savings_summary.trend_pct > 0 %}▲ {{ "%.1f"|format(savings_summary.trend_pct) }}%{% elif savings_summary.trend_pct < 0 %}▼ {{ "%.1f"|format(savings_summary.trend_pct|abs) }}%{% else %}—{% endif %}{% endif %}
+      </div>
+    </div>
+    <div class="stat-card savings-card" data-metric="savings_7d">
+      <div class="stat-label">Savings — 7 Days</div>
+      <div class="stat-value positive">${{ "%.4f"|format(savings_summary.savings_7d|default(0)) }}</div>
+    </div>
+    <div class="stat-card savings-card" data-metric="efficiency_score">
+      <div class="stat-label">Efficiency Score</div>
+      <div class="stat-value accent">{{ "%.1f"|format(savings_summary.efficiency_score|default(0)) }}</div>
+    </div>
+  </div>
+  <div class="chart-wrapper" style="margin-top:var(--space-lg)">
+    <canvas id="savings-progression-chart" data-chart-payload="{{ savings_history | tojson | e }}" height="200"></canvas>
+  </div>
+  <div class="milestone-toasts" role="status" aria-live="polite">
+    {% for milestone in pending_milestones %}
+    <div class="milestone-toast" data-milestone-id="{{ milestone.id }}" role="alert" aria-live="assertive">
+      <div class="milestone-toast-body">
+        <span class="milestone-icon">🏆</span>
+        <div class="milestone-content">
+          <div class="milestone-label">{{ milestone.label }}</div>
+        </div>
+      </div>
+      <button class="milestone-dismiss" onclick="TokenPakMilestones.dismissMilestone({{ milestone.id }}, this)" aria-label="Dismiss">✕</button>
+    </div>
+    {% endfor %}
+  </div>
+</section>

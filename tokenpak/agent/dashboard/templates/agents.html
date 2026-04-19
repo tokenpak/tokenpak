@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Agents — TokenPak Dashboard{% endblock %}
+{% block nav_agents %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Agent Leaderboard</div>
+    <div class="page-subtitle">{{ rows | length }} agents active on {{ query_date }}</div>
+  </div>
+  <form class="controls" style="margin:0" method="get">
+    <label>Date</label>
+    <input type="date" name="date" value="{{ query_date }}" max="{{ today }}">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <button class="btn" type="submit">Load</button>
+    {% if query_date != today %}
+    <a href="/dashboard/agents" class="btn btn-ghost">Today</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    {% if rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Agent</th>
+          <th><a href="?date={{ query_date }}&sort=requests" class="sort-link {% if sort == 'requests' %}active{% endif %}">Requests &#8597;</a></th>
+          <th><a href="?date={{ query_date }}&sort=tokens" class="sort-link {% if sort == 'tokens' %}active{% endif %}">Tokens &#8597;</a></th>
+          <th><a href="?date={{ query_date }}&sort=compression" class="sort-link {% if sort == 'compression' %}active{% endif %}">Avg Compression &#8597;</a></th>
+          <th>Samples</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="rank">{{ loop.index }}</td>
+          <td><span class="agent-badge">{{ row.agent_id }}</span></td>
+          <td>{{ row.request_count }}</td>
+          <td>{{ "{:,}".format(row.total_tokens) }}</td>
+          <td>
+            {% if row.avg_compression_ratio > 0 %}
+            <span style="color:var(--green)">{{ "%.4f"|format(row.avg_compression_ratio) }}</span>
+            {% else %}
+            <span style="color:var(--muted)">&#8212;</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--muted)">{{ row.sample_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:var(--muted);text-align:center;padding:48px 0">
+      No agent activity found for {{ query_date }}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+# TokenPak — Team Internal Config
+# =================================
+# Shared proxy for a team. Auth required on every request.
+# Steps: 1) Set ANTHROPIC_API_KEY  2) Set TOKENPAK_AUTH_TOKEN  3) tokenpak start
+#
+# Best for: small-medium teams sharing one API key budget, internal tooling
+
+port: 8766
+
+# strict = enforce all limits hard (recommended for shared deployments)
+mode: strict
+
+compression:
+  enabled: true
+  threshold_tokens: 3000    # Compress earlier — protects shared budget
+  max_chars: 100
+  cache_size: 5000          # Larger cache benefits multiple users
+
+features:
+  skeleton: true
+  shadow_reader: true
+  router: true
+  validation_gate: true
+  validation_gate_soft: false  # Hard fail on violations — protect shared quota
+
+  # Team features — highly recommended
+  request_logger: true      # Audit trail for all team requests
+  budget_controller: true   # Hard stop at budget limits
+  semantic_cache: true      # Shared cache = big savings across team
+
+  # Advanced (optional)
+  salience_router: false    # Route by request importance
+  failure_memory: false     # Remember and avoid flaky patterns
+
+budget:
+  total_tokens: 50000              # Shared daily token budget
+  validation_gate_cap: 200000      # Max tokens before hard block
+
+upstream:
+  timeout: 300
+
+# Per-user rate limiting
+rate_limit_rpm: 30    # Per-user: 30 requests/minute (lower for fairness)
+
+failover:
+  enabled: true
+  chain:
+    - provider: anthropic
+      credential_env: ANTHROPIC_API_KEY
+    - provider: openai
+      credential_env: OPENAI_API_KEY
+      model_map:
+        claude-opus-4-5: gpt-4o
+        claude-sonnet-4-5: gpt-4o-mini
+        claude-haiku-4-5: gpt-4o-mini

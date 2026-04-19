@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TokenPak{% endblock %} — Telemetry Dashboard</title>
+  <link rel="stylesheet" href="/dashboard/static/css/design-tokens.css">
+  <link rel="stylesheet" href="/dashboard/static/css/components.css">
+  <link rel="stylesheet" href="/dashboard/static/css/layout-shell.css">
+  <link rel="preload" href="/dashboard/static/css/dashboard.css" as="style">
+  <link rel="preload" href="/dashboard/static/js/filters.js" as="script">
+  <link rel="stylesheet" href="/dashboard/static/css/dashboard.css">
+  <link rel="stylesheet" href="/dashboard/static/css/motion.css">
+  <link rel="stylesheet" href="/dashboard/static/css/eye-care.css">
+  <script src="/dashboard/static/js/htmx.min.js" defer></script>
+  <script src="/dashboard/static/js/chart.umd.min.js" defer></script>
+  <script src="/dashboard/static/js/motion.js" defer></script>
+  <script src="/dashboard/static/js/filters.js" defer></script>
+  <script src="/dashboard/static/js/motion-integration.js" defer></script>
+  <script src="/dashboard/static/js/charts/chart-factory.js" defer></script>
+  <script src="/dashboard/static/js/charts/finops-charts.js" defer></script>
+  <script src="/dashboard/static/js/charts/engineering-charts.js" defer></script>
+  <script src="/dashboard/static/js/charts/audit-charts.js" defer></script>
+  <script src="/dashboard/static/js/first-load.js" defer></script>
+  <script src="/dashboard/static/js/settings-ui.js" defer></script>
+  <script src="/dashboard/static/js/search.js" defer></script>
+  <script src="/dashboard/static/js/keyboard-shortcuts.js" defer></script>
+  <script src="/dashboard/static/js/long-session-ux.js" defer></script>
+  <script src="/dashboard/static/js/eye-care.js" defer></script>
+  <script src="/dashboard/static/js/milestones.js" defer></script>
+  <script src="/dashboard/static/js/user-prefs.js" defer></script>
+  <script src="/dashboard/static/js/table-preferences.js" defer></script>
+  <link rel="stylesheet" href="/dashboard/static/css/onboarding.css">
+  <script src="/dashboard/static/js/onboarding.js" defer></script>
+  <link rel="stylesheet" href="/dashboard/static/css/glossary.css">
+  <script src="/dashboard/static/js/glossary.js" defer></script>
+  <script>
+    window.TOKENPAK_GLOSSARY = {{ glossary_data | tojson | safe }};
+  </script>
+  <style>
+    .first-load-status{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 14px;}
+    .first-load-pill{background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:10px;padding:8px 10px;}
+    .first-load-pill .k{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;}
+    .first-load-pill .v{font-size:13px;color:var(--text-primary);margin-top:2px;}
+    .first-load-overlay{display:none;position:absolute;inset:0;background:rgba(11,16,30,.55);backdrop-filter:blur(1px);z-index:5;padding:16px;}
+    .first-load-overlay.active{display:block;}
+    .first-load-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+    .first-load-skel{height:74px;border-radius:10px;background:linear-gradient(90deg,var(--bg-hover) 25%,rgba(255,255,255,.05) 50%,var(--bg-hover) 75%);background-size:200% 100%;animation:flp 1.2s infinite;}
+    .slow-load-msg{display:none;font-size:12px;color:var(--text-muted);margin-top:8px;}
+    .slow-load-msg.active{display:block;}
+    @keyframes flp{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @media (max-width:900px){.first-load-status{grid-template-columns:repeat(2,minmax(0,1fr));}.first-load-grid{grid-template-columns:repeat(2,1fr);} }
+  </style>
+</head>
+<body>
+<div class="refresh-indicator" id="refresh-indicator" aria-hidden="true"></div>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      ⚡ TokenPak
+      <span>Telemetry v1</span>
+    </div>
+    <div class="nav">
+      <a href="/dashboard/finops" class="{% if view == 'finops' %}active{% endif %}">
+        <span class="icon">💰</span>
+        <span>FinOps</span>
+      </a>
+      <a href="/dashboard/engineering" class="{% if view == 'engineering' %}active{% endif %}">
+        <span class="icon">⚙️</span>
+        <span>Engineering</span>
+      </a>
+      <a href="/dashboard/compare" class="nav-link {% if view == 'compare' %}active{% endif %}" {% if view == 'compare' %}aria-current="page"{% endif %}>⚖ Compare</a>
+      <a href="/dashboard/audit" class="{% if view == 'audit' %}active{% endif %}">
+        <span class="icon">🔍</span>
+        <span>Audit</span>
+      </a>
+      <a href="/dashboard/integration" class="{% if view == 'integration' %}active{% endif %}">
+        <span class="icon">🔌</span>
+        <span>Integration</span>
+      </a>
+    <a href="/dashboard/settings" class="{% if view == 'settings' %}active{% endif %}">
+        <span class="icon">⚙️</span>
+        <span>Settings</span>
+      </a>
+      <a href="/dashboard/glossary" class="{% if view == 'glossary' %}active{% endif %}" title="Terminology glossary">
+        <span class="icon">📖</span>
+        <span>Glossary</span>
+      </a>
+    </div>
+    <div class="sidebar-footer">
+      <div>TokenPak</div>
+      <div class="refresh-badge">
+        <span class="spinner htmx-indicator" id="global-spinner"></span>
+        ↻ live
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <div class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">{% block page_title %}Dashboard{% endblock %}</div>
+        <div class="page-subtitle">{% block page_subtitle %}{% endblock %}</div>
+      </div>
+      <div class="header-actions">
+        <div class="tp-search-wrap" style="position:relative;display:inline-block">
+          <input id="tp-search" type="search" placeholder="Search sessions, models…" autocomplete="off"
+            style="padding:6px 12px;border:1px solid #ddd;border-radius:4px;width:220px;font-size:.9em"
+            aria-label="Search dashboard">
+        </div>
+        <div class="tp-export-dropdown" style="position:relative;display:inline-block">
+          <button class="btn btn-secondary" id="tp-export-btn" onclick="document.getElementById('tp-export-menu').classList.toggle('open')" aria-haspopup="true" aria-label="Export data">⬇ Export</button>
+          <div id="tp-export-menu" class="tp-export-menu" role="menu" style="display:none;position:absolute;right:0;background:#fff;border:1px solid #ddd;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:100;min-width:140px">
+            <a class="tp-export-item" role="menuitem" href="/dashboard/export?format=csv&days=30" download style="display:block;padding:8px 16px;text-decoration:none;color:#333">📄 CSV (30 days)</a>
+            <a class="tp-export-item" role="menuitem" href="/dashboard/export?format=json&days=30" download style="display:block;padding:8px 16px;text-decoration:none;color:#333">📋 JSON (30 days)</a>
+            <a class="tp-export-item" role="menuitem" href="/dashboard/export?format=csv&days=7" download style="display:block;padding:8px 16px;text-decoration:none;color:#333">📄 CSV (7 days)</a>
+          </div>
+        </div>
+        <script>
+          document.addEventListener('click', function(e) {
+            if (!e.target.closest('.tp-export-dropdown')) {
+              var m = document.getElementById('tp-export-menu');
+              if (m) m.classList.remove('open');
+            }
+          });
+          document.querySelectorAll('#tp-export-menu').forEach(function(m) {
+            m.addEventListener('click', function() { m.classList.remove('open'); });
+          });
+          // Toggle display based on open class
+          var btn = document.getElementById('tp-export-btn');
+          if (btn) btn.addEventListener('click', function() {
+            var m = document.getElementById('tp-export-menu');
+            if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+          });
+        </script>
+        <button class="btn btn-primary" id="telemetry-refresh-btn" onclick="refreshTelemetry(this)">🔄 Update</button>
+        <script>
+        function refreshTelemetry(btn) {
+          btn.disabled = true; btn.textContent = '⏳ Updating...';
+          const indicator = document.getElementById('refresh-indicator');
+          if (indicator) indicator.classList.add('active');
+          fetch('/v1/telemetry/refresh', {method:'POST'})
+            .then(r => r.json())
+            .then(() => { 
+              btn.textContent = '✅ Done!'; 
+              if (window.showToast) showToast('Data refreshed', 'success');
+              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; window.location.reload(); }, 1200); 
+            })
+            .catch(e => { 
+              btn.textContent = '❌ Failed'; 
+              if (window.showToast) showToast('Refresh failed', 'error');
+              setTimeout(() => { btn.disabled = false; btn.textContent = '🔄 Update'; }, 2000); 
+            })
+            .finally(() => { if (indicator) setTimeout(() => indicator.classList.remove('active'), 300); });
+        }
+        </script>
+      </div>
+    </div>
+
+    {% if view in ["finops","engineering","audit","compare"] %}
+    {% include "filter_bar.html" %}
+    {% endif %}
+
+    {% if view in ["finops","engineering","audit","compare"] %}
+    <div class="content" id="main-content" data-affected-by-filter
+         data-base-path="/dashboard/{% block htmx_target %}finops{% endblock %}"
+         data-filter-section="/dashboard/{% block htmx_target2 %}finops{% endblock %}"
+         hx-get="/dashboard/{% block htmx_target3 %}finops{% endblock %}?days={{ days|default(7) }}&provider={{ filter_provider|default('') }}&model={{ filter_model|default('') }}&agent={{ filter_agent|default('') }}&status={{ filter_status|default('all') }}&compression={{ filter_compression|default('all') }}&partial=1"
+         hx-trigger="filter-changed from:body"
+         hx-swap="innerHTML"
+         hx-indicator="#global-spinner">
+      <div class="first-load-overlay htmx-indicator" id="first-load-overlay" aria-hidden="true">
+        <div class="first-load-grid">
+          <div class="first-load-skel"></div><div class="first-load-skel"></div><div class="first-load-skel"></div>
+        </div>
+        <div class="slow-load-msg" id="slow-load-msg">Loading your insights…</div>
+      </div>
+      {% block content %}{% endblock %}
+    </div>
+    {% else %}
+    <div class="content" id="main-content">
+      {{ self.content() }}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TokenPak — Timeline Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        header {
+            background: white;
+            border-bottom: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #0066cc;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .chart-canvas {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+        .bar {
+            fill: #0066cc;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .bar:hover {
+            opacity: 1;
+        }
+        .axis-label {
+            font-size: 12px;
+            color: #999;
+        }
+        .tooltip {
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+        }
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #ddd;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>💰 Timeline Dashboard</h1>
+            <p class="subtitle">Hourly cost breakdown for the last {{ hours }} hours</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Cost</div>
+                <div class="stat-value">${{ "%.2f"|format(total_cost) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Requests</div>
+                <div class="stat-value">{{ total_requests }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Avg Cost/Request</div>
+                <div class="stat-value">${{ "%.4f"|format(total_cost / max(total_requests, 1)) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Buckets</div>
+                <div class="stat-value">{{ bucket_count }}</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Cost Over Time</div>
+            <div class="chart-canvas" id="costChart"></div>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">Request Volume</div>
+            <div class="chart-canvas" id="requestChart"></div>
+        </div>
+    </div>
+
+    <footer>
+        <p>TokenPak Timeline Dashboard — Real-time cost visualization</p>
+        <p>Generated: <time>{{ now }}</time></p>
+    </footer>
+
+    <script>
+        // Chart data from template
+        const labels = {{ chart_labels|safe }};
+        const costs = {{ chart_costs|safe }};
+        const requests = {{ chart_requests|safe }};
+
+        /**
+         * Draw a simple SVG bar chart
+         */
+        function drawChart(containerId, data, title) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const width = container.clientWidth || 1200;
+            const height = container.clientHeight || 400;
+            const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+
+            // Calculate scales
+            const maxValue = Math.max(...data);
+            const minValue = 0;
+            const range = maxValue || 1;
+
+            const barWidth = Math.max(2, chartWidth / data.length - 1);
+            const yScale = (value) => chartHeight * (1 - value / range);
+            const xScale = (index) => (chartWidth / data.length) * index;
+
+            // Create SVG
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+            // Grid lines
+            for (let i = 0; i <= 5; i++) {
+                const y = margin.top + (chartHeight / 5) * i;
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', margin.left);
+                line.setAttribute('y1', y);
+                line.setAttribute('x2', width - margin.right);
+                line.setAttribute('y2', y);
+                line.setAttribute('stroke', '#f0f0f0');
+                line.setAttribute('stroke-width', '1');
+                svg.appendChild(line);
+
+                // Y-axis labels
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                const labelValue = (range / 5) * (5 - i);
+                label.setAttribute('x', margin.left - 10);
+                label.setAttribute('y', y + 4);
+                label.setAttribute('text-anchor', 'end');
+                label.setAttribute('class', 'axis-label');
+                label.textContent = labelValue.toFixed(2);
+                svg.appendChild(label);
+            }
+
+            // Bars
+            data.forEach((value, index) => {
+                const barX = margin.left + xScale(index);
+                const barY = margin.top + yScale(value);
+                const barHeight = chartHeight - yScale(value);
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', barX);
+                rect.setAttribute('y', barY);
+                rect.setAttribute('width', barWidth);
+                rect.setAttribute('height', Math.max(1, barHeight));
+                rect.setAttribute('class', 'bar');
+                rect.setAttribute('data-index', index);
+                rect.setAttribute('data-value', value.toFixed(4));
+                svg.appendChild(rect);
+
+                // X-axis label (every Nth hour to avoid crowding)
+                const labelFreq = Math.max(1, Math.floor(data.length / 12));
+                if (index % labelFreq === 0 && labels[index]) {
+                    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    const hour = new Date(labels[index]);
+                    label.setAttribute('x', barX + barWidth / 2);
+                    label.setAttribute('y', height - 15);
+                    label.setAttribute('text-anchor', 'middle');
+                    label.setAttribute('class', 'axis-label');
+                    label.textContent = hour.toLocaleTimeString(undefined, { hour: '2-digit' });
+                    svg.appendChild(label);
+                }
+            });
+
+            // Hover tooltips
+            svg.addEventListener('mouseover', (e) => {
+                if (e.target.classList.contains('bar')) {
+                    const idx = parseInt(e.target.getAttribute('data-index'), 10);
+                    const value = parseFloat(e.target.getAttribute('data-value'));
+                    const tooltip = document.getElementById('tooltip');
+                    if (tooltip) {
+                        tooltip.textContent = `${labels[idx]}: ${value.toFixed(4)}`;
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = e.pageX + 10 + 'px';
+                        tooltip.style.top = e.pageY + 10 + 'px';
+                    }
+                }
+            });
+
+            svg.addEventListener('mousemove', (e) => {
+                const tooltip = document.getElementById('tooltip');
+                if (tooltip && tooltip.style.display !== 'none') {
+                    tooltip.style.left = e.pageX + 10 + 'px';
+                    tooltip.style.top = e.pageY + 10 + 'px';
+                }
+            });
+
+            svg.addEventListener('mouseout', () => {
+                const tooltip = document.getElementById('tooltip');
+                if (tooltip) {
+                    tooltip.style.display = 'none';
+                }
+            });
+
+            container.innerHTML = '';
+            container.appendChild(svg);
+        }
+
+        // Draw both charts
+        window.addEventListener('load', () => {
+            drawChart('costChart', costs, 'Cost by Hour');
+            drawChart('requestChart', requests, 'Requests by Hour');
+        });
+
+        // Redraw on window resize
+        window.addEventListener('resize', () => {
+            drawChart('costChart', costs, 'Cost by Hour');
+            drawChart('requestChart', requests, 'Requests by Hour');
+        });
+    </script>
+</body>
+</html>
