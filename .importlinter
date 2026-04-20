@@ -40,26 +40,19 @@ layers =
 ignore_imports =
     ; === Legacy cross-entrypoint imports (Cali P2-06 audit 2026-04-20) ===
     ; All §5.2-C (pure local helper concerns, never invoke a provider).
-    ; Collapse post-D1 once:
-    ;  - agent.proxy.server → proxy.server (canonical subsystem)
-    ;  - routing-rule editing moves out of cli
-    ;  - alerts becomes a true Level-4 notifier that cli reads via
-    ;    telemetry API instead of directly
     ;
     ; cli as launcher + status presenter:
     tokenpak.cli._impl -> tokenpak.alerts
     tokenpak.cli._impl -> tokenpak.companion.config
     tokenpak.cli._impl -> tokenpak.companion.launcher
     ;
-    ; Transitive chain THROUGH agent.proxy.server (gradually
-    ; collapsing as D1 migration advances). 2026-04-20 progress:
-    ; - monitoring.metrics migration: COLLAPSED cache edge
-    ; - cli._impl -> agent.proxy.server: COLLAPSED (cli now imports
-    ;   canonical tokenpak.proxy.server via the new shim; that's
-    ;   a legal Level-5 -> Level-4 edge per tier layering)
-    ; Remaining entries are transitive edges THROUGH the legacy
-    ; server module itself; they collapse when agent.proxy.server
-    ; folds into tokenpak.proxy.server (bigger D1 bite — MTC):
+    ; Transitive edges from the canonical proxy.server. Agent/proxy
+    ; consolidation landed 2026-04-20 (initiative
+    ; 2026-04-20-tokenpak-agent-proxy-consolidation); the Level-4
+    ; proxy.server module is now at its canonical home and retains
+    ; legitimate cross-tier imports for session dashboards, cache
+    ; telemetry, and metrics collection — all §5.2-B (proxy-infeasible
+    ; alternative path for read-side surfaces).
     tokenpak.proxy.server -> tokenpak.dashboard
     tokenpak.proxy.server -> tokenpak.cache.telemetry
     tokenpak.proxy.server -> tokenpak.telemetry.metrics
@@ -120,10 +113,13 @@ ignore_imports =
     ; subcommand module.
     tokenpak.cli._impl -> tokenpak.companion.templates.user_templates
     ;
-    ; agent.proxy.server transitive edges — these collapse when the
-    ; big agent/proxy/* → proxy/* migration lands (MTC-sized initiative).
-    ; Per Kevin 2026-04-20: agent/proxy/* is its own planned migration
-    ; project, not a quick cleanup task.
+    ; Canonical proxy.server + proxy.capsule_integration cross-tier
+    ; edges that survived the agent/proxy consolidation (initiative
+    ; 2026-04-20-tokenpak-agent-proxy-consolidation, landed 2026-04-20).
+    ; These are legitimate §5.2-B exceptions — the orchestrator's goal
+    ; service is read from within the proxy for goal-aware routing
+    ; decisions, and capsule_integration straddles proxy transport
+    ; and compression capsule authoring.
     tokenpak.proxy.server -> tokenpak.orchestration.goals
     tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     tokenpak.telemetry.server -> tokenpak.compression.capsules
@@ -184,19 +180,16 @@ ignore_imports =
     ; ---- §5.2 entries land below this line as P2 migration proceeds ----
     ;
     ; === CLI legacy surfaces (Cali P2-06 audit 2026-04-20) ===
-    ; These are pre-D1 imports where cli/_impl.py is the launcher/
-    ; config-editor/status-presenter surface for subsystems that
-    ; are themselves entrypoints or primitives. All classified as
-    ; §5.2-C (pure local helper concern; never invokes a provider).
-    ; Post-D1 migration, these collapse when agent.proxy.server →
-    ; proxy.server and routing-rule editing moves out of cli.
+    ; cli/_impl.py is the launcher/config-editor/status-presenter
+    ; surface for subsystems that are themselves entrypoints or
+    ; primitives. All classified as §5.2-C (pure local helper concern;
+    ; never invokes a provider). Collapses further when routing-rule
+    ; editing moves out of cli into its own subcommand module.
     tokenpak.cli._impl -> tokenpak.alerts
     tokenpak.cli._impl -> tokenpak.companion.config
     tokenpak.cli._impl -> tokenpak.companion.launcher
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
-    ; (cli._impl -> agent.proxy.server: COLLAPSED 2026-04-20; cli
-    ; now imports tokenpak.proxy.server via the inverted shim.)
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
@@ -219,20 +212,14 @@ ignore_imports =
     ; §5.2-C (pure local helper). cli/_impl.py is the CLI surface
     ; for routing-rule management (tokenpak routing ...) and
     ; credential management (tokenpak creds ...). Both are config-
-    ; editor concerns, not request execution. The cache import is
-    ; transitive through agent.proxy.server and resolves when
-    ; agent.proxy.server migrates to proxy.server.
+    ; editor concerns, not request execution.
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
     ;
-    ; Transitive chain through agent.proxy.server into cache.
-    ; 2026-04-20 progress:
-    ; - cli._impl -> agent.proxy.server: COLLAPSED (cli now imports
-    ;   canonical tokenpak.proxy.server). The below entries remain
-    ;   for agent.proxy.server's own transitive imports, which go
-    ;   away when that module folds into tokenpak.proxy.server.
-    ; - monitoring.metrics -> cache.registry: COLLAPSED (D1
-    ;   migration moved monitoring/metrics to telemetry/metrics/).
+    ; Canonical proxy.server transitive edges into cache and metrics.
+    ; Agent/proxy consolidation landed 2026-04-20; these edges remain
+    ; as §5.2-B (proxy-infeasible) read-side surfaces required by the
+    ; live HTTP server for cache inspection and stats export.
     tokenpak.proxy.server -> tokenpak.cache.telemetry
     tokenpak.proxy.server -> tokenpak.telemetry.metrics
     ;
@@ -275,10 +262,11 @@ ignore_imports =
     tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
     tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
     ;
-    ; Transitive through legacy agent.proxy.server (MTC-sized
-    ; migration pending). proxy.server shim re-exports agent.proxy
-    ; .server which pulls in capsule_integration → compression.
-    ; capsules.builder. Collapses when agent/proxy/* folds.
+    ; Canonical proxy.capsule_integration → compression.capsules.builder.
+    ; Capsule authoring straddles proxy transport (where capsules are
+    ; injected into the live stream) and compression primitives (where
+    ; they're composed). §5.2-B (proxy-infeasible: this is the live
+    ; outbound packaging path).
     tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     ;
     ; (2026-04-20: compiler moved to compression/compiler — edge
