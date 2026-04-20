@@ -169,7 +169,9 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
 
     if isinstance(content, str):
         if content.strip():
-            msg["content"] = [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}]
+            msg["content"] = [
+                {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+            ]
             marked = True
         return msg, marked
 
@@ -207,7 +209,9 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
     system = data.get("system")
     if isinstance(system, str):
         if system.strip():
-            data["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+            data["system"] = [
+                {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
+            ]
             changed = True
             _stats.record_breakpoint("system_last", True)
         else:
@@ -263,7 +267,8 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
             _stats.record_breakpoint("conversation_midpoint", False)
 
         assistant_indices = [
-            i for i, m in enumerate(messages_out)
+            i
+            for i, m in enumerate(messages_out)
             if isinstance(m, dict) and m.get("role") == "assistant"
         ]
         if len(assistant_indices) >= 2:
@@ -284,7 +289,6 @@ def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
 
     if not changed:
         return body_bytes
-
 
     # --- Cap total cache_control blocks to Anthropic max (4) ---
     _all_cc = []
@@ -701,6 +705,7 @@ def build_volatile_tail(
 # DeterministicPromptPack — Fixed Section Ordering & Byte-Identical Output
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DeterministicPromptPack:
     """
@@ -983,18 +988,22 @@ class DeterministicPromptPack:
 
         stable_text = self._build_stable_block()
         if stable_text:
-            blocks.append({
-                "type": "text",
-                "text": stable_text,
-                "cache_control": {"type": "ephemeral"},
-            })
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": stable_text,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            )
 
         volatile_text = self._build_volatile_block()
         if volatile_text:
-            blocks.append({
-                "type": "text",
-                "text": volatile_text,
-            })
+            blocks.append(
+                {
+                    "type": "text",
+                    "text": volatile_text,
+                }
+            )
 
         return blocks
 

@@ -94,9 +94,7 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
             payload["model"] = canonical.model
 
         if canonical.system not in (None, "", []):
-            payload["systemInstruction"] = {
-                "parts": self._to_google_parts(canonical.system)
-            }
+            payload["systemInstruction"] = {"parts": self._to_google_parts(canonical.system)}
 
         if canonical.tools is not None:
             payload["tools"] = copy.deepcopy(canonical.tools)

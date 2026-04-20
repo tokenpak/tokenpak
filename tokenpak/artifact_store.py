@@ -8,7 +8,7 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from .schemas.artifact import ArtifactSchema
 from .schemas.chunk import ChunkSchema
@@ -264,9 +264,7 @@ class ArtifactStore:
 
         return neighbors
 
-    def cache_retrieval_results(
-        self, cache_entry: RetrievalCacheSchema
-    ) -> None:
+    def cache_retrieval_results(self, cache_entry: RetrievalCacheSchema) -> None:
         """Store retrieval cache entry."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -298,9 +296,7 @@ class ArtifactStore:
         conn.commit()
         conn.close()
 
-    def get_cached_results(
-        self, query_fingerprint: str
-    ) -> Optional[RetrievalCacheSchema]:
+    def get_cached_results(self, query_fingerprint: str) -> Optional[RetrievalCacheSchema]:
         """Get retrieval cache entry. Returns None if expired."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -349,8 +345,9 @@ class ArtifactStore:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("DELETE FROM retrieval_cache WHERE query_fingerprint = ?",
-                       (query_fingerprint,))
+        cursor.execute(
+            "DELETE FROM retrieval_cache WHERE query_fingerprint = ?", (query_fingerprint,)
+        )
 
         conn.commit()
         conn.close()
@@ -392,9 +389,7 @@ class ArtifactStore:
         conn.commit()
         conn.close()
 
-    def get_source_map(
-        self, repo_id: str, session_id: str
-    ) -> Optional[SourceMapSchema]:
+    def get_source_map(self, repo_id: str, session_id: str) -> Optional[SourceMapSchema]:
         """Get source map."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()

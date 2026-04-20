@@ -17,18 +17,16 @@ Usage:
     tokenpak dashboard --fleet      # fleet-wide summary
     tokenpak dashboard --json       # JSON export (non-interactive)
 """
+
 from __future__ import annotations
 
 import json
 import os
-import socket
-import sys
 import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 
 PROXY_PORT = int(os.environ.get("TOKENPAK_PORT", "8766"))
 AUTH_PROFILES_FILE = Path.home() / ".tokenpak" / "auth-profiles.json"
@@ -39,6 +37,7 @@ REFRESH_INTERVAL = 5  # seconds
 # ---------------------------------------------------------------------------
 # Data collection helpers
 # ---------------------------------------------------------------------------
+
 
 def _http_get(path: str, port: int = PROXY_PORT, timeout: float = 3.0) -> Optional[Dict]:
     """Fetch JSON from proxy management endpoint. Returns None on failure."""
@@ -121,11 +120,13 @@ def collect_local_data() -> Dict[str, Any]:
     saved_dollars = req_data.get("saved_dollars", req_data.get("cost_saved_usd", 0.0))
 
     # Compression
-    compression_ratio = req_data.get("avg_compression_ratio", req_data.get("compression_ratio", 0.0))
+    compression_ratio = req_data.get(
+        "avg_compression_ratio", req_data.get("compression_ratio", 0.0)
+    )
     if isinstance(compression_ratio, float) and compression_ratio > 1.0:
-        compression_pct = f"{(1.0 - 1.0/compression_ratio)*100:.0f}%"
+        compression_pct = f"{(1.0 - 1.0 / compression_ratio) * 100:.0f}%"
     elif isinstance(compression_ratio, (int, float)) and 0 < compression_ratio < 1:
-        compression_pct = f"{compression_ratio*100:.0f}%"
+        compression_pct = f"{compression_ratio * 100:.0f}%"
     else:
         compression_pct = "n/a"
 
@@ -163,14 +164,15 @@ def collect_local_data() -> Dict[str, Any]:
 
 def collect_fleet_data() -> List[Dict[str, Any]]:
     """Gather data from all fleet agents via SSH."""
-    import subprocess
     import concurrent.futures
+    import subprocess
 
     if not FLEET_CONFIG_FILE.exists():
         return [collect_local_data()]
 
     try:
         import yaml
+
         with open(FLEET_CONFIG_FILE) as f:
             fleet_cfg = yaml.safe_load(f)
     except Exception:
@@ -187,9 +189,18 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
         target = f"{user}@{host}" if user else host
         try:
             result = subprocess.run(
-                ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-                 target, "tokenpak dashboard --json"],
-                capture_output=True, text=True, timeout=10,
+                [
+                    "ssh",
+                    "-o",
+                    "ConnectTimeout=5",
+                    "-o",
+                    "BatchMode=yes",
+                    target,
+                    "tokenpak dashboard --json",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode == 0:
                 data = json.loads(result.stdout)
@@ -202,10 +213,16 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
             "proxy_running": False,
             "proxy_status": "unreachable",
             "proxy_port": PROXY_PORT,
-            "requests": 0, "errors": 0, "error_rate_pct": 0,
-            "avg_latency_ms": 0, "tokens_in": 0, "tokens_out": 0,
-            "saved_dollars": 0.0, "compression_pct": "n/a",
-            "auth_profiles": {}, "recent_errors": ["SSH unreachable"],
+            "requests": 0,
+            "errors": 0,
+            "error_rate_pct": 0,
+            "avg_latency_ms": 0,
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "saved_dollars": 0.0,
+            "compression_pct": "n/a",
+            "auth_profiles": {},
+            "recent_errors": ["SSH unreachable"],
         }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(agents)) as ex:
@@ -216,14 +233,15 @@ def collect_fleet_data() -> List[Dict[str, Any]]:
 # Rendering (rich-based)
 # ---------------------------------------------------------------------------
 
+
 def _render_dashboard(data: Dict[str, Any]) -> None:
     """Print a single dashboard frame using rich."""
     try:
-        from rich.console import Console
-        from rich.table import Table
-        from rich.panel import Panel
-        from rich.columns import Columns
         from rich import box
+        from rich.columns import Columns
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
         from rich.text import Text
     except ImportError:
         _render_plain(data)
@@ -242,8 +260,8 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
     console.print(
         f"Proxy: {proxy_icon} on :{data['proxy_port']} "
         f"[dim](uptime: {uptime})[/dim]  "
-        f"Compression: [yellow]{data.get('compression_mode','hybrid')}[/yellow] | "
-        f"[green]{data.get('compression_pct','n/a')}[/green] avg savings"
+        f"Compression: [yellow]{data.get('compression_mode', 'hybrid')}[/yellow] | "
+        f"[green]{data.get('compression_pct', 'n/a')}[/green] avg savings"
     )
     console.print()
 
@@ -255,7 +273,9 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
     err_rate = data.get("error_rate_pct", 0)
     err_color = "red" if err_rate > 5 else "yellow" if err_rate > 1 else "green"
     stats_table.add_row("Requests", f"{data.get('requests', 0):,}")
-    stats_table.add_row("Errors", f"[{err_color}]{data.get('errors', 0):,} ({err_rate:.1f}%)[/{err_color}]")
+    stats_table.add_row(
+        "Errors", f"[{err_color}]{data.get('errors', 0):,} ({err_rate:.1f}%)[/{err_color}]"
+    )
     stats_table.add_row("Avg Latency", f"{data.get('avg_latency_ms', 0):.0f}ms")
     stats_table.add_row("Tokens in", f"{data.get('tokens_in', 0):,}")
     stats_table.add_row("Tokens out", f"{data.get('tokens_out', 0):,}")
@@ -289,9 +309,9 @@ def _render_dashboard(data: Dict[str, Any]) -> None:
 def _render_fleet_dashboard(fleet_data: List[Dict[str, Any]]) -> None:
     """Print fleet-wide summary."""
     try:
+        from rich import box
         from rich.console import Console
         from rich.table import Table
-        from rich import box
     except ImportError:
         for d in fleet_data:
             _render_plain(d)
@@ -344,6 +364,7 @@ def _render_plain(data: Dict[str, Any]) -> None:
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 def run_dashboard(fleet: bool = False, json_export: bool = False) -> None:
     """Run the dashboard (interactive TUI or one-shot JSON)."""
     if json_export:
@@ -389,8 +410,15 @@ try:
     import click
 
     @click.command("dashboard")
-    @click.option("--fleet", is_flag=True, help="Show fleet-wide summary from all registered agents")
-    @click.option("--json", "json_export", is_flag=True, help="Export dashboard data as JSON (non-interactive)")
+    @click.option(
+        "--fleet", is_flag=True, help="Show fleet-wide summary from all registered agents"
+    )
+    @click.option(
+        "--json",
+        "json_export",
+        is_flag=True,
+        help="Export dashboard data as JSON (non-interactive)",
+    )
     def dashboard_cmd(fleet: bool, json_export: bool) -> None:
         """Real-time TokenPak health dashboard.
 

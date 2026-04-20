@@ -25,7 +25,7 @@ Usage::
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # Shape Registry
@@ -182,10 +182,7 @@ def _shape_fact_chunk(content: str, max_lines: int) -> str:
         if not words:
             return 0.0
         # Prefer paragraphs with identifiers, numbers, punctuation
-        signal = sum(
-            1 for w in words
-            if re.search(r"[A-Z_][A-Z_]{2,}|[a-z_]{2,}[A-Z]|\d+", w)
-        )
+        signal = sum(1 for w in words if re.search(r"[A-Z_][A-Z_]{2,}|[a-z_]{2,}[A-Z]|\d+", w))
         return signal / len(words)
 
     ranked = sorted(paragraphs, key=_density, reverse=True)

@@ -18,11 +18,12 @@ CODE_WITH_TEMPLATES
 import hashlib
 import re
 from enum import Enum
-from typing import List, Optional, Set
+from typing import List, Set
 
 # ============================================================
 # COMPACTION MODES
 # ============================================================
+
 
 class CodeCompactionMode(str, Enum):
     CODE_API = "CODE_API"
@@ -45,9 +46,7 @@ _PY_CLASS_ATTR = re.compile(r"^\s+\w+\s*[=:]")
 
 # Large literal/template patterns  (triple-quoted string on assignment)
 # Matches:   NAME = """..."""  or  NAME = '''...'''  (start of block)
-_PY_TRIPLE_ASSIGN = re.compile(
-    r'^([A-Za-z_]\w*)\s*=\s*("""|\'\'\')(.*)'
-)
+_PY_TRIPLE_ASSIGN = re.compile(r'^([A-Za-z_]\w*)\s*=\s*("""|\'\'\')(.*)')
 # Threshold: literals with >= this many source lines are considered "large"
 _LARGE_LITERAL_THRESHOLD = 5
 
@@ -65,6 +64,7 @@ _JS_CONST_UPPER = re.compile(r"^(export\s+)?(const|let|var)\s+[A-Z_]")
 # HELPERS
 # ============================================================
 
+
 def _sha256_stub(text: str) -> str:
     """Return the first 8 hex chars of the SHA-256 of *text*."""
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:8]
@@ -79,6 +79,7 @@ def _make_template_stub(name: str, lines: int, content: str) -> str:
 # ============================================================
 # MAIN PROCESSOR
 # ============================================================
+
 
 class CodeProcessor:
     """Extract code structure while dropping implementation details."""

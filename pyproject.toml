@@ -201,5 +201,30 @@ ignore = [
     "F841",
 ]
 
+# Per-file exceptions — these patterns are intentional, not drift:
+# - __init__.py files commonly use imports purely for re-export (F401).
+# - Availability-check try/except ImportError blocks import symbols whose
+#   presence is the feature being tested (F401).
+# - Conditional type aliases with `# type: ignore` expect redefinition (F811).
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tokenpak/__init__.py" = ["F401", "F811"]
+"tokenpak/agent/cli/commands/dashboard.py" = ["F401"]
+# Pre-existing dup definition (identical bodies, differing docstrings).
+# Consolidation is out of scope for v1.0.3 pre-promotion; tracked as
+# follow-up in known-findings.md.
+"tokenpak/agent/proxy/intent_policy.py" = ["F811"]
+# Legacy telemetry event filter; `== True` preserved because the stored
+# events are mixed type (bool/int/str-ish) and truthy coercion would
+# widen the filter. Track in known-findings.md.
+"tokenpak/agent/telemetry/demo.py" = ["E712"]
+# BaseObserver is a watchdog type that may not be importable in all
+# environments; the `# type: ignore` comment documents the deliberate
+# fallback. Ruff doesn't honor type-ignore comments.
+"tokenpak/agent/vault/watcher.py" = ["F821"]
+# Availability check — the import exercises the dependency, not the
+# symbol itself.
+"tokenpak/tests/test_proxy_integration.py" = ["F401"]
+
 [tool.mypy]
 ignore_missing_imports = true

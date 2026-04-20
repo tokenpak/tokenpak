@@ -15,11 +15,7 @@ class AnthropicAdapter(FormatAdapter):
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         lower = {k.lower(): v for k, v in headers.items()}
-        return (
-            "/v1/messages" in path
-            or "x-api-key" in lower
-            or "anthropic-version" in lower
-        )
+        return "/v1/messages" in path or "x-api-key" in lower or "anthropic-version" in lower
 
     def normalize(self, body: bytes) -> CanonicalRequest:
         data = json.loads(body)

@@ -11,13 +11,12 @@ from .term_card_builder import (
     validate_card,
     validation_report,
 )
-
 from .term_resolver import (
+    TermCardSnippet,
+    TermResolution,
     TermResolver,
     TermResolverConfig,
     resolve_terms,
-    TermCardSnippet,
-    TermResolution,
 )
 
 __all__ = [

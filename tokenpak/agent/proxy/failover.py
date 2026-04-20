@@ -113,8 +113,7 @@ def load_failover_config(path: Optional[Path] = None) -> FailoverConfig:
         import yaml  # type: ignore[import]
     except ImportError:
         logger.warning(
-            "PyYAML not installed — failover config unavailable. "
-            "Install with: pip install pyyaml"
+            "PyYAML not installed — failover config unavailable. Install with: pip install pyyaml"
         )
         return FailoverConfig(enabled=False)
 
@@ -226,7 +225,7 @@ class FailoverManager:
 
         # Re-order so preferred comes first
         if preferred:
-            available = sorted(available, key=lambda e: (e.provider != preferred))
+            available = sorted(available, key=lambda e: e.provider != preferred)
 
         skipped: List[str] = []
         for entry in available:

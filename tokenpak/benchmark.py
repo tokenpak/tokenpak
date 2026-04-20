@@ -1003,7 +1003,7 @@ def run_compression_benchmark(
     for r in results:
         recipe_str = ", ".join(r["recipe_hits"][:3]) if r["recipe_hits"] else "—"
         if len(r["recipe_hits"]) > 3:
-            recipe_str += f" (+{len(r['recipe_hits'])-3})"
+            recipe_str += f" (+{len(r['recipe_hits']) - 3})"
         print(
             f"{r['name']:<25} {r['file_type']:<6} "
             f"{r['tokens_before']:>7,} {r['tokens_after']:>7,} "
@@ -1256,7 +1256,9 @@ def benchmark_indexing_optimized(directory: str, iterations: int = 3) -> dict[st
     return results
 
 
-def benchmark_search(registry: BlockRegistry, queries: List[str], iterations: int = 3) -> dict[str, Any]:
+def benchmark_search(
+    registry: BlockRegistry, queries: List[str], iterations: int = 3
+) -> dict[str, Any]:
     """Benchmark search operations."""
     results: dict[str, Any] = {}
 

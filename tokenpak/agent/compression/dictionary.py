@@ -32,12 +32,11 @@ can be exported via :meth:`suggest_entries`.
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 _DEFAULT_DICT_PATH = Path.home() / ".tokenpak" / "compression_dict.json"
 
@@ -50,6 +49,7 @@ _RE_PHRASE = re.compile(r"(?<!\w)(?:\w+(?:[  \t]+\w+){4,19})(?!\w)")
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DictionaryResult:
@@ -83,6 +83,7 @@ class SuggestedEntry:
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
+
 
 class CompressionDictionary:
     """
@@ -187,9 +188,7 @@ class CompressionDictionary:
         applied: Dict[str, str] = {}
 
         # Build sorted list so longer phrases take priority
-        sorted_entries = sorted(
-            self._dictionary.items(), key=lambda kv: len(kv[0]), reverse=True
-        )
+        sorted_entries = sorted(self._dictionary.items(), key=lambda kv: len(kv[0]), reverse=True)
 
         for msg in messages:
             content = msg.get("content")

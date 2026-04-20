@@ -378,7 +378,7 @@ class RetryEngine:
                 self.attempts.append(
                     RetryAttempt(
                         level=0,
-                        description=f"wait-retry attempt {i+1}/{len(self.wait_seconds)}, waited {actual_wait}s",
+                        description=f"wait-retry attempt {i + 1}/{len(self.wait_seconds)}, waited {actual_wait}s",
                         error=str(exc),
                         http_status=_extract_http_status(exc),
                     )

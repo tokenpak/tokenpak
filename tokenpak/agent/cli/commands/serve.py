@@ -88,7 +88,7 @@ def run_serve_cmd(args) -> None:
         #
         # SQLite telemetry: WAL mode allows concurrent readers + independent writers
         # from separate processes without corruption.
-        print(f"  Mode: multi-process (workers restart on crash, graceful shutdown)")
+        print("  Mode: multi-process (workers restart on crash, graceful shutdown)")
         print()
         uvicorn.run(
             _APP_FACTORY_IMPORT,

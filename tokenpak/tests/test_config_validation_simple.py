@@ -3,9 +3,7 @@
 Covers: config_validator.py — configuration validation, error reporting.
 """
 
-import pytest
-
-from tokenpak.config_validator import ConfigValidationError, ConfigValidator
+from tokenpak.config_validator import ConfigValidator
 
 
 class TestBasicConfigValidation:
@@ -27,12 +25,7 @@ class TestBasicConfigValidation:
     def test_multiple_providers_valid(self):
         """Multiple providers are accepted."""
         validator = ConfigValidator()
-        config = {
-            "api_keys": {
-                "anthropic": "sk-test1",
-                "openai": "sk-test2"
-            }
-        }
+        config = {"api_keys": {"anthropic": "sk-test1", "openai": "sk-test2"}}
         errors = validator.validate(config)
         assert len(errors) == 0
 
@@ -81,19 +74,13 @@ class TestPortValidation:
     def test_port_out_of_range(self):
         """Ports outside 1024-65535 are rejected."""
         validator = ConfigValidator()
-        
+
         # Too low
-        errors_low = validator.validate({
-            "api_keys": {"anthropic": "key"},
-            "port": 100
-        })
+        errors_low = validator.validate({"api_keys": {"anthropic": "key"}, "port": 100})
         assert any("port" in str(e.field).lower() for e in errors_low)
-        
+
         # Too high
-        errors_high = validator.validate({
-            "api_keys": {"anthropic": "key"},
-            "port": 70000
-        })
+        errors_high = validator.validate({"api_keys": {"anthropic": "key"}, "port": 70000})
         assert any("port" in str(e.field).lower() for e in errors_high)
 
 
@@ -125,7 +112,7 @@ class TestRateLimitValidation:
         config = {
             "api_keys": {"anthropic": "key"},
             "rate_limit_requests": 1000,
-            "rate_limit_window": 60
+            "rate_limit_window": 60,
         }
         errors = validator.validate(config)
         rate_errors = [e for e in errors if "rate_limit" in str(e.field).lower()]
@@ -134,10 +121,7 @@ class TestRateLimitValidation:
     def test_rate_limit_negative_fails(self):
         """Negative rate limit is rejected."""
         validator = ConfigValidator()
-        config = {
-            "api_keys": {"anthropic": "key"},
-            "rate_limit_requests": -100
-        }
+        config = {"api_keys": {"anthropic": "key"}, "rate_limit_requests": -100}
         errors = validator.validate(config)
         assert any("rate_limit" in str(e.field).lower() for e in errors)
 
@@ -150,9 +134,7 @@ class TestProviderURLValidation:
         validator = ConfigValidator()
         config = {
             "api_keys": {"custom": "key"},
-            "provider_urls": {
-                "custom": "https://api.example.com"
-            }
+            "provider_urls": {"custom": "https://api.example.com"},
         }
         errors = validator.validate(config)
         url_errors = [e for e in errors if "url" in str(e.field).lower()]
@@ -161,12 +143,7 @@ class TestProviderURLValidation:
     def test_invalid_provider_urls_fail(self):
         """Invalid URLs are rejected."""
         validator = ConfigValidator()
-        config = {
-            "api_keys": {"custom": "key"},
-            "provider_urls": {
-                "custom": "not-a-url"
-            }
-        }
+        config = {"api_keys": {"custom": "key"}, "provider_urls": {"custom": "not-a-url"}}
         errors = validator.validate(config)
         assert any("url" in str(e.field).lower() for e in errors)
 

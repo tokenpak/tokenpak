@@ -15,8 +15,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
-
+from typing import List, Tuple
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -100,10 +99,7 @@ def _fmt_block(b: dict) -> str:
     raw = b.get("raw_tokens", 0)
     saved = b.get("tokens_saved", 0)
     path = b.get("path", "")
-    return (
-        f"  {bid:<40}  score={score:.2f}  raw={raw:,}  saved={saved:,}\n"
-        f"    path: {path}"
-    )
+    return f"  {bid:<40}  score={score:.2f}  raw={raw:,}  saved={saved:,}\n    path: {path}"
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +117,7 @@ def run_prune(
     # Tier gate
     try:
         from tokenpak.agent.license.activation import is_pro
+
         if not is_pro():
             print("⛔ /tokenpak prune requires a Pro or higher license.")
             print("   Upgrade at: https://tokenpak.dev/pro")
@@ -206,7 +203,9 @@ try:
 
     @click.command("prune")
     @click.option("--auto", is_flag=True, help="Auto-prune without confirmation")
-    @click.option("--dry-run", "dry_run", is_flag=True, help="Show what would be pruned (no changes)")
+    @click.option(
+        "--dry-run", "dry_run", is_flag=True, help="Show what would be pruned (no changes)"
+    )
     @click.option(
         "--threshold",
         type=float,
@@ -228,5 +227,6 @@ try:
         run_prune(auto=auto, dry_run=dry_run, threshold=threshold, as_json=as_json)
 
 except ImportError:
+
     def prune_cmd(*args, **kwargs):  # type: ignore
         run_prune()

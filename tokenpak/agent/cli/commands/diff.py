@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime
-from pathlib import Path
-from typing import Optional, Any
-
+from typing import Optional
 
 # ---------------------------------------------------------------------------
 # Data Classes
@@ -257,9 +254,7 @@ def print_diff(diff: ContextDiff, verbose: bool = False, raw: bool = False) -> N
         for block in diff.compressed:
             if verbose:
                 if block.compression_pct is not None:
-                    tokens_str = (
-                        f" ({block.tokens_before} → {block.tokens_after}, {block.compression_pct:.0f}%)"
-                    )
+                    tokens_str = f" ({block.tokens_before} → {block.tokens_after}, {block.compression_pct:.0f}%)"
                 else:
                     tokens_str = f" ({block.tokens_before} → {block.tokens_after})"
                 print(f"  {block.symbol} {block.name}{tokens_str}")
@@ -269,7 +264,7 @@ def print_diff(diff: ContextDiff, verbose: bool = False, raw: bool = False) -> N
 
     # Retained section (Pinned)
     if diff.retained:
-        print(f"RETAINED (Pinned)")
+        print("RETAINED (Pinned)")
         for block in diff.retained:
             tokens_str = f" ({block.tokens_before} tokens)" if verbose else ""
             print(f"  {block.symbol} {block.name}{tokens_str}")

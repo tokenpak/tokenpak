@@ -39,7 +39,9 @@ class FrontmatterDiagnostics:
         }
 
 
-def _construct_mapping(loader: _DuplicateKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False):
+def _construct_mapping(
+    loader: _DuplicateKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False
+):
     mapping: dict[str, Any] = {}
     duplicates = getattr(loader, "_duplicate_keys", None)
 
@@ -79,7 +81,9 @@ def _normalize_assigned_to(data: dict[str, Any], diagnostics: FrontmatterDiagnos
         diagnostics.normalized_fields.append("assigned_to")
 
 
-def parse_frontmatter(yaml_block: str, strict: bool = False) -> tuple[dict[str, Any], FrontmatterDiagnostics]:
+def parse_frontmatter(
+    yaml_block: str, strict: bool = False
+) -> tuple[dict[str, Any], FrontmatterDiagnostics]:
     """Parse and canonicalize a YAML frontmatter block."""
     diagnostics = FrontmatterDiagnostics(mode="strict" if strict else "lenient")
 

@@ -660,8 +660,7 @@ def get_compression_quality_signal(
 
     if prefer_compression:
         recommendation = (
-            f"Use {best_mode} compression — best QPT "
-            f"({best_qpt:.2e}) vs strict ({strict_qpt:.2e})"
+            f"Use {best_mode} compression — best QPT ({best_qpt:.2e}) vs strict ({strict_qpt:.2e})"
         )
     else:
         recommendation = (
@@ -724,7 +723,7 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
                 samples = stats.get("samples", 0)
                 bar = "█" * int(rate * 10)
                 flag = " ✓" if samples >= MIN_SAMPLES_THRESHOLD else " (low data)"
-                print(f"    {model:<40} {rate*100:5.1f}%  [{bar:<10}]  n={samples}{flag}")
+                print(f"    {model:<40} {rate * 100:5.1f}%  [{bar:<10}]  n={samples}{flag}")
         print()
     else:
         print("📊  Model Performance  — no data yet\n")
@@ -742,7 +741,7 @@ def cmd_learn_status(learning_path: str = DEFAULT_LEARNING_PATH) -> None:
                 retry_rate = stats.get("retry_rate", 0)
                 events = stats.get("event_count", 0)
                 flag = " ⚠️  (high retry)" if retry_rate > 0.20 else ""
-                print(f"    {mode:<14} retry={retry_rate*100:.1f}%  n={events}{flag}")
+                print(f"    {mode:<14} retry={retry_rate * 100:.1f}%  n={events}{flag}")
         if overrides:
             print(f"  Active overrides: {overrides}")
         print()
@@ -839,6 +838,8 @@ def record_lesson(
     """
     from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
+    )
+    from tokenpak.agent.agentic.memory_promoter import (
         record_lesson as _record,
     )
 
@@ -888,6 +889,8 @@ def get_durable_lessons(
     """
     from tokenpak.agent.agentic.memory_promoter import (
         DEFAULT_MEMORY_PATH,
+    )
+    from tokenpak.agent.agentic.memory_promoter import (
         get_durable_lessons as _get_durable,
     )
 

@@ -26,8 +26,8 @@ Usage::
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List
 
 # ---------------------------------------------------------------------------
 # Data Classes
@@ -170,9 +170,7 @@ class TopicBoundaryDetector:
                 # Merge with last segment
                 last = segments[-1]
                 merged_text = last.content + remaining
-                segments[-1] = self._make_segment(
-                    merged_text, last.start, len(text), last.topic_id
-                )
+                segments[-1] = self._make_segment(merged_text, last.start, len(text), last.topic_id)
             else:
                 # Create new segment for remaining
                 topic_id = f"topic_{self._topic_counter}"
@@ -240,9 +238,7 @@ class TopicBoundaryDetector:
                 boundaries.append(offset)
         return boundaries
 
-    def _make_segment(
-        self, content: str, start: int, end: int, topic_id: str
-    ) -> TopicSegment:
+    def _make_segment(self, content: str, start: int, end: int, topic_id: str) -> TopicSegment:
         """Create a TopicSegment with activity scoring."""
         activity = self._score_activity(content)
         recency = self._score_recency(content)

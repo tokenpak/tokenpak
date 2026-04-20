@@ -134,7 +134,7 @@ def compile_pack(
     # Validate budget before compacting
     if budget <= 0:
         raise ValueError(f"budget must be positive (got {budget})")
-    
+
     if budget < 50:
         raise ValueError(
             f"budget too small ({budget} tokens). Minimum practical budget is 50 tokens. "

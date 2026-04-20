@@ -90,7 +90,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
             missing.append(dep)
 
     if missing:
-        msg = f"Missing dependencies: {', '.join(missing)}. " f"Run: pip install tokenpak"
+        msg = f"Missing dependencies: {', '.join(missing)}. Run: pip install tokenpak"
         logger.error("startup: %s", msg)
         warnings.append(msg)
         all_ok = False

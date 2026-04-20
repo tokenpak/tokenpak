@@ -8,7 +8,7 @@ Implementation lives in `tokenpak.cli._impl`; this module is a thin surface
 that also re-exports the `commands` subpackage for consumers that want it.
 """
 
-from tokenpak.cli._impl import main
 from tokenpak.cli import commands as commands
+from tokenpak.cli._impl import main
 
 __all__ = ["main", "commands"]

@@ -299,7 +299,7 @@ def _apply_compression_mode_change(segment: Segment, params: dict) -> Segment:
         lines = content.splitlines()
         summary = lines[0] if lines else ""
         if len(lines) > 1:
-            summary += f"\n[…{len(lines)-1} lines omitted]"
+            summary += f"\n[…{len(lines) - 1} lines omitted]"
         tokens_after = max(1, len(summary.split()))
         return {
             **segment,

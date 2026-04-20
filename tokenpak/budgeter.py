@@ -90,14 +90,17 @@ def _load_config(config_path: str) -> Dict[str, Any]:
     # Try JSON first (faster, no dep)
     try:
         from typing import cast as _cast_t
+
         return _cast_t(Dict[str, Any], json.loads(text))
     except json.JSONDecodeError:
         pass
 
     # Try YAML if pyyaml is available
     try:
-        import yaml
         from typing import cast as _cast_t
+
+        import yaml
+
         return _cast_t(Dict[str, Any], yaml.safe_load(text))
     except ImportError:
         pass
@@ -216,7 +219,9 @@ class Budgeter:
         self.config: Dict[str, Any] = _load_config(config_path)
         self.total_tokens: int = int(self.config.get("total_tokens", 12000))
         self.trim_order: List[str] = self.config.get("trim_order", _DEFAULT_CONFIG["trim_order"])
-        self.thresholds: Dict[str, Any] = self.config.get("thresholds", _DEFAULT_CONFIG["thresholds"])
+        self.thresholds: Dict[str, Any] = self.config.get(
+            "thresholds", _DEFAULT_CONFIG["thresholds"]
+        )
 
     # ── Token counting ───────────────────────────────────────────────────────
 
@@ -287,7 +292,10 @@ class Budgeter:
                 )
             else:
                 # Plain dict
-                new_ev_dict: Dict[str, Any] = {**ev, "text": _truncate_tokens(ev.get("text", ""), max_span)}
+                new_ev_dict: Dict[str, Any] = {
+                    **ev,
+                    "text": _truncate_tokens(ev.get("text", ""), max_span),
+                }
                 new_items.append(new_ev_dict)
                 continue
             new_items.append(new_ev)

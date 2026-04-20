@@ -16,7 +16,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -171,6 +170,7 @@ def run_retain(
     # Tier gate
     try:
         from tokenpak.agent.license.activation import is_pro
+
         if not is_pro():
             print("⛔ /tokenpak retain requires a Pro or higher license.")
             print("   Upgrade at: https://tokenpak.dev/pro")
@@ -215,5 +215,6 @@ try:
         run_retain(block_id=block_id, list_pins=list_pins, remove=remove)
 
 except ImportError:
+
     def retain_cmd(*args, **kwargs):  # type: ignore
         run_retain()

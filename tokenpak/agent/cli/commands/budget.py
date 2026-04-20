@@ -257,7 +257,7 @@ def print_budget_history(days: int = 30, raw: bool = False) -> None:
         print()
         return
     print(f"  {'Date':<14}{'Requests':>10}{'Spent':>12}{'vs Limit':>12}")
-    print(f"  {'-'*14}{'-'*10}{'-'*12}{'-'*12}")
+    print(f"  {'-' * 14}{'-' * 10}{'-' * 12}{'-' * 12}")
     for r in history:
         if daily_limit:
             pct = r["cost_usd"] / float(daily_limit) * 100
@@ -480,9 +480,7 @@ def _calc_burn_rate() -> dict:
     # Prior 7 days = days 8-14 ago (pull from h30)
     prior7_start = (date.today() - timedelta(days=14)).isoformat()
     prior7_end = (date.today() - timedelta(days=8)).isoformat()
-    prior7 = sum(
-        r["cost_usd"] for r in h30 if prior7_start <= r["day"] <= prior7_end
-    )
+    prior7 = sum(r["cost_usd"] for r in h30 if prior7_start <= r["day"] <= prior7_end)
     if prior7 > 0:
         trend_pct = (last7 - prior7) / prior7 * 100
     else:
@@ -575,7 +573,7 @@ def print_budget_intelligence(raw: bool = False) -> None:
     # Trend arrow
     trend_pct = burn["trend_7d_pct"]
     if abs(trend_pct) < 1.0:
-        trend_str = f"→ flat"
+        trend_str = "→ flat"
     elif trend_pct > 0:
         trend_str = f"▲ {trend_pct:.1f}% vs last week"
     else:
@@ -615,8 +613,7 @@ def print_budget_intelligence(raw: bool = False) -> None:
     print(f"  {'Burn Rate:':<26}{_fmt_cost(burn['daily_avg_7d'])}/day")
     if eta and eta.get("days_remaining") is not None:
         print(
-            f"  {'Budget Depletion ETA:':<26}"
-            f"{eta['days_remaining']:.1f} days ({eta['eta_date']})"
+            f"  {'Budget Depletion ETA:':<26}{eta['days_remaining']:.1f} days ({eta['eta_date']})"
         )
     elif monthly_limit_f:
         print(f"  {'Budget Depletion ETA:':<26}N/A (burn rate too low)")

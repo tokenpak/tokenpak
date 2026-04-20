@@ -274,7 +274,9 @@ try:
     @click.command("doctor")
     @click.option("--fix", is_flag=True, help="Auto-fix issues where possible")
     @click.option("--fleet", is_flag=True, help="Check all agents in ~/.tokenpak/fleet.yaml")
-    @click.option("--deploy", is_flag=True, help="Push latest doctor to all agents (use with --fleet)")
+    @click.option(
+        "--deploy", is_flag=True, help="Push latest doctor to all agents (use with --fleet)"
+    )
     def doctor_cmd(fix: bool, fleet: bool, deploy: bool) -> None:
         """Run diagnostics on your TokenPak installation.
 
@@ -309,11 +311,10 @@ except ImportError:
 # Fleet Doctor — tokenpak doctor --fleet
 # ===========================================================================
 
-import subprocess
 import concurrent.futures
-from pathlib import Path
-import yaml
+import subprocess
 
+import yaml
 
 FLEET_CONFIG_FILE = Path.home() / ".tokenpak" / "fleet.yaml"
 
@@ -387,9 +388,23 @@ def _run_remote_doctor(agent: dict, fix: bool = False, timeout: int = 30) -> dic
             "warnings": warnings,
         }
     except subprocess.TimeoutExpired:
-        return {"name": name, "host": host, "success": False, "output": f"[timeout after {timeout}s]", "errors": 1, "warnings": 0}
+        return {
+            "name": name,
+            "host": host,
+            "success": False,
+            "output": f"[timeout after {timeout}s]",
+            "errors": 1,
+            "warnings": 0,
+        }
     except Exception as exc:
-        return {"name": name, "host": host, "success": False, "output": str(exc), "errors": 1, "warnings": 0}
+        return {
+            "name": name,
+            "host": host,
+            "success": False,
+            "output": str(exc),
+            "errors": 1,
+            "warnings": 0,
+        }
 
 
 def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
@@ -399,14 +414,20 @@ def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
     user = agent.get("user", "")
 
     local_doctor = Path(__file__)
-    remote_target = f"{user}@{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+    remote_target = (
+        f"{user}@{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+    )
     if not user:
-        remote_target = f"{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+        remote_target = (
+            f"{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+        )
 
     cmd = [
         "scp",
-        "-o", "ConnectTimeout=10",
-        "-o", "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
         str(local_doctor),
         remote_target,
     ]
@@ -420,7 +441,12 @@ def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
             "output": result.stdout + result.stderr,
         }
     except subprocess.TimeoutExpired:
-        return {"name": name, "host": host, "success": False, "output": f"[scp timeout after {timeout}s]"}
+        return {
+            "name": name,
+            "host": host,
+            "success": False,
+            "output": f"[scp timeout after {timeout}s]",
+        }
     except Exception as exc:
         return {"name": name, "host": host, "success": False, "output": str(exc)}
 
@@ -443,7 +469,13 @@ def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
             deploy_futures = {ex.submit(_deploy_doctor, a): a for a in agents}
             for fut in concurrent.futures.as_completed(deploy_futures):
                 r = fut.result()
-                status = Colors.ok(f"  Deployed to {r['name']} ({r['host']})") if r["success"] else Colors.fail(f"  Deploy failed on {r['name']} ({r['host']}): {r['output'][:60]}")
+                status = (
+                    Colors.ok(f"  Deployed to {r['name']} ({r['host']})")
+                    if r["success"]
+                    else Colors.fail(
+                        f"  Deploy failed on {r['name']} ({r['host']}): {r['output'][:60]}"
+                    )
+                )
                 print(status)
         print()
 
@@ -475,5 +507,7 @@ def run_fleet_doctor(fix: bool = False, deploy: bool = False) -> int:
                 print(f"     {line}")
 
     print("──────────────────────────────────────────────────────")
-    print(f"Fleet: {total_errors} total error(s), {total_warnings} total warning(s) across {len(agents)} agents")
+    print(
+        f"Fleet: {total_errors} total error(s), {total_warnings} total warning(s) across {len(agents)} agents"
+    )
     return 0 if all_ok else 1

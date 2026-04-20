@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -110,7 +110,7 @@ class AttributionTracker:
             rec.timestamp = time.time()
         self._records.append(rec)
         if len(self._records) > self._max:
-            self._records = self._records[-self._max:]
+            self._records = self._records[-self._max :]
 
     @property
     def records(self) -> List[AttributionRecord]:
@@ -122,13 +122,15 @@ class AttributionTracker:
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(lambda: {
-            "requests": 0,
-            "tokens_saved": 0,
-            "cost_saved": 0.0,
-            "cache_hits": 0,
-            "models": defaultdict(int),
-        })
+        groups: Dict[str, dict] = defaultdict(
+            lambda: {
+                "requests": 0,
+                "tokens_saved": 0,
+                "cost_saved": 0.0,
+                "cache_hits": 0,
+                "models": defaultdict(int),
+            }
+        )
 
         for r in filtered:
             g = groups[r.source]
@@ -160,11 +162,13 @@ class AttributionTracker:
         if since:
             filtered = [r for r in filtered if r.timestamp >= since]
 
-        groups: Dict[str, dict] = defaultdict(lambda: {
-            "requests": 0,
-            "tokens_saved": 0,
-            "cost_saved": 0.0,
-        })
+        groups: Dict[str, dict] = defaultdict(
+            lambda: {
+                "requests": 0,
+                "tokens_saved": 0,
+                "cost_saved": 0.0,
+            }
+        )
 
         for r in filtered:
             g = groups[r.model]
@@ -199,10 +203,15 @@ class AttributionTracker:
         try:
             data = json.loads(p.read_text())
             for d in data:
-                self._records.append(AttributionRecord(**{
-                    k: v for k, v in d.items()
-                    if k in AttributionRecord.__dataclass_fields__
-                }))
+                self._records.append(
+                    AttributionRecord(
+                        **{
+                            k: v
+                            for k, v in d.items()
+                            if k in AttributionRecord.__dataclass_fields__
+                        }
+                    )
+                )
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -224,7 +233,9 @@ def format_attribution(tracker: AttributionTracker, days: int = 7) -> str:
     by_model = tracker.rollup_by_model(since=since)
 
     if not by_source:
-        return "No attribution data found.\nRun TokenPak with requests to see attribution breakdown."
+        return (
+            "No attribution data found.\nRun TokenPak with requests to see attribution breakdown."
+        )
 
     total_saved = sum(v["cost_saved"] for v in by_source.values())
 
@@ -243,9 +254,7 @@ def format_attribution(tracker: AttributionTracker, days: int = 7) -> str:
             if key in src.lower():
                 emoji = em
                 break
-        lines.append(
-            f"  {emoji} {src:<22} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)"
-        )
+        lines.append(f"  {emoji} {src:<22} ${stats['cost_saved']:>10.2f} ({pct:.0f}%)")
 
     lines.append("")
     lines.append("Top Models (by savings):")

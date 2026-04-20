@@ -72,6 +72,7 @@ def _roundtrip_preserves_bytes(original: bytes) -> bool:
 # §1 Adapter-level: behaviors that hold today
 # ---------------------------------------------------------------------------
 
+
 class TestPassthroughAdapterCurrentBehavior:
     """Assertions about what the PassthroughAdapter does RIGHT NOW.
 
@@ -115,6 +116,7 @@ class TestPassthroughAdapterCurrentBehavior:
 # ---------------------------------------------------------------------------
 # §2 Specification-level: what Constitution §5.2 REQUIRES
 # ---------------------------------------------------------------------------
+
 
 class TestPassthroughByteFidelityContract:
     """These tests define the byte-fidelity contract TokenPak must satisfy
@@ -182,6 +184,7 @@ class TestPassthroughByteFidelityContract:
 # ---------------------------------------------------------------------------
 # §1 (continued) — Regression gate for the adapter contract itself
 # ---------------------------------------------------------------------------
+
 
 def test_passthrough_adapter_does_not_raise_on_empty_body() -> None:
     """An empty body is a legitimate request shape (e.g. GET-style probes

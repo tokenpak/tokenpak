@@ -60,7 +60,13 @@ _INLINE_FILLER: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bkind\s+of\b\s+", re.IGNORECASE), ""),
     (re.compile(r"\bsort\s+of\b\s+", re.IGNORECASE), ""),
     (re.compile(r"\blike\s+I\s+said\s*,?\s+", re.IGNORECASE), ""),
-    (re.compile(r"\b(as\s+I\s+(?:mentioned|said|noted)\s+(?:before|earlier|above)[,.]?\s*)", re.IGNORECASE), ""),
+    (
+        re.compile(
+            r"\b(as\s+I\s+(?:mentioned|said|noted)\s+(?:before|earlier|above)[,.]?\s*)",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
 ]
 
 # Repeated-question detection: sentences that are semantically identical

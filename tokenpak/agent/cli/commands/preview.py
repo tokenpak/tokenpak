@@ -47,6 +47,7 @@ def register_preview(subparsers):
 def cmd_preview(args):
     """Run compression dry-run and show preview."""
     import sys
+
     from tokenpak.compression.core import Compressor
     from tokenpak.formatting import OutputFormatter, OutputMode
 
@@ -85,7 +86,9 @@ def cmd_preview(args):
     elif args.raw:
         print(f"Input:     {result.get('input_tokens', 0):,} tokens")
         print(f"Output:    {result.get('output_tokens', 0):,} tokens")
-        print(f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0)*100:.1f}%)")
+        print(
+            f"Saved:     {result.get('saved_tokens', 0):,} tokens ({result.get('compression_ratio', 0.0) * 100:.1f}%)"
+        )
         print()
         print("Retained blocks:")
         for block in result.get("retained_blocks", []):
@@ -107,7 +110,7 @@ def cmd_preview(args):
 
         print(f"  Input:          {inp:,} tokens")
         print(f"  → Compressed:   {out:,} tokens")
-        print(f"  Savings:        {saved:,} tokens ({ratio*100:.1f}% reduction)")
+        print(f"  Savings:        {saved:,} tokens ({ratio * 100:.1f}% reduction)")
         print()
 
         retained = result.get("retained_blocks", [])

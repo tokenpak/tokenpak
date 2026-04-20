@@ -20,6 +20,7 @@ Env var overrides (all optional):
     TOKENPAK_LOG_DESTINATION    "file" / "stdout" / "syslog"
     TOKENPAK_LOG_RETENTION_DAYS integer
 """
+
 from __future__ import annotations
 
 import json
@@ -58,22 +59,25 @@ _LEVEL_ORDER = {LEVEL_DEBUG: 0, LEVEL_INFO: 1, LEVEL_WARN: 2}
 # ---------------------------------------------------------------------------
 # Every request record MUST carry a cache_origin value. Overclaiming is worse
 # than admitting uncertainty, so unclassified requests use "unknown".
-CACHE_ORIGIN_CLIENT = "client"    # Provider-side cache hit (e.g. Anthropic cache_control)
-CACHE_ORIGIN_PROXY = "proxy"      # TokenPak-local cache hit
-CACHE_ORIGIN_NONE = "none"        # No cache involved; live provider call
+CACHE_ORIGIN_CLIENT = "client"  # Provider-side cache hit (e.g. Anthropic cache_control)
+CACHE_ORIGIN_PROXY = "proxy"  # TokenPak-local cache hit
+CACHE_ORIGIN_NONE = "none"  # No cache involved; live provider call
 CACHE_ORIGIN_UNKNOWN = "unknown"  # Caller did not classify; do NOT infer optimistically
 
-_CACHE_ORIGIN_VALUES = frozenset({
-    CACHE_ORIGIN_CLIENT,
-    CACHE_ORIGIN_PROXY,
-    CACHE_ORIGIN_NONE,
-    CACHE_ORIGIN_UNKNOWN,
-})
+_CACHE_ORIGIN_VALUES = frozenset(
+    {
+        CACHE_ORIGIN_CLIENT,
+        CACHE_ORIGIN_PROXY,
+        CACHE_ORIGIN_NONE,
+        CACHE_ORIGIN_UNKNOWN,
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Config helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_logging_config() -> Dict[str, Any]:
     """Return the merged logging config (env vars override config.json)."""
@@ -112,6 +116,7 @@ def _load_logging_config() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Log record
 # ---------------------------------------------------------------------------
+
 
 class RequestLogRecord:
     """Immutable snapshot of a single proxied request/response cycle."""
@@ -219,6 +224,7 @@ class RequestLogRecord:
 # Writer implementations
 # ---------------------------------------------------------------------------
 
+
 class _FileWriter:
     """Thread-safe daily-rotating file writer."""
 
@@ -255,6 +261,7 @@ class _FileWriter:
         """Delete log files older than retention_days."""
         try:
             import time as _time
+
             cutoff = _time.time() - self._retention_days * 86400
             for p in self._log_dir.glob("proxy-*.log"):
                 if p.stat().st_mtime < cutoff:
@@ -286,6 +293,7 @@ class _SyslogWriter:
     def __init__(self) -> None:
         try:
             import syslog as _syslog
+
             _syslog.openlog("tokenpak-proxy", _syslog.LOG_PID)
             self._syslog = _syslog
             self._available = True
@@ -311,6 +319,7 @@ class _SyslogWriter:
 # ---------------------------------------------------------------------------
 # RequestLogger
 # ---------------------------------------------------------------------------
+
 
 class RequestLogger:
     """
@@ -464,19 +473,22 @@ class RequestLogger:
             request_id=kwargs.pop("request_id", str(uuid.uuid4())),
             timestamp=datetime.now(timezone.utc).isoformat(),
             level=level,
-            **{k: kwargs.pop(k, v) for k, v in [
-                ("client_ip", ""),
-                ("method", ""),
-                ("endpoint", ""),
-                ("request_body_size", 0),
-                ("response_status", 0),
-                ("response_body_size", 0),
-                ("compression_ratio", None),
-                ("latency_ms", 0.0),
-                ("model", ""),
-                ("provider", ""),
-                ("cache_origin", CACHE_ORIGIN_UNKNOWN),
-            ]},
+            **{
+                k: kwargs.pop(k, v)
+                for k, v in [
+                    ("client_ip", ""),
+                    ("method", ""),
+                    ("endpoint", ""),
+                    ("request_body_size", 0),
+                    ("response_status", 0),
+                    ("response_body_size", 0),
+                    ("compression_ratio", None),
+                    ("latency_ms", 0.0),
+                    ("model", ""),
+                    ("provider", ""),
+                    ("cache_origin", CACHE_ORIGIN_UNKNOWN),
+                ]
+            },
             extra=kwargs,
         )
         self.log(record)
@@ -512,6 +524,7 @@ class RequestLogger:
 # ---------------------------------------------------------------------------
 # Module-level convenience: log request-end event
 # ---------------------------------------------------------------------------
+
 
 def log_request(
     *,

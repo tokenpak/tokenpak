@@ -37,6 +37,7 @@ from typing import Any
 
 try:
     import requests as _requests
+
     _REQUESTS_AVAILABLE = True
 except ImportError:
     _REQUESTS_AVAILABLE = False
@@ -118,8 +119,7 @@ class OpenAIAdapter(TokenPakAdapter):
         # Promote legacy functions → tools
         if "functions" in prepared and "tools" not in prepared:
             prepared["tools"] = [
-                {"type": "function", "function": fn}
-                for fn in prepared.pop("functions")
+                {"type": "function", "function": fn} for fn in prepared.pop("functions")
             ]
         elif "functions" in prepared:
             prepared.pop("functions")  # tools already present, discard duplicate
@@ -164,9 +164,7 @@ class OpenAIAdapter(TokenPakAdapter):
                 f"OpenAIAdapter.send: request timed out after {self.timeout_s}s."
             ) from exc
         except _requests.exceptions.RequestException as exc:
-            raise TokenPakAdapterError(
-                f"OpenAIAdapter.send: HTTP transport error: {exc}"
-            ) from exc
+            raise TokenPakAdapterError(f"OpenAIAdapter.send: HTTP transport error: {exc}") from exc
 
         elapsed_ms = (time.monotonic() - t0) * 1000
         self.logger.info("send complete status=%d elapsed_ms=%.1f", resp.status_code, elapsed_ms)
@@ -225,9 +223,7 @@ class OpenAIAdapter(TokenPakAdapter):
         """Extract OpenAI Chat Completions usage block."""
         usage = response.get("usage", {})
         if not usage:
-            self.logger.warning(
-                "extract_tokens: no 'usage' block in response — returning zeros."
-            )
+            self.logger.warning("extract_tokens: no 'usage' block in response — returning zeros.")
             return {
                 "input_tokens": 0,
                 "output_tokens": 0,

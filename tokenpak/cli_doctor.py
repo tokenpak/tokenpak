@@ -88,10 +88,12 @@ def cmd_doctor(args):
 
     # Check 4: Proxy port
     import os as _os
+
     proxy_port = int(_os.environ.get("TOKENPAK_PORT", "8766"))
     proxy_health = None
     try:
         import urllib.request as _urlreq
+
         resp = _urlreq.urlopen(f"http://127.0.0.1:{proxy_port}/health", timeout=2)
         proxy_health = json.loads(resp.read())
         mode = proxy_health.get("compilation_mode", "unknown")
@@ -100,8 +102,11 @@ def cmd_doctor(args):
         results["pass"] += 1
 
         # Feature checks
-        for feat, key in [("Skeleton", "skeleton"), ("Shadow reader", "shadow_reader"),
-                          ("Canon", "canon")]:
+        for feat, key in [
+            ("Skeleton", "skeleton"),
+            ("Shadow reader", "shadow_reader"),
+            ("Canon", "canon"),
+        ]:
             data = proxy_health.get(key, {})
             enabled = data.get("enabled", False) if isinstance(data, dict) else bool(data)
             if enabled:
@@ -121,7 +126,11 @@ def cmd_doctor(args):
 
         term = proxy_health.get("term_resolver", {})
         if not term.get("enabled"):
-            print(Colors.warn(f"{'Term resolver':<20s}disabled (set TOKENPAK_TERM_RESOLVER_ENABLED=1)"))
+            print(
+                Colors.warn(
+                    f"{'Term resolver':<20s}disabled (set TOKENPAK_TERM_RESOLVER_ENABLED=1)"
+                )
+            )
             results["warn"] += 1
         else:
             print(Colors.ok(f"{'Term resolver':<20s}enabled"))
@@ -131,7 +140,11 @@ def cmd_doctor(args):
         cbs = proxy_health.get("circuit_breakers", {})
         for name, cb in cbs.items():
             if cb.get("open"):
-                print(Colors.fail(f"Circuit breaker     {name} — OPEN ({cb.get('failures', 0)} failures)"))
+                print(
+                    Colors.fail(
+                        f"Circuit breaker     {name} — OPEN ({cb.get('failures', 0)} failures)"
+                    )
+                )
                 results["fail"] += 1
             else:
                 print(Colors.ok(f"Circuit breaker     {name} — closed"))
@@ -144,10 +157,18 @@ def cmd_doctor(args):
             result = sock.connect_ex(("127.0.0.1", proxy_port))
             sock.close()
             if result == 0:
-                print(Colors.ok(f"Proxy reachable     port {proxy_port} — OK (health endpoint failed)"))
+                print(
+                    Colors.ok(
+                        f"Proxy reachable     port {proxy_port} — OK (health endpoint failed)"
+                    )
+                )
                 results["pass"] += 1
             else:
-                print(Colors.warn(f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"))
+                print(
+                    Colors.warn(
+                        f"Proxy reachable     port {proxy_port} — connection refused (run: tokenpak start)"
+                    )
+                )
                 results["warn"] += 1
                 fixes_needed.append("start proxy")
         except Exception:

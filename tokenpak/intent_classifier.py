@@ -12,23 +12,25 @@ from typing import List, Optional
 
 class IntentClass(str, Enum):
     """User intent classification."""
-    GEN_Q = "GEN_Q"           # General question, no project context
-    CODE_Q = "CODE_Q"         # Explain/locate/understand code
-    CODE_EDIT = "CODE_EDIT"   # Modify code
-    DEBUG = "DEBUG"           # Analyze logs/errors
-    DOC_EDIT = "DOC_EDIT"     # Edit prose/spec
-    PLAN = "PLAN"             # Architecture/planning
-    REVIEW = "REVIEW"         # Review diff/PR/design
+
+    GEN_Q = "GEN_Q"  # General question, no project context
+    CODE_Q = "CODE_Q"  # Explain/locate/understand code
+    CODE_EDIT = "CODE_EDIT"  # Modify code
+    DEBUG = "DEBUG"  # Analyze logs/errors
+    DOC_EDIT = "DOC_EDIT"  # Edit prose/spec
+    PLAN = "PLAN"  # Architecture/planning
+    REVIEW = "REVIEW"  # Review diff/PR/design
 
 
 @dataclass
 class ClassificationResult:
     """Result of intent + complexity classification."""
+
     intent: IntentClass
-    complexity_score: float    # 0.0 - 1.0
-    needs_retrieval: bool      # Need to fetch context (files, history)
-    needs_writeback: bool      # Need to write/modify something
-    confidence: float          # 0.0 - 1.0, how certain we are
+    complexity_score: float  # 0.0 - 1.0
+    needs_retrieval: bool  # Need to fetch context (files, history)
+    needs_writeback: bool  # Need to write/modify something
+    confidence: float  # 0.0 - 1.0, how certain we are
 
 
 # ---------------------------------------------------------------------------
@@ -150,8 +152,12 @@ _REVIEW_KEYWORDS = {
 }
 
 # Patterns for file paths, stack traces, etc.
-_FILE_PATH_PATTERN = re.compile(r"\b[\w\-./]+\.(py|js|ts|go|rs|java|cpp|c|h|rb|php|jsx|tsx|vue|css|html|json|yaml|yml|md|txt|sh|bash|sql|xml)\b")
-_STACK_TRACE_PATTERN = re.compile(r"(traceback|File .*line|at .*\(|exception|error:)", re.IGNORECASE)
+_FILE_PATH_PATTERN = re.compile(
+    r"\b[\w\-./]+\.(py|js|ts|go|rs|java|cpp|c|h|rb|php|jsx|tsx|vue|css|html|json|yaml|yml|md|txt|sh|bash|sql|xml)\b"
+)
+_STACK_TRACE_PATTERN = re.compile(
+    r"(traceback|File .*line|at .*\(|exception|error:)", re.IGNORECASE
+)
 _FUNCTION_PATTERN = re.compile(r"\b[a-zA-Z_]\w*\(.*\)|def \w+|function \w+")
 _CODE_BLOCK_PATTERN = re.compile(r"```[\w]*\n")
 
@@ -159,6 +165,7 @@ _CODE_BLOCK_PATTERN = re.compile(r"```[\w]*\n")
 # ---------------------------------------------------------------------------
 # Classification logic
 # ---------------------------------------------------------------------------
+
 
 def classify(
     query: str,
@@ -229,14 +236,25 @@ def _detect_intent(query_lower: str, context_lower: str, file_paths: List[str]) 
     if query_lower.startswith("review") or " review " in query_lower:
         scores[IntentClass.REVIEW] += 2.0
     # Feedback-seeking language: "what do you think", "thoughts on", "opinion on"
-    if any(phrase in query_lower for phrase in ["what do you think", "what do you", "thoughts on", "opinion on", "feedback on"]):
+    if any(
+        phrase in query_lower
+        for phrase in [
+            "what do you think",
+            "what do you",
+            "thoughts on",
+            "opinion on",
+            "feedback on",
+        ]
+    ):
         scores[IntentClass.REVIEW] += 1.5
 
     # DOC_EDIT: "write/draft/document" language (high priority)
     # "add docstring" OR "write" + "readme/doc/spec/guide"
     if "docstring" in query_lower and any(kw in query_lower for kw in ["add", "write", "update"]):
         scores[IntentClass.DOC_EDIT] += 3.0
-    elif "write" in query_lower and any(w in query_lower for w in ["readme", "doc", "spec", "guide", "documentation"]):
+    elif "write" in query_lower and any(
+        w in query_lower for w in ["readme", "doc", "spec", "guide", "documentation"]
+    ):
         scores[IntentClass.DOC_EDIT] += 3.0
     elif any(kw in query_lower for kw in _DOC_EDIT_KEYWORDS):
         scores[IntentClass.DOC_EDIT] += len([kw for kw in _DOC_EDIT_KEYWORDS if kw in query_lower])
@@ -269,15 +287,19 @@ def _detect_intent(query_lower: str, context_lower: str, file_paths: List[str]) 
 
     # "where is" + code keywords (decorator, class, function, etc.) = CODE_Q
     if any(kw in query_lower for kw in ["where", "find", "locate", "search"]):
-        if has_code_signal or any(kw in query_lower for kw in ["decorator", "function", "class", "method", "module"]):
+        if has_code_signal or any(
+            kw in query_lower for kw in ["decorator", "function", "class", "method", "module"]
+        ):
             scores[IntentClass.CODE_Q] += 2.0
 
     if any(kw in query_lower for kw in ["explain", "understand"]):
         if has_code_signal:
             scores[IntentClass.CODE_Q] += 2.0
 
-    # File path alone signals CODE_Q  
-    if _FILE_PATH_PATTERN.search(query_lower) and not (scores[IntentClass.CODE_EDIT] > 0 or scores[IntentClass.DOC_EDIT] > 0):
+    # File path alone signals CODE_Q
+    if _FILE_PATH_PATTERN.search(query_lower) and not (
+        scores[IntentClass.CODE_EDIT] > 0 or scores[IntentClass.DOC_EDIT] > 0
+    ):
         scores[IntentClass.CODE_Q] += 1.0
 
     # Boost CODE intent if there's code in context

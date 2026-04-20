@@ -7,9 +7,9 @@ trend analysis, ASCII charts, and anomaly detection.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 HISTORY_PATH = Path.home() / ".tokenpak" / "history.jsonl"
 
@@ -89,7 +89,7 @@ def detect_anomalies(entries: List[dict], threshold: float = 2.0) -> List[dict]:
         return []
 
     variance = sum((s - avg) ** 2 for s in savings) / len(savings)
-    std = variance ** 0.5
+    std = variance**0.5
     if std <= 0:
         return []
 
@@ -98,13 +98,15 @@ def detect_anomalies(entries: List[dict], threshold: float = 2.0) -> List[dict]:
         saved = e.get("saved_usd", 0)
         if saved < avg - threshold * std:
             pct_below = ((avg - saved) / avg) * 100
-            anomalies.append({
-                "date": e.get("date", ""),
-                "saved_usd": saved,
-                "avg_usd": round(avg, 2),
-                "pct_below": round(pct_below, 0),
-                "cache_hit_pct": e.get("cache_hit_pct", 0),
-            })
+            anomalies.append(
+                {
+                    "date": e.get("date", ""),
+                    "saved_usd": saved,
+                    "avg_usd": round(avg, 2),
+                    "pct_below": round(pct_below, 0),
+                    "cache_hit_pct": e.get("cache_hit_pct", 0),
+                }
+            )
     return anomalies
 
 
@@ -130,12 +132,12 @@ def render_chart(entries: List[dict], width: int = 40) -> str:
 
     avg = sum(savings) / len(savings) if savings else 0
     variance = sum((s - avg) ** 2 for s in savings) / len(savings) if savings else 0
-    var_pct = (variance ** 0.5 / avg * 100) if avg > 0 else 0
+    var_pct = (variance**0.5 / avg * 100) if avg > 0 else 0
 
     lines = [
         f"  ${max_val:,.0f} {sparkline}",
         f"  ${min_val:,.0f} {'─' * len(sparkline)}",
-        f"",
+        "",
         f"  Trend: {'STEADY' if var_pct < 20 else ('VOLATILE' if var_pct > 50 else 'MODERATE')} (avg ${avg:,.0f}/day, variance {var_pct:.0f}%)",
     ]
     return "\n".join(lines)
@@ -195,9 +197,11 @@ def format_timeline(entries: List[dict], show_chart: bool = False) -> str:
     if anomalies:
         lines.append("")
         for a in anomalies:
-            lines.append(f"  ⚠️ Anomaly: {a['date']} saved only ${a['saved_usd']:.2f} ({a['pct_below']:.0f}% below average)")
+            lines.append(
+                f"  ⚠️ Anomaly: {a['date']} saved only ${a['saved_usd']:.2f} ({a['pct_below']:.0f}% below average)"
+            )
             lines.append(f"     → Cache hit dropped to {a['cache_hit_pct']}%")
-            lines.append(f"     → Check proxy health: tokenpak doctor")
+            lines.append("     → Check proxy health: tokenpak doctor")
 
     if show_chart:
         lines.append("")

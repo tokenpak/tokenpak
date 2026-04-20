@@ -42,18 +42,18 @@ import os
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
 
 # ---------------------------------------------------------------------------
 # State enum
 # ---------------------------------------------------------------------------
 
+
 class CircuitState(str, Enum):
-    CLOSED    = "closed"     # Normal operation
-    OPEN      = "open"       # Fast-failing
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Fast-failing
     HALF_OPEN = "half_open"  # Probing recovery
 
 
@@ -61,13 +61,15 @@ class CircuitState(str, Enum):
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for all circuit breakers."""
+
     enabled: bool = True
-    failure_threshold: int = 5      # failures in window before tripping
+    failure_threshold: int = 5  # failures in window before tripping
     recovery_timeout: float = 60.0  # seconds before OPEN → HALF_OPEN
-    window_seconds: float = 60.0    # rolling failure counting window
+    window_seconds: float = 60.0  # rolling failure counting window
 
     @classmethod
     def from_env(cls) -> "CircuitBreakerConfig":
@@ -82,6 +84,7 @@ class CircuitBreakerConfig:
 # ---------------------------------------------------------------------------
 # Per-provider circuit breaker
 # ---------------------------------------------------------------------------
+
 
 class CircuitBreaker:
     """
@@ -239,15 +242,15 @@ class CircuitBreaker:
 
 # Known provider URL substrings → canonical provider names
 _PROVIDER_PATTERNS: List[tuple[str, str]] = [
-    ("anthropic.com",                   "anthropic"),
-    ("openai.com",                       "openai"),
-    ("googleapis.com",                   "google"),
-    ("generativelanguage",               "google"),
-    ("azure.com",                        "azure"),
-    ("ollama",                           "ollama"),
-    ("groq.com",                         "groq"),
-    ("together.xyz",                     "together"),
-    ("cohere.com",                       "cohere"),
+    ("anthropic.com", "anthropic"),
+    ("openai.com", "openai"),
+    ("googleapis.com", "google"),
+    ("generativelanguage", "google"),
+    ("azure.com", "azure"),
+    ("ollama", "ollama"),
+    ("groq.com", "groq"),
+    ("together.xyz", "together"),
+    ("cohere.com", "cohere"),
 ]
 
 
@@ -260,6 +263,7 @@ def provider_from_url(url: str) -> str:
     # Fall back to the hostname as-is
     try:
         from urllib.parse import urlparse
+
         return urlparse(url).hostname or "unknown"
     except Exception:
         return "unknown"
@@ -338,7 +342,9 @@ def get_circuit_breaker_registry() -> CircuitBreakerRegistry:
     return _registry
 
 
-def _reset_registry_for_testing(config: Optional[CircuitBreakerConfig] = None) -> CircuitBreakerRegistry:
+def _reset_registry_for_testing(
+    config: Optional[CircuitBreakerConfig] = None,
+) -> CircuitBreakerRegistry:
     """
     Replace the global registry with a fresh instance.
     ONLY for use in tests.

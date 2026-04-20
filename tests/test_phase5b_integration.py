@@ -20,15 +20,16 @@ Edge cases:
   - limit=0 or negative → safe handling (FastAPI rejects)
   - Future date → empty results
 """
+
 from __future__ import annotations
 
 import io
 import json
 import sys
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -39,8 +40,8 @@ if str(VAULT_PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(VAULT_PKG_ROOT))
 
 from fastapi.testclient import TestClient
-from tokenpak.agent.query.api import EntryStore, create_query_app
 
+from tokenpak.agent.query.api import EntryStore, create_query_app
 
 # ---------------------------------------------------------------------------
 # Fixture data constants
@@ -103,13 +104,19 @@ def _write_fixtures(entries_dir: Path) -> dict[str, list[dict[str, Any]]]:
             agent = AGENTS[i % len(AGENTS)]
             model = MODELS[i % len(MODELS)]
             provider = PROVIDERS[i % len(PROVIDERS)]
-            tokens = 100 + i * 50          # 100, 150, …, 550
+            tokens = 100 + i * 50  # 100, 150, …, 550
             cost = round(0.001 + i * 0.0005, 6)
-            cache_tokens = 20 + i * 5 if i % 2 == 0 else 0   # every other entry has cache hits
-            compression_pct = round(i * 2.5, 2)               # 0.0 … 22.5
+            cache_tokens = 20 + i * 5 if i % 2 == 0 else 0  # every other entry has cache hits
+            compression_pct = round(i * 2.5, 2)  # 0.0 … 22.5
             compression_ratio = round(1.0 + i * 0.1, 3) if i % 3 == 0 else None
             entry = _make_entry(
-                date, i, agent, model, provider, tokens, cost,
+                date,
+                i,
+                agent,
+                model,
+                provider,
+                tokens,
+                cost,
                 cache_tokens=cache_tokens,
                 compression_pct=compression_pct,
                 compression_ratio=compression_ratio,
@@ -130,6 +137,7 @@ def _write_fixtures(entries_dir: Path) -> dict[str, list[dict[str, Any]]]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def entries_dir(tmp_path_factory) -> Path:
     """Create a temp directory with deterministic JSONL fixtures."""
@@ -148,6 +156,7 @@ def store(entries_dir) -> EntryStore:
 def client(entries_dir) -> TestClient:
     """TestClient backed by fixture data via monkeypatched _store."""
     import tokenpak.agent.query.api as query_module
+
     test_store = EntryStore(entries_dir=entries_dir)
     # Patch the module-level _store so all router handlers use fixture data
     with patch.object(query_module, "_store", test_store):
@@ -164,6 +173,7 @@ def fixture_data(entries_dir) -> dict[str, list[dict[str, Any]]]:
 # ---------------------------------------------------------------------------
 # 1. /query/entries
 # ---------------------------------------------------------------------------
+
 
 class TestQueryEntries:
     """GET /query/entries"""
@@ -230,6 +240,7 @@ class TestQueryEntries:
 # 2. /query/stats
 # ---------------------------------------------------------------------------
 
+
 class TestQueryStats:
     """GET /query/stats"""
 
@@ -283,6 +294,7 @@ class TestQueryStats:
 # ---------------------------------------------------------------------------
 # 3. /query/rollups
 # ---------------------------------------------------------------------------
+
 
 class TestQueryRollups:
     """GET /query/rollups"""
@@ -360,6 +372,7 @@ class TestQueryRollups:
 # 4. /query/top-users
 # ---------------------------------------------------------------------------
 
+
 class TestQueryTopUsers:
     """GET /query/top-users"""
 
@@ -414,14 +427,13 @@ class TestQueryTopUsers:
 # 5. /query/cache-trends
 # ---------------------------------------------------------------------------
 
+
 class TestQueryCacheTrends:
     """GET /query/cache-trends"""
 
     def test_cache_trends_multi_day(self, client):
         """TC-CT01: Multi-day range returns one trend point per day with data."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03"
-        )
+        resp = client.get("/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03")
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
@@ -430,44 +442,34 @@ class TestQueryCacheTrends:
 
     def test_cache_trends_fields(self, client):
         """TC-CT02: Each trend point has timestamp, hit_rate, miss_rate."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2025-10-01&end_date=2025-10-01"
-        )
+        resp = client.get("/query/cache-trends?start_date=2025-10-01&end_date=2025-10-01")
         trend = resp.json()["trends"][0]
         for field in ["timestamp", "hit_rate", "miss_rate"]:
             assert field in trend, f"Missing trend field: {field}"
 
     def test_cache_trends_rates_sum_to_one(self, client):
         """TC-CT03: hit_rate + miss_rate ≈ 1.0 for each point."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03"
-        )
+        resp = client.get("/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03")
         for trend in resp.json()["trends"]:
             total = trend["hit_rate"] + trend["miss_rate"]
             assert abs(total - 1.0) < 1e-6, f"Rates don't sum to 1.0: {trend}"
 
     def test_cache_trends_empty_range(self, client):
         """TC-CT04: Empty date range returns empty trends."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2024-01-01&end_date=2024-01-05"
-        )
+        resp = client.get("/query/cache-trends?start_date=2024-01-01&end_date=2024-01-05")
         assert resp.status_code == 200
         assert resp.json()["trends"] == []
 
     def test_cache_trends_positive_hit_rate(self, client):
         """TC-CT05: Days with cache_tokens entries have hit_rate > 0."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2025-10-01&end_date=2025-10-01"
-        )
+        resp = client.get("/query/cache-trends?start_date=2025-10-01&end_date=2025-10-01")
         trend = resp.json()["trends"][0]
         # Fixture data has cache_tokens for even-indexed entries
         assert trend["hit_rate"] > 0.0
 
     def test_cache_trends_sorted_ascending(self, client):
         """TC-CT06: Trend points are in chronological order."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03"
-        )
+        resp = client.get("/query/cache-trends?start_date=2025-10-01&end_date=2025-10-03")
         timestamps = [t["timestamp"] for t in resp.json()["trends"]]
         assert timestamps == sorted(timestamps)
 
@@ -475,6 +477,7 @@ class TestQueryCacheTrends:
 # ---------------------------------------------------------------------------
 # 6. /query/compression-ratio
 # ---------------------------------------------------------------------------
+
 
 class TestQueryCompressionRatio:
     """GET /query/compression-ratio"""
@@ -524,6 +527,7 @@ class TestQueryCompressionRatio:
 # 7. /query/usage-summary
 # ---------------------------------------------------------------------------
 
+
 class TestQueryUsageSummary:
     """GET /query/usage-summary"""
 
@@ -569,14 +573,21 @@ class TestQueryUsageSummary:
         """TC-US06: Summary has all required fields."""
         resp = client.get("/query/usage-summary?date=2025-10-01")
         summary = resp.json()["summary"]
-        for field in ["date", "total_requests", "total_tokens", "cache_tokens",
-                      "avg_compression", "unique_agents"]:
+        for field in [
+            "date",
+            "total_requests",
+            "total_tokens",
+            "cache_tokens",
+            "avg_compression",
+            "unique_agents",
+        ]:
             assert field in summary, f"Missing summary field: {field}"
 
 
 # ---------------------------------------------------------------------------
 # 8. POST /query/export
 # ---------------------------------------------------------------------------
+
 
 class TestQueryExport:
     """POST /query/export"""
@@ -611,8 +622,9 @@ class TestQueryExport:
         )
         lines = resp.text.strip().splitlines()
         # 1 header + ENTRIES_PER_DAY data rows
-        assert len(lines) == ENTRIES_PER_DAY + 1, \
+        assert len(lines) == ENTRIES_PER_DAY + 1, (
             f"Expected {ENTRIES_PER_DAY + 1} lines, got {len(lines)}"
+        )
 
     def test_export_multi_day_row_count(self, client):
         """TC-EX04: Multi-day CSV export includes all entries."""
@@ -645,6 +657,7 @@ class TestQueryExport:
     def test_export_csv_valid_data(self, client):
         """TC-EX07: Each CSV data row has non-empty id and parseable tokens."""
         import csv
+
         resp = client.post(
             "/query/export",
             json={"start_date": "2025-10-01", "end_date": "2025-10-01"},
@@ -660,6 +673,7 @@ class TestQueryExport:
 # ---------------------------------------------------------------------------
 # 9. Edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestEdgeCases:
     """Misc edge cases across all endpoints."""
@@ -706,9 +720,7 @@ class TestEdgeCases:
 
     def test_cache_trends_future_range(self, client):
         """TC-EC07: Cache trends for future range returns empty list."""
-        resp = client.get(
-            "/query/cache-trends?start_date=2099-01-01&end_date=2099-01-31"
-        )
+        resp = client.get("/query/cache-trends?start_date=2099-01-01&end_date=2099-01-31")
         assert resp.status_code == 200
         assert resp.json()["trends"] == []
 

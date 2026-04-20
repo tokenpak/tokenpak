@@ -156,7 +156,9 @@ class StateManager:
     # ── Round-trip ───────────────────────────────────────────────────────────
 
     @classmethod
-    def from_wire(cls, wire_text: str, session_id: str, base_dir: str = ".tokenpak") -> "StateManager":
+    def from_wire(
+        cls, wire_text: str, session_id: str, base_dir: str = ".tokenpak"
+    ) -> "StateManager":
         """
         Parse a STATE_JSON wire section back into a StateManager.
 
@@ -177,7 +179,9 @@ class StateManager:
 import copy as _copy
 
 try:
-    from jsonschema import ValidationError as _ValidationError, validate as _validate  # noqa: F401, F811
+    from jsonschema import ValidationError as _ValidationError  # noqa: F401, F811
+    from jsonschema import validate as _validate
+
     _HAS_JSONSCHEMA_MS = True
 except ImportError:
     _HAS_JSONSCHEMA_MS = False
@@ -262,6 +266,7 @@ class IntentStateManager:
         schemas_dir = _get_schemas_dir()
         try:
             from tokenpak.agent.state_schemas import INTENT_SCHEMA_MAP
+
             filename = INTENT_SCHEMA_MAP.get(self.intent)
             if filename:
                 schema_path = schemas_dir / filename
@@ -352,9 +357,7 @@ class MultiSchemaStateManager:
     def for_intent(self, intent):
         """Get or create the IntentStateManager for a given intent."""
         if intent not in self._managers:
-            self._managers[intent] = IntentStateManager(
-                self.session_id, intent, self.base_dir
-            )
+            self._managers[intent] = IntentStateManager(self.session_id, intent, self.base_dir)
         return self._managers[intent]
 
     def save_all(self):
@@ -376,8 +379,7 @@ class MultiSchemaStateManager:
 
     def __repr__(self):
         return (
-            f"<MultiSchemaStateManager session={self.session_id!r} "
-            f"active={self.active_intents()}>"
+            f"<MultiSchemaStateManager session={self.session_id!r} active={self.active_intents()}>"
         )
 
 

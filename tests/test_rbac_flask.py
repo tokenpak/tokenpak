@@ -11,7 +11,6 @@ This avoids all the tokenpak_operational_* import issues.
 
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -26,7 +25,6 @@ from tokenpak.telemetry.operational.rbac_auth import (
 )
 from tokenpak.telemetry.operational.rbac_core import Permission, Role
 from tokenpak.telemetry.operational.rbac_routes import rbac_bp
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -170,8 +168,11 @@ class TestUsers:
     def test_create_user_as_admin(self, flask_app):
         client, store = flask_app
         token = _login(client, store, Role.ADMIN, "_cu1")
-        resp = client.post("/v1/users", headers=_auth_headers(token),
-                           json={"username": "newuser", "password": "Pass1234!", "role": "readonly"})
+        resp = client.post(
+            "/v1/users",
+            headers=_auth_headers(token),
+            json={"username": "newuser", "password": "Pass1234!", "role": "readonly"},
+        )
         assert resp.status_code == 201
         data = resp.get_json()
         assert data["username"] == "newuser"
@@ -180,22 +181,30 @@ class TestUsers:
     def test_create_user_forbidden_for_readonly(self, flask_app):
         client, store = flask_app
         token = _login(client, store, Role.READONLY, "_cu2")
-        resp = client.post("/v1/users", headers=_auth_headers(token),
-                           json={"username": "another", "password": "Pass1234!", "role": "readonly"})
+        resp = client.post(
+            "/v1/users",
+            headers=_auth_headers(token),
+            json={"username": "another", "password": "Pass1234!", "role": "readonly"},
+        )
         assert resp.status_code == 403
 
     def test_create_user_invalid_role(self, flask_app):
         client, store = flask_app
         token = _login(client, store, Role.ADMIN, "_cu3")
-        resp = client.post("/v1/users", headers=_auth_headers(token),
-                           json={"username": "x", "password": "y", "role": "superuser"})
+        resp = client.post(
+            "/v1/users",
+            headers=_auth_headers(token),
+            json={"username": "x", "password": "y", "role": "superuser"},
+        )
         assert resp.status_code == 400
 
     def test_create_user_duplicate(self, flask_app):
         client, store = flask_app
         token = _login(client, store, Role.ADMIN, "_cu4")
         payload = {"username": "dupuser", "password": "Pass1234!", "role": "readonly"}
-        assert client.post("/v1/users", headers=_auth_headers(token), json=payload).status_code == 201
+        assert (
+            client.post("/v1/users", headers=_auth_headers(token), json=payload).status_code == 201
+        )
         resp = client.post("/v1/users", headers=_auth_headers(token), json=payload)
         assert resp.status_code == 409
 
@@ -225,19 +234,26 @@ class TestUsers:
     def test_update_user_role(self, flask_app):
         client, store = flask_app
         admin_token = _login(client, store, Role.ADMIN, "_uu1")
-        create_resp = client.post("/v1/users", headers=_auth_headers(admin_token),
-                                  json={"username": "target_u", "password": "Pass1234!", "role": "readonly"})
+        create_resp = client.post(
+            "/v1/users",
+            headers=_auth_headers(admin_token),
+            json={"username": "target_u", "password": "Pass1234!", "role": "readonly"},
+        )
         target_id = create_resp.get_json()["id"]
-        resp = client.patch(f"/v1/users/{target_id}", headers=_auth_headers(admin_token),
-                            json={"role": "finops"})
+        resp = client.patch(
+            f"/v1/users/{target_id}", headers=_auth_headers(admin_token), json={"role": "finops"}
+        )
         assert resp.status_code == 200
         assert resp.get_json()["role"] == "finops"
 
     def test_deactivate_user(self, flask_app):
         client, store = flask_app
         admin_token = _login(client, store, Role.ADMIN, "_du1")
-        create_resp = client.post("/v1/users", headers=_auth_headers(admin_token),
-                                  json={"username": "del_target", "password": "Pass1234!", "role": "readonly"})
+        create_resp = client.post(
+            "/v1/users",
+            headers=_auth_headers(admin_token),
+            json={"username": "del_target", "password": "Pass1234!", "role": "readonly"},
+        )
         target_id = create_resp.get_json()["id"]
         resp = client.delete(f"/v1/users/{target_id}", headers=_auth_headers(admin_token))
         assert resp.status_code == 200

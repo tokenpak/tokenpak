@@ -1,6 +1,6 @@
 """Content processors for different file types."""
 
-from .code import CodeProcessor, CodeCompactionMode
+from .code import CodeCompactionMode, CodeProcessor
 from .data import DataProcessor
 from .text import TextProcessor
 

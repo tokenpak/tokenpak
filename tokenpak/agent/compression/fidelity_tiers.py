@@ -37,24 +37,22 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Tier enum
 # ---------------------------------------------------------------------------
 
 
 class FidelityTier(str, Enum):
-    L0_RAW = "raw"          # Full source text
+    L0_RAW = "raw"  # Full source text
     L1_SIGNATURES = "signatures"  # Function/class signatures only
-    L2_ANNOTATED = "annotated"    # Signatures + comments + docstrings
-    L3_CHANGED = "changed"        # Only changed/relevant blocks
-    L4_SUMMARY = "summary"        # Compact summary (key facts only)
+    L2_ANNOTATED = "annotated"  # Signatures + comments + docstrings
+    L3_CHANGED = "changed"  # Only changed/relevant blocks
+    L4_SUMMARY = "summary"  # Compact summary (key facts only)
 
     # Convenience: ordered cheapest → richest
     @classmethod
     def ascending(cls) -> List["FidelityTier"]:
-        return [cls.L4_SUMMARY, cls.L3_CHANGED, cls.L2_ANNOTATED,
-                cls.L1_SIGNATURES, cls.L0_RAW]
+        return [cls.L4_SUMMARY, cls.L3_CHANGED, cls.L2_ANNOTATED, cls.L1_SIGNATURES, cls.L0_RAW]
 
     @classmethod
     def descending(cls) -> List["FidelityTier"]:
@@ -63,11 +61,11 @@ class FidelityTier(str, Enum):
 
 # Approximate token-cost multipliers (relative to L0)
 TIER_COST_FACTOR: Dict[FidelityTier, float] = {
-    FidelityTier.L0_RAW:        1.00,
+    FidelityTier.L0_RAW: 1.00,
     FidelityTier.L1_SIGNATURES: 0.20,
-    FidelityTier.L2_ANNOTATED:  0.40,
-    FidelityTier.L3_CHANGED:    0.55,
-    FidelityTier.L4_SUMMARY:    0.10,
+    FidelityTier.L2_ANNOTATED: 0.40,
+    FidelityTier.L3_CHANGED: 0.55,
+    FidelityTier.L4_SUMMARY: 0.10,
 }
 
 
@@ -211,9 +209,7 @@ class TierGenerator:
 
         # L3 — changed blocks
         if changed_lines:
-            tiers[FidelityTier.L3_CHANGED] = cls._extract_changed(
-                source, changed_lines
-            )
+            tiers[FidelityTier.L3_CHANGED] = cls._extract_changed(source, changed_lines)
         else:
             tiers[FidelityTier.L3_CHANGED] = tiers[FidelityTier.L2_ANNOTATED]
 
@@ -310,13 +306,9 @@ class TierGenerator:
 
         classes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
         funcs = [
-            n
-            for n in ast.walk(tree)
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
-        imports = [
-            n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))
-        ]
+        imports = [n for n in ast.walk(tree) if isinstance(n, (ast.Import, ast.ImportFrom))]
 
         if classes:
             names = ", ".join(c.name for c in classes[:5])
@@ -348,9 +340,7 @@ class TierGenerator:
         tiers[FidelityTier.L2_ANNOTATED] = tiers[FidelityTier.L1_SIGNATURES]
 
         if changed_lines:
-            tiers[FidelityTier.L3_CHANGED] = cls._extract_changed(
-                source, changed_lines
-            )
+            tiers[FidelityTier.L3_CHANGED] = cls._extract_changed(source, changed_lines)
         else:
             tiers[FidelityTier.L3_CHANGED] = tiers[FidelityTier.L2_ANNOTATED]
 
@@ -456,9 +446,7 @@ class TierSelector:
         Falls back to the nearest richer tier if the recommended tier is not
         stored in the block.
         """
-        recommended = TierSelector.select(
-            complexity_score, budget_remaining, relevance_score
-        )
+        recommended = TierSelector.select(complexity_score, budget_remaining, relevance_score)
         return block.get(recommended, fallback=True)
 
 

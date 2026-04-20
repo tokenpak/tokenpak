@@ -21,7 +21,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Enums & data classes
 # ---------------------------------------------------------------------------
@@ -33,7 +32,7 @@ class DataClass(str, Enum):
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
-    RESTRICTED = "restricted"   # PII, secrets, regulated data
+    RESTRICTED = "restricted"  # PII, secrets, regulated data
 
 
 class RuleEffect(str, Enum):
@@ -67,7 +66,7 @@ class ClassificationResult:
     """Result of data classification."""
 
     data_class: DataClass
-    confidence: float          # 0.0 – 1.0
+    confidence: float  # 0.0 – 1.0
     detected_patterns: list[str] = field(default_factory=list)
     redacted_text: Optional[str] = None
 

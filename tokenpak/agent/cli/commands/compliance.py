@@ -50,7 +50,6 @@ def _run_report(standard: str, args: list[str]) -> None:
         sys.exit(2)
 
     import argparse
-    from datetime import datetime, timezone
 
     p = argparse.ArgumentParser(prog=f"tokenpak compliance report {standard}")
     p.add_argument("--output", "-o", default=None, help="Save report to file (JSON)")

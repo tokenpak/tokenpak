@@ -221,13 +221,13 @@ class MacroResult:
     def format(self) -> str:
         """Return human-readable output."""
         lines = [
-            f"{'='*60}",
+            f"{'=' * 60}",
             f"  {self.macro_name.upper()}",
         ]
         if self.dry_run:
             lines.append("  [DRY RUN — no commands executed]")
         lines.append(f"  Started: {self.started_at[:19]}")
-        lines.append(f"{'='*60}")
+        lines.append(f"{'=' * 60}")
 
         for step in self.steps:
             status = "🔍" if step.dry_run else ("✅" if step.success else "❌")
@@ -243,9 +243,9 @@ class MacroResult:
 
         dur = self.duration_seconds
         overall = "✅ PASS" if self.success else "❌ FAIL"
-        lines.append(f"\n{'='*60}")
+        lines.append(f"\n{'=' * 60}")
         lines.append(f"  {overall}  — completed in {dur:.1f}s")
-        lines.append(f"{'='*60}")
+        lines.append(f"{'=' * 60}")
         return "\n".join(lines)
 
 

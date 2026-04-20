@@ -9,11 +9,11 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from workflow import WorkflowManager, WorkflowStatus, WorkflowRecord
+from workflow import WorkflowRecord, WorkflowStatus
 
 DEFAULT_STATS_FILE = Path(os.path.expanduser("~/.tokenpak/workflow_stats.json"))
 
@@ -21,6 +21,7 @@ DEFAULT_STATS_FILE = Path(os.path.expanduser("~/.tokenpak/workflow_stats.json"))
 @dataclass
 class WorkflowStats:
     """Performance statistics for a workflow template."""
+
     template_name: str
     success_count: int = 0
     failure_count: int = 0
@@ -41,7 +42,7 @@ class WorkflowStats:
         """Return average duration in seconds."""
         total = self.success_count + self.failure_count
         if total == 0:
-            return float('inf')
+            return float("inf")
         return self.total_duration_seconds / total
 
     def avg_tokens(self) -> float:
@@ -60,7 +61,7 @@ class WorkflowStats:
 
     def to_dict(self) -> Dict:
         d = asdict(self)
-        d['last_updated'] = self.last_updated
+        d["last_updated"] = self.last_updated
         return d
 
     @classmethod
@@ -83,8 +84,7 @@ class WorkflowPerformanceTracker:
             try:
                 data = json.loads(self._stats_file.read_text())
                 self._stats = {
-                    name: WorkflowStats.from_dict(stat_data)
-                    for name, stat_data in data.items()
+                    name: WorkflowStats.from_dict(stat_data) for name, stat_data in data.items()
                 }
             except Exception:
                 self._stats = {}
@@ -95,7 +95,7 @@ class WorkflowPerformanceTracker:
         """Save stats to disk."""
         self._stats_file.parent.mkdir(parents=True, exist_ok=True)
         data = {name: stats.to_dict() for name, stats in self._stats.items()}
-        tmp = self._stats_file.with_suffix('.tmp')
+        tmp = self._stats_file.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=2))
         tmp.replace(self._stats_file)
 
@@ -106,7 +106,7 @@ class WorkflowPerformanceTracker:
         duration_seconds: float,
         tokens_used: int = 0,
         regression: bool = False,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
     ) -> WorkflowStats:
         """Record a workflow execution."""
         if template_name not in self._stats:
@@ -124,14 +124,16 @@ class WorkflowPerformanceTracker:
             stats.regression_count += 1
 
         # Record detailed execution
-        stats.executions.append({
-            'timestamp': time.time(),
-            'success': success,
-            'duration': duration_seconds,
-            'tokens': tokens_used,
-            'regression': regression,
-            'metadata': metadata or {}
-        })
+        stats.executions.append(
+            {
+                "timestamp": time.time(),
+                "success": success,
+                "duration": duration_seconds,
+                "tokens": tokens_used,
+                "regression": regression,
+                "metadata": metadata or {},
+            }
+        )
 
         # Keep last 1000 executions to avoid unbounded growth
         if len(stats.executions) > 1000:
@@ -150,10 +152,7 @@ class WorkflowPerformanceTracker:
         return dict(self._stats)
 
     def score_template(
-        self,
-        template_name: str,
-        max_duration_seconds: float = 300.0,
-        max_tokens: int = 100000
+        self, template_name: str, max_duration_seconds: float = 300.0, max_tokens: int = 100000
     ) -> float:
         """
         Score a template using the ranking formula:
@@ -177,7 +176,7 @@ class WorkflowPerformanceTracker:
         # Speed score: inverse of normalized duration
         # Lower duration = higher score
         avg_duration = stats.avg_duration_seconds()
-        if avg_duration == float('inf'):
+        if avg_duration == float("inf"):
             speed_score = 0.0
         else:
             speed_score = max(0.0, 1.0 - (avg_duration / max_duration_seconds))
@@ -191,10 +190,10 @@ class WorkflowPerformanceTracker:
         no_regression_score = 1.0 - stats.regression_rate()
 
         score = (
-            success_score * 0.5 +
-            speed_score * 0.2 +
-            token_efficiency * 0.2 +
-            no_regression_score * 0.1
+            success_score * 0.5
+            + speed_score * 0.2
+            + token_efficiency * 0.2
+            + no_regression_score * 0.1
         )
         return round(score, 4)
 
@@ -203,7 +202,7 @@ class WorkflowPerformanceTracker:
         task_type: str,
         candidates: Optional[List[str]] = None,
         max_duration_seconds: float = 300.0,
-        max_tokens: int = 100000
+        max_tokens: int = 100000,
     ) -> List[Tuple[str, float, WorkflowStats]]:
         """
         Rank templates for a given task type.
@@ -243,11 +242,11 @@ def record_workflow_execution(
     workflow: WorkflowRecord,
     tokens_used: int = 0,
     regression: bool = False,
-    tracker: Optional[WorkflowPerformanceTracker] = None
+    tracker: Optional[WorkflowPerformanceTracker] = None,
 ):
     """
     Convenience function to record a completed workflow execution.
-    
+
     Args:
         workflow: The completed WorkflowRecord
         tokens_used: Total tokens used during execution
@@ -269,7 +268,7 @@ def record_workflow_execution(
         duration_seconds=duration,
         tokens_used=tokens_used,
         regression=regression,
-        metadata={'workflow_id': workflow.id, 'workflow_name': workflow.name}
+        metadata={"workflow_id": workflow.id, "workflow_name": workflow.name},
     )
 
 

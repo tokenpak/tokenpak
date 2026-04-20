@@ -228,6 +228,7 @@ def get_registry() -> ToolSchemaRegistry:
 # The actual frozen data lives inside get_registry()._frozen_tools and is
 # updated only when tool schemas genuinely change.
 
+
 def _get_frozen_tool_schemas() -> list:
     """Return currently frozen tool schemas (or empty list if not yet initialized)."""
     reg = get_registry()

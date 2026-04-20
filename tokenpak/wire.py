@@ -2,7 +2,7 @@
 """TokenPak wire format generator."""
 
 import hashlib
-from typing import Any,  Dict, List
+from typing import Dict, List
 
 
 def make_slice_id(content: str, ref: str) -> str:
@@ -39,9 +39,9 @@ def pack(blocks: List[Dict], budget: int, metadata: Dict | None = None) -> str:
         # Build header line
         header = (
             f"[REF: {ref}] "
-            f"[TYPE: {block.get('type','unknown')}] "
-            f"[QUALITY: {float(block.get('quality',1.0)):.2f}] "
-            f"[TOKENS: {int(block.get('tokens',0))}] "
+            f"[TYPE: {block.get('type', 'unknown')}] "
+            f"[QUALITY: {float(block.get('quality', 1.0)):.2f}] "
+            f"[TOKENS: {int(block.get('tokens', 0))}] "
             f"[SLICE: {slice_id}]"
         )
 

@@ -6,22 +6,54 @@ from typing import List, Tuple
 
 # Supported file extensions → type mapping
 FILE_TYPES = {
-    ".md": "text", ".txt": "text", ".html": "text", ".htm": "text",
-    ".rst": "text", ".adoc": "text",
-    ".py": "code", ".js": "code", ".ts": "code", ".jsx": "code",
-    ".tsx": "code", ".go": "code", ".rs": "code", ".rb": "code",
-    ".java": "code", ".c": "code", ".cpp": "code", ".h": "code",
-    ".sh": "code", ".bash": "code", ".sql": "code", ".css": "code",
-    ".json": "data", ".csv": "data", ".tsv": "data",
-    ".yaml": "data", ".yml": "data", ".toml": "data",
-    ".env": "data", ".cfg": "data", ".ini": "data",
+    ".md": "text",
+    ".txt": "text",
+    ".html": "text",
+    ".htm": "text",
+    ".rst": "text",
+    ".adoc": "text",
+    ".py": "code",
+    ".js": "code",
+    ".ts": "code",
+    ".jsx": "code",
+    ".tsx": "code",
+    ".go": "code",
+    ".rs": "code",
+    ".rb": "code",
+    ".java": "code",
+    ".c": "code",
+    ".cpp": "code",
+    ".h": "code",
+    ".sh": "code",
+    ".bash": "code",
+    ".sql": "code",
+    ".css": "code",
+    ".json": "data",
+    ".csv": "data",
+    ".tsv": "data",
+    ".yaml": "data",
+    ".yml": "data",
+    ".toml": "data",
+    ".env": "data",
+    ".cfg": "data",
+    ".ini": "data",
     ".pdf": "pdf",
-    ".png": "image", ".jpg": "image", ".jpeg": "image",
-    ".gif": "image", ".webp": "image", ".svg": "image",
-    ".mp3": "audio", ".wav": "audio", ".m4a": "audio",
-    ".flac": "audio", ".ogg": "audio",
-    ".mp4": "video", ".mkv": "video", ".avi": "video",
-    ".mov": "video", ".webm": "video",
+    ".png": "image",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".gif": "image",
+    ".webp": "image",
+    ".svg": "image",
+    ".mp3": "audio",
+    ".wav": "audio",
+    ".m4a": "audio",
+    ".flac": "audio",
+    ".ogg": "audio",
+    ".mp4": "video",
+    ".mkv": "video",
+    ".avi": "video",
+    ".mov": "video",
+    ".webm": "video",
 }
 
 # Basename-based mappings for dotfiles with no "suffix" via pathlib.
@@ -31,9 +63,21 @@ FILE_NAME_TYPES = {
 
 # Directories to always skip
 SKIP_DIRS = {
-    "node_modules", ".git", "__pycache__", ".venv", "venv",
-    ".env", ".tox", ".mypy_cache", ".pytest_cache", "dist",
-    "build", ".next", ".nuxt", "target", ".cargo",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".env",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    "target",
+    ".cargo",
 }
 
 # Max file size to process (10MB)
@@ -43,7 +87,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 def walk_directory(root: str, max_size: int = MAX_FILE_SIZE) -> List[Tuple[str, str, int]]:
     """
     Recursively walk a directory and return processable files.
-    
+
     Returns:
         List of (absolute_path, file_type, size_bytes) tuples.
     """

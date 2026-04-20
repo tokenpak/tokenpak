@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # Enums & data classes
 # ---------------------------------------------------------------------------
@@ -33,8 +32,8 @@ from typing import Any, Optional
 class SLATier(str, Enum):
     """SLA tier levels."""
 
-    STANDARD = "standard"     # Best-effort (OSS default)
-    ENHANCED = "enhanced"     # Pro/Team: retry + fallback
+    STANDARD = "standard"  # Best-effort (OSS default)
+    ENHANCED = "enhanced"  # Pro/Team: retry + fallback
     GUARANTEED = "guaranteed"  # Enterprise: SLA-backed routing
 
 
@@ -44,7 +43,7 @@ class SLAProfile:
 
     name: str
     tier: SLATier
-    max_latency_ms: int = 5000         # p95 target
+    max_latency_ms: int = 5000  # p95 target
     min_availability_pct: float = 99.0  # monthly uptime target
     max_error_rate_pct: float = 1.0
     fallback_models: list[str] = field(default_factory=list)
@@ -58,14 +57,14 @@ class SLAStatus:
 
     profile: str
     tier: SLATier
-    compliance_pct: float          # Rolling 30-day compliance
+    compliance_pct: float  # Rolling 30-day compliance
     p50_latency_ms: float
     p95_latency_ms: float
     p99_latency_ms: float
     availability_pct: float
     error_rate_pct: float
-    period_start: str              # ISO8601
-    period_end: str                # ISO8601
+    period_start: str  # ISO8601
+    period_end: str  # ISO8601
     incidents: list[dict[str, Any]] = field(default_factory=list)
 
 

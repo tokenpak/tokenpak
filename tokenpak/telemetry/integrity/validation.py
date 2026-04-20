@@ -72,7 +72,7 @@ class EventValidator:
                 ValidationError(
                     field="stage_progression",
                     error_code="INVALID_STAGE_ORDER",
-                    message=f'raw ({stages["raw"]}) must be ≥ qmd ({stages["qmd"]})',
+                    message=f"raw ({stages['raw']}) must be ≥ qmd ({stages['qmd']})",
                 )
             )
             return False
@@ -82,7 +82,7 @@ class EventValidator:
                 ValidationError(
                     field="stage_progression",
                     error_code="INVALID_STAGE_ORDER",
-                    message=f'qmd ({stages["qmd"]}) must be ≥ tokenpak ({stages["tokenpak"]})',
+                    message=f"qmd ({stages['qmd']}) must be ≥ tokenpak ({stages['tokenpak']})",
                 )
             )
             return False
@@ -92,7 +92,7 @@ class EventValidator:
                 ValidationError(
                     field="stage_progression",
                     error_code="INVALID_STAGE_ORDER",
-                    message=f'tokenpak ({stages["tokenpak"]}) must be ≥ final ({stages["final"]})',
+                    message=f"tokenpak ({stages['tokenpak']}) must be ≥ final ({stages['final']})",
                 )
             )
             return False

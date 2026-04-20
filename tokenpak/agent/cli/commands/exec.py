@@ -10,7 +10,6 @@ from typing import Any, Callable
 
 import click
 
-
 OperationFn = Callable[[dict[str, Any], bool], int]
 
 

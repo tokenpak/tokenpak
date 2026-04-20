@@ -13,6 +13,7 @@ class TestRouting:
         """Routing module can be imported."""
         try:
             from tokenpak import routing
+
             assert routing is not None
         except ImportError:
             pytest.skip("routing module not yet available")

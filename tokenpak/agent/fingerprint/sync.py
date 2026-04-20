@@ -174,7 +174,9 @@ class FingerprintSync:
         timeout: int = _REQUEST_TIMEOUT,
     ):
         self.server_url = (
-            server_url or os.environ.get("TOKENPAK_INTELLIGENCE_URL", _DEFAULT_SERVER) or _DEFAULT_SERVER
+            server_url
+            or os.environ.get("TOKENPAK_INTELLIGENCE_URL", _DEFAULT_SERVER)
+            or _DEFAULT_SERVER
         ).rstrip("/")
         self.cache_dir = cache_dir or _DEFAULT_CACHE_DIR
         self.ttl = ttl

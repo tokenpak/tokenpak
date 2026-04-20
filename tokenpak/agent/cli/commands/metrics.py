@@ -83,7 +83,7 @@ def cmd_preview(_args=None) -> None:
     print(
         f"  {'DATE':<12} {'MODEL':<30} {'INPUT':>8} {'OUTPUT':>8} {'SAVED':>8} {'RATIO':>7} {'LATENCY':>9}"
     )
-    print(f"  {'─'*12} {'─'*30} {'─'*8} {'─'*8} {'─'*8} {'─'*7} {'─'*9}")
+    print(f"  {'─' * 12} {'─' * 30} {'─' * 8} {'─' * 8} {'─' * 8} {'─' * 7} {'─' * 9}")
 
     for r in records:
         print(
@@ -124,7 +124,7 @@ def cmd_history(args=None) -> None:
     print(
         f"  {'DATE':<12} {'REQS':>6} {'INPUT':>10} {'SAVED':>10} {'AVG RATIO':>10} {'AVG LATENCY':>12} {'SYNCED':>8}"
     )
-    print(f"  {'─'*12} {'─'*6} {'─'*10} {'─'*10} {'─'*10} {'─'*12} {'─'*8}")
+    print(f"  {'─' * 12} {'─' * 6} {'─' * 10} {'─' * 10} {'─' * 10} {'─' * 12} {'─' * 8}")
 
     for row in summary:
         synced_str = f"{row['synced_count']}/{row['requests']}"

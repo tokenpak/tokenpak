@@ -71,8 +71,7 @@ class FallbackExhaustedError(Exception):
         self.context = context
         self.cause = cause
         super().__init__(
-            f"All fallback options exhausted for task '{context.get('task', 'unknown')}': "
-            f"{cause}"
+            f"All fallback options exhausted for task '{context.get('task', 'unknown')}': {cause}"
         )
 
 

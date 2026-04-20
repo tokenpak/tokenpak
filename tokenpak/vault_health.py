@@ -20,7 +20,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -41,6 +41,7 @@ class IndexStatus:
 @dataclass
 class HealthCheckResult:
     """Result of a vault-health check."""
+
     status: str
     index_path: Optional[Path] = None
     block_count: int = 0
@@ -65,6 +66,7 @@ class HealthCheckResult:
 @dataclass
 class RepairResult:
     """Result of a vault-health repair operation."""
+
     success: bool
     files_processed: int = 0
     files_skipped: int = 0
@@ -200,14 +202,35 @@ class VaultHealth:
 
         TEXT_EXTS = {".md", ".txt", ".rst", ".adoc"}
         CODE_EXTS = {
-            ".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs", ".rb",
-            ".java", ".c", ".cpp", ".h", ".sh", ".bash", ".sql", ".css",
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".go",
+            ".rs",
+            ".rb",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".sh",
+            ".bash",
+            ".sql",
+            ".css",
         }
         DATA_EXTS = {".json", ".yaml", ".yml", ".toml", ".csv", ".env", ".cfg", ".ini"}
         SUPPORTED_EXTS = TEXT_EXTS | CODE_EXTS | DATA_EXTS
         SKIP_DIRS = {
-            ".git", ".tokenpak", "__pycache__", "node_modules",
-            ".venv", "venv", "dist", "build", ".mypy_cache",
+            ".git",
+            ".tokenpak",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            "dist",
+            "build",
+            ".mypy_cache",
         }
         MAX_FILE_BYTES = 1 * 1024 * 1024  # 1 MB
         MAX_FILES = 50_000
@@ -236,10 +259,7 @@ class VaultHealth:
             )
 
         for dirpath, dirnames, filenames in os.walk(str(self.vault_dir)):
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in SKIP_DIRS and not d.startswith(".")
-            ]
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
 
             for filename in filenames:
                 if files_processed >= MAX_FILES:
@@ -271,7 +291,9 @@ class VaultHealth:
                 try:
                     block_id = _make_block_id(rel_path)
                     content = filepath.read_text(encoding="utf-8", errors="ignore")
-                    content_hash = hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+                    content_hash = hashlib.sha256(
+                        content.encode("utf-8", errors="replace")
+                    ).hexdigest()
                     tokens_est = len(content) // 4
 
                     # Incremental: skip unchanged blocks
@@ -385,6 +407,7 @@ class VaultHealth:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()

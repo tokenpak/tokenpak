@@ -12,11 +12,10 @@ from __future__ import annotations
 import json
 import math
 import statistics
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -75,7 +74,7 @@ _BUDGET_NORMAL = 1.00
 _BUDGET_EXPANDED = 1.30
 
 _SCORE_HIGH = 0.8  # above → tight budget
-_SCORE_LOW = 0.5   # below → expanded budget
+_SCORE_LOW = 0.5  # below → expanded budget
 
 
 def _edit_distance_ratio(a: str, b: str) -> float:

@@ -54,7 +54,9 @@ class ConfigError(TokenPakError):
         self.expected = expected
         self.actual = actual
         self.reason = reason
-        message = f"Config error: {field}\n   Expected: {expected}\n   Got: {actual}\n   Reason: {reason}"
+        message = (
+            f"Config error: {field}\n   Expected: {expected}\n   Got: {actual}\n   Reason: {reason}"
+        )
         super().__init__(message, suggestion)
 
 
@@ -76,7 +78,7 @@ class PortInUseError(ProxyStartupError):
         suggestion = (
             f"Either:\n"
             f"  • Kill the existing proxy: pkill -f 'tokenpak serve'\n"
-            f"  • Use a different port: TOKENPAK_PORT={port+1} tokenpak start"
+            f"  • Use a different port: TOKENPAK_PORT={port + 1} tokenpak start"
         )
         super().__init__(reason, suggestion)
 
@@ -86,7 +88,9 @@ class PermissionDeniedError(ProxyStartupError):
 
     def __init__(self, operation: str, path: str):
         reason = f"Permission denied: {operation} at {path}"
-        suggestion = f"Check directory permissions: ls -ld {path}\nOr run with appropriate privileges."
+        suggestion = (
+            f"Check directory permissions: ls -ld {path}\nOr run with appropriate privileges."
+        )
         super().__init__(reason, suggestion)
 
 
@@ -169,7 +173,7 @@ class UnknownCommandError(CLIError):
     def __init__(self, command: str, suggestions: Optional[List[str]] = None):
         message = f"Unknown command: '{command}'"
         if suggestions:
-            suggestion = f"Did you mean:\n   • " + "\n   • ".join(suggestions)
+            suggestion = "Did you mean:\n   • " + "\n   • ".join(suggestions)
         else:
             suggestion = "Run `tokenpak help` to see all available commands."
         super().__init__(message, suggestion)
@@ -195,6 +199,7 @@ def wrap_http_exception(status: int, detail: str) -> Exception:
     """Convert to FastAPI HTTPException-compatible dict."""
     try:
         from fastapi import HTTPException
+
         return HTTPException(status_code=status, detail=detail)
     except ImportError:
         # Fallback if FastAPI not available

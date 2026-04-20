@@ -32,6 +32,7 @@ Schema::
 
     meta(key TEXT PK, value TEXT)
 """
+
 from __future__ import annotations
 
 import json
@@ -41,12 +42,12 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-
+from typing import Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
 # BM25 tokenizer (mirrors proxy_v4._bm25_tokenize)
 # ---------------------------------------------------------------------------
+
 
 def _bm25_tokenize(text: str) -> List[str]:
     return re.findall(r"[a-z0-9_]+", text.lower())
@@ -55,6 +56,7 @@ def _bm25_tokenize(text: str) -> List[str]:
 # ---------------------------------------------------------------------------
 # SQLiteRetrievalBackend
 # ---------------------------------------------------------------------------
+
 
 class SQLiteRetrievalBackend:
     """SQLite-backed BM25 retrieval for proxy_v4 vault injection.
@@ -157,8 +159,10 @@ class SQLiteRetrievalBackend:
         # Import count_tokens lazily to avoid circular imports
         try:
             from tokenpak.tokens import count_tokens as _count_tokens
+
             count_tokens_fn = _count_tokens
         except ImportError:
+
             def count_tokens_fn(t: str) -> int:  # type: ignore[misc]
                 return max(1, len(t) // 4)
 
@@ -180,9 +184,7 @@ class SQLiteRetrievalBackend:
                 block_tokens = count_tokens_fn(content)
 
             source_path = block["source_path"]
-            injection_parts.append(
-                f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}"
-            )
+            injection_parts.append(f"--- [{source_path}] (relevance: {score:.1f}) ---\n{content}")
             tokens_used += block_tokens
             source_refs.append(source_path)
 
@@ -253,9 +255,7 @@ class SQLiteRetrievalBackend:
         try:
             conn = self._connect()
             self._ensure_schema(conn)
-            row = conn.execute(
-                "SELECT value FROM meta WHERE key='index_mtime'"
-            ).fetchone()
+            row = conn.execute("SELECT value FROM meta WHERE key='index_mtime'").fetchone()
             conn.close()
             return float(row[0]) if row else 0.0
         except sqlite3.Error:
@@ -292,8 +292,7 @@ class SQLiteRetrievalBackend:
 
                 # Existing block_ids in DB
                 existing_ids = {
-                    r[0]
-                    for r in conn.execute("SELECT block_id FROM blocks").fetchall()
+                    r[0] for r in conn.execute("SELECT block_id FROM blocks").fetchall()
                 }
                 new_ids = set(raw_blocks.keys())
 
@@ -315,7 +314,11 @@ class SQLiteRetrievalBackend:
                 for bid, bdata in raw_blocks.items():
                     content_file = blocks_dir / f"{bid}.txt"
                     try:
-                        content = content_file.read_text(errors="replace") if content_file.exists() else ""
+                        content = (
+                            content_file.read_text(errors="replace")
+                            if content_file.exists()
+                            else ""
+                        )
                     except OSError:
                         content = ""
 
@@ -398,9 +401,7 @@ class SQLiteRetrievalBackend:
         b_param = 0.75
 
         # Load global stats
-        stats_row = conn.execute(
-            "SELECT doc_count, avg_dl FROM doc_stats WHERE id=1"
-        ).fetchone()
+        stats_row = conn.execute("SELECT doc_count, avg_dl FROM doc_stats WHERE id=1").fetchone()
         if not stats_row or stats_row[0] == 0:
             return []
         doc_count, avg_dl = stats_row
@@ -453,11 +454,7 @@ class SQLiteRetrievalBackend:
 
         # Filter by min_score, sort deterministically (score desc, path asc, id asc)
         ranked = sorted(
-            (
-                (bid, score)
-                for bid, score in block_scores.items()
-                if score >= min_score
-            ),
+            ((bid, score) for bid, score in block_scores.items() if score >= min_score),
             key=lambda x: (
                 -x[1],
                 block_source.get(x[0], ""),
@@ -488,11 +485,7 @@ class SQLiteRetrievalBackend:
             for r in detail_rows
         }
 
-        return [
-            (detail_map[bid], score)
-            for bid, score in ranked
-            if bid in detail_map
-        ]
+        return [(detail_map[bid], score) for bid, score in ranked if bid in detail_map]
 
     # ------------------------------------------------------------------
     # Compatibility — blocks dict (used by debug endpoints / metrics)

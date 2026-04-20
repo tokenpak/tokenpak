@@ -141,9 +141,9 @@ def cmd_status(args):
     saved = st.get("saved_tokens", 0)
     sent = st.get("sent_input_tokens", 0)
     raw_in = sent + saved
-    pct = f"▼ {saved/raw_in*100:.1f}%" if raw_in else "n/a"
+    pct = f"▼ {saved / raw_in * 100:.1f}%" if raw_in else "n/a"
     if args.minimal:
-        print(f"● Active | {d.get('compilation_mode','?')} | {pct}")
+        print(f"● Active | {d.get('compilation_mode', '?')} | {pct}")
         return
     print(header("Status"))
     print(kv("State:", "● Active"))
@@ -342,10 +342,15 @@ def _prune_argparse(argv: list) -> None:
 
     pp = argparse.ArgumentParser(prog="tokenpak prune", add_help=True)
     pp.add_argument("--auto", action="store_true", help="Auto-prune without confirmation")
-    pp.add_argument("--dry-run", dest="dry_run", action="store_true", help="Preview without changes")
     pp.add_argument(
-        "--threshold", type=float, default=0.4, metavar="SCORE",
-        help="Quality score below which blocks are pruned (default: 0.4)"
+        "--dry-run", dest="dry_run", action="store_true", help="Preview without changes"
+    )
+    pp.add_argument(
+        "--threshold",
+        type=float,
+        default=0.4,
+        metavar="SCORE",
+        help="Quality score below which blocks are pruned (default: 0.4)",
     )
     pp.add_argument("--json", dest="as_json", action="store_true", help="Output raw JSON")
     args = pp.parse_args(argv)
@@ -404,6 +409,7 @@ def main():
     # Delegate serve subcommand (Phase 5A: Ingest API)
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         import argparse as _ap
+
         from tokenpak.agent.cli.commands.serve import _default_workers
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
@@ -567,7 +573,9 @@ def main():
     # Delegate optimize subcommand (Pro+)
     if len(sys.argv) > 1 and sys.argv[1] == "optimize":
         import argparse as _ap
+
         from tokenpak.agent.cli.commands.optimize import run_optimize
+
         op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
         op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
         op.add_argument("--json", dest="as_json", action="store_true", help="Machine-readable JSON")
@@ -599,16 +607,19 @@ def main():
     # Delegate Enterprise policy/sla/compliance commands
     if len(sys.argv) > 1 and sys.argv[1] == "policy":
         from tokenpak.agent.cli.commands.policy import run as _policy_run
+
         _policy_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "sla":
         from tokenpak.agent.cli.commands.sla import run as _sla_run
+
         _sla_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "compliance":
         from tokenpak.agent.cli.commands.compliance import run as _compliance_run
+
         _compliance_run(sys.argv[2:])
         return
 

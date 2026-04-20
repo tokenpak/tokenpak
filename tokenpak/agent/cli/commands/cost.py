@@ -249,7 +249,7 @@ def print_by_model(period: str = "today", raw: bool = False) -> None:
         print()
         return
     print(f"  {'Model':<32}{'Requests':>10}{'Tokens':>12}{'Cost':>12}")
-    print(f"  {'-'*32}{'-'*10}{'-'*12}{'-'*12}")
+    print(f"  {'-' * 32}{'-' * 10}{'-' * 12}{'-' * 12}")
     for r in rows:
         print(
             f"  {r['model']:<32}{_fmt_n(r['requests']):>10}{_fmt_n(r['total_tokens']):>12}{_fmt_cost(r['cost_usd']):>12}"
@@ -273,7 +273,7 @@ def print_by_agent(period: str = "today", raw: bool = False) -> None:
         print()
         return
     print(f"  {'Agent/Endpoint':<36}{'Requests':>10}{'Cost':>12}")
-    print(f"  {'-'*36}{'-'*10}{'-'*12}")
+    print(f"  {'-' * 36}{'-' * 10}{'-' * 12}")
     for r in rows:
         print(f"  {r['agent']:<36}{_fmt_n(r['requests']):>10}{_fmt_cost(r['cost_usd']):>12}")
     print()

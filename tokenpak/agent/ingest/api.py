@@ -165,6 +165,7 @@ def create_ingest_app(prefix: str = "") -> Any:
     # Mount Phase 5B query router if available
     try:
         from tokenpak.agent.query.api import router as query_router
+
         app.include_router(query_router, prefix=prefix)
     except ImportError:
         pass

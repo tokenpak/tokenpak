@@ -67,7 +67,7 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
 def get(key: str, default=None, env_var: Optional[str] = None, cast=None):
     """
     Get config value. Priority: env var > config file > default.
-    
+
     Args:
         key: Dot-path into config YAML (e.g. 'compression.threshold_tokens')
         default: Default value if not found
@@ -108,9 +108,15 @@ def get_all() -> Dict[str, Any]:
 
     # Compression
     result["compression.enabled"] = get("compression.enabled", True, "TOKENPAK_COMPACT", bool)
-    result["compression.max_chars"] = get("compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int)
-    result["compression.threshold_tokens"] = get("compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int)
-    result["compression.cache_size"] = get("compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int)
+    result["compression.max_chars"] = get(
+        "compression.max_chars", 120, "TOKENPAK_COMPACT_MAX_CHARS", int
+    )
+    result["compression.threshold_tokens"] = get(
+        "compression.threshold_tokens", 4500, "TOKENPAK_COMPACT_THRESHOLD_TOKENS", int
+    )
+    result["compression.cache_size"] = get(
+        "compression.cache_size", 2000, "TOKENPAK_COMPACT_CACHE_SIZE", int
+    )
 
     # Features
     for feat, env_suffix, default in [
@@ -140,33 +146,55 @@ def get_all() -> Dict[str, Any]:
         ("query_rewriter", "QUERY_REWRITER", False),
         ("stability_scorer", "STABILITY_SCORER", False),
     ]:
-        result[f"features.{feat}"] = get(f"features.{feat}", default, f"TOKENPAK_{env_suffix}", bool)
+        result[f"features.{feat}"] = get(
+            f"features.{feat}", default, f"TOKENPAK_{env_suffix}", bool
+        )
 
     # Budget
     result["budget.total_tokens"] = get("budget.total_tokens", 12000, "TOKENPAK_BUDGET_TOTAL", int)
-    result["budget.validation_gate_cap"] = get("budget.validation_gate_cap", 120000, "TOKENPAK_VALIDATION_GATE_BUDGET_CAP", int)
+    result["budget.validation_gate_cap"] = get(
+        "budget.validation_gate_cap", 120000, "TOKENPAK_VALIDATION_GATE_BUDGET_CAP", int
+    )
 
     # Capsule
     result["capsule.min_chars"] = get("capsule.min_chars", 400, "TOKENPAK_CAPSULE_MIN_CHARS", int)
     result["capsule.hot_window"] = get("capsule.hot_window", 2, "TOKENPAK_CAPSULE_HOT_WINDOW", int)
 
     # Vault / Injection
-    result["vault.index_path"] = get("vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str)
+    result["vault.index_path"] = get(
+        "vault.index_path", str(Path.home() / "vault" / ".tokenpak"), "TOKENPAK_VAULT_INDEX", str
+    )
     result["vault.inject_budget"] = get("vault.inject_budget", 4000, "TOKENPAK_INJECT_BUDGET", int)
     result["vault.inject_top_k"] = get("vault.inject_top_k", 5, "TOKENPAK_INJECT_TOP_K", int)
-    result["vault.inject_min_score"] = get("vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float)
-    result["vault.inject_skip_models"] = get("vault.inject_skip_models", "haiku", "TOKENPAK_INJECT_SKIP_MODELS", str)
-    result["vault.inject_min_prompt"] = get("vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_PROMPT", int)
-    result["vault.retrieval_backend"] = get("vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str)
+    result["vault.inject_min_score"] = get(
+        "vault.inject_min_score", 2.0, "TOKENPAK_INJECT_MIN_SCORE", float
+    )
+    result["vault.inject_skip_models"] = get(
+        "vault.inject_skip_models", "haiku", "TOKENPAK_INJECT_SKIP_MODELS", str
+    )
+    result["vault.inject_min_prompt"] = get(
+        "vault.inject_min_prompt", 1000, "TOKENPAK_INJECT_MIN_PROMPT", int
+    )
+    result["vault.retrieval_backend"] = get(
+        "vault.retrieval_backend", "json_blocks", "TOKENPAK_RETRIEVAL_BACKEND", str
+    )
 
     # Term resolver
-    result["term_resolver.top_k"] = get("term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int)
-    result["term_resolver.max_bytes"] = get("term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int)
+    result["term_resolver.top_k"] = get(
+        "term_resolver.top_k", 3, "TOKENPAK_TERM_RESOLVER_TOP_K", int
+    )
+    result["term_resolver.max_bytes"] = get(
+        "term_resolver.max_bytes", 200, "TOKENPAK_TERM_RESOLVER_MAX_BYTES", int
+    )
 
     # Upstream
     result["upstream.timeout"] = get("upstream.timeout", 300, "TOKENPAK_UPSTREAM_TIMEOUT", int)
-    result["upstream.ollama"] = get("upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str)
-    result["upstream.ollama_timeout"] = get("upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int)
+    result["upstream.ollama"] = get(
+        "upstream.ollama", "http://100.80.241.118:11434", "TOKENPAK_OLLAMA_UPSTREAM", str
+    )
+    result["upstream.ollama_timeout"] = get(
+        "upstream.ollama_timeout", 20, "TOKENPAK_OLLAMA_TIMEOUT", int
+    )
 
     # Rate limit
     result["rate_limit_rpm"] = get("rate_limit_rpm", 60, "TOKENPAK_RATE_LIMIT_RPM", int)

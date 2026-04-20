@@ -24,7 +24,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -33,19 +32,20 @@ from typing import Any, Dict, Optional, Tuple
 @dataclass(frozen=True)
 class PolicyResult:
     """Immutable result from intent policy resolution."""
+
     recipe_id: str
     action_profile: str
-    reason: str                          # e.g. "intent:summarize" or "fallback:low_confidence"
-    compress: bool = False               # True → run compression pipeline
-    retrieve: bool = False               # True → run vault retrieval injection
-    skip_compression: bool = False       # True → bypass compression entirely
+    reason: str  # e.g. "intent:summarize" or "fallback:low_confidence"
+    compress: bool = False  # True → run compression pipeline
+    retrieve: bool = False  # True → run vault retrieval injection
+    skip_compression: bool = False  # True → bypass compression entirely
     # Context contract fields (v2)
-    memory_scope: tuple = ()             # memory categories to include (empty = all)
-    retrieval_sources: tuple = ()        # retrieval sources to include (empty = all)
-    context_quota: int = 4000            # max tokens for this intent
-    omission_rules: tuple = ()           # categories to always exclude
-    reasoning_ceiling: str = "medium"    # low / medium / high
-    stop_condition: str = ""             # when to stop gathering context
+    memory_scope: tuple = ()  # memory categories to include (empty = all)
+    retrieval_sources: tuple = ()  # retrieval sources to include (empty = all)
+    context_quota: int = 4000  # max tokens for this intent
+    omission_rules: tuple = ()  # categories to always exclude
+    reasoning_ceiling: str = "medium"  # low / medium / high
+    stop_condition: str = ""  # when to stop gathering context
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -245,14 +245,18 @@ _SLOT_REFINEMENTS: list[Tuple[str, str, str, Dict[str, Any]]] = [
     # debug + verbose detail level → emit full trace
     ("debug", "detail_level", "verbose", {"action_profile": "verbose", "skip_compression": True}),
     # summarize + long period → heavier compression
-    ("summarize", "period", "30d",       {"action_profile": "compress", "compress": True}),
+    ("summarize", "period", "30d", {"action_profile": "compress", "compress": True}),
     # plan + detailed scope → also retrieve context
-    ("plan", "scope", "detailed",        {"retrieve": True}),
+    ("plan", "scope", "detailed", {"retrieve": True}),
     # execute + dry_run mode → lightweight, no side effects flag
-    ("execute", "mode", "dry_run",       {"action_profile": "lightweight", "skip_compression": True,
-                                          "extra": {"dry_run": True}}),
+    (
+        "execute",
+        "mode",
+        "dry_run",
+        {"action_profile": "lightweight", "skip_compression": True, "extra": {"dry_run": True}},
+    ),
     # search always retrieves (reinforce)
-    ("search", "target", "",             {"retrieve": True}),
+    ("search", "target", "", {"retrieve": True}),
 ]
 
 
@@ -331,7 +335,6 @@ def resolve_policy(
     )
 
 
-
 # ---------------------------------------------------------------------------
 # Context contract enforcement
 # ---------------------------------------------------------------------------
@@ -375,7 +378,11 @@ def apply_context_contract(
 
     # Step 2: Filter memory_scope (if defined, only allow listed scopes)
     if policy.memory_scope:
-        result = {k: v for k, v in result.items() if k in policy.memory_scope or k in policy.retrieval_sources}
+        result = {
+            k: v
+            for k, v in result.items()
+            if k in policy.memory_scope or k in policy.retrieval_sources
+        }
 
     # Step 3: Filter retrieval_sources (if defined, only allow listed sources)
     if policy.retrieval_sources:
@@ -409,7 +416,6 @@ def apply_context_contract(
     return result
 
 
-
 def known_intents() -> list[str]:
     """Return all intents with explicit policy entries."""
     return list(_BASE_POLICY.keys())
@@ -423,18 +429,20 @@ def known_intents() -> list[str]:
 @dataclass(frozen=True)
 class DecisionAction:
     """Action directives for a routing decision."""
-    compress: bool = True               # Run compression pipeline?
-    retrieve: bool = False              # Inject vault retrieval?
-    skip_compression: bool = False      # Bypass compression override?
-    dry_run: bool = False               # Execute in dry-run mode?
+
+    compress: bool = True  # Run compression pipeline?
+    retrieve: bool = False  # Inject vault retrieval?
+    skip_compression: bool = False  # Bypass compression override?
+    dry_run: bool = False  # Execute in dry-run mode?
 
 
 @dataclass(frozen=True)
 class RoutingDecision:
     """Complete routing decision from classifier-first policy."""
+
     intent: str
     recipe_id: str
-    slots_used: dict                    # Filled slots (from SlotFiller)
+    slots_used: dict  # Filled slots (from SlotFiller)
     action: DecisionAction
     fallback: bool = False
     fallback_reason: str = ""
@@ -489,7 +497,7 @@ def decide(
                 skip_compression=FALLBACK_POLICY.skip_compression,
             ),
             fallback=True,
-            fallback_reason=f"unknown_intent",
+            fallback_reason="unknown_intent",
             confidence=0.0,
         )
 

@@ -202,33 +202,30 @@ def measure_injection_consistency(
 # Multi-Signal Scoring + Coverage Score
 # ===========================================================================
 
-import math
 import re
 
 # ---------------------------------------------------------------------------
 # Scoring constants
 # ---------------------------------------------------------------------------
 
-_W_SEM  = 0.45
+_W_SEM = 0.45
 _W_BM25 = 0.45
 _W_META = 0.10
 
-_BOOST_SYMBOL  = 0.15
-_BOOST_PATH    = 0.10
+_BOOST_SYMBOL = 0.15
+_BOOST_PATH = 0.10
 _BOOST_RECENCY = 0.05
 
 _PENALTY_STALE = 0.15
 _PENALTY_NOISE = 0.10
 
 # Boilerplate/noise patterns
-_NOISE_PATTERNS = re.compile(
-    r"(^import\s|^#\s*-+|^pass$|^\.\.\.|\bTODO\b|\bFIXME\b)", re.MULTILINE
-)
-_NOISE_THRESHOLD = 0.60   # If >60% of lines are noise → noise penalty applies
+_NOISE_PATTERNS = re.compile(r"(^import\s|^#\s*-+|^pass$|^\.\.\.|\bTODO\b|\bFIXME\b)", re.MULTILINE)
+_NOISE_THRESHOLD = 0.60  # If >60% of lines are noise → noise penalty applies
 
 # Coverage thresholds
 COVERAGE_STRONG = 0.75
-COVERAGE_OK     = 0.55
+COVERAGE_OK = 0.55
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -281,11 +278,7 @@ def compute_final_score(
     float
         Unclamped final score (may be slightly negative for noisy+stale chunks).
     """
-    score = (
-        _W_SEM  * sem_norm
-        + _W_BM25 * bm25_norm
-        + _W_META * meta_norm
-    )
+    score = _W_SEM * sem_norm + _W_BM25 * bm25_norm + _W_META * meta_norm
     if symbol_hit:
         score += _BOOST_SYMBOL
     if path_hit:
@@ -369,6 +362,7 @@ def all_must_hits_found(
 # Coverage score
 # ---------------------------------------------------------------------------
 
+
 def compute_coverage_score(
     scored_chunks: list[tuple[dict[str, Any], float]],
     must_hit_terms: list[str],
@@ -407,10 +401,7 @@ def compute_coverage_score(
         must_hit_factor = 0.45
 
     # concentration_factor: fewer unique source files = more focused
-    unique_files = len({
-        c.get("source_path", c.get("block_id", "?"))
-        for c in chunks_only
-    })
+    unique_files = len({c.get("source_path", c.get("block_id", "?")) for c in chunks_only})
     concentration_factor = _clamp(1.0 - (unique_files - 1) * 0.15, 0.0, 0.25)
 
     # mass_factor: sum of top-5 scores / 4
@@ -433,6 +424,7 @@ def interpret_coverage(coverage: float) -> str:
 # ---------------------------------------------------------------------------
 # Score-aware sort (extends existing sort_retrieval_results)
 # ---------------------------------------------------------------------------
+
 
 def score_and_sort(
     raw_results: List[Tuple[Dict[str, Any], float]],
@@ -489,18 +481,18 @@ def score_and_sort(
     rescored: List[Tuple[Dict[str, Any], float]] = []
     for block, raw_bm25 in raw_results:
         block_id = block.get("block_id", block.get("source_path", ""))
-        content  = block.get("content", "")
-        source   = block.get("source_path", "")
+        content = block.get("content", "")
+        source = block.get("source_path", "")
 
         bm25_norm = (raw_bm25 - bm25_min) / bm25_range
-        sem_norm  = semantic_scores.get(block_id, 0.0)
+        sem_norm = semantic_scores.get(block_id, 0.0)
         meta_norm = meta_scores.get(block_id, 0.0)
 
         symbol_hit = bool(query_terms and any(t in content.lower() for t in query_terms))
-        path_hit   = bool(source and source.lower() in query_lower)
-        is_recent  = block_id in recent_ids
-        is_stale   = block_id in stale_ids
-        is_noisy   = _is_noisy(content)
+        path_hit = bool(source and source.lower() in query_lower)
+        is_recent = block_id in recent_ids
+        is_stale = block_id in stale_ids
+        is_noisy = _is_noisy(content)
 
         final = compute_final_score(
             sem_norm=sem_norm,

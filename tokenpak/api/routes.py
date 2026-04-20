@@ -101,6 +101,7 @@ class HealthRoute:
 # Route registry — simple path-to-handler mapping
 # ---------------------------------------------------------------------------
 
+
 class RouteRegistry:
     """
     Minimal route registry for management API endpoints.
@@ -150,6 +151,7 @@ class MetricsRoute:
     def handle(self) -> str:
         """Collect and return Prometheus metrics as a text string."""
         from tokenpak.monitoring.metrics import ProxyMetricsCollector
+
         collector = ProxyMetricsCollector(
             proxy_server=self._proxy_server,
             db_path=self._db_path,

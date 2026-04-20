@@ -38,8 +38,8 @@ from .volatile_cache import VolatileCache
 
 CacheInstance = Union[StableCache, VolatileCache]
 
-_DEFAULT_VOLATILE_TTL = 270.0   # 4.5 minutes
-_DEFAULT_STABLE_TTL = 86400.0   # 24 hours
+_DEFAULT_VOLATILE_TTL = 270.0  # 4.5 minutes
+_DEFAULT_STABLE_TTL = 86400.0  # 24 hours
 
 
 class CacheRegistry:
@@ -55,17 +55,23 @@ class CacheRegistry:
     @classmethod
     def get_default(cls) -> VolatileCache:
         """Return the default VolatileCache, creating it on first call."""
-        return cls._get_or_create("default", lambda: VolatileCache(ttl=_DEFAULT_VOLATILE_TTL, name="default"))  # type: ignore[return-value]
+        return cls._get_or_create(
+            "default", lambda: VolatileCache(ttl=_DEFAULT_VOLATILE_TTL, name="default")
+        )  # type: ignore[return-value]
 
     @classmethod
     def get_stable(cls) -> StableCache:
         """Return the default StableCache, creating it on first call."""
-        return cls._get_or_create("stable", lambda: StableCache(ttl=_DEFAULT_STABLE_TTL, name="stable"))  # type: ignore[return-value]
+        return cls._get_or_create(
+            "stable", lambda: StableCache(ttl=_DEFAULT_STABLE_TTL, name="stable")
+        )  # type: ignore[return-value]
 
     @classmethod
     def get_injection(cls) -> VolatileCache:
         """Return the injection cache (alias for the proxy vault-injection cache)."""
-        return cls._get_or_create("injection", lambda: VolatileCache(ttl=_DEFAULT_VOLATILE_TTL, name="injection"))  # type: ignore[return-value]
+        return cls._get_or_create(
+            "injection", lambda: VolatileCache(ttl=_DEFAULT_VOLATILE_TTL, name="injection")
+        )  # type: ignore[return-value]
 
     # ------------------------------------------------------------------
     # Generic named access

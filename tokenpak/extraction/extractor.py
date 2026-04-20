@@ -62,7 +62,9 @@ class EntityExtractor:
         for m in FILE_PATH_RE.finditer(line):
             path = m.group("path")
             if len(path) > 2:
-                out.entities.append(self._entity(EntityType.FILE_PATH, path, line_no, m.start(), line))
+                out.entities.append(
+                    self._entity(EntityType.FILE_PATH, path, line_no, m.start(), line)
+                )
 
     def _extract_api(self, line: str, line_no: int, out: EntitySet) -> None:
         for m in API_ENDPOINT_RE.finditer(line):
@@ -73,13 +75,25 @@ class EntityExtractor:
             out.api_endpoints.append(
                 APIEndpoint(method=method, path=path, source=self._source(line_no, m.start(), line))
             )
-            out.entities.append(self._entity(EntityType.API_ENDPOINT, f"{method or ''} {path}".strip(), line_no, m.start(), line))
+            out.entities.append(
+                self._entity(
+                    EntityType.API_ENDPOINT,
+                    f"{method or ''} {path}".strip(),
+                    line_no,
+                    m.start(),
+                    line,
+                )
+            )
 
     def _extract_dates(self, line: str, line_no: int, out: EntitySet) -> None:
         for m in DATE_RE.finditer(line):
             raw = m.group(0)
             out.deadlines.append(
-                Deadline(text=raw, normalized=self._normalize_date(raw), source=self._source(line_no, m.start(), line))
+                Deadline(
+                    text=raw,
+                    normalized=self._normalize_date(raw),
+                    source=self._source(line_no, m.start(), line),
+                )
             )
             out.entities.append(self._entity(EntityType.DEADLINE, raw, line_no, m.start(), line))
 
@@ -97,7 +111,9 @@ class EntityExtractor:
         if not m:
             return
         term = m.group("term").strip()
-        out.glossary_terms.append(GlossaryTerm(term=term, definition=None, source=self._source(line_no, m.start(), line)))
+        out.glossary_terms.append(
+            GlossaryTerm(term=term, definition=None, source=self._source(line_no, m.start(), line))
+        )
         out.entities.append(self._entity(EntityType.GLOSSARY_TERM, term, line_no, m.start(), line))
 
     def _extract_config(self, line: str, line_no: int, out: EntitySet) -> None:
@@ -107,9 +123,13 @@ class EntityExtractor:
 
     def _extract_people_orgs(self, line: str, line_no: int, out: EntitySet) -> None:
         for m in PERSON_RE.finditer(line):
-            out.entities.append(self._entity(EntityType.PERSON, m.group(1), line_no, m.start(), line))
+            out.entities.append(
+                self._entity(EntityType.PERSON, m.group(1), line_no, m.start(), line)
+            )
         for m in ORG_RE.finditer(line):
-            out.entities.append(self._entity(EntityType.ORGANIZATION, m.group(1), line_no, m.start(), line))
+            out.entities.append(
+                self._entity(EntityType.ORGANIZATION, m.group(1), line_no, m.start(), line)
+            )
 
     @staticmethod
     def _strip_code_blocks(text: str) -> str:
@@ -156,6 +176,8 @@ class EntityExtractor:
 
         entity_set.api_endpoints = _uniq(entity_set.api_endpoints, lambda a: (a.method, a.path))
         entity_set.decisions = _uniq(entity_set.decisions, lambda d: d.text.lower())
-        entity_set.deadlines = _uniq(entity_set.deadlines, lambda d: (d.normalized or d.text).lower())
+        entity_set.deadlines = _uniq(
+            entity_set.deadlines, lambda d: (d.normalized or d.text).lower()
+        )
         entity_set.glossary_terms = _uniq(entity_set.glossary_terms, lambda g: g.term.lower())
         return entity_set

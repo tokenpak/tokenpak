@@ -60,7 +60,12 @@ class ValidationGate:
         try:
             payload = json.loads(request_body)
         except Exception as exc:
-            return ValidationResult(valid=False, errors=[f"invalid JSON payload: {exc}"], budget_used=input_tokens, budget_limit=self.token_budget_cap)
+            return ValidationResult(
+                valid=False,
+                errors=[f"invalid JSON payload: {exc}"],
+                budget_used=input_tokens,
+                budget_limit=self.token_budget_cap,
+            )
 
         budget_used = int(input_tokens or 0)
         if self.token_budget_cap > 0 and budget_used > self.token_budget_cap:
@@ -141,5 +146,9 @@ class ValidationGate:
         if not isinstance(slots, Mapping):
             slots = {}
         recipe_hash = hashlib.sha256(recipe.encode("utf-8")).hexdigest()[:12]
-        blob = json.dumps({"intent": intent, "slots": slots, "recipe_hash": recipe_hash}, sort_keys=True, separators=(",", ":"))
+        blob = json.dumps(
+            {"intent": intent, "slots": slots, "recipe_hash": recipe_hash},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]

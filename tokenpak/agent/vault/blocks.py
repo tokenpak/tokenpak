@@ -161,6 +161,7 @@ def get_block_store(store_path: str = ":memory:") -> BlockStore:
 # Slice storage (mirrors BlockStore but for SliceRecord objects)
 # ---------------------------------------------------------------------------
 
+
 class SliceStore:
     """In-memory + optional JSON persistence for :class:`~tokenpak.agent.vault.slicer.SliceRecord`.
 
@@ -196,7 +197,10 @@ class SliceStore:
         if old is not None:
             # Remove from old parent index if parent changed (shouldn't happen normally)
             old_parent = old.parent_block_id
-            if old_parent in self._parent_index and record.slice_id in self._parent_index[old_parent]:
+            if (
+                old_parent in self._parent_index
+                and record.slice_id in self._parent_index[old_parent]
+            ):
                 self._parent_index[old_parent].remove(record.slice_id)
 
         self._slices[record.slice_id] = record
@@ -235,6 +239,7 @@ class SliceStore:
     def search(self, query: str, top_k: int = 10) -> list:
         """Keyword search over slice content (multi-term, case-insensitive TF scoring)."""
         import re as _re
+
         terms = [t for t in _re.split(r"\W+", query.lower()) if len(t) > 2]
         if not terms:
             return []
@@ -262,6 +267,7 @@ class SliceStore:
         """Write slices to the JSON store file."""
         import json
         from dataclasses import asdict
+
         path = Path(self._path).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {sid: asdict(r) for sid, r in self._slices.items()}
@@ -269,6 +275,7 @@ class SliceStore:
 
     def _load(self) -> None:
         import json
+
         from tokenpak.agent.vault.slicer import SliceRecord
 
         path = Path(self._path).expanduser()

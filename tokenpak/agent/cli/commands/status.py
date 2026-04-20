@@ -17,6 +17,7 @@ except ImportError:
 # Import pricing module for savings calculations
 try:
     from tokenpak.pricing import estimate_savings
+
     HAVE_ESTIMATE_SAVINGS = True
 except ImportError:
     # Fallback if pricing module not available
@@ -89,7 +90,9 @@ def run(
 
     print(f"{'✅  Proxy running':<28}port {proxy_base.split(':')[-1]} — hybrid mode")
     print(f"{'✅  Uptime':<28}{uptime_str}")
-    print(f"{'✅  Health':<28}OK (0 errors)" if errors == 0 else f"{'⚠️  Health':<28}{errors} errors")
+    print(
+        f"{'✅  Health':<28}OK (0 errors)" if errors == 0 else f"{'⚠️  Health':<28}{errors} errors"
+    )
     print()
 
     # Calculate and display savings summary
@@ -99,7 +102,9 @@ def run(
         print(f"    Requests:      {requests:,}")
         print(f"    Input tokens:  {tokens_raw:,}")
         print(f"    Tokens saved:  {tokens_saved:,} ({avg_savings:.1f}% compression)")
-        print(f"    Cache reads:   {session.get('cache_read_tokens', 0):,} ({savings_data.get('cache_hit_rate', 0):.0f}% hit rate)")
+        print(
+            f"    Cache reads:   {session.get('cache_read_tokens', 0):,} ({savings_data.get('cache_hit_rate', 0):.0f}% hit rate)"
+        )
         print(f"    Est. saved:    ${savings_data.get('total_cost_saved', 0):.2f}")
         print()
     else:

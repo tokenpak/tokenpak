@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 _RE_FILE_PATH = re.compile(
     r"(?<!\w)"
-    r"(?:[A-Za-z]:[\\/]|~?/)"       # absolute path start: /foo, ~/foo, C:\foo
+    r"(?:[A-Za-z]:[\\/]|~?/)"  # absolute path start: /foo, ~/foo, C:\foo
     r"(?:[^\s,;\"'`<>\[\](){}|]+)"  # path body (no whitespace / delimiters)
 )
 
@@ -37,7 +37,7 @@ _RE_URL = re.compile(
 # Python/JS-style CamelCase class names or dotted module names (e.g. CompressionPipeline, my.module.Class)
 _RE_CLASS_FUNC = re.compile(
     r"\b(?:[A-Z][A-Za-z0-9]{2,}(?:[A-Z][A-Za-z0-9]+)+|"  # CamelCase ≥2 humps
-    r"[a-z][a-z0-9_]{4,}\.[a-z][a-z0-9_.]{4,})\b"         # dotted module path
+    r"[a-z][a-z0-9_]{4,}\.[a-z][a-z0-9_.]{4,})\b"  # dotted module path
 )
 
 # UPPER_SNAKE env vars that are likely multi-word
@@ -61,12 +61,13 @@ _PREFIX = {
 # Public API
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AliasResult:
     """Result of an AliasCompressor.compress() call."""
 
     messages: List[Dict[str, Any]]
-    symbol_table: Dict[str, str]        # alias → original
+    symbol_table: Dict[str, str]  # alias → original
     tokens_saved: int
     entities_aliased: int
     alias_map: Dict[str, str] = field(default_factory=dict)  # original → alias
@@ -127,9 +128,7 @@ class AliasCompressor:
 
         # 3. Filter to entities that meet occurrence threshold
         candidates = {
-            e: t
-            for e, t in entity_type_map.items()
-            if entity_counts[e] >= self.min_occurrences
+            e: t for e, t in entity_type_map.items() if entity_counts[e] >= self.min_occurrences
         }
 
         if not candidates:
@@ -142,7 +141,7 @@ class AliasCompressor:
             )
 
         # 4. Assign aliases (deterministic: sorted by type then entity)
-        alias_map: Dict[str, str] = {}     # original → alias
+        alias_map: Dict[str, str] = {}  # original → alias
         symbol_table: Dict[str, str] = {}  # alias → original
         counters: Dict[str, int] = {p: 1 for p in _PREFIX.values()}
 
@@ -166,9 +165,7 @@ class AliasCompressor:
 
         # 8. Estimate token savings
         original_chars = sum(len(e) * entity_counts[e] for e in alias_map)
-        aliased_chars = sum(
-            len(alias_map[e]) * entity_counts[e] for e in alias_map
-        )
+        aliased_chars = sum(len(alias_map[e]) * entity_counts[e] for e in alias_map)
         header_chars = len(header)
         saved_chars = original_chars - aliased_chars - header_chars
         tokens_saved = max(0, saved_chars // 4)
@@ -213,6 +210,7 @@ class AliasCompressor:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _collect_text(messages: List[Dict[str, Any]]) -> str:
     """Concatenate all text content from messages."""
     parts: List[str] = []
@@ -237,10 +235,7 @@ def _content_to_str(content: Any) -> str:
 
 def _build_header(symbol_table: Dict[str, str]) -> str:
     """Format: [ALIASES: F1=/path/to/file | S1=my-service]"""
-    entries = " | ".join(
-        f"{alias}={original}"
-        for alias, original in sorted(symbol_table.items())
-    )
+    entries = " | ".join(f"{alias}={original}" for alias, original in sorted(symbol_table.items()))
     return f"[ALIASES: {entries}]"
 
 
@@ -254,9 +249,7 @@ def _replace_entities(
     if not sorted_entities:
         return messages
 
-    pattern = re.compile(
-        "|".join(re.escape(e) for e in sorted_entities)
-    )
+    pattern = re.compile("|".join(re.escape(e) for e in sorted_entities))
 
     def _replace_text(text: str) -> str:
         return pattern.sub(lambda m: alias_map[m.group(0)], text)

@@ -1,4 +1,5 @@
 """aggregate.py — Request ledger aggregation across machines."""
+
 from __future__ import annotations
 
 import json
@@ -43,7 +44,9 @@ def parse_since(value: Optional[str]) -> Optional[datetime]:
     if m:
         qty = int(m.group(1))
         unit = m.group(2)
-        delta = {"d": timedelta(days=qty), "h": timedelta(hours=qty), "m": timedelta(minutes=qty)}[unit]
+        delta = {"d": timedelta(days=qty), "h": timedelta(hours=qty), "m": timedelta(minutes=qty)}[
+            unit
+        ]
         return datetime.now(timezone.utc) - delta
     # ISO date or datetime
     dt = _parse_iso(raw)
@@ -68,7 +71,9 @@ def _coerce_float(value: Any) -> float:
         return 0.0
 
 
-def load_requests(path: Optional[Path] = None, since: Optional[datetime] = None) -> List[Dict[str, Any]]:
+def load_requests(
+    path: Optional[Path] = None, since: Optional[datetime] = None
+) -> List[Dict[str, Any]]:
     p = path or REQUESTS_PATH
     if not p.exists():
         return []
@@ -93,7 +98,9 @@ def load_requests(path: Optional[Path] = None, since: Optional[datetime] = None)
     return rows
 
 
-def aggregate_records(records: Iterable[Dict[str, Any]], machine: str) -> Tuple[List[AggregateRow], Dict[str, Any]]:
+def aggregate_records(
+    records: Iterable[Dict[str, Any]], machine: str
+) -> Tuple[List[AggregateRow], Dict[str, Any]]:
     totals = {
         "requests": 0,
         "tokens": 0,

@@ -102,7 +102,9 @@ class IntentExampleSelector:
     ) -> ExampleSelection:
         cfg = self._intent_cfg(intent)
         if not bool(cfg.get("enabled", False)):
-            return ExampleSelection(intent=intent, selected=(), used_tokens=0, skipped_reason="intent_disabled")
+            return ExampleSelection(
+                intent=intent, selected=(), used_tokens=0, skipped_reason="intent_disabled"
+            )
 
         remaining = token_budget - reserved_tokens
         min_remaining = int(cfg.get("min_remaining_tokens", 500))
@@ -116,11 +118,15 @@ class IntentExampleSelector:
 
         candidates = self._candidate_files(intent, cfg)
         if not candidates:
-            return ExampleSelection(intent=intent, selected=(), used_tokens=0, skipped_reason="no_examples")
+            return ExampleSelection(
+                intent=intent, selected=(), used_tokens=0, skipped_reason="no_examples"
+            )
 
         max_examples = max(0, int(cfg.get("max_examples", 0)))
         if max_examples == 0:
-            return ExampleSelection(intent=intent, selected=(), used_tokens=0, skipped_reason="max_examples_zero")
+            return ExampleSelection(
+                intent=intent, selected=(), used_tokens=0, skipped_reason="max_examples_zero"
+            )
 
         selected: list[SelectedExample] = []
         used = 0

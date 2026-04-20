@@ -30,6 +30,7 @@ from typing import Any, Optional
 
 try:
     import tiktoken  # type: ignore[import]
+
     _ENCODER = tiktoken.get_encoding("cl100k_base")
 
     def _count_tokens(text: str) -> int:
@@ -37,6 +38,7 @@ try:
         return len(_ENCODER.encode(text))
 
 except Exception:
+
     def _count_tokens(text: str) -> int:
         """Fast token estimate: characters / 4."""
         return max(1, len(text) // 4)
@@ -53,22 +55,25 @@ def _message_tokens(msg: dict[str, Any]) -> int:
 # Data types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RetrievedChunk:
     """A single retrieved context chunk with metadata."""
+
     content: str
-    rank: float          # Higher = more relevant
-    source: str = ""     # file:line citation
+    rank: float  # Higher = more relevant
+    source: str = ""  # file:line citation
     chunk_id: str = ""
 
 
 @dataclass
 class ComposedContext:
     """Result of context packing."""
+
     final_prompt_messages: list[dict[str, Any]]
     final_budget: int
     actual_tokens: int
-    explain_plan: list[str]            # Why these chunks were chosen
+    explain_plan: list[str]  # Why these chunks were chosen
     escalation_needed: bool = False
     dropped_chunks: list[str] = field(default_factory=list)
     summarized_chunks: list[str] = field(default_factory=list)
@@ -77,6 +82,7 @@ class ComposedContext:
 # ---------------------------------------------------------------------------
 # Composer
 # ---------------------------------------------------------------------------
+
 
 class ContextComposer:
     """Pack prompt components into a budget-constrained context window."""
@@ -183,10 +189,12 @@ class ContextComposer:
         # Build chunk messages (highest rank first)
         for chunk in included_chunks:
             citation = f" [{chunk.source}]" if chunk.source else ""
-            messages.append({
-                "role": "system",
-                "content": f"[context{citation}]\n{chunk.content}",
-            })
+            messages.append(
+                {
+                    "role": "system",
+                    "content": f"[context{citation}]\n{chunk.content}",
+                }
+            )
 
         # --- Micro-summary for dropped chunks ---
         if dropped:

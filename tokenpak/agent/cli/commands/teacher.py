@@ -8,7 +8,6 @@ from pathlib import Path
 
 from tokenpak.agent.teacher import build_teacher_pack
 
-
 DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/06_RUNTIME/SYSTEM", "~/vault/03_AGENT_PACKS"]
 DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
 DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
@@ -19,11 +18,17 @@ def run_teacher_cmd(argv: list[str]) -> None:
     sub = p.add_subparsers(dest="teacher_cmd")
 
     gen = sub.add_parser("generate", help="Generate deterministic context recipes")
-    gen.add_argument("--source-root", action="append", default=None, help="Source root (repeatable)")
-    gen.add_argument("--command-root", action="append", default=None, help="Command root (repeatable)")
+    gen.add_argument(
+        "--source-root", action="append", default=None, help="Source root (repeatable)"
+    )
+    gen.add_argument(
+        "--command-root", action="append", default=None, help="Command root (repeatable)"
+    )
     gen.add_argument("--output-root", default=DEFAULT_OUTPUT_ROOT, help="Output root directory")
     gen.add_argument("--version", default="v1", help="Version folder under output root")
-    gen.add_argument("--token-budget", type=int, default=1600, help="Default token budget per intent")
+    gen.add_argument(
+        "--token-budget", type=int, default=1600, help="Default token budget per intent"
+    )
     gen.add_argument("--json", action="store_true", help="Print JSON result")
 
     val = sub.add_parser("validate", help="Generate + print validation summary")

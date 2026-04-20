@@ -9,13 +9,10 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Optional, Literal
-
-from .formatting import OutputFormatter, OutputMode
+from typing import Literal, Optional
 
 
 @dataclass
@@ -52,6 +49,7 @@ def _get_savings_report() -> dict:
     """Get historical savings data from telemetry."""
     try:
         from .telemetry.query import get_savings_report
+
         report = get_savings_report(days=1)
         return {
             "total_cost": report.total_cost,
@@ -90,9 +88,7 @@ def _calculate_data() -> DailySavingsData:
     # Tokens
     input_tokens = stats.get("input_tokens", 0)
     saved_tokens = stats.get("saved_tokens", 0)
-    compression_pct = (
-        (saved_tokens / input_tokens * 100) if input_tokens > 0 else 0
-    )
+    compression_pct = (saved_tokens / input_tokens * 100) if input_tokens > 0 else 0
 
     # Cache
     cache_hits = cache.get("cache_hits", 0)
@@ -109,6 +105,7 @@ def _calculate_data() -> DailySavingsData:
     top_model_savings = 0.0
     try:
         from .telemetry.query import get_model_usage
+
         usage = get_model_usage(days=1)
         if usage:
             # Find model with highest cost
@@ -155,7 +152,7 @@ def _format_terminal(data: DailySavingsData) -> str:
         f"  Date:       {data.timestamp.split('T')[0]}",
         f"  Requests:   {data.requests:,}",
         f"  Saved:      ${data.savings_amount:.2f} ({data.savings_percent:.1f}%)",
-        f"  Cache Hit:  {data.cache_hit_rate*100:.0f}%",
+        f"  Cache Hit:  {data.cache_hit_rate * 100:.0f}%",
         f"  Compression: {data.compression_percent:.1f}%",
         f"  Top Model:  {data.top_model}",
         f"  Uptime:     {data.uptime_hours}h {data.uptime_minutes:02d}m",
@@ -176,7 +173,7 @@ def _format_markdown(data: DailySavingsData) -> str:
         "| ------ | ----- |",
         f"| Requests | {data.requests:,} |",
         f"| Savings | ${data.savings_amount:.2f} ({data.savings_percent:.1f}%) |",
-        f"| Cache Hit Rate | {data.cache_hit_rate*100:.0f}% |",
+        f"| Cache Hit Rate | {data.cache_hit_rate * 100:.0f}% |",
         f"| Compression | {data.compression_percent:.1f}% |",
         f"| Top Model | {data.top_model} |",
         f"| Uptime | {data.uptime_hours}h {data.uptime_minutes:02d}m |",

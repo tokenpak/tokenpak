@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -68,15 +68,15 @@ class FailureSignature:
     """A recorded failure pattern with repair recipe and confidence."""
 
     signature_id: str
-    error_class: str          # e.g. "port_bind_failure", "auth_error"
-    error_pattern: str        # regex or normalised error text fragment
+    error_class: str  # e.g. "port_bind_failure", "auth_error"
+    error_pattern: str  # regex or normalised error text fragment
     root_causes: list[str] = field(default_factory=list)
     repair_recipe: list[str] = field(default_factory=list)  # ordered repair steps
-    confidence: float = 0.5   # 0–1, updated by learning loop
+    confidence: float = 0.5  # 0–1, updated by learning loop
     success_count: int = 0
     failure_count: int = 0
     last_seen: str = ""
-    validated: bool = False   # True once the fix has held N times
+    validated: bool = False  # True once the fix has held N times
 
     def __post_init__(self) -> None:
         if not self.last_seen:

@@ -43,7 +43,7 @@ from __future__ import annotations
 import base64
 import json
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -93,11 +93,11 @@ class TokenPakTrace:
 
     trace_id: str
     timestamp: str
-    routing: Dict[str, Any]        # provider, model, reason
-    budget: Dict[str, Any]         # tier, tokens, reasons
-    retrieval: Dict[str, Any]      # sources, top_k, coverage, cache_hit
-    packing: Dict[str, Any]        # kept_turns, dropped_turns, inject_tokens
-    economics: Dict[str, Any]      # actual_tokens, cost_usd, savings_usd
+    routing: Dict[str, Any]  # provider, model, reason
+    budget: Dict[str, Any]  # tier, tokens, reasons
+    retrieval: Dict[str, Any]  # sources, top_k, coverage, cache_hit
+    packing: Dict[str, Any]  # kept_turns, dropped_turns, inject_tokens
+    economics: Dict[str, Any]  # actual_tokens, cost_usd, savings_usd
     warnings: List[str] = field(default_factory=list)
 
     # ------------------------------------------------------------------
@@ -303,11 +303,7 @@ def strip_trace_header(headers: Dict[str, str]) -> Dict[str, str]:
     Both the canonical casing (``X-TokenPak-Trace``) and any lowercase
     variant are removed, so this is safe whether headers are normalised or not.
     """
-    return {
-        k: v
-        for k, v in headers.items()
-        if k.lower() != _TRACE_HEADER_LOWER
-    }
+    return {k: v for k, v in headers.items() if k.lower() != _TRACE_HEADER_LOWER}
 
 
 def read_trace_header(headers: Dict[str, str]) -> Optional[TokenPakTrace]:
@@ -383,8 +379,7 @@ def assert_no_leak(response: Dict[str, Any]) -> None:
     def _check_content(text: str, label: str) -> None:
         if TRACE_ENVELOPE_KEY in text or TRACE_HEADER in text:
             raise AssertionError(
-                f"Trace marker found in {label}; "
-                "trace must not appear in assistant content."
+                f"Trace marker found in {label}; trace must not appear in assistant content."
             )
 
     # OpenAI-style: choices[*].message.content

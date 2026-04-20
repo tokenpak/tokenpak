@@ -271,16 +271,16 @@ class PrometheusMetricsCollector:
 
         for provider, counts in by_prov.items():
             lines.append(
-                f'tokenpak_tokens_total{_label_str(provider=provider, direction="input")}'
-                f' {counts["input"]}'
+                f"tokenpak_tokens_total{_label_str(provider=provider, direction='input')}"
+                f" {counts['input']}"
             )
             lines.append(
-                f'tokenpak_tokens_total{_label_str(provider=provider, direction="output")}'
-                f' {counts["output"]}'
+                f"tokenpak_tokens_total{_label_str(provider=provider, direction='output')}"
+                f" {counts['output']}"
             )
             lines.append(
-                f'tokenpak_tokens_total{_label_str(provider=provider, direction="saved")}'
-                f' {counts["saved"]}'
+                f"tokenpak_tokens_total{_label_str(provider=provider, direction='saved')}"
+                f" {counts['saved']}"
             )
         lines.append("")
 
@@ -335,9 +335,7 @@ class PrometheusMetricsCollector:
                 f"tokenpak_request_duration_seconds_sum{labels_base}"
                 f" {_format_value(data['sum_seconds'])}"
             )
-            lines.append(
-                f"tokenpak_request_duration_seconds_count{labels_base}" f" {data['count']}"
-            )
+            lines.append(f"tokenpak_request_duration_seconds_count{labels_base} {data['count']}")
         lines.append("")
 
     def _emit_compression_ratio(

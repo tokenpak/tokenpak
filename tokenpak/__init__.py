@@ -28,6 +28,24 @@ __description__ = "Local proxy that compresses LLM context before it hits the AP
 # ---------------------------------------------------------------------------
 from tokenpak import agent, connectors, proxy
 
+# ---------------------------------------------------------------------------
+# Agent Handoff Protocol
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Agentic handoff protocol
+# ---------------------------------------------------------------------------
+from tokenpak.agent.agentic.handoff import (
+    ContextRef,
+    HandoffBlock,
+    HandoffManager,
+    HandoffStatus,
+    HandoffWire,
+    TokenPak,
+)
+from tokenpak.agent.agentic.handoff import (
+    HandoffWire as Handoff,
+)
+
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
 from tokenpak.budget import BudgetBlock
@@ -75,38 +93,15 @@ from tokenpak.tokens import count_tokens
 from tokenpak.trace import (  # noqa: F401
     TokenPakTrace,
     TraceBuilder,
-    attach_trace_header,
+    assert_no_leak,
     attach_trace_envelope,
+    attach_trace_header,
+    read_trace_envelope,
+    read_trace_header,
     strip_trace,
     strip_trace_header,
-    read_trace_header,
-    read_trace_envelope,
-    assert_no_leak,
 )
 
-
-# ---------------------------------------------------------------------------
-# Agent Handoff Protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire as Handoff,
-    ContextRef,
-    TokenPak,
-)
-# ---------------------------------------------------------------------------
-# Agentic handoff protocol
-# ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    ContextRef,
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire,
-    TokenPak,
-)
 # HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
 # The internal Handoff dataclass (file-based) is available via
 # tokenpak.agent.agentic.handoff.Handoff

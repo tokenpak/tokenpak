@@ -148,7 +148,9 @@ def build_targeted_repair_prompt(
             "no repair is required."
         )
 
-    drift_list = sorted(report.features_drifted.values(), key=lambda x: x.drift_magnitude, reverse=True)
+    drift_list = sorted(
+        report.features_drifted.values(), key=lambda x: x.drift_magnitude, reverse=True
+    )
     drift_lines = "\n".join(
         f"- {item.name}: drift={item.drift_magnitude:.3f} (score={item.score:.3f}, threshold={item.threshold:.3f})"
         for item in drift_list

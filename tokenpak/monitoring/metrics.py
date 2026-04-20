@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import logging
 import os
-import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -55,6 +54,7 @@ _DEFAULT_DB_PATH = Path(
 # ---------------------------------------------------------------------------
 # Prometheus text format helpers
 # ---------------------------------------------------------------------------
+
 
 def _escape_label_value(v: str) -> str:
     return v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
@@ -78,6 +78,7 @@ def _fmt(v: float) -> str:
 # ---------------------------------------------------------------------------
 # ProxyMetricsCollector
 # ---------------------------------------------------------------------------
+
 
 class ProxyMetricsCollector:
     """
@@ -148,6 +149,7 @@ class ProxyMetricsCollector:
             if not self._db_path.exists():
                 return []
             import sqlite3
+
             conn = sqlite3.connect(str(self._db_path), timeout=2.0)
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
@@ -193,8 +195,10 @@ class ProxyMetricsCollector:
         """Return cache entries, memory bytes, and hit-ratio from CacheRegistry."""
         defaults = {"entries": 0, "memory_bytes": 0, "hit_ratio": 0.0}
         try:
-            from tokenpak.cache.registry import CacheRegistry
             import sys as _sys
+
+            from tokenpak.cache.registry import CacheRegistry
+
             summary = CacheRegistry.summary()
             total_entries = sum(v.get("size", 0) for v in summary.values())
             # Estimate memory for each registered cache
@@ -205,8 +209,7 @@ class ProxyMetricsCollector:
                     store = getattr(cache, "_store", {})
                     # sys.getsizeof gives a rough per-object estimate
                     total_bytes += sum(
-                        _sys.getsizeof(k) + _sys.getsizeof(v)
-                        for k, v in store.items()
+                        _sys.getsizeof(k) + _sys.getsizeof(v) for k, v in store.items()
                     )
                     total_bytes += _sys.getsizeof(store)
             defaults["entries"] = total_entries
@@ -232,7 +235,11 @@ class ProxyMetricsCollector:
             # CompressionStats stores recent events in _recent deque
             recent = list(getattr(cs, "_recent", []))
             for evt in recent:
-                provider = str(evt.get("model", "unknown")).split("/")[0] if isinstance(evt, dict) else "unknown"
+                provider = (
+                    str(evt.get("model", "unknown")).split("/")[0]
+                    if isinstance(evt, dict)
+                    else "unknown"
+                )
                 latency_ms = float(evt.get("latency_ms", 0)) if isinstance(evt, dict) else 0.0
                 if provider not in result:
                     result[provider] = {"count": 0, "sum_ms": 0.0, "raw": []}
@@ -309,14 +316,10 @@ class ProxyMetricsCollector:
                 lines.append(f"tokenpak_tokens_saved_total{labels} {saved}")
         else:
             labels = _label_str(provider="unknown")
-            lines.append(
-                f"tokenpak_tokens_saved_total{labels} {int(session['saved_tokens'])}"
-            )
+            lines.append(f"tokenpak_tokens_saved_total{labels} {int(session['saved_tokens'])}")
         lines.append("")
 
-    def _emit_cache_entries(
-        self, lines: List[str], cache: Dict[str, Any]
-    ) -> None:
+    def _emit_cache_entries(self, lines: List[str], cache: Dict[str, Any]) -> None:
         lines += [
             "# HELP tokenpak_cache_entries Active entries across all TokenPak caches",
             "# TYPE tokenpak_cache_entries gauge",
@@ -324,9 +327,7 @@ class ProxyMetricsCollector:
             "",
         ]
 
-    def _emit_cache_memory_bytes(
-        self, lines: List[str], cache: Dict[str, Any]
-    ) -> None:
+    def _emit_cache_memory_bytes(self, lines: List[str], cache: Dict[str, Any]) -> None:
         lines += [
             "# HELP tokenpak_cache_memory_bytes Estimated bytes used by TokenPak caches",
             "# TYPE tokenpak_cache_memory_bytes gauge",
@@ -352,9 +353,7 @@ class ProxyMetricsCollector:
             ratio = 0.0
         lines += [f"tokenpak_cache_hit_ratio {_fmt(ratio)}", ""]
 
-    def _emit_latency_histogram(
-        self, lines: List[str], latency: Dict[str, Dict[str, Any]]
-    ) -> None:
+    def _emit_latency_histogram(self, lines: List[str], latency: Dict[str, Dict[str, Any]]) -> None:
         lines += [
             "# HELP tokenpak_proxy_latency_ms Proxy request latency in milliseconds",
             "# TYPE tokenpak_proxy_latency_ms histogram",
@@ -362,19 +361,11 @@ class ProxyMetricsCollector:
         for provider, data in latency.items():
             for le, count in data["buckets"].items():
                 le_str = "+Inf" if le == float("inf") else str(int(le))
-                raw_labels = (
-                    f'provider="{_escape_label_value(provider)}",le="{le_str}"'
-                )
-                lines.append(
-                    f"tokenpak_proxy_latency_ms_bucket{{{raw_labels}}} {count}"
-                )
+                raw_labels = f'provider="{_escape_label_value(provider)}",le="{le_str}"'
+                lines.append(f"tokenpak_proxy_latency_ms_bucket{{{raw_labels}}} {count}")
             labels = _label_str(provider=provider)
-            lines.append(
-                f"tokenpak_proxy_latency_ms_sum{labels} {_fmt(data['sum_ms'])}"
-            )
-            lines.append(
-                f"tokenpak_proxy_latency_ms_count{labels} {data['count']}"
-            )
+            lines.append(f"tokenpak_proxy_latency_ms_sum{labels} {_fmt(data['sum_ms'])}")
+            lines.append(f"tokenpak_proxy_latency_ms_count{labels} {data['count']}")
         lines.append("")
 
     def _emit_up(self, lines: List[str], is_up: int) -> None:

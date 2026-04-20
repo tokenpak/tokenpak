@@ -204,7 +204,7 @@ class CircuitBreaker:
             if state.failure_count >= self._threshold and not state.is_open:
                 state.is_open = True
                 logger.warning(
-                    "Circuit OPEN for provider %r after %d failures — " "will retry in %ds",
+                    "Circuit OPEN for provider %r after %d failures — will retry in %ds",
                     provider,
                     state.failure_count,
                     int(self._cool_down),
@@ -639,4 +639,4 @@ def render_failover_footer(
     Example: '⚠️ failover:openai (anthropic 429 rate_limit)'
     """
     status_str = f" {http_status}" if http_status else ""
-    return f"⚠️ failover:{failover_provider} " f"({original_provider}{status_str} {error_type})"
+    return f"⚠️ failover:{failover_provider} ({original_provider}{status_str} {error_type})"

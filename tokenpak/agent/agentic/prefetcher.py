@@ -57,7 +57,9 @@ class PredictivePrefetcher:
             version=raw.get("version", 1),
             workflow_patterns=raw.get("workflow_patterns", {}),
             task_type_artifacts=raw.get("task_type_artifacts", {}),
-            error_artifacts=raw.get("error_artifacts", {"default": list(DEFAULT_DIAGNOSTIC_ARTIFACTS)}),
+            error_artifacts=raw.get(
+                "error_artifacts", {"default": list(DEFAULT_DIAGNOSTIC_ARTIFACTS)}
+            ),
         )
 
     def save(self) -> None:
@@ -76,7 +78,9 @@ class PredictivePrefetcher:
             )
         )
 
-    def record_transition(self, completed_step: str, next_step: str, artifacts: Iterable[str]) -> None:
+    def record_transition(
+        self, completed_step: str, next_step: str, artifacts: Iterable[str]
+    ) -> None:
         """Learn artifact demand for transition: completed_step -> next_step."""
         completed_step = completed_step.strip()
         next_step = next_step.strip()
@@ -90,7 +94,9 @@ class PredictivePrefetcher:
             if artifact:
                 next_map[artifact] = next_map.get(artifact, 0) + 1
 
-    def learn_workflow_path(self, steps: Sequence[str], artifacts_by_step: Dict[str, Iterable[str]]) -> None:
+    def learn_workflow_path(
+        self, steps: Sequence[str], artifacts_by_step: Dict[str, Iterable[str]]
+    ) -> None:
         """Learn transition patterns from a historical workflow path."""
         for idx in range(len(steps) - 1):
             current_step = steps[idx]
@@ -112,7 +118,9 @@ class PredictivePrefetcher:
     def register_error_artifacts(self, error_kind: str, artifacts: Iterable[str]) -> None:
         """Register diagnostic artifacts to load when an error kind is detected."""
         error_kind = error_kind.strip().lower() or "default"
-        merged = list(dict.fromkeys([*self.store.error_artifacts.get(error_kind, []), *list(artifacts)]))
+        merged = list(
+            dict.fromkeys([*self.store.error_artifacts.get(error_kind, []), *list(artifacts)])
+        )
         self.store.error_artifacts[error_kind] = merged
 
     def recommend_for_completed_step(self, completed_step: str, limit: int = 5) -> List[str]:
@@ -134,7 +142,9 @@ class PredictivePrefetcher:
             return []
         return [a for a, _ in Counter(artifact_counts).most_common(limit)]
 
-    def recommend_for_error(self, error_kind: str, extra_artifacts: Iterable[str] | None = None) -> List[str]:
+    def recommend_for_error(
+        self, error_kind: str, extra_artifacts: Iterable[str] | None = None
+    ) -> List[str]:
         error_kind = error_kind.strip().lower() or "default"
         defaults = self.store.error_artifacts.get("default", list(DEFAULT_DIAGNOSTIC_ARTIFACTS))
         specifics = self.store.error_artifacts.get(error_kind, [])

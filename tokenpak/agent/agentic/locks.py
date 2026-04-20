@@ -46,7 +46,7 @@ class LockConflictError(Exception):
         expires = lock_info.get("expires", 0)
         remaining = max(0, expires - time.time())
         super().__init__(
-            f"Lock conflict on '{path}': held by '{agent}', " f"expires in {remaining:.0f}s"
+            f"Lock conflict on '{path}': held by '{agent}', expires in {remaining:.0f}s"
         )
 
 

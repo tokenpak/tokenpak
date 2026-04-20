@@ -1,8 +1,9 @@
 """Test Google adapter tool validation."""
 
 import pytest
-from tokenpak.proxy.adapters.google_adapter import GoogleGenerativeAIAdapter
+
 from tokenpak.proxy.adapters.canonical import CanonicalRequest
+from tokenpak.proxy.adapters.google_adapter import GoogleGenerativeAIAdapter
 
 
 class TestGoogleAdapterTools:

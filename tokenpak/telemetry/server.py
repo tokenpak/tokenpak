@@ -966,7 +966,7 @@ def create_app(
 
     @app.get("/v1/insights")
     async def get_insights(
-        days: int = Query(7, ge=1, le=90, description="Days of history to analyze")
+        days: int = Query(7, ge=1, le=90, description="Days of history to analyze"),
     ):
         """
         Generate automatic insights and decision support suggestions.

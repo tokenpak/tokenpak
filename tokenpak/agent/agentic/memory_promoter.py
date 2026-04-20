@@ -16,8 +16,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -25,26 +25,26 @@ logger = logging.getLogger(__name__)
 
 # Promotion gate thresholds
 PROMOTION_RULES = {
-    "min_occurrences": 2,          # happened more than once
-    "min_success_rate": 0.7,       # validated by outcome
-    "not_contradicted_days": 7,    # not contradicted in last 7 days
-    "material_savings": 0.15,      # reduces future work by >15% (e.g., 15% token reduction)
-    "specificity_score": 0.5,      # specific enough to be actionable (0-1 scale)
+    "min_occurrences": 2,  # happened more than once
+    "min_success_rate": 0.7,  # validated by outcome
+    "not_contradicted_days": 7,  # not contradicted in last 7 days
+    "material_savings": 0.15,  # reduces future work by >15% (e.g., 15% token reduction)
+    "specificity_score": 0.5,  # specific enough to be actionable (0-1 scale)
 }
 
 # Memory tier definitions
 TIER_NAMES = {
-    1: "working",     # current session, auto-expires
-    2: "session",     # persists across turns, TTL: hours
-    3: "project",     # persists across sessions, TTL: days
-    4: "durable",     # permanent, highest quality gate
+    1: "working",  # current session, auto-expires
+    2: "session",  # persists across turns, TTL: hours
+    3: "project",  # persists across sessions, TTL: days
+    4: "durable",  # permanent, highest quality gate
 }
 
 DEFAULT_TTL = {
-    1: 300,              # Tier 1: 5 minutes
-    2: 3600 * 4,         # Tier 2: 4 hours
-    3: 86400 * 7,        # Tier 3: 7 days
-    4: None,             # Tier 4: permanent
+    1: 300,  # Tier 1: 5 minutes
+    2: 3600 * 4,  # Tier 2: 4 hours
+    3: 86400 * 7,  # Tier 3: 7 days
+    4: None,  # Tier 4: permanent
 }
 
 DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
@@ -53,20 +53,20 @@ DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
 @dataclass
 class Lesson:
     """A learned lesson with promotion tracking."""
-    
+
     lesson_id: str
-    content: str                    # The actual lesson text
-    tier: int                       # 1-4
-    occurrences: int                # How many times we've seen this
-    successes: int                  # How many times it succeeded
-    failures: int                   # How many times it failed
-    contradictions: int             # How many times it was contradicted
-    specificity_score: float         # 0-1: actionability
-    savings_pct: float              # 0-100: estimated % savings
-    created_at: float               # Unix timestamp
-    last_seen_at: float             # Unix timestamp
-    last_promoted_at: float         # Unix timestamp when promoted to current tier
-    promoted_from: Optional[int]    # Previous tier
+    content: str  # The actual lesson text
+    tier: int  # 1-4
+    occurrences: int  # How many times we've seen this
+    successes: int  # How many times it succeeded
+    failures: int  # How many times it failed
+    contradictions: int  # How many times it was contradicted
+    specificity_score: float  # 0-1: actionability
+    savings_pct: float  # 0-100: estimated % savings
+    created_at: float  # Unix timestamp
+    last_seen_at: float  # Unix timestamp
+    last_promoted_at: float  # Unix timestamp when promoted to current tier
+    promoted_from: Optional[int]  # Previous tier
 
     def success_rate(self) -> float:
         """Return success rate (0-1)."""
@@ -76,7 +76,7 @@ class Lesson:
     def days_since_contradicted(self) -> float:
         """Return days since last contradiction, or infinity if never contradicted."""
         if self.contradictions == 0:
-            return float('inf')
+            return float("inf")
         # Approximate: last contradiction was about (occurrences - successes - failures) / 2 occurrences ago
         # For simplicity, we'll track the actual timestamp separately in a real implementation
         return 0  # Placeholder—would need actual contradiction timestamp tracking
@@ -192,7 +192,7 @@ class MemoryPromoter:
 
         # Check promotion gates
         success_rate = lesson.success_rate()
-        
+
         if lesson.tier == 1 and self._check_tier1_to_2(lesson):
             self._promote(lesson, 2)
             return True
@@ -202,7 +202,7 @@ class MemoryPromoter:
         elif lesson.tier == 3 and self._check_tier3_to_4(lesson):
             self._promote(lesson, 4)
             return True
-        
+
         return False
 
     def _check_tier1_to_2(self, lesson: Lesson) -> bool:
@@ -264,7 +264,9 @@ class MemoryPromoter:
             old_tier = lesson.tier
             lesson.tier = max(1, lesson.tier - 1)
             lesson.last_promoted_at = time.time()
-            logger.info(f"Demoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {lesson.tier}")
+            logger.info(
+                f"Demoted lesson {lesson.lesson_id} from Tier {old_tier} to Tier {lesson.tier}"
+            )
 
     def cleanup_expired(self) -> int:
         """Remove or demote expired lessons. Returns count of lessons affected."""
@@ -296,7 +298,7 @@ class MemoryPromoter:
         total_lessons = len(self.lessons)
         for lesson in self.lessons.values():
             by_tier[lesson.tier] += 1
-        
+
         return {
             "total_lessons": total_lessons,
             "by_tier": by_tier,

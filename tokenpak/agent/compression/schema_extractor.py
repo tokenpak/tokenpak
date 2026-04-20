@@ -110,8 +110,8 @@ _DETECTION_PATTERNS: Dict[str, List[str]] = {
         r"\badded keys?\b",
         r"\bremoved keys?\b",
         r"^\s*[\w.-]+\s*[:=]\s*.+$",  # key: value or key=value lines
-        r"^[+\-]\s*[\w_.-]+\s*:",      # diff-style +/- lines with key: value
-        r"\bmax_\w+\b",                 # common config key prefixes
+        r"^[+\-]\s*[\w_.-]+\s*:",  # diff-style +/- lines with key: value
+        r"\bmax_\w+\b",  # common config key prefixes
     ],
 }
 
@@ -119,6 +119,7 @@ _DETECTION_PATTERNS: Dict[str, List[str]] = {
 # ---------------------------------------------------------------------------
 # Per-type field extractors
 # ---------------------------------------------------------------------------
+
 
 def _extract_meeting(text: str) -> Dict[str, Any]:
     fields: Dict[str, Any] = {}
@@ -131,14 +132,16 @@ def _extract_meeting(text: str) -> Dict[str, Any]:
         fields["attendees"] = []
 
     # Decisions — bullet/numbered items near "Decision" or "Decided"
-    decisions = re.findall(
-        r"(?:decision[s]?|decided)[:\-\s]+([^\n]{5,200})", text, re.IGNORECASE
+    decisions = re.findall(r"(?:decision[s]?|decided)[:\-\s]+([^\n]{5,200})", text, re.IGNORECASE)
+    fields["decisions"] = [d.strip() for d in decisions] or _extract_bullets_near(
+        text, ["decision", "decided"]
     )
-    fields["decisions"] = [d.strip() for d in decisions] or _extract_bullets_near(text, ["decision", "decided"])
 
     # Blockers
     blockers = re.findall(r"blocker[s]?[:\-\s]+([^\n]{5,200})", text, re.IGNORECASE)
-    fields["blockers"] = [b.strip() for b in blockers] or _extract_bullets_near(text, ["blocker", "blocked"])
+    fields["blockers"] = [b.strip() for b in blockers] or _extract_bullets_near(
+        text, ["blocker", "blocked"]
+    )
 
     # Follow-ups / action items
     follow_ups = re.findall(
@@ -164,7 +167,11 @@ def _extract_pull_request(text: str) -> Dict[str, Any]:
         fields["files_changed"] = len(paths) if paths else "unknown"
 
     # Tests affected
-    m = re.search(r"tests?\s+(added|updated|affected|failed|passed)[:\-\s]*([^\n]{0,100})", text, re.IGNORECASE)
+    m = re.search(
+        r"tests?\s+(added|updated|affected|failed|passed)[:\-\s]*([^\n]{0,100})",
+        text,
+        re.IGNORECASE,
+    )
     fields["tests_affected"] = m.group(0).strip() if m else "unknown"
 
     # Risk level
@@ -188,7 +195,11 @@ def _extract_bug_report(text: str) -> Dict[str, Any]:
     fields["symptom"] = m.group(1).strip() if m else _first_non_header_line(text)
 
     # Repro steps
-    m = re.search(r"(?:steps?\s+to\s+reproduce|repro\s+steps?)[:\-\s]+(.+?)(?=\n\s*\n|\Z)", text, re.IGNORECASE | re.DOTALL)
+    m = re.search(
+        r"(?:steps?\s+to\s+reproduce|repro\s+steps?)[:\-\s]+(.+?)(?=\n\s*\n|\Z)",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
     if m:
         steps = re.findall(r"(?:^\s*[\d\-\*\•]\s*)(.+)", m.group(1), re.MULTILINE)
         fields["repro_steps"] = [s.strip() for s in steps] if steps else [m.group(1).strip()[:200]]
@@ -286,6 +297,7 @@ def _extract_config_file(text: str) -> Dict[str, Any]:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract_bullets_near(text: str, keywords: List[str]) -> List[str]:
     """Extract bullet/numbered items that appear near keyword lines."""
     results: List[str] = []
@@ -323,6 +335,7 @@ _EXTRACTORS = {
 # Result dataclass
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ExtractionResult:
     """Output of :meth:`SchemaExtractor.extract`."""
@@ -345,6 +358,7 @@ class ExtractionResult:
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
+
 
 class SchemaExtractor:
     """
@@ -399,7 +413,8 @@ class SchemaExtractor:
 
         # Require at least two signals to avoid false positives
         total_hits = sum(
-            1 for p in _DETECTION_PATTERNS.get(best_type, [])
+            1
+            for p in _DETECTION_PATTERNS.get(best_type, [])
             if re.search(p, text, re.IGNORECASE | re.MULTILINE)
         )
         if total_hits < 2:

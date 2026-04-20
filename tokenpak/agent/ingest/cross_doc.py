@@ -30,7 +30,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-
 # ---------------------------------------------------------------------------
 # DocCard — compact normalized schema for a single document
 # ---------------------------------------------------------------------------
@@ -227,9 +226,7 @@ class SchemaConverter:
     # private helpers
     # ------------------------------------------------------------------
 
-    def _extract_title(
-        self, lines: List[str], metadata: Dict[str, Any]
-    ) -> Optional[str]:
+    def _extract_title(self, lines: List[str], metadata: Dict[str, Any]) -> Optional[str]:
         if "title" in metadata:
             return str(metadata["title"])
         for line in lines[:15]:
@@ -243,9 +240,7 @@ class SchemaConverter:
                 return stripped[:120]
         return None
 
-    def _extract_authors(
-        self, lines: List[str], metadata: Dict[str, Any]
-    ) -> List[str]:
+    def _extract_authors(self, lines: List[str], metadata: Dict[str, Any]) -> List[str]:
         if "authors" in metadata:
             raw = metadata["authors"]
             if isinstance(raw, list):
@@ -308,11 +303,9 @@ class SchemaConverter:
         """Extract keywords from keyword lines or fallback frequency."""
         kw_match = re.search(r"(?i)keywords?[:\s]+(.+?)(?:\n|$)", text)
         if kw_match:
-            return [
-                k.strip()
-                for k in re.split(r",|;", kw_match.group(1))
-                if k.strip()
-            ][: self.max_keywords]
+            return [k.strip() for k in re.split(r",|;", kw_match.group(1)) if k.strip()][
+                : self.max_keywords
+            ]
         # Fallback: capitalized multi-word phrases (crude)
         caps = re.findall(r"\b([A-Z][a-z]+ [A-Z][a-z]+)\b", text)
         seen: Dict[str, int] = {}
@@ -338,7 +331,7 @@ class AgreementMap:
 
     field: str
     values: List[Tuple[str, Any]]  # (source, value)
-    consensus: Optional[str]       # None if no consensus
+    consensus: Optional[str]  # None if no consensus
 
     @property
     def agreement_ratio(self) -> float:
@@ -377,8 +370,10 @@ class EvidenceMatrix:
 
     def to_table(self) -> str:
         """Render as ASCII table."""
-        header = "Source".ljust(20) + " | " + " | ".join(
-            f"C{i+1}".center(4) for i in range(len(self.claims))
+        header = (
+            "Source".ljust(20)
+            + " | "
+            + " | ".join(f"C{i + 1}".center(4) for i in range(len(self.claims)))
         )
         sep = "-" * len(header)
         lines = [header, sep]
@@ -402,8 +397,10 @@ class MetricTable:
     def to_table(self) -> str:
         """Render as ASCII table."""
         col_w = 12
-        header = "Source".ljust(20) + " | " + " | ".join(
-            m[:col_w].center(col_w) for m in self.metric_names
+        header = (
+            "Source".ljust(20)
+            + " | "
+            + " | ".join(m[:col_w].center(col_w) for m in self.metric_names)
         )
         sep = "-" * len(header)
         lines = [header, sep]
@@ -471,8 +468,7 @@ class ComparisonReport:
             by_status[am.status] = by_status.get(am.status, 0) + 1
         if by_status:
             lines.append(
-                "Fields    : "
-                + ", ".join(f"{k}={v}" for k, v in sorted(by_status.items()))
+                "Fields    : " + ", ".join(f"{k}={v}" for k, v in sorted(by_status.items()))
             )
 
         if self.mode == "merged" and self.synthesis:
@@ -498,7 +494,7 @@ class ComparisonReport:
         if self.evidence_matrix.claims:
             lines.append("\nClaim legend:")
             for i, c in enumerate(self.evidence_matrix.claims):
-                lines.append(f"  C{i+1}: {c[:100]}")
+                lines.append(f"  C{i + 1}: {c[:100]}")
 
         return "\n".join(lines)
 
@@ -646,10 +642,7 @@ class CrossDocAnalyzer:
             for i, claim in enumerate(claims):
                 claim_prefix = claim[:60].lower()
                 # Check for overlap (simple substring / prefix match)
-                found = any(
-                    claim_prefix in cp or cp in claim_prefix
-                    for cp in card_prefixes
-                )
+                found = any(claim_prefix in cp or cp in claim_prefix for cp in card_prefixes)
                 evidence[i] = True if found else None
             rows.append({"source": card.source, "evidence": evidence})
 
@@ -715,14 +708,11 @@ class CrossDocAnalyzer:
         # Schema-level conflicts
         for am in agreement_maps:
             if am.status == "conflict":
-                vals_str = ", ".join(
-                    f"{src}: {val}" for src, val in am.values[:4]
-                )
+                vals_str = ", ".join(f"{src}: {val}" for src, val in am.values[:4])
                 conflicts.append(f"Field '{am.field}' conflicts: {vals_str}")
             elif am.status == "partial":
                 conflicts.append(
-                    f"Field '{am.field}' partial agreement "
-                    f"(ratio={am.agreement_ratio:.0%})"
+                    f"Field '{am.field}' partial agreement (ratio={am.agreement_ratio:.0%})"
                 )
 
         # Metric-level conflicts (high CoV)
@@ -735,8 +725,7 @@ class CrossDocAnalyzer:
                     if m in row["metrics"]
                 ]
                 conflicts.append(
-                    f"Metric '{m}' high divergence (CoV={cov:.2f}): "
-                    + ", ".join(vals[:4])
+                    f"Metric '{m}' high divergence (CoV={cov:.2f}): " + ", ".join(vals[:4])
                 )
 
         return conflicts

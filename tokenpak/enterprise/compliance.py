@@ -159,8 +159,7 @@ class ComplianceReporter:
         standard = standard.lower()
         if standard not in self._STANDARDS:
             raise ValueError(
-                f"Unknown compliance standard: {standard!r}. "
-                f"Choose from: {sorted(self._STANDARDS)}"
+                f"Unknown compliance standard: {standard!r}. Choose from: {sorted(self._STANDARDS)}"
             )
 
         now = datetime.now(tz=timezone.utc)

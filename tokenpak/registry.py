@@ -16,7 +16,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, TYPE_CHECKING, Generator, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional
 
 if TYPE_CHECKING:
     pass
