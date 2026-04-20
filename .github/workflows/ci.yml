@@ -74,53 +74,13 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing
 
-      - name: Run Phase 2 coverage tests (Tier-1 modules)
-        if: matrix.python-version == '3.11'
-        run: |
-          # Tier-1 modules on github/main post-rewrite: tokenpak.validation,
-          # tokenpak.cache, and the error-handling subtree within tokenpak.proxy
-          # (error_response.py et al). The pre-rewrite tokenpak.core namespace
-          # was flattened during the v1.0.3 restructuring.
-          python -m pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
-            -v --tb=short \
-            --junitxml=reports/test-results-phase2-py${{ matrix.python-version }}.xml \
-            --cov=tokenpak.validation \
-            --cov=tokenpak.cache \
-            --cov-report=xml:coverage-tier1.xml \
-            --cov-report=term-missing \
-            -o addopts=""
-
-      - name: Check Tier-1 coverage gate (minimum 50%)
-        if: matrix.python-version == '3.11'
-        run: |
-          # Run pytest-cov on Tier-1 modules only, then enforce gate
-          pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
-            --cov=tokenpak.validation \
-            --cov=tokenpak.cache \
-            --cov-report=term-missing \
-            -q --tb=no
-          python -m coverage report \
-            --include='*/tokenpak/validation*,*/tokenpak/cache*' \
-            --fail-under=50 || {
-            echo "::error::Tier-1 coverage below 50% — Phase 2 coverage gate FAILED"
-            exit 1
-          }
-
-      - name: Check overall coverage (minimum 45%)
-        if: matrix.python-version == '3.11'
-        run: |
-          python -m coverage report --fail-under=45 || {
-            echo "::warning::Overall coverage below 45% baseline — monitoring (non-blocking)"
-            exit 0
-          }
-
-      - name: Upload coverage (Tier-1)
-        uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.11'
-        with:
-          files: ./coverage.xml,./coverage-tier1.xml
-          fail_ci_if_error: false
-          flags: phase2-coverage
+      # Phase 2 coverage (Tier-1 modules) + Tier-1 coverage gate (≥50%) + overall
+      # coverage gate (≥45%) steps were removed in the 2026-04-19
+      # standards-relocation: they ran `pytest tests/test_validation*.py
+      # tests/test_error*.py tests/test_cache*.py` against file globs that no
+      # longer match any file on github/main. Post-rewrite the test suite has a
+      # different structure; Tier-1 coverage gates will be reintroduced in 1.1.0
+      # once architecture-aligned test files are written.
 
       - name: Upload test results
         if: always()
@@ -128,12 +88,4 @@ jobs:
         with:
           name: test-results-py${{ matrix.python-version }}
           path: reports/test-results-py${{ matrix.python-version }}.xml
-          retention-days: 30
-
-      - name: Upload Phase 2 test results
-        if: always() && matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results-phase2-py${{ matrix.python-version }}
-          path: reports/test-results-phase2-py${{ matrix.python-version }}.xml
           retention-days: 30
