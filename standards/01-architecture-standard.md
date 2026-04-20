@@ -13,27 +13,45 @@ Descends from Constitution §7. Governs where code lives, how modules depend on 
 
 ## 1. Package Layout
 
-TokenPak is one Python package at `tokenpak/tokenpak/`. All code lives under that root. Top-level subsystems each own one concern:
+TokenPak is one Python package at `tokenpak/tokenpak/`. All code lives under that root. Top-level subsystems each own one concern. The layout below is **canonical**; any deviation in shipping code is architectural debt (tracked in §9 and in `known-findings.md`), not an alternative pattern.
 
 | Subsystem | Owns |
 |---|---|
-| `core/` | Types, interfaces, shared primitives. No business logic. |
-| `proxy/` | HTTP server at 127.0.0.1:8766; byte-preserved passthrough to providers. |
-| `companion/` | Client-side pre-send optimizer for TUI/CLI (MCP + hooks + skills). |
-| `compression/` | Deterministic token-reduction pipeline (dedup, alias, segmentize, directives). |
-| `cache/` | TokenPak's local compressed-payload cache (distinct from provider cache). |
-| `creds/` | Credential router. Discovers creds from 5 provider surfaces; never stores what it didn't find. |
-| `monitor/` (via `metrics/`) | SQLite request ledger (`monitor.db`). Writes every request row with `cache_origin`. |
-| `routing/` | Request → model → provider decision. Fallback rules. |
-| `cli/` | `tokenpak` entry point. Subcommand dispatch only; delegates to subsystems. |
-| `dashboard/` | Local web UI. Reads from monitor DB; no business logic. |
-| `sdk/` | Public Python SDK surface. Stability contract. |
-| `licensing/` | License enforcement hooks. |
-| `telemetry/` | Opt-in anonymous usage metrics. Off by default. |
-| `recipes_oss/` | Built-in compression recipes (YAML). |
-| `agent/`, `agentic/`, `orchestration/` | **Consolidation pending.** Three overlapping subsystems; see `10-release-quality-bar.md` Gate A4. |
+| `proxy/` | The live request/response layer. Inbound/outbound LLM traffic: HTTP server, middleware, streaming, request-lifecycle handlers, passthrough mode, proxy-side retry and failover execution. |
+| `compression/` | The optimization engine. End-to-end pipeline: segmentation, fingerprinting, strategies by content type, budgets, fidelity tiers, canon (never-touch) blocks, query rewriting, output formatting. Built-in YAML recipes live here. |
+| `vault/` | The knowledge store. Indexing, retrieval, search (keyword + semantic), ranking, chunking, file parsers / AST / symbol extraction, filesystem watcher, SQLite-backed retrieval storage. Distinct from the maintainer-side Obsidian vault at `~/vault/`; the two share a name by coincidence and never share data. |
+| `cache/` | Reuse instead of repeat. Semantic cache, prefix/prompt cache, tool/function schema cache, generated-artifact reuse, smart eviction, invalidation rules, cache persistence. |
+| `routing/` | The decision engine. Routing rules, intent/task/model selection policies, fallback chains, provider health + circuit breakers, A/B and shadow-mode experiments, smart-routing planners. |
+| `telemetry/` | System of record for measurement. Token counting, cost tracking, session telemetry, latency/error/throughput metrics, generated reports, replay metadata, audit-friendly request metadata, SQLite persistence for all of the above. |
+| `companion/` | User-side helper layer. Claude Code companion, reusable memory capsules, prompt packaging, local helper utilities, session journaling. |
+| `orchestration/` | Multi-step and multi-agent coordination. Workflow engine, handoffs, agent/capabilities registry, workflow state + persistence, precondition guards, retry/recovery logic, failure memory, workflow performance profiling. |
+| `sdk/` | Provider and framework adapters. Per-provider adapters (OpenAI, Anthropic, Gemini, etc.), framework adapters (LiteLLM, LangChain, custom), request/response translation, adapter registry, SDK-facing auth helpers. |
+| `sources/` | External and local knowledge connectors. Local filesystem, GitHub, Notion, Drive, shared/org sources, sync pipelines. |
+| `core/` | Shared foundation. Not a feature bucket — the system backbone: config + defaults + env overrides, shared runtime state, schema/contract validation, shared data structures, shared error types, startup/shutdown lifecycle, license activation/validation, version checks, cooldown/rate-recovery primitives. |
+| `cli/` | Terminal commands and command handlers. Individual command modules, output formatting, interactive prompts, argument parsing, entrypoint scripts. `tokenpak <verb>` dispatches here. |
+| `dashboard/` | Web UI and reporting. Main web app, pages/views, UI components, filters, CSV/JSON exports, dashboard-facing stats/report APIs. Reads from telemetry; no business logic. |
+| `alerts/` | Notifications, triggers, thresholds. Alert rule definitions, budget/usage/error thresholds, delivery channels (email, webhook, local notification), action triggers. |
+| `security/` | Protect data and enforce boundaries. PII/DLP scanning + redaction, org/team security policies, permissions/access control, OAuth/team auth ownership, secret-safe request handling. |
+| `plugins/` | Extension without core bloat. Hook points, optional plugin modules, plugin discovery and loading, example plugins. |
+| `debug/` | Developer diagnostics. Structured debug logs, request/compression/routing traces, inspection helpers, health diagnostics. |
 
-**Rule:** a concern lives in exactly one subsystem. If you can't name which one, the subsystem doesn't exist yet — propose one in a PR before writing the code.
+**Rule:** a concern lives in exactly one subsystem. If you can't name which one, the subsystem doesn't exist yet — propose one in a PR (§8) before writing the code.
+
+### 1.1 Canonical subsystem set
+
+Exactly the seventeen subsystems above. Adding new top-level subsystems goes through §8. Removing one requires migrating its concern elsewhere and updating this table in the same PR.
+
+### 1.2 Historical reorganizations (2026-04-19)
+
+This §1 supersedes an earlier layout that had `creds/`, `monitor/` (via `metrics/`), `recipes_oss/`, `licensing/`, and `agent/` + `agentic/` as separate top-level subsystems. Their concerns are now mapped as:
+
+- `creds/` → `security/auth/` and `security/secrets/` (credential discovery and secret-safe handling)
+- `monitor/` + `metrics/` → `telemetry/storage/` + `telemetry/metrics/` (measurement is one subsystem now)
+- `recipes_oss/` → `compression/strategies/` (recipes are compression strategies)
+- `licensing/` → `core/licensing/` (license logic is foundational)
+- `agent/`, `agentic/`, `orchestration/` → collapsed to a single `orchestration/`
+
+Code still sitting in the old subsystem directories on `github/main` is architectural debt; migration is tracked in `known-findings.md` with a 1.1.0 target.
 
 ## 2. Dependency Direction
 
@@ -41,16 +59,17 @@ Dependencies flow inward only. A subsystem at level N may import from any level 
 
 ```
 Level 0  core/
-Level 1  creds/   compression/   cache/   monitor/   recipes_oss/
-Level 2  proxy/   companion/    routing/   telemetry/   licensing/
-Level 3  cli/     sdk/          dashboard/
+Level 1  security/   compression/   cache/   vault/   sources/   debug/
+Level 2  telemetry/   proxy/   routing/   orchestration/   companion/   alerts/   plugins/
+Level 3  cli/   sdk/   dashboard/
 Level 4  (none — top of tree)
 ```
 
 **Consequences:**
-- `proxy/` may import `compression/` and `creds/`; `compression/` must not import `proxy/`.
-- `cli/` may import anything below it; nothing imports from `cli/`.
-- Two Level-1 subsystems must not import from each other. If they need to share logic, promote to `core/`.
+- `proxy/` may import `compression/`, `cache/`, `security/`; `compression/` must not import `proxy/`.
+- `cli/`, `sdk/`, and `dashboard/` may import anything below them; nothing imports from them.
+- Two subsystems at the same level must not import from each other. If they need to share logic, promote it to `core/` or the next-lower level it naturally fits.
+- `orchestration/` sits at Level 2 because it coordinates workflows across `proxy/`, `cache/`, and `compression/`; it can read them but they must not know about it.
 
 Circular imports are a build error, not a warning. Enforced in CI by the import-linter config.
 
@@ -72,10 +91,12 @@ tokenpak/<subsystem>/
 
 Per Constitution §5.4, no hardcoded enumerations. Use discovery patterns:
 
-- **Providers and models** — discovered via `creds/discovery.py` scanning known credential surfaces at startup. Unknown providers produce a debug log and a `provider=unknown` monitor row, never an exception.
-- **Compression recipes** — loaded from `recipes_oss/*.yaml` at import time. Drop a YAML in the directory, it registers itself.
+- **Providers and models** — discovered via `security/auth/discovery.py` scanning known credential surfaces at startup. Unknown providers produce a debug log and a `provider=unknown` telemetry row, never an exception.
+- **Compression strategies** — loaded from `compression/strategies/*.yaml` (and Python strategy classes inheriting from `compression.Strategy`) at import time. Drop a YAML or a subclass in the directory, it registers itself.
 - **Integrations** (`tokenpak integrate <client>`) — one file per client under `tokenpak/cli/integrations/`. The CLI enumerates files in that directory; there is no central registry.
-- **Compression stages** — classes inheriting from `compression.Stage` are picked up via `__subclasses__` at pipeline build time.
+- **Compression pipeline stages** — classes inheriting from `compression.Stage` are picked up via `__subclasses__` at pipeline build time.
+- **Sources** (`tokenpak/sources/*`) — one subpackage per connector. Discovered by walking the `sources/` directory at startup.
+- **Plugins** — `plugins/loaders/` walks `plugins/modules/` and installed entry-point plugins at startup. No central list.
 
 **Rule:** if you find yourself writing `SUPPORTED_X = [...]`, stop. Write discovery instead.
 
@@ -100,8 +121,10 @@ No other config paths. No `~/.config/tokenpak/`, no `XDG_CONFIG_HOME` variants. 
 
 ## 7. State and Persistence
 
-- **Monitor DB** (`~/.tokenpak/monitor.db`) is the only SQLite store. Schema migrations live in `metrics/migrations/`.
-- **Companion stores** (`~/.tokenpak/companion/journal.db`, `capsules/`, `budget.db`) are separate files, owned by `companion/`.
+- **Telemetry store** (`~/.tokenpak/telemetry.db`) — the request ledger. Schema migrations live in `telemetry/storage/migrations/`. Every request row carries `cache_origin` per Constitution §5.3.
+- **Vault index** (`~/.tokenpak/vault/index.db`) — knowledge-store retrieval index. Owned by `vault/storage/`.
+- **Cache store** (`~/.tokenpak/cache/`) — reusable outputs, semantic matches, artifacts. Owned by `cache/storage/`.
+- **Companion stores** (`~/.tokenpak/companion/journal.db`, `capsules/`, `budget.db`) — per-session assistant state, owned by `companion/`.
 - **No pickled state.** Serialize as JSON or SQLite; never pickle anything that touches disk.
 - **No hidden state files** in the repo. If a test needs a fixture, it creates it in a tmpdir.
 
@@ -118,9 +141,10 @@ Bar for a new subsystem: it owns a concern no existing subsystem owns, and at le
 
 ## 9. Known Architectural Debt
 
-Tracked for the audit rubric to check against, not to prescribe fixes here:
+Tracked for the audit rubric to check against, not to prescribe fixes here. Each item is also mirrored in `known-findings.md` (internal) with a target release.
 
-- `agent/`, `agentic/`, `orchestration/` — three subsystems with overlapping scope; consolidation target TBD.
-- Top-level `dashboard/` vs `tokenpak/dashboard/` — one of these is wrong.
-- Transient work documents at repo root (`COMPLETION_REPORT.md`, `IMPLEMENTATION_SUMMARY.md`, `MERGE_CONFLICT_RESOLUTION.md`) — should move to `docs/history/` or be deleted.
-- `ARCHITECTURE.md` at repo root describes TokenPak as a "Universal Content Compiler"; the Constitution identifies it as a local proxy for context compression. Reconcile or retire.
+- **Layout drift on `github/main`.** The v1.0.3 root commit (`81b87716`) has a package tree that doesn't match the §1 canonical layout: it contains `adapters/, agent/, api/, capsule/, compaction/, connectors/, engines/, enterprise/, extraction/, formatting/, handlers/, integrations/, intelligence/, middleware/, monitoring/, processors/, registry/, schemas/, semantic/, validation/` — none of which are §1 subsystems. Consolidation target: 1.1.0.
+- **64 flat `.py` files at the root of `tokenpak/`.** Violates the "one concern per subsystem" rule in §1. Each needs a home. Target: 1.1.0.
+- **Pre-existing `creds/`, `recipes_oss/`, `monitor/`, `metrics/`, `licensing/` subtrees.** Superseded by §1.2 remapping but the directories still exist on working branches. Migrate in-place when each gets touched; no separate migration PR required.
+- **Root-level coverage artifacts.** `coverage.json` and `coverage_report.txt` at the repo root violate `12 §6.4` ("Coverage and benchmark artifacts are regenerated by CI, not edited by hand"). Removed from tracking in the v1.0.3-trix pre-promotion prep; if they reappear, `.gitignore` is missing the patterns.
+- **Duplicate benchmark trees.** Top-level `benchmarks/` and `tests/benchmarks/` both exist on some branches. Canonical location is `tests/benchmarks/`. Removed in the v1.0.3 pre-promotion prep.
