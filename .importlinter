@@ -80,7 +80,20 @@ ignore_imports =
     ; issues) to enrich compile-time context; the URL fetch path hits
     ; sources.url_adapter. compression → sources is another Level-1
     ; collaboration (compression enriches what sources provides).
-    tokenpak.reference_fetcher -> tokenpak.sources.url_adapter
+    tokenpak.compression.reference_fetcher -> tokenpak.sources.url_adapter
+    ;
+    ; compression.pack emits compile reports via telemetry.report.
+    ; This is cross-level (Level-1 → Level-2) — slightly unusual but
+    ; acceptable as intentional collaboration; compression generates
+    ; reports that telemetry stores/reads.
+    tokenpak.compression.pack -> tokenpak.telemetry.report
+    ;
+    ; telemetry.pipeline is the ingestion pipeline for telemetry events;
+    ; it consults routing.complexity + routing.shadow_hook for event
+    ; classification. Same-level routing ↔ telemetry cross-collab.
+    tokenpak.telemetry.pipeline -> tokenpak.routing.complexity
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
     ;
     ; More Level-1 ↔ Level-1 collaboration: sources.walker is a
     ; generic filesystem traversal utility used by vault (for
@@ -127,6 +140,18 @@ ignore_imports =
     ; §5.2 exception — this is the intended topology.
     tokenpak.companion -> tokenpak.services.mcp_bridge
     tokenpak.sdk.mcp.client -> tokenpak.services.mcp_bridge
+    ;
+    ; §5.2-C pure local helper: `tokenpak budget` subcommand is
+    ; a budget-management UX that operates on local budget state,
+    ; never invokes a provider. Collapses when a dedicated budget
+    ; CLI module lands.
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.rules
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.budgeter
+    ;
+    ; Package-level public-API re-export: tokenpak/__init__.py
+    ; exposes budgeter + budget types for user code.
+    tokenpak -> tokenpak.services.policy_service.budget.budgeter
+    tokenpak -> tokenpak.services.policy_service.budget.rules
     ; §5.2 exception allowlist. Each entry MUST have a matching
     ; `# tokenpak: §5.2-exception — <A|B|C> — <reason>` marker in the
     ; importing file's module docstring and a corresponding note in
@@ -208,6 +233,17 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.compression.processors.text
     tokenpak.cli._impl -> tokenpak.compression.wire
     tokenpak.cli._impl -> tokenpak.compression.compiler
+    tokenpak.cli._impl -> tokenpak.compression.miss_detector
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.rules
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.budgeter
+    ;
+    ; Transitive through telemetry.server (telemetry IS a read surface
+    ; cli is allowed to consume; its internal collaborators happen to
+    ; include compression.validation_gate and routing primitives):
+    tokenpak.telemetry.server -> tokenpak.compression.validation_gate
+    tokenpak.telemetry.pipeline -> tokenpak.routing.complexity
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
     ;
     ; (2026-04-20: compiler moved to compression/compiler — edge
     ; is now intra-subsystem compression.compiler → compression.wire,
@@ -233,6 +269,8 @@ ignore_imports =
     tokenpak -> tokenpak.compression.engines.base
     tokenpak -> tokenpak.compression.engines.heuristic
     tokenpak -> tokenpak.compression.pack
+    tokenpak -> tokenpak.services.policy_service.budget.budgeter
+    tokenpak -> tokenpak.services.policy_service.budget.rules
     ;
     ; Vault indexer uses compression.processors to preprocess files.
     ; vault + compression are both Level-1 primitives; same-level

@@ -19,8 +19,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Optional
 
-from tokenpak.reference_fetcher import fetch_reference
-from tokenpak.reference_scanner import Reference, scan_for_references
+from tokenpak.compression.reference_fetcher import fetch_reference
+from tokenpak.compression.reference_scanner import Reference, scan_for_references
 from tokenpak.compression.wire import make_slice_id, pack
 
 DEFAULT_REF_CACHE_PATH = ".tokenpak/ref_cache.json"

@@ -20,19 +20,19 @@ from .storage import TelemetryDB
 logger = logging.getLogger(__name__)
 # --- Shadow hook + intent classifier (fail-silent) ---
 try:
-    from tokenpak.shadow_hook import ShadowHook as _ShadowHookClass
+    from tokenpak.routing.shadow_hook import ShadowHook as _ShadowHookClass
 
     _shadow_hook = _ShadowHookClass()
 except Exception:
     _shadow_hook = None  # type: ignore
 
 try:
-    from tokenpak.complexity import classify_intent as _classify_intent  # type: ignore
+    from tokenpak.routing.complexity import classify_intent as _classify_intent  # type: ignore
 except Exception:
     _classify_intent = None  # type: ignore  # type: ignore
 
 try:
-    from tokenpak.shadow_reader import validate as _shadow_validate
+    from tokenpak.routing.shadow_reader import validate as _shadow_validate
 except Exception:
     _shadow_validate = None  # type: ignore
 

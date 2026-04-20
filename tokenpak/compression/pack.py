@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from tokenpak.report import Action, CompileReport, Decision
+from tokenpak.telemetry.report import Action, CompileReport, Decision
 
 # ── Token counting (reuse budgeter's approach) ────────────────────────────
 

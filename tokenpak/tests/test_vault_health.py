@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from tokenpak.vault_health import (
+from tokenpak.telemetry.vault_health import (
     IndexStatus,
     VaultHealth,
     _make_block_id,

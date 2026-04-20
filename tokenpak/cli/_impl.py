@@ -485,9 +485,9 @@ def cmd_logs(args):
 
 # ── End Progressive Disclosure ────────────────────────────────────────────────
 
-from ..budget import BudgetBlock, quadratic_allocate
+from tokenpak.services.policy_service.budget.rules import BudgetBlock, quadratic_allocate
 from ..calibration import calibrate_workers, get_recommended_workers
-from ..miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
+from tokenpak.compression.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from tokenpak.compression.processors import get_processor
 from ..registry import Block, BlockRegistry
 from ..security import secure_write_config
@@ -1078,7 +1078,7 @@ def cmd_requests(args):
     import json as _json
     import time as _time
 
-    from tokenpak.request_explorer import (
+    from tokenpak.telemetry.request_explorer import (
         REQUESTS_PATH,
         age_label,
         cache_pct,
@@ -2077,7 +2077,7 @@ def cmd_status(args):
 
     # Budget tracking (local DB)
     try:
-        from ..budgeter import BudgetTracker
+        from tokenpak.services.policy_service.budget.budgeter import BudgetTracker
 
         tracker = BudgetTracker()
         rows = []

@@ -5,7 +5,7 @@ Covers: validation_gate.py — validation rules, error handling, bypass modes.
 
 import json
 
-from tokenpak.validation_gate import ValidationGate, ValidationResult
+from tokenpak.compression.validation_gate import ValidationGate, ValidationResult
 
 
 class TestValidationGateBasics:

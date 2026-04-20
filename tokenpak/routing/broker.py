@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from tokenpak.elo import DEFAULT_ELO_PATH, EloRatings
-from tokenpak.routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
+from tokenpak.routing.elo import DEFAULT_ELO_PATH, EloRatings
+from tokenpak.routing.routing_ledger import DEFAULT_LEDGER_PATH, RoutingLedger
 
 # ---------------------------------------------------------------------------
 # Config

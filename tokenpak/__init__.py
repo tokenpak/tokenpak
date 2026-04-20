@@ -10,7 +10,7 @@ Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
     from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
-    from tokenpak.budgeter import Budgeter
+    from tokenpak.services.policy_service.budget.budgeter import Budgeter
 """
 
 from __future__ import annotations
@@ -48,12 +48,12 @@ from tokenpak.agent.agentic.handoff import (
 
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
-from tokenpak.budget import BudgetBlock
+from tokenpak.services.policy_service.budget.rules import BudgetBlock
 
 # ---------------------------------------------------------------------------
 # Budgeting
 # ---------------------------------------------------------------------------
-from tokenpak.budgeter import Budgeter
+from tokenpak.services.policy_service.budget.budgeter import Budgeter
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -77,7 +77,7 @@ from tokenpak.registry import Block, BlockRegistry
 # ---------------------------------------------------------------------------
 # Compile Reports
 # ---------------------------------------------------------------------------
-from tokenpak.report import Action, CompileReport, Decision
+from tokenpak.telemetry.report import Action, CompileReport, Decision
 
 # ---------------------------------------------------------------------------
 # Cache
