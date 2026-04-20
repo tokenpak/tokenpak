@@ -191,6 +191,13 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.compression.engines.heuristic
     tokenpak.cli._impl -> tokenpak.compression.processors
     tokenpak.cli._impl -> tokenpak.compression.processors.text
+    tokenpak.cli._impl -> tokenpak.compression.wire
+    ;
+    ; Transitive via tokenpak.compiler (top-level module that
+    ; compiles blocks into wire format). §5.2-C pure local helper —
+    ; compiler operates on local blocks, never invokes a provider.
+    ; Collapses when compiler moves into compression/ per §1.
+    tokenpak.compiler -> tokenpak.compression.wire
     ;
     ; (2026-04-20: benchmark and calibration moved to debug/benchmark
     ; and debug/calibration per §1; their direct-compression imports

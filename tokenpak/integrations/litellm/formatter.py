@@ -38,7 +38,7 @@ def blocks_to_messages(
         A ``messages`` list with the compiled TokenPak as the first
         ``system`` message, followed by ``existing_messages``.
     """
-    from tokenpak.wire import pack as wire_pack
+    from tokenpak.compression.wire import pack as wire_pack
 
     # Apply compaction if requested and content exceeds budget
     wire_blocks = []

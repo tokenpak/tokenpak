@@ -21,7 +21,7 @@ from typing import List, Optional
 
 from .reference_fetcher import fetch_reference
 from .reference_scanner import Reference, scan_for_references
-from .wire import make_slice_id, pack
+from tokenpak.compression.wire import make_slice_id, pack
 
 DEFAULT_REF_CACHE_PATH = ".tokenpak/ref_cache.json"
 _CACHE_TTL_SECONDS = 3600  # 1 hour

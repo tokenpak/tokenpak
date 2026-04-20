@@ -90,7 +90,7 @@ from tokenpak.telemetry.collector import TelemetryCollector
 # Token Counting (Level 1 — single import, zero config)
 # ---------------------------------------------------------------------------
 from tokenpak.tokens import count_tokens
-from tokenpak.trace import (  # noqa: F401
+from tokenpak.debug.trace import (  # noqa: F401
     TokenPakTrace,
     TraceBuilder,
     assert_no_leak,

@@ -493,7 +493,7 @@ from ..registry import Block, BlockRegistry
 from ..security import secure_write_config
 from ..tokens import cache_info, count_tokens, truncate_to_tokens
 from ..walker import walk_directory
-from ..wire import pack
+from tokenpak.compression.wire import pack
 
 # Batch size for SQLite transactions
 BATCH_SIZE = 100
