@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.startup is a deprecated re-export; "
     "import from tokenpak.proxy.startup instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.startup import *  # noqa: F401,F403,E402
+
+__all__ = ["List", "Path", "Tuple", "format_startup_report", "logger", "run_startup_checks"]

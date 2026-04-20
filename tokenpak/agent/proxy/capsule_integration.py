@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.capsule_integration is a deprecated re-export; "
     "import from tokenpak.proxy.capsule_integration instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.capsule_integration import *  # noqa: F401,F403,E402
+
+__all__ = ["Callable", "Optional", "TYPE_CHECKING", "Tuple", "capsule_request_hook", "clear_cache", "get_capsule_request_hook", "logger"]

@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.failover_engine is a deprecated re-export; "
     "import from tokenpak.proxy.failover_engine instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.failover_engine import *  # noqa: F401,F403,E402
+
+__all__ = ["Any", "CIRCUIT_COOL_DOWN_SECONDS", "CIRCUIT_FAILURE_THRESHOLD", "CircuitBreaker", "CircuitState", "ClassifiedError", "Dict", "ErrorType", "FailoverConfig", "FailoverDecision", "FailoverEngine", "FailoverEvent", "FailoverEventLog", "FailoverManager", "Iterator", "List", "MAX_RETRY_SAME_PROVIDER", "Optional", "ProviderAttempt", "RATE_LIMIT_WAIT_SECONDS", "Tuple", "classify_error", "dataclass", "datetime", "decide", "field", "get_event_log", "load_failover_config", "logger", "normalize_response", "normalize_stream", "render_failover_footer", "timezone"]

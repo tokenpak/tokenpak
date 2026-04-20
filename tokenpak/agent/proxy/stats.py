@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.stats is a deprecated re-export; "
     "import from tokenpak.proxy.stats instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.stats import *  # noqa: F401,F403,E402
+
+__all__ = ["Any", "CompressionStats", "DEFAULT_LOG_DIR", "DEFAULT_LOG_FILENAME", "DEFAULT_LOG_PATH", "Dict", "List", "MAX_LOG_BYTES", "Optional", "Path", "ROLLING_WINDOW", "datetime", "deque", "get_compression_stats", "reset_singleton", "timezone"]

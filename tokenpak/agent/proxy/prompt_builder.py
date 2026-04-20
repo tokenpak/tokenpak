@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.prompt_builder is a deprecated re-export; "
     "import from tokenpak.proxy.prompt_builder instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.prompt_builder import *  # noqa: F401,F403,E402
+
+__all__ = ["DeterministicPromptPack", "PromptBuilder", "PromptCacheStats", "PromptParts", "apply_deterministic_cache_breakpoints", "apply_stable_cache_control", "build_stable_prefix", "build_volatile_tail", "classify_system_blocks", "get_stats", "inject_with_cache_boundary"]

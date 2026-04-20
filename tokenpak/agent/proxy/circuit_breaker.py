@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.circuit_breaker is a deprecated re-export; "
     "import from tokenpak.proxy.circuit_breaker instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.circuit_breaker import *  # noqa: F401,F403,E402
+
+__all__ = ["Any", "CircuitBreaker", "CircuitBreakerConfig", "CircuitBreakerRegistry", "CircuitState", "Dict", "Enum", "List", "Optional", "dataclass", "deque", "get_circuit_breaker_registry", "provider_from_url"]

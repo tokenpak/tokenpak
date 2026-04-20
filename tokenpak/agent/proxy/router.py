@@ -6,9 +6,9 @@ in TIP-2.0.
 """
 from __future__ import annotations
 
-import warnings
+import warnings as _warnings
 
-warnings.warn(
+_warnings.warn(
     "tokenpak.agent.proxy.router is a deprecated re-export; "
     "import from tokenpak.proxy.router instead. "
     "This shim will be removed in TIP-2.0.",
@@ -17,3 +17,5 @@ warnings.warn(
 )
 
 from tokenpak.proxy.router import *  # noqa: F401,F403,E402
+
+__all__ = ["DEFAULT_MAX_TOKENS", "ProviderRouter", "RETRIEVED_CONTEXT_HEADER", "RouteResult", "estimate_cost", "get_model_tier", "inject_retrieved_context", "measure_injection_consistency", "sort_retrieval_results"]
