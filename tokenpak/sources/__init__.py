@@ -1,10 +1,42 @@
-"""Sources subsystem (Architecture §1).
+"""Platform connectors for remote data sources."""
 
-External and local knowledge connectors: local filesystem, GitHub,
-Notion, Drive, shared/org sources, sync pipelines. Level-1 primitive.
+from .base import Connector, ConnectorConfig
 
-Namespace init — actual connector code lives in subdirectories per
-the D1 migration roadmap.
-"""
+# Connector implementations (loaded conditionally)
+CONNECTORS = {}
 
-from __future__ import annotations
+try:
+    from .local import LocalConnector
+
+    CONNECTORS["local"] = LocalConnector
+except ImportError:
+    pass
+
+try:
+    from .obsidian import ObsidianConnector
+
+    CONNECTORS["obsidian"] = ObsidianConnector
+except ImportError:
+    pass
+
+# Future connectors (Pro/Enterprise tier)
+# - google_drive: Google Drive OAuth connector
+# - notion: Notion API connector
+# - github: GitHub repos/issues/PRs connector
+# - onedrive: OneDrive/SharePoint connector
+# - dropbox: Dropbox connector
+# - confluence: Confluence connector
+# - slack: Slack export connector
+
+
+def get_connector(name: str, config: ConnectorConfig) -> Connector:
+    """Get a connector by name."""
+    connector_class = CONNECTORS.get(name)
+    if not connector_class:
+        raise ValueError(f"Unknown connector: {name}")
+    return connector_class(config)
+
+
+def list_connectors() -> list:
+    """List available connectors."""
+    return list(CONNECTORS.keys())
