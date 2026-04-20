@@ -1,0 +1,132 @@
+; TokenPak import-linter contract.
+;
+; Enforces the dependency direction defined in
+; `~/vault/02_COMMAND_CENTER/tokenpak-standards-internal/01-architecture-standard.md §2`
+; and the entrypoint rule in `01 §2.4`.
+;
+; This file is consumed by `lint-imports` (the import-linter CLI). Run via
+; `make lint-imports` once wired in (task P2-14). Until P2-14 lands in CI,
+; this file is the declarative spec; violations are surfaced locally only.
+;
+; Classes of contract below:
+;
+;  C1  Six-tier layering (Architecture §2)
+;  C2  Entrypoint forbidden-import rule (Architecture §2 consequences)
+;  C3  Contracts single-home rule (Architecture §1.4 plane rule 3)
+;  C4  MCP plumbing discipline (Architecture §1.4 plane rule 4)
+;
+; §5.2-exception allowlist entries go under the `ignore_imports` key of C2.
+; Each entry names a specific importer-importee pair plus a `# tokenpak:
+; §5.2-exception — <A|B|C> — <reason>` marker in the target module's
+; docstring.
+
+[importlinter]
+root_package = tokenpak
+include_external_packages = False
+
+; -----------------------------------------------------------------------
+; C1. Tier layering.
+; -----------------------------------------------------------------------
+[importlinter:contract:tier-layering]
+name = Six-tier dependency layering (Architecture §2)
+type = layers
+layers =
+    tokenpak.cli | tokenpak.sdk | tokenpak.companion | tokenpak.dashboard | tokenpak.alerts
+    tokenpak.proxy | tokenpak.orchestration | tokenpak.plugins
+    tokenpak.services
+    tokenpak.telemetry | tokenpak.routing
+    tokenpak.security | tokenpak.compression | tokenpak.cache | tokenpak.vault | tokenpak.sources | tokenpak.debug
+    tokenpak.core
+
+; -----------------------------------------------------------------------
+; C2. Entrypoint forbidden imports.
+;
+; Level-5 entrypoints must not import services/, proxy internals, or
+; pipeline primitives for request execution. They use `proxy.client` as
+; the only supported entry surface. Read-only access to presentation
+; sources (telemetry read queries, etc.) goes through the subsystem's
+; public API and is not a pipeline import.
+;
+; §5.2 exceptions land in `ignore_imports` with a marker comment in the
+; target file.
+; -----------------------------------------------------------------------
+[importlinter:contract:entrypoints-dont-execute-directly]
+name = Entrypoints reach the backbone only through proxy.client (Architecture §2)
+type = forbidden
+source_modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+forbidden_modules =
+    tokenpak.services
+ignore_imports =
+    ; Entrypoints that target proxy.client are allowed (it lives in proxy).
+    tokenpak.cli -> tokenpak.proxy.client
+    tokenpak.sdk -> tokenpak.proxy.client
+    tokenpak.companion -> tokenpak.proxy.client
+    tokenpak.dashboard -> tokenpak.proxy.client
+    tokenpak.alerts -> tokenpak.proxy.client
+    ; §5.2 exception allowlist. Each entry MUST have a matching
+    ; `# tokenpak: §5.2-exception — <A|B|C> — <reason>` marker in the
+    ; importing file's module docstring and a corresponding note in
+    ; `09-audit-rubric.md §3.9` at the next audit cycle.
+    ;
+    ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+
+[importlinter:contract:entrypoints-dont-import-pipeline-primitives]
+name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
+type = forbidden
+source_modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+forbidden_modules =
+    tokenpak.compression
+    tokenpak.cache
+    tokenpak.routing
+    tokenpak.security
+ignore_imports =
+    ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+
+; -----------------------------------------------------------------------
+; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).
+;
+; TIP-defined types (headers, metadata, telemetry events, errors,
+; capabilities, compatibility, manifests) live ONLY in core/contracts/.
+; This contract is enforced as: no subsystem outside core.contracts may
+; define types that compete with core.contracts types.
+;
+; For Phase 2 scaffold the contracts module is stubs; the contract will
+; gain teeth (as a more specific `forbidden` rule over the exact names)
+; in P2-14 once types are populated.
+; -----------------------------------------------------------------------
+[importlinter:contract:contracts-single-home]
+name = TIP contracts live in core/contracts/ (Architecture §1.4 plane rule 3)
+type = independence
+modules =
+    ; For now, just assert that core.contracts stays independent of
+    ; everything else. Once the contracts module has real types, this
+    ; becomes a stronger rule.
+    tokenpak.core.contracts
+
+; -----------------------------------------------------------------------
+; C4. MCP plumbing discipline (Architecture §1.4 plane rule 4).
+;
+; Only services.mcp_bridge may host MCP state/protocol machinery.
+; companion and sdk.mcp are clients of the bridge, not forks of it.
+; -----------------------------------------------------------------------
+[importlinter:contract:mcp-plumbing]
+name = MCP machinery lives only in services.mcp_bridge (Architecture §1.4 plane rule 4)
+type = forbidden
+source_modules =
+    tokenpak.companion
+    tokenpak.sdk.mcp
+forbidden_modules =
+    ; Note: enforcement of "don't vendor an MCP library in companion" is
+    ; done by package layout rather than import-linter. This stanza is
+    ; reserved for future finer-grained MCP-internal module restrictions.
+    ; Placeholder - activated in P2-11.
