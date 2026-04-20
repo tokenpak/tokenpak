@@ -14,6 +14,10 @@ What this script validates today:
      every profile in SELF_PROFILES (profiles.validate_profile).
   3. Every tip.* label TokenPak publishes is in the registry catalog
      (implicit in validate_profile).
+  4. Every ``X-TokenPak-*`` header constant in core.contracts.headers
+     appears in registry headers.schema.json properties, and every
+     registry-declared header has a matching Python constant (drift
+     detector — catches the case where code and protocol drift apart).
 
 What it does NOT validate yet (blocked on D1 code consolidation):
   - Real wire-header shapes from live requests
@@ -105,7 +109,45 @@ def main() -> int:
         for f in cap_result.errors():
             print(f"  ✗ {f.code}: {f.message}")
 
-    # 2. Per-profile compliance.
+    # 2. Header-constants ↔ registry headers.schema.json drift check.
+    from tokenpak.core.contracts import headers as headers_module
+
+    import json
+    headers_schema_path = registry_root / "schemas" / "tip" / "headers.schema.json"
+    with headers_schema_path.open("r", encoding="utf-8") as f:
+        headers_schema = json.load(f)
+    schema_header_names = set(headers_schema.get("properties", {}).keys())
+    code_header_names = {
+        getattr(headers_module, name)
+        for name in dir(headers_module)
+        if name.isupper() and not name.startswith("_")
+        and isinstance(getattr(headers_module, name), str)
+        and getattr(headers_module, name).startswith("X-TokenPak-")
+    }
+
+    missing_from_schema = code_header_names - schema_header_names
+    missing_from_code = schema_header_names - code_header_names
+
+    header_errors = []
+    if missing_from_schema:
+        header_errors.append(
+            f"declared in code but missing from registry schema: {sorted(missing_from_schema)}"
+        )
+    if missing_from_code:
+        header_errors.append(
+            f"declared in registry schema but missing from code: {sorted(missing_from_code)}"
+        )
+    header_ok = not header_errors
+    print(
+        f"headers drift: {'PASS' if header_ok else 'FAIL'} "
+        f"[code={len(code_header_names)} schema={len(schema_header_names)}]"
+    )
+    for err in header_errors:
+        print(f"  ✗ header.drift: {err}")
+    if not header_ok:
+        all_ok = False
+
+    # 3. Per-profile compliance.
     for profile in SELF_PROFILES:
         profile_result = validate_profile(
             profile,

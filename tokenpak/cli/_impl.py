@@ -5962,9 +5962,9 @@ def cmd_fingerprint_sync(args):
     import sys as _sys
     from pathlib import Path as _Path
 
-    from tokenpak.agent.fingerprint.generator import FingerprintGenerator
-    from tokenpak.agent.fingerprint.privacy import PrivacyLevel, apply_privacy
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.generator import FingerprintGenerator
+    from tokenpak.compression.fingerprinting.privacy import PrivacyLevel, apply_privacy
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     gen = FingerprintGenerator()
 
@@ -6059,7 +6059,7 @@ def cmd_fingerprint_sync(args):
 def cmd_fingerprint_cache(args):
     import json as _json
 
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
     status = client.cache_status()
@@ -6079,7 +6079,7 @@ def cmd_fingerprint_cache(args):
 def cmd_fingerprint_clear_cache(args):
     import sys as _sys
 
-    from tokenpak.agent.fingerprint.sync import FingerprintSync
+    from tokenpak.compression.fingerprinting.sync import FingerprintSync
 
     client = FingerprintSync()
 

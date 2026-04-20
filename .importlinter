@@ -155,6 +155,15 @@ ignore_imports =
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
     tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
     tokenpak.telemetry.metrics.collector -> tokenpak.cache.registry
+    ;
+    ; §5.2-C pure local helper: `tokenpak fingerprint` CLI subcommand
+    ; is a management UX — compute fingerprint of local file, sync
+    ; to intelligence server, apply privacy filters. Operates on the
+    ; user's local data; never invokes a provider. Out-of-band from
+    ; the services pipeline.
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.generator
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.privacy
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.sync
 
 ; -----------------------------------------------------------------------
 ; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).
