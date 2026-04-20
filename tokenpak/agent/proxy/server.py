@@ -320,7 +320,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self._send_503_shutdown()
             return
         if path == "/metrics":
-            from tokenpak.monitoring.metrics import ProxyMetricsCollector
+            from tokenpak.telemetry.metrics import ProxyMetricsCollector
 
             collector = ProxyMetricsCollector(proxy_server=ps)
             body = collector.collect().encode("utf-8")

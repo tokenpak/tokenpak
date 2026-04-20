@@ -53,11 +53,17 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.agent.proxy.server
     ;
     ; Transitive chain through legacy agent.proxy.server (resolves
-    ; when server migrates to canonical tokenpak.proxy.server):
+    ; when server migrates to canonical tokenpak.proxy.server).
+    ; Note: monitoring.metrics -> cache.registry collapsed 2026-04-20
+    ; as part of the D1 monitoring→telemetry/metrics migration; the
+    ; canonical telemetry.metrics.collector -> cache.registry edge
+    ; is still allowlisted (telemetry IS a Level-2 primitive, cache
+    ; IS a Level-1 primitive, so tier direction is legal — this
+    ; entry is for the forbidden-contract's cli→cache path only):
     tokenpak.agent.proxy.server -> tokenpak.dashboard
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
-    tokenpak.agent.proxy.server -> tokenpak.monitoring.metrics
-    tokenpak.monitoring.metrics -> tokenpak.cache.registry
+    tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
+    tokenpak.telemetry.metrics.collector -> tokenpak.cache.registry
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -147,8 +153,8 @@ ignore_imports =
     ; when server migrates to canonical proxy/):
     tokenpak.cli._impl -> tokenpak.agent.proxy.server
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
-    tokenpak.agent.proxy.server -> tokenpak.monitoring.metrics
-    tokenpak.monitoring.metrics -> tokenpak.cache.registry
+    tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
+    tokenpak.telemetry.metrics.collector -> tokenpak.cache.registry
 
 ; -----------------------------------------------------------------------
 ; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).

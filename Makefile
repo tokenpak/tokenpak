@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint lint-imports format format-check check build docs clean install hooks
+.PHONY: help dev test lint lint-imports tip-check format format-check check build docs clean install hooks
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -76,7 +76,11 @@ lint-imports:  ## Enforce Architecture §2 dependency direction + §2.4 entrypoi
 	}
 	lint-imports --config .importlinter
 
-check: lint format-check lint-imports test  ## Run lint + format check + import-linter + tests (CI gate)
+tip-check:  ## Run TIP-1.0 conformance validator against TokenPak (Constitution §13.3)
+	@echo "Running TokenPak TIP-1.0 conformance self-check..."
+	@$(VENV_BIN)/python3 scripts/tip_conformance_check.py
+
+check: lint format-check lint-imports tip-check test  ## Run lint + format + import-linter + tip-check + tests (CI gate)
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 build:  ## Build source distribution and wheel
