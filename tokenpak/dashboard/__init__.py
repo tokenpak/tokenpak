@@ -1,7 +1,20 @@
-"""TokenPak Metrics Dashboard - web UI for observability."""
+"""TokenPak Metrics Dashboard — local web UI for observability.
+
+Level-5 read-only entrypoint per Architecture §1. Reads from the
+telemetry store (`~/.tokenpak/telemetry.db`); never writes to it
+(verified by §7.1 authoritative-store rule; importlinter contract
+C2 enforces).
+
+Per Architecture §2.4, any dispatch-style call (e.g. a test request
+from a diagnostic view) goes through tokenpak.proxy.client — made
+available here for that narrow purpose.
+"""
 
 import os
 from pathlib import Path
+
+# §2.4 availability import; no current call sites.
+from tokenpak.proxy import client as proxy_client  # noqa: F401
 
 DASHBOARD_DIR = Path(__file__).parent
 

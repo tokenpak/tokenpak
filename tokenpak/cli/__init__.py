@@ -11,4 +11,13 @@ that also re-exports the `commands` subpackage for consumers that want it.
 from tokenpak.cli import commands as commands
 from tokenpak.cli._impl import main
 
-__all__ = ["main", "commands"]
+# Per Architecture §2.4, entrypoints reach the execution backbone
+# through tokenpak.proxy.client. Made available here so command
+# modules can dispatch via `from tokenpak.cli import proxy_client`
+# rather than crossing subsystem boundaries per-command. The import
+# itself is trivial; in-process transport is active when services.
+# execute has a dispatcher wired (post-D1 code consolidation).
+from tokenpak import proxy as _tp_proxy  # noqa: F401
+from tokenpak.proxy import client as proxy_client  # noqa: F401
+
+__all__ = ["main", "commands", "proxy_client"]

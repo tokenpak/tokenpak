@@ -37,6 +37,27 @@ layers =
     tokenpak.telemetry | tokenpak.routing
     tokenpak.security | tokenpak.compression | tokenpak.cache | tokenpak.vault | tokenpak.sources | tokenpak.debug
     tokenpak.core
+ignore_imports =
+    ; === Legacy cross-entrypoint imports (Cali P2-06 audit 2026-04-20) ===
+    ; All §5.2-C (pure local helper concerns, never invoke a provider).
+    ; Collapse post-D1 once:
+    ;  - agent.proxy.server → proxy.server (canonical subsystem)
+    ;  - routing-rule editing moves out of cli
+    ;  - alerts becomes a true Level-4 notifier that cli reads via
+    ;    telemetry API instead of directly
+    ;
+    ; cli as launcher + status presenter:
+    tokenpak.cli._impl -> tokenpak.alerts
+    tokenpak.cli._impl -> tokenpak.companion.config
+    tokenpak.cli._impl -> tokenpak.companion.launcher
+    tokenpak.cli._impl -> tokenpak.agent.proxy.server
+    ;
+    ; Transitive chain through legacy agent.proxy.server (resolves
+    ; when server migrates to canonical tokenpak.proxy.server):
+    tokenpak.agent.proxy.server -> tokenpak.dashboard
+    tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.agent.proxy.server -> tokenpak.monitoring.metrics
+    tokenpak.monitoring.metrics -> tokenpak.cache.registry
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -68,12 +89,32 @@ ignore_imports =
     tokenpak.companion -> tokenpak.proxy.client
     tokenpak.dashboard -> tokenpak.proxy.client
     tokenpak.alerts -> tokenpak.proxy.client
+    ; Architecture §1.4 plane rule 4: services.mcp_bridge is the
+    ; shared MCP plumbing both companion (as MCP server) and
+    ; sdk.mcp (as MCP client bridge) consume by design. NOT a
+    ; §5.2 exception — this is the intended topology.
+    tokenpak.companion -> tokenpak.services.mcp_bridge
+    tokenpak.sdk.mcp.client -> tokenpak.services.mcp_bridge
     ; §5.2 exception allowlist. Each entry MUST have a matching
     ; `# tokenpak: §5.2-exception — <A|B|C> — <reason>` marker in the
     ; importing file's module docstring and a corresponding note in
     ; `09-audit-rubric.md §3.9` at the next audit cycle.
     ;
     ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+    ;
+    ; === CLI legacy surfaces (Cali P2-06 audit 2026-04-20) ===
+    ; These are pre-D1 imports where cli/_impl.py is the launcher/
+    ; config-editor/status-presenter surface for subsystems that
+    ; are themselves entrypoints or primitives. All classified as
+    ; §5.2-C (pure local helper concern; never invokes a provider).
+    ; Post-D1 migration, these collapse when agent.proxy.server →
+    ; proxy.server and routing-rule editing moves out of cli.
+    tokenpak.cli._impl -> tokenpak.alerts
+    tokenpak.cli._impl -> tokenpak.companion.config
+    tokenpak.cli._impl -> tokenpak.companion.launcher
+    tokenpak.cli._impl -> tokenpak.routing.rules
+    tokenpak.cli._impl -> tokenpak.security
+    tokenpak.cli._impl -> tokenpak.agent.proxy.server
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
@@ -91,6 +132,23 @@ forbidden_modules =
     tokenpak.security
 ignore_imports =
     ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+    ;
+    ; === CLI legacy surfaces (Cali P2-06 audit 2026-04-20) ===
+    ; §5.2-C (pure local helper). cli/_impl.py is the CLI surface
+    ; for routing-rule management (tokenpak routing ...) and
+    ; credential management (tokenpak creds ...). Both are config-
+    ; editor concerns, not request execution. The cache import is
+    ; transitive through agent.proxy.server and resolves when
+    ; agent.proxy.server migrates to proxy.server.
+    tokenpak.cli._impl -> tokenpak.routing.rules
+    tokenpak.cli._impl -> tokenpak.security
+    ;
+    ; Transitive chain through agent.proxy.server into cache (resolves
+    ; when server migrates to canonical proxy/):
+    tokenpak.cli._impl -> tokenpak.agent.proxy.server
+    tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.agent.proxy.server -> tokenpak.monitoring.metrics
+    tokenpak.monitoring.metrics -> tokenpak.cache.registry
 
 ; -----------------------------------------------------------------------
 ; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).

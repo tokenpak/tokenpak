@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""TokenPak Alert Rules and Health Monitoring
+"""TokenPak Alert Rules and Health Monitoring.
 
-Alert system for TokenPak proxy health with rule evaluation,
-cooldown management, and persistent state tracking.
+Level-5 background-notifier entrypoint per Architecture §1. Reads
+from the telemetry store; dispatches notifications through the
+configured delivery channels (email / webhook / local). Per
+Architecture §7.1, alerts MUST NOT write to authoritative stores;
+any test-request dispatch goes through tokenpak.proxy.client per
+§2.4.
 """
 
 from __future__ import annotations
@@ -13,6 +17,10 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
+
+# §2.4 availability import. Alerts uses this for self-check test
+# dispatches when health rules probe the proxy path.
+from tokenpak.proxy import client as proxy_client  # noqa: F401
 
 try:
     import yaml as _yaml
