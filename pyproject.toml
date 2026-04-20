@@ -63,6 +63,20 @@ dependencies = [
     "watchdog>=3.0.0",
     "cryptography>=41.0.0",
     "urllib3>=2.0.0",
+    # Provider SDKs — used by the shipping adapters in tokenpak/sdk/
+    "anthropic>=0.25.0",
+    "openai>=1.0.0",
+    "litellm>=1.0.0",
+    # Compression + retrieval runtime
+    "llmlingua>=0.1.0",
+    "sentence-transformers>=2.2.0",
+    "tree-sitter-languages>=1.8.0",
+    # Data model + computation
+    "pydantic>=2.0.0",
+    "pandas>=1.3.0",
+    "scipy>=1.10.0",
+    # CLI rendering
+    "rich>=13.0.0",
 ]
 
 [project.license]
