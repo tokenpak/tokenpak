@@ -8,7 +8,7 @@ Provides cache-stable term resolution by:
 - Enforcing strict runtime policy (top-K, short fields, zero injection by default)
 - Handling ambiguity deterministically (one question or fallback)
 
-This enables safe integration into proxy_v4 request handling without prompt
+This enables safe integration into proxy request handling without prompt
 stuffing or full glossary dumps.
 
 Usage::
@@ -326,7 +326,7 @@ def resolve_terms(
     """
     Resolve terms in text using the global resolver instance.
 
-    This is the primary entry point for term resolution in proxy_v4.
+    This is the primary entry point for term resolution in the proxy.
 
     Args:
         text: User input text to analyze.

@@ -3,7 +3,7 @@
 
 Provides index_directory() for the rebuild-vault-index.sh script.
 Output format: ~/vault/.tokenpak/index.json + blocks/*.txt
-Compatible with proxy_v4.py VaultIndex reader.
+Compatible with the proxy server's VaultIndex reader.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # TokenPak Semantic Layer — Term-Card Resolver
 
-Deterministic term-card resolver for glossary integration in proxy_v4 request handling.
+Deterministic term-card resolver for glossary integration in the proxy's request handling.
 
 ## Overview
 
@@ -57,7 +57,7 @@ Result object containing:
 - `injection_text`: Formatted text ready for system prompt
 - `tokens_estimate`: Rough token count for budget planning
 
-## Integration with proxy_v4
+## Integration with the proxy
 
 ### Feature Flag
 
@@ -83,7 +83,7 @@ Default: **disabled** (zero overhead, no behavior change)
 
 ### Integration Points
 
-**proxy_v4.py modifications:**
+**Proxy integration (in `tokenpak/agent/proxy/server.py`):**
 
 ```python
 # Feature import (safe fallback if unavailable)
@@ -313,4 +313,4 @@ print(f"Consistent: {consistency['consistent']}")  # True = cache stable
 
 - Task: `~/vault/03_AGENT_PACKS/Trix/queue/p1-tokenpak-runtime-term-card-resolver-2026-03-10.md`
 - Glossary: `~/Projects/tokenpak/tokenpak/term_cards.json`
-- Integration: `~/Projects/tokenpak/proxy_v4.py` (lines ~2090-2150)
+- Integration: `tokenpak/agent/proxy/server.py` (vault injection path)

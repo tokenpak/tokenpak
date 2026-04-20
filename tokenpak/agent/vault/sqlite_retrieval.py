@@ -1,12 +1,12 @@
 """
-TokenPak — SQLite Retrieval Backend for proxy_v4
-=================================================
+TokenPak — SQLite Retrieval Backend
+===================================
 
 Provides a drop-in alternative to the in-memory JSON/blocks BM25 backend.
 Stores block content and precomputed BM25 stats in SQLite for faster
 load times and incremental updates at larger index scales.
 
-Usage (via env var in proxy_v4.py)::
+Usage (via env var read by the proxy server)::
 
     TOKENPAK_RETRIEVAL_BACKEND=sqlite  # or json_blocks (default)
 
@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
-# BM25 tokenizer (mirrors proxy_v4._bm25_tokenize)
+# BM25 tokenizer (matches the in-memory backend's tokenizer)
 # ---------------------------------------------------------------------------
 
 
@@ -59,7 +59,7 @@ def _bm25_tokenize(text: str) -> List[str]:
 
 
 class SQLiteRetrievalBackend:
-    """SQLite-backed BM25 retrieval for proxy_v4 vault injection.
+    """SQLite-backed BM25 retrieval for vault injection.
 
     Implements the same public interface as ``VaultIndex``:
       - ``available: bool``

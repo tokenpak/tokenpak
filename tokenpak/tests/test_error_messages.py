@@ -19,17 +19,15 @@ from tokenpak.integrations.litellm.middleware import TokenPakMiddleware
 class TestConfigErrors:
     """Test config validation error messages."""
 
-    def test_missing_required_field(self):
-        """Missing 'api_keys' should suggest adding it."""
+    def test_api_keys_is_optional(self):
+        """Config without api_keys is valid — credentials can flow from 5
+        sources (env-pool, user-config, claude-cli, codex-cli, openclaw).
+        See project_tokenpak_creds_architecture.md."""
         validator = ConfigValidator()
-        config = {"port": 8766}  # Missing api_keys
+        config = {"port": 8766}
         errors = validator.validate(config)
 
-        assert len(errors) == 1
-        assert errors[0].field == "api_keys"
-        assert "required" in errors[0].message.lower()
-        assert "add" in errors[0].suggestion.lower()
-        assert "api_keys" in errors[0].suggestion
+        assert errors == []
 
     def test_invalid_port_type(self):
         """Port as string should say it needs to be int."""

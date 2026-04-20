@@ -66,8 +66,14 @@ class ConfigValidationError:
 class ConfigValidator:
     """Validates TokenPak proxy configuration."""
 
-    REQUIRED_FIELDS = ["api_keys"]
+    # No top-level fields are strictly required. `api_keys` is optional —
+    # credentials can come from 5 sources (see project_tokenpak_creds_architecture.md):
+    # api_keys dict, env-pool, user-config, claude-cli token injection, codex-cli,
+    # or openclaw. A proxy started without api_keys still routes via the other
+    # providers; type checks below catch shape errors when the key IS present.
+    REQUIRED_FIELDS: List[str] = []
     OPTIONAL_FIELDS = [
+        "api_keys",
         "port",
         "log_dir",
         "cache_dir",

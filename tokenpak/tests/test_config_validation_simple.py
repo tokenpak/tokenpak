@@ -9,11 +9,14 @@ from tokenpak.config_validator import ConfigValidator
 class TestBasicConfigValidation:
     """Test: Basic configuration validation."""
 
-    def test_empty_config_fails(self):
-        """Empty config fails (missing api_keys)."""
+    def test_empty_config_is_valid(self):
+        """Empty config is valid — credentials can come from 5 sources
+        (api_keys dict, env-pool, user-config, claude-cli, codex-cli, openclaw);
+        absence of api_keys is not itself a config error.
+        See project_tokenpak_creds_architecture.md."""
         validator = ConfigValidator()
         errors = validator.validate({})
-        assert len(errors) > 0
+        assert errors == []
 
     def test_valid_config_passes(self):
         """Config with api_keys passes."""

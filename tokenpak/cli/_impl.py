@@ -281,29 +281,17 @@ def cmd_setup(args):
 
     import sys
 
-    # Find proxy_v4.py
-    candidates = [
-        Path(__file__).resolve().parent.parent / "proxy_v4.py",
-        Path.home() / "tokenpak" / "proxy_v4.py",
-        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
-    ]
-    proxy_path = None
-    for c in candidates:
-        if c.exists():
-            proxy_path = c
-            break
-
-    if not proxy_path:
-        print("Warning: proxy_v4.py not found. Skipping auto-start.")
-        return
-
-    # Start proxy
+    # Start proxy (in-tree server module; no external script lookup).
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
     proc = subprocess.Popen(
-        [sys.executable, str(proxy_path)],
+        [
+            sys.executable,
+            "-c",
+            "from tokenpak.agent.proxy.server import start_proxy; "
+            f"start_proxy(host='127.0.0.1', port={port}, blocking=True)",
+        ],
         env=env,
-        cwd=str(proxy_path.parent),
         start_new_session=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -344,7 +332,7 @@ def cmd_setup(args):
 
 
 def cmd_start(args):
-    """Start the proxy on localhost:8766 (launches proxy_v4.py)."""
+    """Start the proxy on localhost:8766 (spawns tokenpak.agent.proxy.server)."""
     import subprocess
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -391,33 +379,18 @@ def cmd_start(args):
         except (ProcessLookupError, ValueError):
             pid_path.unlink(missing_ok=True)
 
-    # Find proxy_v4.py
-    candidates = [
-        Path(__file__).resolve().parent.parent / "proxy_v4.py",
-        Path.home() / "tokenpak" / "proxy_v4.py",
-        Path.home() / "Projects" / "tokenpak" / "proxy_v4.py",
-    ]
-    proxy_path = None
-    for c in candidates:
-        if c.exists():
-            proxy_path = c
-            break
-
-    if not proxy_path:
-        print("Error: proxy_v4.py not found. Falling back to legacy server.")
-        import types
-
-        serve_args = types.SimpleNamespace(port=port, telemetry=False, ingest=False, workers=1)
-        cmd_serve(serve_args)
-        return
-
-    # Launch proxy_v4.py as a background process
+    # Launch the in-tree proxy server as a background process. The CLI
+    # process exits after spawning; PID is recorded for `tokenpak stop`.
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
     proc = subprocess.Popen(
-        [sys.executable, str(proxy_path)],
+        [
+            sys.executable,
+            "-c",
+            "from tokenpak.agent.proxy.server import start_proxy; "
+            f"start_proxy(host='127.0.0.1', port={port}, blocking=True)",
+        ],
         env=env,
-        cwd=str(proxy_path.parent),
         start_new_session=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -1546,9 +1519,12 @@ def cmd_doctor(args):
                 results["pass"] += 1
             else:
                 results["warn"] += 1
-        # Circuit breakers
-        for name, cb in health.get("circuit_breakers", {}).items():
-            if cb.get("open"):
+        # Circuit breakers — iterate provider entries only; top-level keys
+        # are enabled/any_open/providers (see agent/proxy/server.py health()).
+        cb_root = health.get("circuit_breakers", {})
+        cb_providers = cb_root.get("providers", {}) if isinstance(cb_root, dict) else {}
+        for name, cb in cb_providers.items():
+            if isinstance(cb, dict) and cb.get("state") == "open":
                 print(Colors.fail(f"Circuit breaker     {name} — OPEN"))
                 results["fail"] += 1
             else:
@@ -1682,6 +1658,11 @@ def build_parser():
     )
     parser.add_argument(
         "--help", "-h", action="store_true", default=False, help="Show quick-start help"
+    )
+    from tokenpak import __version__ as _cli_version
+
+    parser.add_argument(
+        "--version", "-V", action="version", version=f"tokenpak {_cli_version}"
     )
     parser.add_argument("--db", default=".tokenpak/registry.db", help="Registry SQLite path")
 
@@ -2066,7 +2047,7 @@ def cmd_status(args):
             print(f"  Vault index:     {vault.get('blocks', 0):,} blocks")
     else:
         print(fmt.signal(FS.DISABLED, "Proxy: not reachable", tone="warn"))
-        print("  Run `tokenpak start` or check if proxy_v4.py is running.")
+        print("  Run `tokenpak start` to launch the proxy.")
         print()
 
     # Budget tracking (local DB)
@@ -2713,7 +2694,6 @@ def cmd_compliance_report(args):
 
 # ── Version Control Commands ──────────────────────────────────────────────────
 
-PROXY_VERSION = "0.4.0"
 _LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
 _OPENCLAW_CFG = Path.home() / ".openclaw" / "openclaw.json"
 _PROXY_URL = "http://localhost:8766"
@@ -2799,9 +2779,9 @@ def cmd_version(args):
     """Show current versions of proxy, config, and CLI."""
     from tokenpak import __version__ as cli_ver
 
-    # CLI version
+    # CLI version. Proxy ships in-tree, so expected proxy version == CLI version.
     print(f"TokenPak CLI     : {cli_ver}")
-    print(f"Proxy (expected) : {PROXY_VERSION}")
+    print(f"Proxy (expected) : {cli_ver}")
 
     # Proxy version (live)
     proxy_info = _get_proxy_version()

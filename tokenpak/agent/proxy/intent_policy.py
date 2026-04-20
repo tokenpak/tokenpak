@@ -422,7 +422,7 @@ def known_intents() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Decision object (used by proxy_v4 router)
+# Decision object (used by the proxy router)
 # ---------------------------------------------------------------------------
 
 
@@ -457,7 +457,7 @@ def decide(
     """
     Resolve a complete routing decision for the proxy router.
 
-    This is the main entry point used by proxy_v4.py.
+    This is the main entry point used by the proxy server.
 
     Args:
         intent:     Canonical intent string (e.g. "summarize").

@@ -1,12 +1,5 @@
 """
-TokenPak Proxy Server (LEGACY)
-
-⚠️  DEPRECATED: This module is superseded by proxy_v4.py, which has full
-    compression pipeline, cache poison removal, vault injection, tool schema
-    registry, circuit breakers, and Prometheus metrics.
-
-    Use `tokenpak start` (which now launches proxy_v4.py) or run proxy_v4.py
-    directly. This module is kept for backward compatibility.
+TokenPak Proxy Server
 
 Core HTTP proxy server / request-handling layer. Wraps Python's built-in
 HTTPServer into a multi-threaded ProxyServer with compression pipeline hooks,
@@ -21,15 +14,6 @@ Env vars (all optional):
 """
 
 from __future__ import annotations
-
-import warnings as _warnings
-
-_warnings.warn(
-    "tokenpak.agent.proxy.server is deprecated — use proxy_v4.py instead. "
-    "Run `tokenpak start` to launch the current proxy.",
-    DeprecationWarning,
-    stacklevel=2,
-)
 
 import gzip
 import json

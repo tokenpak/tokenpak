@@ -72,18 +72,18 @@ class TestConfigValidatorRequired:
         errors = validator.validate(config)
         assert len(errors) == 0
 
-    def test_missing_api_keys(self):
-        """Missing api_keys produces error."""
+    def test_empty_config_is_valid(self):
+        """Empty config is valid — credentials may be supplied via env-pool,
+        user-config, claude-cli, codex-cli, or openclaw instead of api_keys.
+        See project_tokenpak_creds_architecture.md."""
         config = {}
         validator = ConfigValidator()
         errors = validator.validate(config)
-        assert len(errors) == 1
-        assert errors[0].field == "api_keys"
-        assert "missing" in errors[0].actual.lower()
+        assert errors == []
 
     def test_error_has_suggestion(self):
-        """Each error includes a fix suggestion."""
-        config = {}
+        """When there IS a shape error, it includes a fix suggestion."""
+        config = {"api_keys": "not-a-dict"}
         validator = ConfigValidator()
         errors = validator.validate(config)
         assert len(errors) > 0
@@ -337,10 +337,10 @@ class TestConfigValidatorMultipleErrors:
         assert "1024-65535" in errors[0].expected
 
     def test_full_error_collection(self):
-        """All validation categories produce errors."""
+        """All shape/range validation categories produce errors together."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = {
-                # api_keys is missing (required)
+                "api_keys": "not-a-dict",  # wrong type
                 "port": 100,  # out of range
                 "cache_ttl": -1,  # out of range
                 "log_dir": "/nonexistent/path",  # path missing
