@@ -386,7 +386,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/goals":
             # Get all goals with progress
-            from tokenpak.goals import GoalManager
+            from tokenpak.orchestration.goals import GoalManager
 
             try:
                 manager = GoalManager()

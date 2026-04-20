@@ -17,6 +17,25 @@ from .agent.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
 
 # Standard model pricing (USD per million tokens)
 # Updated for Q1 2026 standard rates
+
+# ---------------------------------------------------------------------------
+# DEPRECATED 2026-04-20 — canonical home is tokenpak.telemetry.models.
+# Per Kevin's dual-implementation decision: this top-level module is
+# RETIRED. Its API differs from the canonical version and stays
+# functional only to keep existing callers working during the
+# deprecation window. New code MUST import from tokenpak.telemetry.models instead.
+# Removal target: TIP-2.0.
+# ---------------------------------------------------------------------------
+import warnings as _tp_deprecate_warnings
+_tp_deprecate_warnings.warn(
+    "tokenpak.models is deprecated — use tokenpak.telemetry.models instead. "
+    "Top-level tokenpak.models has a different API than the canonical version; "
+    "stays functional until TIP-2.0 to give callers time to migrate.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _tp_deprecate_warnings
+
 MODEL_PRICING = {
     "gpt-4": {"input": 30.0, "output": 60.0},
     "gpt-4-turbo": {"input": 10.0, "output": 30.0},

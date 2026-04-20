@@ -11,6 +11,25 @@ from typing import Optional
 # Pricing per million tokens (input, cached, output)
 # Format: {"input": price, "cached": price, "output": price}
 
+
+# ---------------------------------------------------------------------------
+# DEPRECATED 2026-04-20 — canonical home is tokenpak.telemetry.pricing.
+# Per Kevin's dual-implementation decision: this top-level module is
+# RETIRED. Its API differs from the canonical version and stays
+# functional only to keep existing callers working during the
+# deprecation window. New code MUST import from tokenpak.telemetry.pricing instead.
+# Removal target: TIP-2.0.
+# ---------------------------------------------------------------------------
+import warnings as _tp_deprecate_warnings
+_tp_deprecate_warnings.warn(
+    "tokenpak.pricing is deprecated — use tokenpak.telemetry.pricing instead. "
+    "Top-level tokenpak.pricing has a different API than the canonical version; "
+    "stays functional until TIP-2.0 to give callers time to migrate.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _tp_deprecate_warnings
+
 MODEL_RATES = {
     "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
     "claude-opus-4-6": {"input": 15.0, "cached": 1.50, "output": 75.0},

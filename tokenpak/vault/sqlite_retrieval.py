@@ -158,7 +158,7 @@ class SQLiteRetrievalBackend:
 
         # Import count_tokens lazily to avoid circular imports
         try:
-            from tokenpak.tokens import count_tokens as _count_tokens
+            from tokenpak.telemetry.tokens import count_tokens as _count_tokens
 
             count_tokens_fn = _count_tokens
         except ImportError:

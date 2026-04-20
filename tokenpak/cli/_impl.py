@@ -192,7 +192,7 @@ def cmd_setup(args):
 
     import yaml
 
-    from ..profiles import get_profile
+    from tokenpak.routing.profiles import get_profile
 
     config_dir = Path.home() / ".tokenpak"
     config_file = config_dir / "config.yaml"
@@ -345,7 +345,7 @@ def cmd_start(args):
         try:
             import json as _json
 
-            from tokenpak.config_validator import ConfigValidator
+            from tokenpak.core.config.validator import ConfigValidator
 
             with open(config_path, "r") as _cf:
                 _config = _json.load(_cf)
@@ -489,9 +489,9 @@ from tokenpak.services.policy_service.budget.rules import BudgetBlock, quadratic
 from ..calibration import calibrate_workers, get_recommended_workers
 from tokenpak.compression.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from tokenpak.compression.processors import get_processor
-from ..registry import Block, BlockRegistry
-from ..security import secure_write_config
-from ..tokens import cache_info, count_tokens, truncate_to_tokens
+from tokenpak.core.registry import Block, BlockRegistry
+from tokenpak.security import secure_write_config
+from tokenpak.telemetry.tokens import cache_info, count_tokens, truncate_to_tokens
 from ..walker import walk_directory
 from tokenpak.compression.wire import pack
 
@@ -545,7 +545,7 @@ def cmd_index(args):
     if getattr(args, "status", False):
         import os
 
-        from tokenpak.registry import BlockRegistry
+        from tokenpak.core.registry import BlockRegistry
 
         db_path = getattr(args, "db", os.path.join(os.getcwd(), ".tokenpak", "registry.db"))
         if not os.path.exists(db_path):
@@ -1368,7 +1368,7 @@ def cmd_dashboard(args):
 
     # --public: show public URL with token
     if getattr(args, "public", False):
-        from tokenpak.config_loader import get as _cfg  # noqa: F401
+        from tokenpak.core.config.loader import get as _cfg  # noqa: F401
 
         port = int(_cfg("port", 8766, "TOKENPAK_PORT", int))
         token = load_or_create_token()
@@ -2450,7 +2450,7 @@ def cmd_learn_reset(args):
 
 def _build_user_template_parser(sub):
     """Build `tokenpak template` subcommand parser for local user templates."""
-    from ..user_templates import (
+    from tokenpak.companion.templates.user_templates import (
         cmd_template_add,
         cmd_template_list,
         cmd_template_remove,
@@ -2759,7 +2759,7 @@ def _save_lock(lock: dict):
 
 def cmd_config(args):
     """Config management: show, init, edit."""
-    from tokenpak.config_loader import CONFIG_PATH, generate_default_yaml, get_all
+    from tokenpak.core.config.loader import CONFIG_PATH, generate_default_yaml, get_all
 
     subcmd = getattr(args, "config_cmd", "show")
 
@@ -4898,7 +4898,7 @@ def cmd_replay_show(args):
 def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, int]:
     """Compress message content and return (compressed_text, token_count)."""
     from tokenpak.compression.processors.text import TextProcessor
-    from ..tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 
     proc = TextProcessor(aggressive=aggressive)
     parts = []
@@ -4922,7 +4922,7 @@ def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, i
 
 def cmd_replay_run(args):
     """Re-run a captured session with different settings (zero API cost)."""
-    from ..tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 
     store = _get_replay_store()
     e = store.get(args.id)
@@ -5178,7 +5178,7 @@ def _run_compression_demo():
     """Show live compression on a sample prompt with before/after token counts."""
     from tokenpak.compression.engines.base import CompactionHints
     from tokenpak.compression.engines.heuristic import HeuristicEngine
-    from tokenpak.tokens import count_tokens
+    from tokenpak.telemetry.tokens import count_tokens
 
     SAMPLE_PROMPT = """\
 You are a helpful assistant. Please help me understand the following documentation.
@@ -6224,7 +6224,7 @@ def cmd_config_check(args):
     """Validate a proxy config file (JSON)."""
     import json
 
-    from tokenpak.config_validator import ConfigValidator
+    from tokenpak.core.config.validator import ConfigValidator
 
     config_path = Path(args.file).expanduser()
 

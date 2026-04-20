@@ -14,6 +14,25 @@ from typing import Any, Optional
 
 # ── Schema location ──────────────────────────────────────────────────────────
 
+
+# ---------------------------------------------------------------------------
+# DEPRECATED 2026-04-20 — canonical home is tokenpak.core.validation.validator.
+# Per Kevin's dual-implementation decision: this top-level module is
+# RETIRED. Its API differs from the canonical version and stays
+# functional only to keep existing callers working during the
+# deprecation window. New code MUST import from tokenpak.core.validation.validator instead.
+# Removal target: TIP-2.0.
+# ---------------------------------------------------------------------------
+import warnings as _tp_deprecate_warnings
+_tp_deprecate_warnings.warn(
+    "tokenpak.validator is deprecated — use tokenpak.core.validation.validator instead. "
+    "Top-level tokenpak.validator has a different API than the canonical version; "
+    "stays functional until TIP-2.0 to give callers time to migrate.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _tp_deprecate_warnings
+
 _SCHEMA_DIR = Path(__file__).parent.parent / "schemas"
 _SCHEMA_PATH = _SCHEMA_DIR / "tokenpak-v1.0.json"
 

@@ -640,7 +640,7 @@ def create_app(
         try:
             import dataclasses
 
-            from tokenpak.capsule import CapsuleBuilder
+            from tokenpak.compression.capsules import CapsuleBuilder
 
             builder = CapsuleBuilder()
             capsule = builder.build(  # type: ignore[attr-defined]

@@ -34,7 +34,7 @@ import os
 
 # Re-export the canonical implementation so callers can do:
 #   from tokenpak.agent.proxy.capsule_builder import CapsuleBuilder
-from tokenpak.capsule.builder import (
+from tokenpak.compression.capsules.builder import (
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,
     CapsuleBuilder,

@@ -103,6 +103,30 @@ ignore_imports =
     tokenpak.vault.indexer -> tokenpak.sources.walker
     tokenpak.debug.benchmark -> tokenpak.sources.walker
     tokenpak.debug.calibration -> tokenpak.sources.walker
+    ;
+    ; telemetry.tokens is the canonical token-counting utility; vault
+    ; and debug primitives both consume it for their own diagnostic
+    ; and indexing work. Legitimate Level-1 ↔ Level-2 collab.
+    tokenpak.debug.benchmark -> tokenpak.telemetry.tokens
+    tokenpak.debug.calibration -> tokenpak.telemetry.tokens
+    tokenpak.vault.sqlite_retrieval -> tokenpak.telemetry.tokens
+    tokenpak.vault.indexer -> tokenpak.telemetry.tokens
+    tokenpak.vault.watcher -> tokenpak.telemetry.tokens
+    tokenpak.vault.retrieval -> tokenpak.telemetry.tokens
+    ;
+    ; cli.user-templates subcommand is a template-management UX.
+    ; Cross-entrypoint (cli → companion) for a pure local helper
+    ; (§5.2-C). Collapses when templates get their own top-level
+    ; subcommand module.
+    tokenpak.cli._impl -> tokenpak.companion.templates.user_templates
+    ;
+    ; agent.proxy.server transitive edges — these collapse when the
+    ; big agent/proxy/* → proxy/* migration lands (MTC-sized initiative).
+    ; Per Kevin 2026-04-20: agent/proxy/* is its own planned migration
+    ; project, not a quick cleanup task.
+    tokenpak.agent.proxy.server -> tokenpak.orchestration.goals
+    tokenpak.agent.proxy.capsule_integration -> tokenpak.compression.capsules.builder
+    tokenpak.telemetry.server -> tokenpak.compression.capsules
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -237,13 +261,25 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.services.policy_service.budget.rules
     tokenpak.cli._impl -> tokenpak.services.policy_service.budget.budgeter
     ;
+    ; §5.2-C cli profile management (tokenpak profile subcommand) —
+    ; operates on user config, never invokes a provider.
+    tokenpak.cli._impl -> tokenpak.routing.profiles
+    ;
     ; Transitive through telemetry.server (telemetry IS a read surface
     ; cli is allowed to consume; its internal collaborators happen to
-    ; include compression.validation_gate and routing primitives):
+    ; include compression.validation_gate, compression.capsules and
+    ; routing primitives):
     tokenpak.telemetry.server -> tokenpak.compression.validation_gate
+    tokenpak.telemetry.server -> tokenpak.compression.capsules
     tokenpak.telemetry.pipeline -> tokenpak.routing.complexity
     tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
     tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
+    ;
+    ; Transitive through legacy agent.proxy.server (MTC-sized
+    ; migration pending). proxy.server shim re-exports agent.proxy
+    ; .server which pulls in capsule_integration → compression.
+    ; capsules.builder. Collapses when agent/proxy/* folds.
+    tokenpak.agent.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     ;
     ; (2026-04-20: compiler moved to compression/compiler — edge
     ; is now intra-subsystem compression.compiler → compression.wire,

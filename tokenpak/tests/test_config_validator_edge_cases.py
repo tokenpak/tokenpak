@@ -15,7 +15,7 @@ import tempfile
 
 import pytest
 
-from tokenpak.config_validator import ConfigValidator
+from tokenpak.core.config.validator import ConfigValidator
 
 
 class TestMalformedInput:

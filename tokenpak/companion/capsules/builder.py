@@ -461,7 +461,7 @@ def _count_tokens_total(texts: List[str]) -> int:
     """
     combined = " ".join(texts)
     try:
-        from tokenpak.tokens import count_tokens  # type: ignore
+        from tokenpak.telemetry.tokens import count_tokens  # type: ignore
         return count_tokens(combined)
     except Exception:
         return len(combined) // 4

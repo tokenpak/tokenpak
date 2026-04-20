@@ -12,7 +12,7 @@ Validates config dict fields on proxy startup:
 import os
 import tempfile
 
-from tokenpak.config_validator import ConfigValidationError, ConfigValidator
+from tokenpak.core.config.validator import ConfigValidationError, ConfigValidator
 
 
 class TestConfigValidationError:

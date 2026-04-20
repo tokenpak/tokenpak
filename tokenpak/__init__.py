@@ -9,7 +9,7 @@ Quick start:
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
     from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
-    from tokenpak.registry import Block, BlockRegistry
+    from tokenpak.core.registry import Block, BlockRegistry
     from tokenpak.services.policy_service.budget.budgeter import Budgeter
 """
 
@@ -72,7 +72,7 @@ from tokenpak.compression.pack import CompiledResult, ContextPack, PackBlock, pa
 # ---------------------------------------------------------------------------
 # Content Blocks
 # ---------------------------------------------------------------------------
-from tokenpak.registry import Block, BlockRegistry
+from tokenpak.core.registry import Block, BlockRegistry
 
 # ---------------------------------------------------------------------------
 # Compile Reports
@@ -89,7 +89,7 @@ from tokenpak.telemetry.collector import TelemetryCollector
 # ---------------------------------------------------------------------------
 # Token Counting (Level 1 — single import, zero config)
 # ---------------------------------------------------------------------------
-from tokenpak.tokens import count_tokens
+from tokenpak.telemetry.tokens import count_tokens
 from tokenpak.debug.trace import (  # noqa: F401
     TokenPakTrace,
     TraceBuilder,

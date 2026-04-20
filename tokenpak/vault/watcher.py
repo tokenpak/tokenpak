@@ -247,8 +247,8 @@ class VaultWatcher:
             import hashlib
 
             from tokenpak.compression.processors import get_processor
-            from tokenpak.registry import BlockRegistry
-            from tokenpak.tokens import count_tokens
+            from tokenpak.core.registry import BlockRegistry
+            from tokenpak.telemetry.tokens import count_tokens
             from tokenpak.sources.walker import FILE_TYPES
 
             db = self.config.db_path

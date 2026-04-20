@@ -3,7 +3,7 @@
 Covers: config_validator.py — configuration validation, error reporting.
 """
 
-from tokenpak.config_validator import ConfigValidator
+from tokenpak.core.config.validator import ConfigValidator
 
 
 class TestBasicConfigValidation:

@@ -96,7 +96,7 @@ def inject_retrieved_context(
     """
     if count_tokens_fn is None:
         try:
-            from tokenpak.tokens import count_tokens  # type: ignore
+            from tokenpak.telemetry.tokens import count_tokens  # type: ignore
 
             count_tokens_fn = count_tokens
         except ImportError:
