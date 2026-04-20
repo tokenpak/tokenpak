@@ -8,45 +8,19 @@ on:
       - 'tests/**'
       - '.github/workflows/ci.yml'
       - 'pyproject.toml'
-      - 'docs/cli-reference.md'
-      - 'scripts/generate-cli-docs.py'
   pull_request:
     branches: [main, develop]
     paths:
       - 'tokenpak/**'
       - 'tests/**'
       - 'pyproject.toml'
-      - 'docs/cli-reference.md'
-      - 'scripts/generate-cli-docs.py'
   workflow_dispatch:
 
+# Note: CLI-docs + doc-audit jobs were removed in the 2026-04-19
+# standards-relocation. User-facing docs now live in the sibling
+# tokenpak/docs repo; that repo owns its own doc-consistency CI.
+
 jobs:
-  cli-docs-check:
-    name: CLI Docs Up-to-date
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Check CLI docs are current
-        run: bash scripts/check-cli-docs.sh
-
-  docs-audit:
-    name: Doc Audit (soft warning)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run doc audit script
-        continue-on-error: true
-        run: bash scripts/audit-docs.sh
-
   lint:
     name: Lint (Ruff)
     runs-on: ubuntu-latest
