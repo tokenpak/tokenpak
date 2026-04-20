@@ -36,7 +36,6 @@ import pytest
 
 from tokenpak.proxy.adapters.passthrough_adapter import PassthroughAdapter
 
-
 # ---------------------------------------------------------------------------
 # §3 Helpers
 # ---------------------------------------------------------------------------

@@ -27,7 +27,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import threading
 import uuid
 from datetime import datetime, timezone
