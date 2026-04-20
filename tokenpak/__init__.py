@@ -8,7 +8,7 @@ Quick start:
 
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
-    from tokenpak.engines import CompactionEngine, HeuristicEngine
+    from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
     from tokenpak.registry import Block, BlockRegistry
     from tokenpak.budgeter import Budgeter
 """
@@ -59,14 +59,14 @@ from tokenpak.budgeter import Budgeter
 # CLI
 # ---------------------------------------------------------------------------
 # SKIPPED: from tokenpak.cli import main  # main not defined
-from tokenpak.engines import get_engine
+from tokenpak.compression.engines import get_engine
 
 # ---------------------------------------------------------------------------
 # Compression / Compaction Engines
 # ---------------------------------------------------------------------------
 # CompressionEngine: abstract base for all compaction strategies
-from tokenpak.engines.base import CompactionEngine as CompressionEngine
-from tokenpak.engines.heuristic import HeuristicEngine
+from tokenpak.compression.engines.base import CompactionEngine as CompressionEngine
+from tokenpak.compression.engines.heuristic import HeuristicEngine
 from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
 
 # ---------------------------------------------------------------------------

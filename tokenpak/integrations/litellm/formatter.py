@@ -60,8 +60,8 @@ def blocks_to_messages(
             elif compaction == "balanced":
                 # Try engine compaction first
                 try:
-                    from tokenpak.engines import get_engine
-                    from tokenpak.engines.base import CompactionHints
+                    from tokenpak.compression.engines import get_engine
+                    from tokenpak.compression.engines.base import CompactionHints
 
                     engine = get_engine("heuristic")
                     remaining = max(50, budget - total_tokens)

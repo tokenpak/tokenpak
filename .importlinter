@@ -50,20 +50,19 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.alerts
     tokenpak.cli._impl -> tokenpak.companion.config
     tokenpak.cli._impl -> tokenpak.companion.launcher
-    tokenpak.cli._impl -> tokenpak.agent.proxy.server
     ;
-    ; Transitive chain through legacy agent.proxy.server (resolves
-    ; when server migrates to canonical tokenpak.proxy.server).
-    ; Note: monitoring.metrics -> cache.registry collapsed 2026-04-20
-    ; as part of the D1 monitoring→telemetry/metrics migration; the
-    ; canonical telemetry.metrics.collector -> cache.registry edge
-    ; is still allowlisted (telemetry IS a Level-2 primitive, cache
-    ; IS a Level-1 primitive, so tier direction is legal — this
-    ; entry is for the forbidden-contract's cli→cache path only):
+    ; Transitive chain THROUGH agent.proxy.server (gradually
+    ; collapsing as D1 migration advances). 2026-04-20 progress:
+    ; - monitoring.metrics migration: COLLAPSED cache edge
+    ; - cli._impl -> agent.proxy.server: COLLAPSED (cli now imports
+    ;   canonical tokenpak.proxy.server via the new shim; that's
+    ;   a legal Level-5 -> Level-4 edge per tier layering)
+    ; Remaining entries are transitive edges THROUGH the legacy
+    ; server module itself; they collapse when agent.proxy.server
+    ; folds into tokenpak.proxy.server (bigger D1 bite — MTC):
     tokenpak.agent.proxy.server -> tokenpak.dashboard
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
     tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
-    tokenpak.telemetry.metrics.collector -> tokenpak.cache.registry
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -120,7 +119,8 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.companion.launcher
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
-    tokenpak.cli._impl -> tokenpak.agent.proxy.server
+    ; (cli._impl -> agent.proxy.server: COLLAPSED 2026-04-20; cli
+    ; now imports tokenpak.proxy.server via the inverted shim.)
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
@@ -149,12 +149,16 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
     ;
-    ; Transitive chain through agent.proxy.server into cache (resolves
-    ; when server migrates to canonical proxy/):
-    tokenpak.cli._impl -> tokenpak.agent.proxy.server
+    ; Transitive chain through agent.proxy.server into cache.
+    ; 2026-04-20 progress:
+    ; - cli._impl -> agent.proxy.server: COLLAPSED (cli now imports
+    ;   canonical tokenpak.proxy.server). The below entries remain
+    ;   for agent.proxy.server's own transitive imports, which go
+    ;   away when that module folds into tokenpak.proxy.server.
+    ; - monitoring.metrics -> cache.registry: COLLAPSED (D1
+    ;   migration moved monitoring/metrics to telemetry/metrics/).
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
     tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
-    tokenpak.telemetry.metrics.collector -> tokenpak.cache.registry
     ;
     ; §5.2-C pure local helper: `tokenpak fingerprint` CLI subcommand
     ; is a management UX — compute fingerprint of local file, sync
@@ -164,6 +168,27 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.generator
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.privacy
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.sync
+    ;
+    ; §5.2-C pure local helper: `tokenpak compact` CLI subcommand
+    ; runs compression on a local file for testing/preview. Never
+    ; invokes a provider. Post-D1 migration note: the canonical
+    ; path gained these imports when engines/ → compression/engines/
+    ; landed 2026-04-20 (previously allowlisted under tokenpak.engines
+    ; which was not a forbidden module).
+    tokenpak.cli._impl -> tokenpak.compression.engines.base
+    tokenpak.cli._impl -> tokenpak.compression.engines.heuristic
+    ;
+    ; Package-level public-API re-exports (NOT a §5.2 exception —
+    ; tokenpak/__init__.py is the library's public API surface and
+    ; deliberately exposes convenience names like HeuristicEngine +
+    ; get_engine for user code. When cli does `from tokenpak import
+    ; __version__`, grimp traces the full package-init chain — that's
+    ; a Python side-effect of package loading, not a violation. This
+    ; entry tells importlinter to skip the transitive-chain
+    ; evaluation at the top-level package boundary.
+    tokenpak -> tokenpak.compression.engines
+    tokenpak -> tokenpak.compression.engines.base
+    tokenpak -> tokenpak.compression.engines.heuristic
 
 ; -----------------------------------------------------------------------
 ; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).

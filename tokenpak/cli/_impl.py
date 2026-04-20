@@ -289,7 +289,7 @@ def cmd_setup(args):
         [
             sys.executable,
             "-c",
-            "from tokenpak.agent.proxy.server import start_proxy; "
+            "from tokenpak.proxy.server import start_proxy; "
             f"start_proxy(host='127.0.0.1', port={port}, blocking=True)",
         ],
         env=env,
@@ -388,7 +388,7 @@ def cmd_start(args):
         [
             sys.executable,
             "-c",
-            "from tokenpak.agent.proxy.server import start_proxy; "
+            "from tokenpak.proxy.server import start_proxy; "
             f"start_proxy(host='127.0.0.1', port={port}, blocking=True)",
         ],
         env=env,
@@ -1002,7 +1002,7 @@ def cmd_serve(args):
     # Default (single-worker): start the TokenPak proxy server
     shutdown_timeout = getattr(args, "shutdown_timeout", None)
     try:
-        from ..agent.proxy.server import start_proxy
+        from tokenpak.proxy.server import start_proxy
 
         start_proxy(
             host="127.0.0.1",
@@ -5176,8 +5176,8 @@ def _build_demo_parser(sub):
 
 def _run_compression_demo():
     """Show live compression on a sample prompt with before/after token counts."""
-    from tokenpak.engines.base import CompactionHints
-    from tokenpak.engines.heuristic import HeuristicEngine
+    from tokenpak.compression.engines.base import CompactionHints
+    from tokenpak.compression.engines.heuristic import HeuristicEngine
     from tokenpak.tokens import count_tokens
 
     SAMPLE_PROMPT = """\
