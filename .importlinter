@@ -66,12 +66,15 @@ ignore_imports =
     ;
     ; Same-level (Level-1 → Level-1) primitives that legitimately
     ; share concerns. Vault chunks content; compression processes
-    ; the chunks; these edges are intentional and not a violation
-    ; of the architecture's intent (the layering rule catches
-    ; SILOED drift, not legitimate collaboration between related
-    ; primitives). Documented as an exception.
+    ; the chunks; debug runs benchmark + calibration diagnostics
+    ; against compression. These edges are intentional and not a
+    ; violation of the architecture's intent (the layering rule
+    ; catches SILOED drift, not legitimate collaboration between
+    ; related primitives). Documented as an exception.
     tokenpak.vault.watcher -> tokenpak.compression.processors
     tokenpak.vault.indexer -> tokenpak.compression.processors
+    tokenpak.debug.benchmark -> tokenpak.compression.processors
+    tokenpak.debug.calibration -> tokenpak.compression.processors
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -189,13 +192,13 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.compression.processors
     tokenpak.cli._impl -> tokenpak.compression.processors.text
     ;
-    ; Transitive via tokenpak.benchmark (top-level diagnostic that
-    ; uses compression.processors for local-file-processing).
-    ; §5.2-C pure local helper — benchmark operates on user data,
-    ; never invokes a provider. Collapses when benchmark migrates
-    ; to debug/benchmark/ per §1 (debug owns diagnostics).
-    tokenpak.benchmark -> tokenpak.compression.processors
-    tokenpak.calibration -> tokenpak.compression.processors
+    ; (2026-04-20: benchmark and calibration moved to debug/benchmark
+    ; and debug/calibration per §1; their direct-compression imports
+    ; are now debug.benchmark -> compression.processors and
+    ; debug.calibration -> compression.processors. debug is Level-1,
+    ; compression is Level-1 — same-level edge, allowlisted below.)
+    tokenpak.debug.benchmark -> tokenpak.compression.processors
+    tokenpak.debug.calibration -> tokenpak.compression.processors
     ;
     ; Package-level public-API re-exports (NOT a §5.2 exception —
     ; tokenpak/__init__.py is the library's public API surface and

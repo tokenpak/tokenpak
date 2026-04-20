@@ -46,7 +46,7 @@ import json
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from tokenpak.monitoring.health import HealthChecker
+from tokenpak.proxy.health import HealthChecker
 
 
 class HealthRoute:
