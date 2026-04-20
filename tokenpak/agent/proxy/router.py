@@ -287,7 +287,7 @@ def get_model_tier(model: str) -> str:
 # These functions provide cache-stable BM25 retrieval injection used by the
 # proxy to keep prompt structures byte-identical across repeated requests.
 
-from tokenpak.agent.vault.retrieval import (  # noqa: E402
+from tokenpak.vault.retrieval import (  # noqa: E402
     DEFAULT_MAX_TOKENS,
     RETRIEVED_CONTEXT_HEADER,
     inject_retrieved_context,

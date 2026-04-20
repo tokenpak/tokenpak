@@ -588,7 +588,7 @@ def cmd_index(args):
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
-        from tokenpak.agent.vault.watcher import VaultWatcher, WatcherConfig
+        from tokenpak.vault.watcher import VaultWatcher, WatcherConfig
 
         # Run initial full index first
         _do_index(args)

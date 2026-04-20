@@ -1,14 +1,27 @@
-"""Vault subsystem (Architecture §1).
+"""TokenPak Agent Vault — local file indexing, AST parsing, and block storage."""
 
-The knowledge store: indexing, retrieval (keyword + semantic), chunking,
-file parsers / AST / symbol extraction, filesystem watcher, SQLite
-retrieval index. Level-1 primitive per §2.
+from .ast_parser import ASTParser
+from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
+from .chunk_shapes import CHUNK_SHAPES, apply_shape, get_shape_for_intent, reshape_chunks
+from .indexer import VaultIndexer
+from .slicer import SliceRecord, detect_split_strategy, should_slice, slice_content
+from .symbols import Symbol, SymbolTable
 
-Distinct from the maintainer-side Obsidian vault at ``~/vault/``;
-the two share a name by coincidence and never share data.
-
-Namespace init — actual code lives in subdirectories per the D1
-migration roadmap.
-"""
-
-from __future__ import annotations
+__all__ = [
+    "VaultIndexer",
+    "BlockStore",
+    "BlockRecord",
+    "SliceStore",
+    "get_block_store",
+    "SymbolTable",
+    "Symbol",
+    "ASTParser",
+    "CHUNK_SHAPES",
+    "apply_shape",
+    "get_shape_for_intent",
+    "reshape_chunks",
+    "SliceRecord",
+    "slice_content",
+    "should_slice",
+    "detect_split_strategy",
+]

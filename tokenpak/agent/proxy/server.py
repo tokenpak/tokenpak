@@ -44,8 +44,8 @@ from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
 from tokenpak.cache.telemetry import CacheMetrics
 from tokenpak.cache.telemetry import get_collector as _get_cache_collector
-from tokenpak.monitoring.request_logger import log_request
-from tokenpak.monitoring.request_logger import new_request_id as _new_request_id
+from tokenpak.telemetry.request_logger import log_request
+from tokenpak.telemetry.request_logger import new_request_id as _new_request_id
 
 from .circuit_breaker import get_circuit_breaker_registry, provider_from_url
 from .connection_pool import ConnectionPool, PoolConfig

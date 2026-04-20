@@ -1,27 +1,21 @@
-"""TokenPak Agent Vault — local file indexing, AST parsing, and block storage."""
+"""Backwards-compat shim — see vault.
 
-from .ast_parser import ASTParser
-from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
-from .chunk_shapes import CHUNK_SHAPES, apply_shape, get_shape_for_intent, reshape_chunks
-from .indexer import VaultIndexer
-from .slicer import SliceRecord, detect_split_strategy, should_slice, slice_content
-from .symbols import Symbol, SymbolTable
+Canonical home is ``tokenpak.vault`` (Architecture §1 — vault owns
+indexing, retrieval, chunking, AST parsing, symbol extraction,
+filesystem watcher, SQLite index). Moved 2026-04-20 per D1
+migration. Removal target: TIP-2.0.
+"""
 
-__all__ = [
-    "VaultIndexer",
-    "BlockStore",
-    "BlockRecord",
-    "SliceStore",
-    "get_block_store",
-    "SymbolTable",
-    "Symbol",
-    "ASTParser",
-    "CHUNK_SHAPES",
-    "apply_shape",
-    "get_shape_for_intent",
-    "reshape_chunks",
-    "SliceRecord",
-    "slice_content",
-    "should_slice",
-    "detect_split_strategy",
-]
+from __future__ import annotations
+
+import warnings
+
+from tokenpak.vault import *  # noqa: F401,F403
+
+warnings.warn(
+    "tokenpak.agent.vault is deprecated — "
+    "import from tokenpak.vault (canonical home since 2026-04-20, D1 migration). "
+    "Legacy shim removal target: TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)

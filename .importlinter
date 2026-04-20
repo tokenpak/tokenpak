@@ -63,6 +63,15 @@ ignore_imports =
     tokenpak.agent.proxy.server -> tokenpak.dashboard
     tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
     tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
+    ;
+    ; Same-level (Level-1 → Level-1) primitives that legitimately
+    ; share concerns. Vault chunks content; compression processes
+    ; the chunks; these edges are intentional and not a violation
+    ; of the architecture's intent (the layering rule catches
+    ; SILOED drift, not legitimate collaboration between related
+    ; primitives). Documented as an exception.
+    tokenpak.vault.watcher -> tokenpak.compression.processors
+    tokenpak.vault.indexer -> tokenpak.compression.processors
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -200,16 +209,15 @@ ignore_imports =
     tokenpak -> tokenpak.compression.engines.base
     tokenpak -> tokenpak.compression.engines.heuristic
     ;
-    ; Transitive chain through agent.vault (vault indexer uses
-    ; compression.processors to preprocess files). Resolves when
-    ; agent/vault/ migrates to canonical vault/ subsystem — at
-    ; which point vault → compression is a legal Level-1 → Level-1
-    ; edge (vault + compression are both primitives and can refer
-    ; to each other when the concern naturally spans them; only
-    ; the cli→vault hop makes the full chain look like an
-    ; entrypoint-to-primitive violation).
-    tokenpak.agent.vault.watcher -> tokenpak.compression.processors
-    tokenpak.agent.vault.indexer -> tokenpak.compression.processors
+    ; Vault indexer uses compression.processors to preprocess files.
+    ; vault + compression are both Level-1 primitives; same-level
+    ; imports are generally forbidden by tier layering, but the
+    ; concern naturally spans them (vault chunks content, compression
+    ; processes that content). Allowlisted with rationale.
+    ; 2026-04-20: collapsed agent.vault.* → vault.* prefix after
+    ; the agent/vault/ → vault/ D1 migration landed.
+    tokenpak.vault.watcher -> tokenpak.compression.processors
+    tokenpak.vault.indexer -> tokenpak.compression.processors
 
 ; -----------------------------------------------------------------------
 ; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).
