@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint format check build docs clean install hooks
+.PHONY: help dev test lint lint-imports format format-check check build docs clean install hooks
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -69,7 +69,14 @@ format:  ## Run ruff formatter (auto-fix)
 format-check:  ## Check formatting without making changes
 	$(RUFF) format --check tokenpak/ tests/
 
-check: lint format-check test  ## Run lint + format check + tests (CI gate)
+lint-imports:  ## Enforce Architecture §2 dependency direction + §2.4 entrypoint rule
+	@command -v lint-imports >/dev/null 2>&1 || { \
+		echo "import-linter not installed. Run: pip install tokenpak[dev]"; \
+		exit 1; \
+	}
+	lint-imports --config .importlinter
+
+check: lint format-check lint-imports test  ## Run lint + format check + import-linter + tests (CI gate)
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 build:  ## Build source distribution and wheel

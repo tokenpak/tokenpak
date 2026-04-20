@@ -1,12 +1,36 @@
-"""Policy gates: budget, cost, rate-limit, content-policy.
+"""Policy gates: budget, cost, rate-limit, content-policy (Phase 2 wrapper).
 
-Pipeline-side gates that consult ``security/`` (DLP, permissions) and
-budget/cost state before dispatch. Policy decisions are recorded via
-``telemetry_service`` so the dashboard and alerts can surface them.
+Serves the ``security`` stage name in the canonical pipeline. Policy
+decisions are consulted against primitive modules: ``tokenpak.security/``
+for DLP + permissions (currently migrating from ``tokenpak/creds/`` per
+D1), ``tokenpak.budget`` or the budget_controller for spend gates.
 
-Phase 2 scaffold. Scope negotiated per Q7 2026-04-20: policy_service
-drives enforcement; security/ owns the primitives. See also the §3.9
-audit rubric section for compatibility with the plane rules.
+Phase 2 pass-through. The stage exists so the pipeline emits a
+canonical "security" slot even before policy logic migrates; this
+preserves the Architecture §1.3 invariant that the stage sequence is
+stable.
 """
 
 from __future__ import annotations
+
+from ..request_pipeline.stages import PipelineContext
+
+
+class Stage:
+    """Security / policy pipeline stage."""
+
+    name = "security"
+
+    def apply_request(self, ctx: PipelineContext) -> None:
+        """Apply DLP redaction + budget + rate-limit gates.
+
+        Phase 2 pass-through. Full implementation: run DLP redactor
+        over ``ctx.request.body``, check budget against cached spend
+        state, apply per-provider rate-limit gates, raise a canonical
+        TIP error (core/contracts/errors.py) if any gate denies.
+        """
+        return None
+
+    def apply_response(self, ctx: PipelineContext) -> None:
+        """Phase 2 pass-through."""
+        return None

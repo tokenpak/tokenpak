@@ -1,24 +1,44 @@
-"""MCP protocol plumbing shared by companion (server) and sdk.mcp (client).
+"""Shared MCP protocol plumbing (Architecture §1.4 plane rule 4).
 
-Option C from the TIP-1.0 Phase 1 design decision (Kevin 2026-04-20):
-MCP machinery lives in ``services/mcp_bridge/`` so that ``companion/``
-(which hosts the TokenPak MCP server surface) and ``sdk/mcp/`` (which
-hosts the MCP client bridge consumed by third-party MCP clients) both
-consume the same adapter. Neither subsystem re-implements MCP state.
+This subpackage is the ONLY site that hosts MCP protocol machinery.
+``companion/`` (which exposes the TokenPak MCP server surface) and
+``sdk/mcp/`` (which exposes the MCP client bridge) both consume it;
+neither forks MCP primitives.
 
-``mcp_bridge`` is an adapter over an upstream MCP library, not a fork
-(Architecture §1.4 plane rule 4). Owns:
+Public surface:
 
-- Transport dispatch (stdio, Streamable HTTP)
-- Lifecycle (connect, negotiate, heartbeat, shutdown)
-- Capability negotiation (intersects TIP capability sets against peer)
-- Tool/resource/prompt routing to TIP-specified handlers
-- Error-envelope translation (services errors <-> MCP error frames)
+    TransportKind           — stdio | streamable_http (enum)
+    Transport               — abstract transport protocol
+    LifecycleManager        — connect / negotiate / heartbeat / shutdown
+    CapabilityNegotiator    — intersects TIP capability sets against peer
+    ToolRegistry            — dispatch TIP-defined tools by id
+    ResourceRegistry        — dispatch TIP-defined resources by URI
+    PromptRegistry          — dispatch TIP-defined prompts by name
+    MCPBridgeError          — canonical error for this subsystem
 
-Control-plane only. No model inference happens here (Architecture §1.4
-plane rule 2).
-
-Phase 2 scaffold. Real adapter lands in task P2-11.
+The concrete transport + JSON-RPC framing plugs in via an upstream MCP
+library. The library choice is tracked as DECISION-P2-LIB (follow-on);
+until then the bridge exposes the full surface with no-op protocol
+dispatch, which is enough for companion + sdk.mcp to develop against.
 """
 
 from __future__ import annotations
+
+from .capabilities import CapabilityNegotiator
+from .errors import MCPBridgeError
+from .lifecycle import LifecycleManager
+from .prompts import PromptRegistry
+from .resources import ResourceRegistry
+from .tools import ToolRegistry
+from .transport import Transport, TransportKind
+
+__all__ = [
+    "CapabilityNegotiator",
+    "LifecycleManager",
+    "MCPBridgeError",
+    "PromptRegistry",
+    "ResourceRegistry",
+    "ToolRegistry",
+    "Transport",
+    "TransportKind",
+]

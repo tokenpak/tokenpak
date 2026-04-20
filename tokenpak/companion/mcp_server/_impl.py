@@ -175,5 +175,5 @@ def serve(stdin=None, stdout=None) -> None:
             print(response, file=stdout, flush=True)
 
 
-if __name__ == "__main__":
-    serve()
+# The package's __main__.py handles `python -m tokenpak.companion.mcp_server`
+# invocation. Leave this module import-safe.

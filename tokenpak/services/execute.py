@@ -1,30 +1,37 @@
 """Synchronous execution entry point for the services pipeline.
 
-This is the single function every entrypoint ultimately reaches (via
-``proxy.client.execute``) to run a TokenPak request. It composes the
-canonical pipeline: compression -> security -> cache -> routing ->
-telemetry -> dispatch.
+Composes the canonical pipeline
+(compression -> security -> cache -> routing -> telemetry -> dispatch)
+per Architecture §1.3 design invariant 1. Stages live in sibling
+subpackages; this module just sequences them via
+``request_pipeline.composition``.
 
-Phase 2 scaffold - pipeline composition lands in task packet P2-01
-(request_pipeline). Until then, ``execute`` raises NotImplementedError
-rather than silently returning; this enforces that no caller ships
-against a ghost implementation.
+Called by ``proxy.client.execute`` (in-process transport) and by the
+HTTP proxy server handler (which supplies a real provider-invoking
+dispatcher).
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from .request import Request
+from .request_pipeline.composition import run_pipeline
+from .request_pipeline.dispatch import raise_if_called
+from .request_pipeline.stages import PipelineContext
 from .response import Response
 
 
-def execute(request: Request) -> Response:
-    """Run ``request`` through the services pipeline and return the Response.
+def execute(
+    request: Request,
+    *,
+    dispatch: Callable[[PipelineContext], Response] | None = None,
+) -> Response:
+    """Run ``request`` through the services pipeline.
 
-    Phase 2 scaffold. Real composition lands in P2-01.
+    ``dispatch`` is the terminal provider-invoking step. Callers MUST
+    supply one; there is no sensible default (Phase 2). Proxy server
+    supplies one wired to ``proxy.adapters``. Tests supply a fixture.
     """
-    raise NotImplementedError(
-        "services.execute is a Phase 2 scaffold. "
-        "Pipeline composition ships in task packet P2-01 "
-        "(extract request_lifecycle from proxy -> services). "
-        "Until then, the proxy handles requests via its legacy path."
-    )
+    dispatcher = dispatch if dispatch is not None else raise_if_called
+    return run_pipeline(request, dispatcher)

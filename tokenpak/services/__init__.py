@@ -37,6 +37,11 @@ through P2-05). See Architecture §10 debt item D1.
 
 from __future__ import annotations
 
+from .execute import execute
+from .request import Request
+from .response import Chunk, Response
+from .stream import stream
+
 __all__ = [
     "Request",
     "Response",
