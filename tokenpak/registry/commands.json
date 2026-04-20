@@ -32,6 +32,16 @@
       "related": ["start", "stop", "config"]
     },
     {
+      "command": "claude",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Launch Claude Code with tokenpak companion active",
+      "aliases": [],
+      "usage": "/tokenpak claude [claude-args...]",
+      "detail": "Spawns `claude` with the companion's MCP server + UserPromptSubmit hook wired in. All arguments after `claude` (e.g. --dangerously-skip-permissions, --model, --print) are forwarded verbatim to the claude binary. Set TOKENPAK_COMPANION_ENABLED=false to disable the companion and passthrough directly.",
+      "related": ["start", "status"]
+    },
+    {
       "command": "status",
       "tier": "oss",
       "category": "Control",

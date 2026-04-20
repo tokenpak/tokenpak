@@ -44,6 +44,7 @@ _COMMAND_GROUPS = {
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
+        ("claude", "Launch Claude Code with tokenpak companion active"),
         ("demo", "See compression in action"),
         ("cost", "View your API spend"),
         ("status", "Check proxy health"),
@@ -443,6 +444,22 @@ def cmd_restart(args):
     cmd_stop(args)
     time.sleep(1)
     cmd_start(args)
+
+
+def cmd_claude(args):
+    """Launch Claude Code with the tokenpak companion active.
+
+    All tail arguments are forwarded verbatim to the ``claude`` binary —
+    ``tokenpak claude --dangerously-skip-permissions`` becomes
+    ``claude --dangerously-skip-permissions`` with MCP + UserPromptSubmit
+    hook wired in by the companion launcher.
+    """
+    from tokenpak.companion.config import CompanionConfig
+    from tokenpak.companion.launcher import launch
+
+    config = CompanionConfig.from_env()
+    extra = list(getattr(args, "extra_args", None) or [])
+    launch(config=config, extra_args=extra)
 
 
 def cmd_logs(args):
@@ -1689,6 +1706,14 @@ def build_parser():
 
     p_restart = sub.add_parser("restart", help="Restart the proxy")
     p_restart.set_defaults(func=cmd_restart)
+
+    p_claude = sub.add_parser(
+        "claude",
+        help="Launch Claude Code with the tokenpak companion active",
+        add_help=False,  # all flags after `claude` are forwarded verbatim
+    )
+    p_claude.add_argument("extra_args", nargs=argparse.REMAINDER)
+    p_claude.set_defaults(func=cmd_claude)
 
     p_logs = sub.add_parser("logs", help="Show recent proxy logs")
     p_logs.add_argument(
@@ -3119,6 +3144,19 @@ def _build_config_mgmt_parser(sub):
 
 
 def main():
+    # ── Short-circuit: `tokenpak claude …` forwards verbatim ──────────────────
+    # All trailing args must reach the `claude` binary unmodified, including
+    # flags that argparse would otherwise claim (`--version`, `-h`, etc.). We
+    # detect the subcommand before argparse runs and hand off to the companion
+    # launcher, which either execvp's `claude` directly or writes the MCP +
+    # UserPromptSubmit settings first depending on TOKENPAK_COMPANION_ENABLED.
+    if len(sys.argv) >= 2 and sys.argv[1] == "claude":
+        from tokenpak.companion.config import CompanionConfig
+        from tokenpak.companion.launcher import launch
+
+        launch(config=CompanionConfig.from_env(), extra_args=sys.argv[2:])
+        return
+
     parser = build_parser()
 
     # ── Intercept bare --help / -h for progressive disclosure ─────────────────
@@ -3128,29 +3166,15 @@ def main():
 
     # ── Intercept unknown commands for typo suggestions ───────────────────────
     raw_cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    known_cmds = set(_ALL_COMMANDS) | {
-        # also include argparse-registered commands not in groups
-        "help",
-        "start",
-        "stop",
-        "restart",
-        "logs",
-        "version",
-        "update",
-        "config",
-        "setup",
-        "compare",
-        "leaderboard",
-        "report",
-        "check-alerts",
-        "watch",
-        "integrate",
-        "savings",
-        "usage",
-        "preview",
-        "aggregate",
-        "requests",
-    }
+    # Derive the known-command set from the registered subparsers instead of
+    # maintaining a second hardcoded list (feedback_always_dynamic.md). The
+    # `_ALL_COMMANDS` grouping is still used for the help output, but command
+    # recognition comes straight from argparse.
+    known_cmds = set(_ALL_COMMANDS)
+    for _action in parser._actions:
+        _choices = getattr(_action, "choices", None)
+        if _choices:
+            known_cmds.update(_choices.keys())
     if raw_cmd and not raw_cmd.startswith("-") and raw_cmd not in known_cmds:
         suggestion = _suggest_command(raw_cmd)
         print(f"❌ Unknown command: '{raw_cmd}'")
@@ -3177,7 +3201,8 @@ def main():
                     for cmd, desc in cmds[:3]:  # Show first 3 in each
                         print(f"     • {cmd:<15} {desc}")
                 print("\n   (Use `tokenpak help` to see all commands)")
-        sys.exit(1)
+        # Exit 2 = usage error (unknown verb) per 03 §3.
+        sys.exit(2)
 
     args = parser.parse_args()
 
