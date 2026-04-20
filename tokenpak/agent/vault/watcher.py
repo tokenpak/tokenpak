@@ -246,7 +246,7 @@ class VaultWatcher:
         try:
             import hashlib
 
-            from tokenpak.processors import get_processor
+            from tokenpak.compression.processors import get_processor
             from tokenpak.registry import BlockRegistry
             from tokenpak.tokens import count_tokens
             from tokenpak.walker import FILE_TYPES

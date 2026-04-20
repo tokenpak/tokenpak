@@ -488,7 +488,7 @@ def cmd_logs(args):
 from ..budget import BudgetBlock, quadratic_allocate
 from ..calibration import calibrate_workers, get_recommended_workers
 from ..miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
-from ..processors import get_processor
+from tokenpak.compression.processors import get_processor
 from ..registry import Block, BlockRegistry
 from ..security import secure_write_config
 from ..tokens import cache_info, count_tokens, truncate_to_tokens
@@ -4897,7 +4897,7 @@ def cmd_replay_show(args):
 
 def _compress_messages(messages: list, aggressive: bool = False) -> tuple[str, int]:
     """Compress message content and return (compressed_text, token_count)."""
-    from ..processors.text import TextProcessor
+    from tokenpak.compression.processors.text import TextProcessor
     from ..tokens import count_tokens
 
     proc = TextProcessor(aggressive=aggressive)

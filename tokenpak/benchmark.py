@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .processors import get_processor
+from tokenpak.compression.processors import get_processor
 from .registry import Block, BlockRegistry
 from .tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
 from .walker import walk_directory
