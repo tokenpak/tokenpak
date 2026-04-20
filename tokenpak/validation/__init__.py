@@ -1,63 +1,20 @@
-"""
-TokenPak Validation — Request + Response contract validation for the proxy pipeline.
+"""Backwards-compat shim — see core.validation.
 
-Response validation:
-    from tokenpak.validation import validate_response, is_valid, ResponseValidator
-
-    result = validate_response(response_dict)
-    if not result.valid:
-        print(result.errors)
-
-Request validation:
-    from tokenpak.validation import validate_request, RequestValidator
-
-    result = validate_request(body_bytes, provider="anthropic")
-    if not result.valid:
-        error_payload = result.to_error_response()  # 400-ready dict
+Canonical home is ``tokenpak.core.validation`` (Architecture §1 —
+core owns "schema/contract validation, shared data structures").
+Moved 2026-04-20 per D1 migration. Removal target: TIP-2.0.
 """
 
-from .request_schema import (
-    ANTHROPIC_MESSAGE_SCHEMA,
-    GOOGLE_GENERATE_CONTENT_SCHEMA,
-    OPENAI_CHAT_SCHEMA,
-    OPENAI_RESPONSES_SCHEMA,
-    get_request_schema,
-)
-from .request_validator import (
-    RequestValidationResult,
-    RequestValidator,
-    get_request_validator,
-    get_validation_mode,
-    validate_request,
-)
-from .response_schema import RESPONSE_SCHEMA, get_schema
-from .validator import (
-    ResponseValidator,
-    ValidationResult,
-    get_validator,
-    is_valid,
-    validate_response,
-)
+from __future__ import annotations
 
-__all__ = [
-    # Response validation
-    "RESPONSE_SCHEMA",
-    "get_schema",
-    "ResponseValidator",
-    "ValidationResult",
-    "validate_response",
-    "is_valid",
-    "get_validator",
-    # Request schemas
-    "ANTHROPIC_MESSAGE_SCHEMA",
-    "OPENAI_CHAT_SCHEMA",
-    "OPENAI_RESPONSES_SCHEMA",
-    "GOOGLE_GENERATE_CONTENT_SCHEMA",
-    "get_request_schema",
-    # Request validation
-    "RequestValidator",
-    "RequestValidationResult",
-    "validate_request",
-    "get_request_validator",
-    "get_validation_mode",
-]
+import warnings
+
+from tokenpak.core.validation import *  # noqa: F401,F403
+
+warnings.warn(
+    "tokenpak.validation is deprecated — "
+    "import from tokenpak.core.validation (canonical home since 2026-04-20, D1 migration). "
+    "Legacy shim removal target: TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)

@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from tokenpak.validation.frontmatter import FrontmatterDiagnostics, parse_frontmatter
+from tokenpak.core.validation.frontmatter import FrontmatterDiagnostics, parse_frontmatter
 
 from .base import ConnectorConfig, RemoteFile
 from .local import LocalConnector

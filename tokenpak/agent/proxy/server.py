@@ -696,7 +696,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # --- Request schema validation (strict/warn/off) ---
             if body:
                 try:
-                    from tokenpak.validation.request_validator import (
+                    from tokenpak.core.validation.request_validator import (
                         get_request_validator,
                     )
 
