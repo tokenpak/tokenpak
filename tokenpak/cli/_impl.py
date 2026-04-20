@@ -333,7 +333,7 @@ def cmd_setup(args):
 
 
 def cmd_start(args):
-    """Start the proxy on localhost:8766 (spawns tokenpak.agent.proxy.server)."""
+    """Start the proxy on localhost:8766 (spawns tokenpak.proxy.server)."""
     import subprocess
 
     port = int(os.environ.get("TOKENPAK_PORT", "8766"))
@@ -802,7 +802,7 @@ def cmd_stats(args):
         proxy_data = None
 
     # Also read from the JSONL file for accurate rolling stats
-    from tokenpak.agent.proxy.stats import CompressionStats
+    from tokenpak.proxy.stats import CompressionStats
 
     cs = CompressionStats()
     file_stats = cs.stats_from_file(limit=100)

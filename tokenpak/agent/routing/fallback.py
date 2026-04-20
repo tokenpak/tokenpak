@@ -53,7 +53,7 @@ from tokenpak.agent.agentic.retry import (
     RetryExhaustedError,
     load_recent_retry_events,
 )
-from tokenpak.agent.proxy.failover import (
+from tokenpak.proxy.failover import (
     FailoverManager,
     FailoverResult,
 )

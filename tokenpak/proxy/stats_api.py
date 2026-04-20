@@ -1,4 +1,4 @@
-"""tokenpak.agent.proxy.stats_api — Proxy HTTP endpoints for stats."""
+"""tokenpak.proxy.stats_api — Proxy HTTP endpoints for stats."""
 
 from __future__ import annotations
 

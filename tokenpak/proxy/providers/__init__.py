@@ -4,12 +4,12 @@ TokenPak Provider Modules
 Format handlers for different LLM API providers.
 """
 
-from tokenpak.agent.proxy.providers.anthropic import AnthropicFormat
-from tokenpak.agent.proxy.providers.detector import detect_provider
-from tokenpak.agent.proxy.providers.google import GoogleFormat
-from tokenpak.agent.proxy.providers.openai import OpenAIFormat
-from tokenpak.agent.proxy.providers.stream_translator import StreamingTranslator
-from tokenpak.agent.proxy.providers.translator import translate_request, translate_response
+from tokenpak.proxy.providers.anthropic import AnthropicFormat
+from tokenpak.proxy.providers.detector import detect_provider
+from tokenpak.proxy.providers.google import GoogleFormat
+from tokenpak.proxy.providers.openai import OpenAIFormat
+from tokenpak.proxy.providers.stream_translator import StreamingTranslator
+from tokenpak.proxy.providers.translator import translate_request, translate_response
 
 __all__ = [
     "AnthropicFormat",

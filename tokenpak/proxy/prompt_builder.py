@@ -24,7 +24,7 @@ ALWAYS — even for short requests that skip injection.
 
 Usage in proxy::
 
-    from tokenpak.agent.proxy.prompt_builder import apply_stable_cache_control
+    from tokenpak.proxy.prompt_builder import apply_stable_cache_control
 
     # Apply to every Anthropic request (before forwarding):
     body_bytes = apply_stable_cache_control(body_bytes)

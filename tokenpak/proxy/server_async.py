@@ -282,7 +282,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     if should_log and is_messages:
         # Import here to avoid circular imports
         try:
-            from tokenpak.agent.proxy.server import PipelineTrace
+            from tokenpak.proxy.server import PipelineTrace
 
             trace = PipelineTrace(
                 request_id=str(uuid.uuid4())[:8],
@@ -294,7 +294,7 @@ async def _forward_request(request: Request, target_url: str) -> Response:
     # Route detection
     if should_log and is_messages and body:
         try:
-            from tokenpak.agent.proxy.router import ProviderRouter
+            from tokenpak.proxy.router import ProviderRouter
 
             _router = ProviderRouter()
             route = _router.route(target_url, dict(request.headers), body)
@@ -496,7 +496,7 @@ def _record_telemetry(
     if input_tokens == 0:
         return
     try:
-        from tokenpak.agent.proxy.router import estimate_cost
+        from tokenpak.proxy.router import estimate_cost
 
         cost = estimate_cost(
             model, sent_input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
@@ -604,13 +604,13 @@ async def handle_trace_by_id(request: Request) -> JSONResponse:
 
 
 async def handle_degradation(request: Request) -> JSONResponse:
-    from tokenpak.agent.proxy.degradation import get_degradation_tracker
+    from tokenpak.proxy.degradation import get_degradation_tracker
 
     return JSONResponse(get_degradation_tracker().summary())
 
 
 async def handle_circuit_breakers(request: Request) -> JSONResponse:
-    from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry
+    from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
 
     registry = get_circuit_breaker_registry()
     return JSONResponse(
@@ -670,7 +670,7 @@ async def handle_proxy(request: Request) -> Response:
 
 async def handle_v1_proxy(request: Request) -> Response:
     """Handle /v1/* paths — reverse proxy to the appropriate provider."""
-    from tokenpak.agent.proxy.router import ProviderRouter
+    from tokenpak.proxy.router import ProviderRouter
 
     router = ProviderRouter()
     path = request.url.path

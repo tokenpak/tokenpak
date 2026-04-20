@@ -20,7 +20,7 @@ TOKENPAK_CB_ENABLED             Set to 0 to disable circuit breakers entirely (d
 
 Usage::
 
-    from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry
+    from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry
 
     registry = get_circuit_breaker_registry()
 

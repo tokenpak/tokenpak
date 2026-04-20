@@ -69,7 +69,7 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
     """
     from datetime import timezone
 
-    from tokenpak.agent.proxy.stats import get_compression_stats
+    from tokenpak.proxy.stats import get_compression_stats
 
     models = ["claude-haiku-3-5", "claude-sonnet-4", "gpt-4", "gpt-3.5-turbo", "claude-opus-4"]
 

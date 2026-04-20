@@ -60,9 +60,9 @@ ignore_imports =
     ; Remaining entries are transitive edges THROUGH the legacy
     ; server module itself; they collapse when agent.proxy.server
     ; folds into tokenpak.proxy.server (bigger D1 bite — MTC):
-    tokenpak.agent.proxy.server -> tokenpak.dashboard
-    tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
-    tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
+    tokenpak.proxy.server -> tokenpak.dashboard
+    tokenpak.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.proxy.server -> tokenpak.telemetry.metrics
     ;
     ; Same-level (Level-1 → Level-1) primitives that legitimately
     ; share concerns. Vault chunks content; compression processes
@@ -124,8 +124,8 @@ ignore_imports =
     ; big agent/proxy/* → proxy/* migration lands (MTC-sized initiative).
     ; Per Kevin 2026-04-20: agent/proxy/* is its own planned migration
     ; project, not a quick cleanup task.
-    tokenpak.agent.proxy.server -> tokenpak.orchestration.goals
-    tokenpak.agent.proxy.capsule_integration -> tokenpak.compression.capsules.builder
+    tokenpak.proxy.server -> tokenpak.orchestration.goals
+    tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     tokenpak.telemetry.server -> tokenpak.compression.capsules
 
 ; -----------------------------------------------------------------------
@@ -233,8 +233,8 @@ ignore_imports =
     ;   away when that module folds into tokenpak.proxy.server.
     ; - monitoring.metrics -> cache.registry: COLLAPSED (D1
     ;   migration moved monitoring/metrics to telemetry/metrics/).
-    tokenpak.agent.proxy.server -> tokenpak.cache.telemetry
-    tokenpak.agent.proxy.server -> tokenpak.telemetry.metrics
+    tokenpak.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.proxy.server -> tokenpak.telemetry.metrics
     ;
     ; §5.2-C pure local helper: `tokenpak fingerprint` CLI subcommand
     ; is a management UX — compute fingerprint of local file, sync
@@ -279,7 +279,7 @@ ignore_imports =
     ; migration pending). proxy.server shim re-exports agent.proxy
     ; .server which pulls in capsule_integration → compression.
     ; capsules.builder. Collapses when agent/proxy/* folds.
-    tokenpak.agent.proxy.capsule_integration -> tokenpak.compression.capsules.builder
+    tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     ;
     ; (2026-04-20: compiler moved to compression/compiler — edge
     ; is now intra-subsystem compression.compiler → compression.wire,

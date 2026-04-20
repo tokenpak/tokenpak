@@ -1,5 +1,5 @@
 """
-tokenpak.agent.proxy.capsule_integration
+tokenpak.proxy.capsule_integration
 ========================================
 
 Wire the CapsuleBuilder into the proxy request pipeline.
@@ -17,8 +17,8 @@ Usage
 -----
 ::
 
-    from tokenpak.agent.proxy.capsule_integration import get_capsule_request_hook
-    from tokenpak.agent.proxy.server import start_proxy
+    from tokenpak.proxy.capsule_integration import get_capsule_request_hook
+    from tokenpak.proxy.server import start_proxy
 
     # Get the capsule-enabled request hook
     hook = get_capsule_request_hook()
@@ -119,7 +119,7 @@ def capsule_request_hook(
 
         # ── Tool schema normalization (even when capsule builder is disabled) ──
         try:
-            from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+            from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 
             body, _schema_changed = _get_registry().normalize_request(body)
         except Exception as _exc:
@@ -179,7 +179,7 @@ def capsule_request_hook(
     # Normalize tool schemas to bit-for-byte identical bytes on every request.
     # This prevents cache misses caused by non-deterministic tool schema ordering.
     try:
-        from tokenpak.agent.proxy.tool_schema_registry import get_registry as _get_registry
+        from tokenpak.proxy.tool_schema_registry import get_registry as _get_registry
 
         body, _schema_changed = _get_registry().normalize_request(body)
         if _schema_changed:

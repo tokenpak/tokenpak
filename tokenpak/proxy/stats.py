@@ -1,4 +1,4 @@
-"""tokenpak.agent.proxy.stats — Compression telemetry logging.
+"""tokenpak.proxy.stats — Compression telemetry logging.
 
 Records per-request compression events to a rotating JSONL file and
 maintains an in-memory rolling window for fast aggregation.

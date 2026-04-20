@@ -42,7 +42,7 @@ system: [
 ### Simple Case: No Tools, No Retrieved Context
 
 ```python
-from tokenpak.agent.proxy.prompt_builder import DeterministicPromptPack
+from tokenpak.proxy.prompt_builder import DeterministicPromptPack
 
 pack = DeterministicPromptPack(
     system="You are a helpful AI assistant.",
@@ -107,7 +107,7 @@ body["system"] = "\n\n".join(system_parts)
 **After:**
 ```python
 # New way: deterministic, fixed order
-from tokenpak.agent.proxy.prompt_builder import DeterministicPromptPack
+from tokenpak.proxy.prompt_builder import DeterministicPromptPack
 
 pack = DeterministicPromptPack(
     system=system_prompt,
@@ -123,7 +123,7 @@ body["system"] = pack.to_system_block()
 
 ```python
 import os
-from tokenpak.agent.proxy.prompt_builder import DeterministicPromptPack, PromptBuilder
+from tokenpak.proxy.prompt_builder import DeterministicPromptPack, PromptBuilder
 
 USE_DETERMINISTIC_PACKING = os.getenv("USE_DETERMINISTIC_PACKING", "false").lower() == "true"
 

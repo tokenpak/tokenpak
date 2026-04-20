@@ -13,7 +13,7 @@ Action profiles:
 
 Usage::
 
-    from tokenpak.agent.proxy.intent_policy import resolve_policy, FALLBACK_POLICY
+    from tokenpak.proxy.intent_policy import resolve_policy, FALLBACK_POLICY
 
     policy = resolve_policy("summarize", {"target": "vault", "period": "7d"})
     # PolicyResult(recipe_id='summarize-compress', action_profile='compress', reason='intent:summarize')

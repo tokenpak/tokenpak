@@ -128,7 +128,7 @@ def _get_latest_compression_ratio() -> float:
     rolling stats.  Returns 0.0 if unavailable (no requests yet).
     """
     try:
-        from tokenpak.agent.proxy.stats import CompressionStats
+        from tokenpak.proxy.stats import CompressionStats
 
         stats = CompressionStats.get_global()  # type: ignore[attr-defined]
         ratio = stats.avg_ratio() if stats else 0.0

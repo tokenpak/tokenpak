@@ -14,7 +14,7 @@ This module solves the problem by:
 
 Usage in proxy::
 
-    from tokenpak.agent.proxy.tool_schema_registry import get_registry
+    from tokenpak.proxy.tool_schema_registry import get_registry
 
     # Normalize tools in the request body (returns new body bytes + metadata)
     new_body, changed = get_registry().normalize_request(body_bytes)

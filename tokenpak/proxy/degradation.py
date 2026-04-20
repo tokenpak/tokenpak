@@ -64,7 +64,7 @@ class DegradationTracker:
 
     Usage::
 
-        from tokenpak.agent.proxy.degradation import get_degradation_tracker
+        from tokenpak.proxy.degradation import get_degradation_tracker
         tracker = get_degradation_tracker()
         tracker.record("compression_failure", "CompressionError: …", recovered=True)
     """

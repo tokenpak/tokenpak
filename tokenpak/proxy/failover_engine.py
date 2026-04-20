@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from tokenpak.agent.proxy.failover import FailoverConfig, FailoverManager, load_failover_config
+from tokenpak.proxy.failover import FailoverConfig, FailoverManager, load_failover_config
 
 logger = logging.getLogger(__name__)
 

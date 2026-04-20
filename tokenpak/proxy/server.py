@@ -47,14 +47,14 @@ from tokenpak.cache.telemetry import get_collector as _get_cache_collector
 from tokenpak.telemetry.request_logger import log_request
 from tokenpak.telemetry.request_logger import new_request_id as _new_request_id
 
-from tokenpak.agent.proxy.circuit_breaker import get_circuit_breaker_registry, provider_from_url
-from tokenpak.agent.proxy.connection_pool import ConnectionPool, PoolConfig
-from tokenpak.agent.proxy.degradation import DegradationEventType, get_degradation_tracker
-from tokenpak.agent.proxy.passthrough import PassthroughConfig, forward_headers, validate_auth
-from tokenpak.agent.proxy.router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
-from tokenpak.agent.proxy.startup import format_startup_report, run_startup_checks
-from tokenpak.agent.proxy.stats import CompressionStats
-from tokenpak.agent.proxy.streaming import extract_sse_tokens
+from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry, provider_from_url
+from tokenpak.proxy.connection_pool import ConnectionPool, PoolConfig
+from tokenpak.proxy.degradation import DegradationEventType, get_degradation_tracker
+from tokenpak.proxy.passthrough import PassthroughConfig, forward_headers, validate_auth
+from tokenpak.proxy.router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
+from tokenpak.proxy.startup import format_startup_report, run_startup_checks
+from tokenpak.proxy.stats import CompressionStats
+from tokenpak.proxy.streaming import extract_sse_tokens
 
 # ---------------------------------------------------------------------------
 # Pipeline trace types

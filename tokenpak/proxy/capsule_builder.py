@@ -1,11 +1,11 @@
 """
-tokenpak.agent.proxy.capsule_builder
+tokenpak.proxy.capsule_builder
 =====================================
 
 Proxy-layer access to the CapsuleBuilder.
 
 This module exposes :class:`CapsuleBuilder` at the
-``tokenpak.agent.proxy.capsule_builder`` import path that the proxy
+``tokenpak.proxy.capsule_builder`` import path that the proxy
 pipeline expects, delegating to the canonical implementation in
 ``tokenpak.capsule.builder``.
 
@@ -13,7 +13,7 @@ Typical use
 -----------
 ::
 
-    from tokenpak.agent.proxy.capsule_builder import CapsuleBuilder
+    from tokenpak.proxy.capsule_builder import CapsuleBuilder
 
     builder = CapsuleBuilder(enabled=True)
     new_body, stats = builder.process(request_body_bytes)
@@ -22,7 +22,7 @@ Or via the feature-flag-aware factory:
 
 ::
 
-    from tokenpak.agent.proxy.capsule_builder import make_capsule_builder
+    from tokenpak.proxy.capsule_builder import make_capsule_builder
 
     builder = make_capsule_builder()  # respects TOKENPAK_CAPSULE_BUILDER env var
     new_body, stats = builder.process(request_body_bytes)
@@ -33,7 +33,7 @@ from __future__ import annotations
 import os
 
 # Re-export the canonical implementation so callers can do:
-#   from tokenpak.agent.proxy.capsule_builder import CapsuleBuilder
+#   from tokenpak.proxy.capsule_builder import CapsuleBuilder
 from tokenpak.compression.capsules.builder import (
     DEFAULT_HOT_WINDOW,
     DEFAULT_MIN_BLOCK_CHARS,

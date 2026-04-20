@@ -64,7 +64,7 @@ def run_startup_checks(port: int) -> Tuple[bool, List[str]]:
     # 2. Failover config validity                                          #
     # ------------------------------------------------------------------ #
     try:
-        from tokenpak.agent.proxy.failover import load_failover_config
+        from tokenpak.proxy.failover import load_failover_config
 
         fc = load_failover_config()
         if fc.enabled and not fc.chain:

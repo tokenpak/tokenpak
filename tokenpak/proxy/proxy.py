@@ -5,7 +5,7 @@ after it receives a response from an LLM provider.
 
 Usage (in your proxy's response handler)::
 
-    from tokenpak.agent.proxy.proxy import record_proxy_request
+    from tokenpak.proxy.proxy import record_proxy_request
 
     # After forwarding the upstream response:
     try:
