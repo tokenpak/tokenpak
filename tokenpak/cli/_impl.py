@@ -1183,7 +1183,7 @@ def cmd_aggregate(args):
     """Aggregate request ledger across machines."""
     import json as _json
 
-    from tokenpak.aggregate import (
+    from tokenpak.telemetry.aggregate import (
         aggregate_records,
         default_machine_name,
         load_requests,
@@ -1213,7 +1213,7 @@ def cmd_attribution(args):
     """View savings breakdown by agent/skill/model."""
     import json as _json
 
-    from tokenpak.attribution import AttributionTracker, format_attribution
+    from tokenpak.telemetry.attribution import AttributionTracker, format_attribution
 
     tracker = AttributionTracker()
     tracker.load()
@@ -1238,7 +1238,7 @@ def cmd_timeline(args):
     """View savings trend over 7/30 days."""
     import json as _json
 
-    from tokenpak.timeline import format_timeline, get_timeline
+    from tokenpak.telemetry.timeline import format_timeline, get_timeline
 
     days = getattr(args, "days", 7)
     entries = get_timeline(days=days)
