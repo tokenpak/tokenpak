@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from tokenpak.compression.processors import get_processor
 from tokenpak.registry import Block, BlockRegistry
 from tokenpak.tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
-from tokenpak.walker import walk_directory
+from tokenpak.sources.walker import walk_directory
 
 # ---------------------------------------------------------------------------
 # Built-in sample data for compression benchmark

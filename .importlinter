@@ -81,6 +81,15 @@ ignore_imports =
     ; sources.url_adapter. compression → sources is another Level-1
     ; collaboration (compression enriches what sources provides).
     tokenpak.reference_fetcher -> tokenpak.sources.url_adapter
+    ;
+    ; More Level-1 ↔ Level-1 collaboration: sources.walker is a
+    ; generic filesystem traversal utility used by vault (for
+    ; indexing) and debug (for benchmark/calibration). Cleaner to
+    ; share than to duplicate.
+    tokenpak.vault.watcher -> tokenpak.sources.walker
+    tokenpak.vault.indexer -> tokenpak.sources.walker
+    tokenpak.debug.benchmark -> tokenpak.sources.walker
+    tokenpak.debug.calibration -> tokenpak.sources.walker
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
