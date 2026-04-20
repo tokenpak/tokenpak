@@ -228,7 +228,7 @@ litellm.exceptions.APIConnectionError: Failed to connect to http://localhost:876
 **Fix:**
 1. Verify TokenPak is running: `curl http://localhost:8766/health`
 2. Check port is correct (default `8766`)
-3. If remote: use actual IP instead of `localhost` (e.g., `http://192.168.1.100:8766/v1`)
+3. If remote: use actual IP instead of `localhost` (e.g., `http://192.0.2.100:8766/v1` — substitute your proxy host's real IP)
 
 ---
 

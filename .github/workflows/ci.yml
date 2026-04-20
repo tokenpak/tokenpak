@@ -103,11 +103,14 @@ jobs:
       - name: Run Phase 2 coverage tests (Tier-1 modules)
         if: matrix.python-version == '3.11'
         run: |
+          # Tier-1 modules on github/main post-rewrite: tokenpak.validation,
+          # tokenpak.cache, and the error-handling subtree within tokenpak.proxy
+          # (error_response.py et al). The pre-rewrite tokenpak.core namespace
+          # was flattened during the v1.0.3 restructuring.
           python -m pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
             -v --tb=short \
             --junitxml=reports/test-results-phase2-py${{ matrix.python-version }}.xml \
-            --cov=tokenpak.core.validation \
-            --cov=tokenpak.core.error_handling \
+            --cov=tokenpak.validation \
             --cov=tokenpak.cache \
             --cov-report=xml:coverage-tier1.xml \
             --cov-report=term-missing \
@@ -118,13 +121,12 @@ jobs:
         run: |
           # Run pytest-cov on Tier-1 modules only, then enforce gate
           pytest tests/test_validation*.py tests/test_error*.py tests/test_cache*.py \
-            --cov=tokenpak.core.validation \
-            --cov=tokenpak.core.error_handling \
+            --cov=tokenpak.validation \
             --cov=tokenpak.cache \
             --cov-report=term-missing \
             -q --tb=no
           python -m coverage report \
-            --include='*/tokenpak/core/validation*,*/tokenpak/core/error_handling*,*/tokenpak/cache*' \
+            --include='*/tokenpak/validation*,*/tokenpak/cache*' \
             --fail-under=50 || {
             echo "::error::Tier-1 coverage below 50% — Phase 2 coverage gate FAILED"
             exit 1
