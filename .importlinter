@@ -75,6 +75,12 @@ ignore_imports =
     tokenpak.vault.indexer -> tokenpak.compression.processors
     tokenpak.debug.benchmark -> tokenpak.compression.processors
     tokenpak.debug.calibration -> tokenpak.compression.processors
+    ;
+    ; compression.compiler resolves external references (URLs, GitHub
+    ; issues) to enrich compile-time context; the URL fetch path hits
+    ; sources.url_adapter. compression → sources is another Level-1
+    ; collaboration (compression enriches what sources provides).
+    tokenpak.reference_fetcher -> tokenpak.sources.url_adapter
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -192,12 +198,11 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.compression.processors
     tokenpak.cli._impl -> tokenpak.compression.processors.text
     tokenpak.cli._impl -> tokenpak.compression.wire
+    tokenpak.cli._impl -> tokenpak.compression.compiler
     ;
-    ; Transitive via tokenpak.compiler (top-level module that
-    ; compiles blocks into wire format). §5.2-C pure local helper —
-    ; compiler operates on local blocks, never invokes a provider.
-    ; Collapses when compiler moves into compression/ per §1.
-    tokenpak.compiler -> tokenpak.compression.wire
+    ; (2026-04-20: compiler moved to compression/compiler — edge
+    ; is now intra-subsystem compression.compiler → compression.wire,
+    ; no allowlist needed.)
     ;
     ; (2026-04-20: benchmark and calibration moved to debug/benchmark
     ; and debug/calibration per §1; their direct-compression imports
@@ -218,6 +223,7 @@ ignore_imports =
     tokenpak -> tokenpak.compression.engines
     tokenpak -> tokenpak.compression.engines.base
     tokenpak -> tokenpak.compression.engines.heuristic
+    tokenpak -> tokenpak.compression.pack
     ;
     ; Vault indexer uses compression.processors to preprocess files.
     ; vault + compression are both Level-1 primitives; same-level

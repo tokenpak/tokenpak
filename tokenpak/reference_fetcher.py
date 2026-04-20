@@ -10,8 +10,8 @@ import os
 import urllib.request
 from typing import Optional
 
-from .connectors.url_adapter import SourceFetchError as URLFetchError
-from .connectors.url_adapter import URLAdapter
+from tokenpak.sources.url_adapter import SourceFetchError as URLFetchError
+from tokenpak.sources.url_adapter import URLAdapter
 from .reference_scanner import Reference, RefType
 
 _GITHUB_API = "https://api.github.com"

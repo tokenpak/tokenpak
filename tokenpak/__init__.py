@@ -67,7 +67,7 @@ from tokenpak.compression.engines import get_engine
 # CompressionEngine: abstract base for all compaction strategies
 from tokenpak.compression.engines.base import CompactionEngine as CompressionEngine
 from tokenpak.compression.engines.heuristic import HeuristicEngine
-from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
+from tokenpak.compression.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
 
 # ---------------------------------------------------------------------------
 # Content Blocks

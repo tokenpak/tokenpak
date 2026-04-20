@@ -778,7 +778,7 @@ def cmd_search(args):
         )
 
     if getattr(args, "inject_refs", False):
-        from ..compiler import compile_with_refs
+        from tokenpak.compression.compiler import compile_with_refs
 
         output = compile_with_refs(wire_blocks, args.query, args.budget)
     else:
