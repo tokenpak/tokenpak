@@ -70,7 +70,11 @@ dependencies = [
     # Compression + retrieval runtime
     "llmlingua>=0.1.0",
     "sentence-transformers>=2.2.0",
-    "tree-sitter-languages>=1.8.0",
+    # tree-sitter-languages has no Python 3.13 wheel (dormant package);
+    # pinned below 3.13 until a migration to modern per-language tree-sitter
+    # bindings ships in 1.1.0. Features that import it will raise ImportError
+    # on 3.13 installations — acceptable per graceful-degradation pattern.
+    "tree-sitter-languages>=1.8.0; python_version < '3.13'",
     # Data model + computation
     "pydantic>=2.0.0",
     "pandas>=1.3.0",
