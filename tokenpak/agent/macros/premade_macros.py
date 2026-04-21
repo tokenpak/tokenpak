@@ -84,8 +84,7 @@ class PremadeMacroRunner:
         """
         if name not in PREMADE_MACROS:
             raise ValueError(
-                f"Unknown premade macro: '{name}'. "
-                f"Available: {', '.join(PREMADE_MACROS.keys())}"
+                f"Unknown premade macro: '{name}'. Available: {', '.join(PREMADE_MACROS.keys())}"
             )
 
         INSTALL_DIR.mkdir(parents=True, exist_ok=True)
@@ -165,11 +164,11 @@ class PremadeMacroRunner:
     def format_output(self, result: Dict[str, Any]) -> str:
         """Format macro results for human-readable display."""
         lines = [
-            f"{'='*60}",
+            f"{'=' * 60}",
             f"  {result['name'].upper().replace('-', ' ')}",
             f"  {result['description']}",
             f"  Started: {result['started_at'][:19]}",
-            f"{'='*60}",
+            f"{'=' * 60}",
         ]
         for step in result["steps"]:
             status = "✅" if step["success"] else "❌"
@@ -181,9 +180,9 @@ class PremadeMacroRunner:
                 lines.append(f"   ⚠️  {step['error']}")
 
         dur = result.get("duration_seconds", 0)
-        lines.append(f"\n{'='*60}")
+        lines.append(f"\n{'=' * 60}")
         lines.append(f"  Completed in {dur:.1f}s")
-        lines.append(f"{'='*60}")
+        lines.append(f"{'=' * 60}")
         return "\n".join(lines)
 
     def list_available(self) -> List[Dict[str, str]]:

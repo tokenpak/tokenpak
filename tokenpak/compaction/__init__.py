@@ -1,54 +1,21 @@
-"""
-TokenPak Compaction — Standard Compression Policies.
+"""Backwards-compat shim — see compression.compaction.
 
-Public API::
-
-    from tokenpak.compaction import (
-        CompactionMode,
-        CompactionPolicy,
-        BlockPolicy,
-        compact,
-        TopicAwarePolicy,
-        TopicBoundaryDetector,
-        TopicSegment,
-    )
-
-    # One-shot compaction
-    result = compact(text, mode="balanced", target_tokens=2000)
-
-    # Policy-driven compaction
-    policy = CompactionPolicy.from_dict({
-        "compaction": {
-            "mode": "balanced",
-            "max_tokens": 8000,
-            "priority_order": ["instructions", "code", "knowledge"],
-            "per_block_limits": {
-                "instructions": {"mode": "lossless"},
-                "code": {"mode": "balanced", "max_tokens": 2000},
-            },
-        }
-    })
-    result = policy.compact_block(text, block_type="code")
-
-    # Topic-aware compaction
-    topic_policy = TopicAwarePolicy(
-        active_mode="balanced",
-        inactive_mode="aggressive",
-        activity_threshold=0.5,
-    )
-    result = topic_policy.compact_with_topics(text)
+Canonical home is ``tokenpak.compression.compaction`` (Architecture §1 —
+compaction is a compression concern: reduces context size via mode-
+based policies). Moved 2026-04-20 per D1 migration. Removal target:
+TIP-2.0.
 """
 
-from .modes import CompactionMode, compact
-from .policy import BlockPolicy, CompactionPolicy, TopicAwarePolicy
-from .topic_aware import TopicBoundaryDetector, TopicSegment
+from __future__ import annotations
 
-__all__ = [
-    "CompactionMode",
-    "CompactionPolicy",
-    "BlockPolicy",
-    "compact",
-    "TopicAwarePolicy",
-    "TopicBoundaryDetector",
-    "TopicSegment",
-]
+import warnings
+
+from tokenpak.compression.compaction import *  # noqa: F401,F403
+
+warnings.warn(
+    "tokenpak.compaction is deprecated — "
+    "import from tokenpak.compression.compaction (canonical home since 2026-04-20, D1 migration). "
+    "Legacy shim removal target: TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)

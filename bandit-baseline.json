@@ -2290,7 +2290,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/__init__.py": {
+    "tokenpak/cli/__init__.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2303,7 +2303,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/__init__.py": {
+    "tokenpak/cli/commands/__init__.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2316,7 +2316,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/alerts.py": {
+    "tokenpak/cli/commands/alerts.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2329,7 +2329,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/budget.py": {
+    "tokenpak/cli/commands/budget.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2342,7 +2342,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/compliance.py": {
+    "tokenpak/cli/commands/compliance.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2355,7 +2355,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/compression.py": {
+    "tokenpak/cli/commands/compression.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2368,7 +2368,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/config.py": {
+    "tokenpak/cli/commands/config.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2381,7 +2381,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/cost.py": {
+    "tokenpak/cli/commands/cost.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2394,7 +2394,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/dashboard.py": {
+    "tokenpak/cli/commands/dashboard.py": {
       "CONFIDENCE.HIGH": 6,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2407,7 +2407,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/debug.py": {
+    "tokenpak/cli/commands/debug.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2420,7 +2420,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/diff.py": {
+    "tokenpak/cli/commands/diff.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2433,7 +2433,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/doctor.py": {
+    "tokenpak/cli/commands/doctor.py": {
       "CONFIDENCE.HIGH": 6,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 1,
@@ -2446,7 +2446,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/exec.py": {
+    "tokenpak/cli/commands/exec.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2459,7 +2459,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/fingerprint.py": {
+    "tokenpak/cli/commands/fingerprint.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2472,7 +2472,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/handoff.py": {
+    "tokenpak/cli/commands/handoff.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2485,7 +2485,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/help.py": {
+    "tokenpak/cli/commands/help.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2498,7 +2498,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/index.py": {
+    "tokenpak/cli/commands/index.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2511,7 +2511,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/last.py": {
+    "tokenpak/cli/commands/last.py": {
       "CONFIDENCE.HIGH": 1,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2524,7 +2524,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/license.py": {
+    "tokenpak/cli/commands/license.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2537,7 +2537,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/maintenance.py": {
+    "tokenpak/cli/commands/maintenance.py": {
       "CONFIDENCE.HIGH": 5,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2550,7 +2550,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/metrics.py": {
+    "tokenpak/cli/commands/metrics.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2563,7 +2563,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/optimize.py": {
+    "tokenpak/cli/commands/optimize.py": {
       "CONFIDENCE.HIGH": 3,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2576,7 +2576,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/policy.py": {
+    "tokenpak/cli/commands/policy.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2589,7 +2589,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/preview.py": {
+    "tokenpak/cli/commands/preview.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2602,7 +2602,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/prune.py": {
+    "tokenpak/cli/commands/prune.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2615,7 +2615,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/replay.py": {
+    "tokenpak/cli/commands/replay.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2628,7 +2628,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/retain.py": {
+    "tokenpak/cli/commands/retain.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2641,7 +2641,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/route.py": {
+    "tokenpak/cli/commands/route.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2654,7 +2654,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/savings.py": {
+    "tokenpak/cli/commands/savings.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 2,
@@ -2667,7 +2667,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/serve.py": {
+    "tokenpak/cli/commands/serve.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2680,7 +2680,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/sla.py": {
+    "tokenpak/cli/commands/sla.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2693,7 +2693,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/status.py": {
+    "tokenpak/cli/commands/status.py": {
       "CONFIDENCE.HIGH": 1,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2706,7 +2706,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/teacher.py": {
+    "tokenpak/cli/commands/teacher.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2719,7 +2719,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/template.py": {
+    "tokenpak/cli/commands/template.py": {
       "CONFIDENCE.HIGH": 4,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2732,7 +2732,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/trigger.py": {
+    "tokenpak/cli/commands/trigger.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2745,7 +2745,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/validate_config.py": {
+    "tokenpak/cli/commands/validate_config.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2758,7 +2758,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/vault.py": {
+    "tokenpak/cli/commands/vault.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2771,7 +2771,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/commands/workflow.py": {
+    "tokenpak/cli/commands/workflow.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -2784,7 +2784,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/main.py": {
+    "tokenpak/cli/main.py": {
       "CONFIDENCE.HIGH": 8,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 2,
@@ -2797,7 +2797,7 @@
       "nosec": 0,
       "skipped_tests": 0
     },
-    "tokenpak/agent/cli/trigger_cmd.py": {
+    "tokenpak/cli/trigger_cmd.py": {
       "CONFIDENCE.HIGH": 3,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
@@ -11390,7 +11390,7 @@
       "code": "45         url = f\"http://127.0.0.1:{port}{path}\"\n46         with urllib.request.urlopen(url, timeout=timeout) as resp:\n47             return json.loads(resp.read())\n",
       "col_offset": 13,
       "end_col_offset": 57,
-      "filename": "tokenpak/agent/cli/commands/dashboard.py",
+      "filename": "tokenpak/cli/commands/dashboard.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11410,7 +11410,7 @@
       "code": "40     try:\n41         resp = urllib.request.urlopen(\n42             f\"http://127.0.0.1:{port}{path}\", timeout=timeout\n43         )\n44         return json.loads(resp.read())\n",
       "col_offset": 15,
       "end_col_offset": 9,
-      "filename": "tokenpak/agent/cli/commands/doctor.py",
+      "filename": "tokenpak/cli/commands/doctor.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11432,7 +11432,7 @@
       "code": "28     try:\n29         with urllib.request.urlopen(f\"{proxy_base}/stats/last\", timeout=5) as r:\n30             data = json.loads(r.read())\n",
       "col_offset": 13,
       "end_col_offset": 74,
-      "filename": "tokenpak/agent/cli/commands/last.py",
+      "filename": "tokenpak/cli/commands/last.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11452,7 +11452,7 @@
       "code": "91     try:\n92         with urllib.request.urlopen(f\"{PROXY_BASE}{path}\", timeout=timeout) as r:\n93             return json.loads(r.read())\n",
       "col_offset": 13,
       "end_col_offset": 75,
-      "filename": "tokenpak/agent/cli/commands/optimize.py",
+      "filename": "tokenpak/cli/commands/optimize.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11472,7 +11472,7 @@
       "code": "93     row = conn.execute(\n94         f\"\"\"\n95         SELECT\n96             COUNT(*)                                           AS requests,\n97             COALESCE(AVG(input_tokens), 0)                    AS avg_raw,\n98             COALESCE(AVG(CASE WHEN compressed_tokens > 0\n99                               THEN compressed_tokens\n100                               ELSE input_tokens END), 0)      AS avg_compressed,\n101             COALESCE(SUM(input_tokens), 0)                    AS total_raw,\n102             COALESCE(SUM(CASE WHEN compressed_tokens > 0\n103                               THEN compressed_tokens\n104                               ELSE input_tokens END), 0)      AS total_compressed,\n105             COALESCE(SUM(estimated_cost), 0.0)                AS total_cost\n106         FROM requests {where}\n107         \"\"\",\n108         params,\n",
       "col_offset": 12,
       "end_col_offset": 22,
-      "filename": "tokenpak/agent/cli/commands/savings.py",
+      "filename": "tokenpak/cli/commands/savings.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -11505,7 +11505,7 @@
       "code": "170     rows = conn.execute(\n171         f\"\"\"\n172         SELECT\n173             model,\n174             COUNT(*)                                           AS requests,\n175             COALESCE(AVG(input_tokens), 0)                    AS avg_raw,\n176             COALESCE(AVG(CASE WHEN compressed_tokens > 0\n177                               THEN compressed_tokens\n178                               ELSE input_tokens END), 0)      AS avg_compressed,\n179             COALESCE(SUM(input_tokens), 0)                    AS total_raw,\n180             COALESCE(SUM(CASE WHEN compressed_tokens > 0\n181                               THEN compressed_tokens\n182                               ELSE input_tokens END), 0)      AS total_compressed,\n183             COALESCE(SUM(estimated_cost), 0.0)                AS total_cost\n184         FROM requests {where}\n185         GROUP BY model\n186         ORDER BY total_raw DESC\n187         \"\"\",\n188         params,\n",
       "col_offset": 12,
       "end_col_offset": 22,
-      "filename": "tokenpak/agent/cli/commands/savings.py",
+      "filename": "tokenpak/cli/commands/savings.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -11541,7 +11541,7 @@
       "code": "27     try:\n28         with urllib.request.urlopen(url, timeout=timeout) as r:\n29             return json.loads(r.read())\n",
       "col_offset": 13,
       "end_col_offset": 57,
-      "filename": "tokenpak/agent/cli/commands/status.py",
+      "filename": "tokenpak/cli/commands/status.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11561,7 +11561,7 @@
       "code": "38         try:\n39             with urllib.request.urlopen(url, timeout=10) as resp:\n40                 result = json.loads(resp.read())\n",
       "col_offset": 17,
       "end_col_offset": 56,
-      "filename": "tokenpak/agent/cli/commands/template.py",
+      "filename": "tokenpak/cli/commands/template.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11581,7 +11581,7 @@
       "code": "90         try:\n91             with urllib.request.urlopen(f\"{server_url}/v1/team/templates\", timeout=10) as resp:\n92                 result = json.loads(resp.read())\n",
       "col_offset": 17,
       "end_col_offset": 86,
-      "filename": "tokenpak/agent/cli/commands/template.py",
+      "filename": "tokenpak/cli/commands/template.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11601,7 +11601,7 @@
       "code": "166         try:\n167             with urllib.request.urlopen(req, timeout=10) as resp:\n168                 json.loads(resp.read())\n",
       "col_offset": 17,
       "end_col_offset": 56,
-      "filename": "tokenpak/agent/cli/commands/template.py",
+      "filename": "tokenpak/cli/commands/template.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11621,7 +11621,7 @@
       "code": "195         try:\n196             with urllib.request.urlopen(req, timeout=10) as resp:\n197                 json.loads(resp.read())\n",
       "col_offset": 17,
       "end_col_offset": 56,
-      "filename": "tokenpak/agent/cli/commands/template.py",
+      "filename": "tokenpak/cli/commands/template.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11641,7 +11641,7 @@
       "code": "62     try:\n63         with urllib.request.urlopen(f\"{PROXY_BASE}{path}\", timeout=5) as r:\n64             return json.loads(r.read())\n",
       "col_offset": 13,
       "end_col_offset": 69,
-      "filename": "tokenpak/agent/cli/main.py",
+      "filename": "tokenpak/cli/main.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 22,
@@ -11661,7 +11661,7 @@
       "code": "100     row = conn.execute(\n101         f\"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens), SUM(estimated_cost) \"\n102         f\"FROM requests {where}\",\n103         params,\n",
       "col_offset": 10,
       "end_col_offset": 24,
-      "filename": "tokenpak/agent/cli/main.py",
+      "filename": "tokenpak/cli/main.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -11682,7 +11682,7 @@
       "code": "121     row = conn.execute(\n122         f\"SELECT COUNT(*), SUM(input_tokens), SUM(compressed_tokens), SUM(estimated_cost) \"\n123         f\"FROM requests {where}\",\n124         params,\n",
       "col_offset": 10,
       "end_col_offset": 24,
-      "filename": "tokenpak/agent/cli/main.py",
+      "filename": "tokenpak/cli/main.py",
       "issue_confidence": "MEDIUM",
       "issue_cwe": {
         "id": 89,
@@ -11703,7 +11703,7 @@
       "code": "236                 try:\n237                     r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)\n238                     entry[\"exit_code\"] = r.returncode\n",
       "col_offset": 24,
       "end_col_offset": 99,
-      "filename": "tokenpak/agent/cli/trigger_cmd.py",
+      "filename": "tokenpak/cli/trigger_cmd.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 78,
@@ -11723,7 +11723,7 @@
       "code": "262             try:\n263                 r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)\n264                 out = (r.stdout + r.stderr).strip()\n",
       "col_offset": 20,
       "end_col_offset": 95,
-      "filename": "tokenpak/agent/cli/trigger_cmd.py",
+      "filename": "tokenpak/cli/trigger_cmd.py",
       "issue_confidence": "HIGH",
       "issue_cwe": {
         "id": 78,

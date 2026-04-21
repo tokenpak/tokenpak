@@ -17,10 +17,10 @@ Usage::
 
 """
 
-from .detect import ContentType, detect_content_type
-from .log_extractor import LogExtractor
 from .code_extractor import CodeExtractor
+from .detect import ContentType, detect_content_type
 from .doc_extractor import DocExtractor
+from .log_extractor import LogExtractor
 from .router import SalientResult, extract
 
 __all__ = [

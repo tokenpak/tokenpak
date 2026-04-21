@@ -42,7 +42,7 @@ _DURATION_PATTERNS = [
     (re.compile(r"\b(?:last|past)\s+month\b", re.I), lambda _: "30d"),
     (re.compile(r"\b(\d+)\s*(weeks?)\b", re.I), lambda m: f"{m.group(1)} {m.group(2)}"),
     (re.compile(r"\b(\d+)\s*days?\b", re.I), lambda m: f"{m.group(1)}d"),
-    (re.compile(r"\b(\d+)\s*months?\b", re.I), lambda m: f"{int(m.group(1))*30}d"),
+    (re.compile(r"\b(\d+)\s*months?\b", re.I), lambda m: f"{int(m.group(1)) * 30}d"),
     (re.compile(r"\btoday\b", re.I), lambda _: "1d"),
     (re.compile(r"\bthis\s+week\b", re.I), lambda _: "7d"),
     (re.compile(r"\b(\d+)d\b", re.I), lambda m: f"{m.group(1)}d"),

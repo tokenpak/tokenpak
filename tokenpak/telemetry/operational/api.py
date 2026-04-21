@@ -13,7 +13,6 @@ RBAC integration added (2026-03-18):
 import os
 
 from flask import Flask, jsonify, request
-
 from tokenpak_operational_health import HealthChecker
 from tokenpak_operational_metrics import METRICS
 from tokenpak_operational_pruning import PruneJob, load_retention_config
@@ -91,13 +90,15 @@ def health():
         }
     """
     health_status = health_checker.health_check()
-    return jsonify({
-        "status": health_status.status,
-        "version": health_status.version,
-        "uptime_seconds": health_status.uptime_seconds,
-        "checks": health_status.checks,
-        "stats": health_status.stats,
-    }), 200
+    return jsonify(
+        {
+            "status": health_status.status,
+            "version": health_status.version,
+            "uptime_seconds": health_status.uptime_seconds,
+            "checks": health_status.checks,
+            "stats": health_status.stats,
+        }
+    ), 200
 
 
 # ---------------------------------------------------------------------------
@@ -130,23 +131,27 @@ def admin_prune():
     dry_run = request.args.get("dry_run", "false").lower() == "true"
 
     if dry_run:
-        return jsonify({
-            "success": True,
-            "message": "Dry run - no changes made",
-            "events_would_delete": 1000,
-            "rollups_would_delete": 50,
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": "Dry run - no changes made",
+                "events_would_delete": 1000,
+                "rollups_would_delete": 50,
+            }
+        ), 200
 
     result = prune_job.run_prune()
-    return jsonify({
-        "success": result.success,
-        "events_deleted": result.events_deleted,
-        "rollups_deleted": result.rollups_deleted,
-        "duration_seconds": result.duration_seconds,
-        "db_size_before_bytes": result.db_size_before_bytes,
-        "db_size_after_bytes": result.db_size_after_bytes,
-        "space_freed_bytes": result.db_size_before_bytes - result.db_size_after_bytes,
-    }), 200
+    return jsonify(
+        {
+            "success": result.success,
+            "events_deleted": result.events_deleted,
+            "rollups_deleted": result.rollups_deleted,
+            "duration_seconds": result.duration_seconds,
+            "db_size_before_bytes": result.db_size_before_bytes,
+            "db_size_after_bytes": result.db_size_after_bytes,
+            "space_freed_bytes": result.db_size_before_bytes - result.db_size_after_bytes,
+        }
+    ), 200
 
 
 @app.route("/v1/admin/vacuum", methods=["POST"])
@@ -185,30 +190,32 @@ def admin_stats():
     health_status = health_checker.health_check()
     stats = health_status.stats
 
-    return jsonify({
-        "events_total": stats.get("events_total", 0),
-        "events_today": stats.get("events_today", 0),
-        "rollups_total": METRICS.counters.rollups_total,
-        "ingest_total": METRICS.counters.ingest_total,
-        "ingest_errors": METRICS.counters.ingest_errors_total,
-        "ingest_error_rate": (
-            METRICS.counters.ingest_errors_total / METRICS.counters.ingest_total
-            if METRICS.counters.ingest_total > 0
-            else 0
-        ),
-        "ingest_latency_mean_ms": round(METRICS.ingest_latency.mean * 1000, 1),
-        "rollup_latency_mean_ms": round(METRICS.rollup_duration.mean * 1000, 1),
-        "db_size_bytes": stats.get("db_size_bytes", 0),
-        "db_size_mb": stats.get("db_size_mb", 0),
-        "last_ingest_at": stats.get("last_ingest_at"),
-        "last_rollup_at": stats.get("rollup_last_run"),
-        "retention_config": {
-            "events_days": retention_config.events_days,
-            "rollups_days": retention_config.rollups_days,
-            "auto_prune": retention_config.auto_prune,
-            "prune_schedule": retention_config.prune_schedule,
-        },
-    }), 200
+    return jsonify(
+        {
+            "events_total": stats.get("events_total", 0),
+            "events_today": stats.get("events_today", 0),
+            "rollups_total": METRICS.counters.rollups_total,
+            "ingest_total": METRICS.counters.ingest_total,
+            "ingest_errors": METRICS.counters.ingest_errors_total,
+            "ingest_error_rate": (
+                METRICS.counters.ingest_errors_total / METRICS.counters.ingest_total
+                if METRICS.counters.ingest_total > 0
+                else 0
+            ),
+            "ingest_latency_mean_ms": round(METRICS.ingest_latency.mean * 1000, 1),
+            "rollup_latency_mean_ms": round(METRICS.rollup_duration.mean * 1000, 1),
+            "db_size_bytes": stats.get("db_size_bytes", 0),
+            "db_size_mb": stats.get("db_size_mb", 0),
+            "last_ingest_at": stats.get("last_ingest_at"),
+            "last_rollup_at": stats.get("rollup_last_run"),
+            "retention_config": {
+                "events_days": retention_config.events_days,
+                "rollups_days": retention_config.rollups_days,
+                "auto_prune": retention_config.auto_prune,
+                "prune_schedule": retention_config.prune_schedule,
+            },
+        }
+    ), 200
 
 
 @app.route("/v1/admin/config", methods=["GET"])
@@ -220,18 +227,20 @@ def admin_config():
 
     Requires: VIEW_SETTINGS permission
     """
-    return jsonify({
-        "retention": {
-            "events_days": retention_config.events_days,
-            "rollups_days": retention_config.rollups_days,
-            "auto_prune": retention_config.auto_prune,
-            "prune_schedule": retention_config.prune_schedule,
-        },
-        "database": {
-            "path": DB_PATH,
-            "size_bytes": os.path.getsize(os.path.expanduser(DB_PATH)),
-        },
-    }), 200
+    return jsonify(
+        {
+            "retention": {
+                "events_days": retention_config.events_days,
+                "rollups_days": retention_config.rollups_days,
+                "auto_prune": retention_config.auto_prune,
+                "prune_schedule": retention_config.prune_schedule,
+            },
+            "database": {
+                "path": DB_PATH,
+                "size_bytes": os.path.getsize(os.path.expanduser(DB_PATH)),
+            },
+        }
+    ), 200
 
 
 # ---------------------------------------------------------------------------

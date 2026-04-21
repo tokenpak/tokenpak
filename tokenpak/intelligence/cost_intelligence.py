@@ -381,19 +381,16 @@ class CostIntelligence:
         if pct >= 95:
             level = "critical"
             message = (
-                f"CRITICAL: {pct:.1f}% of budget consumed "
-                f"(${spent_usd:.2f} / ${budget_usd:.2f})"
+                f"CRITICAL: {pct:.1f}% of budget consumed (${spent_usd:.2f} / ${budget_usd:.2f})"
             )
         elif pct >= 80:
             level = "warn"
             message = (
-                f"WARNING: {pct:.1f}% of budget consumed " f"(${spent_usd:.2f} / ${budget_usd:.2f})"
+                f"WARNING: {pct:.1f}% of budget consumed (${spent_usd:.2f} / ${budget_usd:.2f})"
             )
         else:
             level = "ok"
-            message = (
-                f"OK: {pct:.1f}% of budget consumed " f"(${spent_usd:.2f} / ${budget_usd:.2f})"
-            )
+            message = f"OK: {pct:.1f}% of budget consumed (${spent_usd:.2f} / ${budget_usd:.2f})"
 
         return BudgetAlert(
             level=level,

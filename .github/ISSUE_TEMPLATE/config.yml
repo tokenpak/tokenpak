@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 GitHub Discussions (Q&A, Ideas, Show & Tell)
+    url: https://github.com/tokenpak/tokenpak/discussions
+    about: Got a question or idea? Start a Discussion instead of an Issue.
+  - name: 📖 Documentation
+    url: https://github.com/tokenpak/tokenpak/blob/main/README.md
+    about: Check the docs before filing a bug — it might already be covered.

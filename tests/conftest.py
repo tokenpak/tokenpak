@@ -6,22 +6,22 @@ Provides:
 - Test API keys
 - Common test data generators
 """
+
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============================================================================
 # Test Data Generators
 # ============================================================================
+
 
 def make_entry(
     model: str = "claude-sonnet-4-6",
@@ -36,7 +36,7 @@ def make_entry(
     """Create a test entry with sensible defaults."""
     if timestamp is None:
         timestamp = datetime.now(timezone.utc).isoformat()
-    
+
     entry = {
         "model": model,
         "tokens": tokens,
@@ -45,10 +45,10 @@ def make_entry(
         "agent": agent,
         "provider": provider,
     }
-    
+
     if cache_tokens > 0 or extra:
         entry["extra"] = {"cache_tokens": cache_tokens, **extra}
-    
+
     return entry
 
 
@@ -77,6 +77,7 @@ def make_entries(
 # Config Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def temp_config_dir() -> Generator[Path, None, None]:
     """Create and clean up a temporary config directory."""
@@ -104,11 +105,11 @@ def valid_config_file(temp_config_dir: Path) -> Path:
             "openai": {"requests_per_minute": 100},
         },
     }
-    
+
     config_file = temp_config_dir / "config.json"
     with open(config_file, "w") as f:
         json.dump(config, f)
-    
+
     return config_file
 
 
@@ -118,7 +119,7 @@ def invalid_config_file(temp_config_dir: Path) -> Path:
     config_file = temp_config_dir / "invalid.json"
     with open(config_file, "w") as f:
         f.write("{invalid json")
-    
+
     return config_file
 
 
@@ -132,20 +133,21 @@ def missing_config_file(temp_config_dir: Path) -> Path:
 # Entry Store Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def test_entries_dir() -> Generator[Path, None, None]:
     """Create a temporary entries directory with sample JSONL data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         entries_dir = Path(tmpdir) / "entries"
         entries_dir.mkdir(parents=True)
-        
+
         # Write sample entries for 2026-03-01
         entries_file = entries_dir / "2026-03-01.jsonl"
         entries = make_entries(5)
         with open(entries_file, "w") as f:
             for entry in entries:
                 f.write(json.dumps(entry) + "\n")
-        
+
         yield entries_dir
 
 
@@ -153,12 +155,14 @@ def test_entries_dir() -> Generator[Path, None, None]:
 def mock_entry_store(test_entries_dir: Path) -> Any:
     """Return an EntryStore pointing to test data."""
     from tokenpak.agent.query.api import EntryStore
+
     return EntryStore(entries_dir=test_entries_dir)
 
 
 # ============================================================================
 # Provider Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_anthropic_provider() -> MagicMock:
@@ -185,6 +189,7 @@ def mock_openai_provider() -> MagicMock:
 # ============================================================================
 # Sample Data Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_entry() -> dict[str, Any]:
@@ -248,6 +253,7 @@ def sample_entries_with_compression() -> list[dict[str, Any]]:
 # Rate Limiting Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def rate_limit_config() -> dict[str, Any]:
     """Configuration for rate limit testing."""
@@ -269,12 +275,14 @@ def rate_limit_config() -> dict[str, Any]:
 # API Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def test_api_client() -> Any:
     """Create a test FastAPI client for query API."""
     from fastapi.testclient import TestClient
+
     from tokenpak.agent.query.api import create_query_app
-    
+
     app = create_query_app()
     return TestClient(app)
 
@@ -283,7 +291,8 @@ def test_api_client() -> Any:
 def test_ingest_client() -> Any:
     """Create a test FastAPI client for ingest API."""
     from fastapi.testclient import TestClient
+
     from tokenpak.agent.ingest.api import create_ingest_app
-    
+
     app = create_ingest_app()
     return TestClient(app)

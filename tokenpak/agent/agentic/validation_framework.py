@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import subprocess
 import time
@@ -41,9 +40,11 @@ logger = logging.getLogger(__name__)
 # Core data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationCheck:
     """Single named check within a validation run."""
+
     name: str
     passed: bool
     message: str = ""
@@ -53,9 +54,10 @@ class ValidationCheck:
 @dataclass
 class ValidationResult:
     """Aggregate result from a PostActionValidator.validate() call."""
+
     passed: bool
     checks: List[ValidationCheck]
-    confidence: float          # 0.0–1.0
+    confidence: float  # 0.0–1.0
     evidence: Dict[str, Any]
     validator_name: str = ""
     duration_seconds: float = 0.0
@@ -74,6 +76,7 @@ class ValidationResult:
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
+
 
 class PostActionValidator(ABC):
     """Base class for all post-action validators."""
@@ -109,6 +112,7 @@ class PostActionValidator(ABC):
 # ---------------------------------------------------------------------------
 # Built-in Validators
 # ---------------------------------------------------------------------------
+
 
 class ServiceHealthValidator(PostActionValidator):
     """Validate that a service is reachable and healthy.
@@ -150,51 +154,60 @@ class ServiceHealthValidator(PostActionValidator):
                     body = resp.read(512).decode("utf-8", errors="replace")
                 evidence["http_status"] = code
                 evidence["http_body_snippet"] = body[:200]
-                checks.append(ValidationCheck(
-                    name="http_health",
-                    passed=(code == self.expected_status),
-                    message=f"HTTP {code} (expected {self.expected_status})",
-                    evidence={"status_code": code},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="http_health",
+                        passed=(code == self.expected_status),
+                        message=f"HTTP {code} (expected {self.expected_status})",
+                        evidence={"status_code": code},
+                    )
+                )
             except (urllib.error.URLError, OSError) as exc:
                 evidence["http_error"] = str(exc)
-                checks.append(ValidationCheck(
-                    name="http_health",
-                    passed=False,
-                    message=f"HTTP request failed: {exc}",
-                    evidence={"error": str(exc)},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="http_health",
+                        passed=False,
+                        message=f"HTTP request failed: {exc}",
+                        evidence={"error": str(exc)},
+                    )
+                )
 
         # -- Process check --
         if self.process_name:
             try:
                 result = subprocess.run(
-                    ["pgrep", "-f", self.process_name],
-                    capture_output=True, text=True
+                    ["pgrep", "-f", self.process_name], capture_output=True, text=True
                 )
                 running = result.returncode == 0
                 pids = result.stdout.strip().splitlines()
                 evidence["process_pids"] = pids
-                checks.append(ValidationCheck(
-                    name="process_running",
-                    passed=running,
-                    message=f"Process '{self.process_name}' {'found' if running else 'not found'} (pids={pids})",
-                    evidence={"pids": pids},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="process_running",
+                        passed=running,
+                        message=f"Process '{self.process_name}' {'found' if running else 'not found'} (pids={pids})",
+                        evidence={"pids": pids},
+                    )
+                )
             except FileNotFoundError:
                 # pgrep not available — skip gracefully
-                checks.append(ValidationCheck(
-                    name="process_running",
-                    passed=False,
-                    message="pgrep not available",
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="process_running",
+                        passed=False,
+                        message="pgrep not available",
+                    )
+                )
 
         if not checks:
-            checks.append(ValidationCheck(
-                name="no_checks_configured",
-                passed=False,
-                message="ServiceHealthValidator: no url or process_name configured",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="no_checks_configured",
+                    passed=False,
+                    message="ServiceHealthValidator: no url or process_name configured",
+                )
+            )
 
         return self._make_result(checks, evidence, time.monotonic() - start)
 
@@ -243,12 +256,14 @@ class TestSuiteValidator(PostActionValidator):
 
             # Check exit code
             exit_ok = returncode == 0
-            checks.append(ValidationCheck(
-                name="test_exit_code",
-                passed=exit_ok,
-                message=f"Test suite exited with code {returncode}",
-                evidence={"returncode": returncode},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="test_exit_code",
+                    passed=exit_ok,
+                    message=f"Test suite exited with code {returncode}",
+                    evidence={"returncode": returncode},
+                )
+            )
 
             # Try to parse pytest-style summary: "X passed, Y failed"
             passed_count: Optional[int] = None
@@ -267,26 +282,32 @@ class TestSuiteValidator(PostActionValidator):
                 evidence["passed"] = passed_count
                 evidence["failed"] = failed_count
                 evidence["pass_pct"] = round(pct, 1)
-                checks.append(ValidationCheck(
-                    name="pass_rate",
-                    passed=(pct >= self.min_pass_pct),
-                    message=f"{passed_count}/{total} tests passed ({pct:.1f}% >= {self.min_pass_pct}% required)",
-                    evidence={"pass_pct": pct, "required": self.min_pass_pct},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name="pass_rate",
+                        passed=(pct >= self.min_pass_pct),
+                        message=f"{passed_count}/{total} tests passed ({pct:.1f}% >= {self.min_pass_pct}% required)",
+                        evidence={"pass_pct": pct, "required": self.min_pass_pct},
+                    )
+                )
 
         except subprocess.TimeoutExpired:
-            checks.append(ValidationCheck(
-                name="test_timeout",
-                passed=False,
-                message=f"Test suite timed out after {self.timeout}s",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="test_timeout",
+                    passed=False,
+                    message=f"Test suite timed out after {self.timeout}s",
+                )
+            )
         except Exception as exc:
-            checks.append(ValidationCheck(
-                name="test_execution",
-                passed=False,
-                message=f"Failed to run test suite: {exc}",
-                evidence={"error": str(exc)},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="test_execution",
+                    passed=False,
+                    message=f"Failed to run test suite: {exc}",
+                    evidence={"error": str(exc)},
+                )
+            )
 
         return self._make_result(checks, evidence, time.monotonic() - start)
 
@@ -322,23 +343,27 @@ class FileStateValidator(PostActionValidator):
             p = Path(path_str).expanduser()
             exists = p.exists()
             evidence[f"exists:{path_str}"] = exists
-            checks.append(ValidationCheck(
-                name=f"exists:{p.name}",
-                passed=exists,
-                message=f"{'Found' if exists else 'Missing'}: {path_str}",
-                evidence={"path": str(p), "exists": exists},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"exists:{p.name}",
+                    passed=exists,
+                    message=f"{'Found' if exists else 'Missing'}: {path_str}",
+                    evidence={"path": str(p), "exists": exists},
+                )
+            )
 
         for path_str in self.must_not_exist:
             p = Path(path_str).expanduser()
             absent = not p.exists()
             evidence[f"absent:{path_str}"] = absent
-            checks.append(ValidationCheck(
-                name=f"absent:{p.name}",
-                passed=absent,
-                message=f"{'Absent (ok)' if absent else 'Unexpectedly present'}: {path_str}",
-                evidence={"path": str(p), "absent": absent},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"absent:{p.name}",
+                    passed=absent,
+                    message=f"{'Absent (ok)' if absent else 'Unexpectedly present'}: {path_str}",
+                    evidence={"path": str(p), "absent": absent},
+                )
+            )
 
         for path_str, min_ts in self.must_be_newer_than.items():
             p = Path(path_str).expanduser()
@@ -346,18 +371,22 @@ class FileStateValidator(PostActionValidator):
                 mtime = p.stat().st_mtime
                 newer = mtime >= min_ts
                 evidence[f"mtime:{path_str}"] = mtime
-                checks.append(ValidationCheck(
-                    name=f"newer:{p.name}",
-                    passed=newer,
-                    message=f"{path_str} mtime={mtime:.0f} {'≥' if newer else '<'} {min_ts:.0f}",
-                    evidence={"mtime": mtime, "min_ts": min_ts},
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name=f"newer:{p.name}",
+                        passed=newer,
+                        message=f"{path_str} mtime={mtime:.0f} {'≥' if newer else '<'} {min_ts:.0f}",
+                        evidence={"mtime": mtime, "min_ts": min_ts},
+                    )
+                )
             else:
-                checks.append(ValidationCheck(
-                    name=f"newer:{p.name}",
-                    passed=False,
-                    message=f"{path_str} does not exist (can't check mtime)",
-                ))
+                checks.append(
+                    ValidationCheck(
+                        name=f"newer:{p.name}",
+                        passed=False,
+                        message=f"{path_str} does not exist (can't check mtime)",
+                    )
+                )
 
         for path_str, pattern in self.content_patterns.items():
             p = Path(path_str).expanduser()
@@ -365,31 +394,39 @@ class FileStateValidator(PostActionValidator):
                 try:
                     text = p.read_text(errors="replace")
                     match = bool(re.search(pattern, text))
-                    checks.append(ValidationCheck(
-                        name=f"content:{p.name}",
-                        passed=match,
-                        message=f"Pattern {'found' if match else 'NOT found'} in {path_str}: {pattern!r}",
-                        evidence={"pattern": pattern, "match": match},
-                    ))
+                    checks.append(
+                        ValidationCheck(
+                            name=f"content:{p.name}",
+                            passed=match,
+                            message=f"Pattern {'found' if match else 'NOT found'} in {path_str}: {pattern!r}",
+                            evidence={"pattern": pattern, "match": match},
+                        )
+                    )
                 except OSError as exc:
-                    checks.append(ValidationCheck(
+                    checks.append(
+                        ValidationCheck(
+                            name=f"content:{p.name}",
+                            passed=False,
+                            message=f"Could not read {path_str}: {exc}",
+                        )
+                    )
+            else:
+                checks.append(
+                    ValidationCheck(
                         name=f"content:{p.name}",
                         passed=False,
-                        message=f"Could not read {path_str}: {exc}",
-                    ))
-            else:
-                checks.append(ValidationCheck(
-                    name=f"content:{p.name}",
-                    passed=False,
-                    message=f"{path_str} does not exist (can't check content)",
-                ))
+                        message=f"{path_str} does not exist (can't check content)",
+                    )
+                )
 
         if not checks:
-            checks.append(ValidationCheck(
-                name="no_checks_configured",
-                passed=True,
-                message="FileStateValidator: no checks configured (vacuously passing)",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="no_checks_configured",
+                    passed=True,
+                    message="FileStateValidator: no checks configured (vacuously passing)",
+                )
+            )
 
         return self._make_result(checks, evidence, time.monotonic() - start)
 
@@ -422,22 +459,26 @@ class SchemaValidator(PostActionValidator):
         # Required keys
         for key in self.schema.get("required_keys", []):
             present = key in action_result
-            checks.append(ValidationCheck(
-                name=f"required_key:{key}",
-                passed=present,
-                message=f"Key '{key}' {'present' if present else 'MISSING'} in action_result",
-                evidence={"key": key, "present": present},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"required_key:{key}",
+                    passed=present,
+                    message=f"Key '{key}' {'present' if present else 'MISSING'} in action_result",
+                    evidence={"key": key, "present": present},
+                )
+            )
 
         # Disallowed keys
         for key in self.schema.get("disallowed_keys", []):
             absent = key not in action_result
-            checks.append(ValidationCheck(
-                name=f"disallowed_key:{key}",
-                passed=absent,
-                message=f"Key '{key}' {'absent (ok)' if absent else 'unexpectedly present'}",
-                evidence={"key": key, "absent": absent},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"disallowed_key:{key}",
+                    passed=absent,
+                    message=f"Key '{key}' {'absent (ok)' if absent else 'unexpectedly present'}",
+                    evidence={"key": key, "absent": absent},
+                )
+            )
 
         # Type checks
         for key, expected_type in self.schema.get("types", {}).items():
@@ -445,12 +486,18 @@ class SchemaValidator(PostActionValidator):
                 continue  # covered by required_keys check
             val = action_result[key]
             type_ok = isinstance(val, expected_type)
-            checks.append(ValidationCheck(
-                name=f"type:{key}",
-                passed=type_ok,
-                message=f"'{key}' type={type(val).__name__} {'==' if type_ok else '!='} {expected_type.__name__}",
-                evidence={"key": key, "actual_type": type(val).__name__, "expected_type": expected_type.__name__},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"type:{key}",
+                    passed=type_ok,
+                    message=f"'{key}' type={type(val).__name__} {'==' if type_ok else '!='} {expected_type.__name__}",
+                    evidence={
+                        "key": key,
+                        "actual_type": type(val).__name__,
+                        "expected_type": expected_type.__name__,
+                    },
+                )
+            )
 
         # Allowed values
         for key, allowed in self.schema.get("allowed_values", {}).items():
@@ -458,19 +505,23 @@ class SchemaValidator(PostActionValidator):
                 continue
             val = action_result[key]
             value_ok = val in allowed
-            checks.append(ValidationCheck(
-                name=f"allowed_value:{key}",
-                passed=value_ok,
-                message=f"'{key}'={val!r} {'∈' if value_ok else '∉'} allowed={allowed}",
-                evidence={"key": key, "value": val, "allowed": allowed},
-            ))
+            checks.append(
+                ValidationCheck(
+                    name=f"allowed_value:{key}",
+                    passed=value_ok,
+                    message=f"'{key}'={val!r} {'∈' if value_ok else '∉'} allowed={allowed}",
+                    evidence={"key": key, "value": val, "allowed": allowed},
+                )
+            )
 
         if not checks:
-            checks.append(ValidationCheck(
-                name="empty_schema",
-                passed=True,
-                message="SchemaValidator: empty schema (vacuously passing)",
-            ))
+            checks.append(
+                ValidationCheck(
+                    name="empty_schema",
+                    passed=True,
+                    message="SchemaValidator: empty schema (vacuously passing)",
+                )
+            )
 
         return self._make_result(checks, evidence, time.monotonic() - start)
 
@@ -478,6 +529,7 @@ class SchemaValidator(PostActionValidator):
 # ---------------------------------------------------------------------------
 # Orchestrator / Workflow Integration
 # ---------------------------------------------------------------------------
+
 
 class ValidationError(Exception):
     """Raised when validation fails and retry is exhausted."""
@@ -536,7 +588,11 @@ class ValidationOrchestrator:
             logger.debug("No validators for step '%s' — skipping", step_name)
             return ValidationResult(
                 passed=True,
-                checks=[ValidationCheck(name="no_validators", passed=True, message="No validators registered")],
+                checks=[
+                    ValidationCheck(
+                        name="no_validators", passed=True, message="No validators registered"
+                    )
+                ],
                 confidence=1.0,
                 evidence={},
                 validator_name="ValidationOrchestrator",
@@ -553,7 +609,9 @@ class ValidationOrchestrator:
                 logger.exception("Validator %s raised: %s", v.name, exc)
                 r = ValidationResult(
                     passed=False,
-                    checks=[ValidationCheck(name="validator_error", passed=False, message=str(exc))],
+                    checks=[
+                        ValidationCheck(name="validator_error", passed=False, message=str(exc))
+                    ],
                     confidence=0.0,
                     evidence={"exception": str(exc)},
                     validator_name=v.name,
@@ -573,11 +631,13 @@ class ValidationOrchestrator:
             evidence=all_evidence,
             validator_name="ValidationOrchestrator",
         )
-        self._history.append({
-            "step": step_name,
-            "passed": merged.passed,
-            "timestamp": time.time(),
-        })
+        self._history.append(
+            {
+                "step": step_name,
+                "passed": merged.passed,
+                "timestamp": time.time(),
+            }
+        )
         return merged
 
     def handle_failure(
@@ -610,7 +670,10 @@ class ValidationOrchestrator:
         for attempt in range(1, policy.max_retries + 1):
             logger.warning(
                 "Validation failed for step '%s' (attempt %d/%d). Retrying in %.1fs…",
-                step_name, attempt, policy.max_retries, policy.retry_delay_seconds,
+                step_name,
+                attempt,
+                policy.max_retries,
+                policy.retry_delay_seconds,
             )
             time.sleep(policy.retry_delay_seconds)
 
@@ -631,7 +694,9 @@ class ValidationOrchestrator:
                 return current_result
 
         # Retries exhausted
-        logger.error("Validation exhausted after %d retries for step '%s'", policy.max_retries, step_name)
+        logger.error(
+            "Validation exhausted after %d retries for step '%s'", policy.max_retries, step_name
+        )
         if policy.escalate_on_exhaustion:
             if self.on_escalate:
                 self.on_escalate(step_name, current_result)
@@ -665,6 +730,7 @@ class ValidationOrchestrator:
 # Workflow integration helper
 # ---------------------------------------------------------------------------
 
+
 def make_validated_step_handler(
     step_name: str,
     handler: Callable,
@@ -689,6 +755,7 @@ def make_validated_step_handler(
         }
         wf_manager.run(wf_id, handlers)
     """
+
     def _wrapped(step, wf):
         action_result = handler(step, wf)
         if action_result is None:

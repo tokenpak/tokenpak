@@ -210,9 +210,7 @@ class StateCollector:
             state.uncommitted_count = len([l for l in out.splitlines() if l.strip()])
 
         # Last commit message (short)
-        rc, out, _ = _run(
-            ["git", "log", "-1", "--pretty=format:%s (%ar)"], cwd=self.cwd
-        )
+        rc, out, _ = _run(["git", "log", "-1", "--pretty=format:%s (%ar)"], cwd=self.cwd)
         if rc == 0:
             state.last_commit = out[:120]  # cap length
 
@@ -285,15 +283,42 @@ class StateCollector:
         state = FileState()
 
         rc, out, err = _run(
-            ["find", self.cwd, "-maxdepth", "4", "-newer", "/tmp", "-type", "f",
-             "!", "-path", "*/.git/*", "!", "-path", "*/__pycache__/*",
-             "!", "-path", "*/.mypy_cache/*"],
+            [
+                "find",
+                self.cwd,
+                "-maxdepth",
+                "4",
+                "-newer",
+                "/tmp",
+                "-type",
+                "f",
+                "!",
+                "-path",
+                "*/.git/*",
+                "!",
+                "-path",
+                "*/__pycache__/*",
+                "!",
+                "-path",
+                "*/.mypy_cache/*",
+            ],
         )
         if rc != 0:
             # Fallback: files modified in last 10 minutes
             rc, out, err = _run(
-                ["find", self.cwd, "-maxdepth", "4", "-mmin", "-10", "-type", "f",
-                 "!", "-path", "*/.git/*"],
+                [
+                    "find",
+                    self.cwd,
+                    "-maxdepth",
+                    "4",
+                    "-mmin",
+                    "-10",
+                    "-type",
+                    "f",
+                    "!",
+                    "-path",
+                    "*/.git/*",
+                ],
             )
 
         if rc == 0:

@@ -85,7 +85,7 @@ def activate(token: str) -> ValidationResult:
 
     if not result.is_usable:
         raise ValueError(
-            f"License activation failed: {result.message} " f"(status={result.status.value})"
+            f"License activation failed: {result.message} (status={result.status.value})"
         )
 
     # Write the token

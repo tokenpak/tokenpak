@@ -38,7 +38,7 @@ def _require_pro(request: Request) -> Optional[JSONResponse]:
             content={
                 "error": "Forbidden",
                 "detail": (
-                    "Cost Intelligence is a Pro+ feature. " "Upgrade at https://tokenpak.ai/pricing"
+                    "Cost Intelligence is a Pro+ feature. Upgrade at https://tokenpak.ai/pricing"
                 ),
             },
         )

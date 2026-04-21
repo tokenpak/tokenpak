@@ -1,0 +1,74 @@
+name: Repo Hygiene Check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  hygiene:
+    name: Check for internal/sensitive content
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for internal filenames
+        run: |
+          echo "Scanning tracked files for internal document patterns..."
+          # Check for files with internal naming patterns (exact filename patterns, not word matches)
+          BLOCKED=$(git ls-files | grep -iE '(^|/)AUDIT[^/]*\.md$|(^|/)SECURITY_AUDIT[^/]*\.md$|(^|/)COVERAGE_GAPS[^/]*\.md$|(^|/)LAUNCH_CHECKLIST[^/]*\.md$' || true)
+          if [ -n "$BLOCKED" ]; then
+            echo "::error::Internal files detected in repo:"
+            echo "$BLOCKED"
+            echo ""
+            echo "These files belong in the private vault, not the public repo."
+            echo "Remove them with: git rm <file>"
+            exit 1
+          fi
+          echo "✅ No internal filenames found"
+
+      - name: Check for hardcoded private-network IPs
+        run: |
+          # Matches RFC 1918 ranges (10/8, 172.16/12, 192.168/16). Any of these
+          # appearing in tracked files is usually a local-infrastructure leak.
+          echo "Scanning for hardcoded private-network IP addresses..."
+          LEAKS=$(grep -rnE '(^|[^0-9])(10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+|192\.168\.[0-9]+\.[0-9]+)([^0-9]|$)' \
+            --include='*.md' --include='*.py' --include='*.yaml' --include='*.yml' \
+            --include='*.json' --include='*.toml' --include='*.cfg' --include='*.ini' \
+            --include='*.txt' --include='*.rst' --include='*.sh' \
+            . || true)
+          if [ -n "$LEAKS" ]; then
+            echo "::error::Private-network IPs detected:"
+            echo "$LEAKS"
+            echo ""
+            echo "Replace with generic placeholders like <your-ip>, or the documented"
+            echo "convention (127.0.0.1 for loopback; otherwise <host>)."
+            exit 1
+          fi
+          echo "✅ No private-network IPs found"
+
+      - name: Check for local-network hostnames
+        run: |
+          echo "Scanning for local-network hostnames..."
+          # Use git ls-files to scan only tracked files (avoids false positives from
+          # build/ artifacts, .github/ workflow source patterns, and other untracked dirs).
+          # Matches @X.local / @X.internal / @X.lan style references without enumerating
+          # specific hosts in the workflow source.
+          HOSTS=$(git ls-files \
+            --exclude-standard \
+            | grep -E '\.(md|py|yaml|yml|json|toml|cfg|ini|txt|rst|sh)$' \
+            | grep -v '^\.github/' \
+            | xargs grep -nE '@[a-zA-Z0-9-]+\.(local|internal|lan|home|private)\b' 2>/dev/null \
+            | grep -v '\.gitignore' || true)
+          if [ -n "$HOSTS" ]; then
+            echo "::error::Local-network hostnames detected:"
+            echo "$HOSTS"
+            echo ""
+            echo "Replace with the public identity (e.g. hello@tokenpak.ai) or a generic placeholder."
+            exit 1
+          fi
+          echo "✅ No local-network hostnames found"

@@ -471,7 +471,7 @@ def create_app(
     async def get_trace(trace_id: str):
         """Return full trace details including events, usage, cost, segments."""
         try:
-            from tokenpak.cache_report import format_cache_report
+            from tokenpak.telemetry.cache_report import format_cache_report
 
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(_executor, lambda: _storage.get_trace(trace_id))
@@ -640,7 +640,7 @@ def create_app(
         try:
             import dataclasses
 
-            from tokenpak.capsule import CapsuleBuilder
+            from tokenpak.compression.capsules import CapsuleBuilder
 
             builder = CapsuleBuilder()
             capsule = builder.build(  # type: ignore[attr-defined]
@@ -652,7 +652,7 @@ def create_app(
                 retrieval_chunks=body.retrieval_chunks,
             )
             # Run ValidationGate before returning capsule
-            from tokenpak.validation_gate import ValidationGate
+            from tokenpak.compression.validation_gate import ValidationGate
 
             gate = ValidationGate()
             vresult = gate.validate(capsule, dry_run=False)
@@ -770,7 +770,10 @@ def create_app(
 
             # 3. Refresh agent telemetry JSON (no git commit)
             agent_telemetry_script = os.path.expanduser(
-                "~/vault/06_RUNTIME/scripts/collect-agent-telemetry.py"
+                os.environ.get(
+                    "TOKENPAK_COLLECT_TELEMETRY_SCRIPT",
+                    "~/.tokenpak/scripts/collect-agent-telemetry.py",
+                )
             )
             if os.path.exists(agent_telemetry_script):
                 try:
@@ -966,7 +969,7 @@ def create_app(
 
     @app.get("/v1/insights")
     async def get_insights(
-        days: int = Query(7, ge=1, le=90, description="Days of history to analyze")
+        days: int = Query(7, ge=1, le=90, description="Days of history to analyze"),
     ):
         """
         Generate automatic insights and decision support suggestions.

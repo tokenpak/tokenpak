@@ -1,0 +1,6 @@
+🔒 Public/Internal Boundary Check — 2026-04-20T18:39:47-07:00
+  Target: /home/sue/tokenpak
+  Mode:   tracked-only (CI strict)
+  Files:  770
+
+✅ Public/internal boundary clean — no blocking leaks detected

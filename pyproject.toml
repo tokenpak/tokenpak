@@ -1,0 +1,257 @@
+[build-system]
+requires = [
+    "setuptools>=61.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenpak"
+dynamic = ["version"]
+# version sourced from tokenpak/__init__.py via [tool.setuptools.dynamic]
+description = "Slash LLM costs with intelligent context compression, smart routing, and cost tracking"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+]
+maintainers = [
+    { name = "Kevin Yang", email = "hello@tokenpak.ai" },
+]
+keywords = [
+    "llm",
+    "ai",
+    "proxy",
+    "token-optimization",
+    "openai",
+    "anthropic",
+    "compression",
+    "context",
+    "context-window",
+    "tokens",
+    "cost-tracking",
+    "routing",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.9.0",
+    "pyyaml>=6.0",
+    "click>=8.1.0",
+    "starlette>=0.36.0",
+    "uvicorn>=0.27.0",
+    "fastapi>=0.110.0",
+    "flask>=3.0.0",
+    "httpx>=0.26.0",
+    "h2>=3,<5",
+    "requests>=2.28.0",
+    "watchdog>=3.0.0",
+    "cryptography>=41.0.0",
+    "urllib3>=2.0.0",
+    # Provider SDKs — used by the shipping adapters in tokenpak/sdk/
+    "anthropic>=0.25.0",
+    "openai>=1.0.0",
+    "litellm>=1.0.0",
+    # Compression + retrieval runtime
+    "llmlingua>=0.1.0",
+    "sentence-transformers>=2.2.0",
+    # tree-sitter-languages has no Python 3.13 wheel (dormant package);
+    # pinned below 3.13 until a migration to modern per-language tree-sitter
+    # bindings ships in 1.1.0. Features that import it will raise ImportError
+    # on 3.13 installations — acceptable per graceful-degradation pattern.
+    "tree-sitter-languages>=1.8.0; python_version < '3.13'",
+    # Data model + computation
+    "pydantic>=2.0.0",
+    "pandas>=1.3.0",
+    "scipy>=1.10.0",
+    # CLI rendering
+    "rich>=13.0.0",
+]
+
+[project.license]
+file = "LICENSE"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-mock>=3.12.0",
+    "black>=24.0.0",
+    "ruff>=0.2.0",
+    # TIP-1.0 Phase 2: import-linter enforces the Architecture §2
+    # six-tier dependency layering and the §2.4 entrypoint rule via
+    # the repo's .importlinter contract.
+    "import-linter>=2.0",
+    # TIP-1.0 Phase 4: conformance validator. Published to PyPI
+    # 2026-04-20 (DECISION-P4-PUBLISH). Pinned exact for CI stability.
+    "tokenpak-tip-validator==0.1.0",
+]
+tokens = [
+    "tiktoken>=0.5.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.5.0",
+]
+otel = [
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24.0",
+]
+crewai = [
+    "crewai>=0.1.0",
+]
+autogen = [
+    "pyautogen>=0.2.0",
+]
+llamaindex = [
+    "llama-index-core>=0.10.0",
+]
+serve = [
+    "uvicorn>=0.27.0",
+    "starlette>=0.36.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+]
+telemetry = [
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "flask>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/tokenpak/tokenpak"
+Documentation = "https://github.com/tokenpak/tokenpak/blob/main/README.md"
+"Bug Reports" = "https://github.com/tokenpak/tokenpak/issues"
+"Source Code" = "https://github.com/tokenpak/tokenpak"
+Changelog = "https://github.com/tokenpak/tokenpak/blob/main/CHANGELOG.md"
+
+[project.scripts]
+tokenpak = "tokenpak.cli:main"
+tokenpak-main = "tokenpak.cli.main:main"
+
+[tool.setuptools.packages.find]
+where = [
+    ".",
+]
+include = [
+    "tokenpak*",
+]
+
+[tool.setuptools.package-data]
+tokenpak = [
+    "py.typed",
+    "recipes_oss/*.yaml",
+    "routing/model_tiers.json",
+    "config/schema.json",
+    "state_schema.json",
+    "models/data/*.json",
+    "telemetry/data/*.json",
+    "dashboard/templates/**/*",
+    "telemetry/dashboard/static/**/*",
+    "telemetry/dashboard/templates/**/*",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "tokenpak.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+python_files = [
+    "test_*.py",
+]
+norecursedirs = [
+    "tests/archive",
+    ".git",
+    "__pycache__",
+    "*.egg-info",
+    "dist",
+    "build",
+]
+markers = [
+    "quick: fast subset for CI and audit checks (<30s) — no live proxy or network",
+    "integration: integration tests requiring external services or running proxy",
+    "chaos: fault injection and chaos tests",
+    "slow: tests that take longer than 5 seconds",
+    "flaky: tests that may fail intermittently — run with --reruns",
+    "needs_proxy: test requires a running tokenpak proxy (starts ProxyServer or subprocess)",
+    "needs_webhook: test requires a live external API or webhook endpoint (e.g. ANTHROPIC_API_KEY)",
+    "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
+]
+timeout = 30
+
+[tool.black]
+line-length = 100
+target-version = [
+    "py310",
+    "py311",
+    "py312",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+]
+ignore = [
+    "E501",
+    "E701",
+    "E702",
+    "E402",
+    "E741",
+    "F841",
+]
+
+# Per-file exceptions — these patterns are intentional, not drift:
+# - __init__.py files commonly use imports purely for re-export (F401).
+# - Availability-check try/except ImportError blocks import symbols whose
+#   presence is the feature being tested (F401).
+# - Conditional type aliases with `# type: ignore` expect redefinition (F811).
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tokenpak/__init__.py" = ["F401", "F811"]
+"tokenpak/cli/commands/dashboard.py" = ["F401"]
+# Pre-existing dup definition (identical bodies, differing docstrings).
+# Consolidation is out of scope for v1.0.3 pre-promotion; tracked as
+# follow-up in known-findings.md.
+"tokenpak/agent/proxy/intent_policy.py" = ["F811"]
+# Legacy telemetry event filter; `== True` preserved because the stored
+# events are mixed type (bool/int/str-ish) and truthy coercion would
+# widen the filter. Track in known-findings.md.
+"tokenpak/agent/telemetry/demo.py" = ["E712"]
+# BaseObserver is a watchdog type that may not be importable in all
+# environments; the `# type: ignore` comment documents the deliberate
+# fallback. Ruff doesn't honor type-ignore comments.
+"tokenpak/agent/vault/watcher.py" = ["F821"]
+# Availability check — the import exercises the dependency, not the
+# symbol itself.
+"tokenpak/tests/test_proxy_integration.py" = ["F401"]
+
+[tool.mypy]
+ignore_missing_imports = true

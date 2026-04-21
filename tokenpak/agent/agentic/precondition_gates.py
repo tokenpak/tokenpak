@@ -41,7 +41,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import shutil
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
@@ -56,19 +55,22 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_GATES_PATH = Path.home() / ".tokenpak" / "preconditions.json"
 DEFAULT_FAILURES_PATH = Path.home() / ".tokenpak" / "precondition_failures.jsonl"
-AUTO_PROMOTE_THRESHOLD = 3          # failures before auto-gate
-SUPPORTED_GATE_TYPES = frozenset([
-    "env_check",
-    "file_exists",
-    "service_running",
-    "test_passing",
-    "diff_clean",
-])
+AUTO_PROMOTE_THRESHOLD = 3  # failures before auto-gate
+SUPPORTED_GATE_TYPES = frozenset(
+    [
+        "env_check",
+        "file_exists",
+        "service_running",
+        "test_passing",
+        "diff_clean",
+    ]
+)
 
 
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Gate:
@@ -102,6 +104,7 @@ class GateResult:
 # ---------------------------------------------------------------------------
 # Gate checkers
 # ---------------------------------------------------------------------------
+
 
 def _check_env_check(params: Dict[str, Any]) -> Tuple[bool, str]:
     """Verify all required env vars are set and non-empty."""
@@ -209,6 +212,7 @@ _CHECKERS = {
 # Core engine
 # ---------------------------------------------------------------------------
 
+
 class PreconditionGates:
     """
     Manage precondition gates for workflow steps.
@@ -249,8 +253,7 @@ class PreconditionGates:
             "version": 1,
             "updated": time.time(),
             "gates": {
-                step: [g.to_dict() for g in gate_list]
-                for step, gate_list in self._gates.items()
+                step: [g.to_dict() for g in gate_list] for step, gate_list in self._gates.items()
             },
         }
         self.gates_path.write_text(json.dumps(payload, indent=2))
@@ -280,8 +283,7 @@ class PreconditionGates:
         """Manually register a gate for a step."""
         if gate.gate_type not in SUPPORTED_GATE_TYPES:
             raise ValueError(
-                f"Unknown gate type {gate.gate_type!r}. "
-                f"Supported: {sorted(SUPPORTED_GATE_TYPES)}"
+                f"Unknown gate type {gate.gate_type!r}. Supported: {sorted(SUPPORTED_GATE_TYPES)}"
             )
         self._gates.setdefault(gate.step, []).append(gate)
         self._save_gates()
@@ -398,9 +400,7 @@ class PreconditionGates:
                 params=info["params"],
                 auto_promoted=True,
                 promoted_at=time.time(),
-                description=(
-                    f"Auto-promoted after {info['count']} failures"
-                ),
+                description=(f"Auto-promoted after {info['count']} failures"),
             )
             self._gates.setdefault(step, []).append(gate)
             promoted.append(gate)
@@ -424,9 +424,6 @@ class PreconditionGates:
             "gated_steps": list(self._gates.keys()),
             "total_failures_logged": len(failures),
             "auto_promoted": sum(
-                1
-                for gates in self._gates.values()
-                for g in gates
-                if g.auto_promoted
+                1 for gates in self._gates.values() for g in gates if g.auto_promoted
             ),
         }

@@ -38,7 +38,7 @@ def blocks_to_messages(
         A ``messages`` list with the compiled TokenPak as the first
         ``system`` message, followed by ``existing_messages``.
     """
-    from tokenpak.wire import pack as wire_pack
+    from tokenpak.compression.wire import pack as wire_pack
 
     # Apply compaction if requested and content exceeds budget
     wire_blocks = []
@@ -60,8 +60,8 @@ def blocks_to_messages(
             elif compaction == "balanced":
                 # Try engine compaction first
                 try:
-                    from tokenpak.engines import get_engine
-                    from tokenpak.engines.base import CompactionHints
+                    from tokenpak.compression.engines import get_engine
+                    from tokenpak.compression.engines.base import CompactionHints
 
                     engine = get_engine("heuristic")
                     remaining = max(50, budget - total_tokens)
@@ -134,7 +134,7 @@ def compile_pack(
     # Validate budget before compacting
     if budget <= 0:
         raise ValueError(f"budget must be positive (got {budget})")
-    
+
     if budget < 50:
         raise ValueError(
             f"budget too small ({budget} tokens). Minimum practical budget is 50 tokens. "

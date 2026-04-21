@@ -1,0 +1,91 @@
+name: CI — Lint & Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'tokenpak/**'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'tokenpak/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+# Note: CLI-docs + doc-audit jobs were removed in the 2026-04-19
+# standards-relocation. User-facing docs now live in the sibling
+# tokenpak/docs repo; that repo owns its own doc-consistency CI.
+
+jobs:
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Lint with Ruff
+        run: |
+          ruff check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            -m "not integration and not chaos and not slow" \
+            --junitxml=reports/test-results-py${{ matrix.python-version }}.xml \
+            --cov=tokenpak \
+            --cov-report=xml \
+            --cov-report=term-missing
+
+      # Phase 2 coverage (Tier-1 modules) + Tier-1 coverage gate (≥50%) + overall
+      # coverage gate (≥45%) steps were removed in the 2026-04-19
+      # standards-relocation: they ran `pytest tests/test_validation*.py
+      # tests/test_error*.py tests/test_cache*.py` against file globs that no
+      # longer match any file on github/main. Post-rewrite the test suite has a
+      # different structure; Tier-1 coverage gates will be reintroduced in 1.1.0
+      # once architecture-aligned test files are written.
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: reports/test-results-py${{ matrix.python-version }}.xml
+          retention-days: 30

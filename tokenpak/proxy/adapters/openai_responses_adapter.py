@@ -28,7 +28,9 @@ class OpenAIResponsesAdapter(FormatAdapter):
             if input_value:
                 messages = [{"role": "user", "content": input_value}]
         elif isinstance(input_value, list):
-            if input_value and all(isinstance(item, dict) and "role" in item for item in input_value):
+            if input_value and all(
+                isinstance(item, dict) and "role" in item for item in input_value
+            ):
                 input_format = "message_array"
                 messages = copy.deepcopy(input_value)
             else:
@@ -48,7 +50,15 @@ class OpenAIResponsesAdapter(FormatAdapter):
         for key, value in data.items():
             if key in consumed:
                 continue
-            if key in {"max_output_tokens", "temperature", "top_p", "metadata", "reasoning", "text", "tool_choice"}:
+            if key in {
+                "max_output_tokens",
+                "temperature",
+                "top_p",
+                "metadata",
+                "reasoning",
+                "text",
+                "tool_choice",
+            }:
                 generation[key] = value
             else:
                 raw_extra[key] = value
@@ -85,7 +95,11 @@ class OpenAIResponsesAdapter(FormatAdapter):
             else:
                 input_value = []
         elif input_format == "single_message":
-            input_value = copy.deepcopy(canonical.messages[0]) if canonical.messages else {"role": "user", "content": ""}
+            input_value = (
+                copy.deepcopy(canonical.messages[0])
+                if canonical.messages
+                else {"role": "user", "content": ""}
+            )
         else:
             input_value = copy.deepcopy(canonical.messages)
 

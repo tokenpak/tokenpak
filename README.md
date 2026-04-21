@@ -7,7 +7,7 @@
 
 TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, same results. No code changes, no cloud, no credentials stored.
 
-> **Status: early preview.** Core compression engine and proxy are in place. Per-client auto-integration (the `tokenpak integrate` command) is not yet shipped — configure your client manually by pointing it at `http://127.0.0.1:8766`. See [docs/QUICKSTART.md](docs/QUICKSTART.md).
+> **Status: early preview.** Core compression engine and proxy are in place. Per-client auto-integration (the `tokenpak integrate` command) is not yet shipped — configure your client manually by pointing it at `http://127.0.0.1:8766`. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
 
 ---
 
@@ -32,7 +32,7 @@ export OPENAI_BASE_URL=http://127.0.0.1:8766
 
 Then use your client normally. TokenPak compresses requests on the way out and logs savings to a local SQLite ledger.
 
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for per-client setup (Claude Code, Cursor, Aider, and others).
+See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for per-client setup (Claude Code, Cursor, Aider, and others).
 
 ---
 
@@ -66,7 +66,7 @@ Any LLM client that respects a custom base URL:
 
 **Claude Code** · **Cursor** · **Cline** · **Continue.dev** · **Aider** · **OpenAI SDK** · **Anthropic SDK** · **LiteLLM** · **Codex**
 
-Per-client configuration steps are in [docs/QUICKSTART.md](docs/QUICKSTART.md). Auto-wiring via a single `tokenpak integrate <client>` command is tracked for a future release.
+Per-client configuration steps are in QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart). Auto-wiring via a single `tokenpak integrate <client>` command is tracked for a future release.
 
 ---
 
@@ -80,7 +80,7 @@ TokenPak's runtime dependencies include `anthropic`, `openai`, `fastapi`, `flask
 
 Requires Python 3.10+.
 
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for virtual-env setup and first-run details.
+See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for virtual-env setup and first-run details.
 
 ---
 
@@ -95,7 +95,7 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for virtual-env setup and first-run
 - **A/B testing and request replay** — compare compression configs; re-run past requests.
 - **50 built-in compression recipes** — YAML, customizable.
 
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) and [docs/API.md](docs/API.md) to get started.
+See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) and API reference at https://github.com/tokenpak/docs (rendered at tokenpak.ai/api) to get started.
 
 ---
 
@@ -113,7 +113,7 @@ We'd rather ship an honest preview than an advertised product that doesn't match
 
 ## Support
 
-- **Docs:** [docs/QUICKSTART.md](docs/QUICKSTART.md) · [docs/API.md](docs/API.md) · [docs/FAQ.md](docs/FAQ.md)
+- **Docs:** QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) · API reference at https://github.com/tokenpak/docs (rendered at tokenpak.ai/api) · FAQ at https://github.com/tokenpak/docs (rendered at tokenpak.ai/faq)
 - **Issues:** [github.com/tokenpak/tokenpak/issues](https://github.com/tokenpak/tokenpak/issues)
 - **Discussions:** [github.com/tokenpak/tokenpak/discussions](https://github.com/tokenpak/tokenpak/discussions)
 - **Email:** hello@tokenpak.ai

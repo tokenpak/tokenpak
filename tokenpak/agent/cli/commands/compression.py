@@ -1,21 +1,19 @@
-"""compression command — compression pipeline stats and control."""
+"""Deprecated re-export shim (TokenPak agent/cli consolidation 2026-04-20).
 
+Canonical home: ``tokenpak.cli.commands.compression``. Removal target: TIP-2.0.
+"""
 from __future__ import annotations
 
+import warnings as _warnings
 
-def run(raw: bool = False) -> None:
-    """Print compression pipeline stats."""
-    print("compression: not yet implemented (stub)")
+_warnings.warn(
+    "tokenpak.agent.cli.commands.compression is a deprecated re-export; "
+    "import from tokenpak.cli.commands.compression instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from tokenpak.cli.commands.compression import *  # noqa: F401,F403,E402
 
-try:
-    import click
-
-    @click.command("compression")
-    @click.option("--raw", is_flag=True, help="Output raw JSON")
-    def compression_cmd(raw):
-        """Show compression pipeline stats."""
-        run(raw=raw)
-
-except ImportError:
-    pass
+__all__ = ["compression_cmd", "run"]

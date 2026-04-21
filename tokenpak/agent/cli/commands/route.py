@@ -1,36 +1,19 @@
-"""route command — model routing configuration and status."""
+"""Deprecated re-export shim (TokenPak agent/cli consolidation 2026-04-20).
 
+Canonical home: ``tokenpak.cli.commands.route``. Removal target: TIP-2.0.
+"""
 from __future__ import annotations
 
+import warnings as _warnings
 
-def run(action: str = "status", raw: bool = False) -> None:
-    """Model routing control."""
-    print(f"route {action}: not yet implemented (stub)")
+_warnings.warn(
+    "tokenpak.agent.cli.commands.route is a deprecated re-export; "
+    "import from tokenpak.cli.commands.route instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from tokenpak.cli.commands.route import *  # noqa: F401,F403,E402
 
-try:
-    import click
-
-    @click.group("route")
-    def route_cmd():
-        """Model routing commands."""
-        pass
-
-    @route_cmd.command("status")
-    @click.option("--raw", is_flag=True)
-    def route_status(raw):
-        """Show router status."""
-        run(action="status", raw=raw)
-
-    @route_cmd.command("on")
-    def route_on():
-        """Enable the deterministic router."""
-        run(action="on")
-
-    @route_cmd.command("off")
-    def route_off():
-        """Disable the deterministic router."""
-        run(action="off")
-
-except ImportError:
-    pass
+__all__ = ["route_cmd", "route_off", "route_on", "route_status", "run"]

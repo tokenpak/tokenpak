@@ -27,8 +27,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional, Sequence
-
+from typing import Any, Optional, Sequence
 
 # ---------------------------------------------------------------------------
 # NormalizedTable — structured representation of a single table
@@ -91,10 +90,7 @@ class NormalizedTable:
         ``max_rows`` rows when no query match is found.
         """
         q = query.lower()
-        matched = [
-            row for row in self.rows
-            if any(q in str(v).lower() for v in row.values())
-        ]
+        matched = [row for row in self.rows if any(q in str(v).lower() for v in row.values())]
         if not matched:
             matched = self.rows[:max_rows]
         return NormalizedTable(
@@ -279,9 +275,7 @@ class TableExtractor:
     # Markdown extraction
     # ------------------------------------------------------------------
 
-    def _extract_markdown(
-        self, text: str, *, source_section: str
-    ) -> list[NormalizedTable]:
+    def _extract_markdown(self, text: str, *, source_section: str) -> list[NormalizedTable]:
         tables: list[NormalizedTable] = []
         lines = text.splitlines()
         i = 0
@@ -329,9 +323,7 @@ class TableExtractor:
         if header_idx <= 0:
             return ""
         candidate = lines[header_idx - 1].strip()
-        if re.match(r"^(\*\*|__)?[Tt]able\b", candidate) or re.match(
-            r"^[Cc]aption\s*:", candidate
-        ):
+        if re.match(r"^(\*\*|__)?[Tt]able\b", candidate) or re.match(r"^[Cc]aption\s*:", candidate):
             # Strip markdown bold markers
             return re.sub(r"\*\*|__", "", candidate).strip()
         return ""
@@ -340,9 +332,7 @@ class TableExtractor:
     # HTML extraction
     # ------------------------------------------------------------------
 
-    def _extract_html(
-        self, text: str, *, source_section: str
-    ) -> list[NormalizedTable]:
+    def _extract_html(self, text: str, *, source_section: str) -> list[NormalizedTable]:
         if "<table" not in text.lower():
             return []
 
@@ -381,9 +371,7 @@ class TableExtractor:
     # Plain-text aligned table extraction
     # ------------------------------------------------------------------
 
-    def _extract_plain_text(
-        self, text: str, *, source_section: str
-    ) -> list[NormalizedTable]:
+    def _extract_plain_text(self, text: str, *, source_section: str) -> list[NormalizedTable]:
         """Detect whitespace-aligned tables via column gap heuristic.
 
         A candidate block must have:
@@ -444,7 +432,9 @@ class TableExtractor:
         if not header_lines or not data_lines:
             return None
 
-        headers = [_normalize_header(c) for c in re.split(r"  +", header_lines[0].strip()) if c.strip()]
+        headers = [
+            _normalize_header(c) for c in re.split(r"  +", header_lines[0].strip()) if c.strip()
+        ]
         if len(headers) < 2:  # noqa: PLR2004
             return None
 

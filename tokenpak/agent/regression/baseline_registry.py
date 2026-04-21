@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -55,9 +55,7 @@ class BaselineRegistry:
         if Path(self.registry_path).exists():
             with open(self.registry_path, "r") as f:
                 data = json.load(f)
-                self.baselines = {
-                    k: BaselineEntry.from_dict(v) for k, v in data.items()
-                }
+                self.baselines = {k: BaselineEntry.from_dict(v) for k, v in data.items()}
         else:
             self.baselines = {}
 

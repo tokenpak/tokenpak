@@ -484,7 +484,7 @@ def create_dashboard_router(
         )
         top_traces = sorted(
             top_traces_raw,
-            key=lambda t: (t.get("input_billed") or t.get("total_tokens_billed") or 0),
+            key=lambda t: t.get("input_billed") or t.get("total_tokens_billed") or 0,
             reverse=True,
         )[:20]
 
@@ -725,8 +725,8 @@ def create_dashboard_router(
     ):
         """Generate executive summary in paragraph or bullet format."""
         import asyncio
-
         import functools
+
         loop = asyncio.get_event_loop()
         summary = await loop.run_in_executor(
             _executor,
@@ -822,7 +822,11 @@ def create_dashboard_router(
 
 
 def _generate_executive_summary(
-    rollups: Any, days: int, provider: str | None = None, model: str | None = None, format: str = "paragraph"
+    rollups: Any,
+    days: int,
+    provider: str | None = None,
+    model: str | None = None,
+    format: str = "paragraph",
 ):
     """Generate executive summary in paragraph or bullet format."""
     import datetime

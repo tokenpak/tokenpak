@@ -21,7 +21,7 @@ from collections import deque
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 # Thresholds
 # ---------------------------------------------------------------------------
 
-_BASELINE_WINDOW = 20          # number of past queries to keep
+_BASELINE_WINDOW = 20  # number of past queries to keep
 _CHUNK_COUNT_GROWTH_PCT = 0.50  # alert when chunk count grows >50%
-_DEDUP_RATE_DROP = 0.15        # alert when dedup rate drops by >15 pp
+_DEDUP_RATE_DROP = 0.15  # alert when dedup rate drops by >15 pp
 _IRRELEVANT_SOURCE_PCT = 0.30  # alert when irrelevant sources >30%
 _ORDER_INSTABILITY_THRESHOLD = 0.40  # alert when rank correlation < 0.60
 
@@ -51,9 +51,7 @@ class QueryRetrievalRecord:
     query_text: str
     """Raw query text."""
 
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     # --- chunk counts ---
     chunk_count: int = 0
@@ -232,8 +230,7 @@ class RetrievalQualityWatchdog:
         self.auto_remediate = auto_remediate
 
         self.history_path = Path(
-            history_path
-            or str(Path.home() / ".tokenpak" / "retrieval_watchdog_history.json")
+            history_path or str(Path.home() / ".tokenpak" / "retrieval_watchdog_history.json")
         )
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -307,9 +304,7 @@ class RetrievalQualityWatchdog:
             mean_chunk_count=statistics.mean(r.chunk_count for r in records),
             mean_dedup_rate=statistics.mean(r.dedup_rate for r in records),
             mean_relevance=statistics.mean(r.mean_relevance for r in records),
-            mean_irrelevant_source_rate=statistics.mean(
-                r.irrelevant_source_rate for r in records
-            ),
+            mean_irrelevant_source_rate=statistics.mean(r.irrelevant_source_rate for r in records),
             mean_source_diversity=statistics.mean(r.source_diversity for r in records),
             sample_size=len(records),
         )
@@ -321,10 +316,8 @@ class RetrievalQualityWatchdog:
         severity = "warn"
 
         # 1. Chunk count growth
-        if (
-            baseline.mean_chunk_count > 0
-            and record.chunk_count
-            > baseline.mean_chunk_count * (1 + self.chunk_growth_threshold)
+        if baseline.mean_chunk_count > 0 and record.chunk_count > baseline.mean_chunk_count * (
+            1 + self.chunk_growth_threshold
         ):
             dimensions.append("chunk_count_growth")
             severity = "critical"
@@ -341,9 +334,7 @@ class RetrievalQualityWatchdog:
         # 4. Chunk order instability (compare vs last query if available)
         last = list(self._history)[-1] if self._history else None
         if last and last.chunk_ids_ordered and record.chunk_ids_ordered:
-            corr = _rank_correlation(
-                record.chunk_ids_ordered, last.chunk_ids_ordered
-            )
+            corr = _rank_correlation(record.chunk_ids_ordered, last.chunk_ids_ordered)
             if corr < (1 - self.order_instability_threshold):
                 dimensions.append("chunk_order_instability")
 
@@ -365,9 +356,7 @@ class RetrievalQualityWatchdog:
                 "mean_chunk_count": round(baseline.mean_chunk_count, 2),
                 "mean_dedup_rate": round(baseline.mean_dedup_rate, 4),
                 "mean_relevance": round(baseline.mean_relevance, 4),
-                "mean_irrelevant_source_rate": round(
-                    baseline.mean_irrelevant_source_rate, 4
-                ),
+                "mean_irrelevant_source_rate": round(baseline.mean_irrelevant_source_rate, 4),
                 "mean_source_diversity": round(baseline.mean_source_diversity, 4),
             },
             severity=severity,
@@ -402,12 +391,8 @@ class RetrievalQualityWatchdog:
 
         if "chunk_order_instability" in alert.dimensions:
             # Chunk ranking is unstable → tighten relevance filter cutoff
-            actions.append(
-                "tighten_relevance_cutoff: raise min_relevance_score from 0.3→0.45"
-            )
-            logger.info(
-                "[remediation] Raising relevance cutoff due to chunk_order_instability"
-            )
+            actions.append("tighten_relevance_cutoff: raise min_relevance_score from 0.3→0.45")
+            logger.info("[remediation] Raising relevance cutoff due to chunk_order_instability")
 
         if not actions:
             actions.append("no_action: drift below remediation threshold")

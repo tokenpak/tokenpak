@@ -94,7 +94,7 @@ class ProxyHandler:
             return _json_error(
                 400,
                 "Missing required field: 'tokenpak'. "
-                "Request body must include: {'model': '...', 'tokenpak': {...}, 'messages': [...]}"
+                "Request body must include: {'model': '...', 'tokenpak': {...}, 'messages': [...]}",
             )
 
         try:
@@ -109,7 +109,7 @@ class ProxyHandler:
         if not model:
             return _json_error(
                 400,
-                "No model specified. Provide 'model' in request body or set default in proxy config."
+                "No model specified. Provide 'model' in request body or set default in proxy config.",
             )
 
         extra_messages = body.get("messages", [])
@@ -126,7 +126,7 @@ class ProxyHandler:
             return _json_error(
                 400,
                 f"Invalid compaction strategy: {compaction!r}. "
-                f"Choose from: 'none', 'balanced', 'aggressive'"
+                f"Choose from: 'none', 'balanced', 'aggressive'",
             )
 
         # Compile pack → messages
@@ -142,20 +142,19 @@ class ProxyHandler:
             return _json_error(
                 400,
                 f"Invalid TokenPak format: {str(exc)}. "
-                f"tokenpak must be a dict, list of blocks, or BlockRegistry object."
+                f"tokenpak must be a dict, list of blocks, or BlockRegistry object.",
             )
         except ValueError as exc:
             return _json_error(
                 400,
-                f"TokenPak compilation error: {str(exc)}. "
-                f"Check 'budget' and 'compaction' values."
+                f"TokenPak compilation error: {str(exc)}. Check 'budget' and 'compaction' values.",
             )
         except Exception as exc:
             return _json_error(
                 500,
-                f"Unexpected error during pack compilation. Please retry. Error: {type(exc).__name__}"
+                f"Unexpected error during pack compilation. Please retry. Error: {type(exc).__name__}",
             )
-        
+
         compile_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         # Forward to litellm
@@ -172,27 +171,26 @@ class ProxyHandler:
             if "401" in exc_str or "authentication" in exc_str.lower():
                 return _json_error(
                     401,
-                    f"Authentication failed. Check that API key for '{model}' is valid and has sufficient permissions."
+                    f"Authentication failed. Check that API key for '{model}' is valid and has sufficient permissions.",
                 )
             elif "rate_limit" in exc_str.lower() or "429" in exc_str:
                 return _json_error(
                     429,
-                    f"Rate limit exceeded. Wait before retrying. May also indicate quota exhaustion."
+                    "Rate limit exceeded. Wait before retrying. May also indicate quota exhaustion.",
                 )
             elif "timeout" in exc_str.lower():
                 return _json_error(
                     504,
-                    f"Request timeout. The API took too long to respond. Increase timeout or try again."
+                    "Request timeout. The API took too long to respond. Increase timeout or try again.",
                 )
             elif "connection" in exc_str.lower() or "unreachable" in exc_str.lower():
                 return _json_error(
-                    503,
-                    f"Connection failed. Check network and that API endpoint is reachable."
+                    503, "Connection failed. Check network and that API endpoint is reachable."
                 )
             else:
                 return _json_error(
                     502,
-                    f"API returned error: {type(exc).__name__}. Check logs for details. If persistent, verify API endpoint and credentials."
+                    f"API returned error: {type(exc).__name__}. Check logs for details. If persistent, verify API endpoint and credentials.",
                 )
 
         # Attach stats

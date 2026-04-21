@@ -64,7 +64,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 - Use GitHub Issues
 - Include: Python version, OS, steps to reproduce, expected vs actual behavior
-- For security issues, see [SECURITY.md](docs/SECURITY.md)
+- For security issues, see SECURITY.md (see https://github.com/tokenpak/docs)
 
 ## License
 

@@ -286,8 +286,7 @@ class TokenPakAuthMiddleware(BaseHTTPMiddleware):
                 status_code=429,
                 content={
                     "error": "Too Many Requests",
-                    "detail": f"Rate limit exceeded for tier '{tier}'. "
-                    f"Retry after {retry_after}s.",
+                    "detail": f"Rate limit exceeded for tier '{tier}'. Retry after {retry_after}s.",
                 },
                 headers={
                     "X-Request-ID": request_id,

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import random
-import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-from tokenpak.telemetry.models import TelemetryEvent, Usage, Cost
 from .collector import TelemetryCollector
 
 
@@ -47,7 +45,7 @@ def print_demo(request_id: Optional[str] = None) -> None:
 
 def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
     """Generate realistic demo telemetry events for dashboard population.
-    
+
     Writes `count` compression events spread across `hours` time window to
     ~/.tokenpak/compression_events.jsonl with:
     - Time distribution favoring business hours (9-17)
@@ -55,13 +53,13 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
     - ~70% cache hit rate
     - Realistic token counts and latencies
     - Demo marker in payload
-    
+
     Uses the real telemetry storage backend (CompressionStats JSONL format).
-    
+
     Args:
         count: Number of demo events to generate (default 500)
         hours: Time window in hours (default 24)
-    
+
     Returns:
         Dict with:
         - events: number of events written
@@ -69,34 +67,35 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
         - total_events: total now in the file (including demo)
         - cache_read_total: total cache-read tokens across demo set
     """
-    from tokenpak.agent.proxy.stats import get_compression_stats
     from datetime import timezone
-    
+
+    from tokenpak.proxy.stats import get_compression_stats
+
     models = ["claude-haiku-3-5", "claude-sonnet-4", "gpt-4", "gpt-3.5-turbo", "claude-opus-4"]
-    
+
     stats = get_compression_stats()
     cache_hits = 0
     total_cache_read = 0
-    
+
     now = datetime.now(tz=timezone.utc)
     start_time = now - timedelta(hours=hours)
-    
+
     for i in range(count):
         # Spread requests across the time window, favoring business hours (9-17)
         # Total seconds in the window
         total_seconds = hours * 3600
-        
+
         # Pick a random timestamp within the window
         random_seconds = random.randint(0, int(total_seconds))
         base_ts_dt = start_time + timedelta(seconds=random_seconds)
-        
+
         # If this hour is off-hours and we're in the 70% business hour bucket,
         # or it's business hours and we're in the 30% off-hours bucket,
         # adjust the hour
         current_hour = base_ts_dt.hour
         is_business_hour = 9 <= current_hour <= 17
         prefer_business = random.random() < 0.7
-        
+
         if prefer_business and not is_business_hour:
             # Move to a business hour while preserving the day
             target_hour = random.randint(9, 17)
@@ -107,14 +106,14 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
             ts_dt = base_ts_dt.replace(hour=target_hour)
         else:
             ts_dt = base_ts_dt
-        
+
         # Select model
         model = random.choice(models)
-        
+
         # Token counts with realistic ranges
         input_tokens_raw = random.randint(500, 4000)
         is_cache_hit = random.random() < 0.70
-        
+
         if is_cache_hit:
             cache_hits += 1
             cache_read = random.randint(100, input_tokens_raw // 2)
@@ -123,11 +122,11 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
         else:
             cache_read = 0
             compression_ratio = random.uniform(0.80, 0.95)
-        
+
         input_tokens_sent = int(input_tokens_raw * compression_ratio)
         output_tokens = random.randint(100, 2000)
         latency_ms = random.randint(500, 5000)
-        
+
         # Write using the real stats backend
         # This appends to ~/.tokenpak/compression_events.jsonl
         event_dict = {
@@ -142,28 +141,27 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
             "cache_read": cache_read,
             "input_tokens_sent": input_tokens_sent,
         }
-        
+
         # Write directly to JSONL file
-        import json
-        from pathlib import Path
         import os
-        
+        from pathlib import Path
+
         log_dir = os.path.expanduser("~/.tokenpak")
         log_path = Path(log_dir) / "compression_events.jsonl"
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with log_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(event_dict) + "\n")
-    
+
     cache_hit_rate = cache_hits / count if count > 0 else 0
-    
+
     # Count total events in file
     total_events = 0
     log_path = Path(os.path.expanduser("~/.tokenpak")) / "compression_events.jsonl"
     if log_path.exists():
         with log_path.open("r", encoding="utf-8") as fh:
             total_events = sum(1 for _ in fh if _.strip())
-    
+
     return {
         "events": count,
         "cache_hit_rate": cache_hit_rate,
@@ -174,32 +172,31 @@ def seed_demo_data(count: int = 500, hours: int = 24) -> dict:
 
 def clear_demo_data() -> dict:
     """Remove all demo data from telemetry storage.
-    
+
     Reads ~/.tokenpak/compression_events.jsonl, filters out records with
     is_demo=true, and rewrites the file with only non-demo records.
-    
+
     Returns:
         Dict with deletion counts:
         - deleted_events: number of demo events deleted
         - remaining_events: number of non-demo events kept
     """
-    import json
-    from pathlib import Path
     import os
-    
+    from pathlib import Path
+
     log_dir = os.path.expanduser("~/.tokenpak")
     log_path = Path(log_dir) / "compression_events.jsonl"
-    
+
     if not log_path.exists():
         return {
             "deleted_events": 0,
             "remaining_events": 0,
         }
-    
+
     # Read all events
     all_events = []
     deleted_count = 0
-    
+
     try:
         with log_path.open("r", encoding="utf-8") as fh:
             for line in fh:
@@ -217,7 +214,7 @@ def clear_demo_data() -> dict:
                     all_events.append(line)
     except Exception:
         pass  # File may not exist or be readable yet
-    
+
     # Write back only non-demo events
     try:
         with log_path.open("w", encoding="utf-8") as fh:
@@ -228,7 +225,7 @@ def clear_demo_data() -> dict:
                     fh.write(event + "\n")
     except Exception:
         pass
-    
+
     return {
         "deleted_events": deleted_count,
         "remaining_events": len(all_events),

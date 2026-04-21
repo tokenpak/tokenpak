@@ -11,6 +11,25 @@ from typing import Optional
 # Pricing per million tokens (input, cached, output)
 # Format: {"input": price, "cached": price, "output": price}
 
+
+# ---------------------------------------------------------------------------
+# DEPRECATED 2026-04-20 — canonical home is tokenpak.telemetry.pricing.
+# Per Kevin's dual-implementation decision: this top-level module is
+# RETIRED. Its API differs from the canonical version and stays
+# functional only to keep existing callers working during the
+# deprecation window. New code MUST import from tokenpak.telemetry.pricing instead.
+# Removal target: TIP-2.0.
+# ---------------------------------------------------------------------------
+import warnings as _tp_deprecate_warnings
+_tp_deprecate_warnings.warn(
+    "tokenpak.pricing is deprecated — use tokenpak.telemetry.pricing instead. "
+    "Top-level tokenpak.pricing has a different API than the canonical version; "
+    "stays functional until TIP-2.0 to give callers time to migrate.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+del _tp_deprecate_warnings
+
 MODEL_RATES = {
     "claude-opus-4-5": {"input": 15.0, "cached": 1.50, "output": 75.0},
     "claude-opus-4-6": {"input": 15.0, "cached": 1.50, "output": 75.0},
@@ -35,7 +54,7 @@ def get_rates(model: Optional[str] = None) -> dict:
 
 def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
     """Calculate compression + cache savings from proxy stats.
-    
+
     Args:
         stats: Dict with keys like:
             - tokens_raw: total input tokens (pre-compression)
@@ -43,9 +62,9 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
             - cache_read_tokens: tokens served from cache
             - cache_write_tokens: tokens written to cache
             - model (optional): model name override
-            
+
         model: Optional model name override. If not provided, uses stats["model"].
-    
+
     Returns:
         Dict with:
             - compression_tokens_saved: tokens removed by compression
@@ -62,39 +81,45 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
     # Determine model to use
     model_name = model or stats.get("model")
     rates = get_rates(model_name)
-    
+
     # Extract stats with defaults
     tokens_raw = stats.get("tokens_raw", stats.get("input_tokens", 0))
     tokens_saved_compression = stats.get("tokens_saved", 0)
     cache_read_tokens = stats.get("cache_read_tokens", 0)
     cache_write_tokens = stats.get("cache_write_tokens", 0)
     session_requests = stats.get("session_requests", 0)
-    
+
     # Compression savings
     compression_cost_saved = (tokens_saved_compression / 1_000_000) * rates["input"]
-    
+
     # Cache savings: cache_read_tokens are served at cached rate instead of input rate
     # The "savings" is the difference between input rate and cached rate
     cache_cost_saved = (cache_read_tokens / 1_000_000) * (rates["input"] - rates["cached"])
-    
+
     # Calculate "without TokenPak" cost (all tokens at input rate)
     cost_without = (tokens_raw / 1_000_000) * rates["input"]
-    
+
     # Calculate "with TokenPak" cost
     # After compression, remaining tokens + cache hits at cached rate
     tokens_after_compression = tokens_raw - tokens_saved_compression
     tokens_from_cache = cache_read_tokens
     tokens_fresh = tokens_after_compression - tokens_from_cache
-    
-    cost_with = (tokens_fresh / 1_000_000) * rates["input"] + (tokens_from_cache / 1_000_000) * rates["cached"]
-    
+
+    cost_with = (tokens_fresh / 1_000_000) * rates["input"] + (
+        tokens_from_cache / 1_000_000
+    ) * rates["cached"]
+
     # Total savings
     total_cost_saved = cost_without - cost_with
     reduction_pct = (total_cost_saved / cost_without * 100.0) if cost_without > 0 else 0.0
-    
+
     # Cache hit rate
-    cache_hit_rate = (cache_read_tokens / tokens_after_compression * 100.0) if tokens_after_compression > 0 else 0.0
-    
+    cache_hit_rate = (
+        (cache_read_tokens / tokens_after_compression * 100.0)
+        if tokens_after_compression > 0
+        else 0.0
+    )
+
     return {
         "compression_tokens_saved": tokens_saved_compression,
         "compression_cost_saved": round(compression_cost_saved, 4),
@@ -109,7 +134,13 @@ def estimate_savings(stats: dict, model: Optional[str] = None) -> dict:
     }
 
 
-def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int = 0, cache_creation_tokens: int = 0, output_tokens: int = 0) -> float:
+def calculate_request_cost(
+    model: str,
+    input_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    output_tokens: int = 0,
+) -> float:
     """Calculate actual cost for a request routed through TokenPak."""
     rates = get_rates(model)
     input_rate = rates.get("input_per_mtok", 3.0)
@@ -124,7 +155,9 @@ def calculate_request_cost(model: str, input_tokens: int, cache_read_tokens: int
     return round(cost, 6)
 
 
-def calculate_request_cost_baseline(model: str, total_input_tokens: int, output_tokens: int = 0) -> float:
+def calculate_request_cost_baseline(
+    model: str, total_input_tokens: int, output_tokens: int = 0
+) -> float:
     """Calculate what a request would cost WITHOUT TokenPak (no cache, no compression)."""
     rates = get_rates(model)
     input_rate = rates.get("input_per_mtok", 3.0)

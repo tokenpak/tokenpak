@@ -8,14 +8,14 @@ Quick start:
 
 Sub-package imports:
     from tokenpak.telemetry import TelemetryCollector
-    from tokenpak.engines import CompactionEngine, HeuristicEngine
-    from tokenpak.registry import Block, BlockRegistry
-    from tokenpak.budgeter import Budgeter
+    from tokenpak.compression.engines import CompactionEngine, HeuristicEngine
+    from tokenpak.core.registry import Block, BlockRegistry
+    from tokenpak.services.policy_service.budget.budgeter import Budgeter
 """
 
 from __future__ import annotations
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 __author__ = "TokenPak"
 __license__ = "Apache-2.0"
 __description__ = "Local proxy that compresses LLM context before it hits the API"
@@ -28,74 +28,9 @@ __description__ = "Local proxy that compresses LLM context before it hits the AP
 # ---------------------------------------------------------------------------
 from tokenpak import agent, connectors, proxy
 
-# CompletionTracker: tracks per-completion cost, model, and latency
-from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
-from tokenpak.budget import BudgetBlock
-
-# ---------------------------------------------------------------------------
-# Budgeting
-# ---------------------------------------------------------------------------
-from tokenpak.budgeter import Budgeter
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-# SKIPPED: from tokenpak.cli import main  # main not defined
-from tokenpak.engines import get_engine
-
-# ---------------------------------------------------------------------------
-# Compression / Compaction Engines
-# ---------------------------------------------------------------------------
-# CompressionEngine: abstract base for all compaction strategies
-from tokenpak.engines.base import CompactionEngine as CompressionEngine
-from tokenpak.engines.heuristic import HeuristicEngine
-from tokenpak.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
-
-# ---------------------------------------------------------------------------
-# Content Blocks
-# ---------------------------------------------------------------------------
-from tokenpak.registry import Block, BlockRegistry
-
-# ---------------------------------------------------------------------------
-# Compile Reports
-# ---------------------------------------------------------------------------
-from tokenpak.report import Action, CompileReport, Decision
-
-# ---------------------------------------------------------------------------
-# Cache
-# ---------------------------------------------------------------------------
-# CacheManager: semantic cache store (get/set/hit-rate tracking)
-from tokenpak.telemetry.cache import CacheStore as CacheManager
-from tokenpak.telemetry.collector import TelemetryCollector
-
-# ---------------------------------------------------------------------------
-# Token Counting (Level 1 — single import, zero config)
-# ---------------------------------------------------------------------------
-from tokenpak.tokens import count_tokens
-from tokenpak.trace import (  # noqa: F401
-    TokenPakTrace,
-    TraceBuilder,
-    attach_trace_header,
-    attach_trace_envelope,
-    strip_trace,
-    strip_trace_header,
-    read_trace_header,
-    read_trace_envelope,
-    assert_no_leak,
-)
-
-
 # ---------------------------------------------------------------------------
 # Agent Handoff Protocol
 # ---------------------------------------------------------------------------
-from tokenpak.agent.agentic.handoff import (
-    HandoffBlock,
-    HandoffManager,
-    HandoffStatus,
-    HandoffWire as Handoff,
-    ContextRef,
-    TokenPak,
-)
 # ---------------------------------------------------------------------------
 # Agentic handoff protocol
 # ---------------------------------------------------------------------------
@@ -107,6 +42,66 @@ from tokenpak.agent.agentic.handoff import (
     HandoffWire,
     TokenPak,
 )
+from tokenpak.agent.agentic.handoff import (
+    HandoffWire as Handoff,
+)
+
+# CompletionTracker: tracks per-completion cost, model, and latency
+from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
+from tokenpak.services.policy_service.budget.rules import BudgetBlock
+
+# ---------------------------------------------------------------------------
+# Budgeting
+# ---------------------------------------------------------------------------
+from tokenpak.services.policy_service.budget.budgeter import Budgeter
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+# SKIPPED: from tokenpak.cli import main  # main not defined
+from tokenpak.compression.engines import get_engine
+
+# ---------------------------------------------------------------------------
+# Compression / Compaction Engines
+# ---------------------------------------------------------------------------
+# CompressionEngine: abstract base for all compaction strategies
+from tokenpak.compression.engines.base import CompactionEngine as CompressionEngine
+from tokenpak.compression.engines.heuristic import HeuristicEngine
+from tokenpak.compression.pack import CompiledResult, ContextPack, PackBlock, pack_prompt
+
+# ---------------------------------------------------------------------------
+# Content Blocks
+# ---------------------------------------------------------------------------
+from tokenpak.core.registry import Block, BlockRegistry
+
+# ---------------------------------------------------------------------------
+# Compile Reports
+# ---------------------------------------------------------------------------
+from tokenpak.telemetry.report import Action, CompileReport, Decision
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+# CacheManager: semantic cache store (get/set/hit-rate tracking)
+from tokenpak.telemetry.cache import CacheStore as CacheManager
+from tokenpak.telemetry.collector import TelemetryCollector
+
+# ---------------------------------------------------------------------------
+# Token Counting (Level 1 — single import, zero config)
+# ---------------------------------------------------------------------------
+from tokenpak.telemetry.tokens import count_tokens
+from tokenpak.debug.trace import (  # noqa: F401
+    TokenPakTrace,
+    TraceBuilder,
+    assert_no_leak,
+    attach_trace_envelope,
+    attach_trace_header,
+    read_trace_envelope,
+    read_trace_header,
+    strip_trace,
+    strip_trace_header,
+)
+
 # HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
 # The internal Handoff dataclass (file-based) is available via
 # tokenpak.agent.agentic.handoff.Handoff

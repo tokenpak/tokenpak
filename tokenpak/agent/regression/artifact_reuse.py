@@ -22,7 +22,6 @@ class ArtifactReusePlan:
     comparisons: dict[str, ComponentComparison]
 
 
-
 def _normalize_component(value: Any) -> Any:
     if isinstance(value, str):
         return value.strip()
@@ -34,7 +33,6 @@ def _normalize_component(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _normalize_component(v) for k, v in sorted(value.items(), key=lambda kv: kv[0])}
     return value
-
 
 
 def _component_similarity(candidate: Any, baseline: Any) -> float:
@@ -66,14 +64,12 @@ def _component_similarity(candidate: Any, baseline: Any) -> float:
     return 1.0 if c == b else 0.0
 
 
-
 def split_artifact_components(artifact: dict[str, Any]) -> dict[str, Any]:
     components: dict[str, Any] = {}
     for key in _COMPONENT_KEYS:
         if key in artifact:
             components[key] = artifact[key]
     return components
-
 
 
 def compare_components(
@@ -108,7 +104,6 @@ def compare_components(
     return comparisons
 
 
-
 def plan_artifact_reuse(
     candidate_artifact: dict[str, Any],
     baseline_artifact: dict[str, Any],
@@ -117,7 +112,9 @@ def plan_artifact_reuse(
 ) -> ArtifactReusePlan:
     candidate_components = split_artifact_components(candidate_artifact)
     baseline_components = split_artifact_components(baseline_artifact)
-    comparisons = compare_components(candidate_components, baseline_components, thresholds=thresholds)
+    comparisons = compare_components(
+        candidate_components, baseline_components, thresholds=thresholds
+    )
 
     reuse_components: dict[str, Any] = {}
     regenerate_components: dict[str, Any] = {}
@@ -135,7 +132,6 @@ def plan_artifact_reuse(
     )
 
 
-
 def merge_artifact_components(
     plan: ArtifactReusePlan,
     regenerated_components: dict[str, Any] | None = None,
@@ -147,7 +143,6 @@ def merge_artifact_components(
         merged[key] = regenerated.get(key, fallback)
 
     return merged
-
 
 
 def validate_merged_artifact(

@@ -181,23 +181,35 @@ class RBACStore:
                     """INSERT OR IGNORE INTO tp_users
                        (id, username, password_hash, role, created_at, is_active)
                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (user_id, "admin", _hash_password(password), Role.ADMIN.value,
-                     _now_utc().isoformat(), True),
+                    (
+                        user_id,
+                        "admin",
+                        _hash_password(password),
+                        Role.ADMIN.value,
+                        _now_utc().isoformat(),
+                        True,
+                    ),
                 )
-                print(f"\n{'='*50}")
+                print(f"\n{'=' * 50}")
                 print("TokenPak RBAC — First-run admin account created")
-                print(f"  Username : admin")
+                print("  Username : admin")
                 print(f"  Password : {password}")
                 print("  Change this password immediately!")
-                print(f"{'='*50}\n")
+                print(f"{'=' * 50}\n")
                 logger.warning("Admin bootstrapped — change the default password.")
 
     # ------------------------------------------------------------------
     # User management
     # ------------------------------------------------------------------
 
-    def create_user(self, username: str, password: str, role: Role,
-                    email: Optional[str] = None, created_by_id: Optional[str] = None) -> User:
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        role: Role,
+        email: Optional[str] = None,
+        created_by_id: Optional[str] = None,
+    ) -> User:
         user_id = str(uuid.uuid4())
         now = _now_utc().isoformat()
         with self._conn() as conn:
@@ -229,26 +241,40 @@ class RBACStore:
             total = conn.execute("SELECT COUNT(*) FROM tp_users").fetchone()[0]
         return [dict(r) for r in rows], total
 
-    def update_user(self, user_id: str, *, role: Optional[str] = None,
-                    email: Optional[str] = None, is_active: Optional[bool] = None,
-                    updated_by_id: Optional[str] = None) -> Optional[User]:
+    def update_user(
+        self,
+        user_id: str,
+        *,
+        role: Optional[str] = None,
+        email: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        updated_by_id: Optional[str] = None,
+    ) -> Optional[User]:
         with self._conn() as conn:
             if role is not None:
-                conn.execute("UPDATE tp_users SET role=?, updated_at=? WHERE id=?",
-                             (role, _now_utc().isoformat(), user_id))
+                conn.execute(
+                    "UPDATE tp_users SET role=?, updated_at=? WHERE id=?",
+                    (role, _now_utc().isoformat(), user_id),
+                )
             if email is not None:
-                conn.execute("UPDATE tp_users SET email=?, updated_at=? WHERE id=?",
-                             (email, _now_utc().isoformat(), user_id))
+                conn.execute(
+                    "UPDATE tp_users SET email=?, updated_at=? WHERE id=?",
+                    (email, _now_utc().isoformat(), user_id),
+                )
             if is_active is not None:
-                conn.execute("UPDATE tp_users SET is_active=?, updated_at=? WHERE id=?",
-                             (is_active, _now_utc().isoformat(), user_id))
+                conn.execute(
+                    "UPDATE tp_users SET is_active=?, updated_at=? WHERE id=?",
+                    (is_active, _now_utc().isoformat(), user_id),
+                )
             self._audit(conn, updated_by_id, "user.update", "user", user_id, status="ok")
         return self.get_user_by_id(user_id)
 
     def deactivate_user(self, user_id: str, deactivated_by_id: Optional[str] = None) -> bool:
         with self._conn() as conn:
-            conn.execute("UPDATE tp_users SET is_active=FALSE, updated_at=? WHERE id=?",
-                         (_now_utc().isoformat(), user_id))
+            conn.execute(
+                "UPDATE tp_users SET is_active=FALSE, updated_at=? WHERE id=?",
+                (_now_utc().isoformat(), user_id),
+            )
             self._audit(conn, deactivated_by_id, "user.deactivate", "user", user_id, status="ok")
         return True
 
@@ -265,12 +291,14 @@ class RBACStore:
                 return None
             if not _verify_password(password, row["password_hash"]):
                 return None
-            conn.execute("UPDATE tp_users SET last_login=? WHERE id=?",
-                         (_now_utc().isoformat(), row["id"]))
+            conn.execute(
+                "UPDATE tp_users SET last_login=? WHERE id=?", (_now_utc().isoformat(), row["id"])
+            )
             return _row_to_user(row)
 
-    def create_session(self, user: User, ip: Optional[str] = None,
-                       user_agent: Optional[str] = None) -> str:
+    def create_session(
+        self, user: User, ip: Optional[str] = None, user_agent: Optional[str] = None
+    ) -> str:
         token = secrets.token_urlsafe(32)
         session_id = str(uuid.uuid4())
         expires_at = (_now_utc() + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
@@ -278,8 +306,16 @@ class RBACStore:
             conn.execute(
                 """INSERT INTO tp_sessions (id, user_id, token, created_at, expires_at, ip_address, user_agent, is_active)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (session_id, user.id, _hash_token(token),
-                 _now_utc().isoformat(), expires_at, ip, user_agent, True),
+                (
+                    session_id,
+                    user.id,
+                    _hash_token(token),
+                    _now_utc().isoformat(),
+                    expires_at,
+                    ip,
+                    user_agent,
+                    True,
+                ),
             )
         return token
 
@@ -313,9 +349,13 @@ class RBACStore:
     # API Keys
     # ------------------------------------------------------------------
 
-    def create_api_key(self, user: User, name: str = "",
-                       role: Optional[Role] = None,
-                       expires_in_days: Optional[int] = None) -> tuple[str, dict]:
+    def create_api_key(
+        self,
+        user: User,
+        name: str = "",
+        role: Optional[Role] = None,
+        expires_in_days: Optional[int] = None,
+    ) -> tuple[str, dict]:
         """Returns (raw_key, key_record). Store raw_key — it won't be shown again."""
         raw_key = API_KEY_PREFIX + secrets.token_urlsafe(32)
         key_id = str(uuid.uuid4())
@@ -329,8 +369,17 @@ class RBACStore:
                 """INSERT INTO tp_api_keys
                    (id, user_id, key_hash, key_prefix, name, role, created_at, expires_at, is_active)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (key_id, user.id, _hash_token(raw_key), key_prefix,
-                 name, assigned_role, _now_utc().isoformat(), expires_at, True),
+                (
+                    key_id,
+                    user.id,
+                    _hash_token(raw_key),
+                    key_prefix,
+                    name,
+                    assigned_role,
+                    _now_utc().isoformat(),
+                    expires_at,
+                    True,
+                ),
             )
         record = {
             "id": key_id,
@@ -358,8 +407,9 @@ class RBACStore:
                 if exp < _now_utc():
                     conn.execute("UPDATE tp_api_keys SET is_active=FALSE WHERE id=?", (row["id"],))
                     return None
-            conn.execute("UPDATE tp_api_keys SET last_used=? WHERE id=?",
-                         (_now_utc().isoformat(), row["id"]))
+            conn.execute(
+                "UPDATE tp_api_keys SET last_used=? WHERE id=?", (_now_utc().isoformat(), row["id"])
+            )
             user_row = conn.execute(
                 "SELECT * FROM tp_users WHERE id=? AND is_active=TRUE", (row["user_id"],)
             ).fetchone()
@@ -394,9 +444,16 @@ class RBACStore:
     # Audit log
     # ------------------------------------------------------------------
 
-    def _audit(self, conn: sqlite3.Connection, user_id: Optional[str], action: str,
-               resource_type: Optional[str] = None, resource_id: Optional[str] = None,
-               status: str = "ok", details: Optional[str] = None):
+    def _audit(
+        self,
+        conn: sqlite3.Connection,
+        user_id: Optional[str],
+        action: str,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        status: str = "ok",
+        details: Optional[str] = None,
+    ):
         conn.execute(
             """INSERT INTO tp_audit_log
                (user_id, action, resource_type, resource_id, status, created_at, details)
@@ -467,16 +524,19 @@ def init_rbac(app, db_path: str) -> RBACStore:
 
 def require_auth(f: Callable) -> Callable:
     """Require an authenticated caller (401 if missing)."""
+
     @wraps(f)
     def decorated(*args, **kwargs):
         if g.get("current_user") is None:
             return jsonify({"error": "Unauthorized", "message": "Authentication required"}), 401
         return f(*args, **kwargs)
+
     return decorated
 
 
 def require_permission(*permissions: Permission) -> Callable:
     """Require at least one of the listed permissions (403 if denied)."""
+
     def decorator(f: Callable) -> Callable:
         @wraps(f)
         def decorated(*args, **kwargs):
@@ -484,11 +544,15 @@ def require_permission(*permissions: Permission) -> Callable:
             if user is None:
                 return jsonify({"error": "Unauthorized"}), 401
             if not user.has_any_permission(*permissions):
-                return jsonify({
-                    "error": "Forbidden",
-                    "required_permissions": [p.value for p in permissions],
-                    "your_role": user.role.value,
-                }), 403
+                return jsonify(
+                    {
+                        "error": "Forbidden",
+                        "required_permissions": [p.value for p in permissions],
+                        "your_role": user.role.value,
+                    }
+                ), 403
             return f(*args, **kwargs)
+
         return decorated
+
     return decorator

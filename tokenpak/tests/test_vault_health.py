@@ -3,25 +3,20 @@ Tests for tokenpak.vault_health — Phase 1a
 """
 
 import json
-import tempfile
-import time
-from pathlib import Path
 
 import pytest
 
-from tokenpak.vault_health import (
-    HealthCheckResult,
+from tokenpak.telemetry.vault_health import (
     IndexStatus,
-    RepairResult,
     VaultHealth,
     _make_block_id,
     _parse_frontmatter,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def empty_vault(tmp_path):
@@ -46,6 +41,7 @@ def small_vault(tmp_path):
 # ---------------------------------------------------------------------------
 # VaultHealth.check()
 # ---------------------------------------------------------------------------
+
 
 class TestCheck:
     def test_missing_returns_missing_status(self, empty_vault):
@@ -95,6 +91,7 @@ class TestCheck:
 # ---------------------------------------------------------------------------
 # VaultHealth.repair() / rebuild_index()
 # ---------------------------------------------------------------------------
+
 
 class TestRepair:
     def test_repair_builds_index_from_scratch(self, small_vault):
@@ -179,6 +176,7 @@ class TestRepair:
 # Helper functions
 # ---------------------------------------------------------------------------
 
+
 class TestHelpers:
     def test_make_block_id(self):
         assert _make_block_id("notes/README.md") == "notes.README.md"
@@ -203,6 +201,7 @@ class TestHelpers:
 # ---------------------------------------------------------------------------
 # Exit code compatibility
 # ---------------------------------------------------------------------------
+
 
 class TestExitCodes:
     """Verify the module supports the exit code contract from the CLI."""

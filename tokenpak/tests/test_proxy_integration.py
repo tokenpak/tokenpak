@@ -13,6 +13,7 @@ class TestProxyAdapters:
         """Anthropic adapter is available."""
         try:
             from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
+
             assert AnthropicAdapter is not None
         except ImportError:
             pytest.skip("AnthropicAdapter not available")
@@ -21,6 +22,7 @@ class TestProxyAdapters:
         """OpenAI adapter is available."""
         try:
             from tokenpak.proxy.adapters.openai_adapter import OpenAIAdapter
+
             assert OpenAIAdapter is not None
         except ImportError:
             pytest.skip("OpenAIAdapter not available")
@@ -29,6 +31,7 @@ class TestProxyAdapters:
         """Adapters can be initialized."""
         try:
             from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
+
             adapter = AnthropicAdapter()
             assert adapter is not None
         except (ImportError, TypeError):
@@ -54,6 +57,7 @@ class TestResponseHandling:
         """Proxy correctly parses Anthropic API responses."""
         try:
             from tokenpak.proxy.adapters.anthropic_adapter import AnthropicAdapter
+
             # Test response format handling
             pytest.skip("Response parsing tests pending")
         except ImportError:
@@ -79,6 +83,7 @@ class TestCredentialPassthrough:
         """Credential passthrough module is available."""
         try:
             from tokenpak.proxy import credential_passthrough
+
             assert credential_passthrough is not None
         except ImportError:
             pytest.skip("credential_passthrough not available")

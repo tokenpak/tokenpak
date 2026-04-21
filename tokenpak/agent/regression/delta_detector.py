@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass
@@ -96,9 +96,7 @@ class DeltaDetector:
         # Compare config
         current_config = current_state.get("config", {})
         baseline_config = baseline_state.get("config", {})
-        config_keys_diff = set(current_config.keys()).symmetric_difference(
-            baseline_config.keys()
-        )
+        config_keys_diff = set(current_config.keys()).symmetric_difference(baseline_config.keys())
 
         if config_keys_diff:
             changed_dimensions.append("config")
@@ -146,9 +144,7 @@ class DeltaDetector:
 
         return line_score + file_score + deps_score + config_score
 
-    def should_reuse_baseline(
-        self, delta: DeltaResult, baseline_still_passes: bool
-    ) -> bool:
+    def should_reuse_baseline(self, delta: DeltaResult, baseline_still_passes: bool) -> bool:
         """
         Decide whether to reuse baseline artifact.
 

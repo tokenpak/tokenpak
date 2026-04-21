@@ -1,0 +1,351 @@
+; TokenPak import-linter contract.
+;
+; Enforces the dependency direction defined in
+; `~/vault/02_COMMAND_CENTER/tokenpak-standards-internal/01-architecture-standard.md §2`
+; and the entrypoint rule in `01 §2.4`.
+;
+; This file is consumed by `lint-imports` (the import-linter CLI). Run via
+; `make lint-imports` once wired in (task P2-14). Until P2-14 lands in CI,
+; this file is the declarative spec; violations are surfaced locally only.
+;
+; Classes of contract below:
+;
+;  C1  Six-tier layering (Architecture §2)
+;  C2  Entrypoint forbidden-import rule (Architecture §2 consequences)
+;  C3  Contracts single-home rule (Architecture §1.4 plane rule 3)
+;  C4  MCP plumbing discipline (Architecture §1.4 plane rule 4)
+;
+; §5.2-exception allowlist entries go under the `ignore_imports` key of C2.
+; Each entry names a specific importer-importee pair plus a `# tokenpak:
+; §5.2-exception — <A|B|C> — <reason>` marker in the target module's
+; docstring.
+
+[importlinter]
+root_package = tokenpak
+include_external_packages = False
+
+; -----------------------------------------------------------------------
+; C1. Tier layering.
+; -----------------------------------------------------------------------
+[importlinter:contract:tier-layering]
+name = Six-tier dependency layering (Architecture §2)
+type = layers
+layers =
+    tokenpak.cli | tokenpak.sdk | tokenpak.companion | tokenpak.dashboard | tokenpak.alerts
+    tokenpak.proxy | tokenpak.orchestration | tokenpak.plugins
+    tokenpak.services
+    tokenpak.telemetry | tokenpak.routing
+    tokenpak.security | tokenpak.compression | tokenpak.cache | tokenpak.vault | tokenpak.sources | tokenpak.debug
+    tokenpak.core
+ignore_imports =
+    ; === Legacy cross-entrypoint imports (Cali P2-06 audit 2026-04-20) ===
+    ; All §5.2-C (pure local helper concerns, never invoke a provider).
+    ;
+    ; cli as launcher + status presenter:
+    tokenpak.cli._impl -> tokenpak.alerts
+    tokenpak.cli._impl -> tokenpak.companion.config
+    tokenpak.cli._impl -> tokenpak.companion.launcher
+    ;
+    ; Transitive edges from the canonical proxy.server. Agent/proxy
+    ; consolidation landed 2026-04-20 (initiative
+    ; 2026-04-20-tokenpak-agent-proxy-consolidation); the Level-4
+    ; proxy.server module is now at its canonical home and retains
+    ; legitimate cross-tier imports for session dashboards, cache
+    ; telemetry, and metrics collection — all §5.2-B (proxy-infeasible
+    ; alternative path for read-side surfaces).
+    tokenpak.proxy.server -> tokenpak.dashboard
+    tokenpak.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.proxy.server -> tokenpak.telemetry.metrics
+    ;
+    ; Same-level (Level-1 → Level-1) primitives that legitimately
+    ; share concerns. Vault chunks content; compression processes
+    ; the chunks; debug runs benchmark + calibration diagnostics
+    ; against compression. These edges are intentional and not a
+    ; violation of the architecture's intent (the layering rule
+    ; catches SILOED drift, not legitimate collaboration between
+    ; related primitives). Documented as an exception.
+    tokenpak.vault.watcher -> tokenpak.compression.processors
+    tokenpak.vault.indexer -> tokenpak.compression.processors
+    tokenpak.debug.benchmark -> tokenpak.compression.processors
+    tokenpak.debug.calibration -> tokenpak.compression.processors
+    ;
+    ; compression.compiler resolves external references (URLs, GitHub
+    ; issues) to enrich compile-time context; the URL fetch path hits
+    ; sources.url_adapter. compression → sources is another Level-1
+    ; collaboration (compression enriches what sources provides).
+    tokenpak.compression.reference_fetcher -> tokenpak.sources.url_adapter
+    ;
+    ; compression.pack emits compile reports via telemetry.report.
+    ; This is cross-level (Level-1 → Level-2) — slightly unusual but
+    ; acceptable as intentional collaboration; compression generates
+    ; reports that telemetry stores/reads.
+    tokenpak.compression.pack -> tokenpak.telemetry.report
+    ;
+    ; telemetry.pipeline is the ingestion pipeline for telemetry events;
+    ; it consults routing.complexity + routing.shadow_hook for event
+    ; classification. Same-level routing ↔ telemetry cross-collab.
+    tokenpak.telemetry.pipeline -> tokenpak.routing.complexity
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
+    ;
+    ; More Level-1 ↔ Level-1 collaboration: sources.walker is a
+    ; generic filesystem traversal utility used by vault (for
+    ; indexing) and debug (for benchmark/calibration). Cleaner to
+    ; share than to duplicate.
+    tokenpak.vault.watcher -> tokenpak.sources.walker
+    tokenpak.vault.indexer -> tokenpak.sources.walker
+    tokenpak.debug.benchmark -> tokenpak.sources.walker
+    tokenpak.debug.calibration -> tokenpak.sources.walker
+    ;
+    ; telemetry.tokens is the canonical token-counting utility; vault
+    ; and debug primitives both consume it for their own diagnostic
+    ; and indexing work. Legitimate Level-1 ↔ Level-2 collab.
+    tokenpak.debug.benchmark -> tokenpak.telemetry.tokens
+    tokenpak.debug.calibration -> tokenpak.telemetry.tokens
+    tokenpak.vault.sqlite_retrieval -> tokenpak.telemetry.tokens
+    tokenpak.vault.indexer -> tokenpak.telemetry.tokens
+    tokenpak.vault.watcher -> tokenpak.telemetry.tokens
+    tokenpak.vault.retrieval -> tokenpak.telemetry.tokens
+    ;
+    ; cli.user-templates subcommand is a template-management UX.
+    ; Cross-entrypoint (cli → companion) for a pure local helper
+    ; (§5.2-C). Collapses when templates get their own top-level
+    ; subcommand module.
+    tokenpak.cli._impl -> tokenpak.companion.templates.user_templates
+    ;
+    ; Canonical proxy.server + proxy.capsule_integration cross-tier
+    ; edges that survived the agent/proxy consolidation (initiative
+    ; 2026-04-20-tokenpak-agent-proxy-consolidation, landed 2026-04-20).
+    ; These are legitimate §5.2-B exceptions — the orchestrator's goal
+    ; service is read from within the proxy for goal-aware routing
+    ; decisions, and capsule_integration straddles proxy transport
+    ; and compression capsule authoring.
+    tokenpak.proxy.server -> tokenpak.orchestration.goals
+    tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
+    tokenpak.telemetry.server -> tokenpak.compression.capsules
+
+; -----------------------------------------------------------------------
+; C2. Entrypoint forbidden imports.
+;
+; Level-5 entrypoints must not import services/, proxy internals, or
+; pipeline primitives for request execution. They use `proxy.client` as
+; the only supported entry surface. Read-only access to presentation
+; sources (telemetry read queries, etc.) goes through the subsystem's
+; public API and is not a pipeline import.
+;
+; §5.2 exceptions land in `ignore_imports` with a marker comment in the
+; target file.
+; -----------------------------------------------------------------------
+[importlinter:contract:entrypoints-dont-execute-directly]
+name = Entrypoints reach the backbone only through proxy.client (Architecture §2)
+type = forbidden
+source_modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+forbidden_modules =
+    tokenpak.services
+ignore_imports =
+    ; Entrypoints that target proxy.client are allowed (it lives in proxy).
+    tokenpak.cli -> tokenpak.proxy.client
+    tokenpak.sdk -> tokenpak.proxy.client
+    tokenpak.companion -> tokenpak.proxy.client
+    tokenpak.dashboard -> tokenpak.proxy.client
+    tokenpak.alerts -> tokenpak.proxy.client
+    ; Architecture §1.4 plane rule 4: services.mcp_bridge is the
+    ; shared MCP plumbing both companion (as MCP server) and
+    ; sdk.mcp (as MCP client bridge) consume by design. NOT a
+    ; §5.2 exception — this is the intended topology.
+    tokenpak.companion -> tokenpak.services.mcp_bridge
+    tokenpak.sdk.mcp.client -> tokenpak.services.mcp_bridge
+    ;
+    ; §5.2-C pure local helper: `tokenpak budget` subcommand is
+    ; a budget-management UX that operates on local budget state,
+    ; never invokes a provider. Collapses when a dedicated budget
+    ; CLI module lands.
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.rules
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.budgeter
+    ;
+    ; Package-level public-API re-export: tokenpak/__init__.py
+    ; exposes budgeter + budget types for user code.
+    tokenpak -> tokenpak.services.policy_service.budget.budgeter
+    tokenpak -> tokenpak.services.policy_service.budget.rules
+    ; §5.2 exception allowlist. Each entry MUST have a matching
+    ; `# tokenpak: §5.2-exception — <A|B|C> — <reason>` marker in the
+    ; importing file's module docstring and a corresponding note in
+    ; `09-audit-rubric.md §3.9` at the next audit cycle.
+    ;
+    ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+    ;
+    ; === CLI legacy surfaces (Cali P2-06 audit 2026-04-20) ===
+    ; cli/_impl.py is the launcher/config-editor/status-presenter
+    ; surface for subsystems that are themselves entrypoints or
+    ; primitives. All classified as §5.2-C (pure local helper concern;
+    ; never invokes a provider). Collapses further when routing-rule
+    ; editing moves out of cli into its own subcommand module.
+    tokenpak.cli._impl -> tokenpak.alerts
+    tokenpak.cli._impl -> tokenpak.companion.config
+    tokenpak.cli._impl -> tokenpak.companion.launcher
+    tokenpak.cli._impl -> tokenpak.routing.rules
+    tokenpak.cli._impl -> tokenpak.security
+
+[importlinter:contract:entrypoints-dont-import-pipeline-primitives]
+name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
+type = forbidden
+source_modules =
+    tokenpak.cli
+    tokenpak.sdk
+    tokenpak.companion
+    tokenpak.dashboard
+    tokenpak.alerts
+forbidden_modules =
+    tokenpak.compression
+    tokenpak.cache
+    tokenpak.routing
+    tokenpak.security
+ignore_imports =
+    ; ---- §5.2 entries land below this line as P2 migration proceeds ----
+    ;
+    ; === CLI legacy surfaces (Cali P2-06 audit 2026-04-20) ===
+    ; §5.2-C (pure local helper). cli/_impl.py is the CLI surface
+    ; for routing-rule management (tokenpak routing ...) and
+    ; credential management (tokenpak creds ...). Both are config-
+    ; editor concerns, not request execution.
+    tokenpak.cli._impl -> tokenpak.routing.rules
+    tokenpak.cli._impl -> tokenpak.security
+    ;
+    ; Canonical proxy.server transitive edges into cache and metrics.
+    ; Agent/proxy consolidation landed 2026-04-20; these edges remain
+    ; as §5.2-B (proxy-infeasible) read-side surfaces required by the
+    ; live HTTP server for cache inspection and stats export.
+    tokenpak.proxy.server -> tokenpak.cache.telemetry
+    tokenpak.proxy.server -> tokenpak.telemetry.metrics
+    ;
+    ; §5.2-C pure local helper: `tokenpak fingerprint` CLI subcommand
+    ; is a management UX — compute fingerprint of local file, sync
+    ; to intelligence server, apply privacy filters. Operates on the
+    ; user's local data; never invokes a provider. Out-of-band from
+    ; the services pipeline. Post agent/cli consolidation (2026-04-20),
+    ; the real importer is cli.commands.fingerprint (subcommand at
+    ; canonical home).
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.generator
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.privacy
+    tokenpak.cli._impl -> tokenpak.compression.fingerprinting.sync
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.generator
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.privacy
+    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.sync
+    ;
+    ; §5.2-C pure local helper: `tokenpak compact` CLI subcommand
+    ; runs compression on a local file for testing/preview. Never
+    ; invokes a provider. Post-D1 migration note: the canonical
+    ; path gained these imports when engines/ → compression/engines/
+    ; landed 2026-04-20 (previously allowlisted under tokenpak.engines
+    ; which was not a forbidden module).
+    tokenpak.cli._impl -> tokenpak.compression.engines.base
+    tokenpak.cli._impl -> tokenpak.compression.engines.heuristic
+    tokenpak.cli._impl -> tokenpak.compression.processors
+    tokenpak.cli._impl -> tokenpak.compression.processors.text
+    tokenpak.cli._impl -> tokenpak.compression.wire
+    tokenpak.cli._impl -> tokenpak.compression.compiler
+    tokenpak.cli._impl -> tokenpak.compression.miss_detector
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.rules
+    tokenpak.cli._impl -> tokenpak.services.policy_service.budget.budgeter
+    ;
+    ; §5.2-C cli profile management (tokenpak profile subcommand) —
+    ; operates on user config, never invokes a provider.
+    tokenpak.cli._impl -> tokenpak.routing.profiles
+    ;
+    ; Transitive through telemetry.server (telemetry IS a read surface
+    ; cli is allowed to consume; its internal collaborators happen to
+    ; include compression.validation_gate, compression.capsules and
+    ; routing primitives):
+    tokenpak.telemetry.server -> tokenpak.compression.validation_gate
+    tokenpak.telemetry.server -> tokenpak.compression.capsules
+    tokenpak.telemetry.pipeline -> tokenpak.routing.complexity
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_hook
+    tokenpak.telemetry.pipeline -> tokenpak.routing.shadow_reader
+    ;
+    ; Canonical proxy.capsule_integration → compression.capsules.builder.
+    ; Capsule authoring straddles proxy transport (where capsules are
+    ; injected into the live stream) and compression primitives (where
+    ; they're composed). §5.2-B (proxy-infeasible: this is the live
+    ; outbound packaging path).
+    tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
+    ;
+    ; (2026-04-20: compiler moved to compression/compiler — edge
+    ; is now intra-subsystem compression.compiler → compression.wire,
+    ; no allowlist needed.)
+    ;
+    ; (2026-04-20: benchmark and calibration moved to debug/benchmark
+    ; and debug/calibration per §1; their direct-compression imports
+    ; are now debug.benchmark -> compression.processors and
+    ; debug.calibration -> compression.processors. debug is Level-1,
+    ; compression is Level-1 — same-level edge, allowlisted below.)
+    tokenpak.debug.benchmark -> tokenpak.compression.processors
+    tokenpak.debug.calibration -> tokenpak.compression.processors
+    ;
+    ; Package-level public-API re-exports (NOT a §5.2 exception —
+    ; tokenpak/__init__.py is the library's public API surface and
+    ; deliberately exposes convenience names like HeuristicEngine +
+    ; get_engine for user code. When cli does `from tokenpak import
+    ; __version__`, grimp traces the full package-init chain — that's
+    ; a Python side-effect of package loading, not a violation. This
+    ; entry tells importlinter to skip the transitive-chain
+    ; evaluation at the top-level package boundary.
+    tokenpak -> tokenpak.compression.engines
+    tokenpak -> tokenpak.compression.engines.base
+    tokenpak -> tokenpak.compression.engines.heuristic
+    tokenpak -> tokenpak.compression.pack
+    tokenpak -> tokenpak.services.policy_service.budget.budgeter
+    tokenpak -> tokenpak.services.policy_service.budget.rules
+    ;
+    ; Vault indexer uses compression.processors to preprocess files.
+    ; vault + compression are both Level-1 primitives; same-level
+    ; imports are generally forbidden by tier layering, but the
+    ; concern naturally spans them (vault chunks content, compression
+    ; processes that content). Allowlisted with rationale.
+    ; 2026-04-20: collapsed agent.vault.* → vault.* prefix after
+    ; the agent/vault/ → vault/ D1 migration landed.
+    tokenpak.vault.watcher -> tokenpak.compression.processors
+    tokenpak.vault.indexer -> tokenpak.compression.processors
+
+; -----------------------------------------------------------------------
+; C3. Contracts single-home rule (Architecture §1.4 plane rule 3).
+;
+; TIP-defined types (headers, metadata, telemetry events, errors,
+; capabilities, compatibility, manifests) live ONLY in core/contracts/.
+; This contract is enforced as: no subsystem outside core.contracts may
+; define types that compete with core.contracts types.
+;
+; For Phase 2 scaffold the contracts module is stubs; the contract will
+; gain teeth (as a more specific `forbidden` rule over the exact names)
+; in P2-14 once types are populated.
+; -----------------------------------------------------------------------
+[importlinter:contract:contracts-single-home]
+name = TIP contracts live in core/contracts/ (Architecture §1.4 plane rule 3)
+type = independence
+modules =
+    ; For now, just assert that core.contracts stays independent of
+    ; everything else. Once the contracts module has real types, this
+    ; becomes a stronger rule.
+    tokenpak.core.contracts
+
+; -----------------------------------------------------------------------
+; C4. MCP plumbing discipline (Architecture §1.4 plane rule 4).
+;
+; Only services.mcp_bridge may host MCP state/protocol machinery.
+; companion and sdk.mcp are clients of the bridge, not forks of it.
+; -----------------------------------------------------------------------
+[importlinter:contract:mcp-plumbing]
+name = MCP machinery lives only in services.mcp_bridge (Architecture §1.4 plane rule 4)
+type = forbidden
+source_modules =
+    tokenpak.companion
+    tokenpak.sdk.mcp
+forbidden_modules =
+    ; Note: enforcement of "don't vendor an MCP library in companion" is
+    ; done by package layout rather than import-linter. This stanza is
+    ; reserved for future finer-grained MCP-internal module restrictions.
+    ; Placeholder - activated in P2-11.

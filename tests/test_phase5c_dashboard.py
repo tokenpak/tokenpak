@@ -4,9 +4,10 @@ Phase 5C: Dashboard UI — Integration Tests
 ==========================================
 Tests all three dashboard pages and HTMX partials.
 """
+
 import json
-import sys
 import os
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +15,7 @@ from fastapi.testclient import TestClient
 # Resolve vault pypi package path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from tokenpak.agent.dashboard.app import create_dashboard_app, create_combined_app
+from tokenpak.agent.dashboard.app import create_combined_app, create_dashboard_app
 from tokenpak.agent.query.api import EntryStore
 
 # ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ FIXTURE_DATE2 = "2025-11-02"
 FIXTURE_ENTRIES = [
     {
         "id": f"test-{i:03d}",
-        "timestamp": f"2025-11-01T0{i%9}:00:00Z",
+        "timestamp": f"2025-11-01T0{i % 9}:00:00Z",
         "agent": f"agent-{i % 3}",
         "model": "claude-haiku" if i % 2 == 0 else "gpt-4o",
         "provider": "anthropic" if i % 2 == 0 else "openai",
@@ -42,7 +43,7 @@ FIXTURE_ENTRIES = [
 FIXTURE_ENTRIES_D2 = [
     {
         "id": f"test-d2-{i:03d}",
-        "timestamp": f"2025-11-02T0{i%9}:00:00Z",
+        "timestamp": f"2025-11-02T0{i % 9}:00:00Z",
         "agent": f"agent-{i % 2}",
         "model": "claude-sonnet",
         "provider": "anthropic",
@@ -69,8 +70,9 @@ def fixture_dir(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def client(fixture_dir, monkeypatch_session):
-    from tokenpak.agent.query.api import EntryStore as ES, _store as orig_store
     import tokenpak.agent.dashboard.app as dash_app
+    from tokenpak.agent.query.api import EntryStore as ES
+
     store = ES(entries_dir=fixture_dir)
     monkeypatch_session.setattr(dash_app, "_store", store)
     app = create_dashboard_app()
@@ -81,6 +83,7 @@ def client(fixture_dir, monkeypatch_session):
 def monkeypatch_session():
     """Module-scoped monkeypatch."""
     from _pytest.monkeypatch import MonkeyPatch
+
     mp = MonkeyPatch()
     yield mp
     mp.undo()
@@ -89,6 +92,7 @@ def monkeypatch_session():
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+
 
 def test_health(client):
     r = client.get("/health")
@@ -99,6 +103,7 @@ def test_health(client):
 # ---------------------------------------------------------------------------
 # /dashboard (overview)
 # ---------------------------------------------------------------------------
+
 
 class TestOverview:
     def test_overview_200(self, client):
@@ -134,6 +139,7 @@ class TestOverview:
 # /dashboard/time-series
 # ---------------------------------------------------------------------------
 
+
 class TestTimeSeries:
     def test_time_series_200(self, client):
         r = client.get(f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE}&window=60")
@@ -151,13 +157,17 @@ class TestTimeSeries:
         assert "tokensChart" in r.text
 
     def test_time_series_multiday(self, client):
-        r = client.get(f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE2}&window=1440")
+        r = client.get(
+            f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE2}&window=1440"
+        )
         assert r.status_code == 200
         assert "2 buckets" in r.text or "rollup" in r.text.lower()
 
     def test_time_series_window_select(self, client):
         for window in [1, 5, 15, 30, 60, 360, 1440]:
-            r = client.get(f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE}&window={window}")
+            r = client.get(
+                f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE}&window={window}"
+            )
             assert r.status_code == 200
 
     def test_time_series_empty_range(self, client):
@@ -166,7 +176,9 @@ class TestTimeSeries:
         assert "0 buckets" in r.text or "rollup_count" not in r.text
 
     def test_time_series_shows_dates(self, client):
-        r = client.get(f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE2}&window=1440")
+        r = client.get(
+            f"/dashboard/time-series?start={FIXTURE_DATE}&end={FIXTURE_DATE2}&window=1440"
+        )
         assert FIXTURE_DATE in r.text
         assert FIXTURE_DATE2 in r.text
 
@@ -174,6 +186,7 @@ class TestTimeSeries:
 # ---------------------------------------------------------------------------
 # /dashboard/agents
 # ---------------------------------------------------------------------------
+
 
 class TestAgents:
     def test_agents_200(self, client):
@@ -221,6 +234,7 @@ class TestAgents:
 # HTMX partials
 # ---------------------------------------------------------------------------
 
+
 class TestHTMXPartials:
     def test_htmx_stats_200(self, client):
         r = client.get(f"/dashboard/htmx/stats?date={FIXTURE_DATE}")
@@ -264,12 +278,13 @@ class TestHTMXPartials:
 # Combined app
 # ---------------------------------------------------------------------------
 
+
 class TestCombinedApp:
     @pytest.fixture(scope="class")
     def combined_client(self, fixture_dir, monkeypatch_session):
         import tokenpak.agent.dashboard.app as dash_app
         import tokenpak.agent.query.api as query_app
-        import tokenpak.agent.ingest.api as ingest_app
+
         store = EntryStore(entries_dir=fixture_dir)
         monkeypatch_session.setattr(dash_app, "_store", store)
         monkeypatch_session.setattr(query_app, "_store", store)
@@ -282,10 +297,16 @@ class TestCombinedApp:
         assert r.json()["version"] == "5.3.0"
 
     def test_combined_has_ingest_route(self, combined_client):
-        r = combined_client.post("/ingest", json={
-            "model": "test-model", "tokens": 100, "cost": 0.001,
-            "timestamp": "2025-11-01T12:00:00Z", "agent": "test-agent",
-        })
+        r = combined_client.post(
+            "/ingest",
+            json={
+                "model": "test-model",
+                "tokens": 100,
+                "cost": 0.001,
+                "timestamp": "2025-11-01T12:00:00Z",
+                "agent": "test-agent",
+            },
+        )
         # Should succeed or return validation error (not 404)
         assert r.status_code in (200, 201, 422)
 

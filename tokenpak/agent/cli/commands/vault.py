@@ -1,32 +1,19 @@
-"""vault command — vault index management."""
+"""Deprecated re-export shim (TokenPak agent/cli consolidation 2026-04-20).
 
+Canonical home: ``tokenpak.cli.commands.vault``. Removal target: TIP-2.0.
+"""
 from __future__ import annotations
 
+import warnings as _warnings
 
-def run(action: str = "status", raw: bool = False) -> None:
-    """Vault index management."""
-    print(f"vault {action}: not yet implemented (stub)")
+_warnings.warn(
+    "tokenpak.agent.cli.commands.vault is a deprecated re-export; "
+    "import from tokenpak.cli.commands.vault instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from tokenpak.cli.commands.vault import *  # noqa: F401,F403,E402
 
-try:
-    import click
-
-    @click.group("vault")
-    def vault_cmd():
-        """Vault index management commands."""
-        pass
-
-    @vault_cmd.command("status")
-    @click.option("--raw", is_flag=True)
-    def vault_status(raw):
-        """Show vault index status."""
-        run(action="status", raw=raw)
-
-    @vault_cmd.command("reindex")
-    @click.option("--verbose", "-v", is_flag=True)
-    def vault_reindex(verbose):
-        """Rebuild vault block index."""
-        run(action="reindex")
-
-except ImportError:
-    pass
+__all__ = ["run", "vault_cmd", "vault_reindex", "vault_status"]

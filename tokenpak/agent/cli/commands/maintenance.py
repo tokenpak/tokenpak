@@ -1,51 +1,19 @@
-"""maintenance command — proxy restart, reset, log viewing."""
+"""Deprecated re-export shim (TokenPak agent/cli consolidation 2026-04-20).
 
+Canonical home: ``tokenpak.cli.commands.maintenance``. Removal target: TIP-2.0.
+"""
 from __future__ import annotations
 
-import subprocess
-import sys
-import time
+import warnings as _warnings
 
-PROXY_SERVICE = "tokenpak-proxy.service"
+_warnings.warn(
+    "tokenpak.agent.cli.commands.maintenance is a deprecated re-export; "
+    "import from tokenpak.cli.commands.maintenance instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from tokenpak.cli.commands.maintenance import *  # noqa: F401,F403,E402
 
-def restart_proxy() -> None:
-    try:
-        subprocess.run(["systemctl", "--user", "restart", PROXY_SERVICE], check=True)
-        time.sleep(2)
-        print("✓ Proxy service restarted")
-    except subprocess.CalledProcessError as e:
-        print(f"✖ Restart failed: {e}")
-        sys.exit(1)
-
-
-def show_logs(n: int = 30) -> None:
-    r = subprocess.run(
-        ["journalctl", "--user", "-u", PROXY_SERVICE, f"-n{n}", "--no-pager"],
-        capture_output=True,
-        text=True,
-    )
-    print(r.stdout or r.stderr)
-
-
-try:
-    import click
-
-    @click.group("maintenance")
-    def maintenance_cmd():
-        """Proxy maintenance commands."""
-        pass
-
-    @maintenance_cmd.command("restart")
-    def maintenance_restart():
-        """Restart the proxy service."""
-        restart_proxy()
-
-    @maintenance_cmd.command("logs")
-    @click.argument("lines", type=int, default=30, required=False)
-    def maintenance_logs(lines):
-        """Show last N proxy log lines."""
-        show_logs(n=lines)
-
-except ImportError:
-    pass
+__all__ = ["PROXY_SERVICE", "maintenance_cmd", "maintenance_logs", "maintenance_restart", "restart_proxy", "show_logs"]

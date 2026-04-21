@@ -53,7 +53,7 @@ from tokenpak.agent.agentic.retry import (
     RetryExhaustedError,
     load_recent_retry_events,
 )
-from tokenpak.agent.proxy.failover import (
+from tokenpak.proxy.failover import (
     FailoverManager,
     FailoverResult,
 )
@@ -71,8 +71,7 @@ class FallbackExhaustedError(Exception):
         self.context = context
         self.cause = cause
         super().__init__(
-            f"All fallback options exhausted for task '{context.get('task', 'unknown')}': "
-            f"{cause}"
+            f"All fallback options exhausted for task '{context.get('task', 'unknown')}': {cause}"
         )
 
 

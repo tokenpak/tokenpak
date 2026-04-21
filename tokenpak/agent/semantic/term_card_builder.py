@@ -63,7 +63,18 @@ CAPS_LIST_MAX: dict[str, int] = {
     "source_refs": 10,
 }
 
-REQUIRED_FIELDS = {"term", "what", "who", "where", "why", "how", "aliases", "tier", "confidence", "source_refs"}
+REQUIRED_FIELDS = {
+    "term",
+    "what",
+    "who",
+    "where",
+    "why",
+    "how",
+    "aliases",
+    "tier",
+    "confidence",
+    "source_refs",
+}
 
 TERM_CARDS_PATH = Path(__file__).resolve().parents[2] / "term_cards.json"
 
@@ -89,9 +100,7 @@ def enforce_caps(card: dict[str, Any]) -> dict[str, Any]:
     for field, item_cap in CAPS_LIST_ITEM.items():
         if field in out and isinstance(out[field], list):
             max_items = CAPS_LIST_MAX[field]
-            out[field] = [
-                _truncate(str(item), item_cap) for item in out[field][:max_items]
-            ]
+            out[field] = [_truncate(str(item), item_cap) for item in out[field][:max_items]]
     return out
 
 
@@ -157,9 +166,7 @@ def detect_alias_conflicts(cards: dict[str, Any]) -> list[str]:
     for alias, owners in alias_map.items():
         unique_owners = list(dict.fromkeys(owners))  # preserve insertion order, dedup
         if len(unique_owners) > 1:
-            conflicts.append(
-                f"Alias conflict: '{alias}' is claimed by: {', '.join(unique_owners)}"
-            )
+            conflicts.append(f"Alias conflict: '{alias}' is claimed by: {', '.join(unique_owners)}")
     return conflicts
 
 
@@ -254,7 +261,7 @@ def extract_candidates_from_source(
                 "aliases": [],
                 "tier": 1,
                 "confidence": min(0.4 + count * 0.02, 0.75),
-                "source_refs": source_map[ident][:CAPS_LIST_MAX["source_refs"]],
+                "source_refs": source_map[ident][: CAPS_LIST_MAX["source_refs"]],
                 "updated_at": now,
             }
     return candidates
@@ -283,7 +290,7 @@ def lazy_add(
     now = datetime.now(timezone.utc).isoformat()
     stub = enforce_caps(
         {
-            "term": term[:CAPS["term"]],
+            "term": term[: CAPS["term"]],
             "what": f"Unknown term '{term}' — pending enrichment.",
             "who": "Unknown",
             "where": [],
@@ -293,7 +300,7 @@ def lazy_add(
             "aliases": [],
             "tier": 2,
             "confidence": 0.1,
-            "source_refs": (source_refs or [])[:CAPS_LIST_MAX["source_refs"]],
+            "source_refs": (source_refs or [])[: CAPS_LIST_MAX["source_refs"]],
             "updated_at": now,
         }
     )
@@ -326,7 +333,7 @@ def validation_report(cards: dict[str, Any]) -> str:
     for card in cards.values():
         tier_counts[card.get("tier", "?")] += 1
 
-    lines.append(f"=== TokenPak Term-Card Validation Report ===")
+    lines.append("=== TokenPak Term-Card Validation Report ===")
     lines.append(f"Total cards : {len(cards)}")
     for t in sorted(k for k in tier_counts if isinstance(k, int)):
         lines.append(f"  Tier {t}    : {tier_counts[t]}")
@@ -430,8 +437,11 @@ def _cli():
 
     # build
     p_build = sub.add_parser("build", help="Run full Tier 0/1 build pipeline")
-    p_build.add_argument("--source-root", default=str(Path(__file__).resolve().parents[3]),
-                         help="Root of source tree to scan for Tier 1 candidates")
+    p_build.add_argument(
+        "--source-root",
+        default=str(Path(__file__).resolve().parents[3]),
+        help="Root of source tree to scan for Tier 1 candidates",
+    )
     p_build.add_argument("--cards-path", default=str(TERM_CARDS_PATH))
     p_build.add_argument("--no-tier1", action="store_true", help="Skip Tier 1 auto-extraction")
     p_build.add_argument("--dry-run", action="store_true", help="Do not write to disk")

@@ -65,8 +65,7 @@ def _require_pro(request: Request) -> Optional[JSONResponse]:
             content={
                 "error": "Forbidden",
                 "detail": (
-                    "A/B Auto-Optimizer is a Pro+ feature. "
-                    "Upgrade at https://tokenpak.ai/pricing"
+                    "A/B Auto-Optimizer is a Pro+ feature. Upgrade at https://tokenpak.ai/pricing"
                 ),
             },
         )

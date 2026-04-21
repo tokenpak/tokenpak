@@ -1,49 +1,21 @@
-"""tokenpak.agent.proxy.stats_api — Proxy HTTP endpoints for stats."""
+"""Deprecated re-export shim (TokenPak D1 migration 2026-04-20).
 
+The canonical home of this module is ``tokenpak.proxy.stats_api``.
+This shim exists for backwards compatibility and will be removed
+in TIP-2.0.
+"""
 from __future__ import annotations
 
-import json
+import warnings as _warnings
 
-from tokenpak.telemetry.stats import get_stats_storage
+_warnings.warn(
+    "tokenpak.agent.proxy.stats_api is a deprecated re-export; "
+    "import from tokenpak.proxy.stats_api instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from tokenpak.proxy.stats_api import *  # noqa: F401,F403,E402
 
-class StatsAPI:
-    """Handles HTTP requests for stats endpoints."""
-
-    @staticmethod
-    def handle_stats_last() -> tuple[str, dict]:
-        """Handle GET /stats/last request.
-
-        Returns last request stats with session totals.
-        """
-        storage = get_stats_storage()
-        data = storage.get_last_with_session()
-
-        return json.dumps(data), {"Content-Type": "application/json"}
-
-    @staticmethod
-    def handle_stats_session() -> tuple[str, dict]:
-        """Handle GET /stats/session request.
-
-        Returns current session stats.
-        """
-        storage = get_stats_storage()
-        session = storage.get_session()
-
-        return json.dumps(session.to_dict()), {"Content-Type": "application/json"}
-
-    @staticmethod
-    def route(path: str) -> tuple[str, dict] | None:
-        """Route HTTP requests to appropriate handler.
-
-        Args:
-            path: Request path (e.g. "/stats/last")
-
-        Returns:
-            (response_body, headers) tuple or None if not found
-        """
-        if path == "/stats/last":
-            return StatsAPI.handle_stats_last()
-        elif path == "/stats/session":
-            return StatsAPI.handle_stats_session()
-        return None
+__all__ = ["StatsAPI", "get_stats_storage"]

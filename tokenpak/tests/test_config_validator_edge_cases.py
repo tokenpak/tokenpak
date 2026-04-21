@@ -9,11 +9,13 @@ Covers:
 - Recovery scenarios
 """
 
-import pytest
 import json
-import tempfile
 import os
-from tokenpak.config_validator import ConfigValidator
+import tempfile
+
+import pytest
+
+from tokenpak.core.config.validator import ConfigValidator
 
 
 class TestMalformedInput:
@@ -157,10 +159,10 @@ class TestIntegration:
 
     def test_config_file_reload(self):
         """Config file can be reloaded."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump({"api_keys": {"a": "b"}}, f)
             fname = f.name
-        
+
         try:
             validator = ConfigValidator()
             result = validator.validate_file(fname)
@@ -252,7 +254,7 @@ class TestRecovery:
         """Invalid config → fix → retry succeeds."""
         config1 = {"port": 100}  # Invalid
         config2 = {"api_keys": {"a": "b"}, "port": 9000}  # Fixed
-        
+
         validator = ConfigValidator()
         assert not validator.is_valid(config1)
         assert validator.is_valid(config2)
@@ -282,7 +284,7 @@ class TestRecovery:
         """Validate config after migration."""
         old = {"api_key": "sk-test"}
         new = {"api_keys": {"anthropic": old["api_key"]}}
-        
+
         validator = ConfigValidator()
         assert validator.is_valid(new)
 
@@ -295,7 +297,7 @@ class TestRecovery:
         # Remove new feature for downgrade
         if "new_feature" in new_config:
             del new_config["new_feature"]
-        
+
         validator = ConfigValidator()
         assert validator.is_valid(new_config)
 
@@ -327,15 +329,7 @@ class TestEdgeCasesCombinations:
 
     def test_deeply_nested_config(self):
         """Deeply nested config structure."""
-        config = {
-            "api_keys": {
-                "nested": {
-                    "deep": {
-                        "key": "sk-value"
-                    }
-                }
-            }
-        }
+        config = {"api_keys": {"nested": {"deep": {"key": "sk-value"}}}}
         # Should handle or reject gracefully
         assert "api_keys" in config
 

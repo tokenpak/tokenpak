@@ -134,7 +134,7 @@ def _content_to_str(content: Any) -> str:
                     parts.append(block.get("text", ""))
                 elif block.get("type") == "image":
                     src = block.get("source", {})
-                    parts.append(f"[image:{src.get('type','')}:{str(src.get('data',''))[:32]}]")
+                    parts.append(f"[image:{src.get('type', '')}:{str(src.get('data', ''))[:32]}]")
                 else:
                     parts.append(json.dumps(block, ensure_ascii=False))
             else:

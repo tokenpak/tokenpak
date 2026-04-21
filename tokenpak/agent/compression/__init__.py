@@ -16,7 +16,6 @@ Provides the compression pipeline and supporting utilities:
 from .canon import ValidationResult, apply_fallback, validate
 from .dedup import dedup_messages
 from .directives import DirectiveApplier
-from .schema_extractor import TEMPLATES, ExtractionResult, SchemaExtractor
 from .pipeline import CompressionPipeline
 from .recipes import (
     PHRASE_MAP,
@@ -27,6 +26,7 @@ from .recipes import (
     RecipeEngine,
     RecipeType,
 )
+from .schema_extractor import TEMPLATES, ExtractionResult, SchemaExtractor
 from .segmentizer import Segment, SegmentType, segmentize
 from .slot_filler import FilledSlots, SlotFiller
 
@@ -54,24 +54,26 @@ __all__ = [
     "TEMPLATES",
 ]
 from . import salience
-from .salience import (
-    ContentType,
-    detect_content_type,
-    LogExtractor,
-    CodeExtractor,
-    DocExtractor,
-    SalientResult,
-    extract as salience_extract,
-)
 from .fidelity_tiers import (
-    FidelityTier,
     TIER_COST_FACTOR,
+    FidelityTier,
     TieredBlock,
     TierGenerator,
     TierSelector,
     TierStore,
 )
 from .query_rewriter import QueryRewriter, RewriteResult, rewrite_query
+from .salience import (
+    CodeExtractor,
+    ContentType,
+    DocExtractor,
+    LogExtractor,
+    SalientResult,
+    detect_content_type,
+)
+from .salience import (
+    extract as salience_extract,
+)
 
 __all__ += [
     "salience",

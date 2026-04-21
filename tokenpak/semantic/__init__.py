@@ -1,27 +1,21 @@
+"""Backwards-compat shim — see routing.semantic.
+
+Canonical home is ``tokenpak.routing.semantic`` (Architecture §1 —
+semantic intent/entity resolution is a routing concern: it normalizes
+user wording variants to canonical keys before routing decisions are
+made). Moved 2026-04-20 per D1 migration. Removal target: TIP-2.0.
 """
-TokenPak Semantic Translation Module
-======================================
-Deterministic resolution of user wording variants to canonical
-intent/entity keys for consistent routing.
 
-Usage::
+from __future__ import annotations
 
-    from tokenpak.semantic import SemanticResolver
+import warnings
 
-    resolver = SemanticResolver()
-    result = resolver.resolve_intent("how much did i spend last week")
-    # ResolveResult(canonical="usage", alias_matched="how much did i spend", confidence=1.0)
+from tokenpak.routing.semantic import *  # noqa: F401,F403
 
-    # Preprocess raw text (replaces aliases in-place for downstream slot fill)
-    normalized = resolver.normalize_text("token usage for gpt last 7 days")
-    # "usage for model last 7 days"
-"""
-from .loader import SemanticMapLoader, SemanticMapError
-from .resolver import SemanticResolver, ResolveResult
-
-__all__ = [
-    "SemanticMapLoader",
-    "SemanticMapError",
-    "SemanticResolver",
-    "ResolveResult",
-]
+warnings.warn(
+    "tokenpak.semantic is deprecated — "
+    "import from tokenpak.routing.semantic (canonical home since 2026-04-20, D1 migration). "
+    "Legacy shim removal target: TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)

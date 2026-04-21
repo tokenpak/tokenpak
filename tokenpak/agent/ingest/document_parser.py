@@ -29,8 +29,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional
-
+from typing import Any, List
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -134,33 +133,88 @@ class DocumentStructure:
 
 _SECTION_KEYWORDS: dict[str, list[str]] = {
     "overview": [
-        "overview", "introduction", "intro", "summary", "abstract", "background",
-        "synopsis", "executive summary", "purpose", "about",
+        "overview",
+        "introduction",
+        "intro",
+        "summary",
+        "abstract",
+        "background",
+        "synopsis",
+        "executive summary",
+        "purpose",
+        "about",
     ],
     "methodology": [
-        "method", "methodology", "approach", "process", "procedure", "how",
-        "technique", "implementation", "design", "architecture", "workflow",
+        "method",
+        "methodology",
+        "approach",
+        "process",
+        "procedure",
+        "how",
+        "technique",
+        "implementation",
+        "design",
+        "architecture",
+        "workflow",
     ],
     "results": [
-        "result", "finding", "outcome", "data", "analysis", "benchmark",
-        "performance", "metric", "measurement", "evaluation", "test result",
+        "result",
+        "finding",
+        "outcome",
+        "data",
+        "analysis",
+        "benchmark",
+        "performance",
+        "metric",
+        "measurement",
+        "evaluation",
+        "test result",
         "output",
     ],
     "recommendations": [
-        "recommendation", "suggest", "proposal", "action", "next step",
-        "todo", "to-do", "plan", "roadmap", "future work",
+        "recommendation",
+        "suggest",
+        "proposal",
+        "action",
+        "next step",
+        "todo",
+        "to-do",
+        "plan",
+        "roadmap",
+        "future work",
     ],
     "legal": [
-        "license", "copyright", "terms", "privacy", "legal", "disclaimer",
-        "warranty", "liability", "intellectual property", "ip ",
+        "license",
+        "copyright",
+        "terms",
+        "privacy",
+        "legal",
+        "disclaimer",
+        "warranty",
+        "liability",
+        "intellectual property",
+        "ip ",
     ],
     "definitions": [
-        "glossary", "definition", "terminology", "term", "vocabulary",
-        "abbreviation", "acronym", "key concept",
+        "glossary",
+        "definition",
+        "terminology",
+        "term",
+        "vocabulary",
+        "abbreviation",
+        "acronym",
+        "key concept",
     ],
     "appendix": [
-        "appendix", "annex", "supplement", "additional", "extra", "addendum",
-        "index", "reference", "bibliography",
+        "appendix",
+        "annex",
+        "supplement",
+        "additional",
+        "extra",
+        "addendum",
+        "index",
+        "reference",
+        "bibliography",
     ],
 }
 
@@ -395,24 +449,29 @@ def _group_into_sections(tokens: list[tuple]) -> list[DocumentSection]:
     if pre_heading_lines:
         raw = "\n".join(pre_heading_lines).strip()
         if raw:
-            flat.insert(0, {
-                "level": 1,
-                "heading": raw.splitlines()[0][:80].strip() if raw else "Preamble",
-                "content": "\n".join(raw.splitlines()[1:]).strip(),
-                "tables": pre_heading_tables,
-                "code_blocks": pre_heading_code,
-            })
+            flat.insert(
+                0,
+                {
+                    "level": 1,
+                    "heading": raw.splitlines()[0][:80].strip() if raw else "Preamble",
+                    "content": "\n".join(raw.splitlines()[1:]).strip(),
+                    "tables": pre_heading_tables,
+                    "code_blocks": pre_heading_code,
+                },
+            )
     elif not seen_heading and pending_lines:
         # No headings at all — wrap entire content as single implicit section
         raw = "\n".join(pending_lines).strip()
         if raw:
-            flat.append({
-                "level": 1,
-                "heading": "Document",
-                "content": raw,
-                "tables": list(pending_tables),
-                "code_blocks": list(pending_code),
-            })
+            flat.append(
+                {
+                    "level": 1,
+                    "heading": "Document",
+                    "content": raw,
+                    "tables": list(pending_tables),
+                    "code_blocks": list(pending_code),
+                }
+            )
 
     return _nest_sections(flat)
 
@@ -653,9 +712,7 @@ class _HTMLStructureParser(HTMLParser):
         return self._tokens
 
 
-def _html_table_to_dict(
-    headers: list[str], rows: list[list[str]]
-) -> dict | None:
+def _html_table_to_dict(headers: list[str], rows: list[list[str]]) -> dict | None:
     """Convert header list + rows list into normalized dict form."""
     if not rows:
         return None
@@ -736,7 +793,7 @@ def _parse_plain_text(text: str) -> DocumentStructure:
             continue
 
         # Short line followed by blank line + title-case pattern
-        next_blank = (i + 1 < len(lines) and not lines[i + 1].strip())
+        next_blank = i + 1 < len(lines) and not lines[i + 1].strip()
         if (
             line.strip()
             and len(line.strip()) <= 80
@@ -833,8 +890,10 @@ class DocumentParser:
     def _detect_format(self, text: str) -> str:
         """Detect document format from content."""
         stripped = text.strip()
-        if stripped.startswith("<!") or stripped.startswith("<html") or re.search(
-            r"<(h[1-6]|p|div|table|section)\b", stripped[:2000], re.IGNORECASE
+        if (
+            stripped.startswith("<!")
+            or stripped.startswith("<html")
+            or re.search(r"<(h[1-6]|p|div|table|section)\b", stripped[:2000], re.IGNORECASE)
         ):
             return "html"
         if re.search(r"^#{1,6}\s", stripped, re.MULTILINE):

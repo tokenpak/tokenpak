@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional, Set, Tuple
-
+from typing import List, Set, Tuple
 
 # ── constants ─────────────────────────────────────────────────────────────
 
-MAX_FN_BODY_LINES: int = 60   # cap per function body to avoid huge dumps
+MAX_FN_BODY_LINES: int = 60  # cap per function body to avoid huge dumps
 
 # ── regex patterns ────────────────────────────────────────────────────────
 
@@ -39,19 +38,25 @@ _JS_FN_RE = re.compile(
     re.MULTILINE,
 )
 _JS_ARROW_RE = re.compile(
-    r"^(?P<indent>\s*)(?:export\s+)?(?:const|let)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?\(", re.MULTILINE
+    r"^(?P<indent>\s*)(?:export\s+)?(?:const|let)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?\(",
+    re.MULTILINE,
 )
 
 # Java / Kotlin
 _JAVA_FN_RE = re.compile(
-    r"^(?P<indent>\s*)(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(?P<name>\w+)\s*\(", re.MULTILINE
+    r"^(?P<indent>\s*)(?:public|private|protected|static|\s)+[\w<>\[\]]+\s+(?P<name>\w+)\s*\(",
+    re.MULTILINE,
 )
 
 # Go
-_GO_FN_RE = re.compile(r"^(?P<indent>)func\s+(?:\(\w+\s+\*?\w+\)\s+)?(?P<name>\w+)\s*\(", re.MULTILINE)
+_GO_FN_RE = re.compile(
+    r"^(?P<indent>)func\s+(?:\(\w+\s+\*?\w+\)\s+)?(?P<name>\w+)\s*\(", re.MULTILINE
+)
 
 # Rust
-_RUST_FN_RE = re.compile(r"^(?P<indent>\s*)(?:pub(?:\(\w+\))?\s+)?(?:async\s+)?fn\s+(?P<name>\w+)\s*\(", re.MULTILINE)
+_RUST_FN_RE = re.compile(
+    r"^(?P<indent>\s*)(?:pub(?:\(\w+\))?\s+)?(?:async\s+)?fn\s+(?P<name>\w+)\s*\(", re.MULTILINE
+)
 
 # Import statements (multi-language)
 _IMPORT_RE = re.compile(
@@ -144,7 +149,7 @@ class CodeExtractor:
         changed: List[Tuple[str, List[str]]] = []
         test_fns: List[Tuple[str, List[str]]] = []
 
-        for (name, body_lines, pre_lines) in fn_blocks:
+        for name, body_lines, pre_lines in fn_blocks:
             body_text = "\n".join(body_lines)
             pre_text = "\n".join(pre_lines)
             is_changed = (
@@ -163,7 +168,9 @@ class CodeExtractor:
 
         # de-dup test_fns by name (can be detected twice via different regexes)
         seen_test_names: Set[str] = set()
-        test_fns = [(n, b) for n, b in test_fns if not (n in seen_test_names or seen_test_names.add(n))]  # type: ignore[func-returns-value]
+        test_fns = [
+            (n, b) for n, b in test_fns if not (n in seen_test_names or seen_test_names.add(n))
+        ]  # type: ignore[func-returns-value]
 
         result.changed_functions = [n for n, _ in changed]
         result.test_targets = [n for n, _ in test_fns]
@@ -192,7 +199,9 @@ class CodeExtractor:
             sections.append(f"# --- fn: {name} ---")
             sections.extend(body_lines[: self.max_fn_body_lines])
             if len(body_lines) > self.max_fn_body_lines:
-                sections.append(f"    … ({len(body_lines) - self.max_fn_body_lines} lines truncated)")
+                sections.append(
+                    f"    … ({len(body_lines) - self.max_fn_body_lines} lines truncated)"
+                )
 
         # Failing test targets
         for name, body_lines in test_fns:

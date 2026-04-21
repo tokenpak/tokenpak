@@ -1,6 +1,23 @@
-"""Re-export CLI command modules from tokenpak.agent.cli.commands."""
+"""
+TokenPak CLI commands package.
 
-from tokenpak.agent.cli.commands import *  # noqa: F401,F403
-from tokenpak.agent.cli.commands import __all__ as _agent_all
+Each module provides a Click group or argparse handler for a top-level
+CLI command. Stubs are provided for all planned commands.
+"""
 
-__all__ = list(_agent_all)
+__all__ = [
+    "status",
+    "cost",
+    "compression",
+    "vault",
+    "route",
+    "config",
+    "maintenance",
+    "license",
+    "last",
+    "workflow",
+    "replay",
+    "teacher",
+    "exec",
+    "savings",
+]

@@ -160,9 +160,7 @@ class StablePrefixRegistry:
                     "hit_count": 1,
                     "size_bytes": size,
                 }
-                logger.debug(
-                    "[PrefixRegistry] new block_id=%s size=%d", block_id, size
-                )
+                logger.debug("[PrefixRegistry] new block_id=%s size=%d", block_id, size)
                 return block_id, True
 
     def metadata(self, block_id: str) -> Optional[Dict[str, Any]]:

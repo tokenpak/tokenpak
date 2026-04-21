@@ -1,28 +1,36 @@
-"""Compaction engines module."""
+"""Backwards-compat shim — see compression.engines.
 
-from .base import CompactionEngine
-from .heuristic import HeuristicEngine
+Canonical home is ``tokenpak.compression.engines`` (Architecture §1).
+Moved 2026-04-20 per D1 migration. Legacy shim removal target:
+TIP-2.0.
+"""
 
-# LLMLingua engines will be imported conditionally when available
-try:
-    from .llmlingua import LLMLinguaEngine
+from __future__ import annotations
 
-    LLMLINGUA_AVAILABLE = True
-except ImportError:
-    LLMLINGUA_AVAILABLE = False
-    LLMLinguaEngine = None  # type: ignore[assignment, misc]
+import warnings
 
-ENGINES = {
-    "heuristic": HeuristicEngine,
-    "fast": HeuristicEngine,
-}
+from tokenpak.compression.engines import (  # noqa: F401
+    ENGINES,
+    LLMLINGUA_AVAILABLE,
+    CompactionEngine,
+    HeuristicEngine,
+    LLMLinguaEngine,
+    get_engine,
+)
 
-if LLMLINGUA_AVAILABLE:
-    ENGINES["balanced"] = LLMLinguaEngine  # type: ignore[assignment]
-    ENGINES["llmlingua"] = LLMLinguaEngine  # type: ignore[assignment]
+warnings.warn(
+    "tokenpak.engines is deprecated — "
+    "import from tokenpak.compression.engines (canonical home since 2026-04-20, D1 migration). "
+    "Legacy shim removal target: TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-
-def get_engine(name: str = "heuristic") -> CompactionEngine:
-    """Get a compaction engine by name."""
-    engine_class = ENGINES.get(name, HeuristicEngine)
-    return engine_class()
+__all__ = [
+    "CompactionEngine",
+    "HeuristicEngine",
+    "LLMLinguaEngine",
+    "LLMLINGUA_AVAILABLE",
+    "ENGINES",
+    "get_engine",
+]

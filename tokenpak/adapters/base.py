@@ -39,6 +39,7 @@ from typing import Any
 
 # ── Canonical exception hierarchy ─────────────────────────────────────────
 
+
 class TokenPakAdapterError(Exception):
     """Base exception for all TokenPak adapter errors."""
 
@@ -61,6 +62,7 @@ class TokenPakAuthError(TokenPakAdapterError):
 
 
 # ── Base adapter ───────────────────────────────────────────────────────────
+
 
 class TokenPakAdapter(ABC):
     """Abstract base class for all TokenPak SDK/framework adapters.
@@ -206,7 +208,4 @@ class TokenPakAdapter(ABC):
         return parsed
 
     def __repr__(self) -> str:
-        return (
-            f"<{type(self).__name__} provider={self.provider_name!r}"
-            f" base_url={self.base_url!r}>"
-        )
+        return f"<{type(self).__name__} provider={self.provider_name!r} base_url={self.base_url!r}>"
