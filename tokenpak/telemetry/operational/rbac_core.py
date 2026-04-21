@@ -1,7 +1,8 @@
 """
 TokenPak RBAC Core — Role definitions, permission matrix, and access control.
 
-Copied from vault/06_RUNTIME/SYSTEM/rbac/tokenpak-rbac-core.py
+Originally authored in the internal ops repo; this is the canonical copy
+shipped with tokenpak.
 """
 
 from dataclasses import dataclass, field
