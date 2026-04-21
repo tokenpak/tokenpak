@@ -1,0 +1,19 @@
+"""Deprecated re-export shim (TokenPak agent/cli consolidation 2026-04-20).
+
+Canonical home: ``tokenpak.cli.commands.doctor``. Removal target: TIP-2.0.
+"""
+from __future__ import annotations
+
+import warnings as _warnings
+
+_warnings.warn(
+    "tokenpak.agent.cli.commands.doctor is a deprecated re-export; "
+    "import from tokenpak.cli.commands.doctor instead. "
+    "This shim will be removed in TIP-2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from tokenpak.cli.commands.doctor import *  # noqa: F401,F403,E402
+
+__all__ = ["Colors", "DEFAULT_FLEET_CONFIG", "FLEET_CONFIG_FILE", "Path", "doctor_cmd", "load_fleet_config", "run_doctor", "run_fleet_doctor"]
