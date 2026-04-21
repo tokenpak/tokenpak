@@ -311,6 +311,6 @@ print(f"Consistent: {consistency['consistent']}")  # True = cache stable
 
 ## References
 
-- Task: `~/vault/03_AGENT_PACKS/Trix/queue/p1-tokenpak-runtime-term-card-resolver-2026-03-10.md`
-- Glossary: `~/Projects/tokenpak/tokenpak/term_cards.json`
-- Integration: `tokenpak/agent/proxy/server.py` (vault injection path)
+- Task: `<internal-agent-queue>/p1-tokenpak-runtime-term-card-resolver-2026-03-10.md`
+- Glossary: `tokenpak/term_cards.json`
+- Integration: `tokenpak/proxy/server.py` (vault injection path)

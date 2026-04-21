@@ -13,10 +13,10 @@ Supported split strategies
 
 Sub-block IDs
 -------------
-Given a parent block ID of ``/vault/scripts.md#a1b2c3d4`` and a slice headed
+Given a parent block ID of ``docs/scripts.md#a1b2c3d4`` and a slice headed
 "## Script 1: Intro", the child ID is::
 
-    /vault/scripts.md#a1b2c3d4:script1
+    docs/scripts.md#a1b2c3d4:script1
 
 The suffix is derived **deterministically** from the slice's own content hash
 prefix (8 chars), so IDs are stable across re-index runs when content is

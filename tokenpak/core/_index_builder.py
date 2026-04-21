@@ -2,7 +2,8 @@
 """tokenpak/core.py — Vault index builder (proxy-compatible format).
 
 Provides index_directory() for the rebuild-vault-index.sh script.
-Output format: ~/vault/.tokenpak/index.json + blocks/*.txt
+Output format: ``~/.tokenpak/index.json`` + ``blocks/*.txt`` (path configurable
+via the same env overrides as the reader it feeds).
 Compatible with the proxy server's VaultIndex reader.
 """
 

@@ -21,8 +21,8 @@ class GoogleGenerativeAIAdapter(FormatAdapter):
         does not yet translate tool schemas. This method raises NotImplementedError
         to fail loudly rather than silently ignoring tool requests.
 
-        See: ~/vault/01_PROJECTS/tokenpak-oss/tokenpak/docs/provider-gaps.md — Gap #1
-        Status: Stub in place (2026-03-18). Real implementation in Q2 2026.
+        Tracked as provider-gap #1 in the internal gap registry;
+        real implementation slated for Q2 2026. Stub in place since 2026-03-18.
         """
         raise NotImplementedError(
             "Function calling is not yet supported in the Google adapter. "

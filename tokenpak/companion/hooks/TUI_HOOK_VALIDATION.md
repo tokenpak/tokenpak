@@ -76,7 +76,7 @@ run documented in `tests/companion_probe/RESULTS.md` (commit `729b2fcd3`).
 ```
 Input payload:
   {"session_id":"test-session-001","transcript_path":"/tmp/test.jsonl",
-   "hook_event_name":"UserPromptSubmit","cwd":"/home/trix/tokenpak",
+   "hook_event_name":"UserPromptSubmit","cwd":"$HOME/tokenpak",
    "permission_mode":"default","prompt":"Write a unit test for the login flow."}
 
 exit_code: 0
@@ -88,7 +88,7 @@ stderr: [tokenpak test-hook] fired | session=test-session-001 | event=UserPrompt
 ```
 Input payload:
   {"session_id":"test-session-002","transcript_path":"/tmp/test.jsonl",
-   "hook_event_name":"UserPromptSubmit","cwd":"/home/trix/tokenpak",
+   "hook_event_name":"UserPromptSubmit","cwd":"$HOME/tokenpak",
    "permission_mode":"default","prompt":"BLOCK_TEST this prompt should be blocked"}
 
 exit_code: 2

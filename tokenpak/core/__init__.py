@@ -22,7 +22,7 @@ Subpackages (as of Phase 2):
 
 ``_index_builder`` (internal) hosts the legacy vault-index builder
 used by the rebuild-vault-index.sh script; D1 migration target is
-``tokenpak/vault/storage/``.
+``tokenpak.vault.storage``.
 """
 
 from __future__ import annotations
