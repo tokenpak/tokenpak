@@ -4,6 +4,6 @@ TokenPak Agent CLI
 Entry point for the tokenpak command-line interface.
 """
 
-from .main import main
+from tokenpak.agent.cli.main import main
 
 __all__ = ["main"]
