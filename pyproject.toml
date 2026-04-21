@@ -99,6 +99,9 @@ dev = [
     # six-tier dependency layering and the §2.4 entrypoint rule via
     # the repo's .importlinter contract.
     "import-linter>=2.0",
+    # TIP-1.0 Phase 4: conformance validator. Published to PyPI
+    # 2026-04-20 (DECISION-P4-PUBLISH). Pinned exact for CI stability.
+    "tokenpak-tip-validator==0.1.0",
 ]
 tokens = [
     "tiktoken>=0.5.0",

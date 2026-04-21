@@ -62,7 +62,7 @@ def _find_registry_root() -> Path | None:
 
 
 def main() -> int:
-    # Resolve registry
+    # Resolve registry (still needed for schema path discovery)
     registry_root = _find_registry_root()
     if registry_root is None:
         print(
@@ -73,10 +73,9 @@ def main() -> int:
         return 2
     os.environ["TOKENPAK_REGISTRY_ROOT"] = str(registry_root)
 
-    # Put the validator package on sys.path (it ships in the registry repo
-    # under tokenpak_tip_validator/ — pre-PyPI publish).
-    sys.path.insert(0, str(registry_root))
-
+    # Validator is consumed from PyPI (tokenpak-tip-validator==0.1.0, pinned
+    # in pyproject.toml[dev]). Published 2026-04-20 per DECISION-P4-PUBLISH.
+    # No sibling-path fallback needed.
     try:
         from tokenpak_tip_validator import (
             validate_capability_set,
@@ -84,8 +83,8 @@ def main() -> int:
         )
     except ImportError as exc:
         print(
-            f"error: tokenpak_tip_validator not importable: {exc}. "
-            f"Registry root: {registry_root}",
+            f"error: tokenpak_tip_validator not installed: {exc}. "
+            f"Run: pip install tokenpak-tip-validator==0.1.0",
             file=sys.stderr,
         )
         return 2
