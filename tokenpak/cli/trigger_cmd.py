@@ -22,12 +22,12 @@ _warnings.warn(
 # importers (``from tokenpak.cli.trigger_cmd import trigger_group``)
 # still see the upgrade-stub callable.
 from tokenpak.cli.commands.trigger import (  # noqa: F401
-    trigger_group,
-    list_cmd,
     add_cmd,
+    list_cmd,
+    log_cmd,
     remove_cmd,
     test_cmd,
-    log_cmd,
+    trigger_group,
 )
 
 __all__ = ["trigger_group", "list_cmd", "add_cmd", "remove_cmd",

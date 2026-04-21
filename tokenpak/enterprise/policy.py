@@ -23,10 +23,12 @@ _warnings.warn(
     stacklevel=2,
 )
 
+_MODULE_NAME = "policy"
+
 
 def __getattr__(name):
     raise ImportError(
-        f"tokenpak.enterprise.{policy}.{{name}} is not available in OSS. "
+        f"tokenpak.enterprise.{_MODULE_NAME}.{name} is not available in OSS. "
         "Install tokenpak-paid and activate an Enterprise license: "
         "`tokenpak install-tier enterprise`."
     )
