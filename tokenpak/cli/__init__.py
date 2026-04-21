@@ -6,6 +6,20 @@ Exposes `main` so the `tokenpak=tokenpak.cli:main` console entry point and
 
 Implementation lives in `tokenpak.cli._impl`; this module is a thin surface
 that also re-exports the `commands` subpackage for consumers that want it.
+
+Two-dispatcher pattern (intentional, per DECISIONS-AC-05.md):
+
+  - ``tokenpak.cli._impl.main`` — the full argparse-based CLI dispatcher
+    for all 93 commands. Re-exported here and invoked by the ``tokenpak``
+    console script.
+
+  - ``tokenpak.cli.main.main`` — specialized fast-path for heavy daemon
+    subcommands (``serve``, ``trigger``, ``workflow``) that bypass the
+    full argparse init for startup-latency reasons. Exposed separately
+    via the ``tokenpak-main`` console script.
+
+Do not "clean up" to a single dispatcher — both are exercised by
+integration tests; collapsing would regress ``tokenpak serve`` startup.
 """
 
 from tokenpak.cli import commands as commands
