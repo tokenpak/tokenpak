@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from tokenpak.agent.teacher import build_teacher_pack
 
-DEFAULT_SOURCE_ROOTS = ["~/vault", "~/vault/06_RUNTIME/SYSTEM", "~/vault/03_AGENT_PACKS"]
+DEFAULT_SOURCE_ROOTS = [
+    p
+    for p in os.environ.get(
+        "TOKENPAK_TEACHER_SOURCE_ROOTS", "~/.tokenpak/teacher-sources"
+    ).split(":")
+    if p
+]
 DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
 DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
 

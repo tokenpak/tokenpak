@@ -6,7 +6,8 @@ Provides HTTP endpoints for retrieving and analyzing ingested usage entries
 stored as JSONL files in the vault index.
 
 Storage location:
-  ~/vault/.tokenpak/entries/YYYY-MM-DD.jsonl
+  Configured via TOKENPAK_ENTRIES_DIR env var; defaults to
+  ``~/.tokenpak/entries/YYYY-MM-DD.jsonl``.
 
 Endpoints:
   GET  /query/entries          — entries for a date range
@@ -41,7 +42,9 @@ logger = logging.getLogger(__name__)
 # Storage helpers
 # ---------------------------------------------------------------------------
 
-VAULT_ENTRIES_DIR = Path(os.path.expanduser("~/vault/.tokenpak/entries"))
+VAULT_ENTRIES_DIR = Path(
+    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", "~/.tokenpak/entries"))
+)
 
 
 def _date_range(start_date: str, end_date: str) -> list[str]:

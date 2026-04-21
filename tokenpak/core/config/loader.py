@@ -256,7 +256,7 @@ capsule:
   hot_window: 2
 
 vault:
-  index_path: ~/vault/.tokenpak
+  index_path: ~/.tokenpak
   inject_budget: 4000
   inject_top_k: 5
   inject_min_score: 2.0

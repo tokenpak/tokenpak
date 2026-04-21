@@ -770,7 +770,10 @@ def create_app(
 
             # 3. Refresh agent telemetry JSON (no git commit)
             agent_telemetry_script = os.path.expanduser(
-                "~/vault/06_RUNTIME/scripts/collect-agent-telemetry.py"
+                os.environ.get(
+                    "TOKENPAK_COLLECT_TELEMETRY_SCRIPT",
+                    "~/.tokenpak/scripts/collect-agent-telemetry.py",
+                )
             )
             if os.path.exists(agent_telemetry_script):
                 try:
