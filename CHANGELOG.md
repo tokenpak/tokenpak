@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-21
+
+### Changed
+- **BREAKING** — Paid tier commands (Pro/Team/Enterprise) split out into the separate `tokenpak-paid` private package. The OSS `tokenpak` package now contains upgrade stubs for 25 command modules; real implementations ship separately and are installed via `tokenpak install-tier <tier>`. Tier-package-separation initiative (`2026-04-21`).
+- **Removed ~5,150 LOC of paid implementation** from the OSS package: `cli/commands/{optimize, route, compression, diff, prune, retain, fingerprint, replay, debug, last, template, dashboard, savings, metrics, budget, serve, trigger, exec, workflow, handoff, compliance, sla, maintenance, policy, vault}.py` now emit a `DeprecationWarning` on import and print an upgrade message on invocation (exit 2). Every public symbol external callers imported is preserved, aliased to the same `_upgrade_stub`.
+- **`tokenpak.enterprise.*`** (audit, compliance, governance, policy, sla) — canonical home moved to `tokenpak_paid.enterprise.*`. The OSS namespace now raises `ImportError` on attribute access (these modules exposed classes — a silent no-op stub would be surprising).
+- **`tokenpak/cli/trigger_cmd.py`** reduced to a re-export shim pointing at the (stubbed) `tokenpak.cli.commands.trigger`.
+
+### Added
+- **`tokenpak.cli._plugin_loader`** — plugin discovery via `tokenpak.commands` entry-points. Paid commands installed via `tokenpak-paid` surface automatically. Feature-flagged via `TOKENPAK_ENABLE_PLUGINS=1` until the default flips in a future release.
+- **`tokenpak install-tier <tier>`** subcommand — pip-installs the private `tokenpak-paid` package from `pypi.tokenpak.ai/simple/` using a local license key for HTTP Basic auth (`__token__:<KEY>`).
+- **3-layer gating model** — (1) license-key-gated PEP 503 index controls package access, (2) `tokenpak_paid.entitlements.gate_command` runtime-gates every paid command based on tier + features, (3) license-server periodic revalidation with tier-dependent grace periods (14d Pro / 7d Team / 3d Enterprise) + 30d offline tolerance.
+
+### Migration
+- OSS users who previously ran `tokenpak optimize`, `tokenpak dashboard`, etc. see an upgrade message + non-zero exit. Path forward: `tokenpak activate <KEY>` → `tokenpak install-tier pro` (or `team`/`enterprise`). No code change required for users who only use OSS commands (`status`, `doctor`, `config`, `index`, etc.).
+- `.importlinter` contract updated — dropped the obsolete `cli.commands.fingerprint → compression.fingerprinting.*` ignore entry (stub has no fingerprinting imports). 5/5 contracts still KEPT.
+
+### Removed
+- Direct access to paid implementation bodies from the OSS package (see migration note).
+
 ## [1.1.0] - 2026-04-21
 
 ### Added
