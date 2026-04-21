@@ -43,6 +43,7 @@ def _upgrade_stub(*args, **kwargs):
 # Each one is aliased to _upgrade_stub so any invocation path ends in
 # the same upgrade message.
 prune_cmd = _upgrade_stub
+run_prune = _upgrade_stub
 
 
-__all__ = ["prune_cmd"]
+__all__ = ["prune_cmd", "run_prune"]

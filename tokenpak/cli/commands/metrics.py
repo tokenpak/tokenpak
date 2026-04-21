@@ -47,6 +47,10 @@ metrics_history_cmd = _upgrade_stub
 metrics_preview_cmd = _upgrade_stub
 metrics_status_cmd = _upgrade_stub
 metrics_sync_cmd = _upgrade_stub
+cmd_history = _upgrade_stub
+cmd_preview = _upgrade_stub
+cmd_status = _upgrade_stub
+cmd_sync = _upgrade_stub
 
 
-__all__ = ["metrics_cmd", "metrics_history_cmd", "metrics_preview_cmd", "metrics_status_cmd", "metrics_sync_cmd"]
+__all__ = ["metrics_cmd", "metrics_history_cmd", "metrics_preview_cmd", "metrics_status_cmd", "metrics_sync_cmd", "cmd_history", "cmd_preview", "cmd_status", "cmd_sync"]

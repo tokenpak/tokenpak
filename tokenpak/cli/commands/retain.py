@@ -43,6 +43,7 @@ def _upgrade_stub(*args, **kwargs):
 # Each one is aliased to _upgrade_stub so any invocation path ends in
 # the same upgrade message.
 retain_cmd = _upgrade_stub
+run_retain = _upgrade_stub
 
 
-__all__ = ["retain_cmd"]
+__all__ = ["retain_cmd", "run_retain"]

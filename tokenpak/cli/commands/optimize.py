@@ -43,6 +43,7 @@ def _upgrade_stub(*args, **kwargs):
 # Each one is aliased to _upgrade_stub so any invocation path ends in
 # the same upgrade message.
 optimize_cmd = _upgrade_stub
+run_optimize = _upgrade_stub
 
 
-__all__ = ["optimize_cmd"]
+__all__ = ["optimize_cmd", "run_optimize"]
