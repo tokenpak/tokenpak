@@ -6,14 +6,18 @@ when all signals are positive and the window has elapsed; exit 1 on any
 negative signal; exit 2 if the window hasn't elapsed yet.
 
 Usage:
-    python3 scripts/check_v110_soft_launch.py
+    python3 scripts/check_v110_soft_launch.py             # fast checks only
+    python3 scripts/check_v110_soft_launch.py --smoke     # + install-smoke (~5-10 min)
 
-Signals checked:
+Signals checked (fast):
   1. PyPI artifact present, not yanked
   2. 48h window elapsed since PyPI publish (2026-04-21T15:50:20 UTC)
   3. GitHub release still Draft (not accidentally promoted)
   4. Zero new critical issues opened since release
-  5. Install-smoke in fresh venv succeeds
+
+Additional signal with --smoke (slow, opt-in):
+  5. Install-smoke in fresh venv succeeds (can take 5-10 min due to
+     torch/nvidia-* transitive deps)
 """
 
 from __future__ import annotations
@@ -122,21 +126,31 @@ def check_install_smoke() -> tuple[bool, str]:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-CHECKS = [
+FAST_CHECKS = [
     ("PyPI artifact", check_pypi),
     ("48h window", check_window_elapsed),
     ("GitHub release", check_github_release),
     ("Critical issues", check_critical_issues),
+]
+SLOW_CHECKS = [
     ("Install smoke", check_install_smoke),
 ]
 
 
 def main() -> int:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--smoke", action="store_true",
+                    help="also run install-smoke (slow; 5-10min due to heavy deps)")
+    args = ap.parse_args()
+
     print(f"tokenpak 1.1.0 soft-launch signal check — {datetime.now(timezone.utc).isoformat()}")
     print("")
     all_ok = True
     window_ok = True
-    for name, check in CHECKS:
+    checks = FAST_CHECKS + (SLOW_CHECKS if args.smoke else [])
+    for name, check in checks:
         ok, note = check()
         sym = "✓" if ok else "✗"
         print(f"  {sym} {name}: {note}")
