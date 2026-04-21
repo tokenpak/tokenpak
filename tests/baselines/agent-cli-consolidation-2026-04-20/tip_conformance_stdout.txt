@@ -1,0 +1,10 @@
+TokenPak TIP-1.0 conformance check (registry: /home/sue/registry)
+Self-declared capabilities: ['tip.byte-preserved-passthrough', 'tip.cache.provider-observer', 'tip.companion.memory-capsule', 'tip.companion.prompt-packaging', 'tip.companion.session-journal', 'tip.compression.v1', 'tip.preview.local', 'tip.routing.fallback-chain', 'tip.security.dlp-redaction', 'tip.telemetry.wire-side']
+Self-declared profiles: ('tip-proxy', 'tip-companion')
+------------------------------------------------------------
+capability-set: PASS [capability-set] errors=0 warnings=0
+headers drift: PASS [code=8 schema=8]
+profile tip-proxy: PASS [profile:tip-proxy] errors=0 warnings=0
+profile tip-companion: PASS [profile:tip-companion] errors=0 warnings=0
+------------------------------------------------------------
+✅ TokenPak conforms to every declared profile.

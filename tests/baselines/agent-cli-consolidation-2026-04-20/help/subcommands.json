@@ -1,0 +1,124 @@
+{
+  "_root_subcommands": [
+    "start",
+    "stop",
+    "restart",
+    "claude",
+    "status",
+    "logs",
+    "demo",
+    "version",
+    "update",
+    "license",
+    "activate",
+    "deactivate",
+    "plan",
+    "validate",
+    "cost",
+    "doctor",
+    "stats",
+    "index",
+    "search",
+    "config"
+  ],
+  "activate": {
+    "returncode": 2,
+    "stderr": "",
+    "stdout": "\u274c Unknown command: 'activate'\n\n\ud83d\udcd6 Available commands (by category):\n\n   Getting Started:\n     \u2022 start           Start the proxy (localhost:8766)\n     \u2022 stop            Stop the running proxy\n     \u2022 restart         Restart the proxy\n\n   Indexing:\n     \u2022 index           Index a directory for context retrieval\n     \u2022 search          Search indexed content\n\n   Configuration:\n     \u2022 route           Manage model routing rules\n     \u2022 recipe          Manage compression recipes\n     \u2022 template        Manage prompt templates\n\n   (Use `tokenpak help` to see all commands)\n"
+  },
+  "claude": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "Usage: claude [options] [command] [prompt]\n\nClaude Code - starts an interactive session by default, use -p/--print for\nnon-interactive output\n\nArguments:\n  prompt                                            Your prompt\n\nOptions:\n  --add-dir <directories...>                        Additional directories to allow tool access to\n  --agent <agent>                                   Agent for the current session. Overrides the 'agent' setting.\n  --agents <json>                                   JSON object defining custom agents (e.g. '{\"reviewer\": {\"description\": \"Reviews code\", \"prompt\": \"You are a code reviewer\"}}')\n  --allow-dangerously-skip-permissions              Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.\n  --allowedTools, --allowed-tools <tools...>        Comma or space-separated list of tool names to allow (e.g. \"Bash(git *) Edit\")\n  --append-system-prompt <prompt>                   Append a system prompt to the default system prompt\n  --bare                                            Minimal mode: skip hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery. Sets CLAUDE_CODE_SIMPLE=1. Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via --settings (OAuth and keychain are never read). 3P providers (Bedrock/Vertex/Foundry) use their own credentials. Skills still resolve via /skill-name. Explicitly provide context via: --system-prompt[-file], --append-system-prompt[-file], --add-dir (CLAUDE.md dirs), --mcp-config, --settings, --agents, --plugin-dir.\n  --betas <betas...>                                Beta headers to include in API requests (API key users only)\n  --brief                                           Enable SendUserMessage tool for agent-to-user communication\n  --chrome                                          Enable Claude in Chrome integration\n  -c, --continue                                    Continue the most recent conversation in the current directory\n  --dangerously-skip-permissions                    Bypass all permission checks. Recommended only for sandboxes with no internet access.\n  -d, --debug [filter]                              Enable debug mode with optional category filtering (e.g., \"api,hooks\" or \"!1p,!file\")\n  --debug-file <path>                               Write debug logs to a specific file path (implicitly enables debug mode)\n  --disable-slash-commands                          Disable all skills\n  --disallowedTools, --disallowed-tools <tools...>  Comma or space-separated list of tool names to deny (e.g. \"Bash(git *) Edit\")\n  --effort <level>                                  Effort level for the current session (low, medium, high, xhigh, max)\n  --exclude-dynamic-system-prompt-sections          Move per-machine sections (cwd, env info, memory paths, git status) from the system prompt into the first user message. Improves cross-user prompt-cache reuse. Only applies with the default system prompt (ignored with --system-prompt). (default: false)\n  --fallback-model <model>                          Enable automatic fallback to specified model when default model is overloaded (only works with --print)\n  --file <specs...>                                 File resources to download at startup. Format: file_id:relative_path (e.g., --file file_abc:doc.txt file_def:img.png)\n  --fork-session                                    When resuming, create a new session ID instead of reusing the original (use with --resume or --continue)\n  --from-pr [value]                                 Resume a session linked to a PR by PR number/URL, or open interactive picker with optional search term\n  -h, --help                                        Display help for command\n  --ide                                             Automatically connect to IDE on startup if exactly one valid IDE is available\n  --include-hook-events                             Include all hook lifecycle events in the output stream (only works with --output-format=stream-json)\n  --include-partial-messages                        Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)\n  --input-format <format>                           Input format (only works with --print): \"text\" (default), or \"stream-json\" (realtime streaming input) (choices: \"text\", \"stream-json\")\n  --json-schema <schema>                            JSON Schema for structured output validation. Example: {\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}\n  --max-budget-usd <amount>                         Maximum dollar amount to spend on API calls (only works with --print)\n  --mcp-config <configs...>                         Load MCP servers from JSON files or strings (space-separated)\n  --mcp-debug                                       [DEPRECATED. Use --debug instead] Enable MCP debug mode (shows MCP server errors)\n  --model <model>                                   Model for the current session. Provide an alias for the latest model (e.g. 'sonnet' or 'opus') or a model's full name (e.g. 'claude-sonnet-4-6').\n  -n, --name <name>                                 Set a display name for this session (shown in the prompt box, /resume picker, and terminal title)\n  --no-chrome                                       Disable Claude in Chrome integration\n  --no-session-persistence                          Disable session persistence - sessions will not be saved to disk and cannot be resumed (only works with --print)\n  --output-format <format>                          Output format (only works with --print): \"text\" (default), \"json\" (single result), or \"stream-json\" (realtime streaming) (choices: \"text\", \"json\", \"stream-json\")\n  --permission-mode <mode>                          Permission mode to use for the session (choices: \"acceptEdits\", \"auto\", \"bypassPermissions\", \"default\", \"dontAsk\", \"plan\")\n  --plugin-dir <path>                               Load plugins from a directory for this session only (repeatable: --plugin-dir A --plugin-dir B) (default: [])\n  -p, --print                                       Print response and exit (useful for pipes). Note: The workspace trust dialog is skipped when Claude is run with the -p mode. Only use this flag in directories you trust.\n  --remote-control-session-name-prefix <prefix>     Prefix for auto-generated Remote Control session names (default: hostname)\n  --replay-user-messages                            Re-emit user messages from stdin back on stdout for acknowledgment (only works with --input-format=stream-json and --output-format=stream-json)\n  -r, --resume [value]                              Resume a conversation by session ID, or open interactive picker with optional search term\n  --session-id <uuid>                               Use a specific session ID for the conversation (must be a valid UUID)\n  --setting-sources <sources>                       Comma-separated list of setting sources to load (user, project, local).\n  --settings <file-or-json>                         Path to a settings JSON file or a JSON string to load additional settings from\n  --strict-mcp-config                               Only use MCP servers from --mcp-config, ignoring all other MCP configurations\n  --system-prompt <prompt>                          System prompt to use for the session\n  --tmux                                            Create a tmux session for the worktree (requires --worktree). Uses iTerm2 native panes when available; use --tmux=classic for traditional tmux.\n  --tools <tools...>                                Specify the list of available tools from the built-in set. Use \"\" to disable all tools, \"default\" to use all tools, or specify tool names (e.g. \"Bash,Edit,Read\").\n  --verbose                                         Override verbose mode setting from config\n  -v, --version                                     Output the version number\n  -w, --worktree [name]                             Create a new git worktree for this session (optionally specify a name)\n\nCommands:\n  agents [options]                                  List configured agents\n  auth                                              Manage authentication\n  auto-mode                                         Inspect auto mode classifier configuration\n  doctor                                            Check the health of your Claude Code auto-updater. Note: The workspace trust dialog is skipped and stdio servers from .mcp.json are spawned for health checks. Only use this command in directories you trust.\n  install [options] [target]                        Install Claude Code native build. Use [target] to specify version (stable, latest, or specific version)\n  mcp                                               Configure and manage MCP servers\n  plugin|plugins                                    Manage Claude Code plugins\n  setup-token                                       Set up a long-lived authentication token (requires Claude subscription)\n  update|upgrade                                    Check for updates and install if available\n"
+  },
+  "config": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak config [-h] {sync,pull,validate,show,init,path} ...\n\npositional arguments:\n  {sync,pull,validate,show,init,path}\n    sync                Sync config from canonical source\n    pull                Pull config from git or URL\n    validate            Validate config against schema\n    show                Show merged config (file + env overrides)\n    init                Create default config.yaml\n    path                Print config file path\n\noptions:\n  -h, --help            show this help message and exit\n"
+  },
+  "cost": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak cost [-h] [--week] [--month] [--by-model] [--export-csv]\n\noptions:\n  -h, --help    show this help message and exit\n  --week        Show weekly totals\n  --month       Show monthly totals\n  --by-model    Break down by model\n  --export-csv  Export as CSV\n"
+  },
+  "deactivate": {
+    "returncode": 2,
+    "stderr": "",
+    "stdout": "\u274c Unknown command: 'deactivate'\n\n\ud83d\udcd6 Available commands (by category):\n\n   Getting Started:\n     \u2022 start           Start the proxy (localhost:8766)\n     \u2022 stop            Stop the running proxy\n     \u2022 restart         Restart the proxy\n\n   Indexing:\n     \u2022 index           Index a directory for context retrieval\n     \u2022 search          Search indexed content\n\n   Configuration:\n     \u2022 route           Manage model routing rules\n     \u2022 recipe          Manage compression recipes\n     \u2022 template        Manage prompt templates\n\n   (Use `tokenpak help` to see all commands)\n"
+  },
+  "demo": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak demo [-h] [--list] [--category CATEGORY] [--recipe RECIPE]\n                     [--file FILE] [--seed] [--seed-count N] [--seed-hours H]\n                     [--clear]\n\noptions:\n  -h, --help           show this help message and exit\n  --list               List all 50 baked-in recipes\n  --category CATEGORY  Filter by category (general, python, javascript,\n                       markdown, config, common_patterns)\n  --recipe RECIPE      Show details for a specific recipe by name\n  --file FILE          Show which recipes match a given file path\n  --seed               Populate dashboard with 500 realistic demo events (24h\n                       window)\n  --seed-count N       Number of demo events to generate (default: 500)\n  --seed-hours H       Time window in hours (default: 24)\n  --clear              Remove all demo data from telemetry storage\n"
+  },
+  "doctor": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak doctor [-h] [--fix] [--fleet] [--deploy]\n\noptions:\n  -h, --help  show this help message and exit\n  --fix       Auto-fix issues where possible\n  --fleet     Check all agents in ~/.tokenpak/fleet.yaml\n  --deploy    Push latest doctor to all agents (use with --fleet)\n"
+  },
+  "index": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak index [-h] [--status] [--budget BUDGET] [--workers WORKERS]\n                      [--auto-workers] [--recalibrate]\n                      [--calibration-rounds CALIBRATION_ROUNDS]\n                      [--max-workers MAX_WORKERS] [--watch]\n                      [--debounce DEBOUNCE] [--no-treesitter]\n                      [directory]\n\npositional arguments:\n  directory             Directory to index\n\noptions:\n  -h, --help            show this help message and exit\n  --status              Show indexed file count by type\n  --budget BUDGET\n  --workers WORKERS, -w WORKERS\n                        Parallel workers (default: 4)\n  --auto-workers        Use hybrid calibration (static baseline + dynamic\n                        adjustment)\n  --recalibrate         Run static calibration before indexing\n  --calibration-rounds CALIBRATION_ROUNDS\n                        Calibration rounds per candidate worker count\n  --max-workers MAX_WORKERS\n                        Upper worker cap for auto/recalibration\n  --watch               Watch directory and auto-reindex on file changes\n  --debounce DEBOUNCE   Debounce delay in ms for watch mode (default: 500)\n  --no-treesitter       Force regex-based code processing (skip tree-sitter)\n"
+  },
+  "license": {
+    "returncode": 2,
+    "stderr": "",
+    "stdout": "\u274c Unknown command: 'license'\n\n\ud83d\udcd6 Available commands (by category):\n\n   Getting Started:\n     \u2022 start           Start the proxy (localhost:8766)\n     \u2022 stop            Stop the running proxy\n     \u2022 restart         Restart the proxy\n\n   Indexing:\n     \u2022 index           Index a directory for context retrieval\n     \u2022 search          Search indexed content\n\n   Configuration:\n     \u2022 route           Manage model routing rules\n     \u2022 recipe          Manage compression recipes\n     \u2022 template        Manage prompt templates\n\n   (Use `tokenpak help` to see all commands)\n"
+  },
+  "logs": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak logs [-h] [--lines LINES]\n\noptions:\n  -h, --help            show this help message and exit\n  --lines LINES, -n LINES\n                        Number of log lines to show (default: 50)\n"
+  },
+  "plan": {
+    "returncode": 2,
+    "stderr": "",
+    "stdout": "\u274c Unknown command: 'plan'\n   Did you mean: tokenpak learn?\n"
+  },
+  "restart": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak restart [-h]\n\noptions:\n  -h, --help  show this help message and exit\n"
+  },
+  "search": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak search [-h] [--budget BUDGET] [--top-k TOP_K] [--gaps GAPS]\n                       [--inject-refs]\n                       query\n\npositional arguments:\n  query            Search query\n\noptions:\n  -h, --help       show this help message and exit\n  --budget BUDGET\n  --top-k TOP_K\n  --gaps GAPS      Path to gaps.json for miss-based retrieval expansion\n  --inject-refs    Enable compile-time reference injection (GitHub, URLs)\n"
+  },
+  "start": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak start [-h]\n\noptions:\n  -h, --help  show this help message and exit\n"
+  },
+  "stats": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak stats [-h]\n\noptions:\n  -h, --help  show this help message and exit\n"
+  },
+  "status": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak status [-h] [--limit LIMIT]\n\noptions:\n  -h, --help     show this help message and exit\n  --limit LIMIT  Max retry events to show\n"
+  },
+  "stop": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak stop [-h]\n\noptions:\n  -h, --help  show this help message and exit\n"
+  },
+  "update": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak update [-h] [--check] [--force] [--core-only] [--dry-run]\n\noptions:\n  -h, --help   show this help message and exit\n  --check      Check for updates without installing\n  --force      Force update even if already up to date\n  --core-only  Update core only, skip config merge\n  --dry-run    Show what would change without applying\n"
+  },
+  "validate": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak validate [-h] [--verbose] [--json] file\n\npositional arguments:\n  file           Path to the .json TokenPak file\n\noptions:\n  -h, --help     show this help message and exit\n  --verbose, -v  Show quality hints in addition to errors/warnings\n  --json         Output validation result as JSON\n"
+  },
+  "version": {
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "usage: tokenpak version [-h]\n\noptions:\n  -h, --help  show this help message and exit\n"
+  }
+}
