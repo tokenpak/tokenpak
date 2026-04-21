@@ -14,7 +14,7 @@ OperationFn = Callable[[dict[str, Any], bool], int]
 
 
 def _op_reindex(params: dict[str, Any], dry_run: bool) -> int:
-    from tokenpak.agent.cli.commands.index import run_index_path
+    from tokenpak.cli.commands.index import run_index_path
 
     path = os.path.expanduser(str(params.get("path", os.getcwd())))
     verbose = bool(params.get("verbose", False))
@@ -83,7 +83,7 @@ def _op_cleanup_cache(params: dict[str, Any], dry_run: bool) -> int:
 
 
 def _op_health_check(params: dict[str, Any], dry_run: bool) -> int:
-    from tokenpak.agent.cli.commands.doctor import run_doctor
+    from tokenpak.cli.commands.doctor import run_doctor
 
     if dry_run:
         click.echo("[dry-run] health-check")

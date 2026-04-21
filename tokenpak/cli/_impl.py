@@ -142,7 +142,7 @@ def _print_quick_help():
 def _print_full_help():
     """Print the power-user grouped help output (tier-aware)."""
     try:
-        from tokenpak.agent.cli.commands.help import print_full_help
+        from tokenpak.cli.commands.help import print_full_help
 
         print_full_help()
     except Exception:
@@ -160,7 +160,7 @@ def _print_full_help():
 def cmd_help(args):
     """Show tier-aware help. Pass a command name for details, or --minimal for compact list."""
     try:
-        from tokenpak.agent.cli.commands.help import run as help_run
+        from tokenpak.cli.commands.help import run as help_run
 
         # Build help_args list from parsed arguments
         help_args = []
@@ -5519,7 +5519,7 @@ def cmd_run_cancel(args):
 
 def cmd_diff(args):
     """Show context diff: removed, compressed, retained blocks."""
-    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+    from tokenpak.cli.commands.diff import run_diff_cmd
 
     run_diff_cmd(args)
 

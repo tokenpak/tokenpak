@@ -1,4 +1,4 @@
-"""tokenpak/agent/cli/commands/serve.py
+"""tokenpak/cli/commands/serve.py
 
 Phase 5A: `tokenpak serve` command
 ====================================

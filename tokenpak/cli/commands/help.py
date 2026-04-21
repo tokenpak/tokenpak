@@ -67,7 +67,7 @@ _UPSELL_MESSAGES = {
 # Registry loader
 # ─────────────────────────────────────────────
 
-_REGISTRY_PATH = Path(__file__).parent.parent.parent.parent / "registry" / "commands.json"
+_REGISTRY_PATH = Path(__file__).parent.parent.parent / "registry" / "commands.json"
 
 
 def _load_registry() -> list[dict]:

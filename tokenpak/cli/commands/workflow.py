@@ -1,4 +1,4 @@
-"""tokenpak.agent.cli.commands.workflow — Workflow state machine CLI."""
+"""tokenpak.cli.commands.workflow — Workflow state machine CLI."""
 
 from __future__ import annotations
 

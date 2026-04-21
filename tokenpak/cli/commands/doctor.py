@@ -415,11 +415,11 @@ def _deploy_doctor(agent: dict, timeout: int = 30) -> dict:
 
     local_doctor = Path(__file__)
     remote_target = (
-        f"{user}@{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+        f"{user}@{host}:~/.local/lib/python3/dist-packages/tokenpak/cli/commands/doctor.py"
     )
     if not user:
         remote_target = (
-            f"{host}:~/.local/lib/python3/dist-packages/tokenpak/agent/cli/commands/doctor.py"
+            f"{host}:~/.local/lib/python3/dist-packages/tokenpak/cli/commands/doctor.py"
         )
 
     cmd = [

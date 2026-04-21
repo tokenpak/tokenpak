@@ -7,7 +7,7 @@ argparse parsers and handlers.
 Re-exported from the top-level ``tokenpak.cli`` module so that both
 import paths work::
 
-    from tokenpak.agent.cli.commands.replay import (
+    from tokenpak.cli.commands.replay import (
         cmd_replay_list,
         cmd_replay_show,
         cmd_replay_run,

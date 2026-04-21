@@ -16,7 +16,7 @@ DEFAULT_SOURCE_ROOTS = [
     ).split(":")
     if p
 ]
-DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/agent/cli/commands"]
+DEFAULT_COMMAND_ROOTS = ["~/Projects/tokenpak/tokenpak/cli/commands"]
 DEFAULT_OUTPUT_ROOT = "~/Projects/tokenpak/recipes/context"
 
 

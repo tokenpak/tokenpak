@@ -236,7 +236,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
 "tokenpak/__init__.py" = ["F401", "F811"]
-"tokenpak/agent/cli/commands/dashboard.py" = ["F401"]
+"tokenpak/cli/commands/dashboard.py" = ["F401"]
 # Pre-existing dup definition (identical bodies, differing docstrings).
 # Consolidation is out of scope for v1.0.3 pre-promotion; tracked as
 # follow-up in known-findings.md.

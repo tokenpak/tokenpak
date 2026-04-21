@@ -291,7 +291,7 @@ def cmd_help(args):
 
 
 def _savings_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.savings import run_savings_cmd
+    from tokenpak.cli.commands.savings import run_savings_cmd
 
     sp = argparse.ArgumentParser(prog="tokenpak savings", add_help=True)
     sp.add_argument(
@@ -312,7 +312,7 @@ def _savings_argparse(argv: list) -> None:
 
 
 def _cost_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.cost import run_cost_cmd
+    from tokenpak.cli.commands.cost import run_cost_cmd
 
     cp = argparse.ArgumentParser(prog="tokenpak cost", add_help=True)
     cp.add_argument("--yesterday", action="store_true", help="Yesterday's spend")
@@ -327,7 +327,7 @@ def _cost_argparse(argv: list) -> None:
 
 
 def _diff_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.diff import run_diff_cmd
+    from tokenpak.cli.commands.diff import run_diff_cmd
 
     dp = argparse.ArgumentParser(prog="tokenpak diff", add_help=True)
     dp.add_argument("--verbose", "-v", action="store_true", help="Show token counts per block")
@@ -338,7 +338,7 @@ def _diff_argparse(argv: list) -> None:
 
 
 def _prune_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.prune import run_prune
+    from tokenpak.cli.commands.prune import run_prune
 
     pp = argparse.ArgumentParser(prog="tokenpak prune", add_help=True)
     pp.add_argument("--auto", action="store_true", help="Auto-prune without confirmation")
@@ -358,7 +358,7 @@ def _prune_argparse(argv: list) -> None:
 
 
 def _retain_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.retain import run_retain
+    from tokenpak.cli.commands.retain import run_retain
 
     rp = argparse.ArgumentParser(prog="tokenpak retain", add_help=True)
     rp.add_argument("block_id", nargs="?", default=None, help="Block ID to pin")
@@ -369,7 +369,7 @@ def _retain_argparse(argv: list) -> None:
 
 
 def _budget_argparse(argv: list) -> None:
-    from tokenpak.agent.cli.commands.budget import run_budget_cmd
+    from tokenpak.cli.commands.budget import run_budget_cmd
 
     bp = argparse.ArgumentParser(prog="tokenpak budget", add_help=True)
     bsub = bp.add_subparsers(dest="budget_cmd")
@@ -410,7 +410,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         import argparse as _ap
 
-        from tokenpak.agent.cli.commands.serve import _default_workers
+        from tokenpak.cli.commands.serve import _default_workers
 
         sp = _ap.ArgumentParser(prog="tokenpak serve")
         sp.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
@@ -426,7 +426,7 @@ def main():
             ),
         )
         sargs = sp.parse_args(sys.argv[2:])
-        from tokenpak.agent.cli.commands.serve import run_serve_cmd
+        from tokenpak.cli.commands.serve import run_serve_cmd
 
         run_serve_cmd(sargs)
         return
@@ -434,7 +434,7 @@ def main():
     # Delegate trigger subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "trigger":
         try:
-            from tokenpak.agent.cli.commands.trigger import trigger_group
+            from tokenpak.cli.commands.trigger import trigger_group
 
             sys.argv = sys.argv[1:]
             trigger_group(standalone_mode=True)
@@ -446,7 +446,7 @@ def main():
     # Delegate workflow subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "workflow":
         try:
-            from tokenpak.agent.cli.commands.workflow import workflow_cmd
+            from tokenpak.cli.commands.workflow import workflow_cmd
 
             sys.argv = sys.argv[1:]
             workflow_cmd(standalone_mode=True)
@@ -458,7 +458,7 @@ def main():
     # Delegate teacher subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "teacher":
         try:
-            from tokenpak.agent.cli.commands.teacher import run_teacher_cmd
+            from tokenpak.cli.commands.teacher import run_teacher_cmd
 
             run_teacher_cmd(sys.argv[2:])
         except ImportError as e:
@@ -469,7 +469,7 @@ def main():
     # Delegate index subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "index":
         try:
-            from tokenpak.agent.cli.commands.index import index_cmd
+            from tokenpak.cli.commands.index import index_cmd
 
             sys.argv = sys.argv[1:]
             index_cmd(standalone_mode=True)
@@ -481,7 +481,7 @@ def main():
     # Delegate fingerprint subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "fingerprint":
         try:
-            from tokenpak.agent.cli.commands.fingerprint import fingerprint_cmd
+            from tokenpak.cli.commands.fingerprint import fingerprint_cmd
 
             sys.argv = sys.argv[1:]
             fingerprint_cmd(standalone_mode=True)
@@ -493,7 +493,7 @@ def main():
     # Delegate doctor subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "doctor":
         try:
-            from tokenpak.agent.cli.commands.doctor import doctor_cmd
+            from tokenpak.cli.commands.doctor import doctor_cmd
 
             sys.argv = sys.argv[1:]
             doctor_cmd(standalone_mode=True)
@@ -505,7 +505,7 @@ def main():
     # Delegate dashboard subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "dashboard":
         try:
-            from tokenpak.agent.cli.commands.dashboard import dashboard_cmd
+            from tokenpak.cli.commands.dashboard import dashboard_cmd
 
             sys.argv = sys.argv[1:]
             dashboard_cmd(standalone_mode=True)
@@ -517,7 +517,7 @@ def main():
     # Delegate exec subcommand
     if len(sys.argv) > 1 and sys.argv[1] == "exec":
         try:
-            from tokenpak.agent.cli.commands.exec import exec_cmd
+            from tokenpak.cli.commands.exec import exec_cmd
 
             sys.argv = sys.argv[1:]
             exec_cmd(standalone_mode=True)
@@ -530,7 +530,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "metrics":
         import argparse as _ap
 
-        from tokenpak.agent.cli.commands.metrics import (
+        from tokenpak.cli.commands.metrics import (
             cmd_history,
             cmd_preview,
             cmd_status,
@@ -574,7 +574,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "optimize":
         import argparse as _ap
 
-        from tokenpak.agent.cli.commands.optimize import run_optimize
+        from tokenpak.cli.commands.optimize import run_optimize
 
         op = _ap.ArgumentParser(prog="tokenpak optimize", add_help=True)
         op.add_argument("--verbose", "-v", action="store_true", help="Per-block analysis")
@@ -606,19 +606,19 @@ def main():
 
     # Delegate Enterprise policy/sla/compliance commands
     if len(sys.argv) > 1 and sys.argv[1] == "policy":
-        from tokenpak.agent.cli.commands.policy import run as _policy_run
+        from tokenpak.cli.commands.policy import run as _policy_run
 
         _policy_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "sla":
-        from tokenpak.agent.cli.commands.sla import run as _sla_run
+        from tokenpak.cli.commands.sla import run as _sla_run
 
         _sla_run(sys.argv[2:])
         return
 
     if len(sys.argv) > 1 and sys.argv[1] == "compliance":
-        from tokenpak.agent.cli.commands.compliance import run as _compliance_run
+        from tokenpak.cli.commands.compliance import run as _compliance_run
 
         _compliance_run(sys.argv[2:])
         return
@@ -823,7 +823,7 @@ def cmd_last(args):
 
 def _dispatch_license(args) -> None:
     """Handle tokenpak activate / deactivate / plan."""
-    from tokenpak.agent.cli.commands.license import _run_activate, _run_deactivate, _run_plan
+    from tokenpak.cli.commands.license import _run_activate, _run_deactivate, _run_plan
 
     if args.cmd == "activate":
         _run_activate(args.key)
@@ -834,14 +834,14 @@ def _dispatch_license(args) -> None:
 
 
 def _dispatch_debug(args) -> None:
-    from tokenpak.agent.cli.commands.debug import debug_cmd
+    from tokenpak.cli.commands.debug import debug_cmd
 
     debug_cmd(args)
 
 
 def _dispatch_agent(args) -> None:
     """Handle `tokenpak agent <subcommand>` commands."""
-    from tokenpak.agent.cli.commands.handoff import handoff_cmd
+    from tokenpak.cli.commands.handoff import handoff_cmd
 
     agent_cmd = getattr(args, "agent_cmd", None)
     if agent_cmd == "handoff":
