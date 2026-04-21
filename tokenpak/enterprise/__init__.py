@@ -1,10 +1,19 @@
-"""TokenPak Enterprise — audit logging, compliance reports, and enterprise features.
+"""DEPRECATED — `tokenpak.enterprise` moved to `tokenpak_paid.enterprise` (TPS-11).
 
-Modules
--------
-audit       : Immutable append-only audit log (SQLite WAL)
-compliance  : SOC2 / GDPR / CCPA report generators
-policy      : Policy engine interface (Enterprise)
-sla         : SLA routing interface (Enterprise)
-governance  : Governance rules engine (Enterprise)
+The canonical home is ``tokenpak_paid.enterprise`` (shipped with
+an Enterprise subscription). This namespace is kept for backwards
+compatibility with the DeprecationWarning-shim policy (removal
+target: tokenpak 2.0).
 """
+
+from __future__ import annotations
+
+import warnings as _warnings
+
+_warnings.warn(
+    "tokenpak.enterprise: moved to tokenpak_paid.enterprise (Enterprise tier). "
+    "Install with `tokenpak install-tier enterprise`. "
+    "This OSS shim will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)

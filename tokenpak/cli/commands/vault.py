@@ -1,32 +1,49 @@
-"""vault command — vault index management."""
+"""DEPRECATED — `tokenpak vault` moved to tokenpak-paid (2026-04-21).
+
+This module is a stub left behind by TPS-11. The real implementation
+now lives in ``tokenpak_paid.commands._impls.vault`` and is
+installed via:
+
+    tokenpak activate YOUR-KEY
+    tokenpak install-tier enterprise
+
+Importing any callable from this stub and invoking it prints an
+upgrade message and exits with status 2. Dynamic discovery
+(``tokenpak.commands`` entry-points — TPS-01) routes ``tokenpak
+vault`` to the real paid implementation when it is installed.
+"""
 
 from __future__ import annotations
 
+import sys
+import warnings as _warnings
 
-def run(action: str = "status", raw: bool = False) -> None:
-    """Vault index management."""
-    print(f"vault {action}: not yet implemented (stub)")
+_warnings.warn(
+    "tokenpak.cli.commands.vault: implementation moved to "
+    "tokenpak-paid (Enterprise+). Install with `tokenpak install-tier enterprise`. "
+    "This OSS stub will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-try:
-    import click
+def _upgrade_stub(*args, **kwargs):
+    """Upgrade-required stub left behind by TPS-11."""
+    print(
+        "⚠ The `tokenpak vault` command requires a Enterprise subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier enterprise\n"
+        "  (Don’t have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
-    @click.group("vault")
-    def vault_cmd():
-        """Vault index management commands."""
-        pass
 
-    @vault_cmd.command("status")
-    @click.option("--raw", is_flag=True)
-    def vault_status(raw):
-        """Show vault index status."""
-        run(action="status", raw=raw)
+# Preserve every public symbol external callers import from this module.
+# Each one is aliased to _upgrade_stub so any invocation path ends in
+# the same upgrade message.
+vault_cmd = _upgrade_stub
+run = _upgrade_stub
 
-    @vault_cmd.command("reindex")
-    @click.option("--verbose", "-v", is_flag=True)
-    def vault_reindex(verbose):
-        """Rebuild vault block index."""
-        run(action="reindex")
 
-except ImportError:
-    pass
+__all__ = ["vault_cmd", "run"]

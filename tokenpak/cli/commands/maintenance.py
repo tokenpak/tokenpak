@@ -1,51 +1,48 @@
-"""maintenance command — proxy restart, reset, log viewing."""
+"""DEPRECATED — `tokenpak maintenance` moved to tokenpak-paid (2026-04-21).
+
+This module is a stub left behind by TPS-11. The real implementation
+now lives in ``tokenpak_paid.commands._impls.maintenance`` and is
+installed via:
+
+    tokenpak activate YOUR-KEY
+    tokenpak install-tier enterprise
+
+Importing any callable from this stub and invoking it prints an
+upgrade message and exits with status 2. Dynamic discovery
+(``tokenpak.commands`` entry-points — TPS-01) routes ``tokenpak
+maintenance`` to the real paid implementation when it is installed.
+"""
 
 from __future__ import annotations
 
-import subprocess
 import sys
-import time
+import warnings as _warnings
 
-PROXY_SERVICE = "tokenpak-proxy.service"
-
-
-def restart_proxy() -> None:
-    try:
-        subprocess.run(["systemctl", "--user", "restart", PROXY_SERVICE], check=True)
-        time.sleep(2)
-        print("✓ Proxy service restarted")
-    except subprocess.CalledProcessError as e:
-        print(f"✖ Restart failed: {e}")
-        sys.exit(1)
+_warnings.warn(
+    "tokenpak.cli.commands.maintenance: implementation moved to "
+    "tokenpak-paid (Enterprise+). Install with `tokenpak install-tier enterprise`. "
+    "This OSS stub will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-def show_logs(n: int = 30) -> None:
-    r = subprocess.run(
-        ["journalctl", "--user", "-u", PROXY_SERVICE, f"-n{n}", "--no-pager"],
-        capture_output=True,
-        text=True,
+def _upgrade_stub(*args, **kwargs):
+    """Upgrade-required stub left behind by TPS-11."""
+    print(
+        "⚠ The `tokenpak maintenance` command requires a Enterprise subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier enterprise\n"
+        "  (Don’t have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
     )
-    print(r.stdout or r.stderr)
+    sys.exit(2)
 
 
-try:
-    import click
+# Preserve every public symbol external callers import from this module.
+# Each one is aliased to _upgrade_stub so any invocation path ends in
+# the same upgrade message.
+maintenance_cmd = _upgrade_stub
 
-    @click.group("maintenance")
-    def maintenance_cmd():
-        """Proxy maintenance commands."""
-        pass
 
-    @maintenance_cmd.command("restart")
-    def maintenance_restart():
-        """Restart the proxy service."""
-        restart_proxy()
-
-    @maintenance_cmd.command("logs")
-    @click.argument("lines", type=int, default=30, required=False)
-    def maintenance_logs(lines):
-        """Show last N proxy log lines."""
-        show_logs(n=lines)
-
-except ImportError:
-    pass
+__all__ = ["maintenance_cmd"]

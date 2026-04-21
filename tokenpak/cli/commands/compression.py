@@ -1,21 +1,49 @@
-"""compression command — compression pipeline stats and control."""
+"""DEPRECATED — `tokenpak compression` moved to tokenpak-paid (2026-04-21).
+
+This module is a stub left behind by TPS-11. The real implementation
+now lives in ``tokenpak_paid.commands._impls.compression`` and is
+installed via:
+
+    tokenpak activate YOUR-KEY
+    tokenpak install-tier pro
+
+Importing any callable from this stub and invoking it prints an
+upgrade message and exits with status 2. Dynamic discovery
+(``tokenpak.commands`` entry-points — TPS-01) routes ``tokenpak
+compression`` to the real paid implementation when it is installed.
+"""
 
 from __future__ import annotations
 
+import sys
+import warnings as _warnings
 
-def run(raw: bool = False) -> None:
-    """Print compression pipeline stats."""
-    print("compression: not yet implemented (stub)")
+_warnings.warn(
+    "tokenpak.cli.commands.compression: implementation moved to "
+    "tokenpak-paid (Pro+). Install with `tokenpak install-tier pro`. "
+    "This OSS stub will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-try:
-    import click
+def _upgrade_stub(*args, **kwargs):
+    """Upgrade-required stub left behind by TPS-11."""
+    print(
+        "⚠ The `tokenpak compression` command requires a Pro subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier pro\n"
+        "  (Don’t have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
-    @click.command("compression")
-    @click.option("--raw", is_flag=True, help="Output raw JSON")
-    def compression_cmd(raw):
-        """Show compression pipeline stats."""
-        run(raw=raw)
 
-except ImportError:
-    pass
+# Preserve every public symbol external callers import from this module.
+# Each one is aliased to _upgrade_stub so any invocation path ends in
+# the same upgrade message.
+compression_cmd = _upgrade_stub
+run = _upgrade_stub
+
+
+__all__ = ["compression_cmd", "run"]

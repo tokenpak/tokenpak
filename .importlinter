@@ -227,15 +227,13 @@ ignore_imports =
     ; is a management UX — compute fingerprint of local file, sync
     ; to intelligence server, apply privacy filters. Operates on the
     ; user's local data; never invokes a provider. Out-of-band from
-    ; the services pipeline. Post agent/cli consolidation (2026-04-20),
-    ; the real importer is cli.commands.fingerprint (subcommand at
-    ; canonical home).
+    ; the services pipeline. Post TPS-11 (2026-04-21), the real
+    ; fingerprint body ships in tokenpak-paid; the OSS stub has no
+    ; fingerprinting imports. cli._impl retains the legacy direct
+    ; imports as part of the fast-path dispatcher.
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.generator
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.privacy
     tokenpak.cli._impl -> tokenpak.compression.fingerprinting.sync
-    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.generator
-    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.privacy
-    tokenpak.cli.commands.fingerprint -> tokenpak.compression.fingerprinting.sync
     ;
     ; §5.2-C pure local helper: `tokenpak compact` CLI subcommand
     ; runs compression on a local file for testing/preview. Never
