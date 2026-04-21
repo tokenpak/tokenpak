@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-04-21
+## [1.2.1] - 2026-04-21
+
+### Fixed
+- **Wired the `tokenpak install-tier` subcommand into the CLI dispatcher.** The module shipped in 1.2.0 but was never registered on the argparse tree, so `tokenpak install-tier pro` returned "Unknown command". The entire OSS→paid upgrade path documented in the 1.2.0 release notes now works as documented.
+- **`tokenpak audit {list,export,verify,prune,summary}` + `tokenpak compliance report`** no longer crash with `ImportError` on OSS installs. These subcommands still exist (argparse help text is preserved) but now route to an Enterprise upgrade stub that prints the `install-tier enterprise` hint and exits 2. The real implementations live in `tokenpak-paid`.
+- **Removed a fleet-internal Tailscale IP** (`100.80.241.118`) that was shipped as the default value for `upstream.ollama` in `tokenpak/core/config/loader.py`. Default is now the documented Ollama local port (`http://localhost:11434`). Users who override the value via `TOKENPAK_OLLAMA_UPSTREAM` or the config file are unaffected.
+- **`tokenpak savings` no longer dumps a traceback** on fresh installs where the telemetry tables haven't been created yet. Now prints a friendly "no data yet — start the proxy and send some requests" message and exits 0.
+
+### Note
+- 1.2.0 was yanked on PyPI because of the 4 issues above, which were caught by a release-blocking audit before the 1.2.0 announcement went out. The tier-package separation itself (TPS-11) is unchanged in 1.2.1 — same wheel contents, same paid-package contract, same 3-layer gating. If you installed 1.2.0, upgrade to 1.2.1 with `pip install --upgrade tokenpak`.
+
+## [1.2.0] - 2026-04-21 [YANKED]
 
 ### Changed
 - **BREAKING** — Paid tier commands (Pro/Team/Enterprise) split out into the separate `tokenpak-paid` private package. The OSS `tokenpak` package now contains upgrade stubs for 25 command modules; real implementations ship separately and are installed via `tokenpak install-tier <tier>`. Tier-package-separation initiative (`2026-04-21`).

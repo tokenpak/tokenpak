@@ -485,15 +485,16 @@ def cmd_logs(args):
 
 # ── End Progressive Disclosure ────────────────────────────────────────────────
 
-from tokenpak.services.policy_service.budget.rules import BudgetBlock, quadratic_allocate
-from ..calibration import calibrate_workers, get_recommended_workers
 from tokenpak.compression.miss_detector import DEFAULT_GAPS_PATH, should_expand_retrieval
 from tokenpak.compression.processors import get_processor
+from tokenpak.compression.wire import pack
 from tokenpak.core.registry import Block, BlockRegistry
 from tokenpak.security import secure_write_config
+from tokenpak.services.policy_service.budget.rules import BudgetBlock, quadratic_allocate
 from tokenpak.telemetry.tokens import cache_info, count_tokens, truncate_to_tokens
+
+from ..calibration import calibrate_workers, get_recommended_workers
 from ..walker import walk_directory
-from tokenpak.compression.wire import pack
 
 # Batch size for SQLite transactions
 BATCH_SIZE = 100
@@ -1955,6 +1956,7 @@ def build_parser():
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
+    _build_install_tier_parser(sub)
 
     return parser
 
@@ -2139,12 +2141,28 @@ def cmd_usage(args):
 
 def cmd_savings(args):
     """Show compression savings summary."""
+    import sqlite3 as _sqlite3
+
     from ..telemetry.query import get_savings_report
 
     mode = resolve_mode(args)
     fmt = OutputFormatter("Savings", mode=mode, minimal=getattr(args, "minimal", False))
     days = getattr(args, "days", 30)
-    report = get_savings_report(days=days)
+    try:
+        report = get_savings_report(days=days)
+    except _sqlite3.OperationalError as exc:
+        # Fresh install (no proxied requests yet) → no telemetry tables.
+        # Fail gracefully instead of dumping a traceback.
+        if "no such table" in str(exc).lower():
+            print(
+                "No savings data yet — start the proxy and send some requests first.\n"
+                "  Run: tokenpak start\n"
+                "  Then point your LLM client at http://127.0.0.1:8766 and "
+                "retry `tokenpak savings` after a few requests.",
+                file=sys.stderr,
+            )
+            sys.exit(0)
+        raise
 
     if mode == OutputMode.RAW:
         print(fmt.raw({"section": "savings", "days": days, **report.__dict__}))
@@ -2563,102 +2581,42 @@ def _get_audit_db(args) -> str:
     return str(home / "audit.db")
 
 
+def _enterprise_upgrade_stub(command: str) -> None:
+    """Print Enterprise upgrade message and exit 2.
+
+    Used by `tokenpak audit *` and `tokenpak compliance *`: these commands
+    depend on `tokenpak.enterprise.*` which moved to tokenpak-paid in 1.2.0
+    (TPS-11). The argparse subparsers still register the commands so help
+    text works, but invocation routes here.
+    """
+    print(
+        f"⚠ The `tokenpak {command}` command requires an Enterprise subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier enterprise\n"
+        "  (Don't have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def cmd_audit_list(args):
-    import json as _json
-
-    from tokenpak.enterprise.audit import AuditLog
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        rows = log.list(
-            since=getattr(args, "since", None),
-            until=getattr(args, "until", None),
-            user_id=getattr(args, "user_id", None),
-            action=getattr(args, "action", None),
-            model=getattr(args, "model", None),
-            outcome=getattr(args, "outcome", None),
-            limit=getattr(args, "limit", 50),
-        )
-    if getattr(args, "as_json", False):
-        print(_json.dumps(rows, indent=2, default=str))
-    else:
-        if not rows:
-            print("No audit entries found.")
-            return
-        # Pretty table
-        header = f"{'Time':<26} {'User':<16} {'Action':<24} {'Model':<28} {'Outcome':<10}"
-        print(header)
-        print("-" * len(header))
-        for r in rows:
-            print(
-                f"{r.get('ts_iso', '')[:25]:<26} "
-                f"{(r.get('user_id', '') or '-'):<16} "
-                f"{r.get('action', ''):<24} "
-                f"{(r.get('model', '') or '-'):<28} "
-                f"{r.get('outcome', ''):<10}"
-            )
-        print(f"\n{len(rows)} entries")
+    _enterprise_upgrade_stub("audit list")
 
 
 def cmd_audit_export(args):
-    from tokenpak.enterprise.audit import AuditLog
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        n = log.export(
-            args.output,
-            fmt=args.fmt,
-            since=getattr(args, "since", None),
-            until=getattr(args, "until", None),
-            user_id=getattr(args, "user_id", None),
-        )
-    print(f"Exported {n} entries → {args.output} ({args.fmt})")
+    _enterprise_upgrade_stub("audit export")
 
 
 def cmd_audit_verify(args):
-    from tokenpak.enterprise.audit import AuditLog
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        ok, errors = log.verify_chain()
-    if ok:
-        print("✅ Audit chain integrity: OK")
-    else:
-        print(f"❌ Audit chain integrity: FAILED ({len(errors)} violation(s))")
-        for e in errors:
-            print(f"  • {e}")
-        sys.exit(1)
+    _enterprise_upgrade_stub("audit verify")
 
 
 def cmd_audit_prune(args):
-    from tokenpak.enterprise.audit import AuditLog
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        n = log.prune(retention_days=args.days)
-    print(f"Pruned {n} entries older than {args.days} days from {db_path}")
+    _enterprise_upgrade_stub("audit prune")
 
 
 def cmd_audit_summary(args):
-    from tokenpak.enterprise.audit import AuditLog
-
-    db_path = _get_audit_db(args)
-    with AuditLog(db_path) as log:
-        stats = log.summary(since=getattr(args, "since", None))
-    total = stats.get("total", 0)
-    print(f"Total audit entries: {total}")
-    if stats.get("by_action"):
-        print("\nBy action:")
-        for r in stats["by_action"][:10]:
-            action = r.get("action", "?") if isinstance(r, dict) else r[0]
-            n = r.get("n", 0) if isinstance(r, dict) else r[1]
-            print(f"  {action:<30} {n}")
-    if stats.get("by_outcome"):
-        print("\nBy outcome:")
-        for r in stats["by_outcome"]:
-            outcome = r.get("outcome", "?") if isinstance(r, dict) else r[0]
-            n = r.get("n", 0) if isinstance(r, dict) else r[1]
-            print(f"  {outcome:<20} {n}")
+    _enterprise_upgrade_stub("audit summary")
 
 
 # ---------------------------------------------------------------------------
@@ -2695,26 +2653,7 @@ def _build_compliance_parser(sub):
 
 
 def cmd_compliance_report(args):
-    import os
-
-    from tokenpak.enterprise.compliance import ComplianceReporter
-
-    org = getattr(args, "organization", None) or os.environ.get("TOKENPAK_ORG", "Your Organization")
-    db_path = _get_audit_db(args)
-    reporter = ComplianceReporter(audit_db=db_path, organization=org)
-    report = reporter.generate(
-        standard=args.standard,
-        since=getattr(args, "since", None),
-        until=getattr(args, "until", None),
-    )
-    if getattr(args, "output", None):
-        report.save(args.output, fmt=args.fmt)
-        print(f"Report saved → {args.output}")
-    else:
-        if args.fmt == "json":
-            print(report.as_json())
-        else:
-            print(report.as_text())
+    _enterprise_upgrade_stub("compliance report")
 
 
 # ── Version Control Commands ──────────────────────────────────────────────────
@@ -6153,6 +6092,34 @@ def _build_config_check_parser(sub):
     p = sub.add_parser("config-check", help="Validate a proxy config file (JSON)")
     p.add_argument("file", help="Path to config file (JSON)")
     p.set_defaults(func=cmd_config_check)
+    return p
+
+
+# ── Install-Tier (paid-package installer, TPS-02) ─────────────────────────────
+
+
+def cmd_install_tier(args):
+    """Install the private tokenpak-paid package for a given tier."""
+    from ._install_tier import run_install_tier
+
+    rc = run_install_tier(tier=args.tier, dry_run=args.dry_run)
+    # The generic dispatcher ignores return values; propagate the exit
+    # code explicitly so `tokenpak install-tier pro` without a license
+    # exits 2, not 0.
+    sys.exit(rc)
+
+
+def _build_install_tier_parser(sub):
+    """Register 'tokenpak install-tier' command."""
+    p = sub.add_parser(
+        "install-tier",
+        help="Install tokenpak-paid for the given tier (pro/team/enterprise)",
+    )
+    p.add_argument("tier", choices=("pro", "team", "enterprise"),
+                   help="Tier to install. Requires a license key activated via `tokenpak activate`.")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Show what pip would run; do not install")
+    p.set_defaults(func=cmd_install_tier)
     return p
 
 
