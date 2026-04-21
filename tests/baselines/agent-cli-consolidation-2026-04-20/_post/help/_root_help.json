@@ -1,0 +1,5 @@
+{
+  "stdout": "TokenPak \u2014 LLM Proxy with Context Compression\n\nQuick Start:\n  start     Start the proxy (localhost:8766)\n  demo      See compression in action\n  cost      View your API spend\n  status    Check proxy health\n\nRun `tokenpak help` for all commands.\nRun `tokenpak <command> --help` for command details.\n",
+  "stderr": "",
+  "returncode": 0
+}
