@@ -1,7 +1,53 @@
-"""trigger command — re-exported from agent triggers CLI."""
+"""DEPRECATED — `tokenpak trigger` moved to tokenpak-paid (2026-04-21).
+
+This module is a stub left behind by TPS-11. The real implementation
+now lives in ``tokenpak_paid.commands._impls.trigger`` and is
+installed via:
+
+    tokenpak activate YOUR-KEY
+    tokenpak install-tier team
+
+Importing any callable from this stub and invoking it prints an
+upgrade message and exits with status 2. Dynamic discovery
+(``tokenpak.commands`` entry-points — TPS-01) routes ``tokenpak
+trigger`` to the real paid implementation when it is installed.
+"""
 
 from __future__ import annotations
 
-from tokenpak.cli.trigger_cmd import trigger_group  # noqa: F401
+import sys
+import warnings as _warnings
 
-__all__ = ["trigger_group"]
+_warnings.warn(
+    "tokenpak.cli.commands.trigger: implementation moved to "
+    "tokenpak-paid (Team+). Install with `tokenpak install-tier team`. "
+    "This OSS stub will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+
+def _upgrade_stub(*args, **kwargs):
+    """Upgrade-required stub left behind by TPS-11."""
+    print(
+        "⚠ The `tokenpak trigger` command requires a Team subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier team\n"
+        "  (Don’t have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
+# Preserve every public symbol external callers import from this module.
+# Each one is aliased to _upgrade_stub so any invocation path ends in
+# the same upgrade message.
+trigger_group = _upgrade_stub
+list_cmd = _upgrade_stub
+add_cmd = _upgrade_stub
+remove_cmd = _upgrade_stub
+test_cmd = _upgrade_stub
+log_cmd = _upgrade_stub
+
+
+__all__ = ["trigger_group", "list_cmd", "add_cmd", "remove_cmd", "test_cmd", "log_cmd"]

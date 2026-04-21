@@ -1,52 +1,48 @@
-"""CLI commands for debug mode: on / off / status."""
+"""DEPRECATED — `tokenpak debug` moved to tokenpak-paid (2026-04-21).
+
+This module is a stub left behind by TPS-11. The real implementation
+now lives in ``tokenpak_paid.commands._impls.debug`` and is
+installed via:
+
+    tokenpak activate YOUR-KEY
+    tokenpak install-tier pro
+
+Importing any callable from this stub and invoking it prints an
+upgrade message and exits with status 2. Dynamic discovery
+(``tokenpak.commands`` entry-points — TPS-01) routes ``tokenpak
+debug`` to the real paid implementation when it is installed.
+"""
 
 from __future__ import annotations
 
+import sys
+import warnings as _warnings
 
-def _state():
-    from tokenpak.agent.debug.state import DebugState
+_warnings.warn(
+    "tokenpak.cli.commands.debug: implementation moved to "
+    "tokenpak-paid (Pro+). Install with `tokenpak install-tier pro`. "
+    "This OSS stub will be removed in tokenpak 2.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-    return DebugState()
 
-
-def debug_cmd(args) -> None:
-    """Dispatch debug sub-commands."""
-    sub = getattr(args, "debug_cmd", None) or (
-        args.debug_args[0] if getattr(args, "debug_args", None) else None
+def _upgrade_stub(*args, **kwargs):
+    """Upgrade-required stub left behind by TPS-11."""
+    print(
+        "⚠ The `tokenpak debug` command requires a Pro subscription.\n"
+        "  Run: tokenpak activate <YOUR-KEY>\n"
+        "  Then: tokenpak install-tier pro\n"
+        "  (Don’t have a key? Visit tokenpak.ai/pricing.)",
+        file=sys.stderr,
     )
-    if sub == "on":
-        _cmd_on(args)
-    elif sub == "off":
-        _cmd_off()
-    elif sub == "status":
-        _cmd_status()
-    else:
-        print("Usage: tokenpak debug <on [--requests N] | off | status>")
+    sys.exit(2)
 
 
-def _cmd_on(args) -> None:
-    requests = getattr(args, "debug_requests", None)
-    _state().enable(requests=requests)
-    if requests:
-        print(f"Debug mode ON — auto-disables after {requests} request(s).")
-    else:
-        print("Debug mode ON — unlimited. Logs: ~/.tokenpak/debug.log")
+# Preserve every public symbol external callers import from this module.
+# Each one is aliased to _upgrade_stub so any invocation path ends in
+# the same upgrade message.
+debug_cmd = _upgrade_stub
 
 
-def _cmd_off() -> None:
-    _state().disable()
-    print("Debug mode OFF.")
-
-
-def _cmd_status() -> None:
-    st = _state().status()
-    enabled = st["enabled"]
-    flag = "ON" if enabled else "OFF"
-    remaining = st["requests_remaining"]
-    rem_str = str(remaining) if remaining is not None else "unlimited"
-    log_kb = round(st["log_size_bytes"] / 1024, 1)
-    print(f"Debug mode:    {flag}")
-    if enabled:
-        print(f"Remaining:     {rem_str}")
-    print(f"Log path:      {st['log_path']}")
-    print(f"Log size:      {log_kb} KB")
+__all__ = ["debug_cmd"]
