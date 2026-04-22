@@ -832,8 +832,19 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_success = True  # reached here without exception → request succeeded
 
             # ── Request logging ───────────────────────────────────────────
+            # Always count forwarded requests at the start of the logging
+            # block, BEFORE any token parsing that might throw on error
+            # responses. This keeps `tokenpak status` counters honest
+            # regardless of whether we could extract usage info.
+            _always_counted = False
             try:
                 _resp_status = resp.status_code if "resp" in dir() else 0  # type: ignore
+                if should_log and is_messages:
+                    with ps._session_lock:
+                        ps.session["requests"] += 1
+                        if _resp_status >= 400:
+                            ps.session["errors"] += 1
+                    _always_counted = True
                 _req_body_sz = content_length
                 _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
                 _comp_ratio = None
@@ -877,7 +888,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 cost_saved = max(0.0, cost_without - cost)
 
                 with ps._session_lock:
-                    ps.session["requests"] += 1
+                    if not _always_counted:
+                        ps.session["requests"] += 1
                     ps.session["input_tokens"] += input_tokens
                     ps.session["sent_input_tokens"] += sent_input_tokens
                     ps.session["saved_tokens"] += saved

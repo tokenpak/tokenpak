@@ -2065,7 +2065,19 @@ def cmd_status(args):
     print()
 
     if health:
-        s = health.get("stats", {})
+        # /stats has the rich session counters; /health has top-level
+        # summaries. cmd_status used to read `health["stats"]` which
+        # didn't exist in the current schema (always returned empty
+        # dict, hence all-zero output). Merge both:
+        s = (stats or {}).get("session", {}) if stats else {}
+        # Top-level /health fallbacks so we still show requests + errors
+        # even when /stats isn't reachable.
+        if not s:
+            s = {
+                "requests": health.get("requests_total", 0),
+                "errors": health.get("requests_errors", 0),
+                "start_time": _time.time() - health.get("uptime_seconds", 0),
+            }
         uptime_s = _time.time() - s.get("start_time", _time.time())
         h, rem = divmod(int(uptime_s), 3600)
         m = rem // 60
@@ -2082,7 +2094,15 @@ def cmd_status(args):
         print(f"  Uptime:          {uptime_str}")
         print(f"  Requests:        {s.get('requests', 0):,}")
         print(f"  Errors:          {s.get('errors', 0)}")
-        print(f"  Compilation:     {health.get('compilation_mode', 'unknown')}")
+        # Compilation mode lives at stats.compilation_mode (top-level of
+        # the /stats response, not nested under "session"). Fall back
+        # to /health and then "unknown".
+        comp_mode = (
+            (stats or {}).get("compilation_mode")
+            or health.get("compilation_mode")
+            or "unknown"
+        )
+        print(f"  Compilation:     {comp_mode}")
         print()
 
         # Token savings

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] - 2026-04-21
+
+### Fixed
+- **`tokenpak status` now reflects live counters.** Previously read `health["stats"]` (a non-existent nested key in the current /health schema), so every counter displayed 0 even when the proxy had served hundreds of requests. Now reads from `/stats` (authoritative session state) with `/health` top-level fields as fallback. `Compilation:` also now sources from `/stats::compilation_mode` and shows the actual mode (e.g. `hybrid`) instead of `unknown`.
+- **Proxy counts forwarded requests immediately**, not only after successful token-extraction. The in-memory `ps.session["requests"]` (and `errors` for 4xx/5xx) now increments at the top of the request-logging block, so `/health::requests_total` stays honest even on upstream error responses or when body parsing fails.
+
 ## [1.2.4] - 2026-04-21
 
 ### Fixed
