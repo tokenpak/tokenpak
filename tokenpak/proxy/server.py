@@ -207,6 +207,13 @@ def _new_session() -> Dict[str, Any]:
         # Anthropic prompt caching stats
         "cache_read_tokens": 0,
         "cache_creation_tokens": 0,
+        # Origin-split cache accounting (attribution contract 2026-04-17).
+        # Only 'proxy' origin counts toward tokenpak savings; 'client' and
+        # 'unknown' are observability-only. Two counters per origin so
+        # status can show hit rate AND total cached tokens per origin.
+        "cache_hits_by_origin": {"proxy": 0, "client": 0, "unknown": 0},
+        "cache_reads_by_origin": {"proxy": 0, "client": 0, "unknown": 0},
+        "cache_requests_by_origin": {"proxy": 0, "client": 0, "unknown": 0},
     }
 
 
@@ -605,11 +612,32 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # Attribution: classify who's managing the cache_control on
+            # this request BEFORE the proxy modifies anything.
+            # - 'client' : body already has cache_control → client/platform
+            #              manages caching; tokenpak is passthrough for cache.
+            # - 'unknown': body has no cache_control yet. If the proxy's
+            #              request_hook adds blocks below, we bump to 'proxy'.
+            # Never over-claim: if we can't tell, we prefer 'client'.
+            _cache_origin = "unknown"
+            try:
+                if body and (b'"cache_control"' in body):
+                    _cache_origin = "client"
+            except Exception:
+                _cache_origin = "unknown"
+            _body_before_hook = body
+
             if ps.request_hook:
                 try:
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
                         body, model, trace
                     )
+                    # If the hook actually modified the body AND the client
+                    # hadn't marked it, tokenpak is now responsible for the
+                    # cache_control blocks → credit tokenpak for any hits.
+                    if _cache_origin == "unknown" and body != _body_before_hook:
+                        if body and (b'"cache_control"' in body):
+                            _cache_origin = "proxy"
                 except Exception as hook_err:
                     # Graceful degradation: compression failed — forward original request unchanged.
                     # The user still gets a response; we log and track the event.
@@ -857,6 +885,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         ps.session["requests"] += 1
                         if _resp_status >= 400:
                             ps.session["errors"] += 1
+                        # Origin-attribution request count fires here too
+                        # so 4xx/5xx responses (no usable usage data)
+                        # still show up in the correct origin bucket.
+                        _o = _cache_origin if _cache_origin in ("proxy", "client", "unknown") else "unknown"
+                        ps.session["cache_requests_by_origin"][_o] += 1
                     _always_counted = True
                 _req_body_sz = content_length
                 _resp_body_sz = len(resp_body) if "resp_body" in dir() else 0  # type: ignore
@@ -912,6 +945,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cost_saved"] += cost_saved
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
+                    # Per-origin hit + token accounting (only when we have
+                    # a usable response body). Request-count happens
+                    # unconditionally below, outside this guard, so error
+                    # responses (4xx/5xx with no usage) are still
+                    # attributed to the right origin bucket.
+                    _o = _cache_origin if _cache_origin in ("proxy", "client", "unknown") else "unknown"
+                    if cache_read_tokens > 0:
+                        ps.session["cache_hits_by_origin"][_o] += 1
+                        ps.session["cache_reads_by_origin"][_o] += cache_read_tokens
 
                 # Persist to monitor.db so `tokenpak status`, `tokenpak cost`,
                 # `tokenpak savings`, and the dashboards see this request.
@@ -919,16 +961,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # never break the request.
                 if getattr(ps, "monitor", None) is not None:
                     try:
-                        # Cache-origin attribution: if the client sent any
-                        # cache_control blocks we treat the cache as
-                        # client-managed; otherwise unknown. (Proxy-side
-                        # prefix-cache would bump this to "proxy" — added
-                        # when prefix-cache is wired back in.)
-                        _cache_origin = (
-                            "client"
-                            if (cache_read_tokens or cache_creation_tokens) > 0
-                            else "unknown"
-                        )
+                        # _cache_origin was set earlier when the body was
+                        # classified (before/after request_hook). Do NOT
+                        # re-derive from cache_read_tokens — that says
+                        # "who got the hit", not "who placed the markers".
+                        # Per the attribution contract, only 'proxy'
+                        # origin counts toward tokenpak savings.
                         ps.monitor.log(
                             model=model,
                             input_tokens=input_tokens,

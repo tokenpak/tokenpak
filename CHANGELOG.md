@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.8] - 2026-04-22
+
+### Fixed
+- **`tokenpak status` now honestly attributes cache hits.** Per the 2026-04-17 attribution contract, cache activity where the client (Claude Code, Anthropic SDK, etc.) placed its own `cache_control` blocks is **platform/client-managed caching** — tokenpak provides no value for those hits and should never claim credit. Status previously merged all cache reads into a single "Cache hit rate" line regardless of who placed the markers, which over-credited tokenpak for `tokenpak claude` sessions where Claude Code owns the entire cache_control surface.
+
+  The proxy now classifies every forwarded request by `cache_origin`:
+  - `client` — request body already had `cache_control` blocks before the proxy touched it (upstream/platform manages the cache)
+  - `proxy` — the proxy's `request_hook` / `apply_deterministic_cache_breakpoints` added the cache_control blocks (tokenpak manages the cache)
+  - `unknown` — no cache_control activity anywhere (shouldn't happen often)
+
+  Session counters now track `cache_requests_by_origin`, `cache_hits_by_origin`, and `cache_reads_by_origin` as separate dicts. `/stats::session` exposes them. `tokenpak status` renders the split:
+
+  ```
+  TokenPak cache:  52% (17 hits / 33 requests)  (48,910 tokens)
+  Platform cache:  89% (41 hits / 46 requests)  (412,003 tokens, not credited)
+  ```
+
+  Never over-claims: if the classifier can't tell, the request lands in the `unknown` bucket and is explicitly marked "not credited."
+
 ## [1.2.7] - 2026-04-22
 
 ### Fixed

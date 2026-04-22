@@ -2125,20 +2125,48 @@ def cmd_status(args):
             print(f"  Cost saved:      ${cost_saved:.4f}")
         print()
 
-        # Cache
-        if cache:
+        # Cache — origin-split per the attribution contract (2026-04-17).
+        # TokenPak is only credited for cache hits where `origin='proxy'`
+        # (i.e. tokenpak placed the cache_control blocks). Client- or
+        # platform-managed cache (Claude Code, Anthropic SDK, etc.) is
+        # shown as observability, never as a tokenpak saving.
+        hits_by_origin = s.get("cache_hits_by_origin") or {}
+        reads_by_origin = s.get("cache_reads_by_origin") or {}
+        reqs_by_origin = s.get("cache_requests_by_origin") or {}
+
+        if any(hits_by_origin.values()) or any(reqs_by_origin.values()):
+            def _rate(origin: str) -> float:
+                reqs = reqs_by_origin.get(origin, 0)
+                if reqs <= 0:
+                    return 0.0
+                return hits_by_origin.get(origin, 0) / reqs * 100
+
+            print(f"  {'TokenPak cache:':<17}{_rate('proxy'):.0f}% "
+                  f"({hits_by_origin.get('proxy', 0)} hits / "
+                  f"{reqs_by_origin.get('proxy', 0)} requests)  "
+                  f"({reads_by_origin.get('proxy', 0):,} tokens)")
+            print(f"  {'Platform cache:':<17}{_rate('client'):.0f}% "
+                  f"({hits_by_origin.get('client', 0)} hits / "
+                  f"{reqs_by_origin.get('client', 0)} requests)  "
+                  f"({reads_by_origin.get('client', 0):,} tokens, not credited)")
+            if reqs_by_origin.get("unknown", 0):
+                print(f"  {'Unattributed:':<17}{reqs_by_origin.get('unknown', 0)} requests "
+                      f"({reads_by_origin.get('unknown', 0):,} tokens, not credited)")
+        elif cache:
+            # Fallback: older proxies / pre-attribution clients. Show
+            # legacy single-line metric but label it honestly.
             hits = cache.get("cache_hits", 0)
             misses = cache.get("cache_misses", 0)
             total = hits + misses
             hit_rate = (hits / total * 100) if total > 0 else 0
             read_tokens = cache.get("cache_read_tokens", 0)
-            print(f"  Cache hit rate:  {hit_rate:.0f}% ({hits} hits / {misses} misses)")
+            print(f"  Cache hit rate:  {hit_rate:.0f}% ({hits} hits / {misses} misses, origin unattributed)")
             print(f"  Cache reads:     {read_tokens:,} tokens")
             miss_reasons = cache.get("miss_reasons", {})
             if miss_reasons and any(v > 0 for v in miss_reasons.values()):
                 reasons = [f"{k}={v}" for k, v in miss_reasons.items() if v > 0]
                 print(f"  Miss reasons:    {', '.join(reasons)}")
-            print()
+        print()
 
         # Features
         router = health.get("router", {})
