@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.002] - 2026-04-22
+
+### Fixed
+- **Active pre-send hook.** `companion/hooks/pre_send.py` now loads active session capsule + vault context and emits them via Claude Code's `hookSpecificOutput.additionalContext` — the only place tokenpak can add pre-wire value on byte-preserve routes. Each mutation records a `companion_savings` journal row per the 2026-04-17 attribution contract.
+- **Default system prompt non-empty.** Instructs Claude Code's model to call `check_budget` / `prune_context` / `load_capsule` / `journal_*` MCP tools proactively. Overridable via `TOKENPAK_COMPANION_SYSTEM_PROMPT`.
+- **`tokenpak status` Features row** — replaced phantom-key ❌s with live Policy state: `classifier ✅ | DLP warn | TTL-order ✅ | enrichment ❌ | compression ❌`. Honest reflection of actual 1.3.0 behavior for the active route.
+
+### Added
+- **`TokenPak (pre-wire)` status line.** Reads `companion_savings` rows and credits tokenpak for pre-wire work independent of platform cache activity.
+
+### Opt-outs
+- `TOKENPAK_COMPANION_ENRICH=0` — disable active enrichment.
+- `TOKENPAK_COMPANION_MIN_QUERY_TOKENS` + `TOKENPAK_COMPANION_INJECT_BUDGET` — tune the relevance gate + budget.
+
 ## [1.3.001] - 2026-04-22
 
 ### Fixed

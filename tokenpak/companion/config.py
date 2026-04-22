@@ -56,7 +56,27 @@ class CompanionConfig:
     budget_tokens: int = 2000
     model: str = "claude-haiku-4-5-20251001"
     log_level: str = "info"
-    system_prompt: str = ""
+    system_prompt: str = (
+        "You have access to the tokenpak-companion MCP server. "
+        "Use its tools proactively:\n"
+        "- Call `check_budget` when a turn looks expensive (large "
+        "file reads, long plans) to avoid running over the session "
+        "or daily budget.\n"
+        "- Call `prune_context` when the effective prompt (system + "
+        "transcript + current user message) exceeds ~50k tokens, "
+        "requesting a lower `max_tokens` to trim redundancy without "
+        "losing intent.\n"
+        "- Call `load_capsule` at the start of a new session if a "
+        "capsule exists for the current project — it seeds memory "
+        "without re-reading every file.\n"
+        "- Call `journal_write` when the user asks you to remember "
+        "something durable, or when you finish a substantive unit of "
+        "work; call `journal_read` at the start of a session to "
+        "recall prior decisions.\n"
+        "These tools operate on local companion state only. They do "
+        "not make network calls, do not expose secrets, and are "
+        "cheap to invoke. Silent on success."
+    )
     enabled: bool = True
     profile: str = "balanced"
     prune_threshold: int = 50000
@@ -121,7 +141,14 @@ class CompanionConfig:
                 "TOKENPAK_COMPANION_MODEL", "claude-haiku-4-5-20251001"
             ),
             log_level=os.environ.get("TOKENPAK_COMPANION_LOG_LEVEL", "info"),
-            system_prompt=os.environ.get("TOKENPAK_COMPANION_SYSTEM_PROMPT", ""),
+            system_prompt=os.environ.get(
+                "TOKENPAK_COMPANION_SYSTEM_PROMPT",
+                # Fall back to the class-level default (which carries
+                # the MCP-tool-invocation instructions). Using ``""``
+                # here would silently disable the default even when
+                # no env override is set.
+                CompanionConfig.__dataclass_fields__["system_prompt"].default,
+            ),
             enabled=enabled,
             profile=profile,
             prune_threshold=prune_threshold,

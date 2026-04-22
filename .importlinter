@@ -208,6 +208,14 @@ ignore_imports =
     ; anti-pattern the architecture explicitly forbids.
     tokenpak.cli._impl -> tokenpak.services.diagnostics
     ;
+    ; === 1.3.002: status renderer reads classifier + policy resolver (§5.2-C) ===
+    ; cmd_status surfaces live classification + policy state in the
+    ; Features row. Presentation-only; no provider invoked, no wire
+    ; traffic. Same classifier the proxy + companion use — single
+    ; source of truth.
+    tokenpak.cli._impl -> tokenpak.services.routing_service.classifier
+    tokenpak.cli._impl -> tokenpak.services.policy_service.resolver
+    ;
     ; === 1.3.0-α: proxy.server dispatches to services via classify_stage ===
     ; proxy/ is a transport shell around services/ (Architecture §1.3);
     ; it must be allowed to invoke the canonical pipeline stages. These

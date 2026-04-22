@@ -2209,21 +2209,85 @@ def cmd_status(args):
         print()
 
         # Features
-        router = health.get("router", {})
-        components = router.get("components", {})
-        features = []
-        for feat_name, feat_key in [
-            ("skeleton", "skeleton"),
-            ("shadow", "shadow_reader"),
-            ("canon", "canon"),
-            ("capsule", "capsule_available"),
-        ]:
-            feat_data = health.get(feat_key, {})
-            enabled = (
-                feat_data.get("enabled", False) if isinstance(feat_data, dict) else bool(feat_data)
-            )
-            features.append(f"{feat_name} {'✅' if enabled else '❌'}")
-        print(f"  Features:        {' | '.join(features)}")
+        # Companion-side pre-wire attribution (§2026-04-17 contract).
+        # Reads `companion_savings` rows from the hook's journal.db so
+        # tokenpak gets credited for pre-send work (capsule injection,
+        # vault enrichment, prune) that the proxy can't do on byte-
+        # preserve routes.
+        import sqlite3 as _sqlite3
+        from pathlib import Path as _P
+
+        companion_tokens_saved = 0
+        companion_tokens_added = 0
+        companion_cost_saved = 0.0
+        companion_sources: dict[str, int] = {}
+        session_start = s.get("start_time", _time.time())
+        _journal_db = _P.home() / ".tokenpak" / "companion" / "journal.db"
+        try:
+            if _journal_db.exists():
+                _c = _sqlite3.connect(str(_journal_db))
+                # Use session_start as the lower bound so the summary
+                # reflects the currently-running proxy session, not
+                # lifetime totals.
+                rows = _c.execute(
+                    "SELECT metadata_json FROM entries "
+                    "WHERE entry_type='companion_savings' AND timestamp >= ?",
+                    (session_start,),
+                ).fetchall()
+                _c.close()
+                import json as _json
+                for (meta_raw,) in rows:
+                    try:
+                        meta = _json.loads(meta_raw or "{}")
+                    except _json.JSONDecodeError:
+                        continue
+                    tokens = int(meta.get("tokens_avoided", 0))
+                    cost = float(meta.get("cost_avoided_usd", 0.0))
+                    src = str(meta.get("source") or "unknown")
+                    companion_sources[src] = companion_sources.get(src, 0) + 1
+                    if tokens >= 0:
+                        companion_tokens_saved += tokens
+                        companion_cost_saved += cost
+                    else:
+                        companion_tokens_added += -tokens
+        except _sqlite3.OperationalError:
+            pass
+
+        if companion_tokens_saved or companion_tokens_added or companion_sources:
+            parts = []
+            if companion_tokens_saved:
+                parts.append(
+                    f"saved {companion_tokens_saved:,} tok "
+                    f"(${companion_cost_saved:.4f})"
+                )
+            if companion_tokens_added:
+                parts.append(f"+{companion_tokens_added:,} tok context")
+            src_summary = ", ".join(f"{k}×{v}" for k, v in companion_sources.items())
+            print(f"  TokenPak (pre-wire): {' | '.join(parts) or '—'}")
+            print(f"                       sources: {src_summary}")
+
+        # Features row — surfaces the 1.3.0 Policy-driven capabilities.
+        # Classifier always runs; the rest are derived from the policy
+        # preset for the most-active route class in this session
+        # (fallback: generic).
+        try:
+            from tokenpak.services.policy_service.resolver import get_resolver
+            from tokenpak.services.routing_service.classifier import get_classifier
+
+            _rc = get_classifier().classify_from_env()
+            _pol = get_resolver().resolve(_rc)
+            feat_parts = [
+                f"classifier ✅ ({_rc.value})",
+                f"DLP {_pol.dlp_mode}",
+                f"TTL-order {'✅' if _pol.ttl_ordering_enforcement else '❌'}",
+                f"enrichment {'✅' if _pol.injection_enabled else '❌'}",
+                f"compression {'✅' if _pol.compression_eligible else '❌'}",
+            ]
+            print(f"  Features:        {' | '.join(feat_parts)}")
+        except Exception:
+            # If the services layer isn't reachable, fall back silently
+            # rather than showing confusing ❌ for missing features.
+            pass
 
         # Circuit breakers. /health returns {"enabled", "any_open",
         # "providers": {name: {"open": bool, …}}}; iterate providers map,

@@ -119,6 +119,125 @@ def _record_daily_cost(cost_est: float) -> None:
         pass
 
 
+def _journal_write_savings(
+    session_id: str,
+    tokens_avoided: int,
+    cost_avoided_usd: float,
+    source: str,
+) -> None:
+    """Record a ``companion_savings`` journal row per the 2026-04-17
+    attribution contract.
+
+    ``source`` labels which pre-wire optimization produced the saving:
+    ``capsule``, ``vault-enrichment`` (negative tokens; adds context),
+    ``prune``, ``dedupe``, etc. Status reads these rows to credit
+    tokenpak for pre-wire value independent of any platform cache
+    activity.
+    """
+    try:
+        _JOURNAL_DB.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(_JOURNAL_DB))
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                entry_type TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        conn.execute(
+            "INSERT INTO entries (session_id, timestamp, entry_type, "
+            "content, metadata_json) VALUES (?, ?, ?, ?, ?)",
+            (
+                session_id,
+                time.time(),
+                "companion_savings",
+                source,
+                json.dumps({
+                    "source": source,
+                    "tokens_avoided": int(tokens_avoided),
+                    "cost_avoided_usd": round(cost_avoided_usd, 6),
+                }),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def _load_active_capsule(session_id: str) -> str:
+    """Return capsule text for this session, or ``""`` if none.
+
+    Capsules live in ``~/.tokenpak/companion/capsules/<session_id>.md``
+    (or a ``active.md`` symlink). Missing = no-op.
+    """
+    candidates = [
+        _COMPANION_DIR / "capsules" / f"{session_id}.md",
+        _COMPANION_DIR / "capsules" / "active.md",
+    ]
+    for path in candidates:
+        try:
+            if path.exists():
+                text = path.read_text(encoding="utf-8", errors="replace")
+                if text.strip():
+                    return text
+        except OSError:
+            continue
+    return ""
+
+
+def _query_vault_context(prompt: str, budget_chars: int) -> str:
+    """Pull relevant vault snippets for this prompt (best-effort).
+
+    Uses ``services.routing_service.classifier``-style lazy import so
+    the hook stays fast + fails cleanly when vault isn't initialized.
+    Returns concatenated snippet text capped at ``budget_chars``.
+    """
+    if not prompt or budget_chars <= 0:
+        return ""
+    try:
+        # §5.2-C — pure local helper; we're searching local vault state,
+        # not invoking a provider or executing a pipeline.
+        from tokenpak.vault.blocks import BlockStore
+    except Exception:
+        return ""
+    try:
+        store = BlockStore.default()  # type: ignore[attr-defined]
+    except Exception:
+        return ""
+    try:
+        hits = store.search(prompt, top_k=5)
+    except Exception:
+        return ""
+    if not hits:
+        return ""
+    pieces: list[str] = []
+    used = 0
+    for h in hits:
+        text = getattr(h, "text", None) or getattr(h, "content", None)
+        if not text:
+            continue
+        remaining = budget_chars - used - 20
+        if remaining <= 0:
+            break
+        snippet = text if len(text) <= remaining else text[:remaining]
+        pieces.append(snippet)
+        used += len(snippet) + 20
+    return "\n---\n".join(pieces)
+
+
+def _should_enrich(route_class: str) -> bool:
+    """Claude Code routes are byte-preserve on the wire — the ONLY place
+    we can add context is here in the pre-send hook. For non-CC routes
+    the proxy's context-enrichment Stage handles it; duplicating here
+    would double-inject.
+    """
+    return route_class.startswith("claude-code-")
+
+
 def _journal_write(session_id: str, tokens_est: int, cost_est: float,
                    prompt_preview: str, route_class: str) -> None:
     """Record this cycle in the session journal (best-effort).
@@ -253,6 +372,63 @@ def run(payload: Dict[str, Any]) -> int:
     _journal_write(session_id, tokens_est, cost_est, prompt_preview, route_class)
     _record_daily_cost(cost_est)
 
+    # Active pre-send enrichment — the ONLY place tokenpak can add
+    # context on byte-preserve routes (claude-code-*). The proxy's
+    # ContextEnrichmentStage is correctly Policy-gated off for
+    # byte-preserve, so we must do it here or not at all.
+    enriched_parts: list[str] = []
+    credit_summary: list[str] = []
+
+    if _should_enrich(route_class) and os.environ.get(
+        "TOKENPAK_COMPANION_ENRICH", "1"
+    ) != "0":
+        # 1. Capsule — if the user has an active session capsule, inject it.
+        capsule = _load_active_capsule(session_id)
+        if capsule:
+            enriched_parts.append(
+                "# tokenpak capsule (session memory)\n" + capsule
+            )
+            avoided = len(capsule) // 4
+            saved_usd = avoided * rate / 1_000_000
+            _journal_write_savings(session_id, avoided, saved_usd, "capsule")
+            credit_summary.append(f"capsule +{avoided} tok")
+
+        # 2. Vault context — query BlockStore with the user's prompt.
+        #    Only for prompts that clear the relevance gate (avoid
+        #    polluting trivial turns).
+        min_query_tokens = int(
+            os.environ.get("TOKENPAK_COMPANION_MIN_QUERY_TOKENS", "50")
+        )
+        if len(prompt_text) // 4 >= min_query_tokens:
+            budget_chars = int(
+                os.environ.get("TOKENPAK_COMPANION_INJECT_BUDGET", "2000")
+            )
+            vault_ctx = _query_vault_context(prompt_text, budget_chars)
+            if vault_ctx:
+                enriched_parts.append(
+                    "# tokenpak vault context\n" + vault_ctx
+                )
+                added = len(vault_ctx) // 4
+                # Vault enrichment ADDS tokens — recorded as negative
+                # savings so status can render both credit + cost.
+                _journal_write_savings(
+                    session_id, -added, -(added * rate / 1_000_000),
+                    "vault-enrichment",
+                )
+                credit_summary.append(f"vault +{added} tok")
+
+    # Emit mutation to Claude Code via the additionalContext mechanism
+    # (hookSpecificOutput.additionalContext gets prepended to the
+    # user's prompt without replacing it).
+    if enriched_parts:
+        payload_out = {
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": "\n\n".join(enriched_parts),
+            }
+        }
+        print(json.dumps(payload_out))
+
     # Visible status line — shown by Claude Code's TUI under the input.
     if os.environ.get("TOKENPAK_COMPANION_SHOW_COST", "1") != "0":
         parts = [f"tokenpak: ~{tokens_est:,} tokens"]
@@ -262,6 +438,7 @@ def run(payload: Dict[str, Any]) -> int:
             pct = (daily_total / budget) * 100 if budget else 0
             if pct >= 50:
                 parts.append(f"budget {pct:.0f}%")
+        parts.extend(credit_summary)
         print("  ".join(parts), file=sys.stderr)
 
     return 0
