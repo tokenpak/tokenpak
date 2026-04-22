@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.092] - 2026-04-22
+
+### Added — 1.3.0-α (foundation)
+First phase of the approved 1.3.0 Claude Code capability restoration. Plumbing only — no user-facing behavior changes yet; every existing flow behaves identically. Lays the architectural base so β–ε can plug in cleanly.
+
+- **`tokenpak.core.routing`** — canonical protocol primitives:
+  - `RouteClass` enum (9 values): `claude-code-{tui,cli,tmux,sdk,ide,cron}`, `anthropic-sdk`, `openai-sdk`, `generic`.
+  - `Policy` dataclass: typed per-request capability flags (`body_handling`, `cache_ownership`, `injection_enabled` + `injection_budget_chars` + `injection_min_query_tokens`, `dlp_mode`, `compression_eligible`, `ttl_ordering_enforcement`, `profile`, `capture_session_id_header`, `extras`).
+- **`tokenpak.services.routing_service.classifier.RouteClassifier`** — the single authoritative classifier. Inputs: `Request` (headers + body fingerprint) or env markers. Outputs: `RouteClass`. Never raises. No other subsystem re-implements route detection.
+- **`tokenpak.services.policy_service.resolver.PolicyResolver`** + 9 YAML preset files (`presets/*.yaml`) — loads `RouteClass`→`Policy` mapping at import time. Env overrides via `TOKENPAK_POLICY_<FIELD>` (only rewrites typed fields — typos are ignored, not silently accepted).
+- **`tokenpak.services.request_pipeline.classify_stage.ClassifyStage`** — first-in-pipeline Stage that attaches `route_class` + `policy` onto `PipelineContext`. Also extracts the session-id header named by the Policy (e.g. `x-claude-code-session-id`) onto `Request.metadata["session_id"]`.
+- **`PipelineContext`** (extend) gains `route_class: RouteClass | None` and `policy: Policy | None` fields. Every future stage branches on `ctx.policy.<flag>`, not on `ctx.route_class` directly.
+
+### Refactored — existing 1.2.x behavior retrofitted onto the α architecture
+- **`proxy/server.py` attribution** — the inline `cache_origin` heuristic (1.2.8) now derives from `Policy.cache_ownership`. For client-owned routes (all `claude-code-*`) origin is `client` immediately; for proxy-owned routes (`anthropic-sdk`) origin starts `unknown` and promotes to `proxy` only when the request_hook actually mutates the body. "Never over-claim" invariant preserved.
+- **`companion/hooks/pre_send.py`** — restored in 1.2.9 as a full token-estimate + cost-preview + budget-gate + journal pipeline; now calls `RouteClassifier.classify_from_env()` and tags the canonical `route_class` onto every journal row. Single source of truth for the "is this Claude Code?" question across proxy + companion.
+
+### Tests
+- 30 new tests under `tests/services/routing/` and `tests/services/policy/`. 344/0 baseline unchanged.
+
+### Import contracts
+- 5/5 `.importlinter` KEPT. Added allowlist entries for the new proxy→services classify flow + the §5.2-C marker on `companion/hooks/pre_send.py` for its classifier import.
+
+### Next
+- **1.2.093 (1.3.0-β):** DLP scanner + context-enrichment Stage, both gated by `Policy.dlp_mode` + `Policy.injection_enabled`. Default policies keep β a no-op until explicitly opted in.
+
 ## [1.2.091] - 2026-04-22
 
 ### Changed

@@ -1,0 +1,14 @@
+# claude-code-cron — non-interactive, scheduled Claude Code invocations.
+# Higher DLP posture (block) because cron jobs often touch secrets and
+# there's no interactive user to review warnings.
+
+body_handling: byte_preserve
+cache_ownership: client
+injection_enabled: false
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: block                   # no human in the loop → block-on-secret
+compression_eligible: false
+ttl_ordering_enforcement: true
+profile: claude-code-cron
+capture_session_id_header: x-claude-code-session-id

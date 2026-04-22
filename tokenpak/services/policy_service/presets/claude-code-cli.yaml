@@ -1,0 +1,16 @@
+# claude-code-cli — Claude Code in --print / scripted mode.
+#
+# Same byte-preserve contract as TUI. Differentiated mostly for telemetry
+# + dashboard grouping + possible per-mode UX tuning later (e.g. no TUI
+# status line since there's no interactive terminal).
+
+body_handling: byte_preserve
+cache_ownership: client
+injection_enabled: false
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn
+compression_eligible: false
+ttl_ordering_enforcement: true
+profile: claude-code-cli
+capture_session_id_header: x-claude-code-session-id

@@ -1,0 +1,15 @@
+# generic — catch-all for unidentifiable traffic. Conservative defaults.
+# The DEFAULT_POLICY constant in core/routing/policy.py mirrors this;
+# the YAML exists so operators can retune "unknown client" behavior
+# without touching Python code.
+
+body_handling: mutate
+cache_ownership: none
+injection_enabled: false
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn
+compression_eligible: true
+ttl_ordering_enforcement: false
+profile: generic
+capture_session_id_header: null

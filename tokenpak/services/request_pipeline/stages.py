@@ -22,7 +22,11 @@ policy gates see the compressed request. Dispatch is the terminal stage.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from tokenpak.core.routing.policy import Policy
+    from tokenpak.core.routing.route_class import RouteClass
 
 from ..request import Request
 from ..response import Chunk, Response
@@ -35,6 +39,12 @@ class PipelineContext:
     Stages may add keys to ``extras`` (e.g. cache_key, routing_decision)
     to communicate with later stages. ``short_circuit`` lets a stage
     (like cache) return a response without running subsequent stages.
+
+    Classification fields (``route_class``, ``policy``) are populated by
+    the first pipeline stage (``classify_stage``). Every downstream
+    stage branches on ``policy`` fields — not on ``route_class``
+    directly — so capability tuning happens in YAML presets rather
+    than Python code.
     """
 
     request: Request
@@ -42,6 +52,11 @@ class PipelineContext:
     short_circuit: bool = False
     stage_telemetry: dict[str, Any] = field(default_factory=dict)
     extras: dict[str, Any] = field(default_factory=dict)
+    # Classification — filled in by classify_stage at the top of the
+    # pipeline. Before that stage runs these are sentinels; any stage
+    # reading them before classify_stage is a boundary violation.
+    route_class: "RouteClass | None" = None
+    policy: "Policy | None" = None
 
 
 @runtime_checkable

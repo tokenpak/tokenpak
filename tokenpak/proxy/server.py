@@ -612,18 +612,50 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-            # Attribution: classify who's managing the cache_control on
-            # this request BEFORE the proxy modifies anything.
-            # - 'client' : body already has cache_control → client/platform
-            #              manages caching; tokenpak is passthrough for cache.
-            # - 'unknown': body has no cache_control yet. If the proxy's
-            #              request_hook adds blocks below, we bump to 'proxy'.
-            # Never over-claim: if we can't tell, we prefer 'client'.
-            _cache_origin = "unknown"
+            # Route classification + policy resolution (1.3.0-α).
+            # Single call, single source of truth. Every downstream
+            # policy-driven decision reads `_policy.<flag>` instead of
+            # re-inspecting headers or body bytes itself.
             try:
-                if body and (b'"cache_control"' in body):
-                    _cache_origin = "client"
+                from tokenpak.services.request import Request as _SvcRequest
+                from tokenpak.services.request_pipeline.classify_stage import (
+                    ClassifyStage as _ClassifyStage,
+                )
+                from tokenpak.services.request_pipeline.stages import (
+                    PipelineContext as _PipelineContext,
+                )
+
+                _svc_req = _SvcRequest(
+                    body=body or b"",
+                    headers=dict(self.headers),
+                    metadata={"target_url": target_url},
+                )
+                _ctx = _PipelineContext(request=_svc_req)
+                _ClassifyStage().apply_request(_ctx)
+                _route_class = _ctx.route_class
+                _policy = _ctx.policy
             except Exception:
+                # Classifier never raises, but defensively fall back to
+                # the generic (conservative) policy if something goes
+                # wrong during import.
+                from tokenpak.core.routing.policy import DEFAULT_POLICY as _policy
+                from tokenpak.core.routing.route_class import RouteClass as _RC
+                _route_class = _RC.GENERIC
+
+            # Attribution: derive origin from Policy.cache_ownership.
+            # "client"  → upstream caller owns cache_control (byte_preserve
+            #             routes like claude-code-*). Hits credit the
+            #             platform, never tokenpak.
+            # "proxy"   → tokenpak owns cache_control. If the request_hook
+            #             below actually modifies the body, hits credit
+            #             tokenpak.
+            # "none"    → no cache_control involvement; hits (if any) are
+            #             unattributed.
+            if _policy.cache_ownership == "client":
+                _cache_origin = "client"
+            elif _policy.cache_ownership == "proxy":
+                _cache_origin = "unknown"  # promoted below if hook mutates
+            else:
                 _cache_origin = "unknown"
             _body_before_hook = body
 
@@ -632,12 +664,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
                         body, model, trace
                     )
-                    # If the hook actually modified the body AND the client
-                    # hadn't marked it, tokenpak is now responsible for the
-                    # cache_control blocks → credit tokenpak for any hits.
-                    if _cache_origin == "unknown" and body != _body_before_hook:
-                        if body and (b'"cache_control"' in body):
-                            _cache_origin = "proxy"
+                    # Promote to "proxy" origin only when Policy says
+                    # tokenpak may own the cache AND the hook actually
+                    # added blocks. Never over-claim on a client-owned
+                    # route.
+                    if (
+                        _policy.cache_ownership == "proxy"
+                        and body != _body_before_hook
+                        and body
+                        and (b'"cache_control"' in body)
+                    ):
+                        _cache_origin = "proxy"
                 except Exception as hook_err:
                     # Graceful degradation: compression failed — forward original request unchanged.
                     # The user still gets a response; we log and track the event.

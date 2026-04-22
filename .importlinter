@@ -190,6 +190,27 @@ ignore_imports =
     tokenpak.cli._impl -> tokenpak.companion.launcher
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
+    ;
+    ; === 1.3.0-α: route classifier is a pure local helper (§5.2-C) ===
+    ; The classifier is stateless and has no side effects — it only
+    ; reads headers/body/env to assign a RouteClass. Companion's hook
+    ; needs this answer to tag journal rows with the same taxonomy the
+    ; proxy uses; proxy's wire handler calls the same classifier so
+    ; there is exactly one definition. Every entrypoint importing the
+    ; classifier carries a `# tokenpak: §5.2-exception — C — <reason>`
+    ; marker in the call site.
+    tokenpak.companion.hooks.pre_send -> tokenpak.services.routing_service.classifier
+    ;
+    ; === 1.3.0-α: proxy.server dispatches to services via classify_stage ===
+    ; proxy/ is a transport shell around services/ (Architecture §1.3);
+    ; it must be allowed to invoke the canonical pipeline stages. These
+    ; imports are NOT §5.2 exceptions — they are the intended direction
+    ; (proxy -> services). Listed here because the forbidden-modules
+    ; rule covers every source in the entrypoint list and proxy is not
+    ; an entrypoint, but the cli → proxy chain surfaces transitively.
+    tokenpak.proxy.server -> tokenpak.services.request
+    tokenpak.proxy.server -> tokenpak.services.request_pipeline.classify_stage
+    tokenpak.proxy.server -> tokenpak.services.request_pipeline.stages
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)

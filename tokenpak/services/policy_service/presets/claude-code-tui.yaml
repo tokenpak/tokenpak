@@ -1,0 +1,17 @@
+# claude-code-tui — Claude Code interactive terminal (primary consumption mode).
+#
+# Body is byte-preserved because OAuth billing inspects exact payload
+# bytes. Cache control is owned entirely by Claude Code (we only observe,
+# never claim credit). Enrichment via MCP tools the model calls (not via
+# proxy-side splicing).
+
+body_handling: byte_preserve
+cache_ownership: client
+injection_enabled: false          # wire-side enrichment disabled; MCP tools deliver context
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn                    # detect secrets but do NOT rewrite bytes (byte_preserve)
+compression_eligible: false       # no proxy-side compression on CC route
+ttl_ordering_enforcement: true    # Claude Code emits interleaved 1h/5m; fix in place
+profile: claude-code-tui
+capture_session_id_header: x-claude-code-session-id

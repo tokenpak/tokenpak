@@ -1,0 +1,12 @@
+# openai-sdk — direct OpenAI SDK traffic.
+
+body_handling: mutate
+cache_ownership: none             # OpenAI's cache model is server-side, opaque to us
+injection_enabled: true
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn
+compression_eligible: true
+ttl_ordering_enforcement: false   # OpenAI has no ttl-ordering rule
+profile: openai-sdk
+capture_session_id_header: null

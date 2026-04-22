@@ -1,0 +1,13 @@
+# anthropic-sdk — direct Anthropic SDK traffic (API-key auth, not OAuth).
+# Full pipeline eligibility — proxy may compress, enrich, manage cache.
+
+body_handling: mutate
+cache_ownership: proxy            # tokenpak places deterministic cache breakpoints
+injection_enabled: true
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn
+compression_eligible: true
+ttl_ordering_enforcement: true    # harmless on SDK; belt and suspenders
+profile: anthropic-sdk
+capture_session_id_header: null

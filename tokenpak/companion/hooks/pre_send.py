@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
+# tokenpak: §5.2-exception — C — The hook imports
+# `services.routing_service.classifier` to tag journal rows with the
+# canonical RouteClass. Classification is a stateless, side-effect-free
+# local lookup (no provider invoked), keeping the companion's local UX
+# state aligned with the proxy's taxonomy. Single source of truth.
 """UserPromptSubmit hook — pre-send pipeline for the tokenpak companion.
 
 Runs on every Claude Code prompt submit. Must stay fast (< 100ms) because
@@ -115,8 +120,15 @@ def _record_daily_cost(cost_est: float) -> None:
 
 
 def _journal_write(session_id: str, tokens_est: int, cost_est: float,
-                   prompt_preview: str) -> None:
-    """Record this cycle in the session journal (best-effort)."""
+                   prompt_preview: str, route_class: str) -> None:
+    """Record this cycle in the session journal (best-effort).
+
+    ``route_class`` is the value of the canonical
+    :class:`tokenpak.core.routing.route_class.RouteClass` enum assigned
+    by the shared classifier. Stamping it here keeps every journal row
+    attributable to the same taxonomy the proxy uses — no parallel
+    notion of "is this Claude Code?".
+    """
     try:
         _JOURNAL_DB.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(_JOURNAL_DB))
@@ -141,6 +153,7 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float,
                 json.dumps({
                     "tokens_est": tokens_est,
                     "cost_est": round(cost_est, 6),
+                    "route_class": route_class,
                 }),
             ),
         )
@@ -148,6 +161,24 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float,
         conn.close()
     except Exception:
         pass
+
+
+def _resolve_route_class() -> str:
+    """Best-effort: ask the shared classifier for the current route class.
+
+    Falls back to ``"generic"`` if the services layer isn't importable
+    (e.g. during a partial install). Never raises — this is
+    performance-critical pre-send code.
+    """
+    try:
+        # §5.2-C — pure local helper: the companion hook needs the
+        # RouteClass name to stamp its local journal row. We're not
+        # doing proxy/services execution here.
+        from tokenpak.services.routing_service.classifier import get_classifier
+
+        return get_classifier().classify_from_env().value
+    except Exception:
+        return "generic"
 
 
 def run(payload: Dict[str, Any]) -> int:
@@ -213,8 +244,13 @@ def run(payload: Dict[str, Any]) -> int:
             }))
             return 2
 
+    # Tag the journal row with the canonical route class so status +
+    # dashboards can group companion activity the same way they group
+    # proxy-side traffic. Single source of truth.
+    route_class = _resolve_route_class()
+
     # Persist journal + running cost (best-effort, never blocks the hook).
-    _journal_write(session_id, tokens_est, cost_est, prompt_preview)
+    _journal_write(session_id, tokens_est, cost_est, prompt_preview, route_class)
     _record_daily_cost(cost_est)
 
     # Visible status line — shown by Claude Code's TUI under the input.

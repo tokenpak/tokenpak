@@ -1,0 +1,12 @@
+# claude-code-ide — Claude Code IDE extension traffic.
+
+body_handling: byte_preserve
+cache_ownership: client
+injection_enabled: false
+injection_budget_chars: 2000
+injection_min_query_tokens: 50
+dlp_mode: warn
+compression_eligible: false
+ttl_ordering_enforcement: true
+profile: claude-code-ide
+capture_session_id_header: x-claude-code-session-id
