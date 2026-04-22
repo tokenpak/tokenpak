@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.9] - 2026-04-22
+
+### Fixed
+- **Companion pre-send hook was a skeleton — restored the full pipeline.** `tokenpak/companion/hooks/pre_send.py` had been labelled "Wave 1 skeleton" (it only logged a line to stderr and returned 0). Every feature that used to run on `UserPromptSubmit` for `tokenpak claude` was silently no-op. Restored the pipeline from commit `e5b248e67a`:
+  1. **Token estimate** — transcript file-size + prompt text, char // 4 (kept stdlib-only so the hook stays <100ms).
+  2. **Cost estimate** — per-model input rate (opus $15 / sonnet $3 / haiku $0.80 per 1M tokens) read from `TOKENPAK_COMPANION_MODEL`.
+  3. **Budget gate** — if `TOKENPAK_COMPANION_BUDGET` is set and the projected total exceeds it, the hook returns exit 2 + `hookSpecificOutput.decision="block"` JSON so Claude Code blocks the send.
+  4. **Journal write** — every cycle appends to `~/.tokenpak/companion/journal.db` (schema: `entries(session_id, timestamp, entry_type, content, metadata_json)`) so cross-session analytics, `session_info` MCP tool, and the status fleet-savings reader all see the activity.
+  5. **Daily-cost accumulator** — appends to `~/.tokenpak/companion/budget.db`.
+  6. **TUI status line** — stderr one-liner shown under the Claude Code input: `tokenpak: ~11 tokens  est $0.0000`.
+- Accepts both the current `prompt` field and the Wave-1 legacy `message` field so older settings.json files still work.
+- Works in both TUI and `--print` / cron modes (UserPromptSubmit fires in both since Claude Code 2.1.104).
+
+### Note
+- The MCP tools (`estimate_tokens`, `check_budget`, `prune_context`, `load_capsule`, `journal_read`, `journal_write`, `session_info`) were already registered — Claude Code can invoke them at any point during a session. The hook restoration makes the **automatic** per-prompt pipeline work again.
+
 ## [1.2.8] - 2026-04-22
 
 ### Fixed
