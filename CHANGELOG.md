@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.7] - 2026-04-22
+
+### Fixed
+- **`tokenpak claude` UserPromptSubmit hook no longer fails** with `ImportError: cannot import name '__version__' from 'tokenpak'`. Root cause: Claude Code ran the hook with `cwd=/home/<user>`, which caused Python to interpret the sibling `tokenpak/` directory (project repo root) as a namespace package that shadows the editable install. The companion launcher's `settings.json` hook now uses `python3 -P -m …` (Python 3.11+ flag that suppresses cwd from sys.path), so the editable finder resolves first. Re-run `tokenpak claude` to regenerate the hook config; no other action needed.
+- **Proxy enforces Anthropic's `cache_control` TTL-ordering rule.** Anthropic returns HTTP 400 when a `ttl='1h'` block appears after a default-ttl (`5m`) block in document order (tools → system → messages.content). The proxy's own deterministic-breakpoint pass was adding 5m markers to the last stable system block, while clients like Claude Code place 1h markers in `messages[].content[]`. Added `enforce_ttl_ordering(body)` as a final pass that walks the full document, finds the last explicit-TTL position, and strips every default-TTL `cache_control` that precedes it. No-op when no explicit-TTL blocks are present.
+
 ## [1.2.6] - 2026-04-22
 
 ### Fixed

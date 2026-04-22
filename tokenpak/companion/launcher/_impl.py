@@ -33,7 +33,13 @@ def _write_mcp_json(config: CompanionConfig, run_dir: Path) -> Path:
 def _write_settings_json(config: CompanionConfig, run_dir: Path) -> Path:
     """Generate settings.json with UserPromptSubmit hook pointing to companion hook module."""
     settings_path = run_dir / "settings.json"
-    hook_cmd = f"{sys.executable} -m {config.hook_module}"
+    # `-P` suppresses adding the cwd to sys.path. Without it, running
+    # from a directory that has a sibling `tokenpak/` dir (like the repo
+    # root) makes Python resolve `import tokenpak` to that namespace
+    # directory, which has no `__version__` and bypasses the editable
+    # install finder. Claude Code's hook runs with cwd = the project
+    # dir, which triggers exactly that collision for repo-local work.
+    hook_cmd = f"{sys.executable} -P -m {config.hook_module}"
     payload = {
         "hooks": {
             "UserPromptSubmit": [

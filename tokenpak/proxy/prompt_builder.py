@@ -77,7 +77,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,125 @@ def _mark_message_content_cacheable(message: dict[str, Any]) -> tuple[dict[str, 
 
 def apply_stable_cache_control(body_bytes: bytes) -> bytes:
     """Backward-compatible entrypoint for deterministic cache breakpoints."""
-    return apply_deterministic_cache_breakpoints(body_bytes)
+    out = apply_deterministic_cache_breakpoints(body_bytes)
+    # Enforce Anthropic's TTL-ordering rule: longer-TTL blocks (`ttl: 1h`)
+    # must not come after shorter-TTL or default-TTL blocks in document
+    # order. Our `apply_deterministic_cache_breakpoints` adds default-TTL
+    # (5m) blocks; if the caller (e.g. Claude Code) already placed 1h
+    # blocks later, Anthropic returns 400. Fix by stripping any
+    # default-TTL cache_control that appears before the LAST explicit-TTL
+    # position across system → tools → messages document order.
+    return enforce_ttl_ordering(out)
+
+
+def _cc_ttl(block: Any) -> Optional[str]:
+    """Return the ttl of a cache_control block, or None if no cache_control.
+
+    Treats `cache_control: {type: ephemeral}` with no explicit `ttl` as
+    default-TTL (represented here as the sentinel string '5m', which
+    matches Anthropic's default).
+    """
+    if not isinstance(block, dict):
+        return None
+    cc = block.get("cache_control")
+    if not isinstance(cc, dict):
+        return None
+    return str(cc.get("ttl", "5m"))
+
+
+def _strip_cache_control(block: Any) -> Any:
+    """Return a copy of the block with cache_control removed."""
+    if isinstance(block, dict) and "cache_control" in block:
+        out = dict(block)
+        out.pop("cache_control", None)
+        return out
+    return block
+
+
+def enforce_ttl_ordering(body_bytes: bytes) -> bytes:
+    """Strip default-TTL (5m) cache_control blocks that precede any explicit-TTL
+    (e.g. 1h) cache_control block in document order.
+
+    Document order per Anthropic: ``tools`` → ``system`` → ``messages.content``.
+    Within each list, position order. The proxy adds default-TTL markers to
+    the last stable system block; if the client (Claude Code, Anthropic SDK)
+    has already inserted ``ttl: 1h`` blocks later in the document, those
+    proxy-added markers become an ordering violation that fails with HTTP 400.
+
+    Safe to apply unconditionally — if there are no explicit-TTL blocks, no
+    stripping happens.
+    """
+    try:
+        data = json.loads(body_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return body_bytes
+
+    # Walk document order collecting (section, index, sub_index, ttl).
+    # sub_index is used for system/messages where content is a list.
+    positions: list[tuple[str, int, Optional[int], str]] = []
+
+    tools = data.get("tools")
+    if isinstance(tools, list):
+        for i, blk in enumerate(tools):
+            ttl = _cc_ttl(blk)
+            if ttl is not None:
+                positions.append(("tools", i, None, ttl))
+
+    system = data.get("system")
+    if isinstance(system, list):
+        for i, blk in enumerate(system):
+            ttl = _cc_ttl(blk)
+            if ttl is not None:
+                positions.append(("system", i, None, ttl))
+
+    messages = data.get("messages")
+    if isinstance(messages, list):
+        for mi, msg in enumerate(messages):
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if isinstance(content, list):
+                for ci, blk in enumerate(content):
+                    ttl = _cc_ttl(blk)
+                    if ttl is not None:
+                        positions.append(("messages", mi, ci, ttl))
+
+    # Find the last explicit-TTL (non-default, non-5m) position.
+    last_explicit_idx: Optional[int] = None
+    for idx, (_, _, _, ttl) in enumerate(positions):
+        if ttl != "5m":
+            last_explicit_idx = idx
+
+    if last_explicit_idx is None:
+        # No explicit-TTL blocks at all → nothing to fix.
+        return body_bytes
+
+    # Strip every default-TTL cache_control that comes before the last
+    # explicit-TTL position.
+    changed = False
+    for idx in range(last_explicit_idx):
+        section, i, sub_i, ttl = positions[idx]
+        if ttl != "5m":
+            continue
+        if section == "tools":
+            data["tools"][i] = _strip_cache_control(data["tools"][i])
+            changed = True
+        elif section == "system":
+            data["system"][i] = _strip_cache_control(data["system"][i])
+            changed = True
+        elif section == "messages":
+            msg = data["messages"][i]
+            if isinstance(msg, dict) and isinstance(msg.get("content"), list):
+                msg["content"][sub_i] = _strip_cache_control(msg["content"][sub_i])
+                changed = True
+
+    if not changed:
+        return body_bytes
+
+    try:
+        return json.dumps(data, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError):
+        return body_bytes
 
 
 def apply_deterministic_cache_breakpoints(body_bytes: bytes) -> bytes:
@@ -1089,6 +1207,7 @@ __all__ = [
     "DeterministicPromptPack",
     "apply_stable_cache_control",
     "apply_deterministic_cache_breakpoints",
+    "enforce_ttl_ordering",
     "inject_with_cache_boundary",
     "classify_system_blocks",
     "build_stable_prefix",
