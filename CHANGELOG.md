@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.094] - 2026-04-22
+
+### Added — 1.3.0-γ (platform + backend selector + OAuth backend)
+- **`services.routing_service.platform`** — canonical `detect_platform()` + `detect_platform_name()`; legacy `agent/adapters/registry` remains as deprecation shim.
+- **`services.routing_service.backends`** — Backend protocol + `AnthropicAPIBackend` (httpx) + `AnthropicOAuthBackend` (shells out to `claude` CLI for OAuth billing; 502/504 on unavailable — never silently falls back to API-key path).
+- **`services.routing_service.backend_selector.BackendSelector`** — `X-TokenPak-Backend` header overrides route default; Claude Code routes default to OAuth.
+
+### Tests
+- 14 new tests. 390/0 fail baseline (was 376 at β; zero regressions).
+
 ## [1.2.093] - 2026-04-22
 
 ### Added — 1.3.0-β (DLP + context enrichment)
