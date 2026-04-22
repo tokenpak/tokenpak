@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.001] - 2026-04-22
+
+### Fixed
+- **`tokenpak claude` MCP server no longer fails with "1 MCP server failed".** mcp.json invoked the server as `python3 -m tokenpak.companion.mcp_server` without the `-P` flag. Claude Code launches MCP servers with its own cwd (often the user's project dir); when that dir contained a sibling `tokenpak/` directory, Python resolved `import tokenpak` to the namespace directory and died with `ImportError: cannot import name '__version__' from 'tokenpak'`. Same class of bug the UserPromptSubmit hook hit in 1.2.7 — `-P` mitigation now applied to both spawn paths (hook and MCP server). Re-run `tokenpak claude` or `tokenpak integrate claude-code` to regenerate mcp.json.
+
 ## [1.3.0] - 2026-04-22
 
 **Claude Code capability restoration complete.** All five approved phases (α β γ δ ε) live. Architecture: route classifier + Policy as the single branching signal; DLP + vault enrichment + backend selection + diagnostics + dashboard product surface all plug into the canonical pipeline stages. No duplicate proxy-vs-companion implementations. Legacy code was referenced as behavioral spec only; nothing was restored-as-is.

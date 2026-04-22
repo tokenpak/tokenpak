@@ -11,13 +11,26 @@ from tokenpak.companion.config import CompanionConfig
 
 
 def _write_mcp_json(config: CompanionConfig, run_dir: Path) -> Path:
-    """Generate mcp.json pointing to the companion MCP server module."""
+    """Generate mcp.json pointing to the companion MCP server module.
+
+    Uses ``-P`` (Python 3.11+) to suppress prepending cwd to sys.path.
+    Same mitigation as the UserPromptSubmit hook: Claude Code launches
+    MCP servers with its own cwd (typically the user's project dir),
+    and if that dir happens to contain a sibling ``tokenpak/`` directory
+    (as the tokenpak repo root does), Python would resolve ``import
+    tokenpak`` to the namespace directory instead of the editable-
+    install finder, causing
+    ``ImportError: cannot import name '__version__' from 'tokenpak'``.
+
+    ``-P`` blocks that path collision deterministically — the editable
+    finder wins regardless of cwd.
+    """
     mcp_path = run_dir / "mcp.json"
     payload = {
         "mcpServers": {
             "tokenpak-companion": {
                 "command": sys.executable,
-                "args": ["-m", config.mcp_module],
+                "args": ["-P", "-m", config.mcp_module],
                 "env": {
                     "TOKENPAK_COMPANION_LOG_LEVEL": config.log_level,
                     "TOKENPAK_COMPANION_BUDGET_TOKENS": str(config.budget_tokens),
