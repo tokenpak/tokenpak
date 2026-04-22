@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.6] - 2026-04-22
+
+### Fixed
+- **Proxy no longer causes `Decompression error: ZlibError` in clients** (Claude Code, Anthropic SDK, OpenAI SDK). httpx's `.content` and `iter_bytes()` auto-decompress gzipped upstream responses, but the proxy was forwarding upstream's `Content-Encoding: gzip` header unchanged. Clients saw the gzip label on plaintext bytes and failed zlib inflation. Now strips `content-encoding` along with the other hop-by-hop headers on both the streaming and non-streaming response paths. Clients decompress (or don't) correctly based on the actual body they receive.
+
 ## [1.2.5] - 2026-04-21
 
 ### Fixed

@@ -745,11 +745,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     has_cache_control = False
                     for h_key, h_val in resp.headers.items():
                         h_lower = h_key.lower()
+                        # `content-encoding` is stripped because httpx's
+                        # iter_bytes() yields decoded (decompressed) bytes;
+                        # keeping upstream's gzip header would make the
+                        # client attempt to decompress plaintext bytes.
                         if h_lower in (
                             "connection",
                             "keep-alive",
                             "transfer-encoding",
                             "content-length",
+                            "content-encoding",
                         ):
                             continue
                         if h_lower == "content-type":
@@ -789,6 +794,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
                 self.send_response(resp.status_code)
+                # httpx auto-decompresses the response body when accessed via
+                # .content. Upstream's `Content-Encoding: gzip` header is now
+                # a lie for the bytes we forward — clients that trust it will
+                # hit a ZlibError trying to "decompress" the already-plaintext
+                # body. Strip content-encoding along with the hop-by-hop
+                # headers (content-length is already stripped because we might
+                # resize the body on future edits).
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
                     if h_lower in (
@@ -796,6 +808,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "keep-alive",
                         "transfer-encoding",
                         "content-length",
+                        "content-encoding",
                     ):
                         continue
                     self.send_header(h_key, h_val)
