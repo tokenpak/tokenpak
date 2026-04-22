@@ -22,12 +22,30 @@ from tokenpak.companion.hooks import pre_send
 
 from .conftest import (
     apply_scenario_env_override,
+    installed_validator_knows_schema,
     load_companion_scenarios,
     restore_scenario_env,
 )
 
 
-pytestmark = pytest.mark.conformance
+# Layer B validates captured rows against ``companion-journal-row``
+# (schema added in SC-01). The pinned PyPI validator 0.1.0 predates
+# that schema, so a standalone dev run against a plain pip install
+# skips this module gracefully. The SC-08 CI path installs the
+# validator editable from a registry checkout, which always carries
+# the full _SCHEMA_PATHS map — there the skip never fires.
+pytestmark = [
+    pytest.mark.conformance,
+    pytest.mark.skipif(
+        not installed_validator_knows_schema("companion-journal-row"),
+        reason=(
+            "installed tokenpak-tip-validator predates companion-journal-row "
+            "schema (SC-01). Install validator from a registry checkout to "
+            "run: pip install -e ./registry. See "
+            "tokenpak/_tip_schemas/README.md sync checklist."
+        ),
+    ),
+]
 
 
 _FIXTURES_DIR = Path(__file__).resolve().parent / "companion"

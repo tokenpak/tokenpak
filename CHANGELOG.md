@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-04-22
+
+### Fixed — release-gate hotfix
+
+Recovers the TIP-SC phase from a failed v1.3.3 release attempt (no PyPI publication; no GitHub Release page). The v1.3.3 tag is a burned attempt retained on history for auditability; v1.3.4 carries the same content plus the fix below.
+
+- **`release.yml` test step** no longer runs the `tests/conformance/` tree (`--ignore=tests/conformance`). The conformance suite is the canonical job of `tip-self-conformance.yml` per DECISION-SC-08-1; duplicating it in the release-gate required a registry checkout + `TOKENPAK_REGISTRY_ROOT` wiring that workflow intentionally does not carry. The v1.3.3 release failed at this step because the conformance tests couldn't resolve registry schemas.
+- **`tests/conformance/conftest.py::_discover_registry_root`** gains a 4th fallback to the vendored `tokenpak/_tip_schemas/` tree (via `importlib.resources`). Layer A + manifest + self-capability tests now run standalone in any installed env.
+- **New helper `installed_validator_knows_schema(name)`** + module/test-level `pytest.mark.skipif` gates on Layer B + the Layer-C journal smoke. Tests that depend on schemas added after the pinned PyPI validator's release skip gracefully instead of failing (mirrors the SC-07 runner's WARN convention on the pytest side). The SC-08 CI path (registry-editable install) has every schema; the skip never fires there.
+
+### No scope expansion
+
+No TIP-SC semantic changes. No workflow redesign. No cleanup mixed in. Version-scheme retirement (SC-09) stays in effect: `1.3.3` → `1.3.4`.
+
 ## [1.3.3] - 2026-04-22
+
+**Burned tag / failed release attempt — no PyPI publication, no GitHub Release page.** Content is identical to the v1.3.4 entry above (plus the release-gate hotfix). Tag retained on history for auditability.
 
 ### Added — TIP-1.0 self-conformance (Phase TIP-SC)
 

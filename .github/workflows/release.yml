@@ -47,7 +47,12 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/ -q --tb=short
+        # Release-gate scope: release-worthiness only. TIP-1.0 conformance
+        # is gated by .github/workflows/tip-self-conformance.yml (canonical
+        # gate per DECISION-SC-08-1); duplicating it here would require a
+        # registry checkout + TOKENPAK_REGISTRY_ROOT wiring this workflow
+        # intentionally does not carry.
+        run: pytest tests/ -q --tb=short --ignore=tests/conformance
 
       - name: Smoke test CLI
         run: python -m tokenpak.cli --help

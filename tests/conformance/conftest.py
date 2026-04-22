@@ -27,31 +27,70 @@ import pytest
 
 
 def _discover_registry_root() -> "Path | None":
-    """Locate a usable tokenpak/registry checkout for schema + validator resolution.
+    """Locate a usable schema root for TIP-1.0 validation.
 
     Resolution order:
     1. ``TOKENPAK_REGISTRY_ROOT`` env var (operator override).
     2. Sibling ``../registry`` relative to the tokenpak repo root —
        the layout the SC-08 GitHub Actions workflow checks out.
     3. ``$HOME/registry`` — common dev-box layout.
-    4. None — pytest proceeds and any test that depends on
+    4. Vendored ``tokenpak/_tip_schemas/`` shipped in the wheel
+       (SC-07). Makes the conformance suite runnable standalone in
+       any installed environment; the installed validator reads
+       schemas from this path when the higher-priority roots are
+       absent.
+    5. None — pytest proceeds and any test that depends on
        registry-only schemas degrades per SC-07's schema-unavailable
-       WARN convention.
+       WARN convention (module/test-level skipif gates in
+       test_layer_b_companion.py + test_layer_c_smoke.py honor it).
 
     The chosen root must contain ``schemas/tip/capabilities.schema.json``
     to be considered valid.
     """
-    candidates = []
+    candidates: list[Path] = []
     env_root = os.environ.get("TOKENPAK_REGISTRY_ROOT")
     if env_root:
         candidates.append(Path(env_root))
     tokenpak_repo_root = Path(__file__).resolve().parents[2]
     candidates.append(tokenpak_repo_root.parent / "registry")
     candidates.append(Path.home() / "registry")
+    # SC-07 vendored tree — always last so registry checkouts win
+    # (the registry has the latest _SCHEMA_PATHS map; the vendored
+    # tree only has schemas, not validator source).
+    try:
+        from importlib.resources import files as _files
+
+        vendored = _files("tokenpak").joinpath("_tip_schemas")
+        vendored_path = Path(str(vendored))
+        candidates.append(vendored_path)
+    except Exception:
+        pass
     for root in candidates:
         if (root / "schemas" / "tip" / "capabilities.schema.json").is_file():
             return root
     return None
+
+
+def installed_validator_knows_schema(schema_name: str) -> bool:
+    """Return True if the installed ``tokenpak_tip_validator`` knows the schema.
+
+    Guards Layer-B + Layer-C assertions that validate against schemas
+    added in SC-01 but not yet included in the pinned PyPI validator
+    (``tokenpak-tip-validator==0.1.0`` predates ``companion-journal-row``).
+    Running against a registry-editable install (SC-08 CI path) sees
+    the full _SCHEMA_PATHS map and this returns True for every schema.
+
+    Tests use this via ``pytest.mark.skipif(not
+    installed_validator_knows_schema('...'))`` so standalone dev-env
+    runs against a plain pip install gracefully skip the affected
+    assertions instead of failing — mirrors the SC-07 runner's WARN
+    convention on the pytest side.
+    """
+    try:
+        from tokenpak_tip_validator.schema import _SCHEMA_PATHS
+        return schema_name in _SCHEMA_PATHS
+    except Exception:
+        return False
 
 
 def pytest_configure(config):

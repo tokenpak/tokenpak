@@ -32,6 +32,8 @@ from tokenpak.companion.journal.store import JournalStore
 from tokenpak.core.contracts.capabilities import SELF_CAPABILITIES_PROXY
 from tokenpak.proxy.monitor import Monitor
 
+from .conftest import installed_validator_knows_schema
+
 
 pytestmark = [pytest.mark.conformance, pytest.mark.smoke]
 
@@ -143,6 +145,14 @@ def test_monitor_log_disk_artifact_and_observer_agree(conformance_observer):
     assert validate_against("telemetry-event", tip_row).ok
 
 
+@pytest.mark.skipif(
+    not installed_validator_knows_schema("companion-journal-row"),
+    reason=(
+        "installed tokenpak-tip-validator predates companion-journal-row "
+        "schema (SC-01). Install validator from a registry checkout to run: "
+        "pip install -e ./registry."
+    ),
+)
 def test_journal_store_disk_artifact_and_observer_agree(conformance_observer):
     """JournalStore.write_entry persists to SQLite AND the observer sees
     the same schema-valid companion-journal-row.
