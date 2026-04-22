@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.091] - 2026-04-22
+
+### Changed
+- **Versioning scheme** — patch iterations now use 3-digit zero-padded sub-patches (`1.2.091`, `1.2.092`, ...) instead of `1.2.10`, `1.2.11`. Better sort display and reserves `1.3.0` for the next approved major-implementation release (PEP 440 normalizes `1.2.091` → `1.2.91` on PyPI, so resolver ordering is unchanged: `1.2.9 < 1.2.91 < 1.2.92 < … < 1.3.0`).
+
+### Audit
+- **Claude Code integration gap audit** landed at `vault/02_COMMAND_CENTER/audits/2026-04-22-claude-code-integration-gap-audit.md`. Documents **9 memory-referenced features still missing** from the current tree (route classifier, policy table, vault bridge, DLP scanner, 6 `claude-code-*` profile presets, `X-TokenPak-Backend` delegation header, `x-claude-code-session-id` capture, `TOKENPAK_CC_INJECT_*` budget gate, per-host drift detector), plus ~14 unshipped tasks from the 2026-04-08 21-task CCI initiative. No feature code restored in this release — restoration is 1.3.0 scope pending approval.
+
 ## [1.2.9] - 2026-04-22
 
 ### Fixed
