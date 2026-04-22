@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schema/tokenpak-block-v1.0.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tokenpak/block-v1.json",
   "title": "TokenPak Block v1.0",
   "type": "object",
   "additionalProperties": false,
