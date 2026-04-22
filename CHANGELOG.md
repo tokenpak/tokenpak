@@ -5,13 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2026-04-22
+
+### Fixed — release-gate hotfix-3 (pin validity + preflight coverage)
+
+Recovers from a third release attempt that failed before publication (v1.3.5). Content identical to v1.3.3 through v1.3.5 plus two narrowly-scoped fixes; the preflight added in v1.3.5 is now extended so the same bug class cannot burn a tag again.
+
+- **`release.yml` SHA pins corrected** — two of the five pins ported from `publish.yml` during F-01 were invalid SHAs (not the actual tag commits):
+  - `actions/download-artifact@fa0a91b85d4f404e444306234a2a8284e0a91ef9` → **`@fa0a91b85d4f404e444e00e005971372dc801d16`** (the real v4.1.8)
+  - `pypa/gh-action-pypi-publish@76f52bc884231f62b3a5c8ae4dab2bd50e2e5720` → **`@67339c736fd9354cd4f8cb0b744f2b82a74b5c70`** (the real v1.12.3)
+
+  Both verified via `git ls-remote --tags` against the upstream repos. The three other F-01 pins (`actions/checkout@v4.2.2`, `actions/setup-python@v5.3.0`, `actions/upload-artifact@v4.6.0`) are valid and unchanged.
+
+- **New `validate-pins` preflight job in `release.yml`.** Runs before `test` on both `push:tags` and `workflow_dispatch`. Uses `git ls-remote --tags` to resolve every SHA-pinned action to its upstream commit and fails fast if any pin diverges. Closes the gap that let v1.3.5 burn — the prior preflight gated `release` + `publish` out of dispatch runs, so SHA pins in those jobs were never exercised before a real tag.
+
+### Why three burned tags
+
+v1.3.3 → v1.3.4 → v1.3.5 each revealed a distinct release-path bug that the preceding preflight did not cover: conformance tests needed a registry checkout; the CLI smoke step used a non-executable module path; a Python 3.12 tempdir race; and finally two invalid SHA pins. Each fix closed a class. v1.3.6 adds the preflight that would have caught the SHA class before any of them.
+
+### No scope expansion
+
+No TIP-SC semantic changes. No runtime behavior changes. No unrelated cleanup. No broader workflow redesign beyond the pin fixes + the single `validate-pins` job.
+
 ## [1.3.5] - 2026-04-22
 
 ### Fixed — release-gate hotfix-2
 
-Recovers from a second burned tag attempt. v1.3.3 failed on the release-gate test step; v1.3.4 got past that but failed on (a) the `python -m tokenpak.cli --help` smoke invocation and (b) a Python 3.12-only tempdir cleanup race in the Layer A conformance test. v1.3.5 carries the same content as v1.3.3/v1.3.4 plus three narrowly-scoped fixes.
+Recovers from two release attempts that failed before publication. v1.3.3 failed on the release-gate test step; v1.3.4 got past that but failed on (a) the `python -m tokenpak.cli --help` smoke invocation and (b) a Python 3.12-only tempdir cleanup race in the Layer A conformance test. v1.3.5 carries the same content as v1.3.3/v1.3.4 plus three narrowly-scoped fixes.
 
-Both v1.3.3 and v1.3.4 are burned attempts retained on history for auditability. No PyPI publication occurred for either. Users should install v1.3.5 directly.
+v1.3.3 and v1.3.4 are release attempts that failed before publication; tags retained for auditability. No PyPI publication occurred for either. Users should install v1.3.6 directly.
 
 - **`release.yml` Smoke test CLI step** uses `tokenpak --help` (installed console-script entry point) instead of `python -m tokenpak.cli --help`. `tokenpak.cli` is a package without `__main__.py`, so `-m` execution fails; the entry point has always been the correct end-user invocation.
 - **`tests/conformance/test_layer_a_pipeline.py`** — both `tempfile.TemporaryDirectory()` call sites use `ignore_cleanup_errors=True`. Monitor.log's async SQLite writer thread can still hold files in the tempdir when the test context exits; Python 3.12's `shutil.rmtree` surfaces this as `OSError` without the flag. The observer row (the thing the test asserts on) is captured synchronously before teardown; the disk artifact is incidental here.
@@ -23,11 +45,11 @@ No TIP-SC semantic changes. No broader workflow redesign. No unrelated cleanup. 
 
 ## [1.3.4] - 2026-04-22
 
-**Burned tag / failed release attempt — no PyPI publication, no GitHub Release page.** Failed at `Smoke test CLI` (`python -m tokenpak.cli` invocation bug) and at the Python 3.12 matrix leg of self-conformance (tempdir cleanup race). Tag retained on history for auditability. Fix lands in v1.3.5.
+**Release attempt failed before publication; tag retained for auditability.** No PyPI publication, no GitHub Release page. Failed at `Smoke test CLI` (`python -m tokenpak.cli` invocation bug) and at the Python 3.12 matrix leg of self-conformance (tempdir cleanup race). Fixes land in v1.3.5 (which itself failed — see v1.3.5 + v1.3.6 entries).
 
 ### Fixed — release-gate hotfix
 
-Recovered the TIP-SC phase from a failed v1.3.3 release attempt (no PyPI publication; no GitHub Release page). The v1.3.3 tag is a burned attempt retained on history for auditability; v1.3.4 carries the same content plus the fix below.
+Recovered the TIP-SC phase from a failed v1.3.3 release attempt (no PyPI publication; no GitHub Release page). The v1.3.3 tag is a release attempt that failed before publication; tag retained for auditability. v1.3.4 carries the same content plus the fix below.
 
 - **`release.yml` test step** no longer runs the `tests/conformance/` tree (`--ignore=tests/conformance`). The conformance suite is the canonical job of `tip-self-conformance.yml` per DECISION-SC-08-1; duplicating it in the release-gate required a registry checkout + `TOKENPAK_REGISTRY_ROOT` wiring that workflow intentionally does not carry. The v1.3.3 release failed at this step because the conformance tests couldn't resolve registry schemas.
 - **`tests/conformance/conftest.py::_discover_registry_root`** gains a 4th fallback to the vendored `tokenpak/_tip_schemas/` tree (via `importlib.resources`). Layer A + manifest + self-capability tests now run standalone in any installed env.
@@ -39,7 +61,7 @@ No TIP-SC semantic changes. No workflow redesign. No cleanup mixed in. Version-s
 
 ## [1.3.3] - 2026-04-22
 
-**Burned tag / failed release attempt — no PyPI publication, no GitHub Release page.** Content is identical to the v1.3.4 entry above (plus the release-gate hotfix). Tag retained on history for auditability.
+**Release attempt failed before publication; tag retained for auditability.** No PyPI publication, no GitHub Release page. Content is identical to the v1.3.4 entry above.
 
 ### Added — TIP-1.0 self-conformance (Phase TIP-SC)
 

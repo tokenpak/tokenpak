@@ -2,7 +2,7 @@
   "tip_version": "TIP-1.0",
   "id": "tokenpak-proxy",
   "name": "TokenPak Proxy",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "kind": "provider-profile",
   "capabilities": [
     "tip.byte-preserved-passthrough",
