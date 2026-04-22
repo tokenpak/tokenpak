@@ -62,6 +62,26 @@ def _write_system_prompt(config: CompanionConfig, run_dir: Path) -> Optional[Pat
     return prompt_path
 
 
+def _wire_proxy_env(env: dict) -> dict:
+    """Route Claude Code's outbound API traffic through the local TokenPak proxy.
+
+    Sets ANTHROPIC_BASE_URL and OPENAI_BASE_URL so requests hit
+    ``http://127.0.0.1:<TOKENPAK_PORT>`` (default 8766), where the proxy
+    can compress + meter + log them into monitor.db for ``tokenpak status``.
+
+    Respects any pre-existing values — users who have intentionally
+    overridden these (e.g. to a remote proxy) are not clobbered.
+    Suppressed entirely when ``TOKENPAK_PROXY_BYPASS=1`` is set.
+    """
+    if env.get("TOKENPAK_PROXY_BYPASS") == "1":
+        return env
+    port = env.get("TOKENPAK_PORT", "8766")
+    proxy_url = f"http://127.0.0.1:{port}"
+    env.setdefault("ANTHROPIC_BASE_URL", proxy_url)
+    env.setdefault("OPENAI_BASE_URL", f"{proxy_url}/v1")
+    return env
+
+
 def launch(
     config: Optional[CompanionConfig] = None,
     extra_args: Optional[List[str]] = None,
@@ -72,8 +92,13 @@ def launch(
     files persist across sessions — no cleanup is needed and the location is
     predictable for debugging.
 
+    Routes Claude Code's API traffic through the local TokenPak proxy by
+    setting ANTHROPIC_BASE_URL + OPENAI_BASE_URL in the child env. Set
+    ``TOKENPAK_PROXY_BYPASS=1`` to disable.
+
     When companion is disabled (``TOKENPAK_COMPANION_ENABLED=false``), passes
-    through directly to the ``claude`` binary with no extra flags.
+    through directly to the ``claude`` binary with no extra flags (but still
+    routes traffic through the proxy unless bypass is set).
 
     Args:
         config: Companion configuration.  Defaults to :meth:`CompanionConfig.from_env`.
@@ -82,14 +107,16 @@ def launch(
     if config is None:
         config = CompanionConfig.from_env()
 
+    env = _wire_proxy_env(dict(os.environ))
+
     if not config.enabled:
         cmd_args = ["claude"] + (extra_args or [])
         try:
-            os.execvp("claude", cmd_args)
+            os.execvpe("claude", cmd_args, env)
         except OSError:
             import subprocess  # noqa: PLC0415
 
-            subprocess.run(cmd_args, check=False)
+            subprocess.run(cmd_args, env=env, check=False)
         return
 
     run_dir = config.run_dir
@@ -111,8 +138,8 @@ def launch(
     cmd_args += extra_args or []
 
     try:
-        os.execvp("claude", cmd_args)
+        os.execvpe("claude", cmd_args, env)
     except OSError:
         import subprocess  # noqa: PLC0415
 
-        subprocess.run(cmd_args, check=False)
+        subprocess.run(cmd_args, env=env, check=False)

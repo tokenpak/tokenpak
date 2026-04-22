@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-04-21
+
+### Fixed
+- **`tokenpak claude` now actually routes traffic through the local proxy.** The companion launcher was exec-ing `claude` without setting `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`, so Claude Code's API calls bypassed the proxy entirely. Result: `tokenpak status` showed zero requests, `monitor.db` stayed empty, and every other dashboard was frozen even while Claude Code was active. The launcher now sets `ANTHROPIC_BASE_URL=http://127.0.0.1:$TOKENPAK_PORT` and `OPENAI_BASE_URL=…/v1` in the child process env (respects pre-existing values — does not clobber). Set `TOKENPAK_PROXY_BYPASS=1` to disable.
+
 ## [1.2.3] - 2026-04-21
 
 ### Fixed
