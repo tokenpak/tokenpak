@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-22
+
+**Claude Code capability restoration complete.** All five approved phases (α β γ δ ε) live. Architecture: route classifier + Policy as the single branching signal; DLP + vault enrichment + backend selection + diagnostics + dashboard product surface all plug into the canonical pipeline stages. No duplicate proxy-vs-companion implementations. Legacy code was referenced as behavioral spec only; nothing was restored-as-is.
+
+### Added — 1.3.0-ε (dashboard + inline savings + forecast)
+- **`dashboard.panels.PerModePanel`** — groups monitor.db rows by endpoint family, returns JSON-serialisable data for web/API/CLI renderers. Handles missing db gracefully.
+- **`alerts.inline_savings`** — `InlineSavingsEvent` + `build_event()` + `format_oneline()`. The TUI status-line renderer fits under Claude Code's input prompt.
+- **`services.telemetry_service.forecast`** — linear extrapolation over the last N days; reports 7-day + 30-day projections with a rising/flat/falling trend heuristic.
+
+### What 1.3.0 delivers end-to-end
+
+1. **`RouteClass` taxonomy** with 9 values + `Policy` dataclass (α). Single source of truth consumed by proxy, companion, CLI, dashboard.
+2. **Policy-gated pipeline** (β): DLPStage + ContextEnrichmentStage plug into the canonical `security` and `routing` slots. Byte-preserve protection mechanically enforced.
+3. **Backend selection** (γ): `X-TokenPak-Backend: claude-code` header delegation to OAuth path; SDK routes to the default API path. No silent fallback.
+4. **Adoption surfaces** (δ): `tokenpak integrate claude-code` one-shot, `tokenpak doctor --claude-code`, drift detector that catches the dist-info-shadow bug class.
+5. **Product surface** (ε): per-mode dashboard panel + inline savings events + cost forecast.
+
+### Tests
+- 88 new tests total across α–ε (30 α + 32 β + 14 γ + 8 δ + 17 ε — some with shared conftest).
+- 415 pass, 1 skipped, 1 xfailed, 10 deselected (pre-existing HTTP integration tests). Zero regressions over the 1.2.x baseline.
+
+### Architecture enforcement
+- `.importlinter`: 5/5 contracts KEPT at every phase. §5.2-C allowlist entries for the two valid entrypoint→services imports (companion classifier, CLI diagnostics).
+- `tip-check`: 4/4 PASS.
+- No ad-hoc `"claude-code" in …` branches outside `RouteClassifier`. Enforced by code review discipline, visible in the diff.
+
+### Migration notes
+- **No user-visible breaking changes.** Every existing 1.2.x flow continues to behave identically. Default policies keep new stages as no-ops on Claude Code routes until operators opt in.
+- **New env overrides:** `TOKENPAK_POLICY_<FIELD>` for per-field policy tuning; typos are silently ignored so mis-configured env can't create phantom fields.
+- **Public API additions:** `tokenpak.core.routing.{RouteClass, Policy}`; `tokenpak.services.routing_service.{classifier, backend_selector}`; `tokenpak.services.policy_service.{resolver, dlp_stage}`; `tokenpak.services.diagnostics.*`; `tokenpak.alerts.inline_savings.*`; `tokenpak.dashboard.panels.PerModePanel`; `tokenpak.services.telemetry_service.forecast`.
+
 ## [1.2.095] - 2026-04-22
 
 ### Added — 1.3.0-δ (integrate + doctor --claude-code + drift detector)

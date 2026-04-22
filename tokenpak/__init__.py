@@ -15,7 +15,7 @@ Sub-package imports:
 
 from __future__ import annotations
 
-__version__ = "1.2.095"
+__version__ = "1.3.0"
 __author__ = "TokenPak"
 __license__ = "Apache-2.0"
 __description__ = "Local proxy that compresses LLM context before it hits the API"
