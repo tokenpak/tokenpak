@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.093] - 2026-04-22
+
+### Added — 1.3.0-β (DLP + context enrichment)
+Two pipeline stages plug into the α foundation. Both are policy-gated — default preset policies keep them no-ops for Claude Code routes (byte_preserve + injection_enabled=false) until opted in.
+
+- **`tokenpak.security.dlp`** — single-implementation outbound secret scanner:
+  - `scanner.py` — `DLPScanner.scan()` + `scan_bytes()`. Stateless, safe to share.
+  - `rules.py` — 11 default rules: AWS access+secret, Stripe live+restricted, GitHub PAT + fine-grained, OpenAI (+ project keys), Anthropic, Google, Slack, PEM private keys.
+  - `modes.py` — `apply_mode(mode, body, findings)` → `DLPOutcome` with immutable decision. Modes: `off`, `warn` (log only), `redact` (inline rewrite), `block` (short-circuit). Unknown modes fail-open to `off`.
+  - `Finding.redacted()` — safe-to-log representation; never leaks the matched secret into logs.
+- **`services.policy_service.dlp_stage.DLPStage`** — request-pipeline Stage slot `security`. Reads `ctx.policy.dlp_mode`. Automatic `redact` → `warn` downgrade on `byte_preserve` routes so Claude Code OAuth billing contract is preserved even if operator mis-sets the policy. Short-circuits pipeline + sets `ctx.response` on `block`.
+- **`services.routing_service.context_enrichment.ContextEnrichmentStage`** — request-pipeline Stage slot `routing`. Gated by `ctx.policy.injection_enabled` AND `ctx.policy.body_handling == "mutate"`. Enforces `injection_budget_chars` (truncates concatenated hits) and `injection_min_query_tokens` (relevance gate skips trivial prompts). Appends vault context as a non-cached block after existing `system` content. Retriever is a dependency (testable); default falls back to `tokenpak.vault.blocks.BlockStore.default()` when available.
+
+### Architectural guarantees enforced in β
+- **No duplicate DLP implementation.** Same `DLPScanner` is consumed by the Stage (proxy-side) and is available to companion's pre-send hook (§5.2-C local helper) for TUI-level warnings. Single rule registry.
+- **No body mutation on byte-preserve routes.** Stage-level policy gate makes it impossible for a mis-configured policy or a surprise rule change to mutate a Claude Code request body.
+- **Redact-to-warn downgrade visible in telemetry.** When the Stage protects byte-preserve by overriding policy, `stage_telemetry["security"]["dlp_mode_downgraded"]` records it — no silent mode changes.
+
+### Tests
+- 32 new tests: 11 scanner, 7 modes, 7 DLPStage integration, 7 ContextEnrichmentStage integration.
+- Baseline: 376/0 fail (was 344 at α; +32 new, zero regressions).
+
+### Import contracts + TIP
+- `.importlinter` 5/5 KEPT. No new allowlist entries needed — DLP and enrichment both live under `security/` and `services/` respectively, which are valid dependencies for the pipeline.
+- `tip-check` 4/4 PASS.
+
+### Next
+- **1.2.094 (1.3.0-γ):** profile presets wired to dashboard telemetry + platform auto-detection + `X-TokenPak-Backend: claude-code` delegation to OAuth backend.
+
 ## [1.2.092] - 2026-04-22
 
 ### Added — 1.3.0-α (foundation)
