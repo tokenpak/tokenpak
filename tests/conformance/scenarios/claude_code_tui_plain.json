@@ -1,0 +1,33 @@
+{
+  "description": "Byte-preserve happy path — claude-cli/* UA + streaming body classifies as CLAUDE_CODE_TUI via the body-hint disambiguation (stream:true implies TUI). No cache_control. Exercises the core byte-preserve emission shape.",
+  "test_env_preconditions": {
+    "must_unset": ["CLAUDE_CODE_ENTRYPOINT"],
+    "reason": "Classifier's _claude_code_mode parses explicit entrypoint values cron/cli/sdk/ide/tmux from header OR env; 'tui' is not in that list and instead defaults via body-hint (stream:true → TUI). If the runner's CLAUDE_CODE_ENTRYPOINT env is set to any of the recognized values, it overrides the body hint. SC-06 fixtures must scrub this env var before running TUI scenarios."
+  },
+  "request": {
+    "headers": {
+      "user-agent": "claude-cli/1.3.0 (tui)",
+      "content-type": "application/json",
+      "authorization": "Bearer sk-oauth-stub",
+      "anthropic-beta": "oauth-2025-01-01"
+    },
+    "body_text": "{\"model\":\"claude-opus-4-7\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"stream\":true}",
+    "metadata": {
+      "method": "POST",
+      "target_url": "https://api.anthropic.com/v1/messages"
+    }
+  },
+  "expected_route_class": "claude-code-tui",
+  "expected_capabilities_intersection": [
+    "tip.byte-preserved-passthrough",
+    "tip.cache.provider-observer",
+    "tip.routing.classifier.v1",
+    "tip.security.header-allowlist",
+    "tip.telemetry.wire-side"
+  ],
+  "provider_stub_response": {
+    "via": "LoopbackProvider",
+    "shape": "anthropic-messages-v1",
+    "keyed_by": "expected_route_class"
+  }
+}

@@ -232,7 +232,51 @@ class Monitor:
         cache_creation_tokens=0,
         would_have_saved=0,
         cache_origin="unknown",
+        request_id=None,
     ):
+        # SC-02: forward a TIP-shaped row to any installed conformance
+        # observer before the DB write. No-op when no observer is
+        # installed; ship-safe. See services/diagnostics/conformance/
+        # for the observer contract.
+        #
+        # SC-03: ``request_id`` is the wire request id plumbed from
+        # the proxy handler (X-Request-Id header). When absent — e.g.
+        # callers that haven't been updated yet — fall back to a
+        # monitor-local synthetic ID so the schema's required field
+        # is satisfied and the row is still correlatable locally.
+        try:
+            from tokenpak.services.diagnostics import conformance as _conformance
+            from tokenpak.core.contracts import tip_version as _tip_version
+            from datetime import datetime as _dt, timezone as _tz
+            import time as _time
+
+            _rid = (
+                request_id
+                if isinstance(request_id, str) and request_id
+                else f"monitor-{int(_time.time() * 1_000_000)}"
+            )
+            _tip_row = {
+                "request_id": _rid,
+                "timestamp": _dt.now(_tz.utc).isoformat().replace("+00:00", "Z"),
+                "tip_version": _tip_version.CURRENT,
+                "profile": "tip-proxy",
+                "model": model,
+                "status": int(status_code) if status_code is not None else 0,
+                "cache_origin": (
+                    cache_origin
+                    if cache_origin in ("proxy", "client", "unknown")
+                    else "unknown"
+                ),
+                "tokens_in": int(input_tokens or 0),
+                "tokens_out": int(output_tokens or 0),
+                "savings_cache_tokens": int(cache_read_tokens or 0),
+                "provider_ms": float(latency_ms or 0),
+            }
+            _conformance.notify_telemetry_row(_tip_row)
+        except Exception:
+            # Observer notification must never break the monitor write path.
+            pass
+
         # Enqueue write instead of writing directly (async, <0.1ms return)
         insert_params = (
             datetime.now().isoformat(),

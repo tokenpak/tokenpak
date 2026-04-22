@@ -158,6 +158,20 @@ def serve(stdin=None, stdout=None) -> None:
     if stdout is None:
         stdout = sys.stdout
 
+    # SC-02: publish tip-companion capability set at boot. Canonical
+    # source is tokenpak.core.contracts.capabilities; no duplication.
+    # Observer is ship-safe no-op when none installed.
+    try:
+        from tokenpak.services.diagnostics import conformance as _conformance
+        from tokenpak.core.contracts.capabilities import (
+            SELF_CAPABILITIES_COMPANION,
+        )
+        _conformance.notify_capability_published(
+            "tip-companion", SELF_CAPABILITIES_COMPANION
+        )
+    except Exception:
+        pass
+
     for line in stdin:
         line = line.strip()
         if not line:

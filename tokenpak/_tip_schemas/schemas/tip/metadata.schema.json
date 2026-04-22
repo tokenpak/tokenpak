@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/metadata-v1.json",
+  "title": "TIP-1.0 Request/Response Metadata",
+  "description": "Runtime metadata attached to services.Request.metadata and services.Response.metadata. See https://tokenpak.ai/protocol/scope for what TIP-1.0 does and does not cover.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "Matches the X-TokenPak-Request-Id header value."
+    },
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "TIP version used for this request. Matches X-TokenPak-TIP-Version header."
+    },
+    "profile": {
+      "type": "string",
+      "description": "Profile identifier (tip-proxy, tip-companion, tip-adapter, tip-plugin, tip-dashboard-consumer)."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Outbound provider canonical name (anthropic, openai, google, ollama, etc.). Unknown providers are allowed and emit 'unknown' per Constitution §5.3 no-over-claim rule."
+    },
+    "model": {
+      "type": "string",
+      "description": "Model identifier within the provider (claude-opus-4-7, gpt-5-codex, etc.)."
+    },
+    "client": {
+      "type": "string",
+      "description": "Client tool the user is running (claude-code, cursor, aider, cline, continue, codex, custom-sdk, etc.)."
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Client-session identifier if available; used by companion journal for session-scoped state."
+    },
+    "capabilities_negotiated": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capability labels negotiated with the peer (MCP capability intersection). Control-plane metadata only; data-plane requests don't negotiate."
+    },
+    "ext": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Namespaced extension fields per docs/protocol/extension-model.md. Core fields MUST NOT be shadowed here."
+    }
+  }
+}

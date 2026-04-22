@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/compatibility-v1.json",
+  "title": "TIP-1.0 Compatibility Declaration",
+  "description": "How a component declares its TIP version range and peer capability requirements. Included by every TIP manifest. Evaluated by core/contracts/compatibility.py during connection negotiation. See https://tokenpak.ai/protocol/compatibility.",
+  "type": "object",
+  "required": ["tip_version_range"],
+  "additionalProperties": false,
+  "properties": {
+    "tip_version_range": {
+      "type": "string",
+      "description": "Version range the component can speak. Format: comma-separated version predicates, each '<op><TIP-MAJOR.MINOR>' where op is one of '>=', '>', '<=', '<', '==', '!='. Example: '>=TIP-1.0,<TIP-2.0' means 'TIP-1.0 and later, but not TIP-2.x'.",
+      "pattern": "^((>=|>|<=|<|==|!=)TIP-\\d+\\.\\d+)(,(>=|>|<=|<|==|!=)TIP-\\d+\\.\\d+)*$"
+    },
+    "requires_peer_capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capability labels the peer MUST publish for the connection to succeed. Missing any = connection MUST fail with tip.capability.missing-required error (docs/protocol/compatibility.md §2)."
+    },
+    "optional_peer_capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capability labels the component will use if the peer publishes them, but does not require."
+    },
+    "requires_profile": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Profile identifier(s) the peer must advertise. E.g. an adapter's manifest may require the peer be a tip-proxy."
+    },
+    "deprecated_since": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "Set when this component is deprecated starting at a given TIP MINOR. Consumers SHOULD warn on use; a subsequent MAJOR bump MAY refuse the connection."
+    },
+    "removed_at": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "Set when the deprecation window closes. A component advertising removed_at <= current_tip_version MUST NOT connect."
+    }
+  }
+}

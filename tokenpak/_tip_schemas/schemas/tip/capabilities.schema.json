@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/capabilities-v1.json",
+  "title": "TIP-1.0 Capability Catalog",
+  "description": "Authoritative catalog of capability labels a TokenPak-compatible component MAY publish during MCP capability negotiation or in an X-TokenPak-Capability header. TIP-reserved labels start with 'tip.'; extension labels start with 'ext.<namespace>.'. Anything else is invalid. See https://tokenpak.ai/protocol/tip-capabilities.",
+  "type": "object",
+  "required": ["tip_version", "labels"],
+  "properties": {
+    "tip_version": {
+      "type": "string",
+      "const": "TIP-1.0"
+    },
+    "labels": {
+      "type": "array",
+      "description": "Every label TIP-1.0 recognizes. Components publish a subset of these.",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "class"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(tip|ext)\\.[a-z0-9._-]+$"
+          },
+          "description": { "type": "string" },
+          "class": {
+            "type": "string",
+            "enum": ["required", "optional", "profile-specific", "local-only", "passthrough-sensitive"],
+            "description": "Behavior class per docs/protocol/terminology.md. 'required' = core profile requirement. 'profile-specific' = required only for named profiles. 'local-only' = MUST NOT cross the machine boundary. 'passthrough-sensitive' = subject to byte-fidelity rule."
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["tip-proxy", "tip-companion", "tip-adapter", "tip-plugin", "tip-dashboard-consumer"]
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "tip_version": "TIP-1.0",
+      "labels": [
+        {
+          "id": "tip.compression.v1",
+          "description": "Component runs TIP-1.0 context compression before dispatch. Reduces token count without altering semantic content.",
+          "class": "profile-specific",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.byte-preserved-passthrough",
+          "description": "Component preserves exact request-body byte-identity on passthrough paths (no JSON re-serialization). Required where billing routing depends on body bytes (e.g. Anthropic cache_control).",
+          "class": "passthrough-sensitive",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.cache.provider-observer",
+          "description": "Component reports provider cache hits (inferred from response metadata) separately from TokenPak cache hits and never conflates them. Required for honest cache_origin classification.",
+          "class": "profile-specific",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.telemetry.wire-side",
+          "description": "Component writes wire-side telemetry rows (one per request) to the telemetry store per the schema. Entrypoints never claim this capability — only services.telemetry_service does.",
+          "class": "profile-specific",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.routing.fallback-chain",
+          "description": "Component applies user-configured routing rules with ordered fallback chains on provider failure.",
+          "class": "profile-specific",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.security.dlp-redaction",
+          "description": "Component runs DLP/secret redaction over request bodies before dispatch. Required when the emitter claims it does not leak secrets.",
+          "class": "profile-specific",
+          "profiles": ["tip-proxy"]
+        },
+        {
+          "id": "tip.preview.local",
+          "description": "Component provides local-only preview/simulation tools (compression preview, cost simulation) that never invoke a provider. Constitutes a §5.2-C pure local helper.",
+          "class": "local-only",
+          "profiles": ["tip-companion"]
+        },
+        {
+          "id": "tip.companion.prompt-packaging",
+          "description": "Component packages prompts client-side before sending (TUI/CLI pre-send optimizer).",
+          "class": "profile-specific",
+          "profiles": ["tip-companion"]
+        },
+        {
+          "id": "tip.companion.memory-capsule",
+          "description": "Component manages reusable memory capsules for prompt injection.",
+          "class": "profile-specific",
+          "profiles": ["tip-companion"]
+        },
+        {
+          "id": "tip.companion.session-journal",
+          "description": "Component maintains a local session journal of prompt-side events.",
+          "class": "profile-specific",
+          "profiles": ["tip-companion"]
+        },
+        {
+          "id": "tip.adapter.client-integration",
+          "description": "Component wires a specific client tool (Claude Code, Cursor, Aider, etc.) to a TIP-proxy.",
+          "class": "profile-specific",
+          "profiles": ["tip-adapter"]
+        },
+        {
+          "id": "tip.adapter.framework-bridge",
+          "description": "Component exposes TokenPak to a user-space framework (LangChain, LlamaIndex, CrewAI, AutoGen).",
+          "class": "profile-specific",
+          "profiles": ["tip-adapter"]
+        },
+        {
+          "id": "tip.plugin.hook-point",
+          "description": "Component registers with TokenPak's plugin system and installs hooks at documented pipeline stages.",
+          "class": "profile-specific",
+          "profiles": ["tip-plugin"]
+        },
+        {
+          "id": "tip.dashboard.read-only",
+          "description": "Component reads from the telemetry store and presents derived views. No writes. No business logic beyond aggregation.",
+          "class": "profile-specific",
+          "profiles": ["tip-dashboard-consumer"]
+        },
+        {
+          "id": "tip.alerts.threshold-notifier",
+          "description": "Component evaluates user-configured thresholds against telemetry data and dispatches notifications.",
+          "class": "profile-specific",
+          "profiles": ["tip-dashboard-consumer"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "description": "OpenAI SDK consumer — OpenAI Chat Completions shape. Exercises the non-Anthropic emission shape; cache_origin='client' since the proxy's OpenAI path does not manage provider-side cache today.",
+  "request": {
+    "headers": {
+      "user-agent": "openai-python/1.12.0 os/linux",
+      "content-type": "application/json",
+      "authorization": "Bearer sk-openai-stub"
+    },
+    "body_text": "{\"model\":\"gpt-4o-2024-08-06\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}",
+    "metadata": {
+      "method": "POST",
+      "target_url": "https://api.openai.com/v1/chat/completions"
+    }
+  },
+  "expected_route_class": "openai-sdk",
+  "expected_capabilities_intersection": [
+    "tip.cache.provider-observer",
+    "tip.routing.classifier.v1",
+    "tip.security.header-allowlist",
+    "tip.telemetry.wire-side"
+  ],
+  "expected_cache_origin": "client",
+  "provider_stub_response": {
+    "via": "LoopbackProvider",
+    "shape": "anthropic-messages-v1",
+    "keyed_by": "expected_route_class",
+    "note": "LoopbackProvider returns an Anthropic-shaped body for every route class today — SC-03 scope. OpenAI-shaped canned responses would be an SC+1 addition if real SDK-parser coverage is needed."
+  }
+}

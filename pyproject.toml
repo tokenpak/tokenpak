@@ -168,6 +168,17 @@ tokenpak = [
     "dashboard/templates/**/*",
     "telemetry/dashboard/static/**/*",
     "telemetry/dashboard/templates/**/*",
+    # SC-04: TIP-1.0 self-declaration manifests — proxy + companion.
+    # Static JSON on disk; SC-06 asserts sync with the canonical
+    # capability sets in tokenpak.core.contracts.capabilities.
+    "manifests/*.json",
+    # SC-07: TIP-1.0 schemas vendored so `tokenpak doctor --conformance`
+    # works from an installed wheel without requiring a registry
+    # checkout. The runner sets TOKENPAK_REGISTRY_ROOT to this tree
+    # when the env var is unset. Keep in sync with the registry's
+    # schemas/ on every TIP MINOR bump (SC-09 closeout checklist).
+    "_tip_schemas/schemas/tip/*.json",
+    "_tip_schemas/schemas/manifests/*.json",
 ]
 
 [tool.setuptools.dynamic]
@@ -197,6 +208,8 @@ markers = [
     "needs_proxy: test requires a running tokenpak proxy (starts ProxyServer or subprocess)",
     "needs_webhook: test requires a live external API or webhook endpoint (e.g. ANTHROPIC_API_KEY)",
     "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
+    "conformance: TIP-1.0 self-conformance suite (SC-06). Validates live emissions against registry schemas.",
+    "smoke: Layer-C smoke in the conformance suite — boots ProxyServer and checks disk-artifact round-trips.",
 ]
 timeout = 30
 

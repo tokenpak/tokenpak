@@ -1,0 +1,85 @@
+{
+  "description": "Companion pre-send fixtures for SC-05. Each entry drives a single invocation of tokenpak.companion.hooks.pre_send.run(payload) with the observer installed; SC-06 asserts the listed observer events materialize and validate against companion-journal-row.schema.json.",
+  "scenarios": {
+    "enrichable_tui_with_capsule": {
+      "description": "Long-enough prompt on a claude-code-tui session with an active capsule. _should_enrich returns True; capsule injection fires; journal row with entry_type='companion_savings' and source='hook.pre_send:capsule' is expected.",
+      "payload": {
+        "session_id": "sess_sc05_enrich",
+        "prompt_file": "prompt_enrichable.txt",
+        "transcript_path": null
+      },
+      "capsule_file": "capsule_standard.md",
+      "env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "tui",
+        "TOKENPAK_COMPANION_ENABLED": "1",
+        "TOKENPAK_COMPANION_ENRICH": "1",
+        "TOKENPAK_COMPANION_MIN_QUERY_TOKENS": "50",
+        "TOKENPAK_COMPANION_BUDGET": "0"
+      },
+      "expected_route_class": "claude-code-tui",
+      "expected_observer_events": [
+        {
+          "kind": "companion_journal_row",
+          "entry_type": "pre_send",
+          "source_startswith": "hook.pre_send"
+        },
+        {
+          "kind": "companion_journal_row",
+          "entry_type": "companion_savings",
+          "source_startswith": "hook.pre_send:capsule"
+        }
+      ]
+    },
+    "passthrough_tui_short_prompt": {
+      "description": "Short prompt on claude-code-tui without a capsule. _should_enrich still returns True (route is claude-code-*) but the capsule_file is absent AND the prompt is below min_query_tokens, so no companion_savings row is expected. Only the baseline pre_send journal row fires.",
+      "payload": {
+        "session_id": "sess_sc05_passthrough",
+        "prompt_file": "prompt_passthrough.txt",
+        "transcript_path": null
+      },
+      "capsule_file": null,
+      "env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "tui",
+        "TOKENPAK_COMPANION_ENABLED": "1",
+        "TOKENPAK_COMPANION_ENRICH": "1",
+        "TOKENPAK_COMPANION_MIN_QUERY_TOKENS": "50",
+        "TOKENPAK_COMPANION_BUDGET": "0"
+      },
+      "expected_route_class": "claude-code-tui",
+      "expected_observer_events": [
+        {
+          "kind": "companion_journal_row",
+          "entry_type": "pre_send",
+          "source_startswith": "hook.pre_send"
+        }
+      ],
+      "expected_absent_events": [
+        {
+          "kind": "companion_journal_row",
+          "entry_type": "companion_savings"
+        }
+      ]
+    },
+    "companion_disabled": {
+      "description": "TOKENPAK_COMPANION_ENABLED=0 short-circuits pre_send.run entirely. No observer events fire. Pins the early-return behavior so a regression that emits rows with companion disabled is caught.",
+      "payload": {
+        "session_id": "sess_sc05_disabled",
+        "prompt_file": "prompt_enrichable.txt",
+        "transcript_path": null
+      },
+      "capsule_file": "capsule_standard.md",
+      "env": {
+        "CLAUDECODE": "1",
+        "CLAUDE_CODE_ENTRYPOINT": "tui",
+        "TOKENPAK_COMPANION_ENABLED": "0"
+      },
+      "expected_route_class": "claude-code-tui",
+      "expected_observer_events": [],
+      "expected_absent_events": [
+        {"kind": "companion_journal_row"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/error-v1.json",
+  "title": "TIP-1.0 Error Envelope",
+  "description": "Canonical error shape emitted by any TIP-compatible surface. Bare HTML errors are forbidden (see project_openclaw_cali_auth_failure_mode incident). Every error response on the data plane and every error frame on the control plane conforms to this shape.",
+  "type": "object",
+  "required": ["code", "message"],
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Canonical TIP error code. See the 'Error code catalog' section below; implementations MAY emit ext.* codes for their own error classes but MUST NOT collide with TIP-reserved codes.",
+      "examples": [
+        "tip.auth.missing-credentials",
+        "tip.auth.invalid-credentials",
+        "tip.auth.refresh-failed",
+        "tip.policy.budget-exceeded",
+        "tip.policy.rate-limited",
+        "tip.policy.dlp-redaction-required",
+        "tip.routing.no-provider-available",
+        "tip.routing.all-providers-down",
+        "tip.compression.strategy-unknown",
+        "tip.cache.write-failed",
+        "tip.transport.connection-lost",
+        "tip.transport.handshake-failed",
+        "tip.capability.missing-required",
+        "tip.capability.version-mismatch",
+        "tip.manifest.invalid",
+        "tip.manifest.missing-required-field",
+        "tip.protocol.malformed-frame",
+        "tip.protocol.unknown-method",
+        "tip.internal.unexpected-error"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable error message. Constitution §6 requires errors to teach: this message MUST name the cause and the next step."
+    },
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "TIP version of the emitter. Present on cross-version error scenarios; optional otherwise."
+    },
+    "profile": {
+      "type": "string",
+      "description": "Emitter profile (tip-proxy, tip-companion, etc.)."
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Correlation with X-TokenPak-Request-Id if the error is tied to a specific request."
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional structured context for debugging. Per Constitution §5.3 (no-credential-leak), MUST NOT contain credential material."
+    },
+    "retry_after_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Hint for backoff; present on rate-limit / transient-provider-failure codes."
+    }
+  }
+}

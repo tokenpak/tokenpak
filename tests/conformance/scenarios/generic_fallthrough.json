@@ -1,0 +1,31 @@
+{
+  "description": "Unknown client, no identifying UA, no Claude Code signals, no Anthropic/OpenAI body markers. Classifier falls through to RouteClass.GENERIC with the most conservative Policy. Exercises the minimum-viable telemetry emission path.",
+  "test_env_preconditions": {
+    "must_unset": ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID"],
+    "reason": "Classifier's Signal-5 (env markers) treats CLAUDECODE=1 as a Claude Code indicator even when no HTTP signals are present. SC-06 fixtures must scrub these env vars before running this scenario."
+  },
+  "request": {
+    "headers": {
+      "user-agent": "curl/8.4.0",
+      "content-type": "application/json"
+    },
+    "body_text": "{\"input\":\"arbitrary payload\"}",
+    "metadata": {
+      "method": "POST",
+      "target_url": "https://example.test/api/unknown"
+    }
+  },
+  "expected_route_class": "generic",
+  "expected_capabilities_intersection": [
+    "tip.cache.provider-observer",
+    "tip.routing.classifier.v1",
+    "tip.security.header-allowlist",
+    "tip.telemetry.wire-side"
+  ],
+  "expected_cache_origin": "unknown",
+  "provider_stub_response": {
+    "via": "LoopbackProvider",
+    "shape": "anthropic-messages-v1",
+    "keyed_by": "expected_route_class"
+  }
+}

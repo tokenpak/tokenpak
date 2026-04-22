@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/headers-v1.json",
+  "title": "TIP-1.0 Wire Headers",
+  "description": "Canonical X-TokenPak-* headers carried on data-plane requests and responses. See https://tokenpak.ai/protocol/transport-bindings for normative text. TIP-1.0 headers are informational metadata; they never alter the request body (Architecture §5.1 byte-fidelity rule).",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "X-TokenPak-TIP-Version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "TIP version the emitter is using. Example: TIP-1.0. MUST be present on every TIP-aware request and response."
+    },
+    "X-TokenPak-Profile": {
+      "type": "string",
+      "description": "Profile identifier the emitter conforms to. One of tip-proxy, tip-companion, tip-adapter, tip-plugin, tip-dashboard-consumer. See capabilities.schema.json for the authoritative profile list."
+    },
+    "X-TokenPak-Capability": {
+      "type": "string",
+      "description": "Comma-separated list of TIP capability labels the emitter publishes for this request. Format: one or more tip.<name> or ext.<ns>.<name> tokens separated by ','. Example: 'tip.compression.v1,tip.byte-preserved-passthrough'."
+    },
+    "X-TokenPak-Cache-Origin": {
+      "type": "string",
+      "enum": ["proxy", "client", "unknown"],
+      "description": "Classification of any observed cache hit for this response. 'proxy' = TokenPak cache served the response; 'client' = provider cache served it (inferred from response); 'unknown' = cannot attribute (Constitution §5.3 — never over-claim). Required on every response TIP telemetry row."
+    },
+    "X-TokenPak-Savings-Tokens": {
+      "type": "string",
+      "pattern": "^[0-9]+$",
+      "description": "Token savings attributed to this request by compression, as a non-negative integer. Cache savings are reported separately; this header never sums compression + cache into one number. Optional on response; absent means 0 or unmeasured."
+    },
+    "X-TokenPak-Savings-Cost": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+      "description": "Cost savings in USD attributed to this request, as a non-negative decimal. See X-TokenPak-Savings-Tokens for cache vs compression attribution rule."
+    },
+    "X-TokenPak-Request-Id": {
+      "type": "string",
+      "description": "Stable identifier for this request used for correlating telemetry rows, cache lookups, and log lines. Format: opaque string (UUID v7 preferred). Request-side emitter sets it; response-side emitter echoes it unchanged."
+    },
+    "X-TokenPak-Compression-Ms": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+      "description": "Time spent in the compression stage, in milliseconds. Part of the <50ms overhead budget (Constitution §5 performance principle)."
+    }
+  }
+}

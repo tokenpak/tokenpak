@@ -1,0 +1,185 @@
+name: TIP-1.0 Self-Conformance
+
+# Phase TIP-SC / SC-08 (2026-04-22).
+#
+# Runs the self-conformance pytest suite against the tokenpak reference
+# implementation. The pytest suite is the canonical gate
+# (DECISION-SC-08-1); `tokenpak doctor --conformance` runs as a
+# secondary operator-facing smoke.
+#
+# Gating is **process-enforced**, not platform-enforced, per
+# `tokenpak-standards-internal/21-branching-merge-policy.md §9.8`:
+# GitHub does not block merges on these checks — reviewers + release
+# owner are responsible for honoring the outcome manually. The
+# blocking/advisory labels below are intent signals, not platform
+# rules.
+#
+# Required matrix status-check names reviewers must treat as
+# blocking before merging to main or tagging a release:
+#
+#   - self-conformance (blocking) / 3.10
+#   - self-conformance (blocking) / 3.11
+#   - self-conformance (blocking) / 3.12
+#
+# Intentionally no `paths:` filter — a TIP contract can break without
+# any local code change (e.g. a registry schema MINOR bump), so every
+# push + PR runs the suite.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # -------------------------------------------------------------------
+  # BLOCKING — fires for main, release/**, hotfix/**, v* tags, and
+  # PRs whose base is main or release/**. Reviewers must not merge
+  # or tag a release while any matrix status is red.
+  # -------------------------------------------------------------------
+  self-conformance:
+    name: self-conformance (blocking)
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && (
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/release/') ||
+        startsWith(github.ref, 'refs/heads/hotfix/') ||
+        startsWith(github.ref, 'refs/tags/v')
+      )) ||
+      (github.event_name == 'pull_request' && (
+        github.base_ref == 'main' ||
+        startsWith(github.base_ref, 'release/')
+      )) ||
+      github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout tokenpak
+        uses: actions/checkout@v4
+        with:
+          path: tokenpak
+
+      # The registry repo carries both the authoritative TIP schemas
+      # AND the validator source. Installing the validator from that
+      # checkout (editable) guarantees _SCHEMA_PATHS is in sync with
+      # the schemas on disk — avoids the PyPI-drift WARN the doctor
+      # runner handles at runtime.
+      - name: Checkout tokenpak/registry
+        uses: actions/checkout@v4
+        with:
+          repository: tokenpak/registry
+          path: registry
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install tokenpak + validator from registry source
+        working-directory: tokenpak
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '../registry'
+          pip install -e '.[dev]'
+
+      # --- CANONICAL GATE -----------------------------------------------
+      # The pytest conformance suite is the authoritative check per
+      # DECISION-SC-08-1. Must be green on every Python in the matrix
+      # before merge / tag.
+      - name: Run pytest self-conformance suite
+        working-directory: tokenpak
+        env:
+          TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
+        run: pytest tests/conformance/ -v -m conformance
+
+      # --- SECONDARY SMOKE ---------------------------------------------
+      # Exercises the operator-facing CLI path. Not a substitute for
+      # the pytest gate, but proves the installed-environment doctor
+      # command works end-to-end on the same checkout. Captured as
+      # JSON so workflow logs diff cleanly across runs.
+      - name: Run tokenpak doctor --conformance (secondary smoke)
+        working-directory: tokenpak
+        env:
+          TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
+        run: |
+          tokenpak doctor --conformance --json | tee doctor-conformance.json
+          tokenpak doctor --conformance
+
+      # --- MANIFEST SHIPPING PROOF -------------------------------------
+      # Independent evidence that the shipped manifests validate
+      # against their registry schemas. Duplicates SC-06 test_manifests
+      # coverage but runs without pytest fixture setup, so a regression
+      # in conftest would not hide it.
+      - name: Validate shipped manifests via CLI
+        working-directory: tokenpak
+        env:
+          TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
+        run: |
+          python -m tokenpak_tip_validator \
+              --schema provider-profile \
+              --input tokenpak/manifests/tokenpak-proxy.json
+          python -m tokenpak_tip_validator \
+              --schema client-profile \
+              --input tokenpak/manifests/tokenpak-companion.json
+
+      - name: Upload doctor JSON artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doctor-conformance-py${{ matrix.python-version }}
+          path: tokenpak/doctor-conformance.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # -------------------------------------------------------------------
+  # ADVISORY — fires on every other branch push (feature/*, wip/*, …).
+  # Runs once on Python 3.11 with continue-on-error so WIP pushes get
+  # a status signal without blocking day-to-day work. Red advisory is
+  # informational per standard 21 §9.8.
+  # -------------------------------------------------------------------
+  self-conformance-advisory:
+    name: self-conformance (advisory)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'push' &&
+      github.ref != 'refs/heads/main' &&
+      !startsWith(github.ref, 'refs/heads/release/') &&
+      !startsWith(github.ref, 'refs/heads/hotfix/') &&
+      !startsWith(github.ref, 'refs/tags/')
+    continue-on-error: true
+
+    steps:
+      - name: Checkout tokenpak
+        uses: actions/checkout@v4
+        with:
+          path: tokenpak
+
+      - name: Checkout tokenpak/registry
+        uses: actions/checkout@v4
+        with:
+          repository: tokenpak/registry
+          path: registry
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        working-directory: tokenpak
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '../registry'
+          pip install -e '.[dev]'
+
+      - name: Run pytest self-conformance suite (advisory)
+        working-directory: tokenpak
+        env:
+          TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
+        run: pytest tests/conformance/ -v -m conformance
+          || echo "::warning::advisory run — conformance failures on feature branch do NOT block"

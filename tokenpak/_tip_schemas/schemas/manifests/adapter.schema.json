@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/manifests/adapter-v1.json",
+  "title": "TIP-1.0 Adapter Manifest",
+  "description": "Declares a per-client integration (Claude Code, Cursor, Aider, Cline, Continue, Codex) OR a framework bridge (LangChain, LlamaIndex, CrewAI, AutoGen, Langfuse). See https://tokenpak.ai/protocol/manifest-spec.",
+  "type": "object",
+  "required": [
+    "tip_version",
+    "id",
+    "name",
+    "version",
+    "kind",
+    "capabilities",
+    "compatibility",
+    "target"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable lowercase identifier (claude-code, cursor, langchain, etc.)."
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable display name."
+    },
+    "version": {
+      "type": "string",
+      "description": "Adapter's own version (semver)."
+    },
+    "kind": {
+      "const": "adapter"
+    },
+    "adapter_kind": {
+      "type": "string",
+      "enum": [
+        "client-integration",
+        "framework-bridge"
+      ],
+      "description": "Which direction this adapter faces. client-integration = wires a specific client tool (claude-code, cursor, aider, cline, continue, codex). framework-bridge = exposes TokenPak to user-space framework code (langchain, llamaindex, crewai, autogen, langfuse, litellm)."
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The client tool or framework this adapter targets."
+        },
+        "version_range": {
+          "type": "string",
+          "description": "semver range of the target the adapter is compatible with."
+        },
+        "settings_path": {
+          "type": "string",
+          "description": "Relative path inside the user's home where the adapter writes configuration (e.g. ~/.claude/settings.json)."
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(tip|ext)\\.[a-z0-9._-]+$"
+      },
+      "description": "Capability labels this adapter publishes. MUST include 'tip.adapter.client-integration' or 'tip.adapter.framework-bridge' depending on adapter_kind."
+    },
+    "compatibility": {
+      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+    },
+    "trust": {
+      "type": "object",
+      "properties": {
+        "source_repo": {
+          "type": "string",
+          "format": "uri"
+        },
+        "signed": {
+          "type": "boolean"
+        },
+        "maintainer": {
+          "type": "string"
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Namespaced extension fields per docs/protocol/extension-model.md."
+    }
+  }
+}

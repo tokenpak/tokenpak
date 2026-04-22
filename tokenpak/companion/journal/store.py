@@ -112,6 +112,29 @@ class JournalStore:
                 "INSERT INTO entries (session_id, entry_type, content, timestamp) VALUES (?, ?, ?, ?)",
                 (session_id, entry_type, content, time.time()),
             )
+            # SC-02: forward a TIP-shaped row to any installed observer.
+            # Schema is companion-journal-row (registry
+            # schemas/tip/companion-journal-row.schema.json).
+            try:
+                from tokenpak.services.diagnostics import (
+                    conformance as _conformance,
+                )
+                from tokenpak.core.contracts import (
+                    tip_version as _tip_version,
+                )
+                from datetime import datetime as _dt, timezone as _tz
+                _conformance.notify_companion_journal_row({
+                    "session_id": session_id,
+                    "timestamp": _dt.now(_tz.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "tip_version": _tip_version.CURRENT,
+                    "entry_type": entry_type,
+                    "source": "companion.journal.store",
+                    "note": content if content else None,
+                })
+            except Exception:
+                pass
             return cur.lastrowid  # type: ignore[return-value]
 
     # ------------------------------------------------------------------

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/companion-journal-row-v1.json",
+  "title": "TIP-1.0 Companion Journal Row",
+  "description": "One row in the companion-local session journal (~/.tokenpak/companion/journal.db). Companion-side UX state per Constitution §5.2-C; NEVER a source of truth for billing or cache. Rows complement (not replace) the wire-side telemetry rows written by services.telemetry_service. See https://tokenpak.ai/protocol/telemetry-semantics.",
+  "type": "object",
+  "required": ["session_id", "timestamp", "entry_type", "tip_version"],
+  "additionalProperties": false,
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Stable identifier for the companion session. Ties rows back to a single Claude Code invocation."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp of the entry."
+    },
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "TIP version under which this entry was emitted."
+    },
+    "entry_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Entry category. Open vocabulary per TIP extension model; well-known values include: auto, user, milestone, cost, capsule, companion_savings, pre_send. Components MAY introduce new ext.* entry types via the ext namespace."
+    },
+    "source": {
+      "type": ["string", "null"],
+      "description": "Emitting component (e.g. 'hook.pre_send', 'mcp.journal_write'). Null when legacy rows pre-date source tagging."
+    },
+    "tokens_avoided": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Pre-wire tokens saved by companion optimizations. Companion attribution only — never conflated with wire-side savings."
+    },
+    "cost_avoided_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Pre-wire cost saved in USD. Estimated — wire-side telemetry is the billing source of truth."
+    },
+    "note": {
+      "type": ["string", "null"],
+      "description": "Free-form human-readable annotation. Optional."
+    },
+    "ext": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Namespaced extension fields per docs/protocol/extension-model.md. Core fields MUST NOT be shadowed here."
+    }
+  }
+}

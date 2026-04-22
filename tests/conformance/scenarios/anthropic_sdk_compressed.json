@@ -1,0 +1,30 @@
+{
+  "description": "Direct Anthropic SDK consumer — full pipeline eligibility (compression on, proxy cache may serve). Exercises the non-byte-preserve emission shape; cache_origin='proxy' is the expected classification when the proxy cache serves a hit (client did not place the breakpoint).",
+  "request": {
+    "headers": {
+      "user-agent": "anthropic-python/0.42.0 arch/x86_64",
+      "content-type": "application/json",
+      "x-api-key": "sk-ant-api03-stub"
+    },
+    "body_text": "{\"model\":\"claude-opus-4-7\",\"messages\":[{\"role\":\"user\",\"content\":\"summarize the attached long context\"}],\"max_tokens\":512}",
+    "metadata": {
+      "method": "POST",
+      "target_url": "https://api.anthropic.com/v1/messages"
+    }
+  },
+  "expected_route_class": "anthropic-sdk",
+  "expected_capabilities_intersection": [
+    "tip.cache.provider-observer",
+    "tip.cache.proxy-managed",
+    "tip.compression.v1",
+    "tip.routing.classifier.v1",
+    "tip.security.header-allowlist",
+    "tip.telemetry.wire-side"
+  ],
+  "expected_cache_origin": "proxy",
+  "provider_stub_response": {
+    "via": "LoopbackProvider",
+    "shape": "anthropic-messages-v1",
+    "keyed_by": "expected_route_class"
+  }
+}

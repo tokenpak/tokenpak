@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/tip/telemetry-event-v1.json",
+  "title": "TIP-1.0 Telemetry Event",
+  "description": "One row per request in the telemetry store (~/.tokenpak/telemetry.db). Written only by services.telemetry_service per Architecture §7.1. Normative field set for TIP-1.0; additive MINOR bumps may extend it, MAJOR bumps may break it. See https://tokenpak.ai/protocol/telemetry-semantics.",
+  "type": "object",
+  "required": ["request_id", "timestamp", "cache_origin", "tip_version"],
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "Stable identifier matching X-TokenPak-Request-Id header."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp of request arrival at the proxy."
+    },
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$",
+      "description": "TIP version under which this event was emitted."
+    },
+    "profile": {
+      "type": "string",
+      "description": "Emitter profile (tip-proxy, tip-companion, etc.)."
+    },
+    "provider": {
+      "type": ["string", "null"],
+      "description": "Outbound provider canonical name; null if the request never reached a provider (cache hit, policy reject)."
+    },
+    "model": {
+      "type": ["string", "null"],
+      "description": "Model identifier; null when provider is null."
+    },
+    "client": {
+      "type": ["string", "null"],
+      "description": "Client tool identifier."
+    },
+    "cache_origin": {
+      "type": "string",
+      "enum": ["proxy", "client", "unknown"],
+      "description": "REQUIRED. Classification of any cache hit attribution for this request. 'proxy' = TokenPak cache served response; 'client' = provider cache served it; 'unknown' = cannot attribute. NEVER over-claim (Constitution §5.3)."
+    },
+    "status": {
+      "type": "integer",
+      "description": "HTTP-style status code of the response (200, 401, 429, 500, etc.). 0 if the request was rejected before any response shape existed."
+    },
+    "error_code": {
+      "type": ["string", "null"],
+      "description": "TIP error code if the request failed (see error.schema.json); null on success."
+    },
+    "savings_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Compression savings in tokens. Cache savings are reported separately in savings_cache_tokens — never sum them."
+    },
+    "savings_cost": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Compression savings in USD."
+    },
+    "savings_cache_tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Cache-attributable token savings. Classification by cache_origin."
+    },
+    "savings_cache_cost": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Cache-attributable cost savings in USD."
+    },
+    "compression_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Milliseconds spent in services.compression_service. Part of the overhead budget."
+    },
+    "proxy_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Milliseconds spent in services pipeline excluding provider round-trip."
+    },
+    "provider_ms": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Milliseconds the provider took (measured from outbound request dispatch to response-body first byte)."
+    },
+    "tokens_in": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Input tokens billed by the provider for this request (from response usage or body parse)."
+    },
+    "tokens_out": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Output tokens billed by the provider."
+    },
+    "capabilities_negotiated": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Capability labels that were active for this request (MCP intersection or proxy-side defaults)."
+    },
+    "ext": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Namespaced extension fields per docs/protocol/extension-model.md. Core fields MUST NOT be shadowed here."
+    }
+  }
+}

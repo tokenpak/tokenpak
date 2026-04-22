@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/manifests/provider-profile-v1.json",
+  "title": "TIP-1.0 Provider Profile",
+  "description": "Per-provider outbound profile (Anthropic, OpenAI, Google, Ollama, custom-local). Describes how services.routing_service invokes this provider. See https://tokenpak.ai/protocol/manifest-spec.",
+  "type": "object",
+  "required": [
+    "tip_version",
+    "id",
+    "name",
+    "version",
+    "kind",
+    "capabilities",
+    "compatibility",
+    "provider"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "provider-profile"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(tip|ext)\\.[a-z0-9._-]+$"
+      }
+    },
+    "compatibility": {
+      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+    },
+    "provider": {
+      "type": "object",
+      "required": [
+        "name",
+        "endpoint_pattern"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Canonical provider name (anthropic, openai, google, ollama, etc.)."
+        },
+        "endpoint_pattern": {
+          "type": "string",
+          "description": "URL pattern the provider accepts (e.g. 'https://api.anthropic.com/v1/messages'). Placeholders allowed with {name} syntax for user-configured hostnames."
+        },
+        "auth_scheme": {
+          "type": "string",
+          "enum": [
+            "bearer",
+            "x-api-key",
+            "oauth",
+            "none"
+          ],
+          "description": "How the provider authenticates requests."
+        },
+        "auth_header": {
+          "type": "string",
+          "description": "Header name carrying the credential (for bearer/x-api-key)."
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "input_price_per_million": {
+                "type": "number",
+                "minimum": 0
+              },
+              "output_price_per_million": {
+                "type": "number",
+                "minimum": 0
+              },
+              "context_window": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "supports_streaming": {
+                "type": "boolean"
+              },
+              "supports_tools": {
+                "type": "boolean"
+              }
+            }
+          },
+          "description": "Known models this provider serves. Runtime discovery per Constitution \u00a75.4 overrides this list; unknown models graceful-degrade."
+        },
+        "billing_routing_depends_on_body_bytes": {
+          "type": "boolean",
+          "description": "If true, this provider's billing routing depends on exact request body bytes (e.g. Anthropic cache_control ordering). Requires tip.byte-preserved-passthrough capability on the TIP-proxy handling this provider."
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "properties": {
+        "source_repo": {
+          "type": "string",
+          "format": "uri"
+        },
+        "signed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

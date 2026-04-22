@@ -1,0 +1,32 @@
+{
+  "tip_version": "TIP-1.0",
+  "id": "tokenpak-companion",
+  "name": "TokenPak Companion",
+  "version": "1.3.3",
+  "kind": "client-profile",
+  "capabilities": [
+    "tip.cache.provider-observer",
+    "tip.companion.memory-capsule",
+    "tip.companion.prompt-packaging",
+    "tip.companion.session-journal",
+    "tip.mcp.bridge.v1",
+    "tip.preview.local",
+    "tip.telemetry.prompt-side"
+  ],
+  "compatibility": {
+    "tip_version_range": ">=TIP-1.0,<TIP-2.0"
+  },
+  "client": {
+    "mode": "tui",
+    "companion_eligible": true,
+    "detection": {
+      "header_signature": "user-agent: claude-cli/*",
+      "env_signature": "CLAUDECODE=1"
+    }
+  },
+  "extensions": {
+    "schema_choice_note": "Authoritative self-declaration for the TokenPak companion (pre-send optimizer attached to Claude Code TUI/CLI). Schema: client-profile per DECISION-SC-04-A (Kevin 2026-04-22). The companion is an auxiliary attached to a Claude Code client, not a standalone client; client-profile with mode=tui is the closest-fit kind. A dedicated companion-profile schema would be additive in a future TIP MINOR bump.",
+    "canonical_source": "tokenpak.core.contracts.capabilities.SELF_CAPABILITIES_COMPANION",
+    "sync_enforcement": "SC-06 test asserts one-to-one sync between the capabilities array in this file and SELF_CAPABILITIES_COMPANION."
+  }
+}

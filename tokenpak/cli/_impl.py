@@ -1531,6 +1531,72 @@ def cmd_doctor(args):
         )
         sys.exit(rc)
 
+    # --conformance mode is a thin renderer over the SC-07 runner.
+    # Same primitives the pytest suite uses; operator-readable table
+    # + deterministic output order + explicit exit contract:
+    #   0 = every check OK
+    #   1 = ≥1 check FAIL (conformance failure)
+    #   2 = tooling error (validator unimportable, schemas unfindable)
+    if getattr(args, "conformance", False):
+        from tokenpak.services.diagnostics.conformance import (
+            exit_code_for,
+            run_conformance_checks,
+            summarize,
+        )
+
+        want_json = bool(getattr(args, "doctor_json", False))
+        results = run_conformance_checks()
+        counts = summarize(results)
+        code = exit_code_for(results)
+
+        if want_json:
+            import json as _json
+
+            try:
+                from tokenpak import __version__ as _tp_version
+            except Exception:  # noqa: BLE001
+                _tp_version = "unknown"
+            payload = {
+                "tokenpak_version": _tp_version,
+                "tip_version": "TIP-1.0",
+                "profiles": ["tip-proxy", "tip-companion"],
+                "summary": counts,
+                "exit_code": code,
+                "result": {0: "pass", 1: "fail", 2: "tooling-error"}.get(
+                    code, "unknown"
+                ),
+                "checks": [
+                    {
+                        "name": r.name,
+                        "status": r.status.value,
+                        "summary": r.summary,
+                        "details": list(r.details),
+                    }
+                    for r in results
+                ],
+            }
+            print(_json.dumps(payload, indent=2, sort_keys=True))
+            sys.exit(code)
+
+        print("\nTOKENPAK  |  Doctor (TIP-1.0 self-conformance)")
+        print("──────────────────────────────\n")
+        for r in results:
+            marker = {"ok": "✓", "warn": "⚠", "fail": "✗"}[r.status.value]
+            print(f"  {marker} {r.name:<28} {r.summary}")
+            for d in r.details:
+                print(f"      {d}")
+        print()
+        print(
+            f"Summary: {counts['ok']} pass, "
+            f"{counts['warn']} warn, "
+            f"{counts['fail']} fail"
+        )
+        print(
+            f"Exit: {code} "
+            f"({'conforms' if code == 0 else 'conformance-failure' if code == 1 else 'tooling-error'})"
+        )
+        sys.exit(code)
+
     # --claude-code mode delegates entirely to the shared diagnostics
     # service. Core checks always run first so we surface install drift
     # before Claude Code-specific findings (drift is usually the root
@@ -1972,6 +2038,18 @@ def build_parser():
         dest="claude_code",
         action="store_true",
         help="Run Claude Code-specific checks (companion settings, drift, base-url routing)",
+    )
+    p_doctor.add_argument(
+        "--conformance",
+        dest="conformance",
+        action="store_true",
+        help="Run TIP-1.0 self-conformance checks (capability set, profiles, manifests, live emissions)",
+    )
+    p_doctor.add_argument(
+        "--json",
+        dest="doctor_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of the human table (conformance mode)",
     )
     p_doctor.set_defaults(func=cmd_doctor)
 

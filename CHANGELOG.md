@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-04-22
+
+### Added — TIP-1.0 self-conformance (Phase TIP-SC)
+
+Mechanical proof that the reference implementation satisfies TIP-1.0 — live artifacts captured by a harness and validated against the registry schemas on every CI run. No paper-spec; no legacy restoration; centralized observer shared by proxy + companion.
+
+- **ConformanceObserver + emission sinks** (`tokenpak/services/diagnostics/conformance/`) — single shared contract at five production chokepoints (`Monitor.log`, proxy response headers × 2 paths, `JournalStore.write_entry` + `pre_send._journal_write(_savings)`, boot-time capability publication for both profiles). No-op when no observer installed; ship-safe.
+- **LoopbackProvider** — deterministic, network-free provider stub keyed by `RouteClass`. Gated by `TOKENPAK_PROVIDER_STUB=loopback`; production paths untouched when unset.
+- **`tokenpak/manifests/{tokenpak-proxy,tokenpak-companion}.json`** — canonical TIP-1.0 self-declaration manifests shipped in the wheel. Capabilities arrays are one-to-one with `SELF_CAPABILITIES_*` (asserted in CI).
+- **Conformance pytest suite** (`tests/conformance/`, 28 tests) across Layer A (pipeline + Monitor.log), Layer B (companion pre_send), Layer C (startup + disk-artifact round-trips). Full schema validation via `tokenpak-tip-validator`.
+- **`tokenpak doctor --conformance`** (+ `--json`) — operator-facing CLI runner over the same primitives. Nine checks; explicit exit-code contract: 0 = OK, 1 = conformance failure, 2 = tooling error. Works from an installed wheel via vendored schemas at `tokenpak/_tip_schemas/schemas/`.
+- **`.github/workflows/tip-self-conformance.yml`** — blocking/advisory split per standard 21 §9.8. Matrix on Python 3.10/3.11/3.12 for main/release/**/hotfix/**/v* tags + PRs to main|release/**. Advisory (single Python, `continue-on-error: true`) for every other branch. Process-enforced gating; reviewers honor `self-conformance (blocking) / 3.1{0,1,2}` status-check names as required.
+- **Registry `companion-journal-row.schema.json`** + 3 conformance vectors (upstream in `tokenpak/registry`) so companion artifacts are schema-validatable.
+- **Canonical capability refresh** — `SELF_CAPABILITIES_PROXY` 6 → 10, `SELF_CAPABILITIES_COMPANION` 4 → 7, matching what proxy + companion actually implement. Validator's catalog drift source fixed to read `capability-catalog.json` (previously drifted against embedded schema examples).
+
+### Vendored-schema sync discipline
+
+The tokenpak wheel ships a copy of the TIP schemas at `tokenpak/_tip_schemas/schemas/{tip,manifests}/` so `tokenpak doctor --conformance` works without a registry checkout. This is a **vendored mirror** of `tokenpak/registry:schemas/`. Any TIP-MINOR schema change touches three surfaces in order:
+
+1. `tokenpak/registry:schemas/` — authoritative source.
+2. `tokenpak-tip-validator` PyPI republish — `_SCHEMA_PATHS` map in sync with the new schemas.
+3. `tokenpak:tokenpak/_tip_schemas/schemas/` — vendored copy refreshed.
+
+See `tokenpak/_tip_schemas/README.md` for the sync checklist.
+
+### Versioning
+
+Bumps from `1.3.002` → `1.3.3` — returns to canonical 3-segment PEP 440 (`1.3.002` canonicalized to `1.3.2` on PyPI; `1.3.3` is the next clean slot). The 3-digit internal patch scheme (`1.2.091..095`, `1.3.001..002`) is retired as of this release.
+
 ## [1.3.002] - 2026-04-22
 
 ### Fixed

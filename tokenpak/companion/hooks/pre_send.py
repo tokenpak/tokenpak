@@ -164,6 +164,30 @@ def _journal_write_savings(
         )
         conn.commit()
         conn.close()
+        # SC-02: forward a TIP-shaped row to any installed observer.
+        # Schema is companion-journal-row. Notification is a no-op
+        # when no observer is installed.
+        try:
+            from tokenpak.services.diagnostics import (
+                conformance as _conformance,
+            )
+            from tokenpak.core.contracts import (
+                tip_version as _tip_version,
+            )
+            from datetime import datetime as _dt, timezone as _tz
+            _conformance.notify_companion_journal_row({
+                "session_id": session_id,
+                "timestamp": _dt.now(_tz.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "tip_version": _tip_version.CURRENT,
+                "entry_type": "companion_savings",
+                "source": f"hook.pre_send:{source}",
+                "tokens_avoided": int(tokens_avoided),
+                "cost_avoided_usd": round(cost_avoided_usd, 6),
+            })
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -278,6 +302,30 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float,
         )
         conn.commit()
         conn.close()
+        # SC-02 completeness (landed in SC-06): this is the third
+        # companion-journal writer; observer must see it too. Fails
+        # silently on any exception so the hook stays fast.
+        try:
+            from tokenpak.services.diagnostics import (
+                conformance as _conformance,
+            )
+            from tokenpak.core.contracts import (
+                tip_version as _tip_version,
+            )
+            from datetime import datetime as _dt, timezone as _tz
+            _conformance.notify_companion_journal_row({
+                "session_id": session_id,
+                "timestamp": _dt.now(_tz.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "tip_version": _tip_version.CURRENT,
+                "entry_type": "pre_send",
+                "source": f"hook.pre_send:journal:{route_class}",
+                "tokens_avoided": 0,
+                "cost_avoided_usd": 0.0,
+            })
+        except Exception:
+            pass
     except Exception:
         pass
 

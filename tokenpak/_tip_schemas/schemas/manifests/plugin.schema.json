@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenpak.ai/schemas/manifests/plugin-v1.json",
+  "title": "TIP-1.0 Plugin Manifest",
+  "description": "Declares an optional TokenPak plugin that installs at documented hook points. See https://tokenpak.ai/protocol/manifest-spec.",
+  "type": "object",
+  "required": [
+    "tip_version",
+    "id",
+    "name",
+    "version",
+    "kind",
+    "capabilities",
+    "compatibility",
+    "hooks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tip_version": {
+      "type": "string",
+      "pattern": "^TIP-\\d+\\.\\d+$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "kind": {
+      "const": "plugin"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(tip|ext)\\.[a-z0-9._-]+$"
+      },
+      "description": "MUST include tip.plugin.hook-point."
+    },
+    "compatibility": {
+      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+    },
+    "hooks": {
+      "type": "array",
+      "description": "Pipeline hook points this plugin installs into.",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "phase"
+        ],
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "compression",
+              "security",
+              "cache",
+              "routing",
+              "telemetry",
+              "dispatch",
+              "proxy-middleware"
+            ],
+            "description": "Pipeline stage (Architecture \u00a71.3 canonical sequence) or proxy middleware slot."
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "apply_request",
+              "apply_response",
+              "middleware"
+            ],
+            "description": "When within the stage the hook fires."
+          },
+          "module": {
+            "type": "string",
+            "description": "Python dotted path of the hook handler."
+          }
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "properties": {
+        "source_repo": {
+          "type": "string",
+          "format": "uri"
+        },
+        "signed": {
+          "type": "boolean"
+        },
+        "maintainer": {
+          "type": "string"
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

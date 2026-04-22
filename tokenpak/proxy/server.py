@@ -806,6 +806,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 sse_buffer = b""
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
+                    # SC-02: accumulate headers we actually send so the
+                    # conformance observer can validate the outbound set.
+                    # Parallel to send_header calls — no behavior change.
+                    _captured_headers: dict[str, str] = {}
                     has_content_type = False
                     has_cache_control = False
                     for h_key, h_val in resp.headers.items():
@@ -827,15 +831,30 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         if h_lower == "cache-control":
                             has_cache_control = True
                         self.send_header(h_key, h_val)
+                        _captured_headers[h_key] = h_val
                     # SSE-required headers: enforce even if upstream omits them
                     if not has_content_type:
                         self.send_header("Content-Type", "text/event-stream")
+                        _captured_headers["Content-Type"] = "text/event-stream"
                     if not has_cache_control:
                         self.send_header("Cache-Control", "no-cache")
+                        _captured_headers["Cache-Control"] = "no-cache"
                     # Always disable nginx buffering for streaming
                     self.send_header("X-Accel-Buffering", "no")
+                    _captured_headers["X-Accel-Buffering"] = "no"
                     # Propagate request ID to client for correlation
                     self.send_header("X-Request-ID", _req_id)
+                    _captured_headers["X-Request-ID"] = _req_id
+                    # SC-02: notify observer before closing headers.
+                    try:
+                        from tokenpak.services.diagnostics import (
+                            conformance as _conformance,
+                        )
+                        _conformance.notify_response_headers(
+                            _captured_headers, "response"
+                        )
+                    except Exception:
+                        pass
                     self.end_headers()
 
                     for chunk in resp.iter_bytes(chunk_size=4096):
@@ -859,6 +878,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
                 self.send_response(resp.status_code)
+                # SC-02: accumulate headers we actually send so the
+                # conformance observer can validate the outbound set.
+                # Parallel to send_header calls — no behavior change.
+                _captured_headers: dict[str, str] = {}
                 # httpx auto-decompresses the response body when accessed via
                 # .content. Upstream's `Content-Encoding: gzip` header is now
                 # a lie for the bytes we forward — clients that trust it will
@@ -877,6 +900,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ):
                         continue
                     self.send_header(h_key, h_val)
+                    _captured_headers[h_key] = h_val
                 # Debug header: stable prefix hash for cache determinism verification.
                 # Emitted for all messages requests (not just intercepted hosts)
                 # so integration tests and local stubs can verify determinism.
@@ -884,8 +908,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _ph = _compute_stable_prefix_hash(body)
                     if _ph:
                         self.send_header("X-Tokenpak-Cache-Prefix-Hash", _ph)
+                        _captured_headers["X-Tokenpak-Cache-Prefix-Hash"] = _ph
                 # Propagate request ID to client for correlation
                 self.send_header("X-Request-ID", _req_id)
+                _captured_headers["X-Request-ID"] = _req_id
+                # SC-02: notify observer before closing headers.
+                try:
+                    from tokenpak.services.diagnostics import (
+                        conformance as _conformance,
+                    )
+                    _conformance.notify_response_headers(
+                        _captured_headers, "response"
+                    )
+                except Exception:
+                    pass
                 self.end_headers()
 
                 resp_body = resp.content
@@ -1021,6 +1057,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             cache_creation_tokens=cache_creation_tokens,
                             would_have_saved=int(saved),
                             cache_origin=_cache_origin,
+                            # SC-03: plumb the wire request id through so
+                            # the telemetry observer row correlates with
+                            # the response headers observer event via the
+                            # same X-Request-Id seen on the wire.
+                            request_id=_req_id,
                         )
                     except Exception:
                         pass
@@ -1471,6 +1512,19 @@ class ProxyServer:
 
     def start(self, blocking: bool = True) -> None:
         """Start the proxy server."""
+        # SC-02: publish tip-proxy capability set at boot. Canonical
+        # source is tokenpak.core.contracts.capabilities; no duplication.
+        # Observer is ship-safe no-op when none installed.
+        try:
+            from tokenpak.services.diagnostics import conformance as _conformance
+            from tokenpak.core.contracts.capabilities import (
+                SELF_CAPABILITIES_PROXY,
+            )
+            _conformance.notify_capability_published(
+                "tip-proxy", SELF_CAPABILITIES_PROXY
+            )
+        except Exception:
+            pass
         # --- Startup self-test ---
         _all_ok, _warnings = run_startup_checks(self.port)
         if _warnings:

@@ -1,0 +1,36 @@
+{
+  "description": "Byte-preserve with cache_control on the system block. Exercises the cache-client-origin path: any cache hit observed on this route MUST be attributed origin='client' per Constitution §5.3, because tokenpak did not place the breakpoint — Claude Code itself did.",
+  "test_env_preconditions": {
+    "must_unset": ["CLAUDE_CODE_ENTRYPOINT"],
+    "reason": "Classifier's _claude_code_mode parses explicit entrypoint values cron/cli/sdk/ide/tmux from header OR env; 'tui' is not in that list and instead defaults via body-hint (stream:true → TUI). SC-06 fixtures must scrub this env var before running TUI scenarios."
+  },
+  "request": {
+    "headers": {
+      "user-agent": "claude-cli/1.3.0 (tui)",
+      "content-type": "application/json",
+      "authorization": "Bearer sk-oauth-stub",
+      "anthropic-beta": "oauth-2025-01-01",
+      "x-claude-code-entrypoint": "tui"
+    },
+    "body_text": "{\"model\":\"claude-opus-4-7\",\"system\":[{\"type\":\"text\",\"text\":\"long stable preamble\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}},{\"type\":\"text\",\"text\":\"short tail\"}],\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}],\"stream\":true}",
+    "metadata": {
+      "method": "POST",
+      "target_url": "https://api.anthropic.com/v1/messages"
+    }
+  },
+  "expected_route_class": "claude-code-tui",
+  "expected_capabilities_intersection": [
+    "tip.byte-preserved-passthrough",
+    "tip.cache.provider-observer",
+    "tip.cache.ttl-ordering",
+    "tip.routing.classifier.v1",
+    "tip.security.header-allowlist",
+    "tip.telemetry.wire-side"
+  ],
+  "expected_cache_origin": "client",
+  "provider_stub_response": {
+    "via": "LoopbackProvider",
+    "shape": "anthropic-messages-v1",
+    "keyed_by": "expected_route_class"
+  }
+}

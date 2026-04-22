@@ -1,0 +1,7 @@
+I'm working on the TokenPak self-conformance initiative (Phase TIP-SC).
+Please explain how the pre-send companion hook decides whether to enrich
+a Claude Code prompt with capsule + vault context, how that decision
+interacts with the byte-preserve rule on claude-code-* routes, and which
+journal entry types get written as a result of a single enrichable prompt
+turn. Reference the attribution contract (cache_origin enum) when you
+answer.
