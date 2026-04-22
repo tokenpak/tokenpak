@@ -888,6 +888,43 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     ps.session["cache_read_tokens"] += cache_read_tokens
                     ps.session["cache_creation_tokens"] += cache_creation_tokens
 
+                # Persist to monitor.db so `tokenpak status`, `tokenpak cost`,
+                # `tokenpak savings`, and the dashboards see this request.
+                # Async write queue (<0.1ms enqueue). Fail-open: DB errors
+                # never break the request.
+                if getattr(ps, "monitor", None) is not None:
+                    try:
+                        # Cache-origin attribution: if the client sent any
+                        # cache_control blocks we treat the cache as
+                        # client-managed; otherwise unknown. (Proxy-side
+                        # prefix-cache would bump this to "proxy" — added
+                        # when prefix-cache is wired back in.)
+                        _cache_origin = (
+                            "client"
+                            if (cache_read_tokens or cache_creation_tokens) > 0
+                            else "unknown"
+                        )
+                        ps.monitor.log(
+                            model=model,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            cost=cost,
+                            latency_ms=latency_ms,
+                            status_code=_resp_status,
+                            endpoint=target_url,
+                            compilation_mode=ps.compilation_mode,
+                            protected_tokens=protected_tokens,
+                            compressed_tokens=max(0, input_tokens - sent_input_tokens),
+                            injected_tokens=0,
+                            injected_sources="",
+                            cache_read_tokens=cache_read_tokens,
+                            cache_creation_tokens=cache_creation_tokens,
+                            would_have_saved=int(saved),
+                            cache_origin=_cache_origin,
+                        )
+                    except Exception:
+                        pass
+
                 # Record cache telemetry
                 try:
                     _stable_tokens = max(0, input_tokens - (input_tokens - sent_input_tokens))
@@ -1307,6 +1344,26 @@ class ProxyServer:
         self._compression_lock = threading.Lock()
         # Compression telemetry — writes events to ~/.tokenpak/compression_events.jsonl
         self.compression_stats = CompressionStats(start_time=self.session["start_time"])
+
+        # SQLite request log — writes to ~/.tokenpak/monitor.db (async queue,
+        # <0.1ms enqueue). Feeds `tokenpak status`, `cost`, `savings`, and
+        # dashboards. Instantiation is fail-open so the proxy keeps
+        # serving even if the DB is locked or corrupt.
+        try:
+            from tokenpak.proxy.monitor import Monitor as _DbMonitor
+
+            _db_path = os.environ.get(
+                "TOKENPAK_DB",
+                os.path.expanduser("~/.tokenpak/monitor.db"),
+            )
+            self.monitor = _DbMonitor(_db_path)
+        except Exception as _mon_exc:
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "monitor.db writer disabled: %s", _mon_exc
+            )
+            self.monitor = None
 
     # ------------------------------------------------------------------
     # Lifecycle

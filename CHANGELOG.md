@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-04-21
+
+### Fixed
+- **Telemetry is no longer silent.** The proxy now writes every completed request to `~/.tokenpak/monitor.db` again. A prior refactor orphaned the Monitor writer — the class was deleted from `tokenpak/proxy/monitor.py` and the `.log()` call sites in `tokenpak/proxy/server.py` were removed. `tokenpak status`, `tokenpak cost`, `tokenpak savings`, and the dashboards have all been reading from an ever-staler `monitor.db` since 2026-04-19. This release restores the Monitor class + re-wires it into `ProxyServer.__init__` and the per-request post-parse path. Async write queue (<0.1ms enqueue), fail-open (DB errors never break the request).
+- **Hook import regression surfaced by the live audit.** The fleet had a stale `tokenpak-1.1.0.dist-info` finder left behind by an older `pip install -e`; that finder was being picked up intermittently by `/usr/bin/python3 -m tokenpak.companion.hooks.pre_send` and produced `ImportError: cannot import name '__version__' from 'tokenpak'` inside Claude Code's `UserPromptSubmit` hook. Re-installing 1.2.3 on top of a stale 1.1.x cleans the old finder out.
+
+### Note
+- If you're upgrading from 1.2.0/1.2.1/1.2.2, your proxy will start logging again on the next restart. Existing `monitor.db` rows pre-1.2.0 are preserved; there's no migration.
+
 ## [1.2.2] - 2026-04-21
 
 ### Fixed
