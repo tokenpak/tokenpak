@@ -106,7 +106,13 @@ def test_scenario_telemetry_row_validates(scenario_name, conformance_observer):
 
         expected_origin = sc.get("expected_cache_origin", "unknown")
 
-        with tempfile.TemporaryDirectory() as td:
+        # `ignore_cleanup_errors=True` tolerates the race where
+        # Monitor.log's async SQLite writer thread still holds files
+        # in td when the context exits. The observer row (the thing
+        # we assert on) is captured synchronously before teardown;
+        # the disk artifact is incidental here. Python 3.12's rmtree
+        # is stricter and surfaces this as OSError without the flag.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             m = Monitor(db_path=f"{td}/monitor.db")
             m.log(
                 model=json.loads(resp.body).get("model", "unknown"),
@@ -166,7 +172,13 @@ def test_openai_scenario_uses_narrowest_truthful_assertion(conformance_observer)
         resp = get_loopback_provider().dispatch(req)
         usage = json.loads(resp.body)["usage"]
 
-        with tempfile.TemporaryDirectory() as td:
+        # `ignore_cleanup_errors=True` tolerates the race where
+        # Monitor.log's async SQLite writer thread still holds files
+        # in td when the context exits. The observer row (the thing
+        # we assert on) is captured synchronously before teardown;
+        # the disk artifact is incidental here. Python 3.12's rmtree
+        # is stricter and surfaces this as OSError without the flag.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
             m = Monitor(db_path=f"{td}/monitor.db")
             m.log(
                 model="gpt-4o-2024-08-06",

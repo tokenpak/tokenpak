@@ -24,6 +24,14 @@ on:
   push:
     tags:
       - 'v*'
+  # Preflight / dry-run trigger (added 2026-04-22 after v1.3.3 and v1.3.4
+  # burned on smoke-step + tempdir-race bugs that only surfaced at tag-push
+  # time). Firing the workflow via `gh workflow run release.yml --ref <sha>`
+  # runs the test + build jobs against a candidate commit; the release +
+  # publish jobs are skipped via their `if: github.event_name == 'push'`
+  # guards so no tag is cut and no PyPI upload is attempted. Use this to
+  # verify release-gate health before tagging.
+  workflow_dispatch:
 
 permissions:
   contents: write  # Required for creating releases
@@ -55,7 +63,12 @@ jobs:
         run: pytest tests/ -q --tb=short --ignore=tests/conformance
 
       - name: Smoke test CLI
-        run: python -m tokenpak.cli --help
+        # Use the installed console-script entry point (tokenpak.cli:main
+        # via pyproject.toml [project.scripts]). `python -m tokenpak.cli`
+        # does not work because tokenpak/cli is a package without a
+        # __main__.py — exercising the entry point is closer to what end
+        # users actually run.
+        run: tokenpak --help
 
   # ─────────────────────────────────────────────────────────────────────
   # Step 2: Build distribution artifacts
@@ -100,6 +113,9 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: build
+    # Skip GH Release creation on workflow_dispatch (preflight / dry-run);
+    # only real tag pushes should cut a GitHub Release.
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
@@ -171,8 +187,9 @@ jobs:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     needs: release
-    # Only publish on non-prerelease tags (no rc/alpha/beta)
-    if: ${{ !contains(github.ref, 'rc') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') }}
+    # Publish only on real tag pushes (not workflow_dispatch preflight)
+    # AND only on non-prerelease tags (no rc/alpha/beta).
+    if: ${{ github.event_name == 'push' && !contains(github.ref, 'rc') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') }}
     environment: pypi
     permissions:
       id-token: write  # Required for Trusted Publisher (OIDC)

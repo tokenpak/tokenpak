@@ -5,11 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2026-04-22
+
+### Fixed — release-gate hotfix-2
+
+Recovers from a second burned tag attempt. v1.3.3 failed on the release-gate test step; v1.3.4 got past that but failed on (a) the `python -m tokenpak.cli --help` smoke invocation and (b) a Python 3.12-only tempdir cleanup race in the Layer A conformance test. v1.3.5 carries the same content as v1.3.3/v1.3.4 plus three narrowly-scoped fixes.
+
+Both v1.3.3 and v1.3.4 are burned attempts retained on history for auditability. No PyPI publication occurred for either. Users should install v1.3.5 directly.
+
+- **`release.yml` Smoke test CLI step** uses `tokenpak --help` (installed console-script entry point) instead of `python -m tokenpak.cli --help`. `tokenpak.cli` is a package without `__main__.py`, so `-m` execution fails; the entry point has always been the correct end-user invocation.
+- **`tests/conformance/test_layer_a_pipeline.py`** — both `tempfile.TemporaryDirectory()` call sites use `ignore_cleanup_errors=True`. Monitor.log's async SQLite writer thread can still hold files in the tempdir when the test context exits; Python 3.12's `shutil.rmtree` surfaces this as `OSError` without the flag. The observer row (the thing the test asserts on) is captured synchronously before teardown; the disk artifact is incidental here.
+- **`.github/workflows/release.yml`** gains a `workflow_dispatch:` trigger so the test + build jobs can be fired manually against any candidate commit before a real tag is cut. The `release` and `publish` jobs are guarded by `if: github.event_name == 'push'` so dispatch runs never create a GitHub Release or upload to PyPI. Intended use: `gh workflow run release.yml --ref <commit>` as a preflight before tagging.
+
+### No scope expansion
+
+No TIP-SC semantic changes. No broader workflow redesign. No unrelated cleanup. No runtime behavior changes.
+
 ## [1.3.4] - 2026-04-22
+
+**Burned tag / failed release attempt — no PyPI publication, no GitHub Release page.** Failed at `Smoke test CLI` (`python -m tokenpak.cli` invocation bug) and at the Python 3.12 matrix leg of self-conformance (tempdir cleanup race). Tag retained on history for auditability. Fix lands in v1.3.5.
 
 ### Fixed — release-gate hotfix
 
-Recovers the TIP-SC phase from a failed v1.3.3 release attempt (no PyPI publication; no GitHub Release page). The v1.3.3 tag is a burned attempt retained on history for auditability; v1.3.4 carries the same content plus the fix below.
+Recovered the TIP-SC phase from a failed v1.3.3 release attempt (no PyPI publication; no GitHub Release page). The v1.3.3 tag is a burned attempt retained on history for auditability; v1.3.4 carries the same content plus the fix below.
 
 - **`release.yml` test step** no longer runs the `tests/conformance/` tree (`--ignore=tests/conformance`). The conformance suite is the canonical job of `tip-self-conformance.yml` per DECISION-SC-08-1; duplicating it in the release-gate required a registry checkout + `TOKENPAK_REGISTRY_ROOT` wiring that workflow intentionally does not carry. The v1.3.3 release failed at this step because the conformance tests couldn't resolve registry schemas.
 - **`tests/conformance/conftest.py::_discover_registry_root`** gains a 4th fallback to the vendored `tokenpak/_tip_schemas/` tree (via `importlib.resources`). Layer A + manifest + self-capability tests now run standalone in any installed env.
