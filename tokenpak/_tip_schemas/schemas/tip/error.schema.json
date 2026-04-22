@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/error-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/error-v1.json",
   "title": "TIP-1.0 Error Envelope",
   "description": "Canonical error shape emitted by any TIP-compatible surface. Bare HTML errors are forbidden (see project_openclaw_cali_auth_failure_mode incident). Every error response on the data plane and every error frame on the control plane conforms to this shape.",
   "type": "object",

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/compatibility-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/compatibility-v1.json",
   "title": "TIP-1.0 Compatibility Declaration",
-  "description": "How a component declares its TIP version range and peer capability requirements. Included by every TIP manifest. Evaluated by core/contracts/compatibility.py during connection negotiation. See https://tokenpak.ai/protocol/compatibility.",
+  "description": "How a component declares its TIP version range and peer capability requirements. Included by every TIP manifest. Evaluated by core/contracts/compatibility.py during connection negotiation. See https://docs.tokenpak.ai/protocol/compatibility.",
   "type": "object",
   "required": ["tip_version_range"],
   "additionalProperties": false,

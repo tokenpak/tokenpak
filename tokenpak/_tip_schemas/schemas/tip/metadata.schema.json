@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/metadata-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/metadata-v1.json",
   "title": "TIP-1.0 Request/Response Metadata",
-  "description": "Runtime metadata attached to services.Request.metadata and services.Response.metadata. See https://tokenpak.ai/protocol/scope for what TIP-1.0 does and does not cover.",
+  "description": "Runtime metadata attached to services.Request.metadata and services.Response.metadata. See https://docs.tokenpak.ai/protocol/scope for what TIP-1.0 does and does not cover.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

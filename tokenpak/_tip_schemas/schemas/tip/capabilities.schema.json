@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/capabilities-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/capabilities-v1.json",
   "title": "TIP-1.0 Capability Catalog",
-  "description": "Authoritative catalog of capability labels a TokenPak-compatible component MAY publish during MCP capability negotiation or in an X-TokenPak-Capability header. TIP-reserved labels start with 'tip.'; extension labels start with 'ext.<namespace>.'. Anything else is invalid. See https://tokenpak.ai/protocol/tip-capabilities.",
+  "description": "Authoritative catalog of capability labels a TokenPak-compatible component MAY publish during MCP capability negotiation or in an X-TokenPak-Capability header. TIP-reserved labels start with 'tip.'; extension labels start with 'ext.<namespace>.'. Anything else is invalid. See https://docs.tokenpak.ai/protocol/tip-capabilities.",
   "type": "object",
   "required": ["tip_version", "labels"],
   "properties": {
