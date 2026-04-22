@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.095] - 2026-04-22
+
+### Added — 1.3.0-δ (integrate + doctor --claude-code + drift detector)
+- **`tokenpak integrate claude-code`** — one-command setup via new public `companion.launcher.regenerate_config()`.
+- **`tokenpak doctor --claude-code`** — delegates to shared `services.diagnostics` (core + CC check suites).
+- **`services.diagnostics`** — `CheckResult`/`CheckStatus` + `run_core_checks()` + `run_claude_code_checks()` + `detect_install_drift()`. Catches the dist-info-shadow class of bug.
+- **`companion.launcher.regenerate_config()`** — public API; CLI stops reaching into `_impl` internals.
+
+### Tests
+- 8 new tests. 398/0 fail baseline (was 390 at γ; zero regressions).
+
 ## [1.2.094] - 2026-04-22
 
 ### Added — 1.3.0-γ (platform + backend selector + OAuth backend)

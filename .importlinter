@@ -201,6 +201,13 @@ ignore_imports =
     ; marker in the call site.
     tokenpak.companion.hooks.pre_send -> tokenpak.services.routing_service.classifier
     ;
+    ; === 1.3.0-δ: cli doctor/integrate delegates to shared diagnostics (§5.2-C) ===
+    ; `tokenpak doctor --claude-code` and `tokenpak integrate claude-code`
+    ; both consume the shared diagnostic check suite; building a second
+    ; set of checks in the CLI layer would be the duplicate-logic
+    ; anti-pattern the architecture explicitly forbids.
+    tokenpak.cli._impl -> tokenpak.services.diagnostics
+    ;
     ; === 1.3.0-α: proxy.server dispatches to services via classify_stage ===
     ; proxy/ is a transport shell around services/ (Architecture §1.3);
     ; it must be allowed to invoke the canonical pipeline stages. These

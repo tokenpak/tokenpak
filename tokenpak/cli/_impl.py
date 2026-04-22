@@ -1530,6 +1530,39 @@ def cmd_doctor(args):
             fix=getattr(args, "fix", False), deploy=getattr(args, "deploy", False)
         )
         sys.exit(rc)
+
+    # --claude-code mode delegates entirely to the shared diagnostics
+    # service. Core checks always run first so we surface install drift
+    # before Claude Code-specific findings (drift is usually the root
+    # cause for CC hook failures).
+    if getattr(args, "claude_code", False):
+        from tokenpak.services.diagnostics import (
+            CheckStatus,
+            run_claude_code_checks,
+            run_core_checks,
+        )
+
+        print("\nTOKENPAK  |  Doctor (Claude Code)")
+        print("──────────────────────────────\n")
+        fails = 0
+        warns = 0
+        for section_name, results in (
+            ("Core", run_core_checks()),
+            ("Claude Code", run_claude_code_checks()),
+        ):
+            print(f"• {section_name}")
+            for r in results:
+                marker = {"ok": "✓", "warn": "⚠", "fail": "✗"}[r.status.value]
+                print(f"  {marker} {r.name:<22} {r.summary}")
+                for d in r.details:
+                    print(f"      {d}")
+                if r.status is CheckStatus.FAIL:
+                    fails += 1
+                elif r.status is CheckStatus.WARN:
+                    warns += 1
+            print()
+        print(f"Summary: {fails} fail, {warns} warn")
+        sys.exit(2 if fails else 0)
     print("\nTOKENPAK  |  Doctor")
     print("──────────────────────────────\n")
 
@@ -1934,6 +1967,12 @@ def build_parser():
     p_doctor.add_argument(
         "--deploy", action="store_true", help="Push latest doctor to all agents (use with --fleet)"
     )
+    p_doctor.add_argument(
+        "--claude-code",
+        dest="claude_code",
+        action="store_true",
+        help="Run Claude Code-specific checks (companion settings, drift, base-url routing)",
+    )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_dashboard = sub.add_parser(
@@ -2032,6 +2071,7 @@ def build_parser():
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
     _build_install_tier_parser(sub)
+    _build_integrate_parser(sub)
 
     return parser
 
@@ -6254,6 +6294,82 @@ def cmd_install_tier(args):
     sys.exit(rc)
 
 
+# ── Integrate — one-shot per-target setup helpers ─────────────────────────────
+
+
+def cmd_integrate(args):
+    """Wire tokenpak into a specific target (``claude-code`` today)."""
+    target = getattr(args, "target", "").lower()
+    if target == "claude-code":
+        rc = _integrate_claude_code()
+        sys.exit(rc)
+    # Unknown target: show help + exit 2.
+    print(
+        f"tokenpak integrate: unknown target {target!r}\n"
+        f"Supported: claude-code",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
+def _integrate_claude_code() -> int:
+    """Wire Claude Code ↔ tokenpak.
+
+    1. Regenerate companion settings.json + mcp.json (writes the `-P`
+       hook and wires the MCP server).
+    2. Print the env-var recipe the user should export so direct
+       Claude Code invocations (not via ``tokenpak claude``) still
+       route through the local proxy.
+    3. Run the Claude-Code diagnostic suite to confirm everything's
+       reachable.
+    """
+    try:
+        from tokenpak.companion.launcher import regenerate_config
+    except Exception as exc:  # noqa: BLE001
+        print(f"✗ Could not import companion launcher: {exc}", file=sys.stderr)
+        return 1
+
+    paths = regenerate_config()
+
+    port = os.environ.get("TOKENPAK_PORT", "8766")
+    print(
+        "✓ Claude Code integration wired.\n"
+        f"  MCP config:  {paths['mcp']}\n"
+        f"  Settings:    {paths['settings']}\n"
+        "\n"
+        "Launch via:  tokenpak claude\n"
+        "\n"
+        "Or export these to make every `claude` invocation tokenpak-aware:\n"
+        f"  export ANTHROPIC_BASE_URL=http://127.0.0.1:{port}\n"
+        f"  export OPENAI_BASE_URL=http://127.0.0.1:{port}/v1\n"
+    )
+
+    # Verify the integration using the shared diagnostics service.
+    try:
+        from tokenpak.services.diagnostics import (
+            CheckStatus,
+            run_claude_code_checks,
+            run_core_checks,
+        )
+
+        fails = 0
+        print("Post-install verification:")
+        for r in run_core_checks() + run_claude_code_checks():
+            marker = {"ok": "✓", "warn": "⚠", "fail": "✗"}[r.status.value]
+            print(f"  {marker} {r.name:<22} {r.summary}")
+            if r.status is CheckStatus.FAIL:
+                fails += 1
+        if fails:
+            print(
+                "\n⚠ One or more checks failed — see output above. "
+                "Integration files are in place; address the failures and re-run."
+            )
+            return 2
+    except Exception as exc:  # noqa: BLE001
+        print(f"(diagnostics unavailable: {exc})", file=sys.stderr)
+    return 0
+
+
 def _build_install_tier_parser(sub):
     """Register 'tokenpak install-tier' command."""
     p = sub.add_parser(
@@ -6265,6 +6381,21 @@ def _build_install_tier_parser(sub):
     p.add_argument("--dry-run", action="store_true",
                    help="Show what pip would run; do not install")
     p.set_defaults(func=cmd_install_tier)
+    return p
+
+
+def _build_integrate_parser(sub):
+    """Register 'tokenpak integrate <target>' command."""
+    p = sub.add_parser(
+        "integrate",
+        help="Wire tokenpak into a specific target (claude-code, ...)",
+    )
+    p.add_argument(
+        "target",
+        choices=("claude-code",),
+        help="Integration target. Today: claude-code.",
+    )
+    p.set_defaults(func=cmd_integrate)
     return p
 
 

@@ -13,5 +13,35 @@ breaking any existing caller.
 from __future__ import annotations
 
 from ._impl import launch
+from tokenpak.companion.launcher._impl import (
+    _write_mcp_json as _write_mcp_json_impl,
+    _write_settings_json as _write_settings_json_impl,
+    _write_system_prompt as _write_system_prompt_impl,
+)
 
-__all__ = ["launch"]
+
+def regenerate_config() -> dict:
+    """Rewrite companion config files (settings.json, mcp.json, system
+    prompt) from the current ``CompanionConfig.from_env()``.
+
+    Used by ``tokenpak integrate claude-code``. Returns the paths of
+    the files written so the caller can surface them.
+    """
+    from pathlib import Path
+
+    from tokenpak.companion.config import CompanionConfig
+
+    cfg = CompanionConfig.from_env()
+    run_dir = Path(cfg.run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "mcp": _write_mcp_json_impl(cfg, run_dir),
+        "settings": _write_settings_json_impl(cfg, run_dir),
+    }
+    prompt = _write_system_prompt_impl(cfg, run_dir)
+    if prompt is not None:
+        paths["system_prompt"] = prompt
+    return paths
+
+
+__all__ = ["launch", "regenerate_config"]
