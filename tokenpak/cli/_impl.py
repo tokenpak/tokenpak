@@ -382,8 +382,23 @@ def cmd_start(args):
 
     # Launch the in-tree proxy server as a background process. The CLI
     # process exits after spawning; PID is recorded for `tokenpak stop`.
+    # Child stderr goes to a rotating log file so crashes are diagnosable
+    # (prior behavior: DEVNULL, meaning silent failures looked like
+    # successful launches).
     env = os.environ.copy()
     env["TOKENPAK_PORT"] = str(port)
+
+    log_path = Path.home() / ".tokenpak" / "proxy-stderr.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    # Keep only the last 256 KB so the file can't grow unbounded.
+    try:
+        if log_path.exists() and log_path.stat().st_size > 256 * 1024:
+            tail = log_path.read_bytes()[-128 * 1024:]
+            log_path.write_bytes(tail)
+    except OSError:
+        pass
+    log_fh = open(log_path, "ab", buffering=0)
+
     proc = subprocess.Popen(
         [
             sys.executable,
@@ -393,17 +408,42 @@ def cmd_start(args):
         ],
         env=env,
         start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_fh,
+        stderr=log_fh,
     )
     pid_path.parent.mkdir(parents=True, exist_ok=True)
     pid_path.write_text(str(proc.pid))
 
-    # Wait briefly and verify
+    # Poll /health for up to 10 seconds at 500ms cadence. Also check
+    # child liveness — if the subprocess has already exited, surface the
+    # tail of its stderr instead of pretending it's "still starting up."
     import time as _t
 
-    _t.sleep(1.5)
-    health = _proxy_get("/health", port=port)
+    deadline = _t.monotonic() + 10.0
+    health = None
+    while _t.monotonic() < deadline:
+        if proc.poll() is not None:
+            # Child died. Show the last few lines of its stderr so the
+            # user has something to act on.
+            try:
+                tail_bytes = log_path.read_bytes()[-2048:]
+                tail = tail_bytes.decode("utf-8", errors="replace").strip()
+            except OSError:
+                tail = ""
+            print(f"\n❌ Proxy failed to start (child exited with code {proc.returncode}).")
+            if tail:
+                print(f"   Last stderr from {log_path}:")
+                for line in tail.splitlines()[-8:]:
+                    print(f"     {line}")
+            else:
+                print(f"   See {log_path} for details.")
+            pid_path.unlink(missing_ok=True)
+            sys.exit(1)
+        health = _proxy_get("/health", port=port)
+        if health:
+            break
+        _t.sleep(0.5)
+
     if health:
         mode = health.get("compilation_mode", "hybrid")
         print(f"\n✅ Proxy running on http://localhost:{port} (mode: {mode})\n")
@@ -414,8 +454,17 @@ def cmd_start(args):
         print()
         print("💡 First time? Run: tokenpak setup")
     else:
-        print(f"Proxy launched (PID {proc.pid}, port {port}) — waiting for startup...")
-        print("  Run `tokenpak status` to verify.")
+        # Process is alive but /health didn't respond in 10s. Tell the
+        # user exactly that — do NOT claim success.
+        print(
+            f"\n⚠ Proxy process launched (PID {proc.pid}, port {port}) but "
+            f"/health did not respond within 10s.\n"
+            f"   If this persists, check {log_path} for stderr and then run:\n"
+            f"     tokenpak stop\n"
+            f"     tokenpak start",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def cmd_stop(args):
@@ -583,9 +632,14 @@ def cmd_index(args):
         return
 
     if not args.directory:
-        import argparse
-
-        raise argparse.ArgumentError(None, "directory is required when --status is not set")
+        print(
+            "error: a directory argument is required (or pass --status to inspect the index).\n"
+            "  Usage: tokenpak index <directory> [options]\n"
+            "         tokenpak index --status\n"
+            "  See: tokenpak index --help",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     # --watch mode: initial index then watch for changes
     if getattr(args, "watch", False):
@@ -1345,9 +1399,30 @@ def cmd_preview(args):
 
 def cmd_dashboard(args):
     """Real-time TokenPak health dashboard or public web dashboard URL."""
+    import secrets as _secrets
     import webbrowser
+    from pathlib import Path as _P
 
-    from ..token_manager import load_or_create_token, regenerate_token
+    # Inline token helpers: tokenpak.token_manager was removed in the
+    # 2026-04 canonical-layout migration without updating this import.
+    # 32-char hex token, 0o600 perms, ~/.tokenpak/dashboard_token.
+    _TOKEN_FILE = _P.home() / ".tokenpak" / "dashboard_token"
+
+    def load_or_create_token() -> str:
+        if _TOKEN_FILE.exists():
+            return _TOKEN_FILE.read_text().strip()
+        _TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tok = _secrets.token_hex(16)
+        _TOKEN_FILE.write_text(tok)
+        try:
+            os.chmod(_TOKEN_FILE, 0o600)
+        except OSError:
+            pass
+        return tok
+
+    def regenerate_token() -> str:
+        _TOKEN_FILE.unlink(missing_ok=True)
+        return load_or_create_token()
 
     # --show-token: display current token
     if getattr(args, "show_token", False):
@@ -2062,10 +2137,16 @@ def cmd_status(args):
             features.append(f"{feat_name} {'✅' if enabled else '❌'}")
         print(f"  Features:        {' | '.join(features)}")
 
-        # Circuit breakers
+        # Circuit breakers. /health returns {"enabled", "any_open",
+        # "providers": {name: {"open": bool, …}}}; iterate providers map,
+        # not the top-level dict (bools don't have .get()).
         cbs = health.get("circuit_breakers", {})
-        if cbs:
-            cb_parts = [f"{k} {'✅' if not v.get('open') else '🔴'}" for k, v in cbs.items()]
+        providers = cbs.get("providers", {}) if isinstance(cbs, dict) else {}
+        if providers:
+            cb_parts = [
+                f"{k} {'✅' if not (isinstance(v, dict) and v.get('open')) else '🔴'}"
+                for k, v in providers.items()
+            ]
             print(f"  Circuits:        {' | '.join(cb_parts)}")
 
         # Vault
@@ -5178,7 +5259,30 @@ def cmd_demo(args):
     """Show OSS compression recipes and demonstrate recipe selection."""
     from ..agent.compression.recipes import get_oss_engine
 
-    engine = get_oss_engine()
+    # Fast paths that don't need the recipe catalog.
+    if args.seed or args.clear:
+        pass
+    elif not (getattr(args, "list", False) or getattr(args, "category", None)
+              or getattr(args, "recipe", None) or getattr(args, "file", None)):
+        # Default: live compression demo — no recipe catalog required.
+        _run_compression_demo()
+        return
+
+    try:
+        engine = get_oss_engine()
+    except (ValueError, FileNotFoundError) as exc:
+        # Recipe catalog is missing from the shipped package (or the
+        # user pointed at a path that doesn't exist). Print a friendly
+        # message instead of dumping a traceback.
+        print(
+            "Compression recipe catalog is not available in this install.\n"
+            "  This usually means the `recipes/` data directory wasn't\n"
+            "  bundled with the wheel. Try `tokenpak demo` (no flags) to\n"
+            "  see the live compression demo, or reinstall tokenpak.",
+            file=sys.stderr,
+        )
+        print(f"  Underlying error: {exc}", file=sys.stderr)
+        sys.exit(0)
 
     # ── Demo data seeding
     if args.seed:
@@ -5205,15 +5309,8 @@ def cmd_demo(args):
             print("   Dashboard is now empty (ready for real traffic)")
         return
 
-    # ── Default: live compression demo on sample prompt
-    if (
-        not getattr(args, "list", False)
-        and not getattr(args, "category", None)
-        and not getattr(args, "recipe", None)
-        and not getattr(args, "file", None)
-    ):
-        _run_compression_demo()
-        return
+    # (Default live-compression-demo fast-path is handled above, before
+    # get_oss_engine(); no duplicate branch here.)
 
     # ── Single recipe detail
     if args.recipe:

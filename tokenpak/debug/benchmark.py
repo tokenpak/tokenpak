@@ -884,13 +884,17 @@ def _run_single_compression_test(
       - time_ms
       - recipe_hits (list of recipe names that matched)
     """
-    from .agent.compression.recipes import get_oss_engine
+    from tokenpak.agent.compression.recipes import get_oss_engine
 
-    engine = get_oss_engine()
-
-    # Which OSS recipes match this filename?
-    matched_recipes = engine.recipes_for_file(filename)
-    recipe_hits = [r.name for r in matched_recipes]
+    # Recipe catalog is optional — if the `recipes/` data directory
+    # isn't bundled (e.g. pip install without package data), skip the
+    # recipe-match step. Benchmark still produces token-count + timing.
+    try:
+        engine = get_oss_engine()
+        matched_recipes = engine.recipes_for_file(filename)
+        recipe_hits = [r.name for r in matched_recipes]
+    except (ValueError, FileNotFoundError):
+        recipe_hits = []
 
     # Compress via the appropriate processor
     t0 = time.perf_counter()

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-04-21
+
+### Fixed
+- **`tokenpak dashboard` no longer crashes** with `ModuleNotFoundError: tokenpak.token_manager`. The 32-char hex token generation + storage is inlined into `cmd_dashboard` now (prior refactor removed `token_manager.py` but left the import).
+- **`tokenpak status` no longer crashes** when the proxy is running. The circuit-breakers section now iterates `circuit_breakers["providers"]` (the actual shape returned by `/health`) instead of calling `.get()` on the top-level `{enabled, any_open, providers}` dict which would `AttributeError` on the bool values.
+- **`tokenpak start` no longer lies about success.** Child stderr now writes to `~/.tokenpak/proxy-stderr.log` (rotated at 256 KB), the health check polls `/health` for 10 seconds at 500ms cadence, and if the child exits early the CLI prints the tail of its stderr and exits non-zero. Previously the command said "Proxy launched — waiting for startup..." even when the daemon died milliseconds after spawn.
+- **`tokenpak demo` no longer crashes** when the `recipes/oss/` data directory is absent from the installed package. The live-compression demo path runs without the recipe catalog; recipe-catalog paths print a friendly install-hint message and exit 0 instead of dumping a traceback.
+- **`tokenpak benchmark` no longer crashes** with `ModuleNotFoundError: tokenpak.debug.agent`. Fixed a stale relative import in `tokenpak/debug/benchmark.py` — uses the absolute path `tokenpak.agent.compression.recipes` now.
+- **`tokenpak index` with no args** no longer dumps an `argparse.ArgumentError` traceback. Prints a usage hint and exits 2.
+- **Every output header now shows the real CLI version** (`TOKENPAK v1.2.2  | Status`) instead of a hardcoded `TOKENPAK v0.3.1`. `formatter.py` reads from `tokenpak.__version__`.
+
+### Added
+- **`tokenpak/proxy/__main__.py`** — so `python3 -m tokenpak.proxy` works. Existing systemd units (including the fleet's `tokenpak-proxy.service`) have been running `python3 -m tokenpak.proxy` with no `__main__.py` present, producing a 20k+ crash-loop counter. Now launches via `start_proxy(host=TOKENPAK_BIND, port=TOKENPAK_PORT, blocking=True)` by default.
+
+### Note
+- 1.2.0 and 1.2.1 had the same set of underlying bugs; 1.2.2 is the first release where the full CLI surface has been exercised end-to-end against a running proxy. Upgrading strongly recommended.
+
 ## [1.2.1] - 2026-04-21
 
 ### Fixed
