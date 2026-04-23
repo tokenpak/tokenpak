@@ -15,7 +15,6 @@ import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
 
 from tokenpak.services.diagnostics.drift import detect_install_drift
 

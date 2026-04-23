@@ -162,10 +162,10 @@ def serve(stdin=None, stdout=None) -> None:
     # source is tokenpak.core.contracts.capabilities; no duplication.
     # Observer is ship-safe no-op when none installed.
     try:
-        from tokenpak.services.diagnostics import conformance as _conformance
         from tokenpak.core.contracts.capabilities import (
             SELF_CAPABILITIES_COMPANION,
         )
+        from tokenpak.services.diagnostics import conformance as _conformance
         _conformance.notify_capability_published(
             "tip-companion", SELF_CAPABILITIES_COMPANION
         )

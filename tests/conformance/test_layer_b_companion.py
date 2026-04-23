@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import pytest
-
 from tokenpak_tip_validator import validate_against
 
 from tokenpak.companion.hooks import pre_send
@@ -26,7 +25,6 @@ from .conftest import (
     load_companion_scenarios,
     restore_scenario_env,
 )
-
 
 # Layer B validates captured rows against ``companion-journal-row``
 # (schema added in SC-01). The pinned PyPI validator 0.1.0 predates

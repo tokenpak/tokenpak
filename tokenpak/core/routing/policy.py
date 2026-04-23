@@ -20,7 +20,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
-
 BodyHandling = Literal["byte_preserve", "mutate"]
 CacheOwnership = Literal["client", "proxy", "none"]
 DLPMode = Literal["off", "warn", "redact", "block"]

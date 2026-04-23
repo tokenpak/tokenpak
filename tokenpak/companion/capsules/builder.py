@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Default capsule directory
 # ---------------------------------------------------------------------------
@@ -104,7 +103,7 @@ class SessionCapsule:
         """
         lines: List[str] = []
 
-        header = f"## Session Capsule"
+        header = "## Session Capsule"
         if self.session_id:
             header += f" — `{self.session_id[:16]}`"
         lines.append(header)

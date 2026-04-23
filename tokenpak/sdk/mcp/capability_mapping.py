@@ -17,7 +17,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-
 _VALID_LABEL = re.compile(r"^(tip|ext)\.[a-z0-9._-]+$")
 
 

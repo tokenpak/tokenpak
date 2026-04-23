@@ -21,7 +21,6 @@ from tokenpak.core.contracts.permitted_headers import (
     PERMITTED_HEADERS_PROXY,
 )
 
-
 pytestmark = pytest.mark.conformance
 
 

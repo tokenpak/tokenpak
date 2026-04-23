@@ -244,6 +244,10 @@ ignore = [
     "E402",
     "E741",
     "F841",
+    # Cosmetic; trailing whitespace on blank lines inside docstrings
+    # (companion/trace.py) — not worth mass-rewriting docstrings
+    # purely to satisfy the linter.
+    "W293",
 ]
 
 # Per-file exceptions — these patterns are intentional, not drift:
@@ -252,13 +256,22 @@ ignore = [
 #   presence is the feature being tested (F401).
 # - Conditional type aliases with `# type: ignore` expect redefinition (F811).
 [tool.ruff.lint.per-file-ignores]
-"**/__init__.py" = ["F401"]
-"tokenpak/__init__.py" = ["F401", "F811"]
+# `__init__.py` files use `from x import *` extensively for API re-
+# export (the tokenpak public API surface depends on this). Ignore
+# the star-import rules + unused-import rule on those files.
+"**/__init__.py" = ["F401", "F403", "F405"]
+"tokenpak/__init__.py" = ["F401", "F403", "F405", "F811"]
 "tokenpak/cli/commands/dashboard.py" = ["F401"]
+# Deprecated re-export shims (2026-04-20 agent/cli + agent/proxy
+# consolidation). Each shim is a `from <new_home> import *` one-liner
+# plus a DeprecationWarning. Star-import + unused-name rules are
+# expected on these files; they'll be removed in TIP-2.0 along with
+# the shim layer itself.
+"tokenpak/agent/**/*.py" = ["F401", "F403", "F405"]
 # Pre-existing dup definition (identical bodies, differing docstrings).
 # Consolidation is out of scope for v1.0.3 pre-promotion; tracked as
 # follow-up in known-findings.md.
-"tokenpak/agent/proxy/intent_policy.py" = ["F811"]
+"tokenpak/proxy/intent_policy.py" = ["F811"]
 # Legacy telemetry event filter; `== True` preserved because the stored
 # events are mixed type (bool/int/str-ish) and truthy coercion would
 # widen the filter. Track in known-findings.md.
@@ -266,7 +279,7 @@ ignore = [
 # BaseObserver is a watchdog type that may not be importable in all
 # environments; the `# type: ignore` comment documents the deliberate
 # fallback. Ruff doesn't honor type-ignore comments.
-"tokenpak/agent/vault/watcher.py" = ["F821"]
+"tokenpak/vault/watcher.py" = ["F821"]
 # Availability check — the import exercises the dependency, not the
 # symbol itself.
 "tokenpak/tests/test_proxy_integration.py" = ["F401"]

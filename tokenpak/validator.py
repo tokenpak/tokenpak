@@ -8,13 +8,8 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
 
 # ── Schema location ──────────────────────────────────────────────────────────
-
-
 # ---------------------------------------------------------------------------
 # DEPRECATED 2026-04-20 — canonical home is tokenpak.core.validation.validator.
 # Per Kevin's dual-implementation decision: this top-level module is
@@ -24,6 +19,10 @@ from typing import Any, Optional
 # Removal target: TIP-2.0.
 # ---------------------------------------------------------------------------
 import warnings as _tp_deprecate_warnings
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
 _tp_deprecate_warnings.warn(
     "tokenpak.validator is deprecated — use tokenpak.core.validation.validator instead. "
     "Top-level tokenpak.validator has a different API than the canonical version; "

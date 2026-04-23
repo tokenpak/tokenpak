@@ -14,10 +14,8 @@ from __future__ import annotations
 
 import json
 import tempfile
-from pathlib import Path
 
 import pytest
-
 from tokenpak_tip_validator import validate_against
 
 from tokenpak.core.contracts.capabilities import SELF_CAPABILITIES_PROXY
@@ -34,7 +32,6 @@ from .conftest import (
     proxy_scenario_names,
     restore_scenario_env,
 )
-
 
 pytestmark = pytest.mark.conformance
 

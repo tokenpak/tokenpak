@@ -13,8 +13,8 @@ handlers supply their own dispatcher that hits a real provider via
 
 from __future__ import annotations
 
-from .stages import PipelineContext
 from ..response import Response
+from .stages import PipelineContext
 
 
 def raise_if_called(ctx: PipelineContext) -> Response:

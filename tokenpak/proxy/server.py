@@ -44,21 +44,21 @@ from tokenpak.agent.telemetry.collector import RequestStats
 from tokenpak.agent.telemetry.footer import render_footer_oneline
 from tokenpak.cache.telemetry import CacheMetrics
 from tokenpak.cache.telemetry import get_collector as _get_cache_collector
-from tokenpak.telemetry.request_logger import log_request
-from tokenpak.telemetry.request_logger import new_request_id as _new_request_id
 
+# SC2-03 canonical hop-by-hop set. Alias at module scope so the
+# two downstream response-forward loops can use a single
+# lowercased-membership check without re-importing per request.
+from tokenpak.core.contracts.permitted_headers import HOP_BY_HOP as _HOP_BY_HOP
 from tokenpak.proxy.circuit_breaker import get_circuit_breaker_registry, provider_from_url
 from tokenpak.proxy.connection_pool import ConnectionPool, PoolConfig
 from tokenpak.proxy.degradation import DegradationEventType, get_degradation_tracker
 from tokenpak.proxy.passthrough import PassthroughConfig, forward_headers, validate_auth
 from tokenpak.proxy.router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
 from tokenpak.proxy.startup import format_startup_report, run_startup_checks
-# SC2-03 canonical hop-by-hop set. Alias at module scope so the
-# two downstream response-forward loops can use a single
-# lowercased-membership check without re-importing per request.
-from tokenpak.core.contracts.permitted_headers import HOP_BY_HOP as _HOP_BY_HOP
 from tokenpak.proxy.stats import CompressionStats
 from tokenpak.proxy.streaming import extract_sse_tokens
+from tokenpak.telemetry.request_logger import log_request
+from tokenpak.telemetry.request_logger import new_request_id as _new_request_id
 
 # ---------------------------------------------------------------------------
 # Pipeline trace types
@@ -1545,10 +1545,10 @@ class ProxyServer:
         # source is tokenpak.core.contracts.capabilities; no duplication.
         # Observer is ship-safe no-op when none installed.
         try:
-            from tokenpak.services.diagnostics import conformance as _conformance
             from tokenpak.core.contracts.capabilities import (
                 SELF_CAPABILITIES_PROXY,
             )
+            from tokenpak.services.diagnostics import conformance as _conformance
             _conformance.notify_capability_published(
                 "tip-proxy", SELF_CAPABILITIES_PROXY
             )

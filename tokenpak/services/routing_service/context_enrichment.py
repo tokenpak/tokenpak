@@ -32,7 +32,6 @@ from typing import Any
 
 from tokenpak.services.request_pipeline.stages import PipelineContext
 
-
 logger = logging.getLogger(__name__)
 
 

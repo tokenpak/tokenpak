@@ -22,7 +22,6 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
 _DEFAULT_DB_PATH = Path.home() / ".tokenpak" / "companion" / "journal.db"
 
 _SCHEMA = """
@@ -116,13 +115,15 @@ class JournalStore:
             # Schema is companion-journal-row (registry
             # schemas/tip/companion-journal-row.schema.json).
             try:
-                from tokenpak.services.diagnostics import (
-                    conformance as _conformance,
-                )
+                from datetime import datetime as _dt
+                from datetime import timezone as _tz
+
                 from tokenpak.core.contracts import (
                     tip_version as _tip_version,
                 )
-                from datetime import datetime as _dt, timezone as _tz
+                from tokenpak.services.diagnostics import (
+                    conformance as _conformance,
+                )
                 _conformance.notify_companion_journal_row({
                     "session_id": session_id,
                     "timestamp": _dt.now(_tz.utc)

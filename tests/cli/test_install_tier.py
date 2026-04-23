@@ -3,15 +3,9 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from tokenpak.cli._install_tier import (
-    VALID_TIERS,
     _index_url_with_auth,
     _license_key,
     _license_tier,
@@ -31,6 +25,7 @@ def test_no_license_file_returns_2(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("TOKENPAK_LICENSE_FILE", str(fake_file))
     # Need to re-import to pick up env change
     from importlib import reload
+
     import tokenpak.cli._install_tier as mod
     reload(mod)
     rc = mod.run_install_tier("pro", dry_run=True)
@@ -44,6 +39,7 @@ def test_license_missing_key_returns_2(tmp_path, monkeypatch, capsys):
     license_file.write_text(json.dumps({"tier": "pro"}))  # no key field
     monkeypatch.setenv("TOKENPAK_LICENSE_FILE", str(license_file))
     from importlib import reload
+
     import tokenpak.cli._install_tier as mod
     reload(mod)
     rc = mod.run_install_tier("pro", dry_run=True)
@@ -57,6 +53,7 @@ def test_dry_run_with_valid_license_returns_0(tmp_path, monkeypatch, capsys):
     license_file.write_text(json.dumps({"key": "TPK-PRO-TESTKEY123", "tier": "pro"}))
     monkeypatch.setenv("TOKENPAK_LICENSE_FILE", str(license_file))
     from importlib import reload
+
     import tokenpak.cli._install_tier as mod
     reload(mod)
     rc = mod.run_install_tier("pro", dry_run=True)
@@ -96,6 +93,7 @@ def test_tier_mismatch_warns_but_proceeds(tmp_path, monkeypatch, capsys):
     license_file.write_text(json.dumps({"key": "TPK-PRO-X", "tier": "pro"}))
     monkeypatch.setenv("TOKENPAK_LICENSE_FILE", str(license_file))
     from importlib import reload
+
     import tokenpak.cli._install_tier as mod
     reload(mod)
     rc = mod.run_install_tier("team", dry_run=True)

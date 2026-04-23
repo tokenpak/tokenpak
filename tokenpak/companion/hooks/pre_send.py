@@ -40,7 +40,6 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-
 # Per-1M-token input rates (USD). Rough — intentional; a precise costing
 # pass runs post-wire via the proxy's monitor.db. This keeps the hook
 # fast enough to stay in the send loop.
@@ -168,13 +167,15 @@ def _journal_write_savings(
         # Schema is companion-journal-row. Notification is a no-op
         # when no observer is installed.
         try:
-            from tokenpak.services.diagnostics import (
-                conformance as _conformance,
-            )
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
+
             from tokenpak.core.contracts import (
                 tip_version as _tip_version,
             )
-            from datetime import datetime as _dt, timezone as _tz
+            from tokenpak.services.diagnostics import (
+                conformance as _conformance,
+            )
             _conformance.notify_companion_journal_row({
                 "session_id": session_id,
                 "timestamp": _dt.now(_tz.utc)
@@ -306,13 +307,15 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float,
         # companion-journal writer; observer must see it too. Fails
         # silently on any exception so the hook stays fast.
         try:
-            from tokenpak.services.diagnostics import (
-                conformance as _conformance,
-            )
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
+
             from tokenpak.core.contracts import (
                 tip_version as _tip_version,
             )
-            from datetime import datetime as _dt, timezone as _tz
+            from tokenpak.services.diagnostics import (
+                conformance as _conformance,
+            )
             _conformance.notify_companion_journal_row({
                 "session_id": session_id,
                 "timestamp": _dt.now(_tz.utc)

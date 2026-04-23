@@ -11,8 +11,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from tokenpak.compression.processors import get_processor
 from tokenpak.core.registry import Block, BlockRegistry
-from tokenpak.telemetry.tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
 from tokenpak.sources.walker import walk_directory
+from tokenpak.telemetry.tokens import cache_info, clear_cache, count_tokens, count_tokens_uncached
 
 # ---------------------------------------------------------------------------
 # Built-in sample data for compression benchmark

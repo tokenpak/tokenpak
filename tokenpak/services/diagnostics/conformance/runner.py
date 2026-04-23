@@ -21,7 +21,6 @@ operator-readable "is my install conformant?" self-check.
 from __future__ import annotations
 
 import json
-import sqlite3
 import tempfile
 from importlib.resources import files
 from pathlib import Path
@@ -130,8 +129,9 @@ def _tooling_preflight() -> CheckResult | None:
 
 
 def _check_capability_set() -> CheckResult:
-    from tokenpak.core.contracts.capabilities import SELF_CAPABILITIES
     from tokenpak_tip_validator import validate_capability_set
+
+    from tokenpak.core.contracts.capabilities import SELF_CAPABILITIES
 
     result = validate_capability_set(list(SELF_CAPABILITIES))
     if result.ok:
@@ -235,9 +235,10 @@ def _check_telemetry_emission() -> CheckResult:
     Mirrors Layer-A assertion `test_scenario_telemetry_row_validates`
     with a synthetic row. Never touches monitor.db beyond a temp dir.
     """
+    from tokenpak_tip_validator import validate_against
+
     from tokenpak.proxy.monitor import Monitor
     from tokenpak.services.diagnostics import conformance as _conformance
-    from tokenpak_tip_validator import validate_against
 
     captured: list[dict] = []
 
@@ -297,9 +298,10 @@ def _check_telemetry_emission() -> CheckResult:
 
 def _check_journal_emission() -> CheckResult:
     """Drive JournalStore.write_entry under an observer and validate."""
+    from tokenpak_tip_validator import validate_against
+
     from tokenpak.companion.journal.store import JournalStore
     from tokenpak.services.diagnostics import conformance as _conformance
-    from tokenpak_tip_validator import validate_against
 
     captured: list[dict] = []
 

@@ -40,7 +40,6 @@ from typing import Mapping, Optional
 from tokenpak.core.routing.route_class import RouteClass
 from tokenpak.services.request import Request
 
-
 # Header names are lowercased before lookup because HTTP headers are
 # case-insensitive and different callers normalise differently.
 _CC_USER_AGENT_PREFIXES = ("claude-cli", "claude-code", "anthropic-cli")

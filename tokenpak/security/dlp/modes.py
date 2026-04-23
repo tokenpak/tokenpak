@@ -19,11 +19,10 @@ side-effects in their own layer.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
 from tokenpak.security.dlp.scanner import Finding
-
 
 logger = logging.getLogger(__name__)
 

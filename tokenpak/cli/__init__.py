@@ -22,9 +22,6 @@ Do not "clean up" to a single dispatcher — both are exercised by
 integration tests; collapsing would regress ``tokenpak serve`` startup.
 """
 
-from tokenpak.cli import commands as commands
-from tokenpak.cli._impl import main
-
 # Per Architecture §2.4, entrypoints reach the execution backbone
 # through tokenpak.proxy.client. Made available here so command
 # modules can dispatch via `from tokenpak.cli import proxy_client`
@@ -32,6 +29,8 @@ from tokenpak.cli._impl import main
 # itself is trivial; in-process transport is active when services.
 # execute has a dispatcher wired (post-D1 code consolidation).
 from tokenpak import proxy as _tp_proxy  # noqa: F401
+from tokenpak.cli import commands as commands
+from tokenpak.cli._impl import main
 from tokenpak.proxy import client as proxy_client  # noqa: F401
 
 __all__ = ["main", "commands", "proxy_client"]

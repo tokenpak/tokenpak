@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from tokenpak.core.routing.route_class import RouteClass
 
 from ..request import Request
-from ..response import Chunk, Response
+from ..response import Response
 
 
 @dataclass(slots=True)

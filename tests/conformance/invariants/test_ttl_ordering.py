@@ -19,7 +19,6 @@ from typing import Any, List
 
 import pytest
 
-
 pytestmark = [pytest.mark.conformance, pytest.mark.advisory]
 
 

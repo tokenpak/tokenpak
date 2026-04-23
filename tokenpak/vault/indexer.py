@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from tokenpak.agent.ingest.schema_converter import convert_document
-from tokenpak.extraction import EntityExtractor
 from tokenpak.compression.processors import get_processor
-from tokenpak.telemetry.tokens import count_tokens
+from tokenpak.extraction import EntityExtractor
 from tokenpak.sources.walker import detect_file_type, walk_directory
+from tokenpak.telemetry.tokens import count_tokens
 
 from .blocks import BlockRecord, BlockStore, SliceStore, get_block_store
 from .slicer import SliceRecord, should_slice, slice_content

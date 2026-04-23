@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from tokenpak.core.routing.policy import Policy
 from tokenpak.core.routing.route_class import RouteClass
+from tokenpak.services.request import Request
+from tokenpak.services.request_pipeline.stages import PipelineContext
 from tokenpak.services.routing_service.context_enrichment import (
     ContextEnrichmentStage,
 )
-from tokenpak.services.request import Request
-from tokenpak.services.request_pipeline.stages import PipelineContext
 
 
 def _request_body(user_msg: str, system: str | list | None = None) -> bytes:

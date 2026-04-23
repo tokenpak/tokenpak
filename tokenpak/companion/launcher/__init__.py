@@ -12,12 +12,17 @@ breaking any existing caller.
 
 from __future__ import annotations
 
-from ._impl import launch
 from tokenpak.companion.launcher._impl import (
     _write_mcp_json as _write_mcp_json_impl,
+)
+from tokenpak.companion.launcher._impl import (
     _write_settings_json as _write_settings_json_impl,
+)
+from tokenpak.companion.launcher._impl import (
     _write_system_prompt as _write_system_prompt_impl,
 )
+
+from ._impl import launch
 
 
 def regenerate_config() -> dict:

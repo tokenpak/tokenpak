@@ -9,15 +9,8 @@ Aggregates compression events by model, tracking:
 
 from __future__ import annotations
 
-from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, Optional
-
-from .agent.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
-
 # Standard model pricing (USD per million tokens)
 # Updated for Q1 2026 standard rates
-
 # ---------------------------------------------------------------------------
 # DEPRECATED 2026-04-20 — canonical home is tokenpak.telemetry.models.
 # Per Kevin's dual-implementation decision: this top-level module is
@@ -27,6 +20,12 @@ from .agent.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
 # Removal target: TIP-2.0.
 # ---------------------------------------------------------------------------
 import warnings as _tp_deprecate_warnings
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, Optional
+
+from .agent.proxy.stats import DEFAULT_LOG_PATH, CompressionStats
+
 _tp_deprecate_warnings.warn(
     "tokenpak.models is deprecated — use tokenpak.telemetry.models instead. "
     "Top-level tokenpak.models has a different API than the canonical version; "

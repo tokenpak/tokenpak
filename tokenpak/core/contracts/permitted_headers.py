@@ -13,7 +13,6 @@ invariant test suite.
 """
 from __future__ import annotations
 
-
 # Headers that every profile must strip before forwarding — hop-by-hop
 # per RFC 7230 + Content-Encoding (because httpx auto-decompresses, so
 # the upstream's Content-Encoding is a lie for the bytes we forward).

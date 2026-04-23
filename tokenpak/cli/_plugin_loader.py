@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import os
 from importlib.metadata import EntryPoint, entry_points
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -25,15 +25,12 @@ sole activation signal.
 from __future__ import annotations
 
 import json
-from typing import Mapping
 
 from tokenpak.core.routing.route_class import RouteClass
 from tokenpak.services.request import Request
 from tokenpak.services.routing_service.backends.base import (
-    Backend,
     BackendResponse,
 )
-
 
 # One canned Anthropic-shaped non-streaming response body per route
 # class. Token counts are small but non-zero so telemetry rows have

@@ -16,7 +16,6 @@ from typing import Iterable
 
 import pytest
 
-
 pytestmark = [pytest.mark.conformance, pytest.mark.advisory]
 
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from tokenpak.core.routing.policy import Policy
 from tokenpak.core.routing.route_class import RouteClass
 from tokenpak.services.policy_service.dlp_stage import DLPStage

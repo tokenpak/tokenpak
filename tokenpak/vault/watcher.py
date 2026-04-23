@@ -248,8 +248,8 @@ class VaultWatcher:
 
             from tokenpak.compression.processors import get_processor
             from tokenpak.core.registry import BlockRegistry
-            from tokenpak.telemetry.tokens import count_tokens
             from tokenpak.sources.walker import FILE_TYPES
+            from tokenpak.telemetry.tokens import count_tokens
 
             db = self.config.db_path
             registry = BlockRegistry(db) if db else BlockRegistry()

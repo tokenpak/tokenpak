@@ -36,7 +36,6 @@ from typing import Optional
 from tokenpak.services.request import Request
 from tokenpak.services.routing_service.backends.base import BackendResponse
 
-
 logger = logging.getLogger(__name__)
 
 

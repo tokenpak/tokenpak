@@ -30,7 +30,6 @@ from typing import Any, Dict
 
 import pytest
 
-
 pytestmark = pytest.mark.conformance
 
 
@@ -48,6 +47,7 @@ def _make_telemetry_row(
     the schema's ``ext`` namespace.
     """
     from datetime import datetime, timezone
+
     from tokenpak.core.contracts import tip_version
 
     return {

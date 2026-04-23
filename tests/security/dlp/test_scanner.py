@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.security.dlp import DLPScanner, Finding
+from tokenpak.security.dlp import DLPScanner
 from tokenpak.security.dlp.rules import DEFAULT_RULES
 
 

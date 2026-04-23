@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Iterable, Optional, Sequence
+from typing import Optional, Sequence
 
 from tokenpak.security.dlp.rules import DEFAULT_RULES, Rule
-
 
 logger = logging.getLogger(__name__)
 

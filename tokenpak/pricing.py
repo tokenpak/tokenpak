@@ -6,12 +6,8 @@ compression + cache savings from proxy stats.
 
 from __future__ import annotations
 
-from typing import Optional
-
 # Pricing per million tokens (input, cached, output)
 # Format: {"input": price, "cached": price, "output": price}
-
-
 # ---------------------------------------------------------------------------
 # DEPRECATED 2026-04-20 — canonical home is tokenpak.telemetry.pricing.
 # Per Kevin's dual-implementation decision: this top-level module is
@@ -21,6 +17,8 @@ from typing import Optional
 # Removal target: TIP-2.0.
 # ---------------------------------------------------------------------------
 import warnings as _tp_deprecate_warnings
+from typing import Optional
+
 _tp_deprecate_warnings.warn(
     "tokenpak.pricing is deprecated — use tokenpak.telemetry.pricing instead. "
     "Top-level tokenpak.pricing has a different API than the canonical version; "

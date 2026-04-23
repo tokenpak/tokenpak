@@ -18,11 +18,9 @@ policy handling. Those live in their respective pipeline stages upstream.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from tokenpak.services.request import Request
 from tokenpak.services.routing_service.backends.base import BackendResponse
-
 
 logger = logging.getLogger(__name__)
 

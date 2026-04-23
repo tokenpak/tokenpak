@@ -25,7 +25,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from tokenpak_tip_validator import validate_against
 
 from tokenpak.companion.journal.store import JournalStore
@@ -33,7 +32,6 @@ from tokenpak.core.contracts.capabilities import SELF_CAPABILITIES_PROXY
 from tokenpak.proxy.monitor import Monitor
 
 from .conftest import installed_validator_knows_schema
-
 
 pytestmark = [pytest.mark.conformance, pytest.mark.smoke]
 

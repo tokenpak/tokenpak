@@ -8,7 +8,6 @@ profiles tokenpak claims per Constitution §13.3.
 from __future__ import annotations
 
 import pytest
-
 from tokenpak_tip_validator import validate_capability_set, validate_profile
 
 from tokenpak.core.contracts.capabilities import (
@@ -16,7 +15,6 @@ from tokenpak.core.contracts.capabilities import (
     SELF_CAPABILITIES_PROXY,
     SELF_PROFILES,
 )
-
 
 pytestmark = pytest.mark.conformance
 

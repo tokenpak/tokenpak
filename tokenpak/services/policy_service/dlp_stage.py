@@ -25,7 +25,6 @@ import logging
 from tokenpak.security.dlp import DLPScanner, apply_mode
 from tokenpak.services.request_pipeline.stages import PipelineContext
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -19,7 +19,6 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Pattern
 
-
 Severity = Literal["info", "warn", "high"]
 
 

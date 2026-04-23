@@ -15,7 +15,8 @@ from queue import Empty, Queue
 # Migration system (optional — graceful fallback)
 # ---------------------------------------------------------------------------
 try:
-    from db_migrations import migrate as db_migrate, get_current_schema_version
+    from db_migrations import get_current_schema_version
+    from db_migrations import migrate as db_migrate
     MIGRATION_AVAILABLE = True
 except ImportError:
     MIGRATION_AVAILABLE = False
@@ -245,10 +246,12 @@ class Monitor:
         # monitor-local synthetic ID so the schema's required field
         # is satisfied and the row is still correlatable locally.
         try:
-            from tokenpak.services.diagnostics import conformance as _conformance
-            from tokenpak.core.contracts import tip_version as _tip_version
-            from datetime import datetime as _dt, timezone as _tz
             import time as _time
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
+
+            from tokenpak.core.contracts import tip_version as _tip_version
+            from tokenpak.services.diagnostics import conformance as _conformance
 
             _rid = (
                 request_id

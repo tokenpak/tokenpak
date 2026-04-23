@@ -18,8 +18,8 @@ from typing import Dict, List, Tuple
 
 from tokenpak.compression.processors import get_processor
 from tokenpak.core.registry import Block, BlockRegistry
-from tokenpak.telemetry.tokens import clear_cache, count_tokens
 from tokenpak.sources.walker import walk_directory
+from tokenpak.telemetry.tokens import clear_cache, count_tokens
 
 PROFILE_PATH = Path.home() / ".tokenpak" / "calibration.json"
 

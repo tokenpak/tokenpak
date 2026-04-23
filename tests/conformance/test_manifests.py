@@ -17,14 +17,12 @@ from importlib.resources import files
 from typing import Any
 
 import pytest
-
 from tokenpak_tip_validator import validate_against
 
 from tokenpak.core.contracts.capabilities import (
     SELF_CAPABILITIES_COMPANION,
     SELF_CAPABILITIES_PROXY,
 )
-
 
 pytestmark = pytest.mark.conformance
 

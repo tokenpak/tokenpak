@@ -40,8 +40,10 @@ jobs:
           pip install ruff
 
       - name: Lint with Ruff
-        run: |
-          ruff check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
+        # Uses pyproject.toml's [tool.ruff.lint] + per-file-ignores;
+        # no explicit --select/--ignore flags so the config is the
+        # single source of truth (flags would override per-file-ignores).
+        run: ruff check tokenpak/ tests/
 
   # P2-14: Architecture import contracts enforced in CI.
   # Runs lint-imports against .importlinter. Every §5.2 exception has

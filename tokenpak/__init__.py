@@ -48,12 +48,6 @@ from tokenpak.agent.agentic.handoff import (
 
 # CompletionTracker: tracks per-completion cost, model, and latency
 from tokenpak.agent.telemetry.cost_tracker import CostTracker as CompletionTracker
-from tokenpak.services.policy_service.budget.rules import BudgetBlock
-
-# ---------------------------------------------------------------------------
-# Budgeting
-# ---------------------------------------------------------------------------
-from tokenpak.services.policy_service.budget.budgeter import Budgeter
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -73,23 +67,6 @@ from tokenpak.compression.pack import CompiledResult, ContextPack, PackBlock, pa
 # Content Blocks
 # ---------------------------------------------------------------------------
 from tokenpak.core.registry import Block, BlockRegistry
-
-# ---------------------------------------------------------------------------
-# Compile Reports
-# ---------------------------------------------------------------------------
-from tokenpak.telemetry.report import Action, CompileReport, Decision
-
-# ---------------------------------------------------------------------------
-# Cache
-# ---------------------------------------------------------------------------
-# CacheManager: semantic cache store (get/set/hit-rate tracking)
-from tokenpak.telemetry.cache import CacheStore as CacheManager
-from tokenpak.telemetry.collector import TelemetryCollector
-
-# ---------------------------------------------------------------------------
-# Token Counting (Level 1 — single import, zero config)
-# ---------------------------------------------------------------------------
-from tokenpak.telemetry.tokens import count_tokens
 from tokenpak.debug.trace import (  # noqa: F401
     TokenPakTrace,
     TraceBuilder,
@@ -101,6 +78,29 @@ from tokenpak.debug.trace import (  # noqa: F401
     strip_trace,
     strip_trace_header,
 )
+
+# ---------------------------------------------------------------------------
+# Budgeting
+# ---------------------------------------------------------------------------
+from tokenpak.services.policy_service.budget.budgeter import Budgeter
+from tokenpak.services.policy_service.budget.rules import BudgetBlock
+
+# ---------------------------------------------------------------------------
+# Cache
+# ---------------------------------------------------------------------------
+# CacheManager: semantic cache store (get/set/hit-rate tracking)
+from tokenpak.telemetry.cache import CacheStore as CacheManager
+from tokenpak.telemetry.collector import TelemetryCollector
+
+# ---------------------------------------------------------------------------
+# Compile Reports
+# ---------------------------------------------------------------------------
+from tokenpak.telemetry.report import Action, CompileReport, Decision
+
+# ---------------------------------------------------------------------------
+# Token Counting (Level 1 — single import, zero config)
+# ---------------------------------------------------------------------------
+from tokenpak.telemetry.tokens import count_tokens
 
 # HandoffWire is the intended top-level "Handoff" API (pack-based wire format)
 # The internal Handoff dataclass (file-based) is available via
