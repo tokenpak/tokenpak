@@ -123,6 +123,15 @@ ignore_imports =
     tokenpak.proxy.server -> tokenpak.orchestration.goals
     tokenpak.proxy.capsule_integration -> tokenpak.compression.capsules.builder
     tokenpak.telemetry.server -> tokenpak.compression.capsules
+    ;
+    ; === TIP-SC / SC-07: doctor --conformance runner (§5.2-C) ===
+    ; The runner in services/diagnostics/conformance/runner.py drives
+    ; live-emission checks by lazy-instantiating Monitor + JournalStore
+    ; (pure local helpers; no provider invocation). The imports are
+    ; inside function bodies, but import-linter uses static analysis.
+    ; Both are §5.2-C (pure local helper diagnostic concern).
+    tokenpak.services.diagnostics.conformance.runner -> tokenpak.proxy.monitor
+    tokenpak.services.diagnostics.conformance.runner -> tokenpak.companion.journal.store
 
 ; -----------------------------------------------------------------------
 ; C2. Entrypoint forbidden imports.
@@ -226,6 +235,21 @@ ignore_imports =
     tokenpak.proxy.server -> tokenpak.services.request
     tokenpak.proxy.server -> tokenpak.services.request_pipeline.classify_stage
     tokenpak.proxy.server -> tokenpak.services.request_pipeline.stages
+    ;
+    ; === TIP-SC / SC-02 + SC2-02: conformance observer cross-cutting (§5.2-C) ===
+    ; `services.diagnostics.conformance` is the single shared contract
+    ; proxy + companion both emit through for the TIP-1.0 self-conformance
+    ; suite. It is intentionally imported by multiple layers because it is a
+    ; cross-cutting diagnostic — observers subscribe, emitters notify.
+    ; Every notify_* helper is a no-op when no observer is installed;
+    ; ship-safe. §5.2-C (pure local helper; no provider invocation).
+    ; Markers at each call site reference this block.
+    tokenpak.proxy.server -> tokenpak.services.diagnostics.conformance
+    tokenpak.proxy.monitor -> tokenpak.services.diagnostics.conformance
+    tokenpak.cli._impl -> tokenpak.services.diagnostics.conformance
+    tokenpak.companion.hooks.pre_send -> tokenpak.services.diagnostics.conformance
+    tokenpak.companion.journal.store -> tokenpak.services.diagnostics.conformance
+    tokenpak.companion.mcp_server._impl -> tokenpak.services.diagnostics.conformance
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
