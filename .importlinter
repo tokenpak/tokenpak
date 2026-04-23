@@ -4,9 +4,12 @@
 ; `~/vault/02_COMMAND_CENTER/tokenpak-standards-internal/01-architecture-standard.md §2`
 ; and the entrypoint rule in `01 §2.4`.
 ;
-; This file is consumed by `lint-imports` (the import-linter CLI). Run via
-; `make lint-imports` once wired in (task P2-14). Until P2-14 lands in CI,
-; this file is the declarative spec; violations are surfaced locally only.
+; This file is consumed by `lint-imports` (the import-linter CLI).
+; As of 2026-04-23, CI enforces these contracts on every push + PR via
+; `.github/workflows/ci.yml::import-contracts` — P2-14 closed.
+; Violations fail CI; red is the signal that the allowlist needs an
+; explicit §5.2-exception entry or the import needs migrating to a
+; canonical path.
 ;
 ; Classes of contract below:
 ;

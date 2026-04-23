@@ -43,6 +43,32 @@ jobs:
         run: |
           ruff check tokenpak/ tests/ --select=E,F,W,I --ignore=E501,E701,E702,E402,E741,F841
 
+  # P2-14: Architecture import contracts enforced in CI.
+  # Runs lint-imports against .importlinter. Every §5.2 exception has
+  # an explicit allowlist entry; this job catches drift that would let
+  # layering / entrypoint-forbidden / MCP-plumbing / contracts-single-
+  # home rules silently break. Blocking on main + release + PRs.
+  import-contracts:
+    name: Import contracts (Architecture §2 + §1.4)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install tokenpak + import-linter
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: lint-imports
+        run: lint-imports --config .importlinter
+
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
