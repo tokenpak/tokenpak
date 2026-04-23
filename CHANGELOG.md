@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — PM/GTM v2 Phase 3
+## [1.3.8] - 2026-04-23
+
+Ships the full PM/GTM v2 initiative — ten landed goals across public-surface truth (Axis A), commercial enablement (Axis B), and trust artifacts (Axis C), plus a narrow security-hardening delta. Five Kevin decisions (A purchase subdomain, B metrics deferred, C comparison + status surfaces, D security scope, E distribution model) were ratified during the initiative and applied inline. Three new blocking CI gates added (`headline-benchmark`, `cli-docs-in-sync`, `bandit`). SC + SC+1 conformance matrix 84/84 green throughout. Companion artifacts that shipped outside this repo — `tokenpak-paid-stub==0.1.0` on PyPI, 3 compliance pages + comparison + status pages live on `tokenpak.ai` — are referenced per-entry below.
 
 ### Added — B2 `tokenpak upgrade` CLI (M-B2)
 
@@ -45,9 +47,7 @@ Pre-publish prerequisites (Kevin admin):
 2. Configure PyPI Trusted Publisher for that repo.
 3. Tag `v0.1.0`; the workflow publishes to public PyPI.
 
-Manual recovery fallback: `PYPI_TOKEN` in `~/.openclaw/.env` + `twine upload dist/*`.
-
-## [Unreleased] — PM/GTM v2 Phase 2
+Manual recovery fallback: `PYPI_TOKEN` in `~/.openclaw/.env` + `twine upload dist/*`. **Post-release update (2026-04-23):** `tokenpak-paid-stub==0.1.0` is now live on public PyPI (`pypi.org/project/tokenpak-paid-stub/0.1.0/`); initial publish went via manual twine due to a Trusted Publisher config mismatch — next release (v0.1.1) expected to publish via OIDC cleanly.
 
 ### Added — C4 CLI reference autogen + onboarding doc (M-C4)
 
@@ -61,8 +61,6 @@ Auto-generated CLI reference locked to argparse truth + onboarding doc grounded 
 
 Neither the CLI generator nor the onboarding doc modifies production code. Both live in `docs/` and `scripts/` — shipped as package data for wheel installs, and easily synced to `github.com/tokenpak/docs` → `docs.tokenpak.ai` once that sync workflow activates.
 
-## [Unreleased] — PM/GTM v2 Phase 1
-
 ### Added — B3 license CLI 4-path verification (M-B3)
 
 Preflight (2026-04-23) confirmed `tokenpak/cli/commands/license.py` ships `activate` / `deactivate` / `plan` commands. This packet locks the user-facing behavior across 4 paths against regression.
@@ -75,8 +73,6 @@ Preflight (2026-04-23) confirmed `tokenpak/cli/commands/license.py` ships `activ
   5. Cross-path: `get_plan()` never raises on malformed license-key path (directory instead of file) — the never-fail-closed contract.
 
 No production code changed. `tokenpak/agent/license/` shim remains intact (TIP-2.0 cleanup owns migration).
-
-## [Unreleased] — PM/GTM v2 Phase 0
 
 ### Added — A2 + A4 verification drift guards (M-A2, M-A4)
 
