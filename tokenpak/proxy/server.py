@@ -954,6 +954,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     # Propagate request ID to client for correlation
                     self.send_header("X-Request-ID", _req_id)
                     _captured_headers["X-Request-ID"] = _req_id
+                    # P1-1 (Phase B, 2026-04-24): per-request compression
+                    # feedback for the client. Input-side tokens are known
+                    # pre-dispatch (before any response bytes arrive), so
+                    # we can surface them here — streaming output_tokens
+                    # aren't known until stream-end, so this is input-side
+                    # savings only. Users see "we compressed your request
+                    # from N → M tokens" on the response to every request,
+                    # closing the first-request trust loop.
+                    try:
+                        _saved = max(0, int(input_tokens) - int(sent_input_tokens))
+                        self.send_header("X-Tokenpak-Input-Tokens", str(int(input_tokens)))
+                        self.send_header("X-Tokenpak-Sent-Tokens", str(int(sent_input_tokens)))
+                        self.send_header("X-Tokenpak-Saved-Tokens", str(_saved))
+                        _captured_headers["X-Tokenpak-Input-Tokens"] = str(int(input_tokens))
+                        _captured_headers["X-Tokenpak-Sent-Tokens"] = str(int(sent_input_tokens))
+                        _captured_headers["X-Tokenpak-Saved-Tokens"] = str(_saved)
+                    except Exception:
+                        pass
                     # SC-02: notify observer before closing headers.
                     try:
                         from tokenpak.services.diagnostics import (
@@ -1059,6 +1077,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Propagate request ID to client for correlation
                 self.send_header("X-Request-ID", _req_id)
                 _captured_headers["X-Request-ID"] = _req_id
+                # P1-1 (Phase B, 2026-04-24): per-request compression
+                # feedback on non-stream responses. Same input-side
+                # savings as the streaming branch — see that block's
+                # comment for the rationale.
+                try:
+                    _saved = max(0, int(input_tokens) - int(sent_input_tokens))
+                    self.send_header("X-Tokenpak-Input-Tokens", str(int(input_tokens)))
+                    self.send_header("X-Tokenpak-Sent-Tokens", str(int(sent_input_tokens)))
+                    self.send_header("X-Tokenpak-Saved-Tokens", str(_saved))
+                    _captured_headers["X-Tokenpak-Input-Tokens"] = str(int(input_tokens))
+                    _captured_headers["X-Tokenpak-Sent-Tokens"] = str(int(sent_input_tokens))
+                    _captured_headers["X-Tokenpak-Saved-Tokens"] = str(_saved)
+                except Exception:
+                    pass
                 # SC-02: notify observer before closing headers.
                 try:
                     from tokenpak.services.diagnostics import (

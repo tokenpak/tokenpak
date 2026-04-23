@@ -325,10 +325,15 @@ def cmd_setup(args):
         print(f"✅ Proxy launched (PID {proc.pid}, port {port})")
 
     # Success message with next steps
+    # P1-2 (Phase B, 2026-04-24): dashboard URL surfaced here. A fresh
+    # user had no discovery path to the local dashboard until this was
+    # added — README mentioned `tokenpak dashboard` but the wizard's
+    # "Next steps" block did not.
     print("\nNext steps:")
-    print(f"  1. Set your LLM client's base URL to http://localhost:{port}")
-    print("  2. Run: tokenpak status    (check health)")
-    print("  3. Run: tokenpak savings   (see your ROI)")
+    print(f"  1. Set your LLM client's base URL to http://127.0.0.1:{port}")
+    print(f"  2. Open the dashboard: http://127.0.0.1:{port}/dashboard")
+    print("  3. Run: tokenpak status    (check health + request count)")
+    print("  4. Run: tokenpak savings   (see your compression ROI)")
     print()
     print("💡 Quick commands:")
     print("  tokenpak start      — start the proxy")
@@ -1537,6 +1542,38 @@ def cmd_doctor(args):
         )
         sys.exit(rc)
 
+    # P2-1 --privacy is a short static summary (not a probe). No net work,
+    # just render the canonical data-handling posture + link to the live
+    # compliance pages on tokenpak.ai.
+    if getattr(args, "privacy", False):
+        print("\nTOKENPAK  |  Doctor (privacy posture)")
+        print("──────────────────────────────\n")
+        print("  Stays on your machine:")
+        print("    - Every prompt and response body (never forwarded to TokenPak infra)")
+        print("    - Your API keys (passed through to your providers; never stored by TokenPak)")
+        print("    - The local SQLite ledger at ~/.tokenpak/monitor.db (metadata only)")
+        print("    - Proxy logs at ~/.tokenpak/debug.log (when TOKENPAK_LOG_ENABLED=1)")
+        print()
+        print("  Leaves your machine (only what you asked TokenPak to proxy):")
+        print("    - LLM requests forwarded to the provider you configured,")
+        print("      using your own credentials. No mirroring to TokenPak infra.")
+        print("    - If you have a Pro license, the signed license token is")
+        print("      presented to app.tokenpak.ai for tier verification.")
+        print()
+        print("  Opt-in escape hatches (off by default — disclosed fully for trust):")
+        print("    - TOKENPAK_DEBUG=1                 (verbose debug on stdout/stderr)")
+        print("    - TOKENPAK_LOG_ENABLED=1           (request logger to local disk)")
+        print("    - telemetry.store_prompts=true     (store prompt + response bodies locally)")
+        print()
+        print("  Canonical compliance docs:")
+        print("    https://tokenpak.ai/compliance/privacy          — data handling")
+        print("    https://tokenpak.ai/compliance/dpa              — DPA template")
+        print("    https://tokenpak.ai/compliance/sub-processors   — third parties")
+        print()
+        print("  Want the runtime verification? Run:  tokenpak doctor --conformance")
+        print()
+        sys.exit(0)
+
     # --conformance mode is a thin renderer over the SC-07 runner.
     # Same primitives the pytest suite uses; operator-readable table
     # + deterministic output order + explicit exit contract:
@@ -1584,8 +1621,31 @@ def cmd_doctor(args):
             print(_json.dumps(payload, indent=2, sort_keys=True))
             sys.exit(code)
 
+        # P1-3 (Phase B, 2026-04-24): human-language preamble before the
+        # table. Privacy / trust posture in one-glance terms so a user
+        # who doesn't know TIP can still read the result. Overall status
+        # drives the preamble; individual check rows below show detail.
         print("\nTOKENPAK  |  Doctor (TIP-1.0 self-conformance)")
         print("──────────────────────────────\n")
+        overall = (
+            "green" if code == 0
+            else "warning" if code == 1 and counts.get("fail", 0) == 0
+            else "red"
+        )
+        print("  Privacy + integrity posture at a glance:")
+        status_by_name = {r.name: r.status.value for r in results}
+        def _dot(name_fragments: list[str], fallback: str = "?") -> str:
+            for frag in name_fragments:
+                for n, s in status_by_name.items():
+                    if frag in n.lower():
+                        return {"ok": "green", "warn": "warn", "fail": "red"}[s]
+            return fallback
+        print(f"    Byte-identity (requests forwarded as-received):  {_dot(['byte-identity', 'byte identity', 'i1'])}")
+        print(f"    Header-allowlist (no credential leak upstream):  {_dot(['header-allowlist', 'header allowlist', 'i5'])}")
+        print(f"    Cache-attribution (no over-claim vs provider):   {_dot(['cache-attribution', 'cache attribution', 'i2'])}")
+        print(f"    DLP leak prevention:                             {_dot(['dlp', 'i4'])}")
+        print(f"    Overall: {overall}")
+        print("\n  Details (per-check):")
         for r in results:
             marker = {"ok": "✓", "warn": "⚠", "fail": "✗"}[r.status.value]
             print(f"  {marker} {r.name:<28} {r.summary}")
@@ -1689,7 +1749,11 @@ def cmd_doctor(args):
             print(Colors.fail(f"Vault index         {index_path} — invalid JSON"))
             results["fail"] += 1
     else:
-        print(Colors.warn(f"Vault index         {index_path} — not found"))
+        # P1-5 (Phase B, 2026-04-24): demoted from warn to info. Vault
+        # indexing is optional — a user who never runs `tokenpak index`
+        # is in a perfectly-healthy state; flagging this as a warning
+        # erodes trust in the diagnostic.
+        print(f"ℹ  Vault index         {index_path} — not configured (optional; run `tokenpak index <dir>` to enable semantic search)")
         results["warn"] += 1
 
     # Check 4: Proxy health
@@ -2052,6 +2116,16 @@ def build_parser():
         dest="claude_code",
         action="store_true",
         help="Run Claude Code-specific checks (companion settings, drift, base-url routing)",
+    )
+    # P2-1 (Phase B, 2026-04-24): --privacy surfaces the data-handling
+    # posture in human terms + links to the canonical compliance pages.
+    # Does not re-run the conformance suite (that's --conformance); this
+    # is the short "what leaves my machine?" answer.
+    p_doctor.add_argument(
+        "--privacy",
+        dest="privacy",
+        action="store_true",
+        help="Summarize TokenPak's privacy posture (what stays local, what leaves, where compliance docs live)",
     )
     p_doctor.add_argument(
         "--conformance",
@@ -2422,6 +2496,49 @@ def cmd_status(args):
             print()
             print(fmt.kv(rows))
     except Exception:
+        pass
+
+    # P1-4 (Phase B, 2026-04-24): last non-2xx responses. When a user's
+    # client sees a 500 / 429 / auth failure, they need to know whether
+    # it was TokenPak, their provider, their auth, or their quota. This
+    # block surfaces the most-recent 5 non-2xx rows from monitor.db so
+    # the debug starts with a specific thing, not "something's broken."
+    try:
+        import sqlite3 as _sql
+        from pathlib import Path as _Path
+
+        _db = _Path.home() / ".tokenpak" / "monitor.db"
+        if _db.exists():
+            _conn = _sql.connect(str(_db), timeout=1.0)
+            try:
+                _cur = _conn.execute(
+                    "SELECT timestamp, model, status_code, endpoint, latency_ms "
+                    "FROM requests WHERE status_code < 200 OR status_code >= 300 "
+                    "ORDER BY timestamp DESC LIMIT 5"
+                )
+                _errs = _cur.fetchall()
+            except _sql.OperationalError:
+                # Schema drift or table absent — silently skip rather
+                # than dump a user-unfriendly error inside `tokenpak status`.
+                _errs = []
+            finally:
+                _conn.close()
+            if _errs:
+                print()
+                print("  Recent non-2xx responses (last 5):")
+                for ts, model, code, endpoint, latency in _errs:
+                    # Keep endpoint short — full URLs dominate the column.
+                    ep = (endpoint or "")
+                    if len(ep) > 40:
+                        ep = ep[:37] + "..."
+                    mdl = model or "-"
+                    if len(mdl) > 24:
+                        mdl = mdl[:21] + "..."
+                    print(f"    {ts[:19]:<20} {code:<4} {mdl:<24} {ep:<40} {latency or 0:>5}ms")
+    except Exception:
+        # monitor.db may not exist on a fresh install, or may be locked
+        # by a concurrent proxy. Either way, not showing errors is
+        # always safer than crashing `tokenpak status`.
         pass
 
 

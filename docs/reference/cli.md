@@ -413,7 +413,7 @@ Run diagnostics
 
 ```
 usage: tokenpak doctor [-h] [--fix] [--fleet] [--deploy] [--claude-code]
-                       [--conformance] [--json]
+                       [--privacy] [--conformance] [--json]
 
 options:
   -h, --help     show this help message and exit
@@ -422,6 +422,8 @@ options:
   --deploy       Push latest doctor to all agents (use with --fleet)
   --claude-code  Run Claude Code-specific checks (companion settings, drift,
                  base-url routing)
+  --privacy      Summarize TokenPak's privacy posture (what stays local, what
+                 leaves, where compliance docs live)
   --conformance  Run TIP-1.0 self-conformance checks (capability set,
                  profiles, manifests, live emissions)
   --json         Emit machine-readable JSON instead of the human table

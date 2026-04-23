@@ -52,6 +52,19 @@ def _run_plan() -> None:
         print("  Tier    : OSS (free)")
         print("  Status  : Active")
         print("  Expires : —")
+        # P2-2 (Phase B, 2026-04-24): Pro upsell on OSS tier. Single
+        # short block, never shown when an upgraded license is active.
+        # Copy is factual (the four feature groups from paid.astro) +
+        # points at the public-facing /paid page rather than duplicating
+        # pricing here — marketing surface stays authoritative.
+        print()
+        print("  Pro adds for team scale:")
+        print("    • Shared dashboard with multi-seat cost attribution")
+        print("    • Budget enforcement (hard `429 budget_exceeded`) at request time")
+        print("    • Advanced routing policies (cost-aware fallbacks, SLA-aware failover)")
+        print("    • Enterprise credential management + priority support")
+        print()
+        print("  Run: tokenpak upgrade     (opens tokenpak.ai/paid in your browser)")
     else:
         print(f"  Tier    : {result.tier.value.upper()}")
         print(f"  Status  : {result.status.value.upper()}")

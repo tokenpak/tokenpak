@@ -116,7 +116,15 @@ See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quic
 
 ## Pro tier
 
-**Pro** adds team-scale features on top of the OSS core: shared multi-seat dashboards, advanced routing policies, enterprise credential management, priority support, and budget enforcement (`429 budget_exceeded` on configured caps). It ships as the `tokenpak-paid` package, distributed through a private license-gated index at `pypi.tokenpak.ai`. See [tokenpak.ai/paid](https://tokenpak.ai/paid) to request access.
+**Pro** adds team-scale features on top of the OSS core. The OSS proxy, compression engine, client integrations, local dashboard, telemetry store, and route-class policy presets all stay in place — Pro layers the features a team running TokenPak at scale needs:
+
+- **Team-scale cost attribution** — shared dashboard with multi-seat cost attribution: which workloads, which engineers, which tools drive spend, without wiring a BI pipeline.
+- **Budget enforcement** — monthly budget caps map to hard `429 budget_exceeded` responses at request time. Not a passive dashboard: the proxy refuses to forward the request instead of silently burning through the rest of your budget.
+- **Advanced routing policies** — cost-aware fallbacks, SLA-aware failover across providers, tiered routing by workload kind. OSS gives you the rule surface; Pro gives you the policy tooling that runs on top.
+- **Enterprise credential management** — credential-rotation hooks, audit-log export, compliance rulesets that plug into the compression pipeline.
+- **SSO, priority support, SLA** — dashboard SSO, priority support with an SLA, team onboarding.
+
+Ships as the `tokenpak-paid` package via a private license-gated index at `pypi.tokenpak.ai`. See [tokenpak.ai/paid](https://tokenpak.ai/paid) to request access.
 
 Installing the Pro package (after you have a license key):
 
@@ -126,6 +134,18 @@ tokenpak activate <your-license-key>
 ```
 
 Running `pip install tokenpak-paid-stub` from public PyPI fetches a discovery stub that prints these install instructions — so `pip` works as a learning path, not a dead end. The real paid code stays license-gated.
+
+---
+
+## Privacy + compliance
+
+TokenPak is local-first by design. Every prompt, response, and API key stays on your machine. The only data that ever leaves your machine is the LLM request you were going to send anyway — forwarded to your configured provider using your own credentials.
+
+- [**Privacy**](https://tokenpak.ai/compliance/privacy) — what's stored locally, what leaves, and every optional debug-logging escape hatch disclosed in full.
+- [**Data Processing Agreement (template)**](https://tokenpak.ai/compliance/dpa) — IAPP-based template; marked pending legal review.
+- [**Sub-processors**](https://tokenpak.ai/compliance/sub-processors) — Stripe / Cloudflare / Fly.io / GitHub / PyPI for the Pro-tier infrastructure; the OSS proxy has none.
+
+For the runtime posture verification, run `tokenpak doctor --privacy` (plain-English summary) or `tokenpak doctor --conformance` (executes the TIP-1.0 self-conformance suite).
 
 ---
 
