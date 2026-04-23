@@ -21,7 +21,13 @@ import sys
 
 
 def test_upgrade_prints_canonical_url_when_env_unset(monkeypatch):
-    """Default URL (no env override) must be app.tokenpak.ai/upgrade per KEVIN-A."""
+    """Default URL (no env override) must be app.tokenpak.ai/upgrade per KEVIN-A.
+
+    Uses last-line extraction rather than strict stdout-equals, so a
+    one-time welcome banner (printed by ``tokenpak/cli/_impl.py`` on
+    the first invocation in a fresh sandbox) doesn't break the check.
+    The URL is always the final stdout line.
+    """
     monkeypatch.delenv("TOKENPAK_UPGRADE_URL", raising=False)
 
     result = subprocess.run(
@@ -34,10 +40,11 @@ def test_upgrade_prints_canonical_url_when_env_unset(monkeypatch):
         f"`tokenpak upgrade --print-url` must exit zero; got {result.returncode}\n"
         f"stderr: {result.stderr}"
     )
-    # Split to ignore any deprecation warnings on stderr.
-    assert result.stdout.strip() == "https://app.tokenpak.ai/upgrade", (
+    last_line = result.stdout.strip().splitlines()[-1].strip()
+    assert last_line == "https://app.tokenpak.ai/upgrade", (
         f"default upgrade URL drifted from KEVIN-DECISION-A canonical: "
-        f"expected 'https://app.tokenpak.ai/upgrade', got {result.stdout.strip()!r}"
+        f"expected 'https://app.tokenpak.ai/upgrade' as last line, got {last_line!r}\n"
+        f"full stdout:\n{result.stdout}"
     )
 
 
@@ -52,8 +59,10 @@ def test_upgrade_honors_env_override():
         env={**__import__("os").environ, "TOKENPAK_UPGRADE_URL": test_url},
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == test_url, (
-        f"TOKENPAK_UPGRADE_URL override ignored: got {result.stdout.strip()!r}"
+    last_line = result.stdout.strip().splitlines()[-1].strip()
+    assert last_line == test_url, (
+        f"TOKENPAK_UPGRADE_URL override ignored: got last_line={last_line!r}\n"
+        f"full stdout:\n{result.stdout}"
     )
 
 

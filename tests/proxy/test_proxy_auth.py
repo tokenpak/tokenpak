@@ -26,7 +26,7 @@ from __future__ import annotations
 import io
 import json
 from email.message import Message
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

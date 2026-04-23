@@ -216,5 +216,10 @@ jobs:
           pip install -e ".[dev]"
 
       - name: Reproduce README headline claim
+        # Invoke pytest directly rather than `make benchmark-headline` because
+        # the Makefile target points at `$(VENV)/bin/pytest` = `.venv/bin/pytest`,
+        # which doesn't exist on the GitHub runner (CI `pip install -e .[dev]`s
+        # into the system Python, no venv). Local use of `make benchmark-headline`
+        # is unaffected — it runs against `make dev`'s venv as intended.
         run: |
-          make benchmark-headline
+          python -m pytest tests/benchmarks/test_headline_claim.py -v -s --tb=short

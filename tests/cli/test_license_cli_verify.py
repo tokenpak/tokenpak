@@ -28,10 +28,6 @@ from unittest.mock import patch
 
 import pytest
 
-# `_run_plan` is the plain-Python entrypoint used by both the Click-wrapped
-# command and the argparse path. Exercising it directly avoids Click's test
-# harness quirks while still proving the user-visible output.
-from tokenpak.cli.commands.license import _run_plan
 from tokenpak.agent.license import activation as _activation
 from tokenpak.agent.license.validator import (
     LicenseStatus,
@@ -40,6 +36,10 @@ from tokenpak.agent.license.validator import (
     ValidationResult,
 )
 
+# `_run_plan` is the plain-Python entrypoint used by both the Click-wrapped
+# command and the argparse path. Exercising it directly avoids Click's test
+# harness quirks while still proving the user-visible output.
+from tokenpak.cli.commands.license import _run_plan
 
 # ---------------------------------------------------------------------------
 # Helpers
