@@ -215,6 +215,7 @@ markers = [
     "conformance: TIP-1.0 self-conformance suite (SC-06). Validates live emissions against registry schemas.",
     "smoke: Layer-C smoke in the conformance suite — boots ProxyServer and checks disk-artifact round-trips.",
     "advisory: TIP-SC+1 advisory invariants (I3 TTL ordering, I4 DLP leak) — run in CI with continue-on-error until promoted to blocking.",
+    "benchmark: PM/GTM v2 headline-claim benchmark (A5). Deterministic fixture + reduction floor; blocks a README claim regression.",
 ]
 timeout = 30
 

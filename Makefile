@@ -18,7 +18,7 @@ MKDOCS      := $(VENV_BIN)/mkdocs
 UNAME := $(shell uname -s)
 
 # ── Phony targets ──────────────────────────────────────────────────────────────
-.PHONY: help dev test lint lint-imports tip-check format format-check check build docs clean install hooks
+.PHONY: help dev test lint lint-imports tip-check format format-check check build docs clean install hooks benchmark-headline
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:  ## Show this help message
@@ -48,6 +48,9 @@ test:  ## Run full test suite
 
 test-quick:  ## Run quick audit subset (<30s, no live proxy needed)
 	$(PYTEST) -m quick -q --tb=short
+
+benchmark-headline:  ## Reproduce the README headline compression claim (A5)
+	$(PYTEST) tests/benchmarks/test_headline_claim.py -v -s --tb=short
 
 test-fast:  ## Run tests, stop on first failure
 	$(PYTEST) tests/ -q --tb=short -x

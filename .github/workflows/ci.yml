@@ -117,3 +117,36 @@ jobs:
           name: test-results-py${{ matrix.python-version }}
           path: reports/test-results-py${{ matrix.python-version }}.xml
           retention-days: 30
+
+  # PM/GTM v2 A5: pin README headline compression claim as a dedicated
+  # blocking gate per standard 21 §9.8 (process-enforced). The benchmark also
+  # runs inside the `test:` job above — this dedicated job gives reviewers an
+  # unambiguous status-check name they can hold a PR on.
+  #
+  # Required status-check name reviewers must treat as blocking before merging
+  # a change that could affect compression effectiveness:
+  #
+  #   - headline-benchmark (blocking)
+  #
+  # Process-enforced per 21 §9.8; no GitHub platform-level gate.
+  headline-benchmark:
+    name: headline-benchmark (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Reproduce README headline claim
+        run: |
+          make benchmark-headline

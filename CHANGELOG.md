@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — PM/GTM v2 Phase 0
 
+### Added — A5 headline benchmark pinned as blocking CI gate (M-A5)
+
+README's "30–50% reduction" claim was previously unenforced — a PR that silently regressed compression to 25% would have shipped. Pinned to a deterministic fixture + blocking CI job per standard 21 §9.8.
+
+- **`tests/fixtures/headline_corpus.txt`** — new deterministic 7.3 kB agent-style fixture (system prompt + 6 tool definitions + verbose user turn). Bytes-stable; representative of Claude Code / Cursor / Aider inputs.
+- **`tests/benchmarks/test_headline_claim.py`** — three tests:
+  1. Fixture exists and is ≥ 5 kB.
+  2. Compression reduction ≥ 30% (the claim's minimum promise).
+  3. Deterministic — running twice yields identical token counts.
+- **`pyproject.toml`** — registered `benchmark` pytest marker.
+- **`Makefile`** — new `benchmark-headline` target runs the test and prints the measured reduction.
+- **`.github/workflows/ci.yml`** — new `headline-benchmark (blocking)` job runs on every push/PR; process-enforced per standard 21 §9.8.
+- **`README.md`** — added `Reproduce the 30–50% headline claim locally: make benchmark-headline.` under Quick Start.
+
+**Notable measurement:** on the current fixture + `HeuristicEngine`, measured reduction is **~96%** (1471 → 55 tokens). README's "30–50%" is a conservative claim; actual delivery substantially exceeds it. The test asserts the minimum promise (≥30%), which is the defensible gate. Kevin reviews in the Phase 0 closeout evidence bundle whether to widen the README range to reflect measured reality.
+
 ### Changed — A1 zero-config claim resolution (M-A1)
 
 Preflight (2026-04-23) found README line 1 claimed "zero config" while line 10 disclosed manual client configuration. The `cmd_setup` interactive wizard existed at `tokenpak/cli/_impl.py:186` (API-key detection + profile selection + proxy start) and was dispatch-registered in argparse, but was absent from `_COMMAND_GROUPS`, so `tokenpak help` did not surface it.

@@ -34,6 +34,8 @@ Then use your client normally. TokenPak compresses requests on the way out and l
 
 If you prefer manual configuration (no wizard), `tokenpak start` brings the proxy up with defaults and you set `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` yourself.
 
+Reproduce the 30–50% headline claim locally: `make benchmark-headline`.
+
 See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for per-client setup (Claude Code, Cursor, Aider, and others).
 
 ---
