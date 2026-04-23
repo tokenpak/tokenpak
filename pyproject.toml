@@ -170,7 +170,14 @@ include = [
 [tool.setuptools.package-data]
 tokenpak = [
     "py.typed",
-    "recipes_oss/*.yaml",
+    # `recipes_oss/*.yaml` was retired in v1.3.10 (MVP Gap Closure A-3,
+    # 2026-04-24). The "50 built-in recipes" concept was superseded by
+    # the deterministic compression pipeline + `services/policy_service/
+    # presets/*.yaml` route-class policies below. Keeping this comment
+    # so future audits see the reason the path is gone rather than a
+    # packaging oversight.
+    "services/policy_service/presets/*.yaml",
+    "agent/compression/slot_definitions.yaml",
     "routing/model_tiers.json",
     "config/schema.json",
     "state_schema.json",

@@ -35,8 +35,12 @@ def _proxy_get(path: str, port: Optional[int] = None) -> "dict | None":
 
 _FIRST_RUN_FLAG = Path.home() / ".tokenpak" / ".seen_intro"
 
-# Commands shown in quick --help (beginner view)
-_QUICK_COMMANDS = ["start", "demo", "cost", "status"]
+# Commands shown in quick --help (beginner view).
+# `setup` is first because the README headline promises "One command to
+# configure your LLM proxy" (A1 fix, 2026-04-23) — if a brand-new user
+# types `tokenpak --help` and doesn't see `setup`, that promise is
+# structurally invisible. Phase A, MVP Gap Closure, 2026-04-24.
+_QUICK_COMMANDS = ["setup", "start", "demo", "cost", "status"]
 
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
@@ -5562,17 +5566,25 @@ def cmd_demo(args):
     try:
         engine = get_oss_engine()
     except (ValueError, FileNotFoundError) as exc:
-        # Recipe catalog is missing from the shipped package (or the
-        # user pointed at a path that doesn't exist). Print a friendly
-        # message instead of dumping a traceback.
+        # The packaged recipe-YAML catalog is not part of the v1.3.10+
+        # shipping surface. What used to be called "OSS recipes" is now
+        # expressed as the deterministic compression pipeline (under
+        # `tokenpak/agent/compression/`) plus route-class policy presets
+        # (under `tokenpak/services/policy_service/presets/`). Custom
+        # user-authored recipes still work via `tokenpak recipe create/
+        # validate/test/benchmark`. Redirect the user to the live
+        # compression demo rather than suggesting a reinstall that
+        # won't change anything.
         print(
-            "Compression recipe catalog is not available in this install.\n"
-            "  This usually means the `recipes/` data directory wasn't\n"
-            "  bundled with the wheel. Try `tokenpak demo` (no flags) to\n"
-            "  see the live compression demo, or reinstall tokenpak.",
+            "No built-in recipe catalog ships with this version.\n"
+            "  TokenPak's compression is implemented as a deterministic\n"
+            "  pipeline (dedup → alias → segmentize → directives), not a\n"
+            "  bag of YAML recipes. Try:\n"
+            "    tokenpak demo                 # live compression demo\n"
+            "    tokenpak recipe --help        # author your own recipe\n"
+            "    tokenpak status               # see compression running",
             file=sys.stderr,
         )
-        print(f"  Underlying error: {exc}", file=sys.stderr)
         sys.exit(0)
 
     # ── Demo data seeding

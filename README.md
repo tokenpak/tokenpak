@@ -1,4 +1,4 @@
-# TokenPak — Cut your LLM token spend by 30–50%. One command to configure your LLM proxy.
+# TokenPak — Up to 90%+ savings on direct API/CLI and other favorable uncached workloads. One command to configure your LLM proxy.
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
@@ -6,6 +6,8 @@
 <!-- CI badge: pending initial workflow setup — add after .github/workflows/ lands -->
 
 TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, same results. No code changes, no cloud, no credentials stored.
+
+**Observed savings vary by integration path and provider-side cache behavior.** On direct API / CLI / uncached workloads the deterministic pipeline routinely lands in the 90%+ band. On provider-cached flows (Claude Code and similar) observed incremental savings can be much lower, because the provider's own cache already absorbs most of the token pool and TokenPak only optimizes the user-controlled portion. See [How we report savings](#how-we-report-savings) for the full framing.
 
 > **Status: early preview.** Core compression engine and proxy are in place. `tokenpak setup` is the interactive wizard that detects your API keys, picks a compression profile, and starts the proxy. Per-client auto-integration (the forthcoming `tokenpak integrate` command) is not yet shipped — after `tokenpak setup` runs, point your client at `http://127.0.0.1:8766` via the one-line `export` below. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
 
@@ -34,7 +36,7 @@ Then use your client normally. TokenPak compresses requests on the way out and l
 
 If you prefer manual configuration (no wizard), `tokenpak start` brings the proxy up with defaults and you set `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` yourself.
 
-Reproduce the 30–50% headline claim locally: `make benchmark-headline`.
+Reproduce the savings floor locally: `make benchmark-headline` (asserts ≥30% reduction on a pinned agent-style fixture; the CI-enforced floor, not the ceiling).
 
 See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for per-client setup (Claude Code, Cursor, Aider, and others).
 
@@ -90,14 +92,23 @@ See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quic
 
 ## What's included
 
-- **Context compression** — deterministic pipeline (dedup → alias → segmentize → directives); typical 30–50% token reduction on agent workloads.
+- **Context compression** — deterministic pipeline (dedup → alias → segmentize → directives). Up to 90%+ reduction on direct-API / uncached workloads; lower on provider-cached flows. CI-enforced ≥30% floor on the pinned agent-style fixture.
 - **Local proxy** — runs at `127.0.0.1:8766`; zero cloud component.
-- **Model routing** — configurable rules with fallback chains.
+- **Model routing** — configurable rules with fallback chains. Route-class policy presets ship under `tokenpak/services/policy_service/presets/` covering Claude Code (TUI/CLI/TMUX/SDK/IDE/CRON), Anthropic SDK, OpenAI SDK, and generic.
 - **Cost & savings tracking** — per model, per session, per agent; local SQLite (`~/.tokenpak/monitor.db`).
-- **Dashboard** — local web UI for visualizing savings (`tokenpak dashboard`).
+- **Dashboard** — local web UI for visualizing savings at `http://127.0.0.1:8766/dashboard` (also reachable via `tokenpak dashboard`).
 - **Vault indexing + semantic search** — index a directory; search without an LLM call.
 - **A/B testing and request replay** — compare compression configs; re-run past requests.
-- **50 built-in compression recipes** — YAML, customizable.
+- **Custom compression recipes** — author your own via `tokenpak recipe create/validate/test/benchmark`.
+
+## How we report savings
+
+TokenPak's savings aren't a single number because they shouldn't be. The real savings depend on where in your stack the compression runs:
+
+- **Direct API calls, CLI tools, SDK integrations, and any uncached workload** — the compression pipeline operates on the full token pool. Observed savings routinely reach **90%+** on realistic agent-style prompts. The pinned CI benchmark measures this path; `make benchmark-headline` reproduces it.
+- **Provider-cached flows (Claude Code and similar integrations)** — your client uses the provider's server-side prompt cache for most of the prompt (system prompt, tool definitions, historical turns). TokenPak only optimizes the **user-controlled portion** of the token pool. Observed incremental savings on these paths can be much lower — sometimes a few percent of total spend — because the provider cache already did the heavy lifting. This isn't TokenPak failing; it's an honest division of labor.
+
+If you're evaluating TokenPak, start with a direct-API workload to see the compression pipeline's actual effectiveness, then layer in your cached flows to see the marginal contribution on top of the provider cache.
 
 See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) and API reference at https://github.com/tokenpak/docs (rendered at tokenpak.ai/api) to get started.
 

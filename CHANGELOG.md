@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.10] - 2026-04-24
+
+### Changed — Phase A of MVP Gap Closure (Working Product Readiness initiative)
+
+Ratified by Kevin 2026-04-24. Closes three P0 gaps and establishes honest path-specific savings framing before any launch work opens. Details at `~/vault/02_COMMAND_CENTER/initiatives/2026-04-24-working-product-readiness/`.
+
+**P0-5 — path-specific savings framing (this is the big one):** The fresh-install product audit surfaced that `tokenpak` on Claude Code traffic measures ~2% savings even with compression working correctly — because Anthropic's server-side cache already captures 95% of the reducible token pool. The ≥30% CI-pinned floor on the agent-style fixture is honest; the aggregate ~2% on cache-heavy real workloads is also honest; users evaluating on Claude Code alone concluded the claim was false.
+
+Per Kevin's canonical ruling: do NOT flatten into a single 30–50% claim. Use path-specific language.
+
+- **`README.md`** — headline rewritten from "Cut your LLM token spend by 30–50%" to "Up to 90%+ savings on direct API/CLI and other favorable uncached workloads". New "How we report savings" section explains the two paths explicitly: direct API / CLI / uncached workloads land in the 90%+ band; provider-cached flows show lower incremental gains because the cache already did the heavy lifting.
+- **"What's included"** — "50 built-in compression recipes" claim removed. Replaced with an honest description: deterministic compression pipeline + route-class policy presets + custom recipe authoring via `tokenpak recipe create/validate/test/benchmark`.
+- **Reproduction footer** — reworded to "Reproduce the savings floor locally: `make benchmark-headline` (asserts ≥30% reduction on a pinned agent-style fixture; the CI-enforced floor, not the ceiling)." The benchmark is honest; the prior phrasing implied a ceiling that wasn't the point.
+
+**P0-1 — recipes reality alignment:** The `recipes_oss/*.yaml` catalog referenced in `pyproject.toml` package_data did not ship with v1.3.9 (verified absent from the installed wheel). Rather than resurrect an archived recipe pack, the shipped architecture is treated as source of truth.
+
+- **`pyproject.toml`** — removed `recipes_oss/*.yaml` from package_data. Added `services/policy_service/presets/*.yaml` + `agent/compression/slot_definitions.yaml` which actually ship.
+- **`tokenpak demo --list`** — no longer tells the user to reinstall (which wouldn't fix anything). New message explains: "TokenPak's compression is a deterministic pipeline, not a bag of YAML recipes," and points at `tokenpak demo` (live compression), `tokenpak recipe --help` (custom recipes), and `tokenpak status` (see it running).
+- **README** — "50 recipes" claim dropped; `services/policy_service/presets/*.yaml` coverage (9 route-class presets) documented honestly.
+
+**P0-2 — `setup` command in quick help:** `tokenpak --help` (first-run path) previously showed `[start, demo, cost, status]` — `setup` was registered in `_COMMAND_GROUPS` (A1, v1.3.8) but not in `_QUICK_COMMANDS`, so a first-time user seeing the quick help had no hint to run it. README's "One command to configure" promise was structurally invisible.
+
+- **`tokenpak/cli/_impl.py`** — prepended `"setup"` to `_QUICK_COMMANDS` so the first command a new user sees is the one the README promises.
+
+**Tests:** no new tests added (the `_QUICK_COMMANDS` change is covered by the existing `test_setup_registration.py` smoke; the other two are packaging + copy). Conformance matrix 102/102 green; full suite green.
+
 ## [1.3.9] - 2026-04-24
 
 ### Added — TIP-SC+2: streaming semantics invariants
