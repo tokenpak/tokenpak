@@ -4,7 +4,10 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc  # datetime.UTC is a Python 3.11+ alias; re-shim for 3.10 compat
+                    # (tokenpak pyproject.toml requires-python = ">=3.10").
 from pathlib import Path
 from typing import Any
 
