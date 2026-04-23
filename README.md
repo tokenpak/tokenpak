@@ -103,6 +103,21 @@ See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quic
 
 ---
 
+## Pro tier
+
+**Pro** adds team-scale features on top of the OSS core: shared multi-seat dashboards, advanced routing policies, enterprise credential management, priority support, and budget enforcement (`429 budget_exceeded` on configured caps). It ships as the `tokenpak-paid` package, distributed through a private license-gated index at `pypi.tokenpak.ai`. See [tokenpak.ai/paid](https://tokenpak.ai/paid) to request access.
+
+Installing the Pro package (after you have a license key):
+
+```bash
+pip install --index-url https://pypi.tokenpak.ai --extra-index-url https://pypi.org/simple tokenpak-paid
+tokenpak activate <your-license-key>
+```
+
+Running `pip install tokenpak-paid-stub` from public PyPI fetches a discovery stub that prints these install instructions — so `pip` works as a learning path, not a dead end. The real paid code stays license-gated.
+
+---
+
 ## Current limitations
 
 Honest about what isn't ready yet:

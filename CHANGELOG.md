@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — PM/GTM v2 Phase 3
+
+### Added — B1a + B1b `tokenpak-paid-stub` discovery package + README Pro-tier paragraph (M-B1a, M-B1b)
+
+Implements Kevin's **E2** ratification (2026-04-23): public stub on PyPI for discoverability + real `tokenpak-paid` on `pypi.tokenpak.ai` for licensed install. Two distinct PyPI names so pip's index resolution is unambiguous.
+
+- **New repo `/home/sue/tokenpak-paid-stub/`** (not pushed to GitHub yet — awaits repo creation + Trusted Publisher setup, Kevin admin items):
+  - `pyproject.toml` — `tokenpak-paid-stub` v0.1.0, Apache 2.0, `requires-python >= 3.10`, no runtime deps.
+  - `tokenpak_paid_stub/__init__.py` — prints one-liner on import (stderr, non-blocking).
+  - `tokenpak_paid_stub/__main__.py` — `python -m tokenpak_paid_stub` prints full install guidance.
+  - `README.md`, `LICENSE`, `.gitignore`.
+  - `.github/workflows/publish.yml` — mirrors tokenpak v1.3.6 hardened release pattern (validate-pins preflight, SHA-peeled pins, SHA256SUMS outside `dist/`, Trusted Publisher OIDC).
+  - `tests/test_stub_contract.py` — 3 contract tests (version, ProTierRequired export, full guidance contents). Green locally against installed wheel.
+
+- **`README.md`** — new "Pro tier" section (≤150 words) names the tier (`Pro`, marketing voice), the package (`tokenpak-paid`, technical voice), the private index, the discovery stub, and the two install channels per standards 07 + 08.
+
+No production code in `tokenpak` changed — B1b is README-only. SC + SC+1 conformance matrix unchanged.
+
+Pre-publish prerequisites (Kevin admin):
+1. Create `github.com/tokenpak/tokenpak-paid-stub` repo; push the local commit.
+2. Configure PyPI Trusted Publisher for that repo.
+3. Tag `v0.1.0`; the workflow publishes to public PyPI.
+
+Manual recovery fallback: `PYPI_TOKEN` in `~/.openclaw/.env` + `twine upload dist/*`.
+
 ## [Unreleased] — PM/GTM v2 Phase 2
 
 ### Added — C4 CLI reference autogen + onboarding doc (M-C4)
