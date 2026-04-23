@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — PM/GTM v2 Phase 1
+
+### Added — B3 license CLI 4-path verification (M-B3)
+
+Preflight (2026-04-23) confirmed `tokenpak/cli/commands/license.py` ships `activate` / `deactivate` / `plan` commands. This packet locks the user-facing behavior across 4 paths against regression.
+
+- **`tests/cli/test_license_cli_verify.py`** — 5 tests:
+  1. No license installed → `tokenpak plan` shows OSS tier.
+  2. Valid Pro license (validator mocked — signing key lives in MTC license-server, not OSS repo) → `PRO` in human output; standard-08 terminology discipline (human copy never contains the `tokenpak-paid` package slug).
+  3. Expired license (validator raises) → fallback to OSS tier; warning surfaces via stdout or log.
+  4. Corrupt license bytes (real validator exercises the garbage-in path) → fallback to OSS, no exception propagates.
+  5. Cross-path: `get_plan()` never raises on malformed license-key path (directory instead of file) — the never-fail-closed contract.
+
+No production code changed. `tokenpak/agent/license/` shim remains intact (TIP-2.0 cleanup owns migration).
+
 ## [Unreleased] — PM/GTM v2 Phase 0
 
 ### Added — A2 + A4 verification drift guards (M-A2, M-A4)
