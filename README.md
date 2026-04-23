@@ -1,4 +1,4 @@
-# TokenPak — Cut your LLM token spend by 30–50%, zero config
+# TokenPak — Cut your LLM token spend by 30–50%. One command to configure your LLM proxy.
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
@@ -7,7 +7,7 @@
 
 TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, same results. No code changes, no cloud, no credentials stored.
 
-> **Status: early preview.** Core compression engine and proxy are in place. Per-client auto-integration (the `tokenpak integrate` command) is not yet shipped — configure your client manually by pointing it at `http://127.0.0.1:8766`. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
+> **Status: early preview.** Core compression engine and proxy are in place. `tokenpak setup` is the interactive wizard that detects your API keys, picks a compression profile, and starts the proxy. Per-client auto-integration (the forthcoming `tokenpak integrate` command) is not yet shipped — after `tokenpak setup` runs, point your client at `http://127.0.0.1:8766` via the one-line `export` below. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
 
 ---
 
@@ -15,10 +15,10 @@ TokenPak is a local proxy that compresses your LLM context before it hits the AP
 
 ```bash
 pip install tokenpak
-tokenpak start                      # start the local proxy at 127.0.0.1:8766
+tokenpak setup                      # interactive wizard — detects keys, picks a profile, starts the proxy
 ```
 
-Point your LLM client at the proxy. For example, the Anthropic SDK:
+Then point your LLM client at the proxy with one env var. For the Anthropic SDK:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8766
@@ -31,6 +31,8 @@ export OPENAI_BASE_URL=http://127.0.0.1:8766
 ```
 
 Then use your client normally. TokenPak compresses requests on the way out and logs savings to a local SQLite ledger.
+
+If you prefer manual configuration (no wizard), `tokenpak start` brings the proxy up with defaults and you set `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` yourself.
 
 See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for per-client setup (Claude Code, Cursor, Aider, and others).
 

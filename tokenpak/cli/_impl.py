@@ -41,6 +41,7 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
+        ("setup", "One-time interactive configuration wizard (detects keys, picks profile, starts proxy)"),
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
@@ -1870,7 +1871,15 @@ def build_parser():
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
-    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
+    p_setup = sub.add_parser(
+        "setup",
+        help="Interactive first-time configuration wizard",
+        description=(
+            "Interactive wizard: detects API keys from your environment, lets you pick "
+            "a compression profile, writes ~/.tokenpak/config.yaml, and starts the proxy. "
+            "Run once on install. After this, set your LLM client's BASE_URL to the proxy."
+        ),
+    )
     p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
