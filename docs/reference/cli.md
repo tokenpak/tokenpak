@@ -143,6 +143,21 @@ options:
                         Number of log lines to show (default: 50)
 ```
 
+### `tokenpak upgrade`
+
+Open the TokenPak Pro upgrade page in your browser
+
+```
+usage: tokenpak upgrade [-h] [--print-url]
+
+Open the canonical TokenPak Pro upgrade page in your default browser. Target
+URL is https://app.tokenpak.ai/upgrade (override with TOKENPAK_UPGRADE_URL).
+
+options:
+  -h, --help   show this help message and exit
+  --print-url  Print the upgrade URL to stdout instead of opening a browser
+```
+
 ## Indexing
 
 ### `tokenpak index`

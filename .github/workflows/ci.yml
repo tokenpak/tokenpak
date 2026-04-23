@@ -118,6 +118,40 @@ jobs:
           path: reports/test-results-py${{ matrix.python-version }}.xml
           retention-days: 30
 
+  # PM/GTM v2 D-delta (KEVIN-DECISION-D=D1, 2026-04-23): bandit blocking
+  # gate per standard 21 §9.8 (process-enforced). Baseline-based: the
+  # committed .bandit-baseline.json snapshots existing high-severity +
+  # high-confidence findings at gate-introduction time; only NEW findings
+  # fail the gate. Refresh baseline locally (rarely, and only when an
+  # existing finding is genuinely remediated):
+  #
+  #     bandit -r tokenpak -lll -iii -f json -o .bandit-baseline.json
+  #
+  # Required status-check name reviewers must treat as blocking:
+  #
+  #   - bandit (blocking)
+  bandit:
+    name: bandit (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'bandit>=1.7'
+
+      - name: Run bandit with committed baseline
+        run: |
+          bandit -r tokenpak -lll -iii --baseline .bandit-baseline.json -q
+
   # PM/GTM v2 C4: cli-docs-in-sync. Process-enforced blocking gate
   # (standard 21 §9.8). Runs the generator in --check mode; fails the
   # PR if docs/reference/cli.md drifts from the argparse truth in
