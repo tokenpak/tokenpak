@@ -214,6 +214,7 @@ markers = [
     "needs_fast_host: test has timing-sensitive assertions that fail on slow hosts (benchmarks, latency targets)",
     "conformance: TIP-1.0 self-conformance suite (SC-06). Validates live emissions against registry schemas.",
     "smoke: Layer-C smoke in the conformance suite — boots ProxyServer and checks disk-artifact round-trips.",
+    "advisory: TIP-SC+1 advisory invariants (I3 TTL ordering, I4 DLP leak) — run in CI with continue-on-error until promoted to blocking.",
 ]
 timeout = 30
 

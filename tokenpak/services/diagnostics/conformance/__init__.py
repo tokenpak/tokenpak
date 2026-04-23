@@ -37,6 +37,17 @@ class ConformanceObserver(Protocol):
     def on_capability_published(
         self, profile: str, caps: "list[str] | tuple[str, ...] | frozenset[str]"
     ) -> None: ...
+    # SC+1 / SC2-01 — the capture surface for outbound-side invariants
+    # (byte-identity, TTL ordering, DLP leak, header allowlist). Fired
+    # at the proxy dispatch chokepoint, right before bytes go to httpx.
+    def on_outbound_request(
+        self,
+        route_class: str,
+        target_url: str,
+        method: str,
+        headers: Mapping[str, str],
+        body: bytes,
+    ) -> None: ...
 
 
 _tls = threading.local()
@@ -93,6 +104,34 @@ def notify_capability_published(
         obs.on_capability_published(profile, caps)
 
 
+def notify_outbound_request(
+    route_class: str,
+    target_url: str,
+    method: str,
+    headers: Mapping[str, str],
+    body: bytes,
+) -> None:
+    """Forward an outbound request (right before dispatch) to the observer.
+
+    SC+1 capture surface for outbound-side invariants:
+
+    - I1 byte-identity: assert ``body`` equals client input on
+      ``claude-code-*`` routes.
+    - I3 TTL ordering: parse ``body`` JSON; assert no 1h-after-default
+      ``cache_control`` on non-byte-preserve routes.
+    - I4 DLP leak: grep ``body`` for registered secret patterns when
+      ``Policy.dlp_mode='redact'``.
+    - I5 header allowlist: assert ``headers`` ⊆ ``PERMITTED_HEADERS_PROXY``
+      (see ``tokenpak.core.contracts.permitted_headers``).
+
+    Fired at the two dispatch chokepoints in ``proxy/server.py`` (stream
+    + non-stream). No-op when no observer installed; ship-safe.
+    """
+    obs = _get()
+    if obs is not None:
+        obs.on_outbound_request(route_class, target_url, method, headers, body)
+
+
 __all__ = [
     "ConformanceObserver",
     "install",
@@ -100,6 +139,8 @@ __all__ = [
     "notify_response_headers",
     "notify_companion_journal_row",
     "notify_capability_published",
+    # SC+1 / SC2-01 — outbound-request capture surface.
+    "notify_outbound_request",
     # SC-07 — doctor --conformance runner.
     "run_conformance_checks",
     "summarize",

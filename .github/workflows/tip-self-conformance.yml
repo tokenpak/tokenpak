@@ -91,11 +91,15 @@ jobs:
       # The pytest conformance suite is the authoritative check per
       # DECISION-SC-08-1. Must be green on every Python in the matrix
       # before merge / tag.
-      - name: Run pytest self-conformance suite
+      - name: Run pytest self-conformance suite (blocking, excludes SC+1 advisory)
         working-directory: tokenpak
         env:
           TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
-        run: pytest tests/conformance/ -v -m conformance
+        # SC+1 / SC2-10: blocking leg runs SC-06 structural suite + SC+1
+        # invariants EXCEPT those marked `advisory` (I3 TTL ordering, I4
+        # DLP leak). Advisory invariants are exercised by a separate
+        # continue-on-error job — see `self-conformance-invariants-advisory`.
+        run: pytest tests/conformance/ -v -m 'conformance and not advisory'
 
       # --- SECONDARY SMOKE ---------------------------------------------
       # Exercises the operator-facing CLI path. Not a substitute for
@@ -135,6 +139,61 @@ jobs:
           path: tokenpak/doctor-conformance.json
           if-no-files-found: ignore
           retention-days: 30
+
+  # -------------------------------------------------------------------
+  # SC+1 ADVISORY INVARIANTS — fires on the SAME conditions as the
+  # blocking job (main/release/hotfix/v* tags + PRs to main/release),
+  # but `continue-on-error: true` so I3 TTL ordering + I4 DLP leak
+  # invariants surface as WARN rather than block merges. Promoted to
+  # blocking in a follow-up packet once each invariant stabilizes.
+  # -------------------------------------------------------------------
+  self-conformance-invariants-advisory:
+    name: self-conformance (advisory) / invariants
+    runs-on: ubuntu-latest
+    if: >-
+      (github.event_name == 'push' && (
+        github.ref == 'refs/heads/main' ||
+        startsWith(github.ref, 'refs/heads/release/') ||
+        startsWith(github.ref, 'refs/heads/hotfix/') ||
+        startsWith(github.ref, 'refs/tags/v')
+      )) ||
+      (github.event_name == 'pull_request' && (
+        github.base_ref == 'main' ||
+        startsWith(github.base_ref, 'release/')
+      )) ||
+      github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+
+    steps:
+      - name: Checkout tokenpak
+        uses: actions/checkout@v4
+        with:
+          path: tokenpak
+
+      - name: Checkout tokenpak/registry
+        uses: actions/checkout@v4
+        with:
+          repository: tokenpak/registry
+          path: registry
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        working-directory: tokenpak
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '../registry'
+          pip install -e '.[dev]'
+
+      - name: Run SC+1 advisory invariants (I3 TTL + I4 DLP)
+        working-directory: tokenpak
+        env:
+          TOKENPAK_REGISTRY_ROOT: ${{ github.workspace }}/registry
+        run: pytest tests/conformance/invariants/ -v -m 'conformance and advisory'
+          || echo "::warning::SC+1 advisory invariant(s) failed — review but does not block"
 
   # -------------------------------------------------------------------
   # ADVISORY — fires on every other branch push (feature/*, wip/*, …).

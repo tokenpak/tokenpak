@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2026-04-22
+
+### Added — TIP-SC+1: proxy semantic invariants
+
+SC+1 adds the semantic layer on top of TIP-SC's structural conformance. SC proved that emissions have the right shape; SC+1 proves they mean what they claim.
+
+Five property-test tracks, 56 tests total, split between blocking (I1 + I2 + I5) and advisory (I3 + I4) CI gates:
+
+- **I1 byte-identity (blocking).** 20 tests. For `claude-code-{tui,cli,tmux,sdk,ide,cron}`, the body forwarded to upstream is byte-identical to the client-submitted body. Anthropic OAuth billing depends on this. Includes a whitespace-mutation negative canary.
+- **I2 cache-attribution causality (blocking).** 5 tests. `cache_origin='proxy'` iff TokenPak placed the markers (Constitution §5.3). Three causal arms + two explicit over-claim negative tests that fail loudly if anyone misattributes provider-side hits as TokenPak wins.
+- **I3 TTL ordering (advisory).** 11 tests. No `cache_control ttl="1h"` block appears after a default-TTL block on outbound bodies. On `claude-code-*`, byte-identity wins — proxy must NOT "fix" what the client sent.
+- **I4 DLP leak prevention (advisory).** 14 tests. Five synthetic secret families (AWS, Stripe, GitHub PAT, OpenAI, Anthropic). In `redact` mode, outbound bytes contain zero matches. In `block` mode, no dispatch occurs. On `claude-code-*`, auto-downgrade to `warn` is the expected passthrough.
+- **I5 header-allowlist enforcement (blocking).** 6 tests. Outbound headers ⊆ `PERMITTED_HEADERS_PROXY` (new canonical contract at `tokenpak/core/contracts/permitted_headers.py`). v1.2.6 `Content-Encoding` zlib-bug regression canary.
+
+### Infrastructure
+
+- **`ConformanceObserver.on_outbound_request`** — new callback captures the (route_class, url, method, headers, body) five-tuple at dispatch time. Wired at exactly two chokepoints in `proxy/server.py` (stream + non-stream paths). No-op when no observer installed; ship-safe.
+- **`tokenpak/core/contracts/permitted_headers.py`** — canonical per-profile header allowlist + `HOP_BY_HOP` strip-set. Single source of truth for I5.
+- **CI**: new `self-conformance (advisory) / invariants` job (I3+I4, `continue-on-error: true`) added alongside existing blocking matrix. Blocking filter becomes `conformance and not advisory`. Full suite: 84 tests green locally (28 SC-06 + 56 SC+1).
+
+### Why advisory for I3 + I4
+
+I3 depends on `prompt_builder` reordering behavior that may surface pre-existing findings; I4 depends on the DLP rule set being complete for the secret families under test. Both ship as WARN-on-red so the phase can land without holding up stabilization; promoted to blocking in a follow-up packet once each is stable.
+
+### Phase-2 entrypoint migrations (P2-06..10)
+
+Remain queued. Next cleanup phase after SC+1 ships — they run on top of SC+1's regression net.
+
 ## [1.3.6] - 2026-04-22
 
 ### Fixed — release-gate hotfix-3 (pin validity + preflight coverage)

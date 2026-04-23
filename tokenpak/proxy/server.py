@@ -804,6 +804,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # ── Streaming (SSE) path ──────────────────────────────────
                 # Use pool.stream() so the connection is kept alive after SSE ends
                 sse_buffer = b""
+                # SC+1 / SC2-02: notify conformance observer of outbound
+                # dispatch before bytes go to httpx. Capture surface for
+                # byte-identity + TTL ordering + DLP leak + header
+                # allowlist invariants.
+                try:
+                    from tokenpak.services.diagnostics import (
+                        conformance as _conformance,
+                    )
+                    _conformance.notify_outbound_request(
+                        _route_class.value if hasattr(_route_class, "value") else str(_route_class),
+                        target_url,
+                        method,
+                        fwd_headers,
+                        body,
+                    )
+                except Exception:
+                    pass
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
                     # SC-02: accumulate headers we actually send so the
@@ -875,6 +892,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
             else:
                 # ── Non-streaming path ────────────────────────────────────
+                # SC+1 / SC2-02: notify conformance observer of outbound
+                # dispatch before bytes go to httpx. Same capture surface
+                # as the streaming path above.
+                try:
+                    from tokenpak.services.diagnostics import (
+                        conformance as _conformance,
+                    )
+                    _conformance.notify_outbound_request(
+                        _route_class.value if hasattr(_route_class, "value") else str(_route_class),
+                        target_url,
+                        method,
+                        fwd_headers,
+                        body,
+                    )
+                except Exception:
+                    pass
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 
                 self.send_response(resp.status_code)
