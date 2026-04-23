@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — PM/GTM v2 Phase 0
 
+### Added — A2 + A4 verification drift guards (M-A2, M-A4)
+
+Preflight (2026-04-23) confirmed both compression-defaults-on and dashboard-mount were already shipped — no code change needed. These smokes catch drift between preflight and Phase 0 closeout, so a silent regression cannot reach production.
+
+- **`tests/proxy/test_phase0_verification.py`** — 3 tests:
+  1. `compression.enabled` is `True` by default (flat-key accessor `get_all()` with `TOKENPAK_COMPACT` scrubbed from env).
+  2. `compression.threshold_tokens` is a positive integer by default (regression guard against zero/unset).
+  3. `serve_dashboard_file("/")` returns non-empty HTML + `text/html` mime — dashboard is still mounted at `tokenpak/proxy/server.py:346-358`.
+
+No production code changed.
+
 ### Added — A6 proxy-level auth via `TOKENPAK_PROXY_AUTH_TOKEN` (M-A6)
 
 Non-localhost access to a running `tokenpak serve` was previously ungated — any machine that could reach the proxy port could use it without authentication. A6 adds an opt-in middleware that requires a matching `X-TokenPak-Auth` header from non-localhost clients when the operator sets `TOKENPAK_PROXY_AUTH_TOKEN`.
