@@ -101,7 +101,7 @@ def test_non_localhost_without_env_returns_403(monkeypatch):
     """A6 Path 2: env var unset on non-localhost → 403 with typed error."""
     monkeypatch.delenv("TOKENPAK_PROXY_AUTH_TOKEN", raising=False)
 
-    handler = _make_handler("10.0.0.42", headers={})
+    handler = _make_handler("192.0.2.42", headers={})
     assert handler._auth_gate() is False
     assert _sent_status(handler) == 403
 
@@ -120,7 +120,7 @@ def test_non_localhost_env_set_missing_header_returns_401(monkeypatch):
     """A6 Path 3a: env set + header absent → 401."""
     monkeypatch.setenv("TOKENPAK_PROXY_AUTH_TOKEN", "s3kr3t")
 
-    handler = _make_handler("10.0.0.42", headers={})
+    handler = _make_handler("192.0.2.42", headers={})
     assert handler._auth_gate() is False
     assert _sent_status(handler) == 401
 
@@ -133,7 +133,7 @@ def test_non_localhost_env_set_wrong_header_returns_401(monkeypatch):
     """A6 Path 3b: env set + wrong token → 401 (timing-safe compare used)."""
     monkeypatch.setenv("TOKENPAK_PROXY_AUTH_TOKEN", "s3kr3t")
 
-    handler = _make_handler("10.0.0.42", headers={"X-TokenPak-Auth": "wrong-token"})
+    handler = _make_handler("192.0.2.42", headers={"X-TokenPak-Auth": "wrong-token"})
     assert handler._auth_gate() is False
     assert _sent_status(handler) == 401
 
@@ -148,7 +148,7 @@ def test_non_localhost_env_set_correct_header_allows_and_strips(monkeypatch):
     monkeypatch.setenv("TOKENPAK_PROXY_AUTH_TOKEN", "s3kr3t")
 
     handler = _make_handler(
-        "10.0.0.42",
+        "192.0.2.42",
         headers={"X-TokenPak-Auth": "s3kr3t", "Authorization": "Bearer upstream-key"},
     )
     assert handler._auth_gate() is True
