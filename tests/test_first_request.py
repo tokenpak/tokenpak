@@ -269,8 +269,14 @@ class TestFirstRequest:
         except Exception as e:
             pytest.fail(f"Ingest POST failed: {e}")
 
+    @pytest.mark.integration
     def test_batch_ingest_entries(self, ingest_server: IngestServer):
-        """Verify user can ingest multiple entries in a batch."""
+        """Verify user can ingest multiple entries in a batch.
+
+        Marked integration: spins up a real HTTP server + TestClient;
+        times out in CI-sandboxed runners. Run with
+        ``pytest -m integration`` locally.
+        """
         batch_url = f"http://127.0.0.1:{ingest_server.port}/ingest/batch"
 
         # Note: batch endpoint expects a JSON list, not an object with 'entries' key
@@ -315,6 +321,7 @@ class TestFirstRequest:
         except Exception as e:
             pytest.fail(f"Batch ingest failed: {e}")
 
+    @pytest.mark.integration
     def test_entries_written_to_disk(self, ingest_server: IngestServer, entries_dir: Path):
         """Verify that ingest requests are actually written to disk."""
         ingest_url = f"http://127.0.0.1:{ingest_server.port}/ingest"
@@ -455,8 +462,14 @@ class TestGracefulShutdown:
 # ============================================================================
 
 
+@pytest.mark.integration
 class TestFirstRequestIntegration:
-    """Full end-to-end integration test simulating a new user's first request."""
+    """Full end-to-end integration test simulating a new user's first request.
+
+    Marked integration at class level: spins up a real HTTP server +
+    TestClient. Times out in CI-sandboxed runners. Run with
+    ``pytest -m integration`` locally.
+    """
 
     def test_complete_onboarding_flow(self, ingest_server: IngestServer, entries_dir: Path):
         """Simulate a new user's complete first-request flow.
