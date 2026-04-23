@@ -966,6 +966,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         pass
                     self.end_headers()
 
+                    # SC+2 / SC2p-01: SSE observer accumulator. Distinct
+                    # from sse_buffer (which only fills when should_log +
+                    # is_messages). When a conformance observer is
+                    # installed on the thread, we parse per-frame and
+                    # emit in receipt order for I6/I7/I10 tests.
+                    # No-op when no observer installed; one attr lookup.
+                    _observer_buf = b""
+                    _rc_str = _route_class.value if hasattr(_route_class, "value") else str(_route_class)
+                    try:
+                        from tokenpak.services.diagnostics import (
+                            conformance as _conformance,
+                        )
+                    except Exception:
+                        _conformance = None  # type: ignore[assignment]
+
                     for chunk in resp.iter_bytes(chunk_size=4096):
                         if not chunk:
                             continue
@@ -976,6 +991,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             break
                         if should_log and is_messages:
                             sse_buffer += chunk
+                        # Conformance observer — parse + emit per frame.
+                        if _conformance is not None and _conformance._get() is not None:
+                            _observer_buf += chunk
+                            try:
+                                _frames, _observer_buf = _conformance.parse_sse_frames(_observer_buf)
+                                for _etype, _raw in _frames:
+                                    _conformance.notify_stream_event(_rc_str, _etype, _raw)
+                            except Exception:
+                                # Never let observer plumbing perturb the
+                                # streaming forward path. Reset buffer to
+                                # avoid runaway growth on a parse error.
+                                _observer_buf = b""
 
                 if should_log and is_messages and sse_buffer:
                     sse_usage = extract_sse_tokens(sse_buffer)

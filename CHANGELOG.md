@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.9] - 2026-04-24
+
+### Added — TIP-SC+2: streaming semantics invariants
+
+SC+2 extends the conformance matrix from SC+1's non-stream invariants (I1–I5) into the streaming (SSE) path. Three invariants land this phase — the narrowest deliberate scope that covers the highest-value streaming guarantees. Two more (streaming byte-identity of the response-side accumulator; streaming error-frame shape) are deferred to SC+3.
+
+Shipped invariants:
+
+- **I6 SSE frame-ordering (blocking).** Every complete Anthropic-style SSE frame forwarded to the client is notified to the conformance observer exactly once, in receipt order. No reordering, no drops, no synthesis. On `claude-code-*` routes, byte-identity per-frame. 9 tests covering parser primitives + multi-chunk split frames + observer receipt order + route-class propagation.
+- **I7 streaming cache-attribution causality (blocking).** The streaming analog of SC+1 I2. `cache_origin` classification from the `message_start` frame's `usage` block respects the "who placed the markers" rule — `'proxy'` iff TokenPak inserted the cache_control headers, `'client'` iff the client already did, `'unknown'` otherwise. Includes the explicit over-claim negative: upstream reports cache hits that neither side admits to seeding → never attribute to proxy. 5 tests.
+- **I10 streaming telemetry completeness (blocking).** `Monitor.log` fires exactly once per streamed request, post-`message_stop`, with `input_tokens` from `message_start` and `output_tokens` from the final `message_delta`. Fire-once and ordering contract locked; single mid-stream telemetry event would double-count or emit partial rows. 4 tests including the end-to-end ordering-contract exercise.
+
+Infrastructure:
+
+- **`tokenpak/services/diagnostics/conformance/__init__.py`** — new `on_stream_event(route_class, event_type, frame)` callback on `ConformanceObserver` + `notify_stream_event(...)` free helper. Ship-safe no-op when no observer installed.
+- **`parse_sse_frames(buf)`** helper — minimal, deterministic byte-in/tuple-out SSE parser. Consumed by both the production chokepoint (to extract event_type before notifying) and test harnesses (to reconstruct frame sequences). Tolerates LF-only and CRLF terminators; returns partial-frame remainder for chunk-accumulation patterns.
+- **`tokenpak/proxy/server.py`** — streaming forward loop now accumulates an observer-only byte buffer alongside the existing `sse_buffer`, parses complete frames on each chunk, and calls `notify_stream_event` per frame. Zero overhead when no observer is installed (one attr lookup on `threading.local`).
+
+Deferred:
+
+- **I8 streaming byte-identity of the response-side accumulator** — mostly subsumed by SC+1 I1 for the request side; the response-side streaming analog is niche.
+- **I9 streaming error-frame shape** — requires a minor `error.schema.json` extension to cover SSE `error` events; registry is frozen for this phase.
+
+Conformance matrix status: **102 tests green** (84 SC + SC+1 + 18 new SC+2) across 3.10/3.11/3.12.
+
 ## [1.3.8] - 2026-04-23
 
 Ships the full PM/GTM v2 initiative — ten landed goals across public-surface truth (Axis A), commercial enablement (Axis B), and trust artifacts (Axis C), plus a narrow security-hardening delta. Five Kevin decisions (A purchase subdomain, B metrics deferred, C comparison + status surfaces, D security scope, E distribution model) were ratified during the initiative and applied inline. Three new blocking CI gates added (`headline-benchmark`, `cli-docs-in-sync`, `bandit`). SC + SC+1 conformance matrix 84/84 green throughout. Companion artifacts that shipped outside this repo — `tokenpak-paid-stub==0.1.0` on PyPI, 3 compliance pages + comparison + status pages live on `tokenpak.ai` — are referenced per-entry below.

@@ -48,6 +48,17 @@ class ConformanceObserver(Protocol):
         headers: Mapping[str, str],
         body: bytes,
     ) -> None: ...
+    # SC+2 / SC2p-01 — the capture surface for streaming invariants
+    # (I6 frame-ordering, I7 streaming cache-attribution, I10
+    # streaming telemetry completeness). Fired once per complete
+    # Anthropic-style SSE frame as the proxy forwards bytes to the
+    # client, in receipt order.
+    def on_stream_event(
+        self,
+        route_class: str,
+        event_type: str,
+        frame: bytes,
+    ) -> None: ...
 
 
 _tls = threading.local()
@@ -104,6 +115,36 @@ def notify_capability_published(
         obs.on_capability_published(profile, caps)
 
 
+def notify_stream_event(
+    route_class: str,
+    event_type: str,
+    frame: bytes,
+) -> None:
+    """Forward a complete SSE frame to the observer, in receipt order.
+
+    SC+2 capture surface for streaming invariants:
+
+    - I6 frame-ordering: every frame forwarded upstream to client is
+      notified here exactly once, in receipt order. Test harnesses
+      assert the observed sequence equals the upstream-emitted sequence.
+    - I7 streaming cache-attribution: observer filters ``event_type
+      == 'message_start'`` and extracts ``usage.cache_read_input_tokens``
+      / ``usage.cache_creation_input_tokens``; these must drive the
+      downstream ``telemetry-row.cache_origin`` classification per
+      Constitution §5.3 (the streaming analog of SC+1 I2).
+    - I10 streaming telemetry completeness (indirect): a stream's
+      ``message_stop`` is the signal that ``Monitor.log`` may fire —
+      tests cross-correlate this with ``on_telemetry_row`` to assert
+      the log fires exactly once and post-stream-end.
+
+    Fired at the SSE forwarding loop in ``proxy/server.py``. No-op when
+    no observer is installed; ship-safe.
+    """
+    obs = _get()
+    if obs is not None:
+        obs.on_stream_event(route_class, event_type, frame)
+
+
 def notify_outbound_request(
     route_class: str,
     target_url: str,
@@ -141,11 +182,78 @@ __all__ = [
     "notify_capability_published",
     # SC+1 / SC2-01 — outbound-request capture surface.
     "notify_outbound_request",
+    # SC+2 / SC2p-01 — streaming-SSE capture surface (I6/I7/I10).
+    "notify_stream_event",
+    # SC+2 / SC2p-01 — SSE frame parser used by both the production
+    # chokepoint (to extract event_type) and test harnesses (to
+    # reconstruct frame sequences).
+    "parse_sse_frames",
     # SC-07 — doctor --conformance runner.
     "run_conformance_checks",
     "summarize",
     "exit_code_for",
 ]
+
+
+# --------------------------------------------------------------------------- #
+# SC+2 / SC2p-01 — SSE frame parser
+# --------------------------------------------------------------------------- #
+#
+# Minimal Anthropic-style SSE frame parser. Used by the proxy streaming
+# chokepoint to split incoming bytes into complete frames AND by test
+# harnesses to validate frame sequences.
+#
+# A frame is terminated by a blank line (``\n\n`` or ``\r\n\r\n``). Inside
+# a frame, lines prefixed ``event: NAME`` set the event type; lines
+# prefixed ``data: …`` carry the payload. Per the HTML5 EventSource spec,
+# a frame without an explicit ``event:`` field defaults to event type
+# ``message`` — we surface it as the Anthropic default so tests see it
+# consistently.
+#
+# The parser is byte-in / tuple-out. It advances over complete frames
+# only; any trailing partial frame is returned as ``remainder`` for
+# caller-side accumulation on the next chunk.
+# --------------------------------------------------------------------------- #
+def parse_sse_frames(buf: bytes) -> "tuple[list[tuple[str, bytes]], bytes]":
+    """Split a byte buffer into ``(event_type, frame_bytes)`` entries + remainder.
+
+    - ``event_type`` is the parsed ``event:`` field value or ``"message"``
+      per the HTML5 EventSource default.
+    - ``frame_bytes`` is the complete raw frame including its terminator
+      (``\\n\\n`` or ``\\r\\n\\r\\n``). Byte-identical to what the chokepoint
+      forwarded to the client, so tests can assert byte-order.
+    - ``remainder`` is any trailing partial frame (no terminator yet) —
+      accumulate with the next chunk.
+    """
+    frames: list[tuple[str, bytes]] = []
+    # Accept both LF-only and CRLF terminators. We search for whichever
+    # appears; Anthropic uses LF-only, but tolerate httpx-normalized CRLF.
+    i = 0
+    n = len(buf)
+    while i < n:
+        # Find the next blank-line terminator.
+        idx_lf = buf.find(b"\n\n", i)
+        idx_crlf = buf.find(b"\r\n\r\n", i)
+        candidates = [c for c in (idx_lf, idx_crlf) if c != -1]
+        if not candidates:
+            break
+        end = min(candidates)
+        if end == idx_crlf:
+            frame_end = end + 4
+        else:
+            frame_end = end + 2
+        frame = buf[i:frame_end]
+        event_type = "message"  # HTML5 default
+        for line in frame.splitlines():
+            if line.startswith(b"event:"):
+                event_type = line[len(b"event:"):].strip().decode(
+                    "utf-8", errors="replace"
+                )
+                break
+        frames.append((event_type, bytes(frame)))
+        i = frame_end
+    remainder = bytes(buf[i:])
+    return frames, remainder
 
 
 # Re-export the SC-07 runner so ``tokenpak doctor --conformance`` and
