@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/companion-journal-row-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/companion-journal-row-v1.json",
   "title": "TIP-1.0 Companion Journal Row",
-  "description": "One row in the companion-local session journal (~/.tokenpak/companion/journal.db). Companion-side UX state per Constitution §5.2-C; NEVER a source of truth for billing or cache. Rows complement (not replace) the wire-side telemetry rows written by services.telemetry_service. See https://tokenpak.ai/protocol/telemetry-semantics.",
+  "description": "One row in the companion-local session journal (~/.tokenpak/companion/journal.db). Companion-side UX state per Constitution §5.2-C; NEVER a source of truth for billing or cache. Rows complement (not replace) the wire-side telemetry rows written by services.telemetry_service. See https://docs.tokenpak.ai/protocol/telemetry-semantics.",
   "type": "object",
   "required": ["session_id", "timestamp", "entry_type", "tip_version"],
   "additionalProperties": false,

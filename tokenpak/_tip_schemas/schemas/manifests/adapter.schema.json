@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/manifests/adapter-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/manifests/adapter-v1.json",
   "title": "TIP-1.0 Adapter Manifest",
-  "description": "Declares a per-client integration (Claude Code, Cursor, Aider, Cline, Continue, Codex) OR a framework bridge (LangChain, LlamaIndex, CrewAI, AutoGen, Langfuse). See https://tokenpak.ai/protocol/manifest-spec.",
+  "description": "Declares a per-client integration (Claude Code, Cursor, Aider, Cline, Continue, Codex) OR a framework bridge (LangChain, LlamaIndex, CrewAI, AutoGen, Langfuse). See https://docs.tokenpak.ai/protocol/manifest-spec.",
   "type": "object",
   "required": [
     "tip_version",
@@ -73,7 +73,7 @@
       "description": "Capability labels this adapter publishes. MUST include 'tip.adapter.client-integration' or 'tip.adapter.framework-bridge' depending on adapter_kind."
     },
     "compatibility": {
-      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+      "$ref": "https://docs.tokenpak.ai/schemas/tip/compatibility-v1.json"
     },
     "trust": {
       "type": "object",

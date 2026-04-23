@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/headers-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/headers-v1.json",
   "title": "TIP-1.0 Wire Headers",
-  "description": "Canonical X-TokenPak-* headers carried on data-plane requests and responses. See https://tokenpak.ai/protocol/transport-bindings for normative text. TIP-1.0 headers are informational metadata; they never alter the request body (Architecture §5.1 byte-fidelity rule).",
+  "description": "Canonical X-TokenPak-* headers carried on data-plane requests and responses. See https://docs.tokenpak.ai/protocol/transport-bindings for normative text. TIP-1.0 headers are informational metadata; they never alter the request body (Architecture §5.1 byte-fidelity rule).",
   "type": "object",
   "additionalProperties": true,
   "properties": {

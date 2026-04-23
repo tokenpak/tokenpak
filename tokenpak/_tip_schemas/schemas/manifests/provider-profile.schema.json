@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/manifests/provider-profile-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/manifests/provider-profile-v1.json",
   "title": "TIP-1.0 Provider Profile",
-  "description": "Per-provider outbound profile (Anthropic, OpenAI, Google, Ollama, custom-local). Describes how services.routing_service invokes this provider. See https://tokenpak.ai/protocol/manifest-spec.",
+  "description": "Per-provider outbound profile (Anthropic, OpenAI, Google, Ollama, custom-local). Describes how services.routing_service invokes this provider. See https://docs.tokenpak.ai/protocol/manifest-spec.",
   "type": "object",
   "required": [
     "tip_version",
@@ -41,7 +41,7 @@
       }
     },
     "compatibility": {
-      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+      "$ref": "https://docs.tokenpak.ai/schemas/tip/compatibility-v1.json"
     },
     "provider": {
       "type": "object",

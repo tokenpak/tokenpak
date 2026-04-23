@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/tip/telemetry-event-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/tip/telemetry-event-v1.json",
   "title": "TIP-1.0 Telemetry Event",
-  "description": "One row per request in the telemetry store (~/.tokenpak/telemetry.db). Written only by services.telemetry_service per Architecture §7.1. Normative field set for TIP-1.0; additive MINOR bumps may extend it, MAJOR bumps may break it. See https://tokenpak.ai/protocol/telemetry-semantics.",
+  "description": "One row per request in the telemetry store (~/.tokenpak/telemetry.db). Written only by services.telemetry_service per Architecture §7.1. Normative field set for TIP-1.0; additive MINOR bumps may extend it, MAJOR bumps may break it. See https://docs.tokenpak.ai/protocol/telemetry-semantics.",
   "type": "object",
   "required": ["request_id", "timestamp", "cache_origin", "tip_version"],
   "additionalProperties": false,

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/manifests/client-profile-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/manifests/client-profile-v1.json",
   "title": "TIP-1.0 Client Profile",
-  "description": "Per-client inbound profile (CLI, TUI, API, IDE, cron, batch). Describes how requests from this client kind should be routed and whether the companion should attach. See https://tokenpak.ai/protocol/manifest-spec.",
+  "description": "Per-client inbound profile (CLI, TUI, API, IDE, cron, batch). Describes how requests from this client kind should be routed and whether the companion should attach. See https://docs.tokenpak.ai/protocol/manifest-spec.",
   "type": "object",
   "required": [
     "tip_version",
@@ -41,7 +41,7 @@
       }
     },
     "compatibility": {
-      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+      "$ref": "https://docs.tokenpak.ai/schemas/tip/compatibility-v1.json"
     },
     "client": {
       "type": "object",

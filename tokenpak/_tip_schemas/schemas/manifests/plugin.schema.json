@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tokenpak.ai/schemas/manifests/plugin-v1.json",
+  "$id": "https://docs.tokenpak.ai/schemas/manifests/plugin-v1.json",
   "title": "TIP-1.0 Plugin Manifest",
-  "description": "Declares an optional TokenPak plugin that installs at documented hook points. See https://tokenpak.ai/protocol/manifest-spec.",
+  "description": "Declares an optional TokenPak plugin that installs at documented hook points. See https://docs.tokenpak.ai/protocol/manifest-spec.",
   "type": "object",
   "required": [
     "tip_version",
@@ -42,7 +42,7 @@
       "description": "MUST include tip.plugin.hook-point."
     },
     "compatibility": {
-      "$ref": "https://tokenpak.ai/schemas/tip/compatibility-v1.json"
+      "$ref": "https://docs.tokenpak.ai/schemas/tip/compatibility-v1.json"
     },
     "hooks": {
       "type": "array",
