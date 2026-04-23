@@ -53,6 +53,10 @@ from tokenpak.proxy.degradation import DegradationEventType, get_degradation_tra
 from tokenpak.proxy.passthrough import PassthroughConfig, forward_headers, validate_auth
 from tokenpak.proxy.router import INTERCEPT_HOSTS, ProviderRouter, estimate_cost
 from tokenpak.proxy.startup import format_startup_report, run_startup_checks
+# SC2-03 canonical hop-by-hop set. Alias at module scope so the
+# two downstream response-forward loops can use a single
+# lowercased-membership check without re-importing per request.
+from tokenpak.core.contracts.permitted_headers import HOP_BY_HOP as _HOP_BY_HOP
 from tokenpak.proxy.stats import CompressionStats
 from tokenpak.proxy.streaming import extract_sse_tokens
 
@@ -835,13 +839,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         # iter_bytes() yields decoded (decompressed) bytes;
                         # keeping upstream's gzip header would make the
                         # client attempt to decompress plaintext bytes.
-                        if h_lower in (
-                            "connection",
-                            "keep-alive",
-                            "transfer-encoding",
-                            "content-length",
-                            "content-encoding",
-                        ):
+                        # Canonical HOP_BY_HOP set lives in
+                        # tokenpak.core.contracts.permitted_headers
+                        # (SC2-03 single source of truth).
+                        if h_lower in _HOP_BY_HOP:
                             continue
                         if h_lower == "content-type":
                             has_content_type = True
@@ -924,13 +925,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # resize the body on future edits).
                 for h_key, h_val in resp.headers.items():
                     h_lower = h_key.lower()
-                    if h_lower in (
-                        "connection",
-                        "keep-alive",
-                        "transfer-encoding",
-                        "content-length",
-                        "content-encoding",
-                    ):
+                    # Canonical HOP_BY_HOP — SC2-03 single source of truth.
+                    if h_lower in _HOP_BY_HOP:
                         continue
                     self.send_header(h_key, h_val)
                     _captured_headers[h_key] = h_val
