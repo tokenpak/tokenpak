@@ -115,6 +115,25 @@ We'd rather ship an honest preview than an advertised product that doesn't match
 
 ---
 
+## Non-localhost access
+
+TokenPak's default is localhost-only. If you want to expose the proxy to other machines on your LAN, set an auth token:
+
+```bash
+export TOKENPAK_PROXY_AUTH_TOKEN=$(openssl rand -hex 32)
+tokenpak start                # or tokenpak setup for first-time config
+```
+
+Clients then include the token on non-localhost requests:
+
+```
+X-TokenPak-Auth: <your-token>
+```
+
+Localhost (`127.0.0.1`, `::1`) traffic bypasses auth — your local tools keep working without changes. Non-localhost requests without the env var return `403 forbidden`; requests with a missing or wrong header return `401 unauthorized`. The token is stripped from the request before any upstream forward, so provider APIs (Anthropic, OpenAI, etc.) never see it.
+
+---
+
 ## Support
 
 - **Docs:** QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) · API reference at https://github.com/tokenpak/docs (rendered at tokenpak.ai/api) · FAQ at https://github.com/tokenpak/docs (rendered at tokenpak.ai/faq)

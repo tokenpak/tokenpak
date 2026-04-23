@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] — PM/GTM v2 Phase 0
 
+### Added — A6 proxy-level auth via `TOKENPAK_PROXY_AUTH_TOKEN` (M-A6)
+
+Non-localhost access to a running `tokenpak serve` was previously ungated — any machine that could reach the proxy port could use it without authentication. A6 adds an opt-in middleware that requires a matching `X-TokenPak-Auth` header from non-localhost clients when the operator sets `TOKENPAK_PROXY_AUTH_TOKEN`.
+
+- **`tokenpak/proxy/server.py`** — new `_auth_gate()` + `_send_json_error()` helpers on `_ProxyHandler`. Called from `do_GET` / `do_POST` / `do_PUT` / `do_DELETE`. `/health` bypasses the gate so liveness probes keep working.
+- **Auth paths (4-way gate):**
+  1. Localhost (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`) — always allowed (backwards compat).
+  2. Non-localhost + `TOKENPAK_PROXY_AUTH_TOKEN` unset → **403 forbidden**.
+  3. Non-localhost + env set + missing/wrong `X-TokenPak-Auth` → **401 unauthorized** (timing-safe `hmac.compare_digest`).
+  4. Non-localhost + env set + correct header → **allow**, header stripped, stable SHA-256 short identity retained on the handler for future telemetry attribution.
+- **Header choice: `X-TokenPak-Auth`, NOT `Authorization: Bearer`.** Anthropic AND OpenAI both use `Authorization: Bearer` for their own API keys — using that header for proxy auth would collide with the client's upstream credential. `X-TokenPak-Auth` falls under the `x-tokenpak-*` prefix already excluded from `PERMITTED_HEADERS_PROXY`, so the SC+1 I5 header-allowlist invariant will catch any leak automatically. Deviation from the original packet spec is documented here for traceability.
+- **I5 belt-and-suspenders:** on successful auth the gate deletes `X-TokenPak-Auth` from `self.headers` so no downstream code (passthrough, routing, compression) can forward it upstream.
+- **`tests/proxy/test_proxy_auth.py`** — 9 unit tests covering all 4 auth paths + I5 static allowlist alignment.
+- **`README.md`** — new "Non-localhost access" section documenting the env var, header name, and stripping guarantee.
+
+**Telemetry plumbing deferred.** The packet originally asked for `telemetry-row.user_id` population. The TIP-1.0 `telemetry-row` schema has no `user_id` field, and schema changes are frozen for v2 per the initiative context. A stable short identity is computed and retained on the handler for later plumbing; follow-up work (TIP registry MINOR bump) will add the field and wire `Monitor.log`.
+
+Conformance matrix (SC + SC+1 I1/I2/I3/I4/I5): 84/84 green with A6 in place.
+
 ### Added — A5 headline benchmark pinned as blocking CI gate (M-A5)
 
 README's "30–50% reduction" claim was previously unenforced — a PR that silently regressed compression to 25% would have shipped. Pinned to a deterministic fixture + blocking CI job per standard 21 §9.8.
