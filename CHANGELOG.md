@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — PM/GTM v2 Phase 0
+
+### Changed — A1 zero-config claim resolution (M-A1)
+
+Preflight (2026-04-23) found README line 1 claimed "zero config" while line 10 disclosed manual client configuration. The `cmd_setup` interactive wizard existed at `tokenpak/cli/_impl.py:186` (API-key detection + profile selection + proxy start) and was dispatch-registered in argparse, but was absent from `_COMMAND_GROUPS`, so `tokenpak help` did not surface it.
+
+- **`_COMMAND_GROUPS["Getting Started"]`** — added `setup` entry so the wizard is discoverable via `tokenpak help`.
+- **`sub.add_parser("setup", ...)`** — added a `description=` block so `tokenpak setup --help` now explains the wizard instead of printing a bare usage line.
+- **`README.md`** — rewrote line 1 from `zero config` (aspirational until `tokenpak integrate` ships) to `One command to configure your LLM proxy.` (defensible today). Updated Quick Start to lead with `tokenpak setup`. Reframed the early-preview disclosure.
+- **`tests/cli/test_setup_registration.py`** — new smoke covering: (a) `setup` present in Getting Started group, (b) argparse subparser dispatches to `cmd_setup`, (c) `tokenpak setup --help` exits zero and advertises the wizard.
+
+No behavior change to `cmd_setup` itself; migration off the deprecated `tokenpak/agent/license/` shim remains out of scope (TIP-2.0 cleanup initiative).
+
 ## [1.3.7] - 2026-04-22
 
 ### Added — TIP-SC+1: proxy semantic invariants
