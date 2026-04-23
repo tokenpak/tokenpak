@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — PM/GTM v2 Phase 2
+
+### Added — C4 CLI reference autogen + onboarding doc (M-C4)
+
+Auto-generated CLI reference locked to argparse truth + onboarding doc grounded in actually-shipped commands.
+
+- **`scripts/generate-cli-docs.py`** — walks `_COMMAND_GROUPS` in `tokenpak/cli/_impl.py`, introspects every subcommand via `build_parser()`, emits deterministic markdown to `docs/reference/cli.md`. Supports `--check` (CI gate mode), `--stdout`.
+- **`docs/reference/cli.md`** — committed generator output (842 lines across all current command groups).
+- **`docs/onboarding.md`** — Day 1 / 3 / 7 / 14 / 30 narrative grounded in real commands (`tokenpak setup`, `tokenpak cost --week`, `tokenpak recipe list`, `tokenpak plan`, etc.). Pro upsell kept to a single ≤50-word paragraph on Day 14 per standard 06. Links to `tokenpak.ai/compliance/*` trust artifacts from Day 30 ops section.
+- **`.github/workflows/ci.yml`** — new `cli-docs-in-sync (blocking)` job per standard 21 §9.8. Runs the generator in `--check` mode; any drift between committed file and generator output fails the gate.
+- **`Makefile`** — `cli-docs` + `cli-docs-check` targets for local iteration.
+
+Neither the CLI generator nor the onboarding doc modifies production code. Both live in `docs/` and `scripts/` — shipped as package data for wheel installs, and easily synced to `github.com/tokenpak/docs` → `docs.tokenpak.ai` once that sync workflow activates.
+
 ## [Unreleased] — PM/GTM v2 Phase 1
 
 ### Added — B3 license CLI 4-path verification (M-B3)
