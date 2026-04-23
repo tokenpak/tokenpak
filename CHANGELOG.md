@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.11] - 2026-04-24
+
+### Added — Phase B of MVP Gap Closure (Working Product Readiness)
+
+Ratified by Kevin 2026-04-24. Closes the six P1 + two P2 gaps in the Working Product Readiness gap catalog. User-facing changes are additive; no behavior regressions.
+
+**P1-1 — Per-request savings response headers.** On every proxied request (stream + non-stream) the client now receives input-side compression metrics as response headers:
+
+- `X-Tokenpak-Input-Tokens: <n>` — token count after the client's payload parsed, before compression
+- `X-Tokenpak-Sent-Tokens: <n>` — token count actually forwarded upstream (post-compression)
+- `X-Tokenpak-Saved-Tokens: <n>` — the delta; what TokenPak removed on this request
+
+Streaming-side output tokens aren't known until stream-end, so these headers cover input compression only — the "did TokenPak do its job on this request?" loop users were missing. Downstream in `tokenpak status` / `tokenpak savings` / dashboard the aggregate view still shows input + output totals.
+
+**P1-2 — Dashboard URL surfaced in `tokenpak setup` Next Steps.** The wizard's terminal "Next steps" block now prints the local dashboard URL as the second action (`http://127.0.0.1:<port>/dashboard`).
+
+**P1-3 — `tokenpak doctor --conformance` human-language preamble.** Before the per-check table, the doctor now prints a plain-English trust-posture summary (byte-identity / header-allowlist / cache-attribution / DLP leak-prevention) derived from the SC-07 runner results. Detailed check rows unchanged.
+
+**P1-4 — `tokenpak status` surfaces recent non-2xx responses.** When users hit a 500 / 429 / auth failure, the debug now starts with "here are your last 5 non-2xx responses" — timestamp, status, model, endpoint, latency — rather than a blank wall. Reads from the local `monitor.db` ledger; silently skips on a fresh install with no history.
+
+**P1-5 — Doctor vault-index warning demoted to INFO.** Previously a warning (`⚠️ Vault index ... not found`) on every run regardless of whether the user had chosen to enable semantic search. Now an `ℹ` line that says: *"not configured (optional; run `tokenpak index <dir>` to enable semantic search)"*.
+
+**P1-6 — Pro features inline in README.** The Pro section now lists the actual feature groups (team-scale cost attribution / budget enforcement / advanced routing policies / enterprise credential management / SSO+SLA) rather than a single-sentence summary + link.
+
+**P2-1 — Privacy posture surfaced in CLI + linked from README.** New `tokenpak doctor --privacy` command prints the data-handling posture in human language: what stays local, what leaves, every optional escape hatch disclosed by env var name, and direct links to the `tokenpak.ai/compliance/{privacy,dpa,sub-processors}` pages. README adds a "Privacy + compliance" section linking all three pages.
+
+**P2-2 — `tokenpak plan` OSS output surfaces Pro.** When a user on OSS-tier runs `tokenpak plan`, the output now includes a short (5-line) summary of what Pro adds and the `tokenpak upgrade` command. No change when the user has activated a Pro license.
+
+### Tests
+
+No new tests; Phase B changes are additive to existing user-facing surfaces. Regression coverage: 27/27 CLI + 102/102 conformance + ruff clean + `cli-docs-in-sync` green (new `--privacy` flag auto-generated into `docs/reference/cli.md`).
+
 ## [1.3.10] - 2026-04-24
 
 ### Changed — Phase A of MVP Gap Closure (Working Product Readiness initiative)
