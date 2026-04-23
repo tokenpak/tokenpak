@@ -1,4 +1,4 @@
-# TokenPak — Cut your LLM token spend by 30–50%, zero config
+# TokenPak — Cut your LLM token spend by 30–50%. One command to configure your LLM proxy.
 
 [![PyPI version](https://img.shields.io/pypi/v/tokenpak.svg)](https://pypi.org/project/tokenpak/)
 [![Python 3.10+](https://img.shields.io/pypi/pyversions/tokenpak.svg)](https://pypi.org/project/tokenpak/)
@@ -7,7 +7,7 @@
 
 TokenPak is a local proxy that compresses your LLM context before it hits the API — fewer tokens, lower cost, same results. No code changes, no cloud, no credentials stored.
 
-> **Status: early preview.** Core compression engine and proxy are in place. Per-client auto-integration (the `tokenpak integrate` command) is not yet shipped — configure your client manually by pointing it at `http://127.0.0.1:8766`. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
+> **Status: early preview.** Core compression engine and proxy are in place. `tokenpak setup` is the interactive wizard that detects your API keys, picks a compression profile, and starts the proxy. Per-client auto-integration (the forthcoming `tokenpak integrate` command) is not yet shipped — after `tokenpak setup` runs, point your client at `http://127.0.0.1:8766` via the one-line `export` below. See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart).
 
 ---
 
@@ -15,10 +15,10 @@ TokenPak is a local proxy that compresses your LLM context before it hits the AP
 
 ```bash
 pip install tokenpak
-tokenpak start                      # start the local proxy at 127.0.0.1:8766
+tokenpak setup                      # interactive wizard — detects keys, picks a profile, starts the proxy
 ```
 
-Point your LLM client at the proxy. For example, the Anthropic SDK:
+Then point your LLM client at the proxy with one env var. For the Anthropic SDK:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://127.0.0.1:8766
@@ -31,6 +31,10 @@ export OPENAI_BASE_URL=http://127.0.0.1:8766
 ```
 
 Then use your client normally. TokenPak compresses requests on the way out and logs savings to a local SQLite ledger.
+
+If you prefer manual configuration (no wizard), `tokenpak start` brings the proxy up with defaults and you set `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` yourself.
+
+Reproduce the 30–50% headline claim locally: `make benchmark-headline`.
 
 See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quickstart) for per-client setup (Claude Code, Cursor, Aider, and others).
 
@@ -99,6 +103,21 @@ See QUICKSTART at https://github.com/tokenpak/docs (rendered at tokenpak.ai/quic
 
 ---
 
+## Pro tier
+
+**Pro** adds team-scale features on top of the OSS core: shared multi-seat dashboards, advanced routing policies, enterprise credential management, priority support, and budget enforcement (`429 budget_exceeded` on configured caps). It ships as the `tokenpak-paid` package, distributed through a private license-gated index at `pypi.tokenpak.ai`. See [tokenpak.ai/paid](https://tokenpak.ai/paid) to request access.
+
+Installing the Pro package (after you have a license key):
+
+```bash
+pip install --index-url https://pypi.tokenpak.ai --extra-index-url https://pypi.org/simple tokenpak-paid
+tokenpak activate <your-license-key>
+```
+
+Running `pip install tokenpak-paid-stub` from public PyPI fetches a discovery stub that prints these install instructions — so `pip` works as a learning path, not a dead end. The real paid code stays license-gated.
+
+---
+
 ## Current limitations
 
 Honest about what isn't ready yet:
@@ -108,6 +127,25 @@ Honest about what isn't ready yet:
 - **`tokenpak demo` is a compression-recipes demo** (shows recipes applied to a sample input), not the decorated savings panel above. The panel shows what `tokenpak savings` output can look like after real usage.
 
 We'd rather ship an honest preview than an advertised product that doesn't match install-time reality.
+
+---
+
+## Non-localhost access
+
+TokenPak's default is localhost-only. If you want to expose the proxy to other machines on your LAN, set an auth token:
+
+```bash
+export TOKENPAK_PROXY_AUTH_TOKEN=$(openssl rand -hex 32)
+tokenpak start                # or tokenpak setup for first-time config
+```
+
+Clients then include the token on non-localhost requests:
+
+```
+X-TokenPak-Auth: <your-token>
+```
+
+Localhost (`127.0.0.1`, `::1`) traffic bypasses auth — your local tools keep working without changes. Non-localhost requests without the env var return `403 forbidden`; requests with a missing or wrong header return `401 unauthorized`. The token is stripped from the request before any upstream forward, so provider APIs (Anthropic, OpenAI, etc.) never see it.
 
 ---
 

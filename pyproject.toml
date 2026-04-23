@@ -106,6 +106,13 @@ dev = [
     # schema (scripts/tip_conformance_check.py emission:journal goes
     # WARN -> PASS).
     "tokenpak-tip-validator==0.1.1",
+    # PM/GTM v2 D-delta (KEVIN-DECISION-D=D1, 2026-04-23): bandit as a
+    # process-enforced blocking CI gate per standard 21 §9.8. Narrow
+    # delta-only hardening — gate is baseline-based (.bandit-baseline.json),
+    # so only NEW high-severity + high-confidence findings fail the gate.
+    # CodeQL / Trivy / SBOM intentionally deferred to a post-v2 security
+    # initiative.
+    "bandit>=1.7",
 ]
 tokens = [
     "tiktoken>=0.5.0",
@@ -215,6 +222,7 @@ markers = [
     "conformance: TIP-1.0 self-conformance suite (SC-06). Validates live emissions against registry schemas.",
     "smoke: Layer-C smoke in the conformance suite — boots ProxyServer and checks disk-artifact round-trips.",
     "advisory: TIP-SC+1 advisory invariants (I3 TTL ordering, I4 DLP leak) — run in CI with continue-on-error until promoted to blocking.",
+    "benchmark: PM/GTM v2 headline-claim benchmark (A5). Deterministic fixture + reduction floor; blocks a README claim regression.",
 ]
 timeout = 30
 

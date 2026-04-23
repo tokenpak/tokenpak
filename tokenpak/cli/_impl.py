@@ -41,6 +41,7 @@ _QUICK_COMMANDS = ["start", "demo", "cost", "status"]
 # All commands grouped for `tokenpak help`
 _COMMAND_GROUPS = {
     "Getting Started": [
+        ("setup", "One-time interactive configuration wizard (detects keys, picks profile, starts proxy)"),
         ("start", "Start the proxy (localhost:8766)"),
         ("stop", "Stop the running proxy"),
         ("restart", "Restart the proxy"),
@@ -49,6 +50,7 @@ _COMMAND_GROUPS = {
         ("cost", "View your API spend"),
         ("status", "Check proxy health"),
         ("logs", "Show recent proxy logs"),
+        ("upgrade", "Open the TokenPak Pro upgrade page in your browser"),
     ],
     "Indexing": [
         ("index", "Index a directory for context retrieval"),
@@ -1870,7 +1872,15 @@ def build_parser():
     p_help.add_argument("--minimal", action="store_true", help="Show compact one-line command list")
     p_help.set_defaults(func=cmd_help)
 
-    p_setup = sub.add_parser("setup", help="Interactive first-time configuration wizard")
+    p_setup = sub.add_parser(
+        "setup",
+        help="Interactive first-time configuration wizard",
+        description=(
+            "Interactive wizard: detects API keys from your environment, lets you pick "
+            "a compression profile, writes ~/.tokenpak/config.yaml, and starts the proxy. "
+            "Run once on install. After this, set your LLM client's BASE_URL to the proxy."
+        ),
+    )
     p_setup.set_defaults(func=cmd_setup)
 
     p_start = sub.add_parser("start", help="Start the proxy (localhost:8766)")
@@ -2145,6 +2155,7 @@ def build_parser():
     _build_audit_parser(sub)
     _build_compliance_parser(sub)
     _build_version_parser(sub)
+    _build_upgrade_parser(sub)
     _build_update_parser(sub)
     _build_config_mgmt_parser(sub)
     _build_fleet_parser(sub)
@@ -3327,6 +3338,56 @@ def cmd_config_pull(args):
 def _build_version_parser(sub):
     p = sub.add_parser("version", help="Show current versions (proxy, config, cli)")
     p.set_defaults(func=cmd_version)
+
+
+def cmd_upgrade(args):
+    """Open the canonical Pro upgrade page in the user's default browser.
+
+    Default URL is ``https://app.tokenpak.ai/upgrade`` (KEVIN-DECISION-A,
+    2026-04-23). Override with the ``TOKENPAK_UPGRADE_URL`` env var for
+    testing or alternate deployments.
+    """
+    import webbrowser
+
+    default_url = "https://app.tokenpak.ai/upgrade"
+    url = os.environ.get("TOKENPAK_UPGRADE_URL", default_url)
+
+    if getattr(args, "print_url", False):
+        # Non-interactive path: print and exit. Used by automation + tests
+        # so the browser-opening side-effect stays opt-in.
+        print(url)
+        return
+
+    print(f"Opening {url} in your default browser …")
+    try:
+        opened = webbrowser.open(url, new=2)
+    except Exception as exc:
+        opened = False
+        print(f"  ⚠️  Could not launch a browser: {exc}", file=sys.stderr)
+
+    if not opened:
+        print()
+        print("  If the browser did not open, visit the URL manually:")
+        print(f"    {url}")
+
+
+def _build_upgrade_parser(sub):
+    p = sub.add_parser(
+        "upgrade",
+        help="Open the TokenPak Pro upgrade page in your browser",
+        description=(
+            "Open the canonical TokenPak Pro upgrade page in your default browser. "
+            "Target URL is https://app.tokenpak.ai/upgrade "
+            "(override with TOKENPAK_UPGRADE_URL)."
+        ),
+    )
+    p.add_argument(
+        "--print-url",
+        action="store_true",
+        dest="print_url",
+        help="Print the upgrade URL to stdout instead of opening a browser",
+    )
+    p.set_defaults(func=cmd_upgrade)
 
 
 def _build_update_parser(sub):

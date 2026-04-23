@@ -267,6 +267,82 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         pass
 
     # ------------------------------------------------------------------
+    # A6 (PM/GTM v2 Phase 0): Proxy auth gate
+    # ------------------------------------------------------------------
+    # Localhost traffic is always allowed (backwards compat for every
+    # existing user). Non-localhost traffic requires
+    # TOKENPAK_PROXY_AUTH_TOKEN to be set in the proxy process environment
+    # AND the client to send a matching `X-TokenPak-Auth` header.
+    #
+    # Header choice rationale: Anthropic AND OpenAI both use
+    # `Authorization: Bearer` for their upstream API keys. Using that
+    # header for proxy auth would collide with the client's upstream
+    # credential. `X-TokenPak-Auth` is proxy-internal (matches the
+    # `x-tokenpak-*` prefix already excluded from PERMITTED_HEADERS_PROXY),
+    # so it naturally falls outside the I5 header-allowlist invariant's
+    # set of allowed-upstream headers. As belt-and-suspenders, the gate
+    # also deletes the header from self.headers on successful auth so no
+    # downstream code has a chance to forward it.
+    # ------------------------------------------------------------------
+    _LOCALHOST_IPS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
+
+    def _auth_gate(self) -> bool:
+        """Return True if the request may proceed; False if denied (401/403 sent)."""
+        import hashlib
+        import hmac
+        import os
+
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip in self._LOCALHOST_IPS:
+            return True
+
+        expected = os.environ.get("TOKENPAK_PROXY_AUTH_TOKEN")
+        if not expected:
+            self._send_json_error(
+                403,
+                "forbidden",
+                "non-localhost access requires TOKENPAK_PROXY_AUTH_TOKEN "
+                "to be set on the proxy process",
+            )
+            return False
+
+        provided = self.headers.get("X-TokenPak-Auth", "")
+        if not provided or not hmac.compare_digest(provided, expected):
+            self._send_json_error(
+                401,
+                "unauthorized",
+                "invalid or missing X-TokenPak-Auth header",
+            )
+            return False
+
+        # Success. Stable short identity for in-process telemetry; no raw token
+        # is retained. (telemetry-row.user_id plumbing deferred to a TIP registry
+        # MINOR bump; out of scope for v2 Phase 0 per initiative context doc.)
+        self._tokenpak_user_id = hashlib.sha256(provided.encode()).hexdigest()[:16]
+
+        # I5 belt-and-suspenders: strip the header from self.headers so no
+        # downstream code (passthrough, routing, compression) has a chance to
+        # forward it upstream.
+        try:
+            del self.headers["X-TokenPak-Auth"]
+        except KeyError:
+            pass
+        return True
+
+    def _send_json_error(self, status_code: int, error_type: str, message: str) -> None:
+        """Send a TIP-shaped JSON error response."""
+        body = json.dumps(
+            {"error": {"type": error_type, "message": message}},
+            indent=2,
+        ).encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------
     # CONNECT tunnelling (HTTPS MITM passthrough)
     # ------------------------------------------------------------------
 
@@ -315,7 +391,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         ps = self.server.proxy_server
         path = self.path
 
-        # Always allow /health during shutdown (needed for health-check polling)
+        # Always allow /health during shutdown (needed for health-check polling).
+        # Also bypasses the A6 auth gate so external monitors can poll without
+        # credentials — a 401 here would break liveness probes.
         if path == "/health" or path.startswith("/health?"):
             from urllib.parse import parse_qs
             from urllib.parse import urlparse as _urlparse
@@ -324,6 +402,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed_path.query)
             deep = qs.get("deep", ["false"])[0].lower() in ("true", "1", "yes")
             self._send_json(ps.health(deep=deep))
+            return
+
+        # A6: gate all non-/health GET traffic behind the proxy-auth check.
+        if not self._auth_gate():
             return
 
         # Reject new proxied requests while shutting down
@@ -464,6 +546,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         ps = self.server.proxy_server
+        # A6: gate all POST traffic behind the proxy-auth check.
+        if not self._auth_gate():
+            return
         if ps.shutdown.is_shutting_down and (
             self.path.startswith("http") or self.path.startswith("/v1/")
         ):
@@ -514,6 +599,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         ps = self.server.proxy_server
+        # A6: gate all PUT traffic behind the proxy-auth check.
+        if not self._auth_gate():
+            return
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
             return
@@ -524,6 +612,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         ps = self.server.proxy_server
+        # A6: gate all DELETE traffic behind the proxy-auth check.
+        if not self._auth_gate():
+            return
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
             return
