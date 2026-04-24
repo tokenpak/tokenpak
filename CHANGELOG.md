@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.14] - 2026-04-24
+
+### Added — Multi-turn session continuity for platform-bridged traffic
+
+Ratified by Kevin 2026-04-24 as the functional reiteration (not code copy) of the Apr 18-19 working implementation that was lost in the Apr 20 TIP-1.0 protocol rehaul. The v1.3.13 platform-bridge was the plumbing; this release makes it multi-turn-coherent.
+
+**New — `tokenpak/services/routing_service/session_mapper.py`.** Platform-agnostic `(scope, external_id, provider) → internal_id` persistent store. SQLite-backed at `~/.tokenpak/session_map.db` in WAL mode so parallel OpenClaw workers (Cali / Trix / future) can read + write concurrently without serialization. Primary key is the triple — two platforms can reuse the same external session-id string without collision. Corrupt-db recovery quarantines the broken file and initialises a fresh one; `TOKENPAK_SESSION_MAPPER=0` disables the mapper process-wide as a debug escape hatch.
+
+**`AnthropicOAuthBackend` — session-aware dispatch.**
+
+- Now invokes `claude --print --output-format json` so the CLI emits a parseable result record (`session_id`, `usage`, `result`, `modelUsage`, `total_cost_usd`).
+- Per-request flow: `platform_bridge.detect_origin()` extracts `(platform, external_session_id)` from headers; `session_mapper.get()` returns the Claude CLI UUID if a prior turn persisted one. If found → `claude --resume <uuid>`. If not found (first turn) → fresh invocation, capture UUID from CLI output, persist via `session_mapper.set()`.
+- Requests with no platform origin keep the v1.3.13 `--continue` (resume-last-session) default — no behavior change for direct callers.
+- **Real usage tokens are now forwarded.** Previous response stub was `usage: {input_tokens: 0, output_tokens: 0}`; the new JSON-parsed path forwards `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` from the CLI result directly, so `tokenpak cost` / `tokenpak savings` for OpenClaw traffic stop being a blind spot.
+
+**Live verification on running proxy**:
+- Turn 1 with `X-OpenClaw-Session: live-test-sess-A` → Claude session UUID `33a39508-…` captured + persisted.
+- Turn 2 with same external session → `--resume <uuid>` dispatched, Claude recalled context ("Your name is Bob."), cache-read tokens confirm session reuse.
+
+### Tests
+
+26 new tests: 13 for `session_mapper` (roundtrip, triple-key discrimination, upsert, delete, prune, corrupt-db recovery, env opt-out, singleton) + 10 for `AnthropicOAuthBackend` session integration (first-turn persist, subsequent-turn resume, no-platform fallback, mapper-opt-out semantics, usage forwarding, non-JSON graceful degradation) + 3 pre-existing `--continue` tests updated. Regression: 303 services / conformance / proxy / CLI tests green. Import contracts clean.
+
 ## [1.3.13] - 2026-04-24
 
 ### Fixed — OpenClaw → TokenPak → Claude Code companion routing
