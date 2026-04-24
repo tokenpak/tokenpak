@@ -164,13 +164,57 @@ def detect_origin(headers: HeaderMap) -> Optional[PlatformOrigin]:
 
 
 def _openclaw_extract(headers: HeaderMap) -> Optional[PlatformOrigin]:
+    # Highest-confidence signal: explicit session header (aspirational;
+    # real OpenClaw traffic doesn't currently set this, but adapters
+    # that wrap OpenClaw can, and we preserve it for session-mapper
+    # integration).
     session_id = headers.get("x-openclaw-session", "").strip()
-    if not session_id:
+    if session_id:
+        return PlatformOrigin(
+            platform_name="openclaw",
+            session_id=session_id,
+            declared_provider=None,
+        )
+    # Live-traffic signal: OpenClaw's Node runtime sets User-Agent to
+    # ``openclaw`` (or ``OpenClaw-Gateway/1.0``). Case-insensitive.
+    # The inspection was done against the installed binary at
+    # /home/sue/.nvm/.../openclaw/dist — no other client uses this UA.
+    ua = headers.get("user-agent", "").strip().lower()
+    if ua.startswith("openclaw"):
+        return PlatformOrigin(
+            platform_name="openclaw",
+            session_id=None,  # no per-request session to map
+            declared_provider=None,
+        )
+    return None
+
+
+def _codex_extract(headers: HeaderMap) -> Optional[PlatformOrigin]:
+    """Detect Codex-bound traffic: /v1/responses endpoint + JWT bearer.
+
+    Codex clients (the OpenAI Codex CLI + OpenClaw's Codex provider)
+    authenticate with JWT access tokens that start with ``eyJ``. Unlike
+    API-key Bearer (``sk-…``), JWT is the Codex / ChatGPT path. Combined
+    with the ``/v1/responses`` endpoint, this is the canonical signal.
+    """
+    # The request object carries the path via :header:`x-forwarded-uri`
+    # we emit below, but we also read the request line path when the
+    # proxy hands it to us. For the bridge to stay stateless + purely
+    # header-driven, check Authorization shape here; path handling
+    # happens in the proxy's credential-injection hook which knows the
+    # real URL.
+    auth = headers.get("authorization", "").strip()
+    if not auth.lower().startswith("bearer "):
+        return None
+    token = auth.split(" ", 1)[1].strip()
+    # JWTs have three base64url segments separated by dots — quickest
+    # heuristic is the ``eyJ`` prefix (base64(`{"`)).
+    if not token.startswith("eyJ"):
         return None
     return PlatformOrigin(
-        platform_name="openclaw",
-        session_id=session_id,
-        declared_provider=None,  # default_provider supplied by caller
+        platform_name="codex",
+        session_id=None,
+        declared_provider="tokenpak-openai-codex",
     )
 
 
@@ -179,8 +223,14 @@ _openclaw_signal = PlatformSignal(
     default_provider="tokenpak-claude-code",
     extract=_openclaw_extract,
 )
+_codex_signal = PlatformSignal(
+    name="codex",
+    default_provider="tokenpak-openai-codex",
+    extract=_codex_extract,
+)
 
 register(_openclaw_signal)
+register(_codex_signal)
 
 
 # ── Helpers consumed by BackendSelector ───────────────────────────────────────
