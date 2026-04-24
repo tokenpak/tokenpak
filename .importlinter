@@ -248,6 +248,15 @@ ignore_imports =
     tokenpak.proxy.server -> tokenpak.services.routing_service.platform_bridge
     tokenpak.proxy.server -> tokenpak.services.routing_service.backends.anthropic_oauth
     ;
+    ; === v1.3.15: credential injection for platform traffic (2026-04-24) ===
+    ; The default OpenClaw routing pivoted from subprocess dispatch to
+    ; in-path credential injection — strip caller's auth, inject the
+    ; provider's OAuth from ~/.claude/.credentials.json or
+    ; ~/.codex/auth.json, byte-preserve the rest. Same transport-shell
+    ; direction; the injector lives in services/routing_service so any
+    ; future backend can consume the shared credential resolution.
+    tokenpak.proxy.server -> tokenpak.services.routing_service.credential_injector
+    ;
     ; === TIP-SC / SC-02 + SC2-02: conformance observer cross-cutting (§5.2-C) ===
     ; `services.diagnostics.conformance` is the single shared contract
     ; proxy + companion both emit through for the TIP-1.0 self-conformance

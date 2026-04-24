@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.15] - 2026-04-24
+
+### Fixed — OpenClaw routing pivot + Codex Path 1 restoration
+
+Diagnosis: the v1.3.13 / v1.3.14 OpenClaw fix activated only when requests carried `X-OpenClaw-Session`, but inspection of the installed OpenClaw binary (`/home/sue/.nvm/.../openclaw/dist`) showed the Node runtime does NOT set that header on outbound LLM requests — only on internal audit logs. Real OpenClaw traffic carried `User-Agent: openclaw` + standard Anthropic auth, which the classifier read as generic SDK → api-key backend → 401. A manual curl with `X-OpenClaw-Session` worked in the live-verify, but the live fleet still hit 401s.
+
+The architecture was also over-engineered for the problem: Anthropic is stateless and OpenClaw already sends full `messages: [...]` history per request, so subprocess dispatch (`claude --resume <uuid>`) + session mapping aren't needed for the common case. The simpler, correct pattern is **credential injection in the byte-preserved forward path** — strip the caller's auth, inject the provider's real OAuth, and let Anthropic / ChatGPT process the full unmodified payload.
+
+### Added
+
+**New — `tokenpak/services/routing_service/credential_injector.py`.** Generic, per-provider credential resolver. `CredentialProvider` protocol + registry; any adapter plugs in with `register(Provider())`. Built-ins:
+
+- `ClaudeCodeCredentialProvider` — reads `~/.claude/.credentials.json`, returns an `InjectionPlan` that strips the caller's `Authorization`/`x-api-key` and injects `Authorization: Bearer <access_token>` + `anthropic-beta: oauth-2025-04-20`.
+- `CodexCredentialProvider` — reads `~/.codex/auth.json`, injects `Authorization: Bearer <access_token>` + `chatgpt-account-id` + `originator: codex_cli_rs` + `OpenAI-Beta: responses=experimental`, overrides the target URL to `https://chatgpt.com/backend-api/codex/responses`, and normalizes the payload (`stream=true`, `store=false`, drop `max_output_tokens`). Restores the Apr 10-12 Path 1 behavior without copying the deleted adapter file.
+
+Thread-safe registry, 30-second TTL cache per provider so OAuth file reads don't happen on every request, `invalidate_cache()` hook for token-rotation notifications.
+
+**Platform bridge — User-Agent + JWT detection.** `_openclaw_extract` now detects via `User-Agent: openclaw*` (case-insensitive) in addition to the explicit `X-OpenClaw-Session` header. Added `_codex_extract` for `Authorization: Bearer eyJ…` (JWT prefix) → provider `tokenpak-openai-codex`. Dynamic registry preserved — new platforms register a signal + default provider; no enumeration at the call site.
+
+**Proxy hook rewrite.** `ProxyServer.do_POST` now: resolves the provider via the bridge → calls `credential_injector.resolve()` → applies the returned `InjectionPlan` (strip caller auth, inject provider OAuth, optionally rewrite URL + normalize body) → continues to the byte-preserved forward with the rewritten headers. Opt-out: `TOKENPAK_CREDENTIAL_INJECTION=0`.
+
+**Subprocess dispatch is now opt-in (`TOKENPAK_COMPANION_SUBPROCESS=1`).** The v1.3.13/14 subprocess path (Claude CLI + `--continue`/`--resume`) is preserved for power users who need local tool-use / slash-commands / MCP that the HTTP path can't deliver — but default routing is now credential injection, which is simpler, byte-preserving, and handles OpenClaw's actual traffic pattern.
+
+**New — `TOKENPAK_DUMP_HEADERS=1` operator debug flag.** One-line inbound-header summary (auth values redacted) logged at WARN level — used during this release to verify which signals live traffic carries. Kept in the release for future field debugging.
+
+### Live verification
+
+- `User-Agent: openclaw` + `Authorization: Bearer fake-token` + `anthropic-version: 2023-06-01` → pre-fix: `HTTP 401 invalid bearer token`. Post-fix: `HTTP 429` (Anthropic rate-limit after my repeated tests — conclusive proof the injected OAuth token was accepted).
+- `User-Agent: python-requests/...` (no platform signal) → byte-preserve intact: Anthropic returns `HTTP 401 invalid bearer token` for the passthrough fake token. No change to non-platform traffic.
+
+### Tests
+
+35 new tests (20 credential_injector covering registry, Claude + Codex builtins, TTL cache, third-party registration, body transforms; 11 platform_bridge User-Agent + JWT detection + case-insensitivity + priority; 4 pre-existing backend_selector + classifier regressions preserved). Regression: 329 services / conformance / proxy / cli tests green. Import contracts clean (new allowlist entry for `proxy.server → credential_injector`, same class as the v1.3.13 entries).
+
+### Known follow-ups
+
+- Persistent Claude CLI daemon for subprocess path (kill per-request spawn cost when users enable `TOKENPAK_COMPANION_SUBPROCESS=1`).
+- OAuth refresh monitor (today the CLI owns refresh; if the cached token expires between refreshes we see a transient 401 until next TTL bust).
+
 ## [1.3.14] - 2026-04-24
 
 ### Added — Multi-turn session continuity for platform-bridged traffic

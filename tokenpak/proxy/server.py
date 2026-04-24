@@ -691,6 +691,32 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _adapter.platform_name,
                 target_url[:60],
             )
+            # v1.3.14 live-debug hook: when TOKENPAK_DUMP_HEADERS=1, emit
+            # a one-line summary of inbound header names so we can see
+            # exactly what OpenClaw / Codex / Claude CLI actually send.
+            # Values are redacted except for platform markers we care
+            # about (X-OpenClaw-*, X-Claude-*, X-TokenPak-*, anthropic-*).
+            if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                _SAFE_PREFIXES = (
+                    "x-openclaw-", "x-claude-", "x-tokenpak-",
+                    "anthropic-", "user-agent", "x-codex-", "openai-",
+                    "chatgpt-", "content-type",
+                )
+                _sanitized = []
+                for _k, _v in self.headers.items():
+                    _kl = _k.lower()
+                    if any(_kl.startswith(p) or _kl == p for p in _SAFE_PREFIXES):
+                        _sanitized.append(f"{_k}={_v[:80]}")
+                    elif _kl in ("authorization", "x-api-key"):
+                        _sanitized.append(f"{_k}=<redacted:{len(_v)}>")
+                    else:
+                        _sanitized.append(_kl)
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy[HDR-DUMP] platform=%s url=%s headers=%s",
+                    _adapter.platform_name,
+                    target_url[:80],
+                    " | ".join(_sanitized),
+                )
 
         # Run compression pipeline hook if registered
         if should_log and is_messages and body:
@@ -884,32 +910,66 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         else:
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
-        # ── Companion-path dispatch (OpenClaw / tokenpak-claude-code) ─────
+        # ── Platform-bridge credential injection (v1.3.15, 2026-04-24) ────
         #
-        # 2026-04-24 fix: when the platform bridge resolves the request to
-        # the ``tokenpak-claude-code`` provider (OpenClaw default, or any
-        # caller that sets ``X-TokenPak-Provider: tokenpak-claude-code``),
-        # route via the AnthropicOAuthBackend subprocess (claude CLI with
-        # ``--continue``) instead of the byte-preserved forward to
-        # api.anthropic.com. The caller's auth is stripped and the Claude
-        # CLI's OAuth from ``~/.claude/.credentials.json`` is used,
-        # restoring the pre-D1 "proxy injects Claude CLI tokens for
-        # OpenClaw" behavior. Opt-out via TOKENPAK_COMPANION_DISPATCH=0
-        # for ops debugging; default is on for Messages traffic.
+        # When the bridge resolves the request to a known provider (via
+        # explicit X-TokenPak-Provider header OR a platform signal like
+        # User-Agent="openclaw" / /v1/responses+JWT for Codex), rewrite
+        # the forward headers with the provider's real OAuth credentials
+        # and optionally the provider's canonical upstream URL / payload
+        # shape. Byte-preserved forward continues naturally after this
+        # hook — no subprocess dispatch needed for the common case.
+        #
+        # This replaces the v1.3.13/14 ``TOKENPAK_COMPANION_DISPATCH``
+        # subprocess path; that path stays available as
+        # ``TOKENPAK_COMPANION_SUBPROCESS=1`` for power users who need
+        # Claude CLI's local tool-use (slash-commands, MCP, etc.) that
+        # the HTTP path can't deliver.
+        #
+        # Opt-out for debugging: TOKENPAK_CREDENTIAL_INJECTION=0.
+        _cred_injection_plan = None
         if (
             should_log
             and is_messages
-            and os.environ.get("TOKENPAK_COMPANION_DISPATCH", "1") != "0"
+            and os.environ.get("TOKENPAK_CREDENTIAL_INJECTION", "1") != "0"
         ):
             try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    resolve as _resolve_cred,
+                )
                 from tokenpak.services.routing_service.platform_bridge import (
                     resolve_provider as _resolve_provider,
                 )
 
                 _pv = _resolve_provider(dict(self.headers))
+                if _pv:
+                    _cred_injection_plan = _resolve_cred(_pv)
+            except Exception as _inj_err:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy: credential-injection resolve failed (%s: %s) — "
+                    "falling back to byte-preserved forward",
+                    type(_inj_err).__name__, _inj_err,
+                )
+                _cred_injection_plan = None
+
+        # Legacy subprocess dispatch (v1.3.13/14 path) is opt-in now.
+        # Users who want `claude --resume <uuid>` behavior set
+        # TOKENPAK_COMPANION_SUBPROCESS=1.
+        if (
+            should_log
+            and is_messages
+            and os.environ.get("TOKENPAK_COMPANION_SUBPROCESS", "0") == "1"
+        ):
+            try:
+                from tokenpak.services.routing_service.platform_bridge import (
+                    resolve_provider as _resolve_provider_sp,
+                )
+                _pv_sp = _resolve_provider_sp(dict(self.headers))
             except Exception:
-                _pv = None
-            if _pv == "tokenpak-claude-code":
+                _pv_sp = None
+            if _pv_sp == "tokenpak-claude-code":
                 try:
                     from tokenpak.services.request import Request as _Req
                     from tokenpak.services.routing_service.backends.anthropic_oauth import (
@@ -932,18 +992,53 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     import logging as _logging
 
                     _logging.getLogger(__name__).warning(
-                        "tokenpak.proxy: companion-path dispatch failed, "
-                        "falling back to byte-preserved forward: %s: %s",
-                        type(_be_err).__name__,
-                        _be_err,
+                        "tokenpak.proxy: subprocess dispatch failed: %s: %s "
+                        "(falling back to byte-preserved forward)",
+                        type(_be_err).__name__, _be_err,
                     )
-                    # Fall through to normal forward path.
 
-        # Build forwarding headers (client-supplied auth forwarded unchanged)
-        fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
-        fwd_headers["Host"] = parsed.netloc
-        if body is not None:
-            fwd_headers["Content-Length"] = str(len(body))
+        # Apply credential injection plan BEFORE building forward
+        # headers: strip caller auth, inject provider OAuth, optionally
+        # redirect upstream + normalize payload.
+        if _cred_injection_plan is not None:
+            _plan = _cred_injection_plan
+            _mutable_headers = dict(self.headers)
+            # 1. Strip the caller's auth headers (case-insensitive).
+            if _plan.strip_headers:
+                _lc_strip = {h.lower() for h in _plan.strip_headers}
+                _mutable_headers = {
+                    k: v for k, v in _mutable_headers.items()
+                    if k.lower() not in _lc_strip
+                }
+            # 2. Merge the provider's override headers.
+            _mutable_headers.update(_plan.add_headers)
+            # 3. Rewrite the target URL when the plan specifies (Codex).
+            if _plan.target_url_override:
+                target_url = _plan.target_url_override
+                parsed = urlparse(target_url)
+            # 4. Normalize the body when the plan specifies (Codex).
+            if _plan.body_transform is not None and body is not None:
+                try:
+                    body = _plan.body_transform(body)
+                except Exception as _xf_err:
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy: body transform failed (%s) — using original",
+                        _xf_err,
+                    )
+
+            # Build forwarding headers from the rewritten header dict.
+            fwd_headers = forward_headers(_mutable_headers, passthrough_cfg)
+            fwd_headers["Host"] = parsed.netloc
+            if body is not None:
+                fwd_headers["Content-Length"] = str(len(body))
+        else:
+            # Default byte-preserved pass-through (unchanged).
+            fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
+            fwd_headers["Host"] = parsed.netloc
+            if body is not None:
+                fwd_headers["Content-Length"] = str(len(body))
 
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
