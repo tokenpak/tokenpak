@@ -82,16 +82,39 @@ def _write_claude_creds(path: Path, access_token: str = "tok_" + "a" * 80) -> No
     )
 
 
-def test_claude_provider_resolves_to_oauth_bearer(tmp_path: Path):
+def test_claude_provider_resolves_to_full_claude_code_profile(tmp_path: Path):
+    """v1.3.17: injector reproduces every header Claude CLI sends on
+    the wire, not just the OAuth bearer + the one beta marker. Without
+    the full profile (``claude-code-20250219`` beta + Claude CLI UA)
+    Anthropic bills the traffic as generic API OAuth, not Claude Max
+    Code — which exhausted the user's 'extra usage' pool on OpenClaw
+    traffic while interactive ``tokenpak claude`` still worked."""
     creds = tmp_path / ".claude" / ".credentials.json"
     _write_claude_creds(creds, access_token="tok_xyz123")
     provider = ci.ClaudeCodeCredentialProvider(creds_path=creds)
     plan = provider.resolve()
     assert plan is not None
+    # Bearer + every Claude Code identity marker present in add_headers.
     assert plan.add_headers["Authorization"] == "Bearer tok_xyz123"
-    assert plan.add_headers["anthropic-beta"] == "oauth-2025-04-20"
+    assert plan.add_headers["anthropic-dangerous-direct-browser-access"] == "true"
+    assert plan.add_headers["x-app"] == "cli"
+    assert plan.add_headers["User-Agent"].startswith("claude-cli/")
+    # anthropic-beta is in merge_headers (so it concats with caller's
+    # feature-gate markers rather than clobbering them).
+    beta = plan.merge_headers["anthropic-beta"]
+    assert "claude-code-20250219" in beta, (
+        "Missing claude-code beta marker — Anthropic won't treat "
+        "this as Claude Code traffic"
+    )
+    assert "oauth-2025-04-20" in beta
+    # Strip caller's auth + profile-clobbering headers so nothing
+    # leaks through from OpenClaw's SDK defaults. anthropic-beta is
+    # NOT stripped — it's merged with ours.
     assert "authorization" in plan.strip_headers
     assert "x-api-key" in plan.strip_headers
+    assert "user-agent" in plan.strip_headers
+    assert "x-app" in plan.strip_headers
+    assert "anthropic-beta" not in plan.strip_headers  # merged, not stripped
     assert plan.target_url_override is None
 
 
