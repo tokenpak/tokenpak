@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.20] - 2026-04-24
+
+### Fixed — Restore the Apr 15-18 subprocess companion bridge as the default
+
+The v1.3.13-19 sequence iteratively refined an **HTTP header-injection** approach to OpenClaw → Claude Code routing. Investigation against Kevin's working 4/15/2026 fleet build + commit history showed that approach is architecturally wrong: the Apr 15-18 build that shipped the working companion bridge used **subprocess dispatch through the `claude` CLI**, not HTTP header rewriting.
+
+The HTTP path gives OpenClaw traffic valid OAuth but loses everything else tokenpak's companion workflow provides — tool use, MCP, CLAUDE.md, skills, proper session continuity, Claude Max billing pool membership. The Apr 15-18 build routed OpenClaw's request body to `claude --resume <session_uuid> --print --output-format json` with a clean subprocess environment + agent workspace as cwd; Claude CLI handled everything else because it's Claude Code by definition.
+
+### Restored
+
+**Subprocess dispatch is now the DEFAULT for `tokenpak-claude-code`.** Flipped from opt-in (`TOKENPAK_COMPANION_SUBPROCESS=1`) to opt-out (`TOKENPAK_COMPANION_SUBPROCESS=0` disables). When the platform bridge resolves to `tokenpak-claude-code`, the proxy dispatches via `AnthropicOAuthBackend.dispatch()` → `claude` subprocess instead of the HTTP header-injection path.
+
+**`AnthropicOAuthBackend.dispatch()` enhanced** to match the Apr 15-18 behavior point-by-point:
+
+- **Model pass-through**: `--model <model>` forwarded from the request body so Claude CLI doesn't pick its own default (OpenClaw's `/model` selection is now respected end-to-end).
+- **Clean subprocess env** (`_resolve_env()`): strips `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` so Claude CLI doesn't loop through this proxy; sets `DISABLE_PROMPT_CACHING=1` so the CLI's cache_control doesn't collide with tokenpak's compression pipeline; sets `TOKENPAK_COMPANION_BARE=1` so the companion hook skips injecting the CLI's own CLAUDE.md when the caller is already carrying context.
+- **Workspace `cwd`** (`_resolve_workspace()`): reads `X-OpenClaw-Workspace` header, falls back to `OPENCLAW_WORKSPACE` env, then `~/.openclaw/workspace`. cwd matters because Claude CLI reads CLAUDE.md + settings from the cwd tree and tool_use operations are relative.
+- **Session continuity via session_mapper** (already added in v1.3.14, now actually exercised by default): first turn spawns fresh + captures `session_id` from the CLI's JSON output; subsequent turns pass `--resume <uuid>`.
+- **Timeout bumped to 300s** (was 120s) to match Claude CLI's typical long-response upper bound.
+
+**HTTP credential injection retained for `tokenpak-openai-codex` + `tokenpak-anthropic`** — those backends don't have a subprocess equivalent (Codex hits `chatgpt.com/backend-api`; Anthropic direct byte-preserve is correct for api-key and SDK OAuth callers).
+
+### Live verification
+
+OpenClaw-shape curl (Anthropic JS SDK UA + x-api-key placeholder + X-TokenPak-Backend: claude-code):
+
+```
+HTTP 200
+{
+  "id": "msg_claude_e68da47c-6c40-4a1e-94b9-75199e39b2ef",
+  "model": "claude-haiku-4-5",
+  "content": [{"type": "text", "text": "subprocess-companion-restored"}],
+  "usage": {"input_tokens": 137333, ...}
+}
+```
+
+- `msg_claude_<uuid>` prefix = subprocess dispatch (not HTTP forward).
+- 137k input tokens = full CLAUDE.md + companion context loaded, confirming the companion workflow is active.
+- Model honored from request body.
+
+### Tests
+
+339 regression green (services + proxy + conformance + cli). Import contracts clean. Ruff clean.
+
 ## [1.3.19] - 2026-04-24
 
 ### Fixed — Add `?beta=true` URL param for injected Claude Code traffic

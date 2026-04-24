@@ -31,6 +31,7 @@ import json
 import logging
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Optional
 
 from tokenpak.services.request import Request
@@ -112,6 +113,26 @@ class AnthropicOAuthBackend:
             import os as _os
 
             cmd = [self._claude_binary]
+            # Companion flags — use the same ``--mcp-config`` /
+            # ``--settings`` / ``--append-system-prompt-file`` files
+            # that ``tokenpak claude`` writes under
+            # ``~/.tokenpak/companion/run/``. This bypasses Claude
+            # CLI's slow CLAUDE.md auto-discovery (which walks the
+            # cwd + every parent dir looking for the file) and instead
+            # loads an explicit, pre-built companion profile.
+            # Without these, first-turn cold starts routinely exceed
+            # OpenClaw's request timeout because CLAUDE.md
+            # auto-discovery against the user's home dir can pull in
+            # tens of thousands of tokens of standards + project
+            # context before the request even gets to Anthropic.
+            companion_flags = self._companion_flags()
+            cmd.extend(companion_flags)
+            # Pass the model from the request body so Claude CLI doesn't
+            # pick its own default (Apr 15-18 parity — the bridge
+            # respected OpenClaw's /model selection).
+            model_hint = self._extract_model(request.body or b"")
+            if model_hint:
+                cmd.extend(["--model", model_hint])
             if mapped_session_id:
                 # Subsequent turn for a known platform session.
                 cmd.extend(["--resume", mapped_session_id])
@@ -125,11 +146,38 @@ class AnthropicOAuthBackend:
             # which we'll capture + persist below.
             cmd.extend(["--print", "--output-format", "json", prompt])
 
+            # Clean env (Apr 15-18 pattern, restored 2026-04-24):
+            #   - Strip ANTHROPIC_BASE_URL / OPENAI_BASE_URL so the
+            #     subprocess doesn't loop back through this proxy,
+            #     which would cause infinite recursion under load
+            #     and tank throughput.
+            #   - DISABLE_PROMPT_CACHING=1 so the CLI doesn't stash
+            #     cache_control markers that conflict with the proxy's
+            #     own compression pipeline on any OUTBOUND leg.
+            #   - TOKENPAK_COMPANION_BARE=1 hints the companion hook
+            #     to skip injecting the CLI's native CLAUDE.md /
+            #     system context — the caller (OpenClaw etc.) is
+            #     already carrying its own context in the messages[].
+            _env = _os.environ.copy()
+            _env.pop("ANTHROPIC_BASE_URL", None)
+            _env.pop("OPENAI_BASE_URL", None)
+            _env["DISABLE_PROMPT_CACHING"] = "1"
+            _env["TOKENPAK_COMPANION_BARE"] = "1"
+
+            # Workspace resolution (Apr 15-18 parity): caller's
+            # X-OpenClaw-Workspace header wins; otherwise default to
+            # ~/.openclaw/workspace which is where the gateway's agent
+            # state lives. cwd matters because Claude CLI reads
+            # CLAUDE.md / settings from cwd and its parent tree.
+            _workspace = self._resolve_workspace(request)
+
             completed = subprocess.run(
                 cmd,
                 capture_output=True,
-                timeout=120,
+                timeout=300,
                 check=False,
+                env=_env,
+                cwd=_workspace,
             )
             if completed.returncode != 0:
                 err = completed.stderr.decode("utf-8", errors="replace")[:500]
@@ -156,6 +204,24 @@ class AnthropicOAuthBackend:
             if origin is not None and mapped_session_id is None and parsed.get("session_id"):
                 self._persist_session(origin, parsed["session_id"], parsed.get("model"))
 
+            # Caller asked for streaming? OpenClaw's Anthropic JS SDK
+            # does — it sets ``"stream": true`` in the body. When it
+            # gets a non-streaming response the parser fails with
+            # "request ended without sending any chunks". Re-shape
+            # our single JSON result into Anthropic's SSE event
+            # sequence so any streaming client sees it as progress.
+            if self._stream_requested(request.body or b""):
+                messages_envelope = self._as_messages_response(parsed)
+                sse_body = self._as_sse_stream(messages_envelope).encode("utf-8")
+                return BackendResponse(
+                    status=200,
+                    headers={
+                        "content-type": "text/event-stream; charset=utf-8",
+                        "cache-control": "no-cache",
+                    },
+                    body=sse_body,
+                )
+
             return BackendResponse(
                 status=200,
                 headers={"content-type": "application/json"},
@@ -178,6 +244,104 @@ class AnthropicOAuthBackend:
                     "error": {"type": "backend_error", "message": str(exc)[:200]}
                 }).encode(),
             )
+
+    # ── Companion flag builder (reuses tokenpak claude's run dir) ──
+
+    _COMPANION_RUN_DIR = Path.home() / ".tokenpak" / "companion" / "run"
+
+    @classmethod
+    def _companion_flags(cls) -> list[str]:
+        """Return Claude CLI flags that load the companion profile.
+
+        Re-uses the ``~/.tokenpak/companion/run/`` files that the
+        ``tokenpak claude`` launcher writes, so subprocess dispatch
+        gets the same MCP servers, settings, and companion system
+        prompt the interactive launcher does — while avoiding the
+        slow CLAUDE.md auto-discovery walk that makes first-turn
+        cold starts exceed OpenClaw's request timeout.
+
+        When the companion run dir doesn't exist yet (fresh install,
+        the user hasn't invoked ``tokenpak claude`` before), returns
+        an empty list — Claude CLI falls back to its own default
+        discovery. The subprocess will be slower first time but still
+        correct.
+        """
+        flags: list[str] = []
+        if not cls._COMPANION_RUN_DIR.is_dir():
+            return flags
+        mcp_path = cls._COMPANION_RUN_DIR / "mcp.json"
+        settings_path = cls._COMPANION_RUN_DIR / "settings.json"
+        # Prefer companion-prompt.md (the launcher's canonical name);
+        # system_prompt.md is the older name from the Apr 15-18 build.
+        prompt_candidates = [
+            cls._COMPANION_RUN_DIR / "companion-prompt.md",
+            cls._COMPANION_RUN_DIR / "system_prompt.md",
+        ]
+        if mcp_path.is_file():
+            flags.extend(["--mcp-config", str(mcp_path)])
+        if settings_path.is_file():
+            flags.extend(["--settings", str(settings_path)])
+        for p in prompt_candidates:
+            if p.is_file():
+                flags.extend(["--append-system-prompt-file", str(p)])
+                break
+        return flags
+
+    # ── Request shape extractors (Apr 15-18 parity) ───────────────────
+
+    @staticmethod
+    def _extract_model(body: bytes) -> Optional[str]:
+        """Pull the ``model`` field out of an Anthropic Messages body.
+
+        The Apr 15-18 bridge passed the OpenClaw-selected model through
+        to the CLI via ``--model``. Without this, Claude CLI picks its
+        configured default — which can diverge from what the caller
+        asked for (e.g. OpenClaw says Haiku, CLI picks Opus).
+        """
+        if not body:
+            return None
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        m = data.get("model") if isinstance(data, dict) else None
+        return m if isinstance(m, str) and m.strip() else None
+
+    @staticmethod
+    def _resolve_workspace(request: Request) -> Optional[str]:
+        """Return the ``cwd`` to pass to the subprocess.
+
+        Precedence:
+          1. ``X-OpenClaw-Workspace`` request header (if valid dir).
+          2. ``OPENCLAW_WORKSPACE`` env override.
+          3. ``~/.openclaw/workspace`` default (where the gateway keeps
+             agent state).
+          4. ``None`` — inherit proxy's cwd as last resort.
+
+        cwd matters because Claude CLI reads CLAUDE.md + settings from
+        the cwd tree, and tool_use operations (file reads, shell
+        commands) are relative to it. Apr 15-18 bridge always set this
+        explicitly; v1.3.13-19 lost the behavior.
+        """
+        import os as _os
+        from pathlib import Path as _Path
+
+        headers = request.headers or {}
+        # Case-insensitive lookup
+        for k, v in headers.items():
+            if k.lower() == "x-openclaw-workspace" and v:
+                p = _Path(v).expanduser()
+                if p.is_dir():
+                    return str(p)
+        env_ws = _os.environ.get("OPENCLAW_WORKSPACE", "").strip()
+        if env_ws:
+            p = _Path(env_ws).expanduser()
+            if p.is_dir():
+                return str(p)
+        default = _Path.home() / ".openclaw" / "workspace"
+        if default.is_dir():
+            return str(default)
+        return None
 
     # ── Session mapper integration (v1.3.14) ──────────────────────────
 
@@ -321,6 +485,106 @@ class AnthropicOAuthBackend:
                 ),
             },
         }
+
+    @staticmethod
+    def _stream_requested(body: bytes) -> bool:
+        """True when the caller set ``"stream": true`` in the JSON body.
+
+        Anthropic's SDKs stream by default (OpenClaw's JS SDK always
+        asks for SSE). When streaming is requested, the response must
+        be ``text/event-stream`` with the Messages event sequence;
+        a flat JSON body causes the client parser to fail with
+        "request ended without sending any chunks".
+        """
+        if not body:
+            return False
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return False
+        return bool(isinstance(data, dict) and data.get("stream") is True)
+
+    @staticmethod
+    def _as_sse_stream(envelope: dict) -> str:
+        """Re-encode a Messages response as an SSE event stream.
+
+        Synthesizes the Anthropic Messages streaming event sequence
+        from our single non-streaming subprocess result — one
+        ``message_start`` → ``content_block_start`` →
+        ``content_block_delta`` (with the whole text) →
+        ``content_block_stop`` → ``message_delta`` (with usage) →
+        ``message_stop``. Clients get the full response in one SSE
+        flush; not token-by-token but conformant with the streaming
+        wire contract so their parser doesn't bail.
+
+        Real token-by-token streaming via ``claude --output-format
+        stream-json`` is a later enhancement; synthetic events are
+        enough to unblock OpenClaw today.
+        """
+        content_blocks = envelope.get("content") or []
+        text = ""
+        for blk in content_blocks:
+            if isinstance(blk, dict) and blk.get("type") == "text":
+                text = blk.get("text") or ""
+                break
+
+        # message_start carries the metadata envelope minus the text.
+        msg_start_payload = {
+            "type": "message_start",
+            "message": {
+                "id": envelope.get("id", "msg_claude_cli"),
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": envelope.get("model") or "claude-via-oauth",
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {
+                    "input_tokens": envelope.get("usage", {}).get("input_tokens", 0),
+                    "output_tokens": 0,
+                    "cache_creation_input_tokens": envelope.get("usage", {}).get(
+                        "cache_creation_input_tokens", 0
+                    ),
+                    "cache_read_input_tokens": envelope.get("usage", {}).get(
+                        "cache_read_input_tokens", 0
+                    ),
+                },
+            },
+        }
+        content_start = {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {"type": "text", "text": ""},
+        }
+        content_delta = {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": text},
+        }
+        content_stop = {"type": "content_block_stop", "index": 0}
+        message_delta = {
+            "type": "message_delta",
+            "delta": {
+                "stop_reason": envelope.get("stop_reason", "end_turn"),
+                "stop_sequence": None,
+            },
+            "usage": {
+                "output_tokens": envelope.get("usage", {}).get("output_tokens", 0),
+            },
+        }
+        message_stop = {"type": "message_stop"}
+
+        events = [
+            ("message_start", msg_start_payload),
+            ("content_block_start", content_start),
+            ("content_block_delta", content_delta),
+            ("content_block_stop", content_stop),
+            ("message_delta", message_delta),
+            ("message_stop", message_stop),
+        ]
+        return "".join(
+            f"event: {ev}\ndata: {json.dumps(data)}\n\n" for ev, data in events
+        )
 
     @staticmethod
     def _extract_prompt(body: bytes) -> Optional[str]:
