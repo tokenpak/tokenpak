@@ -241,13 +241,25 @@ def resolve_provider(headers: HeaderMap) -> Optional[str]:
 
     Precedence:
       1. Explicit ``X-TokenPak-Provider`` header (wins).
-      2. The first registered platform signal's default_provider.
-      3. ``None`` — selector falls back to its legacy RouteClass default.
+      2. Legacy ``X-TokenPak-Backend`` header: ``claude-code`` / ``oauth``
+         → ``tokenpak-claude-code``, ``api`` → ``tokenpak-anthropic``.
+         This is what ``tokenpak-inject.sh`` actually installs in
+         ``~/.openclaw/openclaw.json``, so real OpenClaw traffic routes
+         through this header — not via User-Agent, which OpenClaw's
+         embedded Anthropic JS SDK sets to ``Anthropic/JS <ver>`` and
+         doesn't mention OpenClaw at all (HDR-DUMP confirmed 2026-04-24).
+      3. The first registered platform signal's default_provider.
+      4. ``None`` — caller falls back to its default behavior.
     """
     lheaders = _lower(headers)
     explicit = read_declared_provider(lheaders)
     if explicit:
         return explicit
+    backend_hdr = lheaders.get("x-tokenpak-backend", "").strip().lower()
+    if backend_hdr in ("claude-code", "oauth"):
+        return "tokenpak-claude-code"
+    if backend_hdr == "api":
+        return "tokenpak-anthropic"
     for sig in _REGISTRY:
         origin = sig.extract(lheaders)
         if origin is not None:

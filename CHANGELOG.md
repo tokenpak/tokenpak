@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.16] - 2026-04-24
+
+### Fixed — Hotfix for v1.3.15: real OpenClaw signal is `X-TokenPak-Backend`, not User-Agent
+
+v1.3.15 shipped User-Agent-based OpenClaw detection based on a static grep of `openclaw/dist/*.js`. But the UA=`openclaw` strings found in that grep are used by OpenClaw's **internal** modules (audit log, a2ui host identification, gateway self-reporting) — not by its outbound LLM HTTP client, which uses the embedded Anthropic JS SDK and sends `User-Agent: Anthropic/JS <ver>`. Live `TOKENPAK_DUMP_HEADERS` on the running proxy confirmed the mismatch.
+
+The actual signal OpenClaw carries is the `X-TokenPak-Backend: claude-code` header, installed into every `tokenpak-*` provider entry in `~/.openclaw/openclaw.json` by `tokenpak-inject.sh`. The platform bridge now reads this header and maps it:
+
+- `X-TokenPak-Backend: claude-code` → `tokenpak-claude-code`
+- `X-TokenPak-Backend: oauth` (alias) → `tokenpak-claude-code`
+- `X-TokenPak-Backend: api` → `tokenpak-anthropic`
+
+Live end-to-end verified post-fix:
+- Pre-fix (v1.3.15): OpenClaw-shape request (Anthropic JS SDK UA + `x-api-key` placeholder + `X-TokenPak-Backend`) → `HTTP 401 invalid x-api-key` (bridge didn't fire, byte-preserve forward).
+- Post-fix (v1.3.16): same request → `HTTP 200` with a real Claude response. Credential injection strips the placeholder `x-api-key`, injects Claude CLI OAuth, forwards to Anthropic which accepts.
+
+### Tests
+
+8 new regression tests pinning the `X-TokenPak-Backend` header path, case-insensitivity, precedence (explicit `X-TokenPak-Provider` still wins), unknown-value fall-through, and a "real OpenClaw shape" fixture that would have caught this bug pre-v1.3.15.
+
 ## [1.3.15] - 2026-04-24
 
 ### Fixed — OpenClaw routing pivot + Codex Path 1 restoration
