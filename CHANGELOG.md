@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.18] - 2026-04-24
+
+### Fixed — Inject `X-Claude-Code-Session-Id` (required for Claude Max billing pool)
+
+v1.3.17 reproduced the Claude CLI wire profile but still missed one header: `X-Claude-Code-Session-Id`. Live diagnosis showed that header is **required** for Anthropic to route Claude Code OAuth traffic through the Claude Max billing pool — interactive `tokenpak claude` sends it (with its own UUID); our credential injector did not. Without it, Anthropic still accepted the OAuth but routed to a restricted pool that returned `You're out of extra usage` while the main Claude Max pool had headroom (interactive CLI kept working on the same token).
+
+Fix: `ClaudeCodeCredentialProvider` now generates one UUID per proxy process (`_get_proxy_session_id()`) and injects it as `X-Claude-Code-Session-Id`. Stable for the life of the proxy, matching how interactive `claude` uses a stable session-id per CLI instance. Caller's own session-id header (if any) is stripped so tokenpak-bridged traffic always maps to the proxy's coherent session, not the caller's.
+
+### Live verification
+
+Pre-fix (v1.3.17): real OpenClaw shape → `HTTP 400 invalid_request_error "You're out of extra usage"` even with full Claude Code beta + UA markers injected.
+
+Post-fix (v1.3.18): same request → `HTTP 200` with Claude response `session-id-verified` (and routing through the interactive CLI's billing pool).
+
+### Tests
+
+Updated `test_claude_provider_resolves_to_full_claude_code_profile` to assert `X-Claude-Code-Session-Id` is present + has UUID4 shape. 339 regression green.
+
 ## [1.3.17] - 2026-04-24
 
 ### Fixed — Full Claude Code wire profile in credential injection

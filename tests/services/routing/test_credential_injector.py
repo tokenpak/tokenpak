@@ -99,6 +99,12 @@ def test_claude_provider_resolves_to_full_claude_code_profile(tmp_path: Path):
     assert plan.add_headers["anthropic-dangerous-direct-browser-access"] == "true"
     assert plan.add_headers["x-app"] == "cli"
     assert plan.add_headers["User-Agent"].startswith("claude-cli/")
+    # X-Claude-Code-Session-Id is CRITICAL — without it Anthropic
+    # routes Claude Code OAuth to a restricted billing pool and
+    # returns "out of extra usage" (verified end-to-end 2026-04-24).
+    sess_id = plan.add_headers["X-Claude-Code-Session-Id"]
+    # UUID4 shape: 8-4-4-4-12 hex chars.
+    assert len(sess_id) == 36 and sess_id.count("-") == 4
     # anthropic-beta is in merge_headers (so it concats with caller's
     # feature-gate markers rather than clobbering them).
     beta = plan.merge_headers["anthropic-beta"]

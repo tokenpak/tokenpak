@@ -51,6 +51,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, FrozenSet, List, Optional, Protocol
@@ -180,6 +181,37 @@ def invalidate_cache() -> None:
     """Drop the cache — tests + explicit token-rotation notifications."""
     with _CACHE_LOCK:
         _CACHE.clear()
+
+
+# ── Proxy-scoped session id for Claude Code billing ──────────────────
+#
+# Anthropic requires ``X-Claude-Code-Session-Id`` on Claude Code
+# traffic. One UUID per proxy process = one logical Claude session
+# serving all platform-bridged traffic, which matches how
+# interactive ``claude`` CLI uses a stable session-id for the life of
+# an instance. Persists across requests so billing attributes them
+# coherently.
+
+_PROXY_SESSION_ID: Optional[str] = None
+_PROXY_SESSION_LOCK = threading.Lock()
+
+
+def _get_proxy_session_id() -> str:
+    """Return a stable UUID used as ``X-Claude-Code-Session-Id`` for all
+    platform-bridged Claude Code traffic in this proxy process."""
+    global _PROXY_SESSION_ID
+    if _PROXY_SESSION_ID is None:
+        with _PROXY_SESSION_LOCK:
+            if _PROXY_SESSION_ID is None:
+                _PROXY_SESSION_ID = str(uuid.uuid4())
+    return _PROXY_SESSION_ID
+
+
+def _reset_proxy_session_id() -> None:
+    """Test helper: force a fresh proxy session id on the next call."""
+    global _PROXY_SESSION_ID
+    with _PROXY_SESSION_LOCK:
+        _PROXY_SESSION_ID = None
 
 
 # ── Built-in: Claude Code OAuth ──────────────────────────────────────
@@ -315,6 +347,23 @@ class ClaudeCodeCredentialProvider:
                 )
         except (TypeError, ValueError):
             pass
+        # X-Claude-Code-Session-Id is REQUIRED for Anthropic to route
+        # traffic through the Claude Code billing pool (the one
+        # interactive ``claude`` CLI uses). Without it, even with full
+        # CLI-profile betas + User-Agent, Anthropic billing returns
+        # ``You're out of extra usage`` — we verified this end-to-end
+        # 2026-04-24: v1.3.17 applied the profile but omitted the
+        # session-id header; OpenClaw traffic hit the restricted pool
+        # while interactive CLI (which sends a session-id) worked
+        # cleanly on the same OAuth token.
+        #
+        # We derive a stable per-process UUID so every OpenClaw request
+        # through this proxy shares one session-id. Aligns with Claude
+        # Max's per-session usage tracking; matches the behavior of
+        # interactive ``claude`` (one CLI instance = one session-id for
+        # the life of that instance).
+        session_id = _get_proxy_session_id()
+
         return InjectionPlan(
             strip_headers=frozenset({
                 "authorization",
@@ -326,12 +375,17 @@ class ClaudeCodeCredentialProvider:
                 # x-app identifies the Claude client flavor to the
                 # backend (cli / web / ide). Strip the caller's if any.
                 "x-app",
+                # If the caller tried to set its own session-id, drop
+                # it — we inject a tokenpak-scoped one so Anthropic
+                # sees coherent session usage across platform traffic.
+                "x-claude-code-session-id",
             }),
             add_headers={
                 "Authorization": f"Bearer {access_token}",
                 "anthropic-dangerous-direct-browser-access": "true",
                 "User-Agent": self._detect_cli_version(),
                 "x-app": "cli",
+                "X-Claude-Code-Session-Id": session_id,
             },
             # anthropic-beta is MERGED with whatever the caller sent —
             # OpenClaw's SDK emits feature-gate markers (``fine-grained-
