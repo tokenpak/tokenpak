@@ -329,6 +329,18 @@ def cmd_setup(args):
     # user had no discovery path to the local dashboard until this was
     # added — README mentioned `tokenpak dashboard` but the wizard's
     # "Next steps" block did not.
+    # L-8 (Launch Readiness, 2026-04-24): if an IDE host is detected, offer
+    # to wire ANTHROPIC_BASE_URL into the user's shell profile so
+    # IDE-launched Claude Code / Anthropic SDK calls route through the
+    # proxy. No-op when no IDE signals are present — keeps the wizard
+    # single-screen for CLI-only users.
+    try:
+        from tokenpak.cli.ide import run_setup_step as _run_ide_step
+
+        _run_ide_step(port)
+    except Exception as _ide_err:  # never block setup on the IDE step
+        print(f"(IDE integration step skipped: {_ide_err})")
+
     print("\nNext steps:")
     print(f"  1. Set your LLM client's base URL to http://127.0.0.1:{port}")
     print(f"  2. Open the dashboard: http://127.0.0.1:{port}/dashboard")

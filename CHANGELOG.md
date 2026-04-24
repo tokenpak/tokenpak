@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.12] - 2026-04-24
+
+### Added — L-8 (Launch Readiness): IDE integration in `tokenpak setup`
+
+Ratified by Kevin 2026-04-24 as the sole launch-blocker-adjacent gap surfaced by the adapter dynamic-passivity audit (`02-ADAPTER-AUDIT.md`). The wizard now detects IDE hosts via environment signals and offers to wire `ANTHROPIC_BASE_URL` into the user's shell profile so IDE-launched Claude Code / Anthropic SDK calls route through the local proxy without manual configuration.
+
+**Design.** Per-IDE handlers live in `tokenpak/cli/ide.py::_REGISTRY`. Registering a new IDE is one `register(IDEHandler(...))` call; detection is signal-based and the call-site does not enumerate IDEs (`feedback_always_dynamic`, 2026-04-16). Built-in handlers: Cursor (`CURSOR_*` env, `TERM_PROGRAM=cursor`), VSCode (`VSCODE_PID`, `VSCODE_IPC_HOOK`, `TERM_PROGRAM=vscode`).
+
+**Flow.** After the proxy starts, the wizard:
+1. Detects the user's IDE host by env signals.
+2. Locates the first existing shell profile (zsh / bash / fish) honoring `$SHELL`.
+3. Prompts (default yes) to append an `ANTHROPIC_BASE_URL` export in the target shell's syntax.
+4. Prints a manual copy-paste fallback if no profile exists or the user declines.
+
+Idempotent: re-running `tokenpak setup` with the same port does not duplicate the export line. No-op when no IDE signals are present — the wizard stays single-screen for CLI-only users. Setup never fails because of the IDE step; any error is caught and surfaced as a one-line notice.
+
+### Tests
+
+18 new tests covering registry idempotency, per-IDE signal detection, shell-profile resolution, shell-specific export syntax (bash/zsh/fish), idempotent append semantics, decline / accept / auto-yes paths, and the no-profile fallback. Regression coverage: 46/46 CLI tests green.
+
 ## [1.3.11] - 2026-04-24
 
 ### Added — Phase B of MVP Gap Closure (Working Product Readiness)
