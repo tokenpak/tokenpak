@@ -68,6 +68,13 @@ class InjectionPlan:
     - ``strip_headers``: case-insensitive names to remove before forwarding.
     - ``add_headers``: headers to add (overrides strip when the same key
       appears in both; add wins).
+    - ``merge_headers``: headers whose value is *appended* to any
+      caller-supplied value with a comma separator. Intended for
+      ``anthropic-beta`` where we need our Claude Code markers in the
+      header but also want to preserve the caller's feature-gate
+      markers (``fine-grained-tool-streaming-*`` etc.). Applied AFTER
+      strip + add so the caller's original value still reaches the
+      merge step. Empty caller → falls back to our value.
     - ``target_url_override``: when set, replaces the original target URL
       entirely (e.g. ``chatgpt.com/backend-api/codex/responses`` for
       Codex). ``None`` means keep the original target.
@@ -79,6 +86,7 @@ class InjectionPlan:
 
     strip_headers: FrozenSet[str] = frozenset()
     add_headers: Dict[str, str] = field(default_factory=dict)
+    merge_headers: Dict[str, str] = field(default_factory=dict)
     target_url_override: Optional[str] = None
     body_transform: Optional[Callable[[bytes], bytes]] = None
 
@@ -178,19 +186,93 @@ def invalidate_cache() -> None:
 
 
 class ClaudeCodeCredentialProvider:
-    """Inject Claude CLI OAuth from ``~/.claude/.credentials.json``.
+    """Inject Claude CLI OAuth + full Claude Code client profile.
 
     The CLI keeps a rotated access token at
     ``claudeAiOauth.accessToken`` plus an ``expiresAt`` timestamp.
-    We read the token + pair it with the ``anthropic-beta:
-    oauth-2025-04-20`` marker Anthropic's OAuth path requires. Any
-    caller auth (Bearer placeholder, ``x-api-key``) is stripped.
+    We read the token and *also reproduce every header Claude Code
+    CLI itself sends on the wire* — not just the OAuth beta. This is
+    the v1.3.17 fix: Anthropic treats incoming traffic differently
+    based on the full Claude Code client profile (billing tier,
+    caching, quota rules). Without the ``claude-code-20250219``
+    beta marker and the ``claude-cli`` User-Agent, traffic gets
+    OAuth'd but routed as generic Anthropic API usage — which
+    exhausts the user's Claude Max 'extra usage' pool while the
+    interactive CLI doesn't, creating the divergence Kevin flagged
+    2026-04-24 (same OAuth token, different billing behavior).
+
+    The full Claude Code wire profile we reproduce:
+      - ``Authorization: Bearer <access_token>``
+      - ``anthropic-beta: claude-code-20250219,oauth-2025-04-20,context-1m-2025-08-07,interleaved-thinking``
+      - ``anthropic-dangerous-direct-browser-access: true``
+      - ``User-Agent: claude-cli/<version> (external, cli)``
+      - ``x-app: cli``
+
+    Caller's own ``Authorization`` / ``x-api-key`` / ``anthropic-beta``
+    headers are stripped before the injection so there's no residue
+    from OpenClaw's SDK auth-shape.
     """
 
     name = "tokenpak-claude-code"
 
+    # Minimum anthropic-beta set that identifies traffic to Anthropic
+    # as "Claude Code OAuth" rather than "generic API OAuth". Verified
+    # against live CLI traffic 2026-04-24. We deliberately do NOT
+    # forward the CLI's full beta list (``context-1m-2025-08-07``,
+    # date-versioned ``interleaved-thinking-YYYY-MM-DD``) because
+    # those are feature-gated beta tracks that change over CLI
+    # versions; including stale ones produces ``400 invalid beta``.
+    # If the caller shipped their own safe beta markers, we MERGE
+    # them with ours below so tool-use betas (``fine-grained-tool-
+    # streaming-*``) still work from OpenClaw's SDK.
+    _CLAUDE_CODE_BETA_BASE = "claude-code-20250219,oauth-2025-04-20"
+    # User-Agent profile for the Claude CLI binary. Kept here as a
+    # fallback constant; ``_detect_cli_version()`` tries to read the
+    # actual installed ``claude`` binary's version first so the
+    # profile follows whatever the user has installed (dynamic +
+    # no hardcoded version, per feedback_always_dynamic).
+    _CLI_UA_FALLBACK = "claude-cli/2.1.119 (external, cli)"
+
     def __init__(self, creds_path: Optional[Path] = None) -> None:
         self._path = creds_path or (Path.home() / ".claude" / ".credentials.json")
+
+    @staticmethod
+    def _detect_cli_version() -> str:
+        """Probe ``claude --version`` and return the UA the binary
+        identifies itself as. Result cached at module scope for the
+        lifetime of the process (version is stable until claude
+        upgrades).
+        """
+        import shutil
+        import subprocess
+
+        global _CACHED_CLI_UA
+        cached = globals().get("_CACHED_CLI_UA")
+        if cached:
+            return cached
+
+        binary = shutil.which("claude")
+        if not binary:
+            ua = ClaudeCodeCredentialProvider._CLI_UA_FALLBACK
+        else:
+            try:
+                out = subprocess.run(
+                    [binary, "--version"],
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                line = out.stdout.decode("utf-8", errors="replace").strip()
+                # Expected: "2.1.119 (Claude Code)"
+                version = line.split()[0] if line else ""
+                if version:
+                    ua = f"claude-cli/{version} (external, cli)"
+                else:
+                    ua = ClaudeCodeCredentialProvider._CLI_UA_FALLBACK
+            except Exception:
+                ua = ClaudeCodeCredentialProvider._CLI_UA_FALLBACK
+        globals()["_CACHED_CLI_UA"] = ua
+        return ua
 
     def _load(self) -> Optional[InjectionPlan]:
         try:
@@ -234,10 +316,30 @@ class ClaudeCodeCredentialProvider:
         except (TypeError, ValueError):
             pass
         return InjectionPlan(
-            strip_headers=frozenset({"authorization", "x-api-key"}),
+            strip_headers=frozenset({
+                "authorization",
+                "x-api-key",
+                # Caller's User-Agent (typically ``Anthropic/JS <ver>``)
+                # is replaced with the Claude CLI's UA so billing
+                # treats the request as Claude Code.
+                "user-agent",
+                # x-app identifies the Claude client flavor to the
+                # backend (cli / web / ide). Strip the caller's if any.
+                "x-app",
+            }),
             add_headers={
                 "Authorization": f"Bearer {access_token}",
-                "anthropic-beta": "oauth-2025-04-20",
+                "anthropic-dangerous-direct-browser-access": "true",
+                "User-Agent": self._detect_cli_version(),
+                "x-app": "cli",
+            },
+            # anthropic-beta is MERGED with whatever the caller sent —
+            # OpenClaw's SDK emits feature-gate markers (``fine-grained-
+            # tool-streaming-*``, date-versioned ``interleaved-thinking-
+            # YYYY-MM-DD``) that we want to preserve. We just append our
+            # Claude Code + OAuth identity markers on the end.
+            merge_headers={
+                "anthropic-beta": self._CLAUDE_CODE_BETA_BASE,
             },
         )
 

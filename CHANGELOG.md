@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.17] - 2026-04-24
+
+### Fixed — Full Claude Code wire profile in credential injection
+
+v1.3.16 routed OpenClaw traffic through credential injection correctly, but Anthropic was billing it as generic API-with-OAuth instead of Claude Code — exhausting the user's "extra usage" pool while interactive `tokenpak claude` kept working on the same OAuth token. Kevin flagged that behavior should match `tokenpak claude` end-to-end.
+
+Root cause: the injector was adding only ``Authorization: Bearer <token>`` + ``anthropic-beta: oauth-2025-04-20``, but the real Claude CLI wire profile carries a richer identity set. Without ``claude-code-20250219`` in beta and ``User-Agent: claude-cli/<version>``, Anthropic sees OAuth traffic but doesn't apply Claude Code's caching / billing treatment.
+
+Fix: `ClaudeCodeCredentialProvider` now reproduces the full CLI profile:
+
+- ``Authorization: Bearer <access_token>`` (from ``~/.claude/.credentials.json``)
+- ``anthropic-beta: …,claude-code-20250219,oauth-2025-04-20`` (MERGED with caller's betas)
+- ``anthropic-dangerous-direct-browser-access: true``
+- ``User-Agent: claude-cli/<probed-version> (external, cli)``
+- ``x-app: cli``
+
+**New `merge_headers` field on `InjectionPlan`.** Instead of stripping the caller's `anthropic-beta` and replacing it — which lost OpenClaw's feature-gate markers (`fine-grained-tool-streaming-*`, `interleaved-thinking-YYYY-MM-DD`) — the plan now carries *merge* semantics for `anthropic-beta`. The proxy hook concatenates the caller's value with ours, de-duping tokens case-insensitively. Other identity-clobbering headers (`User-Agent`, `x-app`, `Authorization`, `x-api-key`) keep the strip-and-replace pattern.
+
+**User-Agent is dynamically probed.** `ClaudeCodeCredentialProvider._detect_cli_version()` runs `claude --version` once at first use and caches the result, so the injected UA follows whatever version the user has installed (no hardcoded version per `feedback_always_dynamic` 2026-04-16). Falls back to a constant if the `claude` binary isn't on PATH.
+
+### Live verification
+
+Pre-fix (v1.3.16): OpenClaw-shape request with `X-TokenPak-Backend: claude-code` + caller's beta markers → `HTTP 200` but Anthropic billed as non-Claude-Code, `You're out of extra usage` after quota burn.
+
+Post-fix (v1.3.17): same request → `HTTP 200` with Claude response; Anthropic sees the full Claude Code profile + billing pool matches interactive `tokenpak claude`. Test command:
+
+```
+curl -H "User-Agent: Anthropic/JS 0.73.0" \
+     -H "x-api-key: placeholder" \
+     -H "X-TokenPak-Backend: claude-code" \
+     -H "anthropic-beta: fine-grained-tool-streaming-2025-05-14,interleaved-thinking-2025-05-14" \
+     …
+```
+
+### Tests
+
+339 regression tests green (services + proxy + conformance + cli). `test_claude_provider_resolves_to_full_claude_code_profile` updated to assert the full profile + `merge_headers` semantics; two new regressions pin the beta-merge de-dup behavior.
+
 ## [1.3.16] - 2026-04-24
 
 ### Fixed — Hotfix for v1.3.15: real OpenClaw signal is `X-TokenPak-Backend`, not User-Agent

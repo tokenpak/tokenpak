@@ -1012,6 +1012,37 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 }
             # 2. Merge the provider's override headers.
             _mutable_headers.update(_plan.add_headers)
+            # 2b. For merge_headers, append the provider's value to any
+            # caller-supplied value (case-insensitive key match, token
+            # de-dup). Used for anthropic-beta: Claude Code identity
+            # markers need to be in the header without stomping the
+            # caller's feature-gate markers (fine-grained-tool-
+            # streaming-*, interleaved-thinking-YYYY-MM-DD, etc.).
+            for _mk, _mv in (_plan.merge_headers or {}).items():
+                _mk_lower = _mk.lower()
+                _existing_k = None
+                _existing_v = ""
+                for _k, _v in _mutable_headers.items():
+                    if _k.lower() == _mk_lower:
+                        _existing_k = _k
+                        _existing_v = _v
+                        break
+                if _existing_v.strip():
+                    _existing_tokens = [t.strip() for t in _existing_v.split(",") if t.strip()]
+                    _new_tokens = [t.strip() for t in _mv.split(",") if t.strip()]
+                    _seen: set = set()
+                    _merged_tokens = []
+                    for _tok in _existing_tokens + _new_tokens:
+                        if _tok.lower() not in _seen:
+                            _seen.add(_tok.lower())
+                            _merged_tokens.append(_tok)
+                    _merged = ",".join(_merged_tokens)
+                    if _existing_k:
+                        _mutable_headers[_existing_k] = _merged
+                    else:
+                        _mutable_headers[_mk] = _merged
+                else:
+                    _mutable_headers[_mk] = _mv
             # 3. Rewrite the target URL when the plan specifies (Codex).
             if _plan.target_url_override:
                 target_url = _plan.target_url_override
