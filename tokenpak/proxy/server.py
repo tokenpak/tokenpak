@@ -1059,6 +1059,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if _plan.target_url_override:
                 target_url = _plan.target_url_override
                 parsed = urlparse(target_url)
+            # 3b. Claude Code identity: ensure ``?beta=true`` is on the
+            # URL when we're injecting the Claude Code profile. Without
+            # this param Anthropic's beta-feature gating doesn't honor
+            # the ``anthropic-beta: claude-code-20250219`` header we
+            # inject — traffic authenticates as Claude Code but lands
+            # in the restricted pool. Claude CLI always sets this param;
+            # OpenClaw's JS SDK doesn't. Verified 2026-04-24 live HDR
+            # dumps: CLI URL="...?beta=true", OpenClaw URL="..." (no
+            # param) → different billing pool.
+            if (
+                _plan.target_url_override is None
+                and _plan.add_headers
+                and "X-Claude-Code-Session-Id" in _plan.add_headers
+                and "beta=true" not in (parsed.query or "")
+            ):
+                _new_query = (parsed.query + "&beta=true") if parsed.query else "beta=true"
+                target_url = parsed._replace(query=_new_query).geturl()
+                parsed = urlparse(target_url)
             # 4. Normalize the body when the plan specifies (Codex).
             if _plan.body_transform is not None and body is not None:
                 try:
@@ -1076,6 +1094,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Host"] = parsed.netloc
             if body is not None:
                 fwd_headers["Content-Length"] = str(len(body))
+            # Diagnostic: dump the final outbound header names (+ values
+            # for identity markers, auth redacted) so field debugging
+            # shows exactly what Anthropic receives post-injection.
+            if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                import logging as _logging
+
+                _safe = ("x-claude-code-", "anthropic-", "user-agent", "x-app", "x-tokenpak-")
+                _out = []
+                for _k, _v in fwd_headers.items():
+                    _kl = _k.lower()
+                    if any(_kl.startswith(p) or _kl == p for p in _safe):
+                        _out.append(f"{_k}={_v[:100]}")
+                    elif _kl in ("authorization", "x-api-key"):
+                        _out.append(f"{_k}=<redacted:{len(_v)}>")
+                    else:
+                        _out.append(_kl)
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy[POST-INJECT] url=%s body_bytes=%d headers=%s",
+                    target_url[:80],
+                    len(body or b""),
+                    " | ".join(_out),
+                )
         else:
             # Default byte-preserved pass-through (unchanged).
             fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.19] - 2026-04-24
+
+### Fixed — Add `?beta=true` URL param for injected Claude Code traffic
+
+Final delta between interactive `tokenpak claude` outbound and OpenClaw-bridged outbound (confirmed by live `POST-INJECT` header dump 2026-04-24):
+
+- Claude CLI: `https://api.anthropic.com/v1/messages?beta=true`
+- OpenClaw post-injection: `https://api.anthropic.com/v1/messages` (no param)
+
+Without the `?beta=true` query param, Anthropic's beta-feature gating doesn't honor the `anthropic-beta: claude-code-20250219` header we inject. The request authenticates + identifies as Claude Code but lands in the restricted billing pool that returned `"You're out of extra usage"` — while interactive CLI on the same OAuth token kept working because it always sets the param.
+
+Fix: when the credential injector applies a Claude Code plan (anything with `X-Claude-Code-Session-Id`), the proxy appends `?beta=true` to the forward URL if not already present. Codex path is unaffected — it uses a `target_url_override` that already carries the correct query.
+
+### Live verification
+
+Post-fix outbound URL: `https://api.anthropic.com/v1/messages?beta=true` — matches interactive CLI bit-for-bit. Synthetic curl with OpenClaw shape returns `HTTP 200`.
+
 ## [1.3.18] - 2026-04-24
 
 ### Fixed — Inject `X-Claude-Code-Session-Id` (required for Claude Max billing pool)
