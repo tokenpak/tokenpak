@@ -239,6 +239,15 @@ ignore_imports =
     tokenpak.proxy.server -> tokenpak.services.request_pipeline.classify_stage
     tokenpak.proxy.server -> tokenpak.services.request_pipeline.stages
     ;
+    ; === v1.3.13: OpenClaw → companion subprocess routing (2026-04-24) ===
+    ; proxy/ consumes the platform bridge + OAuth backend to decide when
+    ; to intercept Messages traffic for companion-path dispatch (claude
+    ; CLI --continue with Claude CLI OAuth) instead of the byte-preserved
+    ; forward. Same intended direction as the 1.3.0-α block above —
+    ; proxy-as-transport-shell over services-as-execution-backbone.
+    tokenpak.proxy.server -> tokenpak.services.routing_service.platform_bridge
+    tokenpak.proxy.server -> tokenpak.services.routing_service.backends.anthropic_oauth
+    ;
     ; === TIP-SC / SC-02 + SC2-02: conformance observer cross-cutting (§5.2-C) ===
     ; `services.diagnostics.conformance` is the single shared contract
     ; proxy + companion both emit through for the TIP-1.0 self-conformance
