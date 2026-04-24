@@ -944,6 +944,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _pv = _resolve_provider(dict(self.headers))
                 if _pv:
                     _cred_injection_plan = _resolve_cred(_pv)
+                # Diagnostic: log the provider + injection outcome so
+                # field debugging shows whether the hook fired. Emits
+                # at WARN level to make it easy to grep without
+                # turning on global DEBUG.
+                if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy[INJECT] provider=%s plan=%s",
+                        _pv or "<none>",
+                        "applied" if _cred_injection_plan else "<none>",
+                    )
             except Exception as _inj_err:
                 import logging as _logging
 
