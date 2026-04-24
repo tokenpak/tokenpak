@@ -87,10 +87,43 @@ class BackendSelector:
                 hdr_val,
             )
 
+        # 2. Platform bridge — provider-name routing for adapter traffic
+        # (OpenClaw, Codex, future). Ratified 2026-04-24:
+        #   - tokenpak-claude-code  → companion path (OAuth backend) always
+        #   - tokenpak-anthropic    → api or OAuth based on caller auth shape
+        #   - tokenpak-openai-codex → (reserved; falls through for now)
+        provider = self._resolve_provider(request.headers or {})
+        if provider == "tokenpak-claude-code":
+            return self._oauth
+        if provider == "tokenpak-anthropic":
+            lh = {k.lower(): v for k, v in (request.headers or {}).items()}
+            if lh.get("x-api-key"):
+                return self._api
+            if lh.get("authorization", "").lower().startswith("bearer "):
+                return self._oauth
+            # Caller declared the provider but shipped no auth — preserve
+            # prior behavior (api backend) rather than guess.
+            return self._api
+
         # 3. RouteClass default.
         if route_class and route_class.is_claude_code:
             return self._oauth
         return self._api
+
+    @staticmethod
+    def _resolve_provider(headers: dict) -> Optional[str]:
+        # Lazy import to avoid a circular dep at module load: the
+        # platform_bridge module lives in the same package.
+        try:
+            from tokenpak.services.routing_service.platform_bridge import (
+                resolve_provider,
+            )
+        except Exception:
+            return None
+        try:
+            return resolve_provider(headers)
+        except Exception:
+            return None
 
     @staticmethod
     def _get_header(headers: dict, name: str) -> str:
