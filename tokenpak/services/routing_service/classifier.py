@@ -66,7 +66,22 @@ class RouteClassifier:
         """
         headers = _lower_headers(request.headers or {})
 
-        # Signal 2 first (strongest): Claude Code session id header.
+        # Signal 0 (highest): platform bridge — a registered non-Claude
+        # platform (OpenClaw, Codex, future) carrying its own session
+        # marker. When the platform's default_provider resolves to the
+        # Claude Code family, we classify it as Claude Code so that the
+        # BackendSelector picks the OAuth backend (companion subprocess
+        # with `--continue`). This is the 2026-04-24 fix for OpenClaw
+        # traffic hitting the api-key backend with 401s.
+        from tokenpak.services.routing_service.platform_bridge import (
+            resolve_provider as _resolve_provider,
+        )
+
+        _provider = _resolve_provider(headers)
+        if _provider == "tokenpak-claude-code":
+            return self._claude_code_mode(headers, request)
+
+        # Signal 2 (strongest inside Claude Code): Claude Code session id header.
         if headers.get("x-claude-code-session-id"):
             return self._claude_code_mode(headers, request)
 

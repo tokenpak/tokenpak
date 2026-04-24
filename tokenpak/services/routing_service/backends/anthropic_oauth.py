@@ -98,8 +98,22 @@ class AnthropicOAuthBackend:
                 )
 
             # Synchronous invocation for γ; streaming driver lands later.
+            #
+            # Session continuity (Part 2b, 2026-04-24): pass ``--continue``
+            # so the CLI picks up the last session on this machine instead
+            # of opening a fresh conversation per request. Single-agent
+            # semantics accepted by Kevin's ratification — multi-session
+            # isolation is a later item if concurrency actually breaks.
+            # The flag is opt-out via TOKENPAK_OAUTH_NO_CONTINUE=1 for
+            # tests + rare debugging.
+            import os as _os
+
+            cmd = [self._claude_binary]
+            if _os.environ.get("TOKENPAK_OAUTH_NO_CONTINUE", "").strip() != "1":
+                cmd.append("--continue")
+            cmd.extend(["--print", prompt])
             completed = subprocess.run(
-                [self._claude_binary, "--print", prompt],
+                cmd,
                 capture_output=True,
                 timeout=120,
                 check=False,

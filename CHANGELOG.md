@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.13] - 2026-04-24
+
+### Fixed — OpenClaw → TokenPak → Claude Code companion routing
+
+Ratified by Kevin 2026-04-24 after confirming OpenClaw traffic was hitting api.anthropic.com with `x-api-key`/bearer-token 401s (`provider=tokenpak-claude-code error=HTTP 401 authentication_error: invalid x-api-key`). The underlying issue: the `OpenClawAdapter` scaffolded in commit `60c33e87d3` detected OpenClaw traffic but its output was never consumed by the classifier, selector, or proxy forward path — so OpenClaw requests fell through to the api-key backend that rejected them.
+
+**New — `tokenpak/services/routing_service/platform_bridge.py`.** Reusable platform-bridge mechanism that any agent-orchestration adapter (OpenClaw, Codex, future) uses to declare its origin and preferred provider via request headers:
+
+- `X-OpenClaw-Session: <id>` — OpenClaw session marker (built-in handler, default provider `tokenpak-claude-code`).
+- `X-TokenPak-Provider: <name>` — explicit provider declaration, wins over any platform default. Accepted: `tokenpak-claude-code`, `tokenpak-anthropic`, or any future provider name.
+
+Adding a new platform is one `register(PlatformSignal(...))` call. No call-site enumeration (`feedback_always_dynamic` 2026-04-16).
+
+**Classifier + Selector — provider-aware routing.**
+
+- `RouteClassifier` now upgrades requests to `RouteClass.CLAUDE_CODE_CLI` when the bridge resolves the provider to `tokenpak-claude-code`, so downstream policy sees Claude-Code-family traffic.
+- `BackendSelector` routes per Kevin's 2026-04-24 ratification:
+  - `tokenpak-claude-code` → always OAuth backend (companion subprocess path), regardless of caller auth shape.
+  - `tokenpak-anthropic` + `x-api-key` → api backend (caller's key).
+  - `tokenpak-anthropic` + `Authorization: Bearer …` → OAuth backend (caller's OAuth).
+  - Explicit `X-TokenPak-Backend` header still wins over provider.
+
+**Proxy companion-path dispatch.** `ProxyServer.do_POST` now intercepts Messages traffic that the bridge resolves to `tokenpak-claude-code` and dispatches it via `AnthropicOAuthBackend` (Claude CLI subprocess) instead of the byte-preserved forward to api.anthropic.com. The caller's auth is stripped and the Claude CLI OAuth from `~/.claude/.credentials.json` is used — restoring the pre-D1 "inject Claude CLI tokens for OpenClaw" behavior. Opt-out via `TOKENPAK_COMPANION_DISPATCH=0`.
+
+**Part 2b — `claude --continue` for session continuity.** `AnthropicOAuthBackend` now passes `--continue` to the CLI subprocess so every OpenClaw / companion-path request resumes the last session on this machine rather than opening a fresh conversation per request. Single-agent semantics accepted by Kevin's ratification. Opt-out via `TOKENPAK_OAUTH_NO_CONTINUE=1`.
+
+### Tests
+
+31 new tests (platform bridge + classifier integration + selector × provider × auth-shape × `X-TokenPak-Backend` precedence matrix + OAuth backend `--continue` flag). Regression: 280 services/conformance/CLI tests green, 12/12 proxy tests green. Live end-to-end verified on running proxy + OpenClaw header shape — returns HTTP 200 via companion subprocess where pre-fix returned 401.
+
 ## [1.3.12] - 2026-04-24
 
 ### Added — L-8 (Launch Readiness): IDE integration in `tokenpak setup`

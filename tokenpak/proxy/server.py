@@ -884,6 +884,61 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         else:
             passthrough_cfg = PassthroughConfig(require_auth=False)
 
+        # ── Companion-path dispatch (OpenClaw / tokenpak-claude-code) ─────
+        #
+        # 2026-04-24 fix: when the platform bridge resolves the request to
+        # the ``tokenpak-claude-code`` provider (OpenClaw default, or any
+        # caller that sets ``X-TokenPak-Provider: tokenpak-claude-code``),
+        # route via the AnthropicOAuthBackend subprocess (claude CLI with
+        # ``--continue``) instead of the byte-preserved forward to
+        # api.anthropic.com. The caller's auth is stripped and the Claude
+        # CLI's OAuth from ``~/.claude/.credentials.json`` is used,
+        # restoring the pre-D1 "proxy injects Claude CLI tokens for
+        # OpenClaw" behavior. Opt-out via TOKENPAK_COMPANION_DISPATCH=0
+        # for ops debugging; default is on for Messages traffic.
+        if (
+            should_log
+            and is_messages
+            and os.environ.get("TOKENPAK_COMPANION_DISPATCH", "1") != "0"
+        ):
+            try:
+                from tokenpak.services.routing_service.platform_bridge import (
+                    resolve_provider as _resolve_provider,
+                )
+
+                _pv = _resolve_provider(dict(self.headers))
+            except Exception:
+                _pv = None
+            if _pv == "tokenpak-claude-code":
+                try:
+                    from tokenpak.services.request import Request as _Req
+                    from tokenpak.services.routing_service.backends.anthropic_oauth import (
+                        AnthropicOAuthBackend,
+                    )
+
+                    _be = AnthropicOAuthBackend()
+                    _resp = _be.dispatch(
+                        _Req(body=body or b"", headers=dict(self.headers))
+                    )
+                    self.send_response(_resp.status)
+                    for _hk, _hv in (_resp.headers or {}).items():
+                        self.send_header(_hk, _hv)
+                    self.send_header("Content-Length", str(len(_resp.body or b"")))
+                    self.end_headers()
+                    if _resp.body:
+                        self.wfile.write(_resp.body)
+                    return
+                except Exception as _be_err:
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy: companion-path dispatch failed, "
+                        "falling back to byte-preserved forward: %s: %s",
+                        type(_be_err).__name__,
+                        _be_err,
+                    )
+                    # Fall through to normal forward path.
+
         # Build forwarding headers (client-supplied auth forwarded unchanged)
         fwd_headers = forward_headers(dict(self.headers), passthrough_cfg)
         fwd_headers["Host"] = parsed.netloc
