@@ -1922,8 +1922,13 @@ _ADAPTER_REGISTRY = None
 def _get_adapter_registry():
     global _ADAPTER_REGISTRY
     if _ADAPTER_REGISTRY is None:
-        from tokenpak.proxy.adapters import build_default_registry
-        _ADAPTER_REGISTRY = build_default_registry()
+        # Use ``build_registry`` (not ``build_default_registry``) so
+        # discovered plugin adapters — entry points + filesystem
+        # drop-ins under ``~/.tokenpak/adapters/`` — auto-register at
+        # startup. Built-ins always win on ``source_format`` collision;
+        # ``TOKENPAK_DISABLE_ADAPTER_PLUGINS=1`` opts out entirely.
+        from tokenpak.proxy.adapters import build_registry
+        _ADAPTER_REGISTRY = build_registry()
     return _ADAPTER_REGISTRY
 
 
