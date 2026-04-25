@@ -59,6 +59,29 @@ class TestCohere:
 
 
 # ── Vertex AI Gemini ─────────────────────────────────────────────────
+#
+# google-auth is an optional dependency — production behavior is that
+# VertexAIGeminiCredentialProvider returns None when it's not installed
+# (verified by ``test_returns_none_without_google_auth``, which mocks
+# the import failure and runs unconditionally). The other Vertex tests
+# need the real library to exercise URL resolver / body transform /
+# header_resolver paths, so they're skipped when google-auth is
+# absent (CI hosts that don't pull the optional extra). Same pattern
+# boto3 follows for the Bedrock test module.
+
+try:
+    import google.auth  # noqa: F401
+    _HAS_GOOGLE_AUTH = True
+except ImportError:
+    _HAS_GOOGLE_AUTH = False
+
+_REQUIRES_GOOGLE_AUTH = pytest.mark.skipif(
+    not _HAS_GOOGLE_AUTH,
+    reason="google-auth not installed (optional dep). The provider "
+    "gracefully returns None in this case — see "
+    "TestVertexGating::test_returns_none_without_google_auth which "
+    "verifies that path unconditionally.",
+)
 
 
 @pytest.fixture
@@ -82,11 +105,13 @@ class TestVertexGating:
         monkeypatch.delenv("GCLOUD_PROJECT", raising=False)
         assert VertexAIGeminiCredentialProvider().resolve() is None
 
+    @_REQUIRES_GOOGLE_AUTH
     def test_returns_plan_when_both_present(self, monkeypatch, _vertex_env):
         # google-auth IS importable in this test env; project IS set.
         plan = VertexAIGeminiCredentialProvider().resolve()
         assert plan is not None
 
+    @_REQUIRES_GOOGLE_AUTH
     def test_project_via_legacy_gcloud_env(self, monkeypatch):
         monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
         monkeypatch.setenv("GCLOUD_PROJECT", "legacy-project-id")
@@ -98,6 +123,7 @@ class TestVertexGating:
         assert "/projects/legacy-project-id/" in url
 
 
+@_REQUIRES_GOOGLE_AUTH
 class TestVertexUrlResolution:
     def _resolver(self):
         return VertexAIGeminiCredentialProvider().resolve().target_url_resolver
@@ -147,6 +173,7 @@ class TestVertexUrlResolution:
         assert self._resolver()(body, {}) is None
 
 
+@_REQUIRES_GOOGLE_AUTH
 class TestVertexBodyTransform:
     def _xform(self, _vertex_env):
         return VertexAIGeminiCredentialProvider().resolve().body_transform
@@ -190,6 +217,7 @@ class TestVertexBodyTransform:
         }
 
 
+@_REQUIRES_GOOGLE_AUTH
 class TestVertexHeaderResolver:
     def test_emits_bearer_token_when_creds_resolvable(self, _vertex_env, monkeypatch):
         # Mock google.auth.default so we don't need real GCP creds.
