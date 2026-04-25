@@ -128,11 +128,13 @@ def render_openai_chat_apikey_provider_class(p: ScaffoldParams) -> str:
     standalone class with a fully-spelled-out ``_load`` method
     (mirrors ``AzureOpenAICredentialProvider``'s shape from PR #32).
 
-    The auth header NAME defaults to ``api-key`` (Azure
-    convention). Custom header names can be set on the generated
-    class's ``_AUTH_HEADER`` constant post-generation.
+    The auth header NAME is configurable via ``--auth-header`` and
+    defaults to ``api-key`` (Azure convention). Phase 4.2 added the
+    flag so the generated class doesn't need a post-edit for
+    vendor-specific headers like ``X-API-Key`` or ``Api-Key``.
     """
     cls_name = f"{p.class_basename}CredentialProvider"
+    auth_header = p.auth_header or "api-key"
     lines: list[str] = []
 
     lines.append("# SPDX-License-Identifier: Apache-2.0")
@@ -191,17 +193,16 @@ def render_openai_chat_apikey_provider_class(p: ScaffoldParams) -> str:
     lines.append("")
     lines.extend(live_status_lines)
     lines.append("")
-    lines.append("    Custom auth header name? Override ``_AUTH_HEADER`` on a")
-    lines.append('    subclass — defaults to ``"api-key"`` (Azure convention).')
-    lines.append("    Common variants: ``X-API-Key`` (Anthropic-style),")
-    lines.append('    ``Api-Key`` (some vendors).')
+    lines.append('    Auth header configured at scaffold-time via ``--auth-header``.')
+    lines.append('    Common variants: ``api-key`` (Azure / default), ``X-API-Key``')
+    lines.append('    or ``x-api-key`` (Anthropic-style), ``Api-Key`` (some vendors).')
     lines.append('    """')
     lines.append("")
     lines.append(f"    live_verified = {p.live_verified!r}")
     lines.append(f'    name = "{p.slug}"')
     lines.append(f'    _UPSTREAM = "{p.endpoint}"')
     lines.append(f'    _ENV_VAR = "{p.env_var}"')
-    lines.append('    _AUTH_HEADER = "api-key"')
+    lines.append(f'    _AUTH_HEADER = "{auth_header}"')
     lines.append("")
     lines.append("    def _load(self) -> Optional[InjectionPlan]:")
     lines.append("        api_key = os.environ.get(self._ENV_VAR, '').strip()")
@@ -218,8 +219,13 @@ def render_openai_chat_apikey_provider_class(p: ScaffoldParams) -> str:
         for k, v in sorted(p.extra_headers.items()):
             lines.append(f"        headers[{json.dumps(k)}] = {json.dumps(v)}")
 
+    # Always strip caller-sent variants of any auth header that
+    # might have leaked through — the proxy is the sole authority
+    # on which key reaches the upstream.
+    strip_set = sorted({"authorization", "x-api-key", auth_header.lower()})
+    strip_literal = ", ".join(f'"{h}"' for h in strip_set)
     lines.append("        return InjectionPlan(")
-    lines.append('            strip_headers=frozenset({"authorization", "x-api-key"}),')
+    lines.append(f'            strip_headers=frozenset({{{strip_literal}}}),')
     lines.append("            add_headers=headers,")
     lines.append("            target_url_override=self._UPSTREAM,")
     lines.append("        )")
@@ -233,6 +239,7 @@ def render_openai_chat_apikey_provider_class(p: ScaffoldParams) -> str:
 def render_openai_chat_apikey_test_file(p: ScaffoldParams) -> str:
     """Render offline contract tests for the api-key-header pattern."""
     cls_name = f"{p.class_basename}CredentialProvider"
+    auth_header = p.auth_header or "api-key"
     extra_assertions = ""
     if p.extra_headers:
         extra_lines = [
@@ -292,8 +299,8 @@ def render_openai_chat_apikey_test_file(p: ScaffoldParams) -> str:
         '    def test_emits_api_key_header_not_bearer(self, monkeypatch):\n'
         f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
         f'        plan = {cls_name}().resolve()\n'
-        '        # api-key header (default for this pattern) — NOT Bearer.\n'
-        '        assert plan.add_headers["api-key"] == "test-fake-key"\n'
+        f'        # Configured auth header for this provider — NOT Bearer.\n'
+        f'        assert plan.add_headers[{json.dumps(auth_header)}] == "test-fake-key"\n'
         '        assert "Authorization" not in plan.add_headers\n'
         '\n'
         '    def test_strips_caller_auth(self, monkeypatch):\n'
@@ -301,6 +308,7 @@ def render_openai_chat_apikey_test_file(p: ScaffoldParams) -> str:
         f'        plan = {cls_name}().resolve()\n'
         '        assert "authorization" in plan.strip_headers\n'
         '        assert "x-api-key" in plan.strip_headers\n'
+        f'        assert {json.dumps(auth_header.lower())} in plan.strip_headers\n'
         '\n'
         '    def test_target_url_override(self, monkeypatch):\n'
         f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
@@ -626,3 +634,606 @@ def render_followup_issue_text(p: ScaffoldParams) -> str:
         f"- Offline contract tests: tests/test_{vendor_safe}_offline.py\n"
         "- Standard #23 §6.4 (live_verified marker semantics)\n"
     )
+
+
+# ── Provider class (Pattern A-passthrough: openai-chat + bearer + body-pass-through) ──
+
+
+def render_openai_chat_bearer_passthrough_provider_class(p: ScaffoldParams) -> str:
+    """Render Pattern A-passthrough: OpenAI-Chat + Bearer auth with
+    explicit body pass-through.
+
+    Identical to the bearer renderer at the InjectionPlan level
+    (no ``body_transform`` set → request body is forwarded
+    unmodified) but emits an explicit ``_BODY_PASSTHROUGH = True``
+    annotation so the maintainer + reviewers can see the contract
+    declaratively. Use this for OpenRouter-style providers that
+    accept extra/non-standard body fields (``provider``,
+    ``transforms``, ``route``, etc.) that must reach the upstream
+    intact.
+    """
+    cls_name = f"{p.class_basename}CredentialProvider"
+    lines: list[str] = []
+
+    lines.append("# SPDX-License-Identifier: Apache-2.0")
+    lines.append(
+        f'"""Auto-scaffolded credential provider for {p.slug}.\n'
+        f'\n'
+        f'Source docs: {p.docs_url}\n'
+        f'\n'
+        f'Pattern A-passthrough: OpenAI-Chat + Bearer auth with explicit\n'
+        f'body pass-through. Extra/non-standard request body fields\n'
+        f'(OpenRouter-style ``provider`` / ``transforms`` / ``route``,\n'
+        f'etc.) are forwarded to the upstream unmodified.\n'
+        f'\n'
+        f'Generated by ``tokenpak adapter scaffold`` per Standard #23.\n'
+        f'``live_verified`` is False until an ``{p.env_var}`` is available\n'
+        f'and the route is smoke-tested against the live upstream.\n'
+        f'"""'
+    )
+    lines.append("")
+    lines.append("from __future__ import annotations")
+    lines.append("")
+    lines.append("from tokenpak.services.routing_service.credential_injector import (")
+    lines.append("    _EnvKeyBearerProvider,")
+    lines.append(")")
+    lines.append("")
+    lines.append("")
+
+    if p.live_verified:
+        live_status_lines = [
+            '    **Live status: smoke-tested live before merge.**',
+        ]
+    else:
+        article = (
+            "an" if p.env_var[:1].upper() in {"A", "E", "I", "O", "U"} else "a"
+        )
+        live_status_lines = [
+            f'    **Live status: contract-tested offline only.** No '
+            f'``{p.env_var}`` was available when this',
+            '    route was scaffolded. Body pass-through is enforced by '
+            'NOT setting a',
+            '    ``body_transform`` on the InjectionPlan — the proxy '
+            'forwards the request',
+            '    body byte-for-byte. Live verification is tracked '
+            'separately — when',
+            f'    {article} ``{p.env_var}`` becomes available, smoke-test '
+            f'the route against the',
+            '    upstream, then flip ``live_verified`` to ``True`` and '
+            'update this',
+            '    docstring per Standard #23 §6.4.',
+        ]
+
+    lines.append(f"class {cls_name}(_EnvKeyBearerProvider):")
+    lines.append(f'    """{p.class_basename} — OpenAI-Chat + Bearer + body-pass-through, ``{p.env_var}``.')
+    lines.append("")
+    lines.append(f"    Source: {p.docs_url}")
+    lines.append("")
+    lines.extend(live_status_lines)
+    lines.append("")
+    lines.append("    Body pass-through contract: the InjectionPlan emitted by")
+    lines.append("    this provider has NO ``body_transform``, so unknown /")
+    lines.append("    non-standard request fields (e.g. OpenRouter's")
+    lines.append("    ``provider``, ``transforms``, ``route``) reach the upstream")
+    lines.append("    unmodified. The ``_BODY_PASSTHROUGH = True`` class")
+    lines.append("    attribute makes the contract greppable + auditable.")
+    lines.append('    """')
+    lines.append("")
+    lines.append(f"    live_verified = {p.live_verified!r}")
+    lines.append(f'    name = "{p.slug}"')
+    lines.append(f'    _UPSTREAM = "{p.endpoint}"')
+    lines.append(f'    _ENV_VAR = "{p.env_var}"')
+    lines.append("    _BODY_PASSTHROUGH = True")
+
+    if p.extra_headers:
+        lines.append("    _EXTRA_HEADERS = {")
+        for k, v in sorted(p.extra_headers.items()):
+            lines.append(f'        "{k}": {json.dumps(v)},')
+        lines.append("    }")
+
+    return "\n".join(lines) + "\n"
+
+
+def render_openai_chat_bearer_passthrough_test_file(p: ScaffoldParams) -> str:
+    """Render the Pattern A-passthrough offline contract tests.
+
+    Reuses the Pattern A test scaffolding (auth header / strip /
+    target URL / extra headers) and adds a ``TestBodyPassThrough``
+    class asserting the InjectionPlan has no ``body_transform`` and
+    the class declares ``_BODY_PASSTHROUGH = True``.
+    """
+    cls_name = f"{p.class_basename}CredentialProvider"
+    return (
+        '# SPDX-License-Identifier: Apache-2.0\n'
+        f'"""Offline contract tests for {p.slug} (bearer + body-pass-through)."""\n'
+        '\n'
+        'from __future__ import annotations\n'
+        '\n'
+        'import pytest\n'
+        '\n'
+        'from tokenpak.services.routing_service.credential_injector import (\n'
+        f'    {cls_name},\n'
+        '    invalidate_cache,\n'
+        '    registered,\n'
+        '    resolve,\n'
+        ')\n'
+        '\n'
+        '\n'
+        '@pytest.fixture(autouse=True)\n'
+        'def _clear_cache():\n'
+        '    invalidate_cache()\n'
+        '    yield\n'
+        '    invalidate_cache()\n'
+        '\n'
+        '\n'
+        'class TestLiveVerifiedMarker:\n'
+        '    def test_default_unverified(self):\n'
+        f'        assert {cls_name}.live_verified is False\n'
+        '\n'
+        '\n'
+        'class TestProviderResolveGate:\n'
+        '    def test_no_env_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.delenv("{p.env_var}", raising=False)\n'
+        f'        assert {cls_name}().resolve() is None\n'
+        '\n'
+        '    def test_empty_env_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "")\n'
+        f'        assert {cls_name}().resolve() is None\n'
+        '\n'
+        '    def test_valid_key_emits_plan(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        assert plan is not None\n'
+        '\n'
+        '\n'
+        'class TestAuthHeaderInjection:\n'
+        '    def test_emits_bearer_header(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        assert plan.add_headers["Authorization"] == "Bearer test-fake-key"\n'
+        '\n'
+        '    def test_strips_caller_auth(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        assert "authorization" in plan.strip_headers\n'
+        '        assert "x-api-key" in plan.strip_headers\n'
+        '\n'
+        '    def test_target_url_override(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        f'        assert plan.target_url_override == "{p.endpoint}"\n'
+        + _render_extra_header_test_block(p, cls_name)
+        + '\n'
+        'class TestBodyPassThrough:\n'
+        '    """Phase 4.2 contract: the InjectionPlan must have no\n'
+        '    ``body_transform`` so unknown / non-standard request body\n'
+        '    fields are forwarded byte-for-byte to the upstream.\n'
+        '    """\n'
+        '\n'
+        '    def test_class_declares_passthrough(self):\n'
+        f'        assert getattr({cls_name}, "_BODY_PASSTHROUGH", False) is True\n'
+        '\n'
+        '    def test_no_body_transform_in_plan(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        # Body pass-through is enforced by NOT setting a\n'
+        '        # body_transform on the InjectionPlan — the proxy then\n'
+        '        # forwards the request body byte-for-byte.\n'
+        '        assert plan.body_transform is None\n'
+        '\n'
+        '\n'
+        'class TestRegistration:\n'
+        '    def test_registered_with_known_slug(self):\n'
+        '        names = {p.name for p in registered()}\n'
+        f'        assert "{p.slug}" in names\n'
+        '\n'
+        '    def test_resolve_with_no_key_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.delenv("{p.env_var}", raising=False)\n'
+        f'        assert resolve("{p.slug}") is None\n'
+    )
+
+
+# ── Provider class (Pattern A-anthropic: anthropic-messages + api-key) ──
+
+
+def render_anthropic_messages_apikey_provider_class(p: ScaffoldParams) -> str:
+    """Render the Anthropic Messages + x-api-key CredentialProvider.
+
+    Anthropic's auth contract is two headers: ``x-api-key: <key>``
+    and ``anthropic-version: 2023-06-01`` (or override via
+    ``--extra-header anthropic-version=YYYY-MM-DD``). The renderer
+    emits explicit capability declarations on the class — there is
+    NO implicit TIP support; semantic-cache / capsule-injection /
+    aggressive-compaction are all opt-in by the maintainer once
+    they've reviewed the upstream's tolerance for body rewrites.
+    """
+    cls_name = f"{p.class_basename}CredentialProvider"
+    auth_header = p.auth_header or "x-api-key"
+    lines: list[str] = []
+
+    lines.append("# SPDX-License-Identifier: Apache-2.0")
+    lines.append(
+        f'"""Auto-scaffolded credential provider for {p.slug}.\n'
+        f'\n'
+        f'Source docs: {p.docs_url}\n'
+        f'\n'
+        f'Pattern A-anthropic: Anthropic Messages API + ``{auth_header}`` auth\n'
+        f'+ required ``anthropic-version`` header. ``live_verified`` is\n'
+        f'False until an ``{p.env_var}`` is available and the route is\n'
+        f'smoke-tested against the live upstream.\n'
+        f'"""'
+    )
+    lines.append("")
+    lines.append("from __future__ import annotations")
+    lines.append("")
+    lines.append("import logging")
+    lines.append("import os")
+    lines.append("from typing import Optional")
+    lines.append("")
+    lines.append("from tokenpak.services.routing_service.credential_injector import (")
+    lines.append("    InjectionPlan,")
+    lines.append("    _cached_resolve,")
+    lines.append(")")
+    lines.append("")
+    lines.append("logger = logging.getLogger(__name__)")
+    lines.append("")
+    lines.append("")
+
+    if p.live_verified:
+        live_status_lines = [
+            '    **Live status: smoke-tested live before merge.**',
+        ]
+    else:
+        article = (
+            "an" if p.env_var[:1].upper() in {"A", "E", "I", "O", "U"} else "a"
+        )
+        live_status_lines = [
+            f'    **Live status: contract-tested offline only.** No '
+            f'``{p.env_var}`` was available when this',
+            '    route was scaffolded. The route compiles and the offline '
+            'contract tests pass.',
+            f'    Live verification is tracked separately — when {article} '
+            f'``{p.env_var}`` becomes',
+            '    available, smoke-test the route against the upstream, then '
+            'flip',
+            '    ``live_verified`` to ``True`` and update this docstring per '
+            'Standard #23 §6.4.',
+        ]
+
+    lines.append(f"class {cls_name}:")
+    lines.append(f'    """{p.class_basename} — Anthropic-Messages-compatible, '
+                 f'``{p.env_var}``.')
+    lines.append("")
+    lines.append(f"    Source: {p.docs_url}")
+    lines.append("")
+    lines.extend(live_status_lines)
+    lines.append("")
+    lines.append("    Capability declarations (explicit; NO implicit TIP support):")
+    lines.append("    the maintainer must opt in to each capability after")
+    lines.append("    confirming the upstream tolerates the corresponding body")
+    lines.append("    rewrite. Anthropic Messages is sensitive to system-message")
+    lines.append("    placement + content-block shape; default is to declare")
+    lines.append("    NOTHING and let the proxy pass the body through.")
+    lines.append('    """')
+    lines.append("")
+    lines.append(f"    live_verified = {p.live_verified!r}")
+    lines.append(f'    name = "{p.slug}"')
+    lines.append(f'    _UPSTREAM = "{p.endpoint}"')
+    lines.append(f'    _ENV_VAR = "{p.env_var}"')
+    lines.append(f'    _AUTH_HEADER = "{auth_header}"')
+    lines.append('    _ANTHROPIC_VERSION = "2023-06-01"')
+    lines.append("")
+    lines.append("    # Explicit capability declarations (Standard #23 §4 + TIP-1.0).")
+    lines.append("    # Default = empty — NO implicit TIP support. Opt in per")
+    lines.append("    # capability after reviewing the upstream's body-rewrite")
+    lines.append("    # tolerance. Candidate capabilities (NOT yet declared):")
+    lines.append('    #   "tip.compression.v1"')
+    lines.append('    #   "tip.cache.proxy-managed"')
+    lines.append('    #   "tip.capsule.injection.v1"')
+    lines.append('    capabilities: frozenset = frozenset()')
+    lines.append("")
+    lines.append("    def _load(self) -> Optional[InjectionPlan]:")
+    lines.append("        api_key = os.environ.get(self._ENV_VAR, '').strip()")
+    lines.append("        if not api_key:")
+    lines.append("            logger.info(")
+    lines.append('                "credential_injector[%s]: env var %s not set; skipping",')
+    lines.append("                self.name, self._ENV_VAR,")
+    lines.append("            )")
+    lines.append("            return None")
+    lines.append("        headers = {")
+    lines.append("            self._AUTH_HEADER: api_key,")
+    lines.append('            "anthropic-version": self._ANTHROPIC_VERSION,')
+    lines.append("        }")
+
+    if p.extra_headers:
+        lines.append("        # Extra headers declared at scaffold time:")
+        for k, v in sorted(p.extra_headers.items()):
+            lines.append(f"        headers[{json.dumps(k)}] = {json.dumps(v)}")
+
+    # Strip caller-sent auth + version variants so the proxy is the
+    # authoritative source.
+    strip_set = sorted(
+        {"authorization", "x-api-key", auth_header.lower(), "anthropic-version"}
+    )
+    strip_literal = ", ".join(f'"{h}"' for h in strip_set)
+    lines.append("        return InjectionPlan(")
+    lines.append(f'            strip_headers=frozenset({{{strip_literal}}}),')
+    lines.append("            add_headers=headers,")
+    lines.append("            target_url_override=self._UPSTREAM,")
+    lines.append("        )")
+    lines.append("")
+    lines.append("    def resolve(self) -> Optional[InjectionPlan]:")
+    lines.append("        return _cached_resolve(self.name, self._load)")
+
+    return "\n".join(lines) + "\n"
+
+
+def render_anthropic_messages_apikey_test_file(p: ScaffoldParams) -> str:
+    """Render offline contract tests for the Anthropic Messages + api-key pattern."""
+    cls_name = f"{p.class_basename}CredentialProvider"
+    auth_header = p.auth_header or "x-api-key"
+    extra_assertions = ""
+    if p.extra_headers:
+        extra_lines = [
+            '\n',
+            '    def test_extra_headers_injected(self, monkeypatch):\n',
+            f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n',
+            f'        plan = {cls_name}().resolve()\n',
+        ]
+        for k, v in sorted(p.extra_headers.items()):
+            extra_lines.append(
+                f'        assert plan.add_headers[{json.dumps(k)}] == {json.dumps(v)}\n'
+            )
+        extra_lines.append('\n')
+        extra_assertions = "".join(extra_lines)
+
+    return (
+        '# SPDX-License-Identifier: Apache-2.0\n'
+        f'"""Offline contract tests for {p.slug} (Anthropic Messages + api-key)."""\n'
+        '\n'
+        'from __future__ import annotations\n'
+        '\n'
+        'import pytest\n'
+        '\n'
+        'from tokenpak.services.routing_service.credential_injector import (\n'
+        '    invalidate_cache,\n'
+        '    registered,\n'
+        '    resolve,\n'
+        ')\n'
+        f'from tokenpak.services.routing_service.extras.{p.vendor.replace("-", "_")} import (\n'
+        f'    {cls_name},\n'
+        ')\n'
+        '\n'
+        '\n'
+        '@pytest.fixture(autouse=True)\n'
+        'def _clear_cache():\n'
+        '    invalidate_cache()\n'
+        '    yield\n'
+        '    invalidate_cache()\n'
+        '\n'
+        '\n'
+        'class TestLiveVerifiedMarker:\n'
+        '    def test_default_unverified(self):\n'
+        f'        assert {cls_name}.live_verified is False\n'
+        '\n'
+        '\n'
+        'class TestProviderResolveGate:\n'
+        '    def test_no_env_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.delenv("{p.env_var}", raising=False)\n'
+        f'        assert {cls_name}().resolve() is None\n'
+        '\n'
+        '    def test_empty_env_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "")\n'
+        f'        assert {cls_name}().resolve() is None\n'
+        '\n'
+        '\n'
+        'class TestAuthHeaderInjection:\n'
+        '    def test_emits_xapikey_header_not_bearer(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        f'        assert plan.add_headers[{json.dumps(auth_header)}] == "test-fake-key"\n'
+        '        assert "Authorization" not in plan.add_headers\n'
+        '\n'
+        '    def test_emits_anthropic_version(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        assert plan.add_headers["anthropic-version"] == "2023-06-01"\n'
+        '\n'
+        '    def test_strips_caller_auth(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        '        assert "authorization" in plan.strip_headers\n'
+        '        assert "x-api-key" in plan.strip_headers\n'
+        '        assert "anthropic-version" in plan.strip_headers\n'
+        '\n'
+        '    def test_target_url_override(self, monkeypatch):\n'
+        f'        monkeypatch.setenv("{p.env_var}", "test-fake-key")\n'
+        f'        plan = {cls_name}().resolve()\n'
+        f'        assert plan.target_url_override == "{p.endpoint}"\n'
+        '\n'
+        '\n'
+        'class TestCapabilityDeclarations:\n'
+        '    """Phase 4.2: explicit capability set; default is empty."""\n'
+        '\n'
+        '    def test_capabilities_attribute_present(self):\n'
+        f'        assert hasattr({cls_name}, "capabilities")\n'
+        '\n'
+        '    def test_no_implicit_tip_support(self):\n'
+        '        # Generated default declares NO TIP capabilities — the\n'
+        '        # maintainer opts in per-capability after reviewing the\n'
+        '        # upstream\'s body-rewrite tolerance.\n'
+        f'        caps = {cls_name}.capabilities\n'
+        '        assert "tip.compression.v1" not in caps\n'
+        '        assert "tip.cache.proxy-managed" not in caps\n'
+        '        assert "tip.capsule.injection.v1" not in caps\n'
+        + extra_assertions
+        + '\n'
+        'class TestRegistration:\n'
+        '    def test_resolve_with_no_key_returns_none(self, monkeypatch):\n'
+        f'        monkeypatch.delenv("{p.env_var}", raising=False)\n'
+        f'        if "{p.slug}" not in {{p.name for p in registered()}}:\n'
+        '            pytest.skip(\n'
+        '                "Provider not yet registered — add the register() "\n'
+        '                "call to credential_injector.py."\n'
+        '            )\n'
+        f'        assert resolve("{p.slug}") is None\n'
+    )
+
+
+# ── Fixtures (Pattern A-anthropic) ───────────────────────────────────
+
+
+def render_anthropic_messages_request_fixture(p: ScaffoldParams) -> str:
+    """Anthropic Messages-shaped request fixture.
+
+    Anthropic differs from OpenAI Chat: ``messages`` array (no
+    ``system`` role — system goes in a top-level ``system`` field),
+    ``max_tokens`` REQUIRED, no ``temperature`` default. Maintainer
+    replaces model id + content with vendor-specific examples
+    post-generation.
+    """
+    fixture = {
+        "_scaffold_note": (
+            f"SCAFFOLD-VERIFY: replace model id + messages with examples "
+            f"from {p.docs_url}. ``max_tokens`` is REQUIRED on Anthropic "
+            f"Messages; ``system`` is a top-level field, not a message role."
+        ),
+        "model": f"<{p.vendor}-model-id>",
+        "max_tokens": 64,
+        "system": "You are a concise assistant.",
+        "messages": [
+            {"role": "user", "content": "ping"},
+        ],
+    }
+    return json.dumps(fixture, indent=2) + "\n"
+
+
+def render_anthropic_messages_response_fixture(p: ScaffoldParams) -> str:
+    """Anthropic Messages-shaped response fixture.
+
+    Response shape differs materially from OpenAI Chat:
+    ``content`` is an array of typed blocks (``{"type": "text",
+    "text": ...}``), token counts are ``usage.input_tokens`` /
+    ``usage.output_tokens`` (not ``prompt_tokens`` /
+    ``completion_tokens``).
+    """
+    fixture = {
+        "_scaffold_note": (
+            f"SCAFFOLD-VERIFY: replace with a real response sample from "
+            f"{p.docs_url}. Anthropic uses ``content`` blocks + "
+            f"``usage.input_tokens`` / ``usage.output_tokens``."
+        ),
+        "id": "msg_fixture_id",
+        "type": "message",
+        "role": "assistant",
+        "model": f"<{p.vendor}-model-id>",
+        "content": [
+            {"type": "text", "text": "pong"},
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": None,
+        "usage": {
+            "input_tokens": 12,
+            "output_tokens": 1,
+        },
+    }
+    return json.dumps(fixture, indent=2) + "\n"
+
+
+def render_anthropic_messages_docs_stub(p: ScaffoldParams) -> str:
+    """Docs stub for Anthropic-Messages-shaped providers.
+
+    Differs from the OpenAI-Chat stub in the curl example body
+    (uses ``max_tokens`` + Anthropic header set) and the
+    troubleshooting section (notes the ``anthropic-version`` and
+    content-block specifics).
+    """
+    auth_header = p.auth_header or "x-api-key"
+    extra_env_section = ""
+    if p.optional_deps:
+        deps = ", ".join(f"`{d}`" for d in p.optional_deps)
+        install = " ".join(p.optional_deps)
+        extra_env_section = (
+            "\n### Optional Python dependencies\n\n"
+            f"This route requires {deps}. Install with `pip install "
+            f"{install}`. Without them, the provider gracefully returns "
+            "None at registration time and the route is unavailable.\n"
+        )
+
+    body = (
+        f"# {p.class_basename}\n"
+        "\n"
+        f"Source: <{p.docs_url}>\n"
+        "\n"
+        f"Provider slug: `{p.slug}`\n"
+        "\n"
+        f"Wire format: Anthropic Messages API (`{auth_header}` auth + "
+        "`anthropic-version` header).\n"
+        "\n"
+        "## Status\n"
+        "\n"
+        f"Contract-tested offline. Live verification pending — see the\n"
+        f"follow-up issue tracking when an `{p.env_var}` becomes\n"
+        f"available.\n"
+        "\n"
+        "## Required environment\n"
+        "\n"
+        f"- `{p.env_var}` — the API key from {p.docs_url}.\n"
+        f"{extra_env_section}\n"
+        "## Capability declarations\n"
+        "\n"
+        "This provider declares NO TIP capabilities by default. Anthropic\n"
+        "Messages is sensitive to system-message placement and\n"
+        "content-block shape, so semantic-cache / capsule-injection /\n"
+        "aggressive-compaction are all opt-in. Review the upstream's\n"
+        "tolerance before flipping any capability flag in the generated\n"
+        "class.\n"
+        "\n"
+        "## Supported models\n"
+        "\n"
+        f"See the upstream docs at <{p.docs_url}>. The TokenPak proxy\n"
+        "forwards whatever model id the caller specifies — no\n"
+        "per-model allowlist is enforced.\n"
+        "\n"
+        "## Live test\n"
+        "\n"
+        f"Once you have an `{p.env_var}`:\n"
+        "\n"
+        "```bash\n"
+        f"export {p.env_var}=...\n"
+        "\n"
+        f"curl -X POST {p.endpoint} \\\n"
+        f'  -H "{auth_header}: ${p.env_var}" \\\n'
+        '  -H "anthropic-version: 2023-06-01" \\\n'
+        "  -H 'content-type: application/json' \\\n"
+        f'  -d \'{{"model": "<{p.vendor}-model-id>",\n'
+        '        "max_tokens": 64,\n'
+        '        "messages": [{"role": "user", "content": "hello"}]}\'\n'
+        "```\n"
+        "\n"
+        "Expected: an Anthropic Messages response (`content` blocks +\n"
+        "`usage.input_tokens` / `usage.output_tokens`) recorded in\n"
+        "`~/.tokenpak/monitor.db`.\n"
+        "\n"
+        "## Troubleshooting\n"
+        "\n"
+        "- **HTTP 401 from upstream**: API key invalid / expired or\n"
+        f"  `{auth_header}` header name doesn't match the upstream's\n"
+        "  expectation. Verify against the docs URL.\n"
+        "- **HTTP 400 `anthropic-version required`**: the proxy strips\n"
+        "  caller-sent `anthropic-version` and re-adds the canonical\n"
+        "  value (`2023-06-01`). Override on the generated class if the\n"
+        "  upstream needs a different version.\n"
+        "- **HTTP 4xx with vendor-specific error**: check the upstream's\n"
+        "  model id naming + required body fields against the docs URL.\n"
+        "- **Proxy returns 502 `backend_unavailable`**: the optional\n"
+        "  dependency (if any) isn't installed. See above.\n"
+        "\n"
+        "<!-- SCAFFOLD-VERIFY: maintainer should fill in:\n"
+        "     - exact model ids supported on first ratification\n"
+        "     - any vendor-specific request fields beyond Anthropic Messages\n"
+        "     - rate-limit + cost expectations\n"
+        "     - whether any TIP capability is safe to opt in\n"
+        "-->\n"
+    )
+    return body

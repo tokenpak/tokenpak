@@ -26,9 +26,24 @@ REFERENCE_PRS = {
         "tokenpak-deepseek, tokenpak-cohere, tokenpak-openrouter. "
         "PR #27 + #34 + #36."
     ),
+    ("openai-chat", "bearer-passthrough"): (
+        "Pattern A-passthrough — OpenAI-Chat + Bearer with explicit "
+        "body pass-through (extra provider fields preserved). "
+        "Reference: tokenpak-openrouter (HTTP-Referer + X-Title "
+        "headers + ``provider``/``transforms`` body fields)."
+    ),
+    ("openai-chat", "api-key-header"): (
+        "Pattern A-prime — OpenAI-Chat + non-Bearer header auth. "
+        "Configurable header name via ``--auth-header`` (defaults "
+        "to ``api-key``)."
+    ),
     ("openai-responses", "oauth-token-file"): (
         "Pattern B — OpenAI-Responses + file-OAuth (Codex). "
         "Reference: tokenpak-openai-codex. PR #27."
+    ),
+    ("anthropic-messages", "api-key-header"): (
+        "Pattern A-anthropic — Anthropic Messages + x-api-key auth + "
+        "anthropic-version header. Phase 4.2."
     ),
     ("anthropic-messages", "oauth-token-file"): (
         "Pattern C — Anthropic Messages + file-OAuth + merge_headers. "
@@ -69,8 +84,12 @@ def renderer_name(params: ScaffoldParams) -> str:
 
     if key == ("openai-chat", "bearer"):
         return "openai_chat_bearer"
+    if key == ("openai-chat", "bearer-passthrough"):
+        return "openai_chat_bearer_passthrough"
     if key == ("openai-chat", "api-key-header"):
         return "openai_chat_apikey"
+    if key == ("anthropic-messages", "api-key-header"):
+        return "anthropic_messages_apikey"
 
     # Combination is recognised but not implemented in MVP:
     if key in REFERENCE_PRS:

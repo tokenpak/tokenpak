@@ -34,8 +34,17 @@ KNOWN_FAMILIES = frozenset({
 })
 
 # All auth schemes MVP can classify (spec §3 + §6).
+#
+# ``bearer-passthrough`` (Phase 4.2): bearer auth + explicit
+# guarantee that the request body is forwarded unmodified — i.e.
+# extra/non-standard provider fields (OpenRouter's ``provider`` /
+# ``transforms`` / ``route``, etc.) are preserved end-to-end. The
+# generated InjectionPlan has no ``body_transform``; the renderer
+# adds an explicit ``_BODY_PASSTHROUGH = True`` annotation + a test
+# class asserting the contract. Pattern A applies otherwise.
 KNOWN_AUTHS = frozenset({
     "bearer",
+    "bearer-passthrough",
     "api-key-header",
     "sigv4",
     "oauth-adc",
@@ -116,6 +125,18 @@ class ScaffoldParams:
     """Vendor-required extra headers (e.g. OpenRouter's
     ``HTTP-Referer`` + ``X-Title``). MVP supports passing these via
     ``--extra-header KEY=VALUE`` (repeatable).
+    """
+
+    auth_header: Optional[str] = None
+    """Auth header name (Phase 4.2) for ``api-key-header`` auth.
+
+    When ``None`` (default) the renderer picks a sensible default:
+    ``api-key`` for the ``openai-chat + api-key-header`` pattern
+    (Azure convention), ``x-api-key`` for the
+    ``anthropic-messages + api-key-header`` pattern (Anthropic
+    convention). Pass ``--auth-header X-API-Key`` (or any
+    vendor-specific header) to override at scaffold-time so the
+    generated class doesn't need a post-edit.
     """
 
     def validate(self) -> None:

@@ -607,6 +607,7 @@ def cmd_adapter_scaffold(args) -> int:
         streaming=args.streaming,
         optional_deps=parse_optional_dep_list(getattr(args, "optional_dep", "")),
         extra_headers=extra_headers,
+        auth_header=getattr(args, "auth_header", None),
         out_dir=out_dir,
         dry_run=bool(getattr(args, "dry_run", False)),
         non_interactive=bool(getattr(args, "non_interactive", False)),
@@ -2167,13 +2168,16 @@ def build_parser():
         required=True,
         choices=sorted([
             "bearer",
+            "bearer-passthrough",
             "api-key-header",
             "sigv4",
             "oauth-adc",
             "oauth-token-file",
             "custom",
         ]),
-        help="Auth scheme. MVP fully implements 'bearer'.",
+        help="Auth scheme. Phase 4.2 implements: 'bearer', "
+        "'bearer-passthrough' (OpenRouter-style body pass-through), "
+        "'api-key-header' (paired with --auth-header).",
     )
     p_scaffold.add_argument(
         "--endpoint",
@@ -2199,6 +2203,15 @@ def build_parser():
         default=[],
         help="Extra static header to inject (KEY=VALUE; repeatable). "
         "OpenRouter's HTTP-Referer + X-Title are the canonical case.",
+    )
+    p_scaffold.add_argument(
+        "--auth-header",
+        dest="auth_header",
+        default=None,
+        help="(Phase 4.2) Auth header name for --auth api-key-header. "
+        "Defaults to 'api-key' (Azure convention) for openai-chat or "
+        "'x-api-key' for anthropic-messages. Use 'X-API-Key' or any "
+        "vendor-specific header to override at scaffold-time.",
     )
     p_scaffold.add_argument(
         "--out-dir",
