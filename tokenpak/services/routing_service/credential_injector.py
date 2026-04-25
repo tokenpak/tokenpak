@@ -54,7 +54,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, FrozenSet, List, Optional, Protocol
+from typing import Callable, Dict, FrozenSet, List, Mapping, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,17 @@ class InjectionPlan:
       merge step. Empty caller → falls back to our value.
     - ``target_url_override``: when set, replaces the original target URL
       entirely (e.g. ``chatgpt.com/backend-api/codex/responses`` for
-      Codex). ``None`` means keep the original target.
+      Codex). ``None`` means keep the original target. Static — does
+      not depend on the request body.
+    - ``target_url_resolver``: optional ``(body, headers) -> Optional[str]``
+      callable for providers that compute the URL from the request
+      payload. Azure OpenAI is the canonical case: the deployment id
+      lives in the body's ``model`` field but Azure routes it via the
+      URL path
+      (``<endpoint>/openai/deployments/<deployment>/chat/completions``).
+      When set, overrides ``target_url_override``. Returning ``None``
+      from the resolver falls back to ``target_url_override`` (then to
+      the original target).
     - ``body_transform``: optional bytes → bytes transform applied
       before forward. Codex needs a few payload-normalization tweaks
       (``stream=true``, ``store=false``, drop ``max_output_tokens``).
@@ -89,6 +99,9 @@ class InjectionPlan:
     add_headers: Dict[str, str] = field(default_factory=dict)
     merge_headers: Dict[str, str] = field(default_factory=dict)
     target_url_override: Optional[str] = None
+    target_url_resolver: Optional[
+        Callable[[bytes, Mapping[str, str]], Optional[str]]
+    ] = None
     body_transform: Optional[Callable[[bytes], bytes]] = None
 
 
@@ -585,6 +598,104 @@ class DeepSeekCredentialProvider(_EnvKeyBearerProvider):
     _ENV_VAR = "DEEPSEEK_API_KEY"
 
 
+class AzureOpenAICredentialProvider:
+    """Azure OpenAI — same wire format as OpenAI Chat Completions but
+    routes by deployment id in the URL path, uses ``api-key`` header
+    (not ``Authorization: Bearer``), and requires an ``api-version``
+    query param.
+
+    Three env vars, all required:
+
+      - ``AZURE_OPENAI_API_KEY`` — the resource's API key.
+      - ``AZURE_OPENAI_ENDPOINT`` — the resource URL, e.g.
+        ``https://my-resource.openai.azure.com``. Trailing slash is
+        tolerated.
+      - ``AZURE_OPENAI_API_VERSION`` — the API version to pin
+        (default ``2024-10-21``). Azure breaks compat across versions
+        more often than other providers; the default is a stable GA
+        line as of 2026.
+
+    Routing model
+    -------------
+
+    Azure customers create *deployments* of OpenAI models. The
+    deployment name (which the customer picks) — not the canonical
+    model id — is what Azure routes by. Two ways to supply it:
+
+      - **Default**: caller sets ``model: "<deployment-name>"`` in the
+        request body. We pull it and build
+        ``<endpoint>/openai/deployments/<deployment>/chat/completions?api-version=...``.
+      - **Override**: caller sets ``X-Azure-Deployment: <name>`` header.
+        Wins over the body field. Useful when the caller wants to keep
+        the canonical model id in the body for telemetry / cost
+        tracking but route to a deployment with a different name.
+
+    No body-side ``model`` rewrite — Azure tolerates it (and some
+    middleware chains rely on it being preserved).
+    """
+
+    name = "tokenpak-azure-openai"
+    _DEFAULT_API_VERSION = "2024-10-21"
+    _PATH_TEMPLATE = "/openai/deployments/{deployment}/chat/completions"
+
+    def _load(self) -> Optional[InjectionPlan]:
+        api_key = _os.environ.get("AZURE_OPENAI_API_KEY", "").strip()
+        endpoint = _os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
+        if not api_key:
+            logger.info(
+                "credential_injector[azure-openai]: AZURE_OPENAI_API_KEY "
+                "not set; skipping"
+            )
+            return None
+        if not endpoint:
+            logger.info(
+                "credential_injector[azure-openai]: AZURE_OPENAI_ENDPOINT "
+                "not set; skipping"
+            )
+            return None
+
+        api_version = (
+            _os.environ.get("AZURE_OPENAI_API_VERSION", "").strip()
+            or self._DEFAULT_API_VERSION
+        )
+        endpoint = endpoint.rstrip("/")
+
+        def _resolve_url(body: bytes, headers: Mapping[str, str]) -> Optional[str]:
+            # Header override wins.
+            for k, v in (headers or {}).items():
+                if k.lower() == "x-azure-deployment" and v:
+                    deployment = v.strip()
+                    if deployment:
+                        return self._build_url(endpoint, deployment, api_version)
+            # Else read deployment from body's model field.
+            if not body:
+                return None
+            try:
+                data = json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return None
+            if not isinstance(data, dict):
+                return None
+            deployment = data.get("model")
+            if not isinstance(deployment, str) or not deployment.strip():
+                return None
+            return self._build_url(endpoint, deployment.strip(), api_version)
+
+        return InjectionPlan(
+            strip_headers=frozenset({"authorization", "x-api-key"}),
+            add_headers={"api-key": api_key},
+            target_url_resolver=_resolve_url,
+        )
+
+    @classmethod
+    def _build_url(cls, endpoint: str, deployment: str, api_version: str) -> str:
+        path = cls._PATH_TEMPLATE.format(deployment=deployment)
+        return f"{endpoint}{path}?api-version={api_version}"
+
+    def resolve(self) -> Optional[InjectionPlan]:
+        return _cached_resolve(self.name, self._load)
+
+
 class OpenRouterCredentialProvider(_EnvKeyBearerProvider):
     """OpenRouter — meta-provider proxying ~100 models. ``OPENROUTER_API_KEY``.
 
@@ -612,9 +723,11 @@ register(GroqCredentialProvider())
 register(TogetherCredentialProvider())
 register(DeepSeekCredentialProvider())
 register(OpenRouterCredentialProvider())
+register(AzureOpenAICredentialProvider())
 
 
 __all__ = [
+    "AzureOpenAICredentialProvider",
     "ClaudeCodeCredentialProvider",
     "CodexCredentialProvider",
     "CredentialProvider",

@@ -1185,6 +1185,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     add_headers={},
                     merge_headers={},
                     target_url_override=_full_plan.target_url_override,
+                    target_url_resolver=_full_plan.target_url_resolver,
                     body_transform=_full_plan.body_transform,
                 )
                 if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
@@ -1297,8 +1298,27 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         _mutable_headers[_mk] = _merged
                 else:
                     _mutable_headers[_mk] = _mv
-            # 3. Rewrite the target URL when the plan specifies (Codex).
-            if _plan.target_url_override:
+            # 3. Rewrite the target URL when the plan specifies. Two
+            # mechanisms, in priority order:
+            #   - ``target_url_resolver``: body-aware resolution (Azure
+            #     OpenAI routes by deployment id from the body's
+            #     ``model`` field). Returning ``None`` falls back to
+            #     the static override.
+            #   - ``target_url_override``: static rewrite (Codex points
+            #     at ChatGPT backend regardless of body).
+            _resolver = getattr(_plan, "target_url_resolver", None)
+            if _resolver is not None:
+                try:
+                    _resolved_url = _resolver(body or b"", dict(self.headers))
+                except Exception:
+                    _resolved_url = None
+                if _resolved_url:
+                    target_url = _resolved_url
+                    parsed = urlparse(target_url)
+                elif _plan.target_url_override:
+                    target_url = _plan.target_url_override
+                    parsed = urlparse(target_url)
+            elif _plan.target_url_override:
                 target_url = _plan.target_url_override
                 parsed = urlparse(target_url)
             # 3b. Claude Code identity: ensure ``?beta=true`` is on the
