@@ -706,6 +706,23 @@ class AzureOpenAICredentialProvider:
         return _cached_resolve(self.name, self._load)
 
 
+class CohereCredentialProvider(_EnvKeyBearerProvider):
+    """Cohere Chat v2 — OpenAI-Chat-compatible, ``COHERE_API_KEY``.
+
+    Cohere's v2 chat endpoint mirrors the OpenAI Chat Completions
+    request/response shape, so the existing ``OpenAIChatAdapter``
+    handles the wire format without modification. Bearer auth.
+
+    The older ``/v1/chat`` endpoint had Cohere's distinct shape and
+    would need a dedicated FormatAdapter — explicitly NOT what we
+    target here.
+    """
+
+    name = "tokenpak-cohere"
+    _UPSTREAM = "https://api.cohere.ai/v2/chat"
+    _ENV_VAR = "COHERE_API_KEY"
+
+
 class OpenRouterCredentialProvider(_EnvKeyBearerProvider):
     """OpenRouter — meta-provider proxying ~100 models. ``OPENROUTER_API_KEY``.
 
@@ -879,6 +896,181 @@ class BedrockClaudeCredentialProvider:
         return _cached_resolve(self.name, self._load)
 
 
+class VertexAIGeminiCredentialProvider:
+    """Google Vertex AI for Gemini — same wire format as the public
+    Generative AI API but a different endpoint, project-scoped URLs,
+    and OAuth-2-access-token auth via Application Default Credentials.
+
+    Required:
+
+      - ``google-auth`` installed (standard GCP Python ecosystem dep).
+        Graceful skip with logged INFO if not — ``pip install
+        google-auth`` to enable.
+      - ``GOOGLE_CLOUD_PROJECT`` env var (or ``GCLOUD_PROJECT``).
+      - GCP credentials discoverable by ADC: ``GOOGLE_APPLICATION_CREDENTIALS``
+        pointing at a service-account JSON key, ``gcloud auth
+        application-default login``, GCE/GKE metadata server, or
+        workload identity.
+
+    Optional:
+
+      - ``VERTEX_REGION`` / ``GOOGLE_CLOUD_REGION`` (default
+        ``us-central1``).
+
+    Routing
+    -------
+
+    Vertex routes by model id in the URL path
+    (``publishers/google/models/<model>:streamGenerateContent``)
+    similar to Bedrock. Picks ``:streamGenerateContent`` when the
+    request body sets ``"stream": true`` (or the body's content type
+    suggests SSE), else ``:generateContent``.
+
+    Auth
+    ----
+
+    Like Bedrock, the auth header is computed per-request — the
+    ``google-auth`` library returns a short-lived OAuth2 access token
+    that auto-refreshes. Cached internally by google-auth so the
+    network round-trip happens at most every ~50 minutes.
+
+    Body shape
+    ----------
+
+    Vertex accepts the same body as the public Gemini API
+    (``contents`` array, ``generationConfig``, etc.). The existing
+    ``GoogleGenerativeAIAdapter`` handles the wire format. We strip
+    the ``model`` field (Vertex routes by URL) but leave everything
+    else byte-stable so the user's ``contents`` flow through cleanly.
+    """
+
+    name = "tokenpak-vertex-gemini"
+    _DEFAULT_REGION = "us-central1"
+    _SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+
+    def _load(self) -> Optional[InjectionPlan]:
+        try:
+            import google.auth  # noqa: F401  (presence check only)
+        except ImportError:
+            logger.info(
+                "credential_injector[vertex-gemini]: google-auth not "
+                "installed; skipping. `pip install google-auth` to enable "
+                "Vertex AI routing."
+            )
+            return None
+
+        project = (
+            _os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
+            or _os.environ.get("GCLOUD_PROJECT", "").strip()
+        )
+        if not project:
+            logger.info(
+                "credential_injector[vertex-gemini]: GOOGLE_CLOUD_PROJECT "
+                "not set; skipping."
+            )
+            return None
+
+        region = (
+            _os.environ.get("VERTEX_REGION", "").strip()
+            or _os.environ.get("GOOGLE_CLOUD_REGION", "").strip()
+            or self._DEFAULT_REGION
+        )
+
+        host = f"{region}-aiplatform.googleapis.com"
+
+        def _resolve_url(body: bytes, headers: Mapping[str, str]) -> Optional[str]:
+            if not body:
+                return None
+            try:
+                data = json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return None
+            if not isinstance(data, dict):
+                return None
+            model = data.get("model")
+            if not isinstance(model, str) or not model.strip():
+                return None
+            stream = bool(data.get("stream"))
+            verb = "streamGenerateContent" if stream else "generateContent"
+            # Vertex inference profile / publisher path. Anthropic
+            # Claude on Vertex would use ``publishers/anthropic/...``
+            # but that's a separate provider (different body shape).
+            return (
+                f"https://{host}/v1/projects/{project}/locations/{region}"
+                f"/publishers/google/models/{model.strip()}:{verb}"
+            )
+
+        def _transform_body(body: bytes) -> bytes:
+            if not body:
+                return body
+            try:
+                data = json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return body
+            if not isinstance(data, dict):
+                return body
+            data.pop("model", None)
+            data.pop("stream", None)  # Vertex encodes via URL verb, not body field.
+            try:
+                return json.dumps(data).encode("utf-8")
+            except (TypeError, ValueError):
+                return body
+
+        # Cache the credentials object across requests; google-auth
+        # itself memoizes the access token until expiry, so a single
+        # ``creds.refresh()`` call costs nothing on subsequent hits.
+        _creds_cache = {"creds": None}
+
+        def _sign_request(
+            body: bytes,
+            url: str,
+            method: str,
+            _existing_headers: Mapping[str, str],
+        ) -> Dict[str, str]:
+            from google.auth import default as _ga_default
+            from google.auth.transport.requests import Request as _GARequest
+
+            creds = _creds_cache["creds"]
+            if creds is None:
+                try:
+                    creds, _proj = _ga_default(scopes=[self._SCOPE])
+                    _creds_cache["creds"] = creds
+                except Exception as exc:
+                    logger.warning(
+                        "credential_injector[vertex-gemini]: "
+                        "google.auth.default() failed (%s: %s) — "
+                        "request will fail upstream",
+                        type(exc).__name__, exc,
+                    )
+                    return {}
+            try:
+                # Refresh only when needed; google-auth checks expiry.
+                if not creds.valid:
+                    creds.refresh(_GARequest())
+            except Exception as exc:
+                logger.warning(
+                    "credential_injector[vertex-gemini]: token refresh "
+                    "failed (%s: %s)",
+                    type(exc).__name__, exc,
+                )
+                return {}
+            token = getattr(creds, "token", None)
+            if not token:
+                return {}
+            return {"Authorization": f"Bearer {token}"}
+
+        return InjectionPlan(
+            strip_headers=frozenset({"authorization", "x-api-key", "x-goog-api-key"}),
+            add_headers={"Content-Type": "application/json"},
+            target_url_resolver=_resolve_url,
+            body_transform=_transform_body,
+            header_resolver=_sign_request,
+        )
+
+    def resolve(self) -> Optional[InjectionPlan]:
+        return _cached_resolve(self.name, self._load)
+
+
 # ── Register built-ins at import ─────────────────────────────────────
 
 
@@ -888,9 +1080,11 @@ register(MistralCredentialProvider())
 register(GroqCredentialProvider())
 register(TogetherCredentialProvider())
 register(DeepSeekCredentialProvider())
+register(CohereCredentialProvider())
 register(OpenRouterCredentialProvider())
 register(AzureOpenAICredentialProvider())
 register(BedrockClaudeCredentialProvider())
+register(VertexAIGeminiCredentialProvider())
 
 
 __all__ = [
@@ -898,6 +1092,7 @@ __all__ = [
     "BedrockClaudeCredentialProvider",
     "ClaudeCodeCredentialProvider",
     "CodexCredentialProvider",
+    "CohereCredentialProvider",
     "CredentialProvider",
     "DeepSeekCredentialProvider",
     "GroqCredentialProvider",
@@ -905,6 +1100,7 @@ __all__ = [
     "MistralCredentialProvider",
     "OpenRouterCredentialProvider",
     "TogetherCredentialProvider",
+    "VertexAIGeminiCredentialProvider",
     "invalidate_cache",
     "register",
     "registered",
