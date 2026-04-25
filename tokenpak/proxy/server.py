@@ -1048,12 +1048,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         #
         # Caller-creds precedence (Kevin 2026-04-24):
         #   - If the caller already shipped a usable credential
-        #     (``x-api-key: sk-…`` or ``Authorization: Bearer …``),
-        #     skip injection and pass their creds through.
-        #   - Else fall back to the registered provider plan (managed
-        #     creds from ``~/.claude`` / ``~/.codex``).
-        # This lets ``tokenpak codex`` users with their own OpenAI key
-        # or ChatGPT JWT bypass the managed credentials entirely.
+        #     (``x-api-key: sk-…`` or long-form ``Authorization: Bearer
+        #     …``), preserve their auth — but still apply the plan's
+        #     ``target_url_override`` and ``body_transform``. Codex's
+        #     URL rewrite (``api.openai.com/codex/responses`` →
+        #     ``chatgpt.com/backend-api/codex/responses``) is mandatory
+        #     even when the caller's JWT is the right shape; the
+        #     OpenAI host doesn't serve the codex path.
+        #   - Else fall back to the full plan (managed creds from
+        #     ``~/.claude`` / ``~/.codex``).
+        # Override: ``TOKENPAK_INJECTION_OVERRIDE=1`` forces full
+        # injection even when caller has creds.
         _cred_injection_plan = None
         if (
             should_log
@@ -1062,41 +1067,58 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             and os.environ.get("TOKENPAK_CREDENTIAL_INJECTION", "1") != "0"
         ):
             _caller_has_creds = self._caller_has_credentials(dict(self.headers))
-            if _caller_has_creds and os.environ.get(
-                "TOKENPAK_INJECTION_OVERRIDE", "0"
-            ).strip() != "1":
+            _force_inject = (
+                os.environ.get("TOKENPAK_INJECTION_OVERRIDE", "0").strip() == "1"
+            )
+            try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    resolve as _resolve_cred,
+                )
+
+                _full_plan = _resolve_cred(_resolved_provider)
+            except Exception as _inj_err:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy: credential-injection resolve failed (%s: %s) — "
+                    "falling back to byte-preserved forward",
+                    type(_inj_err).__name__, _inj_err,
+                )
+                _full_plan = None
+
+            if _full_plan is not None and _caller_has_creds and not _force_inject:
+                # Caller has their own creds: keep their auth, but still
+                # apply URL + body transforms from the plan (otherwise
+                # ``/codex/responses`` would 404 against api.openai.com).
+                from tokenpak.services.routing_service.credential_injector import (
+                    InjectionPlan as _InjectionPlan,
+                )
+
+                _cred_injection_plan = _InjectionPlan(
+                    strip_headers=frozenset(),
+                    add_headers={},
+                    merge_headers={},
+                    target_url_override=_full_plan.target_url_override,
+                    body_transform=_full_plan.body_transform,
+                )
                 if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
                     import logging as _logging
 
                     _logging.getLogger(__name__).warning(
-                        "tokenpak.proxy[INJECT] provider=%s plan=passthrough "
-                        "(caller has own credentials)",
+                        "tokenpak.proxy[INJECT] provider=%s plan=passthrough+url "
+                        "(caller has own credentials; URL rewrite preserved)",
                         _resolved_provider,
                     )
             else:
-                try:
-                    from tokenpak.services.routing_service.credential_injector import (
-                        resolve as _resolve_cred,
-                    )
-
-                    _cred_injection_plan = _resolve_cred(_resolved_provider)
-                    if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
-                        import logging as _logging
-
-                        _logging.getLogger(__name__).warning(
-                            "tokenpak.proxy[INJECT] provider=%s plan=%s",
-                            _resolved_provider,
-                            "applied" if _cred_injection_plan else "<none>",
-                        )
-                except Exception as _inj_err:
+                _cred_injection_plan = _full_plan
+                if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
                     import logging as _logging
 
                     _logging.getLogger(__name__).warning(
-                        "tokenpak.proxy: credential-injection resolve failed (%s: %s) — "
-                        "falling back to byte-preserved forward",
-                        type(_inj_err).__name__, _inj_err,
+                        "tokenpak.proxy[INJECT] provider=%s plan=%s",
+                        _resolved_provider,
+                        "applied" if _cred_injection_plan else "<none>",
                     )
-                    _cred_injection_plan = None
 
         # Legacy subprocess dispatch toggle is deprecated by the v1.3.20
         # default (subprocess IS the default for tokenpak-claude-code).
