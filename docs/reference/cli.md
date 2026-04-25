@@ -413,21 +413,29 @@ Run diagnostics
 
 ```
 usage: tokenpak doctor [-h] [--fix] [--fleet] [--deploy] [--claude-code]
-                       [--privacy] [--conformance] [--json]
+                       [--privacy] [--conformance] [--intent] [--explain-last]
+                       [--json]
 
 options:
-  -h, --help     show this help message and exit
-  --fix          Auto-fix issues where possible
-  --fleet        Check all agents in ~/.tokenpak/fleet.yaml
-  --deploy       Push latest doctor to all agents (use with --fleet)
-  --claude-code  Run Claude Code-specific checks (companion settings, drift,
-                 base-url routing)
-  --privacy      Summarize TokenPak's privacy posture (what stays local, what
-                 leaves, where compliance docs live)
-  --conformance  Run TIP-1.0 self-conformance checks (capability set,
-                 profiles, manifests, live emissions)
-  --json         Emit machine-readable JSON instead of the human table
-                 (conformance mode)
+  -h, --help      show this help message and exit
+  --fix           Auto-fix issues where possible
+  --fleet         Check all agents in ~/.tokenpak/fleet.yaml
+  --deploy        Push latest doctor to all agents (use with --fleet)
+  --claude-code   Run Claude Code-specific checks (companion settings, drift,
+                  base-url routing)
+  --privacy       Summarize TokenPak's privacy posture (what stays local, what
+                  leaves, where compliance docs live)
+  --conformance   Run TIP-1.0 self-conformance checks (capability set,
+                  profiles, manifests, live emissions)
+  --intent        (Phase 0.1) Show the Intent Layer Phase 0 diagnostic view:
+                  classifier activation, proxy self-capability publication,
+                  per-adapter §4.3 gate declaration, and whether wire emission
+                  is currently enabled on this host.
+  --explain-last  (Phase 0.1) Render the most recent intent_events row
+                  (contract_id, intent_class, confidence, slots,
+                  catch_all_reason, tip_headers_emitted/stripped). Read-only.
+  --json          Emit machine-readable JSON instead of the human table
+                  (applies to --conformance, --intent, --explain-last)
 ```
 
 ### `tokenpak dashboard`
