@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.23] - 2026-04-24
+
+### Added — `OpenAICodexResponsesAdapter` (Codex format adapter restored)
+
+Restores the `OpenAICodexResponsesAdapter` deleted in the Apr-16 wave-4 cleanup, ported as a functional reiteration against the current modular tree (not a verbatim copy of the Apr-12 file).
+
+**New module** `tokenpak/proxy/adapters/openai_codex_responses_adapter.py`:
+
+- Extends `OpenAIResponsesAdapter`. Wire format is identical to `/v1/responses`; only the upstream, path, and a few payload constraints differ.
+- **Detection (priority 270)**: matches `/v1/responses` requests whose `Authorization` header carries a ChatGPT OAuth JWT (`Bearer eyJ…`). The standard `OpenAIResponsesAdapter` (priority 260) still matches the API-key (`sk-…`) case, so existing direct-OpenAI traffic is untouched.
+- **Upstream rewrite**: `get_default_upstream() → https://chatgpt.com/backend-api`, `get_upstream_path() → /codex/responses`. SSE format reuses `openai-responses-sse`.
+- **Payload constraints** enforced in `denormalize()` (the ChatGPT Codex backend rejects requests that don't conform):
+  - `stream: true` (always)
+  - `store: false` (no server-side conversation persistence)
+  - `max_output_tokens` is dropped (the backend computes its own cap)
+  - `input` is promoted to a list of message objects when the parent emits a string
+
+**Relationship to `credential_injector` (v1.3.15):** the existing `CodexCredentialProvider` handles the *platform-bridged* path — when OpenClaw stamps `X-TokenPak-Backend` / `X-TokenPak-Provider: tokenpak-openai-codex`, the proxy's pre-forward hook reads `~/.codex/auth.json`, injects headers, rewrites the URL, and normalises the body. That runs **before** adapter selection. This adapter handles the *direct* path — when a Codex CLI client (or any caller carrying a JWT directly) hits the proxy at `/v1/responses`. No double injection because the bridge path returns its own response before the adapter registry runs.
+
+**Registered** in `build_default_registry()` at priority 270, between `AnthropicAdapter` (300) and `OpenAIResponsesAdapter` (260).
+
+**Tests** (`tests/test_openai_codex_responses_adapter.py`, 22 cases):
+
+- JWT detection: `eyJ` + `.` shape, `Bearer ` prefix stripping (case-insensitive), `sk-` rejection, empty-header rejection
+- Adapter `detect()`: path filter, auth-header casing, missing-auth rejection
+- Upstream + path + SSE format overrides
+- `denormalize()`: forces `stream=true` + `store=false`, drops `max_output_tokens`, promotes string input to structured list, preserves existing list/dict input via deep-copy
+- Registry integration: JWT routes to Codex adapter, `sk-` falls through to standard `OpenAIResponsesAdapter`
+
 ## [1.3.22] - 2026-04-24
 
 ### Added — Dynamic per-model context registry + fail-fast 413 at the bridge boundary
