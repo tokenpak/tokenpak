@@ -1,12 +1,28 @@
 #!/usr/bin/env bash
 # tokenpak-inject.sh — Auto-inject TokenPak provider routing into OpenClaw config
 #
-# What it does:
-#   1. Mirrors every provider as tokenpak-* with baseUrl → proxy
-#   2. Interleaves model chains: [tp-primary, primary, tp-fb, fb, ...]
-#   3. Updates allowlist, copies auth profiles
-#   4. Processes both openclaw.json and agent models.json files
-#   5. Idempotent — safe to run repeatedly
+# Two modes:
+#
+#   DEFAULT (additive — 2026-04-25):
+#     Mirrors providers, copies auth profiles, adds tokenpak-* entries
+#     to the model allowlist. The user's primary model, fallback chains,
+#     and per-agent model selections are LEFT UNTOUCHED. Result: users
+#     see tokenpak-* providers as new options in their dropdown but
+#     keep their existing routing intact. They opt in to tokenpak by
+#     manually selecting a tokenpak-* model in OpenClaw's UI/config.
+#
+#   EXCLUSIVE (--exclusive flag or TOKENPAK_INJECT_EXCLUSIVE=1):
+#     Additionally rewrites primary models to their tokenpak-* version
+#     and clears fallback chains, so ALL agent traffic auto-routes
+#     through the proxy. Use this for hosts dedicated to tokenpak
+#     (single-purpose bots, testbeds). Destructive — overwrites the
+#     user's chosen primary/fallback selections.
+#
+# Either way:
+#   - Idempotent — safe to run repeatedly.
+#   - Existing non-tokenpak providers are NEVER removed from the config.
+#   - Restoring previous behavior is a `tokenpak-uninstall.sh` away
+#     (uses the .pre-tokenpak-backup snapshot).
 #
 # Runs as ExecStartPre before openclaw-gateway starts.
 #
@@ -29,6 +45,18 @@ set -euo pipefail
 
 PROXY_URL="${TOKENPAK_URL:-http://localhost:8766}"
 
+# ── Mode flag ────────────────────────────────────────────────────────
+# Default = additive. Pass --exclusive (or set
+# TOKENPAK_INJECT_EXCLUSIVE=1) to also rewrite primary models +
+# clear fallbacks. The flag-style and env-style trigger the same mode.
+INJECT_EXCLUSIVE="${TOKENPAK_INJECT_EXCLUSIVE:-0}"
+for arg in "$@"; do
+    case "$arg" in
+        --exclusive|-x) INJECT_EXCLUSIVE=1 ;;
+    esac
+done
+export INJECT_EXCLUSIVE
+
 python3 << 'PYEOF'
 import json, os, shutil
 from pathlib import Path
@@ -36,6 +64,7 @@ from glob import glob
 
 PROXY_URL = os.environ.get("TOKENPAK_URL", "http://localhost:8766")
 PREFIX = "tokenpak"
+EXCLUSIVE = os.environ.get("INJECT_EXCLUSIVE", "0").strip() in {"1", "true", "yes"}
 
 # Honor the OpenClaw-native env var that systemd units set per service
 # (governor → ~/.openclaw-governor, gateway → ~/.openclaw, etc.). Falls
@@ -106,14 +135,25 @@ def mirror_providers(providers):
 
 def interleave(model_cfg, pm):
     """
-    Promote primary to tokenpak version. NO fallbacks.
-    
+    EXCLUSIVE-mode-only: Promote primary to tokenpak version + clear fallbacks.
+
     Input:  primary=opus4.6, fallbacks=[anything]
     Output: primary=tp-opus4.6, fallbacks=[]
-    
-    Direct provider refs are kept in config for emergency use but never
-    auto-routed. Kevin can manually switch to anthropic/* if proxy is down.
+
+    DEFAULT MODE (not EXCLUSIVE): returns (model_cfg, False) without
+    mutation — the user's primary + fallback selections are left as-is.
+    Tokenpak-* providers are still added to the allowlist by
+    update_allowlist() so they appear as options; the user opts in by
+    manually selecting one.
+
+    Direct provider refs are always kept in the config so the user can
+    manually switch to non-tokenpak routing whenever they want.
     """
+    if not EXCLUSIVE:
+        # Additive default: do not mutate primary or fallbacks.
+        # Caller may still see (cfg, False) and skip the write.
+        return model_cfg, False
+
     # Normalize to dict
     if isinstance(model_cfg, str):
         model_cfg = {"primary": model_cfg, "fallbacks": []}
@@ -348,13 +388,15 @@ def process_main(path):
     config = load_json(path)
     if not config: return False, {}
 
+    log(f"Mode: {'EXCLUSIVE (rewrites primary + clears fallbacks)' if EXCLUSIVE else 'additive (mirrors providers + allowlist; leaves user routing untouched)'}")
+
     config.setdefault("models", {}).setdefault("providers", {})
     config["models"]["mode"] = "merge"
 
     c1, pm = mirror_providers(config["models"]["providers"])
     c1b = inject_claude_code_provider(config["models"]["providers"])
-    c2 = interleave_defaults(config, pm)
-    c3 = interleave_agents(config, pm)
+    c2 = interleave_defaults(config, pm)  # no-op when not EXCLUSIVE
+    c3 = interleave_agents(config, pm)    # no-op when not EXCLUSIVE
     c4 = update_allowlist(config, pm)
     c5 = copy_auth(config, pm)
 
