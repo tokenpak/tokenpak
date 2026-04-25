@@ -84,6 +84,31 @@ def _ep_dist(ep: EntryPoint) -> str:
     return "<unknown>"
 
 
+def _is_format_adapter_subclass(cls) -> bool:
+    """Robust subclass-of-FormatAdapter check.
+
+    Walks ``cls.__mro__`` and matches any ancestor whose ``__name__``
+    is ``"FormatAdapter"`` and whose ``__module__`` ends in
+    ``proxy.adapters.base``. This is resilient to module reloads —
+    if ``tokenpak.proxy.adapters.base`` was popped from
+    ``sys.modules`` (by the deprecation-shim test suite, for example)
+    and re-imported, the resulting class object differs by identity
+    from any captured top-level import — but the name + module path
+    are stable. Plain ``issubclass`` would falsely return False in
+    that scenario.
+    """
+    for ancestor in cls.__mro__:
+        if (
+            ancestor is cls
+            or ancestor.__name__ != "FormatAdapter"
+        ):
+            continue
+        mod = getattr(ancestor, "__module__", "") or ""
+        if mod.endswith("proxy.adapters.base"):
+            return True
+    return False
+
+
 def _validate_adapter_class(cls, source: str) -> bool:
     """Return ``True`` if ``cls`` is a registrable FormatAdapter subclass.
 
@@ -102,7 +127,7 @@ def _validate_adapter_class(cls, source: str) -> bool:
             getattr(cls, "__name__", repr(cls)), source,
         )
         return False
-    if not issubclass(cls, FormatAdapter) or cls is FormatAdapter:
+    if cls is FormatAdapter or not _is_format_adapter_subclass(cls):
         logger.warning(
             "tokenpak adapter-plugin %r (from %s) is not a FormatAdapter "
             "subclass; skipped.",
