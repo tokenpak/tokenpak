@@ -941,28 +941,66 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_provider = None
             _cb_registry = None
 
-        # Validate credentials for intercepted provider requests
-        # Client-supplied key takes precedence over any environment-level key.
+        # Resolve the declared provider once, before the auth gate, so
+        # known providers can bypass the require-caller-auth check
+        # (the credential_injector will inject managed env credentials).
+        _resolved_provider: Optional[str] = None
         if should_log and is_messages:
-            passthrough_cfg = PassthroughConfig(require_auth=True)
-            auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
-            if not auth_ok:
-                import json as _json
+            try:
+                from tokenpak.services.routing_service.platform_bridge import (
+                    resolve_provider as _resolve_provider,
+                )
 
-                err_body = _json.dumps(
-                    {
-                        "error": {
-                            "type": "authentication_error",
-                            "message": auth_err,
+                _resolved_provider = _resolve_provider(dict(self.headers))
+            except Exception:
+                _resolved_provider = None
+
+        # Validate credentials for intercepted provider requests.
+        # Client-supplied key takes precedence over any environment-level key.
+        # Bypass when the caller declared a known provider that the
+        # credential injector will resolve from managed env credentials —
+        # otherwise BYO-env-key flows (Phase 1 pack: Mistral, Groq,
+        # Together, DeepSeek, OpenRouter; also the existing
+        # tokenpak-claude-code / tokenpak-openai-codex / tokenpak-anthropic)
+        # would 401 here before injection even runs.
+        _bypass_auth_gate = False
+        if should_log and is_messages and _resolved_provider:
+            try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    registered as _registered_for_gate,
+                )
+
+                if _resolved_provider in {
+                    p.name for p in _registered_for_gate()
+                }:
+                    _bypass_auth_gate = True
+            except Exception:
+                pass
+
+        if should_log and is_messages:
+            # require_auth=True for the schema-validation path even when
+            # we bypass the explicit auth check above; downstream
+            # ``forward_headers`` reads it to decide what to keep.
+            passthrough_cfg = PassthroughConfig(require_auth=True)
+            if not _bypass_auth_gate:
+                auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
+                if not auth_ok:
+                    import json as _json
+
+                    err_body = _json.dumps(
+                        {
+                            "error": {
+                                "type": "authentication_error",
+                                "message": auth_err,
+                            }
                         }
-                    }
-                ).encode()
-                self.send_response(401)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(err_body)))
-                self.end_headers()
-                self.wfile.write(err_body)
-                return
+                    ).encode()
+                    self.send_response(401)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(err_body)))
+                    self.end_headers()
+                    self.wfile.write(err_body)
+                    return
 
             # --- Request schema validation (strict/warn/off) ---
             if body:
@@ -1026,15 +1064,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         #                                       byte-forward which will
         #                                       fail for OpenClaw-
         #                                       style callers)
-        _resolved_provider: Optional[str] = None
-        if should_log and is_messages:
-            try:
-                from tokenpak.services.routing_service.platform_bridge import (
-                    resolve_provider as _resolve_provider,
-                )
-                _resolved_provider = _resolve_provider(dict(self.headers))
-            except Exception:
-                _resolved_provider = None
+        # ``_resolved_provider`` was resolved earlier (before auth gate);
+        # reuse it here.
 
         # (1) Subprocess dispatch for tokenpak-claude-code — DEFAULT path
         # for Claude Code traffic. Restores the Apr 15-18 companion
@@ -1097,11 +1128,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         #     ``~/.claude`` / ``~/.codex``).
         # Override: ``TOKENPAK_INJECTION_OVERRIDE=1`` forces full
         # injection even when caller has creds.
+        # Known providers come from the credential_injector's registry —
+        # dynamic, so adding a new CredentialProvider (e.g. Mistral,
+        # Groq, OpenRouter) automatically gates this branch. No
+        # per-platform enumeration in the proxy hot path.
         _cred_injection_plan = None
+        _known_providers: frozenset = frozenset()
+        if should_log and is_messages and _resolved_provider:
+            try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    registered as _registered_providers,
+                )
+
+                _known_providers = frozenset(
+                    p.name for p in _registered_providers()
+                )
+            except Exception:
+                _known_providers = frozenset()
+
         if (
             should_log
             and is_messages
-            and _resolved_provider in ("tokenpak-openai-codex", "tokenpak-anthropic")
+            and _resolved_provider in _known_providers
             and os.environ.get("TOKENPAK_CREDENTIAL_INJECTION", "1") != "0"
         ):
             _caller_has_creds = self._caller_has_credentials(dict(self.headers))

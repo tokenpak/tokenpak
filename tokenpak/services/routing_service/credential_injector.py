@@ -500,18 +500,130 @@ class CodexCredentialProvider:
         return _cached_resolve(self.name, self._load)
 
 
+# ── OpenAI-Chat-compatible providers (Phase 1 adapter pack) ──────────
+#
+# Mistral, Groq, Together, DeepSeek, OpenRouter all speak OpenAI Chat
+# Completions wire format. ``OpenAIChatAdapter`` already handles the
+# JSON shape; what differs per provider is the upstream URL and the
+# auth header value. Each gets a tiny CredentialProvider that reads
+# its own ``<NAME>_API_KEY`` env var and emits an InjectionPlan with
+# a target_url_override + Authorization: Bearer header.
+#
+# Adding another OpenAI-Chat-compatible provider is a 5-line class —
+# subclass ``_EnvKeyBearerProvider``, set name / upstream / env var.
+# No new format adapter, no edits to proxy core.
+
+
+import os as _os
+
+
+class _EnvKeyBearerProvider:
+    """Base for OpenAI-Chat-compatible providers using a single env-var key.
+
+    Subclasses set:
+      - ``name``: tokenpak provider slug (``tokenpak-mistral`` etc.).
+      - ``_UPSTREAM``: full URL the proxy rewrites the request to.
+      - ``_ENV_VAR``: environment variable holding the API key.
+      - ``_EXTRA_HEADERS`` (optional): extra static headers to inject
+        (e.g. OpenRouter requires ``HTTP-Referer`` + ``X-Title``).
+    """
+
+    name: str = ""
+    _UPSTREAM: str = ""
+    _ENV_VAR: str = ""
+    _EXTRA_HEADERS: Dict[str, str] = {}
+
+    def _load(self) -> Optional[InjectionPlan]:
+        api_key = _os.environ.get(self._ENV_VAR, "").strip()
+        if not api_key:
+            logger.info(
+                "credential_injector[%s]: env var %s not set; skipping",
+                self.name, self._ENV_VAR,
+            )
+            return None
+        headers: Dict[str, str] = {"Authorization": f"Bearer {api_key}"}
+        headers.update(self._EXTRA_HEADERS)
+        return InjectionPlan(
+            strip_headers=frozenset({"authorization", "x-api-key"}),
+            add_headers=headers,
+            target_url_override=self._UPSTREAM,
+        )
+
+    def resolve(self) -> Optional[InjectionPlan]:
+        return _cached_resolve(self.name, self._load)
+
+
+class MistralCredentialProvider(_EnvKeyBearerProvider):
+    """Mistral AI — OpenAI-Chat-compatible, ``MISTRAL_API_KEY``."""
+
+    name = "tokenpak-mistral"
+    _UPSTREAM = "https://api.mistral.ai/v1/chat/completions"
+    _ENV_VAR = "MISTRAL_API_KEY"
+
+
+class GroqCredentialProvider(_EnvKeyBearerProvider):
+    """Groq — OpenAI-Chat-compatible, ``GROQ_API_KEY``."""
+
+    name = "tokenpak-groq"
+    _UPSTREAM = "https://api.groq.com/openai/v1/chat/completions"
+    _ENV_VAR = "GROQ_API_KEY"
+
+
+class TogetherCredentialProvider(_EnvKeyBearerProvider):
+    """Together AI — OpenAI-Chat-compatible, ``TOGETHER_API_KEY``."""
+
+    name = "tokenpak-together"
+    _UPSTREAM = "https://api.together.xyz/v1/chat/completions"
+    _ENV_VAR = "TOGETHER_API_KEY"
+
+
+class DeepSeekCredentialProvider(_EnvKeyBearerProvider):
+    """DeepSeek — OpenAI-Chat-compatible, ``DEEPSEEK_API_KEY``."""
+
+    name = "tokenpak-deepseek"
+    _UPSTREAM = "https://api.deepseek.com/v1/chat/completions"
+    _ENV_VAR = "DEEPSEEK_API_KEY"
+
+
+class OpenRouterCredentialProvider(_EnvKeyBearerProvider):
+    """OpenRouter — meta-provider proxying ~100 models. ``OPENROUTER_API_KEY``.
+
+    Requires ``HTTP-Referer`` + ``X-Title`` headers on every request
+    (per OpenRouter's docs); without them OpenRouter rejects with a
+    400. The Referer is informational; we use the tokenpak homepage.
+    """
+
+    name = "tokenpak-openrouter"
+    _UPSTREAM = "https://openrouter.ai/api/v1/chat/completions"
+    _ENV_VAR = "OPENROUTER_API_KEY"
+    _EXTRA_HEADERS = {
+        "HTTP-Referer": "https://tokenpak.ai",
+        "X-Title": "TokenPak",
+    }
+
+
 # ── Register built-ins at import ─────────────────────────────────────
 
 
 register(ClaudeCodeCredentialProvider())
 register(CodexCredentialProvider())
+register(MistralCredentialProvider())
+register(GroqCredentialProvider())
+register(TogetherCredentialProvider())
+register(DeepSeekCredentialProvider())
+register(OpenRouterCredentialProvider())
 
 
 __all__ = [
     "ClaudeCodeCredentialProvider",
     "CodexCredentialProvider",
     "CredentialProvider",
+    "DeepSeekCredentialProvider",
+    "GroqCredentialProvider",
     "InjectionPlan",
+    "MistralCredentialProvider",
+    "OpenRouterCredentialProvider",
+    "TogetherCredentialProvider",
     "invalidate_cache",
     "register",
     "registered",
