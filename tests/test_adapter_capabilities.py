@@ -237,7 +237,13 @@ class TestCapabilityGatedMiddleware:
             body, {"x-api-key": "sk-test"}, "/v1/messages"
         )
         assert adapter is not None
-        assert isinstance(adapter, AnthropicAdapter)
+        # Compare by ``source_format`` rather than ``isinstance`` — the
+        # latter is fragile under module-reload tests
+        # (``tests/deprecations`` pops every ``tokenpak.proxy.*`` from
+        # ``sys.modules`` to verify shim warnings, after which the
+        # registered AnthropicAdapter class object differs by identity
+        # from the one captured at top-of-file imports here).
+        assert adapter.source_format == "anthropic-messages"
         # Anthropic opts in to compression — gate evaluates True.
         assert "tip.compression.v1" in adapter.capabilities
 
@@ -269,7 +275,8 @@ class TestCapabilityGatedMiddleware:
         body = json.dumps({"weird_format": True, "data": "..."}).encode()
         adapter = _resolve_adapter_for_request(body, {}, "/some/random/path")
         assert adapter is not None
-        assert isinstance(adapter, PassthroughAdapter)
+        # source_format check — see same rationale as the anthropic test above.
+        assert adapter.source_format == "passthrough"
         assert "tip.compression.v1" not in adapter.capabilities
 
     def test_empty_body_resolves_to_none(self):
