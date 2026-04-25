@@ -101,6 +101,51 @@ def _wire_proxy_env(env: dict) -> dict:
     return env
 
 
+def _wire_codex_env(env: dict) -> dict:
+    """Route codex CLI traffic through the local TokenPak proxy.
+
+    The codex CLI reads ``OPENAI_BASE_URL`` for ChatGPT-OAuth-mode calls
+    and falls back to the ChatGPT backend URL otherwise. Setting it to
+    the proxy lets the proxy apply compression / caching / telemetry +
+    credential precedence (caller's own ``OPENAI_API_KEY`` wins; else
+    managed creds get injected).
+
+    Same ``TOKENPAK_PROXY_BYPASS=1`` opt-out as the Claude path.
+    """
+    if env.get("TOKENPAK_PROXY_BYPASS") == "1":
+        return env
+    port = env.get("TOKENPAK_PORT", "8766")
+    proxy_url = f"http://127.0.0.1:{port}"
+    # Codex's pi-ai connector posts to ``<baseUrl>/codex/responses`` and
+    # ``<baseUrl>/v1/responses`` depending on shape. Pointing at the
+    # proxy root lets both work; the proxy's path matcher routes either.
+    env.setdefault("OPENAI_BASE_URL", proxy_url)
+    return env
+
+
+def launch_codex(extra_args: Optional[List[str]] = None) -> None:
+    """Build env-routed launch for the codex CLI.
+
+    Mirrors :func:`launch` for Claude Code: sets ``OPENAI_BASE_URL`` to
+    the local TokenPak proxy and execs ``codex`` with any forwarded
+    args. Codex's own AGENTS.md / hooks / MCP discovery from the cwd
+    keeps working — we only redirect outbound HTTP through the proxy.
+
+    The companion MCP / hook layer is *not* wired in yet for codex
+    (Kevin 2026-04-15 architecture parks that as a follow-up: native
+    MCP + hooks + AGENTS.md + skills, NOT a wrapper). For now this
+    launcher is purely env wiring.
+    """
+    env = _wire_codex_env(dict(os.environ))
+    cmd_args = ["codex"] + (extra_args or [])
+    try:
+        os.execvpe("codex", cmd_args, env)
+    except OSError:
+        import subprocess  # noqa: PLC0415
+
+        subprocess.run(cmd_args, env=env, check=False)
+
+
 def launch(
     config: Optional[CompanionConfig] = None,
     extra_args: Optional[List[str]] = None,

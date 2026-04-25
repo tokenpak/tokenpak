@@ -550,7 +550,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if not self._auth_gate():
             return
         if ps.shutdown.is_shutting_down and (
-            self.path.startswith("http") or self.path.startswith("/v1/")
+            self.path.startswith("http")
+            or self.path.startswith("/v1/")
+            or self.path.startswith("/codex/")
         ):
             self._send_503_shutdown()
             return
@@ -590,7 +592,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(_resp)))
             self.end_headers()
             self.wfile.write(_resp)
-        elif self.path.startswith("/v1/"):
+        elif self.path.startswith("/v1/") or self.path.startswith("/codex/"):
+            # ``/codex/responses`` is OpenClaw's pi-ai Codex connector
+            # endpoint shape (``<baseUrl>/codex/responses``). The standard
+            # OpenAI Responses API is ``/v1/responses``. Both route through
+            # the provider router; ``/codex/...`` resolves to the
+            # tokenpak-openai-codex provider, ``/v1/...`` to whatever the
+            # body / headers indicate.
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
             self._proxy_to(route.full_url, "POST")
@@ -647,6 +655,40 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # Core forwarding
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _caller_has_credentials(headers: dict) -> bool:
+        """True when the caller already shipped a usable upstream credential.
+
+        Recognises:
+          - ``x-api-key: sk-…`` (OpenAI / Anthropic API keys)
+          - ``Authorization: Bearer sk-…`` (same, in Bearer shape)
+          - ``Authorization: Bearer eyJ…`` with a long token (JWT —
+            ChatGPT OAuth or Anthropic OAuth). The length filter
+            screens out short placeholder Bearers OpenClaw sometimes
+            ships from stale auth profiles.
+
+        Used by the credential-injection block to honour caller's own
+        creds (``tokenpak codex`` with ``OPENAI_API_KEY`` set, BYO Codex
+        JWT, etc.) instead of injecting managed creds.
+        """
+        if not headers:
+            return False
+        lh = {k.lower(): v for k, v in headers.items() if isinstance(v, str)}
+        api_key = lh.get("x-api-key", "").strip()
+        if api_key.startswith("sk-"):
+            return True
+        auth = lh.get("authorization", "").strip()
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            if token.startswith("sk-"):
+                return True
+            # JWT: must be eyJ-prefixed AND long enough to be plausible
+            # (real JWTs are >1k chars; OpenClaw's stale auth-profile
+            # tokens are typically <100).
+            if token.startswith("eyJ") and len(token) >= 200 and "." in token:
+                return True
+        return False
+
     def _proxy_to(self, target_url: str, method: str) -> None:
         ps = self.server.proxy_server  # type: ignore[attr-defined]
         with ps.shutdown.track_request():
@@ -660,7 +702,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(target_url)
 
         should_log = any(h in target_url for h in INTERCEPT_HOSTS)
-        is_messages = "/messages" in target_url or "/chat/completions" in target_url
+        is_messages = (
+            "/messages" in target_url
+            or "/chat/completions" in target_url
+            or "/v1/responses" in target_url
+            or "/codex/responses" in target_url
+        )
 
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
@@ -998,6 +1045,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Anthropic). This is the byte-preserved HTTP path where we
         # rewrite caller auth with the provider's credentials and
         # optionally redirect upstream + normalize body.
+        #
+        # Caller-creds precedence (Kevin 2026-04-24):
+        #   - If the caller already shipped a usable credential
+        #     (``x-api-key: sk-…`` or ``Authorization: Bearer …``),
+        #     skip injection and pass their creds through.
+        #   - Else fall back to the registered provider plan (managed
+        #     creds from ``~/.claude`` / ``~/.codex``).
+        # This lets ``tokenpak codex`` users with their own OpenAI key
+        # or ChatGPT JWT bypass the managed credentials entirely.
         _cred_injection_plan = None
         if (
             should_log
@@ -1005,29 +1061,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             and _resolved_provider in ("tokenpak-openai-codex", "tokenpak-anthropic")
             and os.environ.get("TOKENPAK_CREDENTIAL_INJECTION", "1") != "0"
         ):
-            try:
-                from tokenpak.services.routing_service.credential_injector import (
-                    resolve as _resolve_cred,
-                )
-
-                _cred_injection_plan = _resolve_cred(_resolved_provider)
+            _caller_has_creds = self._caller_has_credentials(dict(self.headers))
+            if _caller_has_creds and os.environ.get(
+                "TOKENPAK_INJECTION_OVERRIDE", "0"
+            ).strip() != "1":
                 if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
                     import logging as _logging
 
                     _logging.getLogger(__name__).warning(
-                        "tokenpak.proxy[INJECT] provider=%s plan=%s",
+                        "tokenpak.proxy[INJECT] provider=%s plan=passthrough "
+                        "(caller has own credentials)",
                         _resolved_provider,
-                        "applied" if _cred_injection_plan else "<none>",
                     )
-            except Exception as _inj_err:
-                import logging as _logging
+            else:
+                try:
+                    from tokenpak.services.routing_service.credential_injector import (
+                        resolve as _resolve_cred,
+                    )
 
-                _logging.getLogger(__name__).warning(
-                    "tokenpak.proxy: credential-injection resolve failed (%s: %s) — "
-                    "falling back to byte-preserved forward",
-                    type(_inj_err).__name__, _inj_err,
-                )
-                _cred_injection_plan = None
+                    _cred_injection_plan = _resolve_cred(_resolved_provider)
+                    if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                        import logging as _logging
+
+                        _logging.getLogger(__name__).warning(
+                            "tokenpak.proxy[INJECT] provider=%s plan=%s",
+                            _resolved_provider,
+                            "applied" if _cred_injection_plan else "<none>",
+                        )
+                except Exception as _inj_err:
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy: credential-injection resolve failed (%s: %s) — "
+                        "falling back to byte-preserved forward",
+                        type(_inj_err).__name__, _inj_err,
+                    )
+                    _cred_injection_plan = None
 
         # Legacy subprocess dispatch toggle is deprecated by the v1.3.20
         # default (subprocess IS the default for tokenpak-claude-code).

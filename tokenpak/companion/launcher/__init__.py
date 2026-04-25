@@ -22,7 +22,7 @@ from tokenpak.companion.launcher._impl import (
     _write_system_prompt as _write_system_prompt_impl,
 )
 
-from ._impl import launch
+from ._impl import launch, launch_codex
 
 
 def regenerate_config() -> dict:
@@ -49,4 +49,4 @@ def regenerate_config() -> dict:
     return paths
 
 
-__all__ = ["launch", "regenerate_config"]
+__all__ = ["launch", "launch_codex", "regenerate_config"]

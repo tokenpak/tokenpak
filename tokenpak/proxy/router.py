@@ -172,8 +172,10 @@ class ProviderRouter:
         # Path-based detection (highest priority)
         if "/v1/messages" in path:
             return "anthropic"
-        if "/v1/responses" in path:
-            # OpenAI Responses API — used by Codex subscription models
+        if "/v1/responses" in path or "/codex/responses" in path:
+            # OpenAI Responses API — used by Codex subscription models.
+            # ``/codex/responses`` is OpenClaw's pi-ai Codex connector
+            # endpoint shape; ``/v1/responses`` is the standard.
             return "openai-codex"
         if "/chat/completions" in path:
             return "openai"
