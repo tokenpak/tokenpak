@@ -12,6 +12,14 @@ from .canonical import CanonicalRequest
 
 class OpenAIResponsesAdapter(FormatAdapter):
     source_format = "openai-responses"
+    # OpenAI Responses API: proxy-managed cache + compression.
+    # Not byte-preserved (we re-serialize during denormalize) — the
+    # OpenAI prompt cache uses ``prompt_cache_key`` which we preserve
+    # in raw_extra, so byte fidelity isn't a cache prerequisite.
+    capabilities = frozenset({
+        "tip.compression.v1",
+        "tip.cache.proxy-managed",
+    })
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         return "/v1/responses" in path

@@ -12,6 +12,12 @@ from .canonical import CanonicalRequest
 
 class GoogleGenerativeAIAdapter(FormatAdapter):
     source_format = "google-generative-ai"
+    # Google Generative AI (Gemini): proxy-managed cache + compression.
+    # Re-serialised during denormalize, so not byte-preserved.
+    capabilities = frozenset({
+        "tip.compression.v1",
+        "tip.cache.proxy-managed",
+    })
 
     def validate_tools(self) -> None:
         """

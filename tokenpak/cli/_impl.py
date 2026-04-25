@@ -534,6 +534,24 @@ def cmd_claude(args):
     launch(config=config, extra_args=extra)
 
 
+def cmd_codex(args):
+    """Launch the ``codex`` CLI with traffic routed through the tokenpak proxy.
+
+    Mirrors ``tokenpak claude``: sets ``OPENAI_BASE_URL`` to the local
+    proxy and execs ``codex``. The proxy handles compression, caching,
+    telemetry, and credential precedence — caller's own
+    ``OPENAI_API_KEY`` / ChatGPT JWT (if any) wins over managed creds.
+
+    All tail arguments are forwarded verbatim to ``codex`` —
+    ``tokenpak codex --model gpt-5.3-codex`` becomes
+    ``codex --model gpt-5.3-codex`` with proxy env wired.
+    """
+    from tokenpak.companion.launcher import launch_codex
+
+    extra = list(getattr(args, "extra_args", None) or [])
+    launch_codex(extra_args=extra)
+
+
 def cmd_logs(args):
     """Show recent proxy logs."""
     log_candidates = [
@@ -1979,6 +1997,14 @@ def build_parser():
     )
     p_claude.add_argument("extra_args", nargs=argparse.REMAINDER)
     p_claude.set_defaults(func=cmd_claude)
+
+    p_codex = sub.add_parser(
+        "codex",
+        help="Launch the codex CLI with traffic routed through the tokenpak proxy",
+        add_help=False,  # all flags after `codex` are forwarded verbatim
+    )
+    p_codex.add_argument("extra_args", nargs=argparse.REMAINDER)
+    p_codex.set_defaults(func=cmd_codex)
 
     p_logs = sub.add_parser("logs", help="Show recent proxy logs")
     p_logs.add_argument(

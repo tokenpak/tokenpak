@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Callable, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from tokenpak import __version__ as _tokenpak_version
@@ -550,7 +550,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if not self._auth_gate():
             return
         if ps.shutdown.is_shutting_down and (
-            self.path.startswith("http") or self.path.startswith("/v1/")
+            self.path.startswith("http")
+            or self.path.startswith("/v1/")
+            or self.path.startswith("/codex/")
         ):
             self._send_503_shutdown()
             return
@@ -590,7 +592,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(_resp)))
             self.end_headers()
             self.wfile.write(_resp)
-        elif self.path.startswith("/v1/"):
+        elif self.path.startswith("/v1/") or self.path.startswith("/codex/"):
+            # ``/codex/responses`` is OpenClaw's pi-ai Codex connector
+            # endpoint shape (``<baseUrl>/codex/responses``). The standard
+            # OpenAI Responses API is ``/v1/responses``. Both route through
+            # the provider router; ``/codex/...`` resolves to the
+            # tokenpak-openai-codex provider, ``/v1/...`` to whatever the
+            # body / headers indicate.
             ps = self.server.proxy_server
             route = ps.router.route(self.path, dict(self.headers))
             self._proxy_to(route.full_url, "POST")
@@ -647,6 +655,40 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # Core forwarding
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _caller_has_credentials(headers: dict) -> bool:
+        """True when the caller already shipped a usable upstream credential.
+
+        Recognises:
+          - ``x-api-key: sk-…`` (OpenAI / Anthropic API keys)
+          - ``Authorization: Bearer sk-…`` (same, in Bearer shape)
+          - ``Authorization: Bearer eyJ…`` with a long token (JWT —
+            ChatGPT OAuth or Anthropic OAuth). The length filter
+            screens out short placeholder Bearers OpenClaw sometimes
+            ships from stale auth profiles.
+
+        Used by the credential-injection block to honour caller's own
+        creds (``tokenpak codex`` with ``OPENAI_API_KEY`` set, BYO Codex
+        JWT, etc.) instead of injecting managed creds.
+        """
+        if not headers:
+            return False
+        lh = {k.lower(): v for k, v in headers.items() if isinstance(v, str)}
+        api_key = lh.get("x-api-key", "").strip()
+        if api_key.startswith("sk-"):
+            return True
+        auth = lh.get("authorization", "").strip()
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            if token.startswith("sk-"):
+                return True
+            # JWT: must be eyJ-prefixed AND long enough to be plausible
+            # (real JWTs are >1k chars; OpenClaw's stale auth-profile
+            # tokens are typically <100).
+            if token.startswith("eyJ") and len(token) >= 200 and "." in token:
+                return True
+        return False
+
     def _proxy_to(self, target_url: str, method: str) -> None:
         ps = self.server.proxy_server  # type: ignore[attr-defined]
         with ps.shutdown.track_request():
@@ -660,7 +702,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(target_url)
 
         should_log = any(h in target_url for h in INTERCEPT_HOSTS)
-        is_messages = "/messages" in target_url or "/chat/completions" in target_url
+        is_messages = (
+            "/messages" in target_url
+            or "/chat/completions" in target_url
+            or "/v1/responses" in target_url
+            or "/codex/responses" in target_url
+        )
 
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
@@ -672,6 +719,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
+        # Resolved format adapter for this request — set by the
+        # token-extraction step and read later by capability gates
+        # (compression telemetry, capsule injection, cache lookup).
+        # ``None`` when no adapter matches; gates default to "skip".
+        request_adapter = None
 
         trace: Optional[PipelineTrace] = None
         if should_log and is_messages:
@@ -725,7 +777,29 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 model = route.model
             except Exception:
                 pass
-            input_tokens = _estimate_tokens_from_body(body)
+            # Format-agnostic token estimation: route through the
+            # adapter registry so codex (``input`` field), Google
+            # (``contents`` field), and any future format counted
+            # correctly without per-platform branches in this hot path.
+            # Falls back to legacy hardcoded ``messages`` reader when
+            # no adapter matches (passthrough or unrecognised body).
+            request_adapter = _resolve_adapter_for_request(
+                body, dict(self.headers), self.path
+            )
+            _adapter_tokens = 0
+            if request_adapter is not None:
+                try:
+                    _adapter_model, _adapter_tokens = (
+                        request_adapter.extract_request_tokens(body)
+                    )
+                    if _adapter_tokens > 0:
+                        input_tokens = _adapter_tokens
+                        if model in (None, "", "unknown") and _adapter_model:
+                            model = _adapter_model
+                except Exception:
+                    pass
+            if _adapter_tokens == 0:
+                input_tokens = _estimate_tokens_from_body(body)
 
             try:
                 data = json.loads(body)
@@ -780,7 +854,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _cache_origin = "unknown"
             _body_before_hook = body
 
-            if ps.request_hook:
+            # Capability-gated request_hook (capsule injection +
+            # chained downstream hooks). Format adapters declare
+            # ``tip.compression.v1`` to opt in to canonical-shape
+            # transforms. Passthrough opts out — its body shape is
+            # unknown so we don't mutate it. ``request_adapter is None``
+            # also opts out (defensive: if detection failed, don't
+            # transform the body).
+            _hook_supported = (
+                request_adapter is not None
+                and "tip.compression.v1" in request_adapter.capabilities
+            )
+            if ps.request_hook and _hook_supported:
                 try:
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
                         body, model, trace
@@ -856,28 +941,66 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _cb_provider = None
             _cb_registry = None
 
-        # Validate credentials for intercepted provider requests
-        # Client-supplied key takes precedence over any environment-level key.
+        # Resolve the declared provider once, before the auth gate, so
+        # known providers can bypass the require-caller-auth check
+        # (the credential_injector will inject managed env credentials).
+        _resolved_provider: Optional[str] = None
         if should_log and is_messages:
-            passthrough_cfg = PassthroughConfig(require_auth=True)
-            auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
-            if not auth_ok:
-                import json as _json
+            try:
+                from tokenpak.services.routing_service.platform_bridge import (
+                    resolve_provider as _resolve_provider,
+                )
 
-                err_body = _json.dumps(
-                    {
-                        "error": {
-                            "type": "authentication_error",
-                            "message": auth_err,
+                _resolved_provider = _resolve_provider(dict(self.headers))
+            except Exception:
+                _resolved_provider = None
+
+        # Validate credentials for intercepted provider requests.
+        # Client-supplied key takes precedence over any environment-level key.
+        # Bypass when the caller declared a known provider that the
+        # credential injector will resolve from managed env credentials —
+        # otherwise BYO-env-key flows (Phase 1 pack: Mistral, Groq,
+        # Together, DeepSeek, OpenRouter; also the existing
+        # tokenpak-claude-code / tokenpak-openai-codex / tokenpak-anthropic)
+        # would 401 here before injection even runs.
+        _bypass_auth_gate = False
+        if should_log and is_messages and _resolved_provider:
+            try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    registered as _registered_for_gate,
+                )
+
+                if _resolved_provider in {
+                    p.name for p in _registered_for_gate()
+                }:
+                    _bypass_auth_gate = True
+            except Exception:
+                pass
+
+        if should_log and is_messages:
+            # require_auth=True for the schema-validation path even when
+            # we bypass the explicit auth check above; downstream
+            # ``forward_headers`` reads it to decide what to keep.
+            passthrough_cfg = PassthroughConfig(require_auth=True)
+            if not _bypass_auth_gate:
+                auth_ok, auth_err = validate_auth(dict(self.headers), passthrough_cfg)
+                if not auth_ok:
+                    import json as _json
+
+                    err_body = _json.dumps(
+                        {
+                            "error": {
+                                "type": "authentication_error",
+                                "message": auth_err,
+                            }
                         }
-                    }
-                ).encode()
-                self.send_response(401)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(err_body)))
-                self.end_headers()
-                self.wfile.write(err_body)
-                return
+                    ).encode()
+                    self.send_response(401)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(err_body)))
+                    self.end_headers()
+                    self.wfile.write(err_body)
+                    return
 
             # --- Request schema validation (strict/warn/off) ---
             if body:
@@ -941,15 +1064,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         #                                       byte-forward which will
         #                                       fail for OpenClaw-
         #                                       style callers)
-        _resolved_provider: Optional[str] = None
-        if should_log and is_messages:
-            try:
-                from tokenpak.services.routing_service.platform_bridge import (
-                    resolve_provider as _resolve_provider,
-                )
-                _resolved_provider = _resolve_provider(dict(self.headers))
-            except Exception:
-                _resolved_provider = None
+        # ``_resolved_provider`` was resolved earlier (before auth gate);
+        # reuse it here.
 
         # (1) Subprocess dispatch for tokenpak-claude-code — DEFAULT path
         # for Claude Code traffic. Restores the Apr 15-18 companion
@@ -998,27 +1114,54 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Anthropic). This is the byte-preserved HTTP path where we
         # rewrite caller auth with the provider's credentials and
         # optionally redirect upstream + normalize body.
+        #
+        # Caller-creds precedence (Kevin 2026-04-24):
+        #   - If the caller already shipped a usable credential
+        #     (``x-api-key: sk-…`` or long-form ``Authorization: Bearer
+        #     …``), preserve their auth — but still apply the plan's
+        #     ``target_url_override`` and ``body_transform``. Codex's
+        #     URL rewrite (``api.openai.com/codex/responses`` →
+        #     ``chatgpt.com/backend-api/codex/responses``) is mandatory
+        #     even when the caller's JWT is the right shape; the
+        #     OpenAI host doesn't serve the codex path.
+        #   - Else fall back to the full plan (managed creds from
+        #     ``~/.claude`` / ``~/.codex``).
+        # Override: ``TOKENPAK_INJECTION_OVERRIDE=1`` forces full
+        # injection even when caller has creds.
+        # Known providers come from the credential_injector's registry —
+        # dynamic, so adding a new CredentialProvider (e.g. Mistral,
+        # Groq, OpenRouter) automatically gates this branch. No
+        # per-platform enumeration in the proxy hot path.
         _cred_injection_plan = None
+        _known_providers: frozenset = frozenset()
+        if should_log and is_messages and _resolved_provider:
+            try:
+                from tokenpak.services.routing_service.credential_injector import (
+                    registered as _registered_providers,
+                )
+
+                _known_providers = frozenset(
+                    p.name for p in _registered_providers()
+                )
+            except Exception:
+                _known_providers = frozenset()
+
         if (
             should_log
             and is_messages
-            and _resolved_provider in ("tokenpak-openai-codex", "tokenpak-anthropic")
+            and _resolved_provider in _known_providers
             and os.environ.get("TOKENPAK_CREDENTIAL_INJECTION", "1") != "0"
         ):
+            _caller_has_creds = self._caller_has_credentials(dict(self.headers))
+            _force_inject = (
+                os.environ.get("TOKENPAK_INJECTION_OVERRIDE", "0").strip() == "1"
+            )
             try:
                 from tokenpak.services.routing_service.credential_injector import (
                     resolve as _resolve_cred,
                 )
 
-                _cred_injection_plan = _resolve_cred(_resolved_provider)
-                if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
-                    import logging as _logging
-
-                    _logging.getLogger(__name__).warning(
-                        "tokenpak.proxy[INJECT] provider=%s plan=%s",
-                        _resolved_provider,
-                        "applied" if _cred_injection_plan else "<none>",
-                    )
+                _full_plan = _resolve_cred(_resolved_provider)
             except Exception as _inj_err:
                 import logging as _logging
 
@@ -1027,7 +1170,41 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     "falling back to byte-preserved forward",
                     type(_inj_err).__name__, _inj_err,
                 )
-                _cred_injection_plan = None
+                _full_plan = None
+
+            if _full_plan is not None and _caller_has_creds and not _force_inject:
+                # Caller has their own creds: keep their auth, but still
+                # apply URL + body transforms from the plan (otherwise
+                # ``/codex/responses`` would 404 against api.openai.com).
+                from tokenpak.services.routing_service.credential_injector import (
+                    InjectionPlan as _InjectionPlan,
+                )
+
+                _cred_injection_plan = _InjectionPlan(
+                    strip_headers=frozenset(),
+                    add_headers={},
+                    merge_headers={},
+                    target_url_override=_full_plan.target_url_override,
+                    body_transform=_full_plan.body_transform,
+                )
+                if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy[INJECT] provider=%s plan=passthrough+url "
+                        "(caller has own credentials; URL rewrite preserved)",
+                        _resolved_provider,
+                    )
+            else:
+                _cred_injection_plan = _full_plan
+                if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy[INJECT] provider=%s plan=%s",
+                        _resolved_provider,
+                        "applied" if _cred_injection_plan else "<none>",
+                    )
 
         # Legacy subprocess dispatch toggle is deprecated by the v1.3.20
         # default (subprocess IS the default for tokenpak-claude-code).
@@ -1579,8 +1756,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass  # telemetry must never break request handling
 
+                # Capability-gated compression telemetry. Format adapters
+                # declare ``tip.compression.v1`` to opt in. Passthrough
+                # (catch-all, doesn't know the format) opts out — its
+                # traffic doesn't generate spurious compression rows.
+                _compression_supported = (
+                    request_adapter is not None
+                    and "tip.compression.v1" in request_adapter.capabilities
+                )
+
                 # Track per-request compression ratio for rolling average
-                if input_tokens > 0:
+                if input_tokens > 0 and _compression_supported:
                     ratio = round(saved / input_tokens, 4)
                     with ps._compression_lock:
                         ps._compression_ratios.append(ratio)
@@ -1775,7 +1961,80 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
         return ""
 
 
+# Lazy module-level adapter registry — built once on first use, then
+# reused for every request. Used by ``_extract_tokens_via_adapters`` to
+# delegate request shape parsing to the format-specific adapter.
+_ADAPTER_REGISTRY = None
+
+
+def _get_adapter_registry():
+    global _ADAPTER_REGISTRY
+    if _ADAPTER_REGISTRY is None:
+        # Use ``build_registry`` (not ``build_default_registry``) so
+        # discovered plugin adapters — entry points + filesystem
+        # drop-ins under ``~/.tokenpak/adapters/`` — auto-register at
+        # startup. Built-ins always win on ``source_format`` collision;
+        # ``TOKENPAK_DISABLE_ADAPTER_PLUGINS=1`` opts out entirely.
+        from tokenpak.proxy.adapters import build_registry
+        _ADAPTER_REGISTRY = build_registry()
+    return _ADAPTER_REGISTRY
+
+
+def _resolve_adapter_for_request(
+    body: bytes,
+    headers: dict,
+    path: str,
+):
+    """Look up the matching :class:`FormatAdapter` for this request.
+
+    Walks the registry's priority-ordered detect() chain. Returns the
+    adapter, or ``None`` when no adapter matches (rare —
+    PassthroughAdapter detect→True is the universal fallback).
+
+    Used both for token extraction and for capability-gated middleware
+    activation: callers can read ``adapter.capabilities`` to decide
+    whether to apply compression / capsule injection / cache lookup
+    for this request.
+    """
+    if not body:
+        return None
+    try:
+        return _get_adapter_registry().detect(path, headers, body)
+    except Exception:
+        return None
+
+
+def _extract_tokens_via_adapters(
+    body: bytes,
+    headers: dict,
+    path: str,
+) -> Tuple[str, int]:
+    """Look up the matching format adapter + ask it for (model, tokens).
+
+    Format-agnostic replacement for the historical hardcoded
+    ``messages`` field reader. Each registered adapter knows its own
+    request shape (Anthropic ``messages``, OpenAI Responses ``input``,
+    Google ``contents``, etc.) — we let it do the counting.
+
+    Returns ``("unknown", 0)`` when no adapter matches or counting
+    fails; the caller decides whether to fall back.
+    """
+    adapter = _resolve_adapter_for_request(body, headers, path)
+    if adapter is None:
+        return "unknown", 0
+    try:
+        return adapter.extract_request_tokens(body)
+    except Exception:
+        return "unknown", 0
+
+
 def _estimate_tokens_from_body(body: bytes) -> int:
+    """Legacy hardcoded ``messages``-only token estimator.
+
+    Kept as a fallback for paths where adapter detection fails (e.g.
+    passthrough adapter normalises to a single empty user message).
+    Prefer :func:`_extract_tokens_via_adapters` in new code.
+    """
     try:
         data = json.loads(body)
         messages = data.get("messages", [])

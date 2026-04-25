@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Mapping, Optional, Tuple
+from typing import Any, Callable, FrozenSet, Mapping, Optional, Tuple
 
 from .canonical import CanonicalRequest
 
@@ -12,9 +12,62 @@ TokenCounter = Callable[[str], int]
 
 
 class FormatAdapter(ABC):
-    """Abstract format adapter for provider-specific payloads."""
+    """Abstract format adapter for provider-specific payloads.
+
+    TIP-1.0 capability declaration
+    ------------------------------
+
+    Each adapter declares the TIP capability labels its format supports
+    via the ``capabilities`` class attribute (default: empty). The proxy
+    reads these at runtime to decide which middleware to activate for
+    traffic of this format — compression telemetry, semantic cache,
+    capsule injection, compaction, etc. Capability vocabulary is
+    authoritative in :mod:`tokenpak.core.contracts.capabilities` and the
+    canonical catalog in the registry repo.
+
+    Adding a new platform:
+
+        class MyProviderAdapter(FormatAdapter):
+            source_format = "my-provider"
+            capabilities = frozenset({
+                "tip.compression.v1",
+                "tip.cache.proxy-managed",
+            })
+            def normalize(self, body): ...
+            def denormalize(self, canonical): ...
+            def get_default_upstream(self): ...
+
+    Drop the file in, register at priority — features the adapter opted
+    in to are automatically active for its traffic. No edits to
+    compression/cache/capsule code, no edits to the proxy core. This is
+    the MCP-analog dev UX — declare capabilities, get features.
+    """
 
     source_format: str = "unknown"
+
+    # TIP-1.0 capability labels this adapter publishes. Format:
+    # ``frozenset[str]`` of ``tip.<group>.<feature>`` labels (or
+    # ``ext.<vendor>.<feature>`` for non-TIP capability extensions).
+    # Empty default means "format-only adapter, no opt-in features" —
+    # this is what PassthroughAdapter wants. Override in subclasses.
+    capabilities: FrozenSet[str] = frozenset()
+
+    @classmethod
+    def describe(cls) -> dict:
+        """Return a self-describing dict for introspection / docs / TIP discovery.
+
+        Used by ``tokenpak doctor`` and the docs generator to enumerate
+        which capabilities each registered adapter publishes. Output is
+        intentionally JSON-serialisable so it can be ingested by an
+        external docs site or third-party tool that wants to know what
+        TokenPak's adapters support without importing Python.
+        """
+        return {
+            "source_format": cls.source_format,
+            "class_name": cls.__name__,
+            "capabilities": sorted(cls.capabilities),
+            "module": cls.__module__,
+        }
 
     @abstractmethod
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:

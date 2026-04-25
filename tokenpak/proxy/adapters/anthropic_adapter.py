@@ -12,6 +12,15 @@ from .canonical import CanonicalRequest
 
 class AnthropicAdapter(FormatAdapter):
     source_format = "anthropic-messages"
+    # Anthropic Messages API: byte-preserved (cache_control routing
+    # depends on exact bytes), supports proxy-managed cache + the
+    # ttl-ordering rule (1h blocks before default-ttl), full compression.
+    capabilities = frozenset({
+        "tip.compression.v1",
+        "tip.byte-preserved-passthrough",
+        "tip.cache.proxy-managed",
+        "tip.cache.ttl-ordering",
+    })
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         lower = {k.lower(): v for k, v in headers.items()}

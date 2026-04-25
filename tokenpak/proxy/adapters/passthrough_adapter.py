@@ -12,6 +12,10 @@ from .canonical import CanonicalRequest
 
 class PassthroughAdapter(FormatAdapter):
     source_format = "passthrough"
+    # Catch-all fallback. Byte-preserved by definition (we don't know
+    # the format, so we can't safely transform anything). No opt-in
+    # capabilities — the proxy treats this as "forward only".
+    capabilities = frozenset({"tip.byte-preserved-passthrough"})
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         return True

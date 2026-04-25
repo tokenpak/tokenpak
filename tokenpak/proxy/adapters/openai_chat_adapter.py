@@ -12,6 +12,12 @@ from .canonical import CanonicalRequest
 
 class OpenAIChatAdapter(FormatAdapter):
     source_format = "openai-chat"
+    # OpenAI Chat Completions: proxy-managed cache + compression. Same
+    # rationale as OpenAIResponsesAdapter — not byte-preserved.
+    capabilities = frozenset({
+        "tip.compression.v1",
+        "tip.cache.proxy-managed",
+    })
 
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
         return "/v1/chat/completions" in path
