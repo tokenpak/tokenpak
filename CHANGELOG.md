@@ -5,6 +5,131 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.22] - 2026-04-24
+
+### Added — Dynamic per-model context registry + fail-fast 413 at the bridge boundary
+
+Per-model context windows are now sourced from each provider's own `/v1/models` API instead of being hand-maintained in tokenpak. Self-maintaining + provider-agnostic: any future provider (OpenAI, Google, etc.) plugs in with one `register_provider()` call.
+
+**New module** `tokenpak/services/routing_service/model_context.py`:
+
+- `ModelRegistryProvider` Protocol — each provider implements `fetch() -> Iterable[ModelLimits]` against its own model-listing API.
+- `ModelContextRegistry` — federation across registered providers; lazy load on first use; 24h TTL cache at `~/.tokenpak/model_context_cache.json`; thread-safe; fail-open semantics (unreachable provider or unknown model → returns `None`, caller skips validation).
+- `AnthropicModelRegistryProvider` — built-in. Hits `GET https://api.anthropic.com/v1/models`, returns `max_input_tokens` + `max_tokens` per model. Reuses Claude CLI OAuth from `~/.claude/.credentials.json`.
+- Lookup is normalization-aware: callers can pass either versioned (`claude-haiku-4-5-20251001`) or unversioned (`claude-opus-4-7`) forms; both resolve to the same record.
+
+**OAuth backend dispatch** now does a fast input-token estimate before spawning the subprocess. If the estimate exceeds the model's context window minus a 4096-token safety margin, returns `HTTP 413` with a structured `context_overflow` error including `model`, `context_window`, `estimated_input_tokens`, `safety_margin`. No wasted round-trip to Anthropic, no reactive compaction, no ugly fail-then-retry latency. Disable via `TOKENPAK_BRIDGE_CONTEXT_CHECK=0`.
+
+### Live verification (2026-04-24)
+
+| Scenario | Result |
+|---|---|
+| Tiny payload to `claude-haiku-4-5` | HTTP 200 (passthrough) |
+| 222k tokens to `claude-haiku-4-5` (200k cap) | **HTTP 413** with `context_overflow` payload, served in milliseconds |
+| Unknown model id (`claude-opus-3-old`, `gpt-5.4`) | Registry returns `None`; backend fails-open |
+| Cache age > 24h | Lazy refresh on next access |
+| `/v1/models` unreachable | Cache stays as-is; new lookups fail-open |
+
+Initial fetch produced 9 Anthropic model records (Opus 4.6/4.7 + Sonnet 4.x at 1M, Haiku 4.5 + older Opus/Sonnet at 200k).
+
+### Provider-agnostic by design
+
+The registry has no Anthropic-specific assumptions in the federation layer — that's the registered Anthropic provider's job. Adding OpenAI/Codex would be:
+
+```python
+class OpenAIModelRegistryProvider:
+    name = "openai"
+    def fetch(self) -> Iterable[ModelLimits]:
+        # GET /v1/models with the user's OpenAI key, parse, yield ModelLimits
+        ...
+
+register_provider(OpenAIModelRegistryProvider())
+```
+
+No changes to `ModelContextRegistry`, `AnthropicOAuthBackend`, or the proxy hot path. Honors `feedback_always_dynamic` (2026-04-16) + Kevin 2026-04-24 ("provider/model/platform agnostic, self-maintaining, dynamic — users never edit a hand-written model list").
+
+### Tests
+
+191 services + proxy tests green. Ruff + import contracts clean. Live curl verification covers passthrough, 413 fail-fast, cache behavior, and unknown-model fail-open.
+
+## [1.3.21] - 2026-04-24
+
+### Fixed — Platform-slim subprocess context (stop auto-compaction + restore cache)
+
+v1.3.20 restored the subprocess bridge but each turn loaded ~147k tokens of full tokenpak-companion context (MCP schemas, companion-prompt.md, CLAUDE.md auto-discovery), triggering Claude Code's auto-compaction after nearly every message. Compaction rewrites the conversation history → invalidates Anthropic's prompt-cache → every turn billed as fresh (`cache_creation_input_tokens` rather than `cache_read_input_tokens`).
+
+Additionally, v1.3.20 subprocess used `--continue` by default for all platform-bridged calls with no session header, which resumed whatever the *last* CLI session on the machine had been — accumulating unrelated prior state across turns and hitting 300k+ tokens.
+
+### Changed — platform-bridge subprocess context policy
+
+**Ratified by Kevin 2026-04-24:**
+
+1. **Default: platform-slim.** For platform-bridged subprocess (OpenClaw, Codex-via-Claude, future adapters), load *only* the platform workspace's `.md` files (MEMORY.md, IDENTITY.md, AGENTS.md, TOOLS.md, etc. at the workspace root). Skip tokenpak-companion's MCP + system prompt + settings layer. Platform callers already carry their own system prompt + memory in `messages[]`; adding the companion layer is duplicative.
+2. **Opt-in full companion** via `TOKENPAK_BRIDGE_COMPANION=1` — loads the `~/.tokenpak/companion/run/` profile on top of platform context. Intended for callers that want the full `tokenpak claude` experience over the bridge.
+3. **Fresh session per request** for platform-bridged calls (`--no-session-persistence` + no `--resume` unless the session mapper has a match). Platform replays full conversation in `messages[]` each turn, so CLI-side session continuity is redundant + harmful. Auto-compaction no longer fires because the context envelope is stable across turns.
+4. **1M context window** — Claude CLI emits `context-1m-2025-08-07` beta by default; nothing in tokenpak caps it.
+
+### Implementation details
+
+- New `_platform_prompt_flags(workspace)` concatenates every `*.md` at the workspace root into a single cached tempfile at `/tmp/tokenpak-bridge-prompts/<content-hash>.md` and emits `--append-system-prompt-file <path>`. Cache key is file list + mtimes, so edits to any workspace .md invalidate cleanly.
+- New `_build_context_flags(workspace)` assembles the full flag set: platform flags by default, companion flags appended when `TOKENPAK_BRIDGE_COMPANION=1`.
+- New `_has_platform_headers(headers)` detects bridged traffic via `X-TokenPak-Backend` / `X-TokenPak-Provider` / `X-OpenClaw-*` / `X-Codex-*` so fresh-session mode kicks in even when the platform bridge doesn't detect via User-Agent.
+
+### Live verification
+
+Same curl shape as v1.3.20:
+
+| Metric | v1.3.20 | v1.3.21 |
+|---|---|---|
+| `input_tokens` | 147k-309k (stale `--continue` accumulation) | 52k (fresh session, workspace .md only) |
+| Cold-start latency | ~13s first turn, then compaction every turn | ~9s every turn, no compaction |
+| Session ID | reused across requests (context accumulates) | fresh UUID per request |
+| `msg_claude_<uuid>` response ID | same across requests | new per request (expected) |
+
+Response content still carries the Sue persona from workspace `IDENTITY.md` / `MEMORY.md` / `AGENTS.md` / `TOOLS.md` / `SOUL.md`, confirming the platform's own context loaded correctly:
+
+```
+🔥 Fresh session loaded.
+Context active:
+- Sue (Strategist) — architecture, strategy, direct Kevin partner
+- MEMORY.md curated — 19 years of standing orders and lessons
+- AGENTS.md + SOUL.md + USER.md + TOOLS.md compiled
+```
+
+### Tests
+
+191 services + proxy tests green. Ruff + import contracts clean.
+
+### Also fixed: prompt-cache re-enabled on subprocess path
+
+Removed `DISABLE_PROMPT_CACHING=1` from the subprocess env. That flag was copied from the Apr 15-18 monolith, where it prevented interference between the proxy's compression pipeline and Claude CLI's cache_control markers. In the v1.3.20+ architecture the subprocess hits `api.anthropic.com` directly (we strip `ANTHROPIC_BASE_URL`), so Anthropic's server-side prompt cache is free to fire. Opt-out via `TOKENPAK_BRIDGE_DISABLE_PROMPT_CACHE=1` (debugging only).
+
+### Also added: conversation-fingerprint session mapping (multi-turn cache accumulation)
+
+The first v1.3.21 iteration extracted only the last user message from the body for the subprocess prompt — which meant Claude CLI never saw the conversation history, so Anthropic's cache couldn't accumulate across turns within a single OpenClaw conversation. Each turn paid cache_creation on the same ~52k workspace prefix; no cache_read beyond the initial workspace block.
+
+Fixed by mapping each platform-bridged conversation to a persistent Claude CLI session via a content-addressed fingerprint (SHA256 of `model + first_user_message_text`, truncated to 16 hex chars):
+
+- **Turn 1** of a conversation: no mapping yet → run fresh, Claude CLI picks a UUID, tokenpak persists `(bridge-fp, <fingerprint>, provider) → <claude_uuid>` in the session mapper.
+- **Turn 2+** of the SAME conversation: OpenClaw replays the same first user message on every turn → same fingerprint → session_mapper returns the Claude UUID → subprocess invokes `claude --resume <uuid>`. Claude CLI has the prior-turn state locally; Anthropic's cache hits the accumulated prefix.
+- **New conversation** (e.g. OpenClaw `/new` → different first user message) → different fingerprint → no mapping → fresh session. Cache cleanly breaks on conversation boundary.
+
+Empirical verification (2026-04-24):
+
+| Turn | Conversation | `input_tokens` | `cache_creation` | `cache_read` |
+|---|---|---|---|---|
+| 1 | A (new) | 10 | 27,289 | 25,039 |
+| 2 | A (continued, same fingerprint) | 10 | **325** | **52,328** |
+| 3 | B (new `/new`, different fingerprint) | 10 | 27,284 | 25,039 |
+
+Turn 2 → 99.4% cache hit (325 creation vs 52,328 read). Conversation B correctly isolated — A's cache untouched. Session map shows one `bridge-fp` row per conversation, each mapped to its own Claude CLI session UUID.
+
+This matches the interactive `claude` chat-window behavior Kevin asked to replicate:
+- Same OpenClaw conversation multi-turn → cache accumulates like a single CLI session
+- New OpenClaw session → cache breaks only on that boundary
+
+Opt-out via `TOKENPAK_SESSION_MAPPER=0` (disables all session mapping, falls back to fresh session every turn).
+
 ## [1.3.20] - 2026-04-24
 
 ### Fixed — Restore the Apr 15-18 subprocess companion bridge as the default

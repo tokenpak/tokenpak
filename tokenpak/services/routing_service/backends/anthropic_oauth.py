@@ -104,6 +104,20 @@ class AnthropicOAuthBackend:
                     }).encode(),
                 )
 
+            # ── Defense-in-depth: per-model context cap (v1.3.22) ────
+            # Fail fast at the proxy boundary if the inbound payload
+            # exceeds the model's context window. Saves a wasted
+            # round-trip to Anthropic + lets the caller (OpenClaw)
+            # compact + retry against a clean 413 instead of waiting
+            # for ``invalid_request_error: prompt is too long``.
+            #
+            # Model context windows are sourced dynamically from
+            # Anthropic's /v1/models endpoint; cached for 24h with
+            # fail-open semantics (unknown model → skip validation).
+            cap_response = self._maybe_reject_oversized(request)
+            if cap_response is not None:
+                return cap_response
+
             # Resolve platform origin + session mapping for this request.
             origin, mapped_session_id = self._resolve_session(request)
 
@@ -113,56 +127,85 @@ class AnthropicOAuthBackend:
             import os as _os
 
             cmd = [self._claude_binary]
-            # Companion flags — use the same ``--mcp-config`` /
-            # ``--settings`` / ``--append-system-prompt-file`` files
-            # that ``tokenpak claude`` writes under
-            # ``~/.tokenpak/companion/run/``. This bypasses Claude
-            # CLI's slow CLAUDE.md auto-discovery (which walks the
-            # cwd + every parent dir looking for the file) and instead
-            # loads an explicit, pre-built companion profile.
-            # Without these, first-turn cold starts routinely exceed
-            # OpenClaw's request timeout because CLAUDE.md
-            # auto-discovery against the user's home dir can pull in
-            # tens of thousands of tokens of standards + project
-            # context before the request even gets to Anthropic.
-            companion_flags = self._companion_flags()
-            cmd.extend(companion_flags)
             # Pass the model from the request body so Claude CLI doesn't
             # pick its own default (Apr 15-18 parity — the bridge
             # respected OpenClaw's /model selection).
             model_hint = self._extract_model(request.body or b"")
             if model_hint:
                 cmd.extend(["--model", model_hint])
+            # Session mode decision:
+            #   1. Explicit X-OpenClaw-Session (or equivalent) that
+            #      maps to a stored Claude session → --resume <uuid>
+            #      (multi-turn via CLI state, v1.3.14 semantic)
+            #   2. Platform signal (UA=openclaw, X-TokenPak-Backend)
+            #      BUT no session header → START FRESH every call.
+            #      The platform replays full messages[] per turn so
+            #      we don't need CLI-side continuity; resuming
+            #      instead accumulates irrelevant prior state +
+            #      triggers Claude Code auto-compaction. v1.3.21 fix.
+            #   3. No platform signal at all → --continue fallback
+            #      (direct CLI callers that don't replay history).
+            # Session mode decision:
+            #   1. Mapped session (explicit platform session id OR
+            #      conversation fingerprint match) → ``--resume <uuid>``.
+            #      Claude CLI has the prior-turn state locally; Anthropic
+            #      cache accumulates across turns within the same
+            #      OpenClaw conversation. This is Kevin's 2026-04-24
+            #      ratified target behavior.
+            #   2. Platform-bridged FIRST turn (no mapping yet) → run
+            #      fresh, let Claude CLI pick a UUID. Session IS
+            #      persisted locally so turn 2 can resume via the
+            #      fingerprint we write in _persist_session.
+            #   3. Direct CLI caller with no platform signal → the
+            #      legacy ``--continue`` fallback (resumes whatever
+            #      last session on this machine — only appropriate
+            #      when the caller is the local claude CLI itself).
+            is_platform_bridged = (
+                origin is not None
+                or self._has_platform_headers(request.headers or {})
+            )
             if mapped_session_id:
-                # Subsequent turn for a known platform session.
                 cmd.extend(["--resume", mapped_session_id])
-            elif origin is None and (
-                _os.environ.get("TOKENPAK_OAUTH_NO_CONTINUE", "").strip() != "1"
-            ):
-                # No platform context at all — preserve v1.3.13 default.
+            elif is_platform_bridged:
+                # First turn — don't --continue. Default session
+                # persistence is fine; we'll persist the UUID via
+                # _persist_session after parsing the response, so
+                # turn 2 can resume by fingerprint.
+                pass
+            elif _os.environ.get("TOKENPAK_OAUTH_NO_CONTINUE", "").strip() != "1":
+                # Direct CLI caller fallback.
                 cmd.append("--continue")
-            # If origin is present but there's no mapping yet, this is
-            # the first turn — run fresh so the CLI picks its own UUID,
-            # which we'll capture + persist below.
             cmd.extend(["--print", "--output-format", "json", prompt])
 
-            # Clean env (Apr 15-18 pattern, restored 2026-04-24):
+            # Clean env (Apr 15-18 pattern, with cache re-enabled
+            # 2026-04-24 after empirical verification):
             #   - Strip ANTHROPIC_BASE_URL / OPENAI_BASE_URL so the
-            #     subprocess doesn't loop back through this proxy,
-            #     which would cause infinite recursion under load
-            #     and tank throughput.
-            #   - DISABLE_PROMPT_CACHING=1 so the CLI doesn't stash
-            #     cache_control markers that conflict with the proxy's
-            #     own compression pipeline on any OUTBOUND leg.
+            #     subprocess doesn't loop back through this proxy
+            #     (infinite recursion + throughput tank).
             #   - TOKENPAK_COMPANION_BARE=1 hints the companion hook
             #     to skip injecting the CLI's native CLAUDE.md /
             #     system context — the caller (OpenClaw etc.) is
             #     already carrying its own context in the messages[].
+            #
+            # We deliberately DO NOT set DISABLE_PROMPT_CACHING. The
+            # Apr 15-18 monolith had it because the in-proxy
+            # compression pipeline competed with the CLI's
+            # cache_control markers; in the v1.3.20+ architecture
+            # the subprocess hits api.anthropic.com directly (no
+            # ANTHROPIC_BASE_URL loop), so Anthropic's server-side
+            # prompt cache is free to fire. Cache hits across turns
+            # depend on a stable workspace-prompt prefix, which our
+            # content-hashed tempfile preserves. Set
+            # TOKENPAK_BRIDGE_DISABLE_PROMPT_CACHE=1 to opt out
+            # (debugging only).
             _env = _os.environ.copy()
             _env.pop("ANTHROPIC_BASE_URL", None)
             _env.pop("OPENAI_BASE_URL", None)
-            _env["DISABLE_PROMPT_CACHING"] = "1"
             _env["TOKENPAK_COMPANION_BARE"] = "1"
+            if _os.environ.get(
+                "TOKENPAK_BRIDGE_DISABLE_PROMPT_CACHE", ""
+            ).strip() == "1":
+                _env["DISABLE_PROMPT_CACHING"] = "1"
 
             # Workspace resolution (Apr 15-18 parity): caller's
             # X-OpenClaw-Workspace header wins; otherwise default to
@@ -170,6 +213,13 @@ class AnthropicOAuthBackend:
             # state lives. cwd matters because Claude CLI reads
             # CLAUDE.md / settings from cwd and its parent tree.
             _workspace = self._resolve_workspace(request)
+
+            # Platform-slim context by default: concatenate the
+            # workspace's *.md files into one appended system prompt
+            # file and skip the tokenpak-companion MCP + system
+            # prompt layer unless TOKENPAK_BRIDGE_COMPANION=1.
+            # See ``_build_context_flags`` below.
+            cmd = cmd[:1] + self._build_context_flags(_workspace) + cmd[1:]
 
             completed = subprocess.run(
                 cmd,
@@ -201,8 +251,13 @@ class AnthropicOAuthBackend:
             # request for the same (platform, external_id) just
             # starts another fresh session — worst case is lost
             # continuity, never a user-visible failure.
-            if origin is not None and mapped_session_id is None and parsed.get("session_id"):
-                self._persist_session(origin, parsed["session_id"], parsed.get("model"))
+            # Persist session mapping on first turn when we learned a
+            # new Claude session id. Covers both explicit-session and
+            # fingerprint-based scopes inside _persist_session.
+            if mapped_session_id is None and parsed.get("session_id"):
+                self._persist_session(
+                    origin, parsed["session_id"], parsed.get("model"), request=request
+                )
 
             # Caller asked for streaming? OpenClaw's Anthropic JS SDK
             # does — it sets ``"stream": true`` in the body. When it
@@ -245,34 +300,165 @@ class AnthropicOAuthBackend:
                 }).encode(),
             )
 
-    # ── Companion flag builder (reuses tokenpak claude's run dir) ──
+    # ── Per-model context cap (v1.3.22) ─────────────────────────────
+
+    # Safety margin between the inbound payload and the model's
+    # context wall. We reserve at least this much for the response
+    # plus tokenpak's own framing. Any inbound payload over
+    # ``max_input_tokens - margin`` is rejected with 413.
+    _CONTEXT_SAFETY_MARGIN_TOKENS = 4096
+
+    def _maybe_reject_oversized(self, request: Request):
+        """Fast 413 when the inbound payload exceeds the model's cap.
+
+        Returns a :class:`BackendResponse` to short-circuit dispatch,
+        or ``None`` to proceed normally (fail-open: unknown model,
+        unknown body shape, registry unreachable, etc.).
+
+        Disable via ``TOKENPAK_BRIDGE_CONTEXT_CHECK=0`` for debugging.
+        """
+        import os as _os
+
+        if _os.environ.get("TOKENPAK_BRIDGE_CONTEXT_CHECK", "1").strip() == "0":
+            return None
+        body = request.body or b""
+        if not body:
+            return None
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        model_id = data.get("model")
+        if not isinstance(model_id, str) or not model_id.strip():
+            return None
+        try:
+            from tokenpak.services.routing_service.model_context import (
+                get_registry,
+            )
+            cap = get_registry().get_context_window(model_id)
+        except Exception:
+            cap = None
+        if cap is None:
+            # Fail-open: unknown model, registry miss. Anthropic will
+            # still enforce the wall on its end if we're truly over.
+            return None
+
+        estimated = self._estimate_input_tokens(data)
+        ceiling = cap - self._CONTEXT_SAFETY_MARGIN_TOKENS
+        if estimated <= ceiling:
+            return None
+
+        # Over the wall — reject before spawning the subprocess.
+        err_payload = {
+            "error": {
+                "type": "context_overflow",
+                "message": (
+                    f"Estimated input ({estimated:,} tokens) exceeds "
+                    f"{model_id}'s context window ({cap:,} tokens, "
+                    f"reserving {self._CONTEXT_SAFETY_MARGIN_TOKENS} for "
+                    f"completion). Compact the request or pick a model "
+                    f"with a larger context."
+                ),
+                "model": model_id,
+                "context_window": cap,
+                "estimated_input_tokens": estimated,
+                "safety_margin": self._CONTEXT_SAFETY_MARGIN_TOKENS,
+            }
+        }
+        logger.info(
+            "anthropic-oauth: 413 context overflow model=%s estimated=%d cap=%d",
+            model_id, estimated, cap,
+        )
+        return BackendResponse(
+            status=413,
+            headers={"content-type": "application/json"},
+            body=json.dumps(err_payload).encode("utf-8"),
+        )
+
+    @staticmethod
+    def _estimate_input_tokens(body: dict) -> int:
+        """Cheap token estimate from raw JSON body (chars / 3.6).
+
+        Uses 3.6 chars/token (Anthropic's published average for
+        English; closer to 3.0 for code-heavy / 4.0 for prose). It's
+        conservative — we'd rather wave through some borderline
+        requests than reject correct ones because of a low estimate.
+        Final authority is Anthropic's tokenizer; this is just the
+        proxy-side fence to avoid round-tripping known-overlimit
+        payloads.
+        """
+        chars = 0
+        # system prompt
+        sys_val = body.get("system")
+        if isinstance(sys_val, str):
+            chars += len(sys_val)
+        elif isinstance(sys_val, list):
+            for blk in sys_val:
+                if isinstance(blk, dict):
+                    t = blk.get("text")
+                    if isinstance(t, str):
+                        chars += len(t)
+        # messages
+        for msg in body.get("messages") or []:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if isinstance(content, str):
+                chars += len(content)
+            elif isinstance(content, list):
+                for blk in content:
+                    if isinstance(blk, dict):
+                        t = blk.get("text") or blk.get("content")
+                        if isinstance(t, str):
+                            chars += len(t)
+        # tools (very rough — schema serialized as JSON)
+        tools = body.get("tools")
+        if isinstance(tools, list):
+            try:
+                chars += len(json.dumps(tools))
+            except (TypeError, ValueError):
+                pass
+        return int(chars / 3.6)
+
+    # ── Subprocess flag builder — platform-slim by default ──────────
+    #
+    # Kevin 2026-04-24 ratification: the platform-bridge subprocess
+    # path should take ONLY the platform's own .md context by default.
+    # The full tokenpak-companion profile (MCP schemas, companion
+    # system prompt, settings) layers on top of whatever system
+    # prompt the platform carries in ``messages[]`` — which pushes
+    # context over Claude Code's auto-compaction threshold and kills
+    # Anthropic's prompt cache across turns.
+    #
+    # Default: concatenate the platform workspace's ``*.md`` files at
+    # the workspace root (MEMORY.md, IDENTITY.md, AGENTS.md, etc.)
+    # into a single ``--append-system-prompt-file``. Claude CLI's
+    # native CLAUDE.md auto-discovery still runs (tiny overhead) but
+    # tokenpak's companion layer is skipped.
+    #
+    # Opt-in: ``TOKENPAK_BRIDGE_COMPANION=1`` additionally loads the
+    # tokenpak-companion MCP + settings + companion-prompt files
+    # from ``~/.tokenpak/companion/run/`` for callers that want the
+    # full interactive ``tokenpak claude`` experience.
 
     _COMPANION_RUN_DIR = Path.home() / ".tokenpak" / "companion" / "run"
+    _PLATFORM_PROMPT_CACHE_DIR = Path("/tmp/tokenpak-bridge-prompts")
 
     @classmethod
     def _companion_flags(cls) -> list[str]:
-        """Return Claude CLI flags that load the companion profile.
+        """Full tokenpak-companion flags (opt-in).
 
-        Re-uses the ``~/.tokenpak/companion/run/`` files that the
-        ``tokenpak claude`` launcher writes, so subprocess dispatch
-        gets the same MCP servers, settings, and companion system
-        prompt the interactive launcher does — while avoiding the
-        slow CLAUDE.md auto-discovery walk that makes first-turn
-        cold starts exceed OpenClaw's request timeout.
-
-        When the companion run dir doesn't exist yet (fresh install,
-        the user hasn't invoked ``tokenpak claude`` before), returns
-        an empty list — Claude CLI falls back to its own default
-        discovery. The subprocess will be slower first time but still
-        correct.
+        Only loaded when ``TOKENPAK_BRIDGE_COMPANION=1`` — otherwise
+        the bridge stays platform-slim so platform callers' context
+        stays well under the auto-compaction threshold.
         """
         flags: list[str] = []
         if not cls._COMPANION_RUN_DIR.is_dir():
             return flags
         mcp_path = cls._COMPANION_RUN_DIR / "mcp.json"
         settings_path = cls._COMPANION_RUN_DIR / "settings.json"
-        # Prefer companion-prompt.md (the launcher's canonical name);
-        # system_prompt.md is the older name from the Apr 15-18 build.
         prompt_candidates = [
             cls._COMPANION_RUN_DIR / "companion-prompt.md",
             cls._COMPANION_RUN_DIR / "system_prompt.md",
@@ -285,6 +471,66 @@ class AnthropicOAuthBackend:
             if p.is_file():
                 flags.extend(["--append-system-prompt-file", str(p)])
                 break
+        return flags
+
+    @classmethod
+    def _platform_prompt_flags(cls, workspace: Optional[str]) -> list[str]:
+        """Build ``--append-system-prompt-file`` from the platform's .md files.
+
+        Concatenates every ``*.md`` at the workspace root (non-
+        recursive) into a single tempfile cached by content hash.
+        Re-generates when workspace files change; stays stable
+        otherwise so Claude CLI's cache_control tracking sees a
+        stable prefix across turns.
+
+        Workspace conventions observed 2026-04-24 (OpenClaw):
+        ``MEMORY.md``, ``IDENTITY.md``, ``AGENTS.md``, ``TOOLS.md``,
+        ``SOUL.md``, ``HEARTBEAT.md``, ``PAUSED_PROJECTS.md``,
+        ``REFERENCE_INDEX.md``, ``EMERGENCY_RESTORE.md``. Any other
+        platform adapter following the same convention (.md at
+        workspace root) gets the same treatment.
+        """
+        if not workspace:
+            return []
+        import hashlib
+
+        ws = Path(workspace)
+        if not ws.is_dir():
+            return []
+        md_files = sorted(p for p in ws.glob("*.md") if p.is_file())
+        if not md_files:
+            return []
+        # Cache key: file list + mtimes. Regenerate on ANY change.
+        fingerprint = "\n".join(
+            f"{p}:{int(p.stat().st_mtime)}" for p in md_files
+        ).encode("utf-8")
+        digest = hashlib.sha256(fingerprint).hexdigest()[:16]
+        cls._PLATFORM_PROMPT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cached = cls._PLATFORM_PROMPT_CACHE_DIR / f"{digest}.md"
+        if not cached.is_file():
+            chunks = []
+            for p in md_files:
+                try:
+                    content = p.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                chunks.append(f"# --- {p.name} ---\n\n{content}\n")
+            cached.write_text("\n".join(chunks), encoding="utf-8")
+        return ["--append-system-prompt-file", str(cached)]
+
+    @classmethod
+    def _build_context_flags(cls, workspace: Optional[str]) -> list[str]:
+        """Assemble the full flag list for this subprocess dispatch.
+
+        Default path: platform-slim (workspace .md only). Opt-in via
+        ``TOKENPAK_BRIDGE_COMPANION=1`` adds the full
+        tokenpak-companion profile on top.
+        """
+        import os as _os
+
+        flags = cls._platform_prompt_flags(workspace)
+        if _os.environ.get("TOKENPAK_BRIDGE_COMPANION", "0").strip() == "1":
+            flags.extend(cls._companion_flags())
         return flags
 
     # ── Request shape extractors (Apr 15-18 parity) ───────────────────
@@ -306,6 +552,28 @@ class AnthropicOAuthBackend:
             return None
         m = data.get("model") if isinstance(data, dict) else None
         return m if isinstance(m, str) and m.strip() else None
+
+    @staticmethod
+    def _has_platform_headers(headers) -> bool:
+        """True when the caller identified as a platform bridge.
+
+        Looks for the standard platform markers tokenpak's bridge
+        uses — X-TokenPak-Backend (installed by tokenpak-inject.sh
+        into OpenClaw's provider config), X-TokenPak-Provider (the
+        generic explicit declaration), or X-OpenClaw-* / X-Codex-*
+        identifiers any adapter might stamp. Any of them mean
+        'caller is replaying its own conversation per turn; don't
+        resume a stale CLI session'.
+        """
+        if not headers:
+            return False
+        for k in headers:
+            kl = k.lower()
+            if kl in ("x-tokenpak-backend", "x-tokenpak-provider"):
+                return True
+            if kl.startswith("x-openclaw-") or kl.startswith("x-codex-"):
+                return True
+        return False
 
     @staticmethod
     def _resolve_workspace(request: Request) -> Optional[str]:
@@ -343,14 +611,27 @@ class AnthropicOAuthBackend:
             return str(default)
         return None
 
-    # ── Session mapper integration (v1.3.14) ──────────────────────────
+    # ── Session mapper integration (v1.3.14 + v1.3.21 fingerprint) ───
+
+    _BRIDGE_FP_SCOPE = "bridge-fp"
 
     def _resolve_session(self, request: Request):
         """Return ``(PlatformOrigin | None, mapped_session_id | None)``.
 
-        Consults the platform bridge for the origin and the session
-        mapper for a prior mapping. Never raises — a registry miss
-        simply means "first turn for this platform session".
+        Resolution priority:
+          1. Explicit platform session id (``X-OpenClaw-Session``)
+             keyed under ``scope=<platform_name>``. Strongest signal.
+          2. Conversation fingerprint derived from the first user
+             message + model in ``messages[]``, keyed under
+             ``scope=bridge-fp``. This is what allows multi-turn
+             OpenClaw conversations to reuse a single Claude CLI
+             session (and thus accumulate Anthropic's prompt cache
+             across turns). Same OpenClaw conversation replays the
+             same first user message on every turn → same fingerprint
+             → same Claude session via ``--resume``. A new OpenClaw
+             /new session starts with a different first message →
+             different fingerprint → fresh Claude session → cache
+             cleanly breaks (Kevin's 2026-04-24 ratification).
         """
         try:
             from tokenpak.services.routing_service.platform_bridge import (
@@ -359,64 +640,202 @@ class AnthropicOAuthBackend:
             )
         except Exception:
             return None, None
+
         try:
             origin = detect_origin(request.headers or {})
         except Exception:
             origin = None
-        if origin is None or not origin.session_id:
-            return origin, None
-        provider = origin.declared_provider or resolve_provider(request.headers or {})
-        if provider is None:
-            return origin, None
+
+        provider = None
+        if origin is not None:
+            provider = origin.declared_provider or resolve_provider(
+                request.headers or {}
+            )
+        else:
+            provider = resolve_provider(request.headers or {})
+
         try:
             from tokenpak.services.routing_service.session_mapper import (
                 get_session_mapper,
             )
         except Exception:
             return origin, None
-        try:
-            record = get_session_mapper().get(
-                scope=origin.platform_name,
-                external_id=origin.session_id,
-                provider=provider,
-            )
-        except Exception:
-            return origin, None
-        if record is None:
-            return origin, None
-        return origin, record.internal_id
+        mapper = get_session_mapper()
+
+        # Path 1: explicit platform session id (strongest).
+        if origin is not None and origin.session_id and provider is not None:
+            try:
+                record = mapper.get(
+                    scope=origin.platform_name,
+                    external_id=origin.session_id,
+                    provider=provider,
+                )
+                if record is not None:
+                    return origin, record.internal_id
+            except Exception:
+                pass
+
+        # Path 2: conversation fingerprint (bridge-fp scope). Only
+        # fires when the caller is actually platform-bridged —
+        # direct CLI callers never hit this path.
+        if provider is not None and self._has_platform_headers(
+            request.headers or {}
+        ):
+            fp = self._conversation_fingerprint(request.body or b"")
+            if fp:
+                try:
+                    record = mapper.get(
+                        scope=self._BRIDGE_FP_SCOPE,
+                        external_id=fp,
+                        provider=provider,
+                    )
+                    if record is not None:
+                        return origin, record.internal_id
+                except Exception:
+                    pass
+
+        return origin, None
 
     @staticmethod
-    def _persist_session(origin, claude_session_id: str, model: Optional[str]) -> None:
-        """Store ``(scope=platform, external_id=session, provider) → claude uuid``."""
+    def _conversation_fingerprint(body: bytes) -> Optional[str]:
+        """Stable ID for the platform conversation.
+
+        Keyed on ``(system prompt + first user message text)`` —
+        components a well-behaved platform client replays identically
+        across every turn of the same conversation and that differ
+        between conversations.
+
+        Edge case (accepted): OpenClaw's ``/new`` may send an opening
+        boilerplate turn whose first user message differs from the
+        user's first *real* message. That creates a one-turn
+        cache-warmup hop — turn 1 and turn 2+ hit different
+        fingerprints. All subsequent turns within the same
+        conversation share the same fp and reuse one Claude session
+        via ``--resume``, accumulating Anthropic's prompt cache
+        normally. Net effect: 4-of-6 turns cached for a typical
+        6-turn conversation (verified 2026-04-24).
+
+        Including the system prompt in the key distinguishes
+        same-first-user-message conversations that happen to differ
+        in system context (e.g. different OpenClaw workspaces with
+        different AGENTS.md), so cache entries don't collide across
+        truly different conversations.
+        """
+        if not body:
+            return None
         try:
-            from tokenpak.services.routing_service.platform_bridge import (
-                resolve_provider,
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+
+        def _content_text(content) -> str:
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                parts = []
+                for blk in content:
+                    if isinstance(blk, dict) and blk.get("type") == "text":
+                        t = blk.get("text")
+                        if isinstance(t, str):
+                            parts.append(t)
+                return "\n".join(parts)
+            return ""
+
+        system = data.get("system") or ""
+        if isinstance(system, list):
+            system = _content_text(system)
+        system_text = (system if isinstance(system, str) else "")[:2000]
+
+        messages = data.get("messages") or []
+        first_user_text: Optional[str] = None
+        for m in messages:
+            if not isinstance(m, dict) or m.get("role") != "user":
+                continue
+            text = _content_text(m.get("content"))
+            if text.strip():
+                first_user_text = text
+                break
+        if not first_user_text:
+            return None
+
+        import hashlib
+
+        model = data.get("model") or ""
+        key = f"model={model}\nsystem={system_text}\nfirst_user={first_user_text[:1000]}"
+        fp = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        import os as _os
+        if _os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+            logger.warning(
+                "anthropic-oauth[fp] fp=%s model=%s sys_len=%d "
+                "first_user[:80]=%r",
+                fp, model, len(system_text), first_user_text[:80],
             )
+        return fp
+
+    @classmethod
+    def _persist_session(
+        cls,
+        origin,
+        claude_session_id: str,
+        model: Optional[str],
+        request: Optional[Request] = None,
+    ) -> None:
+        """Persist session mapping(s) on the first turn.
+
+        Two scopes are written when applicable:
+
+          - ``scope=<platform_name>`` keyed on the explicit platform
+            session id (when the caller sent one). Used by
+            X-OpenClaw-Session-style callers.
+          - ``scope=bridge-fp`` keyed on the conversation fingerprint
+            (first user message hash). Used for real OpenClaw traffic
+            that doesn't carry an explicit session id. Second-turn
+            requests in the same conversation replay the same first
+            user message → same fingerprint → ``--resume`` hits the
+            Claude CLI session already populated by turn 1 →
+            Anthropic's prompt cache accumulates across turns.
+        """
+        try:
             from tokenpak.services.routing_service.session_mapper import (
                 get_session_mapper,
             )
         except Exception:
             return
-        provider = origin.declared_provider or "tokenpak-claude-code"
-        # resolve_provider is headers-based; we already have the origin
-        # so prefer its declared_provider, falling back to the default
-        # for known platforms. Unknown platform → still persist under
-        # whatever provider the request declared.
-        _ = resolve_provider  # keep import present for future overrides
+        mapper = get_session_mapper()
         metadata = {"model": model} if model else {}
-        try:
-            get_session_mapper().set(
-                scope=origin.platform_name,
-                external_id=origin.session_id,
-                provider=provider,
-                internal_id=claude_session_id,
-                metadata=metadata,
-            )
-        except Exception:
-            # Session mapping is a best-effort optimisation — never let
-            # persistence failure break the live dispatch.
-            pass
+        provider = "tokenpak-claude-code"
+        if origin is not None:
+            provider = origin.declared_provider or provider
+
+        # Write path 1: explicit platform session id, when present.
+        if origin is not None and origin.session_id:
+            try:
+                mapper.set(
+                    scope=origin.platform_name,
+                    external_id=origin.session_id,
+                    provider=provider,
+                    internal_id=claude_session_id,
+                    metadata=metadata,
+                )
+            except Exception:
+                pass
+
+        # Write path 2: conversation fingerprint (OpenClaw default).
+        if request is not None and cls._has_platform_headers(request.headers or {}):
+            fp = cls._conversation_fingerprint(request.body or b"")
+            if fp:
+                try:
+                    mapper.set(
+                        scope=cls._BRIDGE_FP_SCOPE,
+                        external_id=fp,
+                        provider=provider,
+                        internal_id=claude_session_id,
+                        metadata=metadata,
+                    )
+                except Exception:
+                    pass
 
     # ── Claude CLI --output-format=json parsing ───────────────────────
 
