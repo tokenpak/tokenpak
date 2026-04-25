@@ -546,7 +546,7 @@ def cmd_codex(args):
     ``tokenpak codex --model gpt-5.3-codex`` becomes
     ``codex --model gpt-5.3-codex`` with proxy env wired.
     """
-    from tokenpak.companion.launcher._impl import launch_codex
+    from tokenpak.companion.launcher import launch_codex
 
     extra = list(getattr(args, "extra_args", None) or [])
     launch_codex(extra_args=extra)
