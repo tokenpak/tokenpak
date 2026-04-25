@@ -103,6 +103,16 @@ class InjectionPlan:
         Callable[[bytes, Mapping[str, str]], Optional[str]]
     ] = None
     body_transform: Optional[Callable[[bytes], bytes]] = None
+    # Dynamic per-request headers — computed AFTER body_transform +
+    # URL resolution. Used when a provider's auth depends on the exact
+    # bytes being sent (AWS SigV4 is the canonical case: the Authorization
+    # header is a hash of the request including method, URL, headers,
+    # and body content). Result is merged into the request headers,
+    # OVERRIDING ``add_headers`` for any conflicting keys (because the
+    # dynamic value is the authoritative one).
+    header_resolver: Optional[
+        Callable[[bytes, str, str, Mapping[str, str]], Dict[str, str]]
+    ] = None
 
 
 # ── Provider protocol + registry ─────────────────────────────────────
@@ -713,6 +723,162 @@ class OpenRouterCredentialProvider(_EnvKeyBearerProvider):
     }
 
 
+class BedrockClaudeCredentialProvider:
+    """AWS Bedrock for Anthropic Claude — Anthropic Messages format
+    wrapped in Bedrock's InvokeModel envelope, signed with AWS SigV4.
+
+    Bedrock takes the Messages payload directly (almost — it wants
+    ``anthropic_version: "bedrock-2023-05-31"`` and forbids the
+    ``model`` field, which is encoded in the URL instead). Auth is
+    SigV4 over the request bytes; we delegate signing to ``boto3`` to
+    avoid maintaining a hand-rolled HMAC implementation.
+
+    Required:
+
+      - ``boto3`` installed (standard AWS Python ecosystem dep).
+      - ``AWS_ACCESS_KEY_ID`` + ``AWS_SECRET_ACCESS_KEY`` env vars
+        (or any boto3-discoverable credentials: profile, IAM role,
+        SSO, etc. — we use ``boto3.Session()`` which resolves all of
+        them).
+      - ``AWS_REGION`` or ``AWS_DEFAULT_REGION`` env var. Default
+        ``us-east-1`` if neither set.
+
+    Routing
+    -------
+
+    Bedrock specifies the model via URL path
+    (``/model/<id>/invoke``); the request body MUST NOT contain a
+    ``model`` field. The caller is expected to put the Bedrock model
+    id (e.g. ``anthropic.claude-3-5-sonnet-20241022-v2:0``, or an
+    inference-profile ARN) in the body's ``model`` field — we strip
+    it out before forwarding and use it to build the URL.
+
+    Streaming uses the ``/invoke-with-response-stream`` suffix; we
+    pick that variant when the request body sets ``stream: true``.
+
+    Plan composition
+    ----------------
+
+      - ``target_url_resolver`` — body-aware (model + stream flag).
+      - ``body_transform`` — strips ``model``, adds
+        ``anthropic_version``.
+      - ``header_resolver`` — SigV4 signs the FINAL body + URL +
+        method on every request.
+
+    No ``add_headers`` / ``Authorization`` — SigV4 puts everything in
+    the dynamic resolver because all four (Authorization, x-amz-date,
+    x-amz-content-sha256, host) depend on the exact final bytes.
+    """
+
+    name = "tokenpak-bedrock-claude"
+    _DEFAULT_REGION = "us-east-1"
+    _SERVICE = "bedrock"
+    _ANTHROPIC_VERSION = "bedrock-2023-05-31"
+
+    def _load(self) -> Optional[InjectionPlan]:
+        try:
+            import boto3  # noqa: F401  (presence check only here)
+        except ImportError:
+            logger.info(
+                "credential_injector[bedrock]: boto3 not installed; skipping. "
+                "`pip install boto3` to enable Bedrock routing."
+            )
+            return None
+
+        # Resolve region: env first, then boto3's session default.
+        region = (
+            _os.environ.get("AWS_REGION", "").strip()
+            or _os.environ.get("AWS_DEFAULT_REGION", "").strip()
+            or self._DEFAULT_REGION
+        )
+
+        # Build a session lazily so credential errors surface per-request
+        # (not at provider-resolve time when boto3 may not have looked
+        # at env vars yet).
+        endpoint_host = f"bedrock-runtime.{region}.amazonaws.com"
+
+        def _resolve_url(body: bytes, headers: Mapping[str, str]) -> Optional[str]:
+            if not body:
+                return None
+            try:
+                data = json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return None
+            if not isinstance(data, dict):
+                return None
+            model = data.get("model")
+            if not isinstance(model, str) or not model.strip():
+                return None
+            stream = bool(data.get("stream"))
+            suffix = "invoke-with-response-stream" if stream else "invoke"
+            # Inference-profile ARNs contain ``:`` which must NOT be
+            # URL-encoded for Bedrock — use as-is.
+            return f"https://{endpoint_host}/model/{model.strip()}/{suffix}"
+
+        def _transform_body(body: bytes) -> bytes:
+            if not body:
+                return body
+            try:
+                data = json.loads(body)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return body
+            if not isinstance(data, dict):
+                return body
+            data.pop("model", None)
+            data.setdefault("anthropic_version", self._ANTHROPIC_VERSION)
+            try:
+                return json.dumps(data).encode("utf-8")
+            except (TypeError, ValueError):
+                return body
+
+        def _sign_request(
+            body: bytes,
+            url: str,
+            method: str,
+            _existing_headers: Mapping[str, str],
+        ) -> Dict[str, str]:
+            # Use boto3's SigV4Auth — battle-tested + handles all the
+            # canonical-request edge cases (case folding, empty bodies,
+            # query string normalisation) we'd otherwise have to
+            # replicate by hand.
+            from boto3 import Session as _Session
+            from botocore.auth import SigV4Auth
+            from botocore.awsrequest import AWSRequest
+
+            session = _Session()
+            creds = session.get_credentials()
+            if creds is None:
+                logger.warning(
+                    "credential_injector[bedrock]: no AWS credentials "
+                    "discoverable by boto3 — request will fail upstream."
+                )
+                return {}
+            frozen = creds.get_frozen_credentials()
+            req = AWSRequest(method=method, url=url, data=body or b"")
+            # ``Host`` and ``content-type`` are required for signing;
+            # set them explicitly so the signature reflects what we'll
+            # actually send.
+            from urllib.parse import urlparse as _urlparse
+
+            req.headers["Host"] = _urlparse(url).netloc
+            req.headers["Content-Type"] = "application/json"
+            SigV4Auth(frozen, self._SERVICE, region).add_auth(req)
+            # SigV4Auth mutates req.headers in-place. Pull the resulting
+            # set out as a plain dict.
+            return dict(req.headers.items())
+
+        return InjectionPlan(
+            strip_headers=frozenset({"authorization", "x-api-key"}),
+            add_headers={"Content-Type": "application/json"},
+            target_url_resolver=_resolve_url,
+            body_transform=_transform_body,
+            header_resolver=_sign_request,
+        )
+
+    def resolve(self) -> Optional[InjectionPlan]:
+        return _cached_resolve(self.name, self._load)
+
+
 # ── Register built-ins at import ─────────────────────────────────────
 
 
@@ -724,10 +890,12 @@ register(TogetherCredentialProvider())
 register(DeepSeekCredentialProvider())
 register(OpenRouterCredentialProvider())
 register(AzureOpenAICredentialProvider())
+register(BedrockClaudeCredentialProvider())
 
 
 __all__ = [
     "AzureOpenAICredentialProvider",
+    "BedrockClaudeCredentialProvider",
     "ClaudeCodeCredentialProvider",
     "CodexCredentialProvider",
     "CredentialProvider",

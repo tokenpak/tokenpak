@@ -1187,6 +1187,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     target_url_override=_full_plan.target_url_override,
                     target_url_resolver=_full_plan.target_url_resolver,
                     body_transform=_full_plan.body_transform,
+                    header_resolver=_full_plan.header_resolver,
                 )
                 if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
                     import logging as _logging
@@ -1350,6 +1351,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "tokenpak.proxy: body transform failed (%s) — using original",
                         _xf_err,
                     )
+
+            # 5. Dynamic header resolution — computed from the FINAL
+            # body + URL + method (after steps 1-4). Used by AWS SigV4
+            # signing, which depends on the exact bytes being sent.
+            # Result is merged on top of the static add_headers so the
+            # signature reflects everything the upstream will see.
+            _hdr_resolver = getattr(_plan, "header_resolver", None)
+            if _hdr_resolver is not None:
+                try:
+                    _dynamic = _hdr_resolver(
+                        body or b"",
+                        target_url,
+                        method,
+                        dict(_mutable_headers),
+                    )
+                except Exception as _hr_err:
+                    import logging as _logging
+
+                    _logging.getLogger(__name__).warning(
+                        "tokenpak.proxy: header_resolver failed (%s) — "
+                        "using static headers only",
+                        _hr_err,
+                    )
+                    _dynamic = None
+                if _dynamic:
+                    for _hk, _hv in _dynamic.items():
+                        # Case-insensitive replace: drop any caller / static
+                        # headers with the same key (case folded), then
+                        # set the dynamic value. Critical for SigV4 — the
+                        # signature must match the EXACT header set sent.
+                        for _existing in [
+                            k for k in list(_mutable_headers)
+                            if k.lower() == _hk.lower()
+                        ]:
+                            _mutable_headers.pop(_existing, None)
+                        _mutable_headers[_hk] = _hv
 
             # Build forwarding headers from the rewritten header dict.
             fwd_headers = forward_headers(_mutable_headers, passthrough_cfg)
