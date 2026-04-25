@@ -20,7 +20,10 @@ from tokenpak.proxy.adapters.google_adapter import GoogleGenerativeAIAdapter
 from tokenpak.proxy.adapters.openai_chat_adapter import OpenAIChatAdapter
 from tokenpak.proxy.adapters.openai_responses_adapter import OpenAIResponsesAdapter
 from tokenpak.proxy.adapters.passthrough_adapter import PassthroughAdapter
-from tokenpak.proxy.server import _extract_tokens_via_adapters
+from tokenpak.proxy.server import (
+    _extract_tokens_via_adapters,
+    _resolve_adapter_for_request,
+)
 
 # TIP capability label format: ``tip.<group>.<feature>`` or ``ext.<vendor>.<feature>``.
 _TIP_LABEL_RE = re.compile(r"^(tip|ext)\.[a-z0-9._-]+$")
@@ -218,3 +221,76 @@ class TestProxyHotPathFormatAgnostic:
         # PassthroughAdapter accepts any body; it'll normalise to a
         # canonical with no messages → 0 tokens. Critical: no exception.
         assert tokens == 0
+
+
+class TestCapabilityGatedMiddleware:
+    """``_resolve_adapter_for_request`` returns the adapter so middleware
+    can read ``adapter.capabilities`` and decide whether to apply.
+    """
+
+    def test_anthropic_request_resolves_to_anthropic_adapter_with_compression(self):
+        body = json.dumps({
+            "model": "claude-haiku-4-5",
+            "messages": [{"role": "user", "content": "hi"}],
+        }).encode()
+        adapter = _resolve_adapter_for_request(
+            body, {"x-api-key": "sk-test"}, "/v1/messages"
+        )
+        assert adapter is not None
+        assert isinstance(adapter, AnthropicAdapter)
+        # Anthropic opts in to compression — gate evaluates True.
+        assert "tip.compression.v1" in adapter.capabilities
+
+    def test_codex_request_resolves_with_compression_capability(self):
+        body = json.dumps({
+            "model": "gpt-5.4",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "hi"}],
+                }
+            ],
+        }).encode()
+        long_jwt = "eyJ" + "x" * 300 + ".y.z"
+        adapter = _resolve_adapter_for_request(
+            body,
+            {"Authorization": f"Bearer {long_jwt}"},
+            "/v1/responses",
+        )
+        assert adapter is not None
+        # Whichever Responses-family adapter wins, both declare compression.
+        assert "tip.compression.v1" in adapter.capabilities
+
+    def test_unknown_format_falls_through_to_passthrough_no_compression(self):
+        # An opaque body (no recognisable shape) lands on PassthroughAdapter
+        # via the catch-all detect=True. Passthrough does NOT declare
+        # tip.compression.v1 → middleware gates evaluate False → no
+        # phantom telemetry rows + no body mutation.
+        body = json.dumps({"weird_format": True, "data": "..."}).encode()
+        adapter = _resolve_adapter_for_request(body, {}, "/some/random/path")
+        assert adapter is not None
+        assert isinstance(adapter, PassthroughAdapter)
+        assert "tip.compression.v1" not in adapter.capabilities
+
+    def test_empty_body_resolves_to_none(self):
+        # Defensive: no body → no adapter → middleware gates default to "skip".
+        assert _resolve_adapter_for_request(b"", {}, "/v1/messages") is None
+
+    def test_capability_gate_pattern_works_per_adapter(self):
+        # Demonstrates the gating pattern callers should use:
+        #   adapter = _resolve_adapter_for_request(body, headers, path)
+        #   if adapter and "tip.X" in adapter.capabilities:
+        #       run_middleware_X()
+        registry = build_default_registry()
+        compression_supporters = [
+            a
+            for a in registry.adapters()
+            if "tip.compression.v1" in a.capabilities
+        ]
+        # All four real format adapters opt in; passthrough does not.
+        formats_with_compression = {a.source_format for a in compression_supporters}
+        assert "anthropic-messages" in formats_with_compression
+        assert "openai-responses" in formats_with_compression
+        assert "openai-chat" in formats_with_compression
+        assert "google-generative-ai" in formats_with_compression
+        assert "passthrough" not in formats_with_compression

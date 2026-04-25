@@ -719,6 +719,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         is_streaming = False
         cache_read_tokens = 0
         cache_creation_tokens = 0
+        # Resolved format adapter for this request — set by the
+        # token-extraction step and read later by capability gates
+        # (compression telemetry, capsule injection, cache lookup).
+        # ``None`` when no adapter matches; gates default to "skip".
+        request_adapter = None
 
         trace: Optional[PipelineTrace] = None
         if should_log and is_messages:
@@ -778,14 +783,22 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # correctly without per-platform branches in this hot path.
             # Falls back to legacy hardcoded ``messages`` reader when
             # no adapter matches (passthrough or unrecognised body).
-            _adapter_model, _adapter_tokens = _extract_tokens_via_adapters(
+            request_adapter = _resolve_adapter_for_request(
                 body, dict(self.headers), self.path
             )
-            if _adapter_tokens > 0:
-                input_tokens = _adapter_tokens
-                if model in (None, "", "unknown") and _adapter_model:
-                    model = _adapter_model
-            else:
+            _adapter_tokens = 0
+            if request_adapter is not None:
+                try:
+                    _adapter_model, _adapter_tokens = (
+                        request_adapter.extract_request_tokens(body)
+                    )
+                    if _adapter_tokens > 0:
+                        input_tokens = _adapter_tokens
+                        if model in (None, "", "unknown") and _adapter_model:
+                            model = _adapter_model
+                except Exception:
+                    pass
+            if _adapter_tokens == 0:
                 input_tokens = _estimate_tokens_from_body(body)
 
             try:
@@ -841,7 +854,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _cache_origin = "unknown"
             _body_before_hook = body
 
-            if ps.request_hook:
+            # Capability-gated request_hook (capsule injection +
+            # chained downstream hooks). Format adapters declare
+            # ``tip.compression.v1`` to opt in to canonical-shape
+            # transforms. Passthrough opts out — its body shape is
+            # unknown so we don't mutate it. ``request_adapter is None``
+            # also opts out (defensive: if detection failed, don't
+            # transform the body).
+            _hook_supported = (
+                request_adapter is not None
+                and "tip.compression.v1" in request_adapter.capabilities
+            )
+            if ps.request_hook and _hook_supported:
                 try:
                     body, sent_input_tokens, input_tokens, protected_tokens = ps.request_hook(
                         body, model, trace
@@ -1684,8 +1708,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass  # telemetry must never break request handling
 
+                # Capability-gated compression telemetry. Format adapters
+                # declare ``tip.compression.v1`` to opt in. Passthrough
+                # (catch-all, doesn't know the format) opts out — its
+                # traffic doesn't generate spurious compression rows.
+                _compression_supported = (
+                    request_adapter is not None
+                    and "tip.compression.v1" in request_adapter.capabilities
+                )
+
                 # Track per-request compression ratio for rolling average
-                if input_tokens > 0:
+                if input_tokens > 0 and _compression_supported:
                     ratio = round(saved / input_tokens, 4)
                     with ps._compression_lock:
                         ps._compression_ratios.append(ratio)
@@ -1894,6 +1927,30 @@ def _get_adapter_registry():
     return _ADAPTER_REGISTRY
 
 
+def _resolve_adapter_for_request(
+    body: bytes,
+    headers: dict,
+    path: str,
+):
+    """Look up the matching :class:`FormatAdapter` for this request.
+
+    Walks the registry's priority-ordered detect() chain. Returns the
+    adapter, or ``None`` when no adapter matches (rare —
+    PassthroughAdapter detect→True is the universal fallback).
+
+    Used both for token extraction and for capability-gated middleware
+    activation: callers can read ``adapter.capabilities`` to decide
+    whether to apply compression / capsule injection / cache lookup
+    for this request.
+    """
+    if not body:
+        return None
+    try:
+        return _get_adapter_registry().detect(path, headers, body)
+    except Exception:
+        return None
+
+
 def _extract_tokens_via_adapters(
     body: bytes,
     headers: dict,
@@ -1909,11 +1966,10 @@ def _extract_tokens_via_adapters(
     Returns ``("unknown", 0)`` when no adapter matches or counting
     fails; the caller decides whether to fall back.
     """
-    if not body:
+    adapter = _resolve_adapter_for_request(body, headers, path)
+    if adapter is None:
         return "unknown", 0
     try:
-        registry = _get_adapter_registry()
-        adapter = registry.detect(path, headers, body)
         return adapter.extract_request_tokens(body)
     except Exception:
         return "unknown", 0
