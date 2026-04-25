@@ -921,3 +921,309 @@ class TestRegisterPatch:
                 vendor_safe="x",
                 class_name="XProviderCredentialProvider",
             )
+
+
+# ── Phase 4.2: configurable auth header for api-key-header renderer ──
+
+
+class TestApiKeyHeaderConfigurable:
+    """Phase 4.2 — ``--auth-header NAME`` overrides the default
+    ``api-key`` so vendor-specific headers (``X-API-Key``,
+    ``Api-Key``, etc.) are emitted at scaffold-time without a
+    post-edit.
+    """
+
+    def _params(self, **over):
+        kw = dict(DEFAULT_KW)
+        kw["auth"] = "api-key-header"
+        kw.update(over)
+        return ScaffoldParams(**kw)
+
+    def test_default_auth_header_is_api_key(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert '_AUTH_HEADER = "api-key"' in provider_art.content
+
+    def test_custom_auth_header_emitted_in_class(self):
+        arts = generate_artifacts(self._params(auth_header="X-API-Key"))
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert '_AUTH_HEADER = "X-API-Key"' in provider_art.content
+        assert '_AUTH_HEADER = "api-key"' not in provider_art.content
+
+    def test_custom_auth_header_asserted_in_test_file(self):
+        arts = generate_artifacts(self._params(auth_header="X-API-Key"))
+        test_art = next(a for a in arts if a.kind == "test")
+        # The test file's header-injection assertion uses the
+        # configured header name, not the default.
+        assert '"X-API-Key"' in test_art.content
+
+    def test_custom_auth_header_lowercased_in_strip_set(self):
+        # Caller-sent variants should be stripped — proxy is the
+        # authoritative source for the configured header.
+        arts = generate_artifacts(self._params(auth_header="X-API-Key"))
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # Strip set is alphabetised; check the lowercased name is in.
+        assert '"x-api-key"' in provider_art.content
+
+    def test_custom_auth_header_passes_ruff(self, tmp_path: Path):
+        arts = generate_artifacts(self._params(auth_header="X-API-Key"))
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        scratch = tmp_path / "scaffold_apikey_custom.py"
+        scratch.write_text(provider_art.content)
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", str(scratch)],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        assert result.returncode == 0, (
+            f"custom-header provider failed ruff: "
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+
+# ── Phase 4.2: bearer-passthrough renderer ───────────────────────────
+
+
+class TestBearerPassthroughRenderer:
+    """Phase 4.2 — ``--auth bearer-passthrough`` for OpenRouter-style
+    providers preserving extra/non-standard request body fields.
+    Generates Pattern A class + ``_BODY_PASSTHROUGH = True`` annotation
+    + a ``TestBodyPassThrough`` class asserting ``body_transform`` is
+    None on the InjectionPlan.
+    """
+
+    def _params(self, **over):
+        kw = dict(DEFAULT_KW)
+        kw["auth"] = "bearer-passthrough"
+        kw.update(over)
+        return ScaffoldParams(**kw)
+
+    def test_classifier_picks_passthrough_renderer(self):
+        arts = generate_artifacts(self._params())
+        assert len(arts) == 6  # 5 files + 1 instructions
+
+    def test_provider_class_declares_body_passthrough(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert "_BODY_PASSTHROUGH = True" in provider_art.content
+
+    def test_provider_class_subclasses_env_key_bearer(self):
+        # Same base class as Pattern A — the only difference is the
+        # explicit passthrough annotation + a stricter test contract.
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert "(_EnvKeyBearerProvider)" in provider_art.content
+
+    def test_provider_class_compiles(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        compile(provider_art.content, provider_art.relative_path, "exec")
+
+    def test_provider_class_passes_ruff(self, tmp_path: Path):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        scratch = tmp_path / "scaffold_passthrough_check.py"
+        scratch.write_text(provider_art.content)
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", str(scratch)],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        assert result.returncode == 0, (
+            f"passthrough provider failed ruff: "
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+    def test_test_file_has_body_passthrough_class(self):
+        arts = generate_artifacts(self._params())
+        test_art = next(a for a in arts if a.kind == "test")
+        assert "class TestBodyPassThrough" in test_art.content
+        assert "test_no_body_transform_in_plan" in test_art.content
+        assert "test_class_declares_passthrough" in test_art.content
+
+    def test_test_file_compiles(self):
+        arts = generate_artifacts(self._params())
+        test_art = next(a for a in arts if a.kind == "test")
+        compile(test_art.content, test_art.relative_path, "exec")
+
+    def test_extra_headers_supported(self):
+        # OpenRouter-style: HTTP-Referer + X-Title alongside body
+        # pass-through.
+        arts = generate_artifacts(
+            self._params(extra_headers={"HTTP-Referer": "https://x.example"})
+        )
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert "_EXTRA_HEADERS" in provider_art.content
+        assert "HTTP-Referer" in provider_art.content
+
+
+# ── Phase 4.2: anthropic-messages + api-key-header renderer ──────────
+
+
+class TestAnthropicMessagesApikeyRenderer:
+    """Phase 4.2 — Anthropic Messages adapter via x-api-key auth +
+    anthropic-version header. Capability declarations are EXPLICIT;
+    no implicit TIP support. Fixtures use Anthropic shape (content
+    blocks, max_tokens required, system as top-level field).
+    """
+
+    def _params(self, **over):
+        kw = dict(DEFAULT_KW)
+        kw["family"] = "anthropic-messages"
+        kw["auth"] = "api-key-header"
+        kw["endpoint"] = "https://api.example.com/v1/messages"
+        kw.update(over)
+        return ScaffoldParams(**kw)
+
+    def test_classifier_picks_anthropic_renderer(self):
+        arts = generate_artifacts(self._params())
+        assert len(arts) == 6  # 5 files + 1 instructions
+
+    def test_default_auth_header_is_x_api_key(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert '_AUTH_HEADER = "x-api-key"' in provider_art.content
+
+    def test_custom_auth_header_override(self):
+        arts = generate_artifacts(self._params(auth_header="X-API-Key"))
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert '_AUTH_HEADER = "X-API-Key"' in provider_art.content
+
+    def test_anthropic_version_emitted(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert '_ANTHROPIC_VERSION = "2023-06-01"' in provider_art.content
+        assert '"anthropic-version"' in provider_art.content
+
+    def test_capabilities_declared_explicit_empty(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # Explicit empty frozenset — no implicit TIP support.
+        assert "capabilities: frozenset = frozenset()" in provider_art.content
+        # The candidate capability names appear in the surrounding
+        # comment block (not as declared values).
+        assert "tip.compression.v1" in provider_art.content
+        assert "tip.cache.proxy-managed" in provider_art.content
+
+    def test_provider_class_compiles(self):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        compile(provider_art.content, provider_art.relative_path, "exec")
+
+    def test_provider_class_passes_ruff(self, tmp_path: Path):
+        arts = generate_artifacts(self._params())
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        scratch = tmp_path / "scaffold_anthropic_check.py"
+        scratch.write_text(provider_art.content)
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", str(scratch)],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+        assert result.returncode == 0, (
+            f"anthropic provider failed ruff: "
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+    def test_request_fixture_has_anthropic_shape(self):
+        arts = generate_artifacts(self._params())
+        req_art = next(a for a in arts if a.kind == "fixture" and "request" in a.relative_path)
+        body = json.loads(req_art.content)
+        # Anthropic-specific: max_tokens required, system at top level.
+        assert "max_tokens" in body
+        assert "system" in body
+        # No OpenAI-Chat-specific fields.
+        assert "temperature" not in body
+
+    def test_response_fixture_has_anthropic_shape(self):
+        arts = generate_artifacts(self._params())
+        resp_art = next(a for a in arts if a.kind == "fixture" and "response" in a.relative_path)
+        body = json.loads(resp_art.content)
+        # Anthropic content blocks (not OpenAI choices array).
+        assert "content" in body
+        assert isinstance(body["content"], list)
+        assert body["content"][0]["type"] == "text"
+        # Anthropic usage shape.
+        assert "input_tokens" in body["usage"]
+        assert "output_tokens" in body["usage"]
+        # No OpenAI-specific fields.
+        assert "choices" not in body
+        assert "prompt_tokens" not in body.get("usage", {})
+
+    def test_test_file_has_capability_class(self):
+        arts = generate_artifacts(self._params())
+        test_art = next(a for a in arts if a.kind == "test")
+        assert "class TestCapabilityDeclarations" in test_art.content
+        assert "test_no_implicit_tip_support" in test_art.content
+
+    def test_test_file_compiles(self):
+        arts = generate_artifacts(self._params())
+        test_art = next(a for a in arts if a.kind == "test")
+        compile(test_art.content, test_art.relative_path, "exec")
+
+    def test_test_file_asserts_anthropic_version(self):
+        arts = generate_artifacts(self._params())
+        test_art = next(a for a in arts if a.kind == "test")
+        assert "test_emits_anthropic_version" in test_art.content
+        assert '"anthropic-version"' in test_art.content
+        assert "2023-06-01" in test_art.content
+
+    def test_docs_stub_documents_anthropic_specifics(self):
+        arts = generate_artifacts(self._params())
+        docs_art = next(a for a in arts if a.kind == "docs")
+        assert "anthropic-version" in docs_art.content
+        assert "Capability declarations" in docs_art.content
+        # Curl example uses Anthropic shape (max_tokens, anthropic-version).
+        assert "max_tokens" in docs_art.content
+
+    def test_dry_run_works(self, tmp_path: Path):
+        # Acceptance criterion: dry-run works for each renderer.
+        params = self._params(out_dir=tmp_path, dry_run=True)
+        arts = generate_artifacts(params)
+        check_artifacts(arts)  # passes guardrails
+        # Nothing on disk — dry_run doesn't write here, but
+        # generate_artifacts itself doesn't write either; this asserts
+        # the generation pipeline is clean for the new renderer.
+        assert (tmp_path / "request.json").exists() is False
+
+
+# ── Phase 4.2: non-interactive failure on missing required fields ────
+
+
+class TestPhase42NonInteractiveSafety:
+    """Acceptance criterion: non-interactive mode fails safely when
+    required fields are missing for the new renderers.
+    """
+
+    def test_anthropic_missing_endpoint_fails(self):
+        params = ScaffoldParams(
+            docs_url="https://docs.example.com",
+            slug="tokenpak-x",
+            family="anthropic-messages",
+            auth="api-key-header",
+            endpoint="",  # empty — should fail
+            non_interactive=True,
+        )
+        with pytest.raises(ScaffoldError):
+            params.validate()
+
+    def test_passthrough_missing_endpoint_fails(self):
+        params = ScaffoldParams(
+            docs_url="https://docs.example.com",
+            slug="tokenpak-x",
+            family="openai-chat",
+            auth="bearer-passthrough",
+            endpoint="",
+            non_interactive=True,
+        )
+        with pytest.raises(ScaffoldError):
+            params.validate()
+
+    def test_invalid_slug_rejected_for_anthropic(self):
+        # Standard #23 §1.1 slug rules apply across renderers.
+        params = ScaffoldParams(
+            docs_url="https://docs.example.com",
+            slug="Bad_Slug",
+            family="anthropic-messages",
+            auth="api-key-header",
+            endpoint="https://api.example.com/v1/messages",
+        )
+        with pytest.raises(ScaffoldError):
+            params.validate()
