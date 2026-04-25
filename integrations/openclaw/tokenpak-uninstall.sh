@@ -95,13 +95,15 @@ if [ -f "$CFG" ]; then
     else
         log "No .pre-tokenpak-backup found — falling back to in-place strip of tokenpak-* entries."
         if confirm "Strip tokenpak-* providers, auth profiles, allowlist entries, and headers from $CFG?"; then
-            STRIP_RESULT=$(python3 - <<PYEOF
-import json, sys, shutil
+            STRIP_RESULT=$(DRY_RUN=$DRY_RUN python3 - <<PYEOF
+import json, os, shutil
 from pathlib import Path
 
+dry_run = os.environ.get("DRY_RUN", "0") == "1"
 cfg_path = Path("$CFG")
 backup = Path(str(cfg_path) + ".uninstall-rollback")
-shutil.copy2(cfg_path, backup)
+if not dry_run:
+    shutil.copy2(cfg_path, backup)
 
 c = json.loads(cfg_path.read_text())
 removed = []
@@ -147,12 +149,13 @@ strip_array(agents, "models", "agents.defaults.models")
 strip_array(agents, "modelAllowlist", "agents.defaults.modelAllowlist")
 
 # Save
-cfg_path.write_text(json.dumps(c, indent=2))
-print(json.dumps({"removed": removed, "rollback": str(backup)}))
+if not dry_run:
+    cfg_path.write_text(json.dumps(c, indent=2))
+print(json.dumps({"removed": removed, "rollback": str(backup), "dry_run": dry_run}))
 PYEOF
 )
             log "Stripped entries:"
-            echo "$STRIP_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print('  rollback:', d['rollback']); [print('  -',e) for e in d['removed']]" 2>&1
+            echo "$STRIP_RESULT" | python3 -c "import json,sys; d=json.load(sys.stdin); print('  rollback:', d['rollback'], '(DRY-RUN: not written)' if d['dry_run'] else ''); [print('  -',e, '(DRY-RUN: not applied)' if d['dry_run'] else '') for e in d['removed']]" 2>&1
         else
             log "Skipped openclaw.json modification."
         fi
