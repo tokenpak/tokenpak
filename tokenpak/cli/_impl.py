@@ -552,6 +552,85 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_adapter_scaffold(args) -> int:
+    """Scaffold a new provider adapter from its docs URL.
+
+    Phase 4 MVP per Standard #23 + the design spec at
+    ``docs/internal/specs/phase4-adapter-scaffold-spec-2026-04-25.md``.
+
+    Generates a CredentialProvider class, offline contract test file,
+    fixture JSONs, docs stub, and paste-ready follow-up issue text.
+    Defaults to ``live_verified=False`` (Standard #23 §6.4).
+    Generated provider classes land as standalone files under
+    ``tokenpak/services/routing_service/extras/`` and require manual
+    registration in ``credential_injector.py`` — keeps the writer's
+    blast radius bounded for the MVP slice.
+    """
+    from pathlib import Path
+
+    from tokenpak.scaffold import (
+        GuardrailViolation,
+        ScaffoldError,
+        ScaffoldParams,
+        parse_optional_dep_list,
+        scaffold,
+    )
+    from tokenpak.scaffold._config import parse_extra_header
+    from tokenpak.scaffold._writer import format_summary
+
+    if getattr(args, "llm_assist", False):
+        print(
+            "[scaffold] --llm-assist is not implemented in MVP. "
+            "Use deterministic --family / --auth / --endpoint flags instead.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    extra_headers: dict[str, str] = {}
+    for raw in getattr(args, "extra_headers", None) or []:
+        try:
+            k, v = parse_extra_header(raw)
+        except ScaffoldError as exc:
+            print(f"[scaffold] error: {exc}", file=sys.stderr)
+            sys.exit(2)
+        extra_headers[k] = v
+
+    out_dir_raw = getattr(args, "out_dir", None)
+    out_dir = Path(out_dir_raw).expanduser().resolve() if out_dir_raw else None
+
+    params = ScaffoldParams(
+        docs_url=args.from_docs,
+        slug=args.slug,
+        family=args.family,
+        auth=args.auth,
+        endpoint=args.endpoint,
+        streaming=args.streaming,
+        optional_deps=parse_optional_dep_list(getattr(args, "optional_dep", "")),
+        extra_headers=extra_headers,
+        out_dir=out_dir,
+        dry_run=bool(getattr(args, "dry_run", False)),
+        non_interactive=bool(getattr(args, "non_interactive", False)),
+        live_verified=False,
+    )
+
+    try:
+        params.validate()
+    except ScaffoldError as exc:
+        print(f"[scaffold] error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        result = scaffold(params)
+    except ScaffoldError as exc:
+        print(f"[scaffold] error: {exc}", file=sys.stderr)
+        sys.exit(2)
+    except GuardrailViolation as exc:
+        print(f"[scaffold] guardrail violation: {exc}", file=sys.stderr)
+        sys.exit(3)
+
+    print(format_summary(result, params.slug))
+
+
 def cmd_logs(args):
     """Show recent proxy logs."""
     log_candidates = [
@@ -2005,6 +2084,112 @@ def build_parser():
     )
     p_codex.add_argument("extra_args", nargs=argparse.REMAINDER)
     p_codex.set_defaults(func=cmd_codex)
+
+    p_adapter = sub.add_parser(
+        "adapter",
+        help="Adapter management (scaffold new providers from docs URLs)",
+    )
+    p_adapter_sub = p_adapter.add_subparsers(dest="adapter_cmd", required=False)
+
+    p_scaffold = p_adapter_sub.add_parser(
+        "scaffold",
+        help=(
+            "Scaffold a new provider integration from its docs URL "
+            "(Phase 4 MVP per docs/internal/specs/phase4-adapter-scaffold-spec-2026-04-25.md)"
+        ),
+    )
+    p_scaffold.add_argument(
+        "--from-docs",
+        dest="from_docs",
+        required=True,
+        help="Provider's API docs URL (used as docstring metadata + trace info)",
+    )
+    p_scaffold.add_argument(
+        "--slug",
+        required=True,
+        help="Provider slug per Standard #23 §1.1, e.g. tokenpak-x-provider",
+    )
+    p_scaffold.add_argument(
+        "--family",
+        required=True,
+        choices=sorted([
+            "openai-chat",
+            "openai-responses",
+            "anthropic-messages",
+            "gemini",
+            "azure-openai-wrapper",
+            "bedrock-wrapper",
+            "vertex-wrapper",
+            "cli-bridge",
+            "custom",
+        ]),
+        help="Wire format family. MVP fully implements 'openai-chat'; "
+        "others print a clear 'not yet templated' message pointing at "
+        "the reference implementation.",
+    )
+    p_scaffold.add_argument(
+        "--auth",
+        required=True,
+        choices=sorted([
+            "bearer",
+            "api-key-header",
+            "sigv4",
+            "oauth-adc",
+            "oauth-token-file",
+            "custom",
+        ]),
+        help="Auth scheme. MVP fully implements 'bearer'.",
+    )
+    p_scaffold.add_argument(
+        "--endpoint",
+        required=True,
+        help="Upstream URL (or URL template with {placeholders} for body-aware routing)",
+    )
+    p_scaffold.add_argument(
+        "--streaming",
+        choices=sorted(["same-url", "verb-suffix", "path-suffix", "none"]),
+        default="same-url",
+        help="How streaming is signalled to the upstream (default: same-url)",
+    )
+    p_scaffold.add_argument(
+        "--optional-dep",
+        dest="optional_dep",
+        default="",
+        help="Comma-separated list of pip packages required (e.g. 'boto3,botocore')",
+    )
+    p_scaffold.add_argument(
+        "--extra-header",
+        dest="extra_headers",
+        action="append",
+        default=[],
+        help="Extra static header to inject (KEY=VALUE; repeatable). "
+        "OpenRouter's HTTP-Referer + X-Title are the canonical case.",
+    )
+    p_scaffold.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        default=None,
+        help="Override canonical output locations; write all artifacts under this dir",
+    )
+    p_scaffold.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="Print what would be written without touching disk",
+    )
+    p_scaffold.add_argument(
+        "--non-interactive",
+        dest="non_interactive",
+        action="store_true",
+        help="Fail on any ambiguity instead of prompting (CI-safe)",
+    )
+    p_scaffold.add_argument(
+        "--llm-assist",
+        dest="llm_assist",
+        action="store_true",
+        help="(NOT IMPLEMENTED in MVP — explicit opt-in for future LLM-driven inference)",
+    )
+    p_scaffold.set_defaults(func=cmd_adapter_scaffold)
 
     p_logs = sub.add_parser("logs", help="Show recent proxy logs")
     p_logs.add_argument(
