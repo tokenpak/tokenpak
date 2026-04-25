@@ -628,7 +628,42 @@ def cmd_adapter_scaffold(args) -> int:
         print(f"[scaffold] guardrail violation: {exc}", file=sys.stderr)
         sys.exit(3)
 
-    print(format_summary(result, params.slug))
+    vendor_safe = params.vendor.replace("-", "_")
+    print(format_summary(
+        result,
+        params.slug,
+        class_basename=params.class_basename,
+        vendor_safe=vendor_safe,
+    ))
+
+    # --register: opt-in in-place patch of credential_injector.py.
+    # Default off so the tool stays non-destructive (Standard #23 §3
+    # additive-only spirit applied to codegen).
+    if getattr(args, "auto_register", False) and not params.dry_run:
+        from tokenpak.scaffold._register import (
+            RegisterError,
+            apply_register_patch,
+        )
+
+        try:
+            patched_path = apply_register_patch(
+                vendor_safe=vendor_safe,
+                class_name=f"{params.class_basename}CredentialProvider",
+            )
+            print()
+            print(
+                f"[scaffold] --register applied: patched {patched_path}\n"
+                f"  Run `git diff {patched_path}` to review."
+            )
+        except RegisterError as exc:
+            print()
+            print(f"[scaffold] --register failed: {exc}", file=sys.stderr)
+            print(
+                "[scaffold] The provider files are still on disk + the "
+                "manual patch instructions are above. Apply by hand.",
+                file=sys.stderr,
+            )
+            sys.exit(4)
 
 
 def cmd_logs(args):
@@ -2182,6 +2217,15 @@ def build_parser():
         dest="non_interactive",
         action="store_true",
         help="Fail on any ambiguity instead of prompting (CI-safe)",
+    )
+    p_scaffold.add_argument(
+        "--register",
+        dest="auto_register",
+        action="store_true",
+        help="(Phase 4.1) AUTO-APPLY the register() patch to credential_injector.py "
+        "in-place. Default is non-destructive — the tool prints the exact patch "
+        "for manual application. Use --register when you've reviewed the generated "
+        "class and trust the tool to wire it.",
     )
     p_scaffold.add_argument(
         "--llm-assist",

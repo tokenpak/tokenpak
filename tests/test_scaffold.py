@@ -278,24 +278,14 @@ class TestGeneratedAdapterStructure:
         assert "https://docs.example.com/api" in provider_art.content
 
     def test_provider_class_passes_ruff(self, tmp_path: Path):
-        # Generated source MUST lint clean per spec §5.
+        # Phase 4.1: generated provider files are SELF-CONTAINED
+        # (include SPDX header, docstring, imports). Lint without
+        # any wrapper — the file as written must pass ruff.
         params = _params()
         arts = generate_artifacts(params)
         provider_art = next(a for a in arts if a.kind == "provider-class")
-        # Wrap with import-block + blank line so ruff's I001 rule
-        # (sorted imports + blank line before code) is satisfied;
-        # the generated CLASS itself is what we're testing.
-        wrapper = (
-            "from __future__ import annotations\n"
-            "\n"
-            "from tokenpak.services.routing_service.credential_injector import (\n"
-            "    _EnvKeyBearerProvider,\n"
-            ")\n"
-            "\n"
-            "\n"
-        )
         scratch = tmp_path / "scaffold_check.py"
-        scratch.write_text(wrapper + provider_art.content)
+        scratch.write_text(provider_art.content)
         result = subprocess.run(
             [sys.executable, "-m", "ruff", "check", str(scratch)],
             capture_output=True,
@@ -306,6 +296,20 @@ class TestGeneratedAdapterStructure:
         assert result.returncode == 0, (
             f"generated provider class failed ruff: {result.stdout}\n{result.stderr}"
         )
+
+    def test_provider_class_is_self_contained(self):
+        # Phase 4.1 hardening — generated file should compile without
+        # any wrapper because it imports its own dependencies.
+        params = _params()
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # SPDX header, module docstring, future-annotations, and the
+        # base class import must all be present.
+        assert "SPDX-License-Identifier" in provider_art.content
+        assert "from __future__ import annotations" in provider_art.content
+        assert "_EnvKeyBearerProvider" in provider_art.content
+        # Module-level docstring (just after SPDX line).
+        assert "Auto-scaffolded credential provider" in provider_art.content
 
 
 # ── 5. Generated test fixture structure ─────────────────────────────
@@ -558,3 +562,362 @@ class TestUnsupportedFamilyAuthCombination:
         # Custom family + bearer auth isn't in the REFERENCE_PRS table.
         with pytest.raises(ScaffoldError):
             generate_artifacts(params)
+
+
+# ── Phase 4.1 regression tests ───────────────────────────────────────
+
+
+class TestConflictSkipBehavior:
+    """Writer refuses to overwrite existing files (Standard #23 §3 spirit
+    applied to codegen — non-destructive default).
+    """
+
+    def test_existing_file_is_skipped(self, tmp_path: Path):
+        from tokenpak.scaffold import scaffold
+
+        # First run writes everything.
+        params = _params(out_dir=tmp_path)
+        result1 = scaffold(params)
+        assert len(result1.written_paths) == 5
+        assert len(result1.skipped_existing) == 0
+
+        # Second run: every file already exists → all skipped.
+        params2 = _params(out_dir=tmp_path)
+        result2 = scaffold(params2)
+        assert len(result2.written_paths) == 0
+        assert len(result2.skipped_existing) == 5
+
+    def test_partial_existing_skips_only_overlap(self, tmp_path: Path):
+        from tokenpak.scaffold import scaffold
+
+        # Pre-write the docs stub only.
+        (tmp_path / "tokenpak-example.md").parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "tokenpak-example.md").write_text("# pre-existing\n")
+
+        params = _params(out_dir=tmp_path)
+        result = scaffold(params)
+        assert len(result.skipped_existing) == 1
+        assert result.skipped_existing[0].name == "tokenpak-example.md"
+        assert len(result.written_paths) == 4
+
+
+class TestAtomicWriteBehavior:
+    """Writer uses temp-file + rename so a crash mid-write doesn't
+    leave a half-written artifact.
+    """
+
+    def test_no_tmp_files_left_after_successful_write(self, tmp_path: Path):
+        from tokenpak.scaffold import scaffold
+
+        params = _params(out_dir=tmp_path)
+        scaffold(params)
+        # Walk the entire output tree; no .scaffold.tmp files should remain.
+        leftover = list(tmp_path.rglob("*.scaffold.tmp"))
+        assert leftover == [], f"atomic-write left tmp files: {leftover}"
+
+    def test_dry_run_writes_nothing_to_disk(self, tmp_path: Path):
+        from tokenpak.scaffold import scaffold
+
+        params = _params(out_dir=tmp_path, dry_run=True)
+        scaffold(params)
+        # tmp_path should be empty.
+        assert list(tmp_path.iterdir()) == []
+
+
+class TestDocsStubContent:
+    """Phase 4.1 polish — docs stub must be usable as-shipped."""
+
+    def test_docs_stub_contains_provider_slug(self):
+        params = _params()
+        arts = generate_artifacts(params)
+        docs_art = next(a for a in arts if a.kind == "docs")
+        assert "tokenpak-example" in docs_art.content
+
+    def test_docs_stub_contains_curl_example(self):
+        params = _params()
+        arts = generate_artifacts(params)
+        docs_art = next(a for a in arts if a.kind == "docs")
+        assert "curl" in docs_art.content
+        assert "X-TokenPak-Provider" in docs_art.content
+
+    def test_docs_stub_documents_optional_deps(self):
+        params = _params(optional_deps=["boto3", "botocore"])
+        arts = generate_artifacts(params)
+        docs_art = next(a for a in arts if a.kind == "docs")
+        # Both listed.
+        assert "boto3" in docs_art.content
+        assert "botocore" in docs_art.content
+        # Install instruction is present.
+        assert "pip install" in docs_art.content
+
+    def test_docs_stub_omits_optional_dep_section_when_none(self):
+        params = _params()
+        arts = generate_artifacts(params)
+        docs_art = next(a for a in arts if a.kind == "docs")
+        assert "Optional Python dependencies" not in docs_art.content
+
+    def test_docs_stub_has_troubleshooting_section(self):
+        params = _params()
+        arts = generate_artifacts(params)
+        docs_art = next(a for a in arts if a.kind == "docs")
+        assert "Troubleshooting" in docs_art.content
+
+
+class TestExtraHeaderHandling:
+    """Phase 4.1 — extra headers reflected in tests + exposed in
+    follow-up issue text + present in fixtures' contract.
+    """
+
+    def test_extra_headers_appear_in_provider_class(self):
+        params = _params(
+            extra_headers={
+                "HTTP-Referer": "https://tokenpak.ai",
+                "X-Title": "TokenPak",
+            }
+        )
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # Header dict block emitted.
+        assert "_EXTRA_HEADERS" in provider_art.content
+        # Both keys + values quoted correctly.
+        assert '"HTTP-Referer"' in provider_art.content
+        assert '"https://tokenpak.ai"' in provider_art.content
+        assert '"X-Title"' in provider_art.content
+
+    def test_extra_headers_asserted_in_test_file(self):
+        params = _params(
+            extra_headers={"HTTP-Referer": "https://tokenpak.ai"}
+        )
+        arts = generate_artifacts(params)
+        test_art = next(a for a in arts if a.kind == "test")
+        # Phase 4.1 — generated test asserts each extra header is in
+        # the resolved plan's add_headers.
+        assert "test_extra_headers_injected" in test_art.content
+        assert "HTTP-Referer" in test_art.content
+        assert "https://tokenpak.ai" in test_art.content
+
+    def test_no_extra_headers_block_when_none(self):
+        params = _params()  # no extra_headers
+        arts = generate_artifacts(params)
+        test_art = next(a for a in arts if a.kind == "test")
+        # No extra-header test class when no headers declared.
+        assert "test_extra_headers_injected" not in test_art.content
+
+
+class TestInvalidSlugHandling:
+    """Standard #23 §1.1 slug regex enforced at the input boundary."""
+
+    @pytest.mark.parametrize(
+        "bad_slug",
+        [
+            "not-tokenpak-prefix",
+            "TOKENPAK-uppercase",  # lowercase only
+            "tokenpak_underscore",  # hyphens only
+            "tokenpak-",  # nothing after prefix
+            "",  # empty
+            "tokenpak",  # no suffix
+            "tokenpak--double-hyphen",  # double hyphen
+            "tokenpak-end-",  # trailing hyphen
+        ],
+    )
+    def test_invalid_slug_raises(self, bad_slug):
+        params = _params(slug=bad_slug)
+        with pytest.raises(ScaffoldError):
+            params.validate()
+
+    @pytest.mark.parametrize(
+        "good_slug",
+        [
+            "tokenpak-mistral",
+            "tokenpak-azure-openai",
+            "tokenpak-bedrock-claude",
+            "tokenpak-vertex-gemini",
+            "tokenpak-foo123",
+            "tokenpak-multi-word-name",
+        ],
+    )
+    def test_valid_slug_accepted(self, good_slug):
+        params = _params(slug=good_slug)
+        params.validate()  # must not raise
+
+
+class TestLlmAssistRefusal:
+    """Phase 4.1 regression — --llm-assist exits explicitly,
+    deterministically, with a non-zero code per spec §1.2.
+    """
+
+    def test_llm_assist_exits_2(self):
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "tokenpak", "adapter", "scaffold",
+                "--from-docs", "https://docs.example.com",
+                "--slug", "tokenpak-llm-test",
+                "--family", "openai-chat",
+                "--auth", "bearer",
+                "--endpoint", "https://api.example.com/v1/chat/completions",
+                "--llm-assist",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        assert result.returncode == 2
+        # Message must mention --llm-assist + "not implemented".
+        msg = result.stderr.lower()
+        assert "llm-assist" in msg or "llm_assist" in msg
+        assert "not implemented" in msg or "deferred" in msg
+
+
+# ── New renderer: openai-chat + api-key-header ──────────────────────
+
+
+class TestApiKeyHeaderRenderer:
+    """Phase 4.1 — second renderer for OpenAI-Chat + api-key-header
+    auth (non-Bearer). Generates a standalone class with custom
+    auth header (default ``api-key``).
+    """
+
+    def _params(self, **over):
+        kw = dict(DEFAULT_KW)
+        kw["auth"] = "api-key-header"
+        kw.update(over)
+        return ScaffoldParams(**kw)
+
+    def test_classifier_picks_apikey_renderer(self):
+        params = self._params()
+        arts = generate_artifacts(params)  # must not raise classifier error
+        assert len(arts) == 6  # 5 files + 1 instructions
+
+    def test_provider_class_uses_api_key_header_not_bearer(self):
+        params = self._params()
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # The auth header is configurable; default is "api-key".
+        assert '_AUTH_HEADER = "api-key"' in provider_art.content
+        # Specifically NOT injecting an Authorization: Bearer header.
+        # (The word "Bearer" may appear in the docstring; the test
+        # asserts on the actual generated header injection logic.)
+        assert "headers = {self._AUTH_HEADER: api_key}" in provider_art.content
+        # The bearer template would emit ``Authorization: f"Bearer {...}"``;
+        # the api-key template never does.
+        assert 'f"Bearer {' not in provider_art.content
+        assert 'Authorization":' not in provider_art.content
+
+    def test_provider_class_is_standalone_module(self):
+        params = self._params()
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        # Self-contained; doesn't extend _EnvKeyBearerProvider.
+        assert "InjectionPlan" in provider_art.content
+        assert "_cached_resolve" in provider_art.content
+        assert "_EnvKeyBearerProvider" not in provider_art.content
+
+    def test_provider_class_compiles(self):
+        params = self._params()
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        compile(provider_art.content, provider_art.relative_path, "exec")
+
+    def test_provider_class_passes_ruff(self, tmp_path: Path):
+        params = self._params()
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        scratch = tmp_path / "scaffold_apikey_check.py"
+        scratch.write_text(provider_art.content)
+        result = subprocess.run(
+            [sys.executable, "-m", "ruff", "check", str(scratch)],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            f"api-key provider failed ruff: {result.stdout}\n{result.stderr}"
+        )
+
+    def test_test_file_asserts_api_key_header(self):
+        params = self._params()
+        arts = generate_artifacts(params)
+        test_art = next(a for a in arts if a.kind == "test")
+        assert "test_emits_api_key_header_not_bearer" in test_art.content
+
+    def test_extra_headers_supported(self):
+        params = self._params(extra_headers={"X-Region": "us-east"})
+        arts = generate_artifacts(params)
+        provider_art = next(a for a in arts if a.kind == "provider-class")
+        assert "X-Region" in provider_art.content
+        assert "us-east" in provider_art.content
+
+
+# ── --register flag (in-place patch) ─────────────────────────────────
+
+
+class TestRegisterPatch:
+    """Phase 4.1 — opt-in --register flag patches credential_injector.py
+    in-place. Must be idempotent and refuse to patch when anchors
+    aren't found.
+    """
+
+    def test_apply_register_patch_is_idempotent(self, tmp_path: Path, monkeypatch):
+        # Use a synthetic credential_injector.py for this test so we
+        # don't mutate the real one.
+        synth_dir = tmp_path / "tokenpak" / "services" / "routing_service"
+        synth_dir.mkdir(parents=True)
+        synth = synth_dir / "credential_injector.py"
+        synth.write_text(
+            "register(ExistingProvider())\n"
+            "\n"
+            "# ── Register built-ins at import\n"
+            "register(AnotherProvider())\n"
+            "\n"
+            '__all__ = [\n'
+            '    "ExistingProvider",\n'
+            ']\n'
+        )
+
+        # Repoint the register module's path resolver at the synthetic.
+        from tokenpak.scaffold import _register
+
+        monkeypatch.setattr(_register, "_INJECTOR_PATH", synth)
+
+        # First apply.
+        _register.apply_register_patch(
+            vendor_safe="test_provider",
+            class_name="TestProviderCredentialProvider",
+        )
+        first = synth.read_text()
+        assert "register(TestProviderCredentialProvider())" in first
+        assert "import TestProviderCredentialProvider" in first or (
+            "from tokenpak.services.routing_service.extras.test_provider import "
+            "TestProviderCredentialProvider"
+        ) in first
+        assert '"TestProviderCredentialProvider"' in first
+
+        # Second apply — idempotent, no double entries.
+        _register.apply_register_patch(
+            vendor_safe="test_provider",
+            class_name="TestProviderCredentialProvider",
+        )
+        second = synth.read_text()
+        assert second == first
+        # Exactly one register() line for the new class.
+        assert second.count("register(TestProviderCredentialProvider())") == 1
+
+    def test_apply_register_patch_refuses_when_no_anchor(
+        self, tmp_path: Path, monkeypatch
+    ):
+        from tokenpak.scaffold import RegisterError, _register
+
+        synth_dir = tmp_path / "tokenpak" / "services" / "routing_service"
+        synth_dir.mkdir(parents=True)
+        synth = synth_dir / "credential_injector.py"
+        # File without the expected anchors.
+        synth.write_text("# random content\n")
+        monkeypatch.setattr(_register, "_INJECTOR_PATH", synth)
+
+        with pytest.raises(RegisterError):
+            _register.apply_register_patch(
+                vendor_safe="x",
+                class_name="XProviderCredentialProvider",
+            )
