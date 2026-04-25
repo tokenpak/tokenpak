@@ -12,7 +12,7 @@ Canonical wire headers, manifest schemas, telemetry event schema, profiles, and 
 
 Third-party adopters (adapter / plugin / alternate proxy implementers): `pip install tokenpak-tip-validator==0.1.0` for the separate conformance-testing package.
 
-Protocol docs: https://tokenpak.ai/protocol
+Protocol docs: https://docs.tokenpak.ai/protocol/
 
 ### Proxy + CLI consolidation
 
@@ -46,8 +46,8 @@ Drop-in. DeprecationWarning shims preserve every legacy import path through TIP-
 
 ## Architecture + operational docs
 
-- Protocol: https://tokenpak.ai/protocol
-- Quickstart: https://tokenpak.ai/quickstart
+- Protocol: https://docs.tokenpak.ai/protocol/
+- Quickstart: https://docs.tokenpak.ai/quickstart/
 - Canonical §1 subsystem layout: Architecture Standard §1 in the internal docs
 
 ## Acknowledgments
