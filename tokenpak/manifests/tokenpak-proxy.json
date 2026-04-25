@@ -10,6 +10,7 @@
     "tip.cache.proxy-managed",
     "tip.cache.ttl-ordering",
     "tip.compression.v1",
+    "tip.intent.contract-headers-v1",
     "tip.routing.classifier.v1",
     "tip.routing.fallback-chain",
     "tip.security.dlp-redaction",
