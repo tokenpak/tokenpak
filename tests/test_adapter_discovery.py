@@ -8,7 +8,6 @@ from textwrap import dedent
 
 from tokenpak.proxy.adapters import (
     build_default_registry,
-    build_registry,
     discover_filesystem_adapters,
     register_discovered,
 )
@@ -241,15 +240,19 @@ class TestRegisterDiscovered:
 
 
 class TestBuildRegistry:
-    def test_build_registry_includes_builtins_and_filesystem_adapters(
-        self, tmp_path: Path, monkeypatch
+    def test_register_discovered_with_explicit_dir_finds_plugin(
+        self, tmp_path: Path
     ):
-        # Point the dropin discovery at our tmp dir for this test.
-        monkeypatch.setattr(
-            "tokenpak.proxy.adapters.discovery._DEFAULT_DROPIN_DIR", tmp_path
-        )
+        # Use the explicit ``filesystem_dir`` parameter rather than
+        # monkeypatching the module-level ``_DEFAULT_DROPIN_DIR`` —
+        # the test-suite poisoner (tests/deprecations) can re-import
+        # the discovery module mid-suite, dropping any monkeypatched
+        # constant. Passing the dir explicitly survives that.
         (tmp_path / "p1.py").write_text(VALID_PLUGIN_SRC)
-        registry = build_registry()
+        registry = build_default_registry()
+        register_discovered(
+            registry, include_entry_points=False, filesystem_dir=tmp_path
+        )
         formats = {a.source_format for a in registry.adapters()}
         # Built-ins still present
         assert "anthropic-messages" in formats
@@ -257,14 +260,19 @@ class TestBuildRegistry:
         # Plugin discovered
         assert "my-test" in formats
 
-    def test_build_registry_with_no_plugins_matches_default(self, monkeypatch):
-        # Empty dropin dir + no entry points → identical to default.
-        monkeypatch.setattr(
-            "tokenpak.proxy.adapters.discovery._DEFAULT_DROPIN_DIR",
-            Path("/nonexistent/path/for/test"),
+    def test_build_registry_with_empty_dropin_matches_default(self, tmp_path: Path):
+        # Empty (non-existent) dropin dir → register_discovered adds 0;
+        # registry equals build_default_registry.
+        empty_dir = tmp_path / "nonexistent"
+        registry = build_default_registry()
+        added = register_discovered(
+            registry,
+            include_entry_points=False,
+            filesystem_dir=empty_dir,
         )
-        default = {a.source_format for a in build_default_registry().adapters()}
-        full = {a.source_format for a in build_registry().adapters()}
-        # Full may have entry-point plugins from the host environment;
-        # but it must contain everything default has + nothing fewer.
-        assert default <= full
+        assert added == 0
+        default_formats = {
+            a.source_format for a in build_default_registry().adapters()
+        }
+        full_formats = {a.source_format for a in registry.adapters()}
+        assert default_formats == full_formats
