@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout tokenpak
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: tokenpak
 
@@ -70,7 +70,7 @@ jobs:
       # the schemas on disk — avoids the PyPI-drift WARN the doctor
       # runner handles at runtime.
       - name: Checkout tokenpak/registry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tokenpak/registry
           path: registry
@@ -168,12 +168,12 @@ jobs:
 
     steps:
       - name: Checkout tokenpak
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: tokenpak
 
       - name: Checkout tokenpak/registry
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: tokenpak/registry
           path: registry
