@@ -218,22 +218,34 @@ def get_capsule_request_hook(
 
 
 def _estimate_tokens(body: bytes) -> int:
-    """Rough token estimate (chars / 4)."""
-    try:
-        import json
+    """Format-agnostic token estimate via the adapter registry.
 
-        data = json.loads(body)
-        messages = data.get("messages", [])
-        total_chars = 0
-        for msg in messages:
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                total_chars += len(content)
-            elif isinstance(content, list):
-                for part in content:
-                    if isinstance(part, dict):
-                        total_chars += len(part.get("text", ""))
-        return total_chars // 4
+    Iterates registered :class:`FormatAdapter` instances and asks each
+    to count — only the adapter that actually understands the body
+    shape will return >0 (the others return 0 from a JSON parse error
+    or a missing root field). Picks the max so any adapter that
+    successfully parses wins.
+
+    Covers Anthropic Messages (``messages``), OpenAI Responses
+    (``input``), OpenAI Chat (``messages``), Google (``contents``) +
+    any future format that registers an adapter. No per-platform
+    branches in this function.
+    """
+    if not body:
+        return 0
+    try:
+        from tokenpak.proxy.adapters import build_default_registry
+
+        registry = build_default_registry()
+        best = 0
+        for adapter in registry.adapters():
+            try:
+                _model, tokens = adapter.extract_request_tokens(body)
+                if tokens > best:
+                    best = tokens
+            except Exception:
+                continue
+        return best if best > 0 else len(body) // 4
     except Exception:
         return len(body) // 4
 

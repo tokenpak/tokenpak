@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, Callable, Dict, Generator, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from urllib.parse import urlparse
 
 from tokenpak import __version__ as _tokenpak_version
@@ -772,7 +772,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 model = route.model
             except Exception:
                 pass
-            input_tokens = _estimate_tokens_from_body(body)
+            # Format-agnostic token estimation: route through the
+            # adapter registry so codex (``input`` field), Google
+            # (``contents`` field), and any future format counted
+            # correctly without per-platform branches in this hot path.
+            # Falls back to legacy hardcoded ``messages`` reader when
+            # no adapter matches (passthrough or unrecognised body).
+            _adapter_model, _adapter_tokens = _extract_tokens_via_adapters(
+                body, dict(self.headers), self.path
+            )
+            if _adapter_tokens > 0:
+                input_tokens = _adapter_tokens
+                if model in (None, "", "unknown") and _adapter_model:
+                    model = _adapter_model
+            else:
+                input_tokens = _estimate_tokens_from_body(body)
 
             try:
                 data = json.loads(body)
@@ -1866,7 +1880,52 @@ def _compute_stable_prefix_hash(body: Optional[bytes]) -> str:
         return ""
 
 
+# Lazy module-level adapter registry — built once on first use, then
+# reused for every request. Used by ``_extract_tokens_via_adapters`` to
+# delegate request shape parsing to the format-specific adapter.
+_ADAPTER_REGISTRY = None
+
+
+def _get_adapter_registry():
+    global _ADAPTER_REGISTRY
+    if _ADAPTER_REGISTRY is None:
+        from tokenpak.proxy.adapters import build_default_registry
+        _ADAPTER_REGISTRY = build_default_registry()
+    return _ADAPTER_REGISTRY
+
+
+def _extract_tokens_via_adapters(
+    body: bytes,
+    headers: dict,
+    path: str,
+) -> Tuple[str, int]:
+    """Look up the matching format adapter + ask it for (model, tokens).
+
+    Format-agnostic replacement for the historical hardcoded
+    ``messages`` field reader. Each registered adapter knows its own
+    request shape (Anthropic ``messages``, OpenAI Responses ``input``,
+    Google ``contents``, etc.) — we let it do the counting.
+
+    Returns ``("unknown", 0)`` when no adapter matches or counting
+    fails; the caller decides whether to fall back.
+    """
+    if not body:
+        return "unknown", 0
+    try:
+        registry = _get_adapter_registry()
+        adapter = registry.detect(path, headers, body)
+        return adapter.extract_request_tokens(body)
+    except Exception:
+        return "unknown", 0
+
+
 def _estimate_tokens_from_body(body: bytes) -> int:
+    """Legacy hardcoded ``messages``-only token estimator.
+
+    Kept as a fallback for paths where adapter detection fails (e.g.
+    passthrough adapter normalises to a single empty user message).
+    Prefer :func:`_extract_tokens_via_adapters` in new code.
+    """
     try:
         data = json.loads(body)
         messages = data.get("messages", [])
