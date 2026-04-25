@@ -104,6 +104,20 @@ class AnthropicOAuthBackend:
                     }).encode(),
                 )
 
+            # ── Defense-in-depth: per-model context cap (v1.3.22) ────
+            # Fail fast at the proxy boundary if the inbound payload
+            # exceeds the model's context window. Saves a wasted
+            # round-trip to Anthropic + lets the caller (OpenClaw)
+            # compact + retry against a clean 413 instead of waiting
+            # for ``invalid_request_error: prompt is too long``.
+            #
+            # Model context windows are sourced dynamically from
+            # Anthropic's /v1/models endpoint; cached for 24h with
+            # fail-open semantics (unknown model → skip validation).
+            cap_response = self._maybe_reject_oversized(request)
+            if cap_response is not None:
+                return cap_response
+
             # Resolve platform origin + session mapping for this request.
             origin, mapped_session_id = self._resolve_session(request)
 
@@ -285,6 +299,128 @@ class AnthropicOAuthBackend:
                     "error": {"type": "backend_error", "message": str(exc)[:200]}
                 }).encode(),
             )
+
+    # ── Per-model context cap (v1.3.22) ─────────────────────────────
+
+    # Safety margin between the inbound payload and the model's
+    # context wall. We reserve at least this much for the response
+    # plus tokenpak's own framing. Any inbound payload over
+    # ``max_input_tokens - margin`` is rejected with 413.
+    _CONTEXT_SAFETY_MARGIN_TOKENS = 4096
+
+    def _maybe_reject_oversized(self, request: Request):
+        """Fast 413 when the inbound payload exceeds the model's cap.
+
+        Returns a :class:`BackendResponse` to short-circuit dispatch,
+        or ``None`` to proceed normally (fail-open: unknown model,
+        unknown body shape, registry unreachable, etc.).
+
+        Disable via ``TOKENPAK_BRIDGE_CONTEXT_CHECK=0`` for debugging.
+        """
+        import os as _os
+
+        if _os.environ.get("TOKENPAK_BRIDGE_CONTEXT_CHECK", "1").strip() == "0":
+            return None
+        body = request.body or b""
+        if not body:
+            return None
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        model_id = data.get("model")
+        if not isinstance(model_id, str) or not model_id.strip():
+            return None
+        try:
+            from tokenpak.services.routing_service.model_context import (
+                get_registry,
+            )
+            cap = get_registry().get_context_window(model_id)
+        except Exception:
+            cap = None
+        if cap is None:
+            # Fail-open: unknown model, registry miss. Anthropic will
+            # still enforce the wall on its end if we're truly over.
+            return None
+
+        estimated = self._estimate_input_tokens(data)
+        ceiling = cap - self._CONTEXT_SAFETY_MARGIN_TOKENS
+        if estimated <= ceiling:
+            return None
+
+        # Over the wall — reject before spawning the subprocess.
+        err_payload = {
+            "error": {
+                "type": "context_overflow",
+                "message": (
+                    f"Estimated input ({estimated:,} tokens) exceeds "
+                    f"{model_id}'s context window ({cap:,} tokens, "
+                    f"reserving {self._CONTEXT_SAFETY_MARGIN_TOKENS} for "
+                    f"completion). Compact the request or pick a model "
+                    f"with a larger context."
+                ),
+                "model": model_id,
+                "context_window": cap,
+                "estimated_input_tokens": estimated,
+                "safety_margin": self._CONTEXT_SAFETY_MARGIN_TOKENS,
+            }
+        }
+        logger.info(
+            "anthropic-oauth: 413 context overflow model=%s estimated=%d cap=%d",
+            model_id, estimated, cap,
+        )
+        return BackendResponse(
+            status=413,
+            headers={"content-type": "application/json"},
+            body=json.dumps(err_payload).encode("utf-8"),
+        )
+
+    @staticmethod
+    def _estimate_input_tokens(body: dict) -> int:
+        """Cheap token estimate from raw JSON body (chars / 3.6).
+
+        Uses 3.6 chars/token (Anthropic's published average for
+        English; closer to 3.0 for code-heavy / 4.0 for prose). It's
+        conservative — we'd rather wave through some borderline
+        requests than reject correct ones because of a low estimate.
+        Final authority is Anthropic's tokenizer; this is just the
+        proxy-side fence to avoid round-tripping known-overlimit
+        payloads.
+        """
+        chars = 0
+        # system prompt
+        sys_val = body.get("system")
+        if isinstance(sys_val, str):
+            chars += len(sys_val)
+        elif isinstance(sys_val, list):
+            for blk in sys_val:
+                if isinstance(blk, dict):
+                    t = blk.get("text")
+                    if isinstance(t, str):
+                        chars += len(t)
+        # messages
+        for msg in body.get("messages") or []:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            if isinstance(content, str):
+                chars += len(content)
+            elif isinstance(content, list):
+                for blk in content:
+                    if isinstance(blk, dict):
+                        t = blk.get("text") or blk.get("content")
+                        if isinstance(t, str):
+                            chars += len(t)
+        # tools (very rough — schema serialized as JSON)
+        tools = body.get("tools")
+        if isinstance(tools, list):
+            try:
+                chars += len(json.dumps(tools))
+            except (TypeError, ValueError):
+                pass
+        return int(chars / 3.6)
 
     # ── Subprocess flag builder — platform-slim by default ──────────
     #
@@ -562,11 +698,28 @@ class AnthropicOAuthBackend:
 
     @staticmethod
     def _conversation_fingerprint(body: bytes) -> Optional[str]:
-        """Stable ID from (model, first user message text).
+        """Stable ID for the platform conversation.
 
-        Same OpenClaw conversation replays the same first user message
-        on every turn — so the fingerprint is stable across turns in
-        one conversation, and unique per ``/new`` session.
+        Keyed on ``(system prompt + first user message text)`` —
+        components a well-behaved platform client replays identically
+        across every turn of the same conversation and that differ
+        between conversations.
+
+        Edge case (accepted): OpenClaw's ``/new`` may send an opening
+        boilerplate turn whose first user message differs from the
+        user's first *real* message. That creates a one-turn
+        cache-warmup hop — turn 1 and turn 2+ hit different
+        fingerprints. All subsequent turns within the same
+        conversation share the same fp and reuse one Claude session
+        via ``--resume``, accumulating Anthropic's prompt cache
+        normally. Net effect: 4-of-6 turns cached for a typical
+        6-turn conversation (verified 2026-04-24).
+
+        Including the system prompt in the key distinguishes
+        same-first-user-message conversations that happen to differ
+        in system context (e.g. different OpenClaw workspaces with
+        different AGENTS.md), so cache entries don't collide across
+        truly different conversations.
         """
         if not body:
             return None
@@ -576,32 +729,50 @@ class AnthropicOAuthBackend:
             return None
         if not isinstance(data, dict):
             return None
-        messages = data.get("messages") or []
-        first_user_text: Optional[str] = None
-        for m in messages:
-            if not isinstance(m, dict) or m.get("role") != "user":
-                continue
-            content = m.get("content")
+
+        def _content_text(content) -> str:
             if isinstance(content, str):
-                first_user_text = content
-            elif isinstance(content, list):
-                parts: list[str] = []
+                return content
+            if isinstance(content, list):
+                parts = []
                 for blk in content:
                     if isinstance(blk, dict) and blk.get("type") == "text":
                         t = blk.get("text")
                         if isinstance(t, str):
                             parts.append(t)
-                if parts:
-                    first_user_text = "\n".join(parts)
-            if first_user_text is not None:
+                return "\n".join(parts)
+            return ""
+
+        system = data.get("system") or ""
+        if isinstance(system, list):
+            system = _content_text(system)
+        system_text = (system if isinstance(system, str) else "")[:2000]
+
+        messages = data.get("messages") or []
+        first_user_text: Optional[str] = None
+        for m in messages:
+            if not isinstance(m, dict) or m.get("role") != "user":
+                continue
+            text = _content_text(m.get("content"))
+            if text.strip():
+                first_user_text = text
                 break
-        if not first_user_text or not first_user_text.strip():
+        if not first_user_text:
             return None
-        model = data.get("model") or ""
+
         import hashlib
 
-        key = f"{model}\n{first_user_text[:1000]}"
-        return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        model = data.get("model") or ""
+        key = f"model={model}\nsystem={system_text}\nfirst_user={first_user_text[:1000]}"
+        fp = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+        import os as _os
+        if _os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+            logger.warning(
+                "anthropic-oauth[fp] fp=%s model=%s sys_len=%d "
+                "first_user[:80]=%r",
+                fp, model, len(system_text), first_user_text[:80],
+            )
+        return fp
 
     @classmethod
     def _persist_session(

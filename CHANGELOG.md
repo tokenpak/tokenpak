@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.22] - 2026-04-24
+
+### Added — Dynamic per-model context registry + fail-fast 413 at the bridge boundary
+
+Per-model context windows are now sourced from each provider's own `/v1/models` API instead of being hand-maintained in tokenpak. Self-maintaining + provider-agnostic: any future provider (OpenAI, Google, etc.) plugs in with one `register_provider()` call.
+
+**New module** `tokenpak/services/routing_service/model_context.py`:
+
+- `ModelRegistryProvider` Protocol — each provider implements `fetch() -> Iterable[ModelLimits]` against its own model-listing API.
+- `ModelContextRegistry` — federation across registered providers; lazy load on first use; 24h TTL cache at `~/.tokenpak/model_context_cache.json`; thread-safe; fail-open semantics (unreachable provider or unknown model → returns `None`, caller skips validation).
+- `AnthropicModelRegistryProvider` — built-in. Hits `GET https://api.anthropic.com/v1/models`, returns `max_input_tokens` + `max_tokens` per model. Reuses Claude CLI OAuth from `~/.claude/.credentials.json`.
+- Lookup is normalization-aware: callers can pass either versioned (`claude-haiku-4-5-20251001`) or unversioned (`claude-opus-4-7`) forms; both resolve to the same record.
+
+**OAuth backend dispatch** now does a fast input-token estimate before spawning the subprocess. If the estimate exceeds the model's context window minus a 4096-token safety margin, returns `HTTP 413` with a structured `context_overflow` error including `model`, `context_window`, `estimated_input_tokens`, `safety_margin`. No wasted round-trip to Anthropic, no reactive compaction, no ugly fail-then-retry latency. Disable via `TOKENPAK_BRIDGE_CONTEXT_CHECK=0`.
+
+### Live verification (2026-04-24)
+
+| Scenario | Result |
+|---|---|
+| Tiny payload to `claude-haiku-4-5` | HTTP 200 (passthrough) |
+| 222k tokens to `claude-haiku-4-5` (200k cap) | **HTTP 413** with `context_overflow` payload, served in milliseconds |
+| Unknown model id (`claude-opus-3-old`, `gpt-5.4`) | Registry returns `None`; backend fails-open |
+| Cache age > 24h | Lazy refresh on next access |
+| `/v1/models` unreachable | Cache stays as-is; new lookups fail-open |
+
+Initial fetch produced 9 Anthropic model records (Opus 4.6/4.7 + Sonnet 4.x at 1M, Haiku 4.5 + older Opus/Sonnet at 200k).
+
+### Provider-agnostic by design
+
+The registry has no Anthropic-specific assumptions in the federation layer — that's the registered Anthropic provider's job. Adding OpenAI/Codex would be:
+
+```python
+class OpenAIModelRegistryProvider:
+    name = "openai"
+    def fetch(self) -> Iterable[ModelLimits]:
+        # GET /v1/models with the user's OpenAI key, parse, yield ModelLimits
+        ...
+
+register_provider(OpenAIModelRegistryProvider())
+```
+
+No changes to `ModelContextRegistry`, `AnthropicOAuthBackend`, or the proxy hot path. Honors `feedback_always_dynamic` (2026-04-16) + Kevin 2026-04-24 ("provider/model/platform agnostic, self-maintaining, dynamic — users never edit a hand-written model list").
+
+### Tests
+
+191 services + proxy tests green. Ruff + import contracts clean. Live curl verification covers passthrough, 413 fail-fast, cache behavior, and unknown-model fail-open.
+
 ## [1.3.21] - 2026-04-24
 
 ### Fixed — Platform-slim subprocess context (stop auto-compaction + restore cache)
