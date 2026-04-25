@@ -31,6 +31,9 @@ from tokenpak.services.routing_service.backends.anthropic_oauth import (
     AnthropicOAuthBackend,
 )
 from tokenpak.services.routing_service.backends.base import Backend
+from tokenpak.services.routing_service.backends.openai_codex_oauth import (
+    OpenAICodexOAuthBackend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +56,11 @@ class BackendSelector:
         self,
         api_backend: Optional[Backend] = None,
         oauth_backend: Optional[Backend] = None,
+        codex_backend: Optional[Backend] = None,
     ) -> None:
         self._api = api_backend or AnthropicAPIBackend()
         self._oauth = oauth_backend or AnthropicOAuthBackend()
+        self._codex = codex_backend or OpenAICodexOAuthBackend()
 
     def select(
         self, request: Request, route_class: RouteClass
@@ -89,12 +94,14 @@ class BackendSelector:
 
         # 2. Platform bridge — provider-name routing for adapter traffic
         # (OpenClaw, Codex, future). Ratified 2026-04-24:
-        #   - tokenpak-claude-code  → companion path (OAuth backend) always
+        #   - tokenpak-claude-code  → companion path (Anthropic OAuth backend) always
         #   - tokenpak-anthropic    → api or OAuth based on caller auth shape
-        #   - tokenpak-openai-codex → (reserved; falls through for now)
+        #   - tokenpak-openai-codex → companion path (Codex OAuth backend) always
         provider = self._resolve_provider(request.headers or {})
         if provider == "tokenpak-claude-code":
             return self._oauth
+        if provider == "tokenpak-openai-codex":
+            return self._codex
         if provider == "tokenpak-anthropic":
             lh = {k.lower(): v for k, v in (request.headers or {}).items()}
             if lh.get("x-api-key"):

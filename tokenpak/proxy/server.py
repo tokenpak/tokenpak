@@ -660,7 +660,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(target_url)
 
         should_log = any(h in target_url for h in INTERCEPT_HOSTS)
-        is_messages = "/messages" in target_url or "/chat/completions" in target_url
+        is_messages = (
+            "/messages" in target_url
+            or "/chat/completions" in target_url
+            or "/v1/responses" in target_url
+        )
 
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
@@ -924,23 +928,29 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         #                           the companion bridge Kevin asked to
         #                           restore.
         #
-        #   tokenpak-openai-codex → CREDENTIAL INJECTION (byte-forward
-        #                           with rewritten auth headers + URL
-        #                           + body normalization). Codex's
-        #                           ChatGPT backend is HTTP — no
-        #                           subprocess equivalent.
+        #   tokenpak-openai-codex → SUBPROCESS dispatch through the
+        #                           ``codex`` CLI (v1.3.24, 2026-04-24).
+        #                           Mirrors the Claude Code path — OAuth
+        #                           via ``~/.codex/auth.json``, session
+        #                           continuity via ``codex exec resume
+        #                           <thread_id>``, tool use, AGENTS.md.
+        #                           Falls back to credential injection
+        #                           when TOKENPAK_COMPANION_SUBPROCESS=0
+        #                           or the codex CLI is unavailable.
         #
         #   tokenpak-anthropic    → CREDENTIAL INJECTION (byte-forward
         #                           with caller's own OAuth / api-key).
         #
         # Opt-outs:
         #   TOKENPAK_CREDENTIAL_INJECTION=0  — disable the header-rewrite
-        #                                       path (Codex + Anthropic)
-        #   TOKENPAK_COMPANION_SUBPROCESS=0  — disable Claude Code
-        #                                       subprocess path (force
-        #                                       byte-forward which will
-        #                                       fail for OpenClaw-
-        #                                       style callers)
+        #                                       path (Anthropic + Codex
+        #                                       fallback)
+        #   TOKENPAK_COMPANION_SUBPROCESS=0  — disable subprocess paths
+        #                                       (Claude Code + Codex);
+        #                                       Codex falls back to
+        #                                       credential injection,
+        #                                       Claude Code fails for
+        #                                       OpenClaw-style callers
         _resolved_provider: Optional[str] = None
         if should_log and is_messages:
             try:
@@ -994,9 +1004,56 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     type(_be_err).__name__, _be_err,
                 )
 
-        # (2) Credential injection for non-Claude-Code providers (Codex,
-        # Anthropic). This is the byte-preserved HTTP path where we
-        # rewrite caller auth with the provider's credentials and
+        # (1b) Subprocess dispatch for tokenpak-openai-codex — DEFAULT path
+        # for Codex traffic (v1.3.24, 2026-04-24). Mirrors the Claude
+        # Code companion bridge: spawn ``codex exec --json`` with stdin
+        # prompt + workspace cwd; resume by Codex thread uuid on
+        # follow-up turns of the same conversation. Disabled by
+        # TOKENPAK_COMPANION_SUBPROCESS=0 (falls through to credential
+        # injection HTTP path below).
+        if (
+            should_log
+            and is_messages
+            and _resolved_provider == "tokenpak-openai-codex"
+            and os.environ.get("TOKENPAK_COMPANION_SUBPROCESS", "1") != "0"
+        ):
+            if os.environ.get("TOKENPAK_DUMP_HEADERS", "").strip() == "1":
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy[INJECT] provider=tokenpak-openai-codex plan=subprocess"
+                )
+            try:
+                from tokenpak.services.request import Request as _Req
+                from tokenpak.services.routing_service.backends.openai_codex_oauth import (
+                    OpenAICodexOAuthBackend,
+                )
+
+                _be = OpenAICodexOAuthBackend()
+                _resp = _be.dispatch(
+                    _Req(body=body or b"", headers=dict(self.headers))
+                )
+                self.send_response(_resp.status)
+                for _hk, _hv in (_resp.headers or {}).items():
+                    self.send_header(_hk, _hv)
+                self.send_header("Content-Length", str(len(_resp.body or b"")))
+                self.end_headers()
+                if _resp.body:
+                    self.wfile.write(_resp.body)
+                return
+            except Exception as _be_err:
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "tokenpak.proxy: codex subprocess companion dispatch "
+                    "failed (%s: %s) — falling back to credential injection",
+                    type(_be_err).__name__, _be_err,
+                )
+
+        # (2) Credential injection for tokenpak-anthropic (and the
+        # tokenpak-openai-codex fallback when subprocess is disabled or
+        # the codex CLI is unavailable). Byte-preserved HTTP path where
+        # we rewrite caller auth with provider credentials and
         # optionally redirect upstream + normalize body.
         _cred_injection_plan = None
         if (
