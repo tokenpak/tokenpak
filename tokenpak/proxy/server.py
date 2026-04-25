@@ -801,6 +801,37 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if _adapter_tokens == 0:
                 input_tokens = _estimate_tokens_from_body(body)
 
+            # ── Intent Layer Phase 0 — classify upstream ───────────────
+            # Always classify; gate the WIRE EMISSION downstream per
+            # Standard #23 §4.3. Telemetry stays local-only when the
+            # adapter doesn't declare ``tip.intent.contract-headers-v1``.
+            _intent_contract = None
+            try:
+                from tokenpak.proxy.intent_classifier import classify_intent as _classify_intent
+                from tokenpak.proxy.intent_classifier import (
+                    extract_prompt_text as _extract_prompt_text,
+                )
+                from tokenpak.proxy.intent_contract import build_contract as _build_contract
+
+                _prompt_text = ""
+                if request_adapter is not None and body:
+                    try:
+                        _canonical = request_adapter.normalize(body)
+                        _prompt_text = _extract_prompt_text(
+                            getattr(_canonical, "messages", None) or []
+                        )
+                    except Exception:
+                        _prompt_text = ""
+                _classification = _classify_intent(_prompt_text)
+                _intent_contract = _build_contract(
+                    classification=_classification,
+                    raw_prompt=_prompt_text,
+                )
+            except Exception:
+                # Telemetry side-channel — never break the proxy on
+                # classifier errors. Leave _intent_contract as None.
+                _intent_contract = None
+
             try:
                 data = json.loads(body)
                 is_streaming = data.get("stream", False)
@@ -1421,6 +1452,47 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             fwd_headers["Host"] = parsed.netloc
             if body is not None:
                 fwd_headers["Content-Length"] = str(len(body))
+
+        # ── Intent Layer Phase 0 — capability-gated header emission ──
+        # Standard #23 §4.3 verbatim: attach wire intent headers ONLY
+        # when the request adapter declares the opt-in capability
+        # ``tip.intent.contract-headers-v1``. Otherwise the contract
+        # stays in local telemetry only (``tip_headers_stripped`` row
+        # bit flips on for the dashboard count).
+        _i0_emitted = False
+        _i0_stripped = False
+        if _intent_contract is not None:
+            try:
+                from tokenpak.proxy.intent_contract import GATE_CAPABILITY as _I0_GATE
+                from tokenpak.proxy.intent_contract import IntentTelemetryRow as _I0Row
+                from tokenpak.proxy.intent_contract import attach_intent_headers as _i0_attach
+                from tokenpak.proxy.intent_contract import get_default_store as _i0_store
+
+                if (
+                    request_adapter is not None
+                    and _I0_GATE in request_adapter.capabilities
+                ):
+                    _i0_attach(fwd_headers, _intent_contract)
+                    _i0_emitted = True
+                else:
+                    # Headers stay in local telemetry only — no wire emission.
+                    _i0_stripped = True
+
+                _i0_store().write(
+                    _I0Row(
+                        request_id=_req_id,
+                        contract=_intent_contract,
+                        timestamp=datetime.now().isoformat(timespec="seconds"),
+                        tip_headers_emitted=_i0_emitted,
+                        tip_headers_stripped=_i0_stripped,
+                        tokens_in=input_tokens or None,
+                        tokens_out=None,
+                        latency_ms=None,
+                    )
+                )
+            except Exception:
+                # Side-channel; never break the request on telemetry failures.
+                pass
 
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]

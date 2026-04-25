@@ -44,6 +44,11 @@ SELF_CAPABILITIES_PROXY: frozenset[str] = frozenset({
     "tip.cache.ttl-ordering",
     "tip.routing.fallback-chain",
     "tip.security.dlp-redaction",
+    # Intent Layer Phase 0 (Adj-2 of 2026-04-25). Proxy publishes the
+    # label so adapters can opt in via FormatAdapter.capabilities; the
+    # §4.3 wire-emission gate keys off the adapter-side declaration,
+    # not this set. Catalog entry: tokenpak/registry PR-I0-2.
+    "tip.intent.contract-headers-v1",
 })
 
 # Self-declared set for the tip-companion profile. Companion publishes
