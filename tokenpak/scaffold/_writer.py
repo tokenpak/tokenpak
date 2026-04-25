@@ -91,11 +91,20 @@ def _resolve_path(rel: str) -> Path:
     return _REPO_ROOT / p
 
 
-def format_summary(result: WriteResult, params_slug: str) -> str:
+def format_summary(
+    result: WriteResult,
+    params_slug: str,
+    *,
+    class_basename: str = "",
+    vendor_safe: str = "",
+) -> str:
     """Human-friendly stdout summary.
 
-    Prints written / skipped / instructions sections in the same
-    format the spec §2.5 documented.
+    Prints written / skipped / register-patch / next-steps /
+    follow-up-issue sections. The register-patch block (§2.5 of the
+    Phase 4 spec, hardened in 4.1) shows the EXACT lines the
+    maintainer adds to ``credential_injector.py`` so paste-merging
+    is mechanical, not reverse-engineered from the file structure.
     """
     lines: List[str] = []
 
@@ -115,15 +124,47 @@ def format_summary(result: WriteResult, params_slug: str) -> str:
 
     lines.append("")
     lines.append(f"[scaffold] Provider scaffolded: {params_slug}")
+
+    # Phase 4.1 hardening — emit the exact register() patch the
+    # maintainer needs to apply. Two anchors so the maintainer can
+    # find both insertion points in credential_injector.py:
+    if class_basename and vendor_safe:
+        cls_name = f"{class_basename}CredentialProvider"
+        lines.append("")
+        lines.append("[scaffold] Apply this register() patch to wire the provider in:")
+        lines.append("")
+        lines.append(
+            "  Edit tokenpak/services/routing_service/credential_injector.py\n"
+            "\n"
+            "  ① Add the import (near other extras imports, BEFORE the\n"
+            "     ``# ── Register built-ins at import`` comment block):\n"
+            "\n"
+            f"     from tokenpak.services.routing_service.extras.{vendor_safe} import (\n"
+            f"         {cls_name},\n"
+            "     )\n"
+            "\n"
+            "  ② Append a register() call to the existing register block\n"
+            "     (after the last existing register(...) line):\n"
+            "\n"
+            f"     register({cls_name}())\n"
+            "\n"
+            "  ③ (Optional) Add the class to ``__all__`` in alphabetical order:\n"
+            "\n"
+            f'     "{cls_name}",\n'
+            "\n"
+            "  Future versions of the scaffolder may apply this patch\n"
+            "  automatically via ``--register`` (see Phase 4.1)."
+        )
+
+    lines.append("")
+    test_filename = f"test_{vendor_safe}_offline.py" if vendor_safe else "test_<vendor>_offline.py"
     lines.append(
         "[scaffold] Next steps:\n"
-        "  1. Add the new CredentialProvider's import + register() to\n"
-        "     tokenpak/services/routing_service/credential_injector.py\n"
-        "     (the writer dropped a standalone file under\n"
-        "     tokenpak/services/routing_service/extras/ for review).\n"
-        "  2. Run: pytest tests/test_<vendor>_offline.py\n"
+        f"  1. Apply the register() patch above (or re-run with --register).\n"
+        f"  2. Run: pytest tests/{test_filename}\n"
         "  3. Run: ruff check tokenpak/ tests/\n"
-        "  4. Open a PR per Standard #21 (branching policy)."
+        "  4. Open a PR per Standard #21 (branching policy).\n"
+        "  5. After live verification: flip live_verified=True + update docstring."
     )
 
     if result.instructions:

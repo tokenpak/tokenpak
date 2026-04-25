@@ -69,6 +69,8 @@ def renderer_name(params: ScaffoldParams) -> str:
 
     if key == ("openai-chat", "bearer"):
         return "openai_chat_bearer"
+    if key == ("openai-chat", "api-key-header"):
+        return "openai_chat_apikey"
 
     # Combination is recognised but not implemented in MVP:
     if key in REFERENCE_PRS:

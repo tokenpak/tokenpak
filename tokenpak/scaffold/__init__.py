@@ -25,6 +25,7 @@ from __future__ import annotations
 from ._config import ScaffoldError, ScaffoldParams, parse_optional_dep_list
 from ._generator import GeneratedArtifact, generate_artifacts
 from ._guardrails import GuardrailViolation, check_artifacts
+from ._register import RegisterError, apply_register_patch
 from ._writer import WriteResult, write_artifacts
 
 
@@ -47,9 +48,11 @@ def scaffold(params: ScaffoldParams) -> WriteResult:
 __all__ = [
     "GeneratedArtifact",
     "GuardrailViolation",
+    "RegisterError",
     "ScaffoldError",
     "ScaffoldParams",
     "WriteResult",
+    "apply_register_patch",
     "check_artifacts",
     "generate_artifacts",
     "parse_optional_dep_list",
