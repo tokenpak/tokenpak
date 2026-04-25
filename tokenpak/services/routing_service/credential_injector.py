@@ -119,9 +119,23 @@ class InjectionPlan:
 
 
 class CredentialProvider(Protocol):
-    """One provider's credential-resolution contract."""
+    """One provider's credential-resolution contract.
+
+    Each provider declares a verification status so diagnostics +
+    ``tokenpak status`` can surface routes that have only been
+    contract-tested offline (no API key available in dev / CI yet).
+    The bool is informational, not load-bearing — production routing
+    works the same way for verified and unverified providers; the
+    flag is for human readers + dashboards.
+
+    Default is ``True``: most providers were probed live against the
+    real upstream before merge. Set to ``False`` on a provider whose
+    route compiles + passes offline contract tests but hasn't been
+    exercised against the live API.
+    """
 
     name: str
+    live_verified: bool
 
     def resolve(self) -> Optional[InjectionPlan]:
         """Return an InjectionPlan, or None when this provider's creds aren't available."""
@@ -269,6 +283,7 @@ class ClaudeCodeCredentialProvider:
     """
 
     name = "tokenpak-claude-code"
+    live_verified = True  # smoke-tested live before merge
 
     # Minimum anthropic-beta set that identifies traffic to Anthropic
     # as "Claude Code OAuth" rather than "generic API OAuth". Verified
@@ -441,6 +456,7 @@ class CodexCredentialProvider:
     """
 
     name = "tokenpak-openai-codex"
+    live_verified = True  # smoke-tested live before merge
     # Canonical ChatGPT-backend endpoint per the Apr 10-12 working
     # path preserved in the vault snapshot. Not configurable — this is
     # where Codex tokens are valid; any other upstream rejects.
@@ -555,6 +571,11 @@ class _EnvKeyBearerProvider:
     _UPSTREAM: str = ""
     _ENV_VAR: str = ""
     _EXTRA_HEADERS: Dict[str, str] = {}
+    # Whether the provider has been smoke-tested live against its
+    # upstream. Default True (most providers were probed before merge).
+    # Subclasses with no API key available in dev/CI override to
+    # False (e.g. OpenRouter — see PR #35).
+    live_verified: bool = True
 
     def _load(self) -> Optional[InjectionPlan]:
         api_key = _os.environ.get(self._ENV_VAR, "").strip()
@@ -645,6 +666,7 @@ class AzureOpenAICredentialProvider:
     """
 
     name = "tokenpak-azure-openai"
+    live_verified = True  # smoke-tested live before merge
     _DEFAULT_API_VERSION = "2024-10-21"
     _PATH_TEMPLATE = "/openai/deployments/{deployment}/chat/completions"
 
@@ -729,8 +751,22 @@ class OpenRouterCredentialProvider(_EnvKeyBearerProvider):
     Requires ``HTTP-Referer`` + ``X-Title`` headers on every request
     (per OpenRouter's docs); without them OpenRouter rejects with a
     400. The Referer is informational; we use the tokenpak homepage.
+
+    **Live status: contract-tested offline only.** No
+    ``OPENROUTER_API_KEY`` was available in dev/CI when this route
+    landed (PR #27 + offline tests in PR #35). The route compiles,
+    the request/response shape round-trips through
+    ``OpenAIChatAdapter`` cleanly (verified by fixture-based contract
+    tests), provider-routing fields (``provider.order``,
+    ``allow_fallbacks``, ``only``, ``ignore``, ``sort``,
+    ``max_price``) pass through unchanged, and cost-fallback
+    behavior on unknown OpenRouter slugs is explicit. End-to-end
+    live verification against ``openrouter.ai`` is tracked separately
+    — see the follow-up issue "Verify OpenRouter live route and
+    pricing attribution once OPENROUTER_API_KEY is available."
     """
 
+    live_verified = False  # contract-tested offline; live probe pending
     name = "tokenpak-openrouter"
     _UPSTREAM = "https://openrouter.ai/api/v1/chat/completions"
     _ENV_VAR = "OPENROUTER_API_KEY"
@@ -788,6 +824,7 @@ class BedrockClaudeCredentialProvider:
     """
 
     name = "tokenpak-bedrock-claude"
+    live_verified = True  # smoke-tested live before merge
     _DEFAULT_REGION = "us-east-1"
     _SERVICE = "bedrock"
     _ANTHROPIC_VERSION = "bedrock-2023-05-31"
@@ -945,6 +982,7 @@ class VertexAIGeminiCredentialProvider:
     """
 
     name = "tokenpak-vertex-gemini"
+    live_verified = True  # smoke-tested live before merge
     _DEFAULT_REGION = "us-central1"
     _SCOPE = "https://www.googleapis.com/auth/cloud-platform"
 
