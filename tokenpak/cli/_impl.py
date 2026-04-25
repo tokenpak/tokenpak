@@ -1687,6 +1687,41 @@ def cmd_doctor(args):
         )
         sys.exit(rc)
 
+    # ── Intent Layer Phase 0.1 — operator-readable diagnostic views ──
+    # ``--intent`` shows classifier activation, proxy self-capability
+    # publication, per-adapter §4.3 gate declaration, and whether wire
+    # emission is currently enabled. ``--explain-last`` shows the most
+    # recent ``intent_events`` row in full.
+    if getattr(args, "intent_view", False):
+        import json as _json
+
+        from tokenpak.proxy.intent_doctor import (
+            collect_intent_view,
+            render_intent_view,
+        )
+
+        view = collect_intent_view()
+        if getattr(args, "doctor_json", False):
+            print(_json.dumps(view, indent=2, sort_keys=True))
+        else:
+            print(render_intent_view(view))
+        sys.exit(0)
+
+    if getattr(args, "explain_last", False):
+        import json as _json
+
+        from tokenpak.proxy.intent_doctor import (
+            collect_explain_last,
+            render_explain_last,
+        )
+
+        payload = collect_explain_last()
+        if getattr(args, "doctor_json", False):
+            print(_json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(render_explain_last(payload))
+        sys.exit(0)
+
     # P2-1 --privacy is a short static summary (not a probe). No net work,
     # just render the canonical data-handling posture + link to the live
     # compliance pages on tokenpak.ai.
@@ -2414,10 +2449,27 @@ def build_parser():
         help="Run TIP-1.0 self-conformance checks (capability set, profiles, manifests, live emissions)",
     )
     p_doctor.add_argument(
+        "--intent",
+        dest="intent_view",
+        action="store_true",
+        help="(Phase 0.1) Show the Intent Layer Phase 0 diagnostic view: classifier "
+        "activation, proxy self-capability publication, per-adapter §4.3 gate declaration, "
+        "and whether wire emission is currently enabled on this host.",
+    )
+    p_doctor.add_argument(
+        "--explain-last",
+        dest="explain_last",
+        action="store_true",
+        help="(Phase 0.1) Render the most recent intent_events row "
+        "(contract_id, intent_class, confidence, slots, catch_all_reason, "
+        "tip_headers_emitted/stripped). Read-only.",
+    )
+    p_doctor.add_argument(
         "--json",
         dest="doctor_json",
         action="store_true",
-        help="Emit machine-readable JSON instead of the human table (conformance mode)",
+        help="Emit machine-readable JSON instead of the human table "
+        "(applies to --conformance, --intent, --explain-last)",
     )
     p_doctor.set_defaults(func=cmd_doctor)
 
