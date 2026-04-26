@@ -199,6 +199,8 @@ The pre/post distinction is asserted in `tests/test_intent_prompt_intervention_p
 - `docs/reference/claude-code-intent-preview.md` — PI-2 read-only preview (predecessor)
 - `docs/internal/specs/intent-prompt-intervention-spec-2026-04-26.md` — PI-0 unified spec (§10 covers the rollout)
 - `docs/reference/intent-layer-phase-0.md` — Phase 0 fundamentals
+- `docs/internal/milestones/intent-advisory-mvp-2026-04-26.md` — Intent Advisory MVP closeout (predecessor milestone)
+- `docs/internal/milestones/claude-code-intent-guidance-mvp-2026-04-26.md` — Claude Code Intent Guidance Injection MVP closeout (this sub-arc's closeout)
 
 ## What's next
 
