@@ -229,10 +229,14 @@ def render_intent_view(view: Optional[Dict[str, Any]] = None) -> str:
 
 
 def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
-    """Read the most recent ``intent_events`` row.
+    """Read the most recent ``intent_events`` row plus its linked
+    ``intent_policy_decisions`` row (Phase 2.2).
 
-    Returns ``None`` when the DB doesn't exist or the table is
-    empty. Caller renders the absent case with a clear message.
+    Returns ``None`` when the events DB doesn't exist or the events
+    table is empty. The policy-decision linkage is best-effort —
+    if the policy table doesn't exist or doesn't carry a row for
+    the same ``contract_id``, the returned dict has
+    ``policy_decision = None``.
     """
     path = db_path if db_path is not None else _intent_db_path()
     if not path.is_file():
@@ -258,9 +262,57 @@ def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str
                 "FROM intent_events "
                 "ORDER BY timestamp DESC LIMIT 1"
             ).fetchone()
+            if row is None:
+                return None
+            contract_id = row["contract_id"]
+
+            # Phase 2.2: pull the linked policy decision if present.
+            policy_decision: Optional[Dict[str, Any]] = None
+            policy_table = conn.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='intent_policy_decisions'"
+            ).fetchone()
+            if policy_table is not None and contract_id:
+                p = conn.execute(
+                    "SELECT decision_id, request_id, contract_id, timestamp, "
+                    "mode, intent_class, intent_confidence, action, "
+                    "decision_reason, safety_flags, recommended_provider, "
+                    "recommended_model, budget_action, compression_profile, "
+                    "cache_strategy, delivery_strategy, warning_message, "
+                    "requires_user_confirmation "
+                    "FROM intent_policy_decisions "
+                    "WHERE contract_id = ? "
+                    "ORDER BY timestamp DESC LIMIT 1",
+                    (contract_id,),
+                ).fetchone()
+                if p is not None:
+                    try:
+                        flags = json.loads(p["safety_flags"] or "[]")
+                    except (TypeError, json.JSONDecodeError):
+                        flags = []
+                    policy_decision = {
+                        "decision_id": p["decision_id"],
+                        "request_id": p["request_id"],
+                        "contract_id": p["contract_id"],
+                        "timestamp": p["timestamp"],
+                        "mode": p["mode"],
+                        "intent_class": p["intent_class"],
+                        "intent_confidence": p["intent_confidence"],
+                        "action": p["action"],
+                        "decision_reason": p["decision_reason"],
+                        "safety_flags": flags,
+                        "recommended_provider": p["recommended_provider"],
+                        "recommended_model": p["recommended_model"],
+                        "budget_action": p["budget_action"],
+                        "compression_profile": p["compression_profile"],
+                        "cache_strategy": p["cache_strategy"],
+                        "delivery_strategy": p["delivery_strategy"],
+                        "warning_message": p["warning_message"],
+                        "requires_user_confirmation": bool(
+                            p["requires_user_confirmation"]
+                        ),
+                    }
     except sqlite3.DatabaseError:
-        return None
-    if row is None:
         return None
 
     return {
@@ -279,6 +331,7 @@ def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str
         "tokens_in": row["tokens_in"],
         "tokens_out": row["tokens_out"],
         "latency_ms": row["latency_ms"],
+        "policy_decision": policy_decision,
     }
 
 
@@ -340,6 +393,44 @@ def render_explain_last(payload: Optional[Dict[str, Any]] = None) -> str:
         lines.append(f"    tokens_in:               {p['tokens_in']}")
         lines.append(f"    tokens_out:              {p['tokens_out']}")
         lines.append(f"    latency_ms:              {p['latency_ms']}")
+        lines.append("")
+
+    # Phase 2.2 — linked policy decision (dry-run / preview only).
+    pd = p.get("policy_decision")
+    if pd is None:
+        lines.append("  Linked policy decision:    (none recorded yet)")
+        lines.append("    The Phase 2.1 dry-run engine writes one decision per")
+        lines.append("    classified request. If this row predates Phase 2.1, no")
+        lines.append("    linkage is expected.")
+        lines.append("")
+    else:
+        lines.append("  Linked policy decision (Phase 2.2 dry-run / preview only):")
+        lines.append(f"    decision_id:               {pd['decision_id']}")
+        lines.append(f"    mode:                      {pd['mode']}")
+        lines.append(f"    action:                    {pd['action']}")
+        lines.append(f"    decision_reason:           {pd['decision_reason']}")
+        flags = pd.get("safety_flags") or []
+        flags_str = ", ".join(flags) if flags else "(none)"
+        lines.append(f"    safety_flags:              {flags_str}")
+        if pd.get("recommended_provider"):
+            lines.append(f"    recommended_provider:      {pd['recommended_provider']}")
+        if pd.get("recommended_model"):
+            lines.append(f"    recommended_model:         {pd['recommended_model']}")
+        if pd.get("budget_action"):
+            lines.append(f"    budget_action:             {pd['budget_action']}")
+        if pd.get("compression_profile"):
+            lines.append(f"    compression_profile:       {pd['compression_profile']}")
+        if pd.get("cache_strategy"):
+            lines.append(f"    cache_strategy:            {pd['cache_strategy']}")
+        if pd.get("delivery_strategy"):
+            lines.append(f"    delivery_strategy:         {pd['delivery_strategy']}")
+        lines.append(
+            f"    requires_user_confirmation: {pd['requires_user_confirmation']}"
+        )
+        if pd.get("warning_message"):
+            lines.append(f"    warning_message:           {pd['warning_message']}")
+        lines.append("")
+        lines.append("    DRY-RUN / PREVIEW ONLY — no routing decision was made.")
         lines.append("")
     return "\n".join(lines)
 

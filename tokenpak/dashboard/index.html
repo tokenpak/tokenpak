@@ -168,6 +168,58 @@
                 <h3>Operator panel</h3>
                 <ul id="intent-review-areas" style="line-height: 1.6;"></ul>
             </div>
+
+            <!-- Intent Policy (Phase 2.2) — DRY-RUN / PREVIEW ONLY -->
+            <div class="chart-container">
+                <h2>Intent Policy
+                    <small id="intent-policy-window-badge"
+                           style="font-weight: normal; opacity: 0.7;">
+                        — last 14d (DRY-RUN / PREVIEW ONLY — no routing decisions made)
+                    </small>
+                </h2>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Dry-Run Decisions</div>
+                        <div class="stat-value" id="intent-policy-total">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Budget Risk Flags</div>
+                        <div class="stat-value" id="intent-policy-budget-risk">0</div>
+                    </div>
+                </div>
+                <h3>Top recommended actions</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Action</th><th>Count</th><th>%</th></tr></thead>
+                    <tbody id="intent-policy-actions-body"></tbody>
+                </table>
+                <h3>Top safety flags</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Safety flag</th><th>Count</th><th>%</th></tr></thead>
+                    <tbody id="intent-policy-safety-body"></tbody>
+                </table>
+                <h3>Suggested compression profiles</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Profile</th><th>Count</th></tr></thead>
+                    <tbody id="intent-policy-compression-body"></tbody>
+                </table>
+                <h3>Suggested cache policies</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Strategy</th><th>Count</th></tr></thead>
+                    <tbody id="intent-policy-cache-body"></tbody>
+                </table>
+                <h3>Suggested delivery policies</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Strategy</th><th>Count</th></tr></thead>
+                    <tbody id="intent-policy-delivery-body"></tbody>
+                </table>
+                <h3>Auto-routing blocked reasons</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Reason</th><th>Count</th></tr></thead>
+                    <tbody id="intent-policy-blocked-body"></tbody>
+                </table>
+                <h3>Operator panel</h3>
+                <ul id="intent-policy-review-areas" style="line-height: 1.6;"></ul>
+            </div>
         </div>
     </div>
 
@@ -175,6 +227,7 @@
     <script src="charts.js"></script>
     <script src="goals.js"></script>
     <script src="intent.js"></script>
+    <script src="intent_policy.js"></script>
     <script>
         // Auto-refresh every 5 seconds
         setInterval(() => {
@@ -182,12 +235,18 @@
             if (typeof fetchAndUpdateIntentDashboard === "function") {
                 fetchAndUpdateIntentDashboard();
             }
+            if (typeof fetchAndUpdateIntentPolicyDashboard === "function") {
+                fetchAndUpdateIntentPolicyDashboard();
+            }
         }, 5000);
 
         // Initial load
         fetchAndUpdateMetrics();
         if (typeof fetchAndUpdateIntentDashboard === "function") {
             fetchAndUpdateIntentDashboard();
+        }
+        if (typeof fetchAndUpdateIntentPolicyDashboard === "function") {
+            fetchAndUpdateIntentPolicyDashboard();
         }
     </script>
 </body>

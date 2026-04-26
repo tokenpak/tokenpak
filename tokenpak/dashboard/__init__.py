@@ -28,6 +28,9 @@ def get_dashboard_files():
         # Phase 1.1 — intent dashboard cards. Read-only; consumes
         # /api/intent/report?window=14d.
         "intent.js": DASHBOARD_DIR / "intent.js",
+        # Phase 2.2 — intent policy preview panel (dry-run only).
+        # Consumes /api/intent/policy-report?window=14d.
+        "intent_policy.js": DASHBOARD_DIR / "intent_policy.js",
         "styles.css": DASHBOARD_DIR / "styles.css",
     }
 
