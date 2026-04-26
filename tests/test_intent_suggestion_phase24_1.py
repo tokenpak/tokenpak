@@ -65,7 +65,6 @@ from tokenpak.proxy.intent_suggestion import (
     SUGGESTION_PROVIDER_MODEL,
     SUGGESTION_TYPES,
     SuggestionBuilderContext,
-    SuggestionWordingError,
     build_suggestions,
     make_suggestion_id,
 )
