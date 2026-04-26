@@ -104,20 +104,91 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Intent Layer (Phase 1.1) — observation-only -->
+            <div class="chart-container">
+                <h2>Intent Layer
+                    <small id="intent-window-badge" style="font-weight: normal; opacity: 0.7;">— last 14d (observation-only)</small>
+                </h2>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Classified</div>
+                        <div class="stat-value" id="intent-total-classified">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg Confidence</div>
+                        <div class="stat-value" id="intent-avg-confidence">0.00</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Low Confidence</div>
+                        <div class="stat-value" id="intent-low-confidence">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">TIP Headers Emitted</div>
+                        <div class="stat-value" id="intent-headers-emitted">0</div>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Telemetry-Only</div>
+                        <div class="stat-value" id="intent-telemetry-only">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Adapters Eligible</div>
+                        <div class="stat-value" id="intent-adapters-eligible">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Adapters Blocking</div>
+                        <div class="stat-value" id="intent-adapters-blocking">0</div>
+                    </div>
+                </div>
+                <h3>Intent class distribution</h3>
+                <table class="metrics-table">
+                    <thead>
+                        <tr>
+                            <th>Intent</th>
+                            <th>Count</th>
+                            <th>%</th>
+                            <th>Avg confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="intent-class-distribution-body">
+                    </tbody>
+                </table>
+                <h3>Top missing slots</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Slot</th><th>Count</th><th>%</th></tr></thead>
+                    <tbody id="intent-top-missing-slots-body"></tbody>
+                </table>
+                <h3>Top catch-all reasons</h3>
+                <table class="metrics-table">
+                    <thead><tr><th>Reason</th><th>Count</th><th>%</th></tr></thead>
+                    <tbody id="intent-catch-all-body"></tbody>
+                </table>
+                <h3>Operator panel</h3>
+                <ul id="intent-review-areas" style="line-height: 1.6;"></ul>
+            </div>
         </div>
     </div>
 
     <script src="metrics.js"></script>
     <script src="charts.js"></script>
     <script src="goals.js"></script>
+    <script src="intent.js"></script>
     <script>
         // Auto-refresh every 5 seconds
         setInterval(() => {
             fetchAndUpdateMetrics();
+            if (typeof fetchAndUpdateIntentDashboard === "function") {
+                fetchAndUpdateIntentDashboard();
+            }
         }, 5000);
-        
+
         // Initial load
         fetchAndUpdateMetrics();
+        if (typeof fetchAndUpdateIntentDashboard === "function") {
+            fetchAndUpdateIntentDashboard();
+        }
     </script>
 </body>
 </html>
