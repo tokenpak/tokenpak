@@ -128,6 +128,11 @@ class IntentReport:
     top_catch_all_reasons: List[Tuple[str, int]] = field(default_factory=list)
     review_areas: List[str] = field(default_factory=list)
 
+    # Phase 2.2 — policy summary (dry-run / preview only). Populated
+    # by build_report() from the intent_policy_decisions table.
+    # Empty dict on a fresh DB or pre-2.1 hosts.
+    policy_summary: Dict[str, Any] = field(default_factory=dict)
+
     def to_dict(self) -> Dict[str, Any]:
         """JSON-friendly dict (tuples → 2-element lists)."""
         return {
@@ -150,6 +155,7 @@ class IntentReport:
             "top_missing_slots": [list(t) for t in self.top_missing_slots],
             "top_catch_all_reasons": [list(t) for t in self.top_catch_all_reasons],
             "review_areas": list(self.review_areas),
+            "policy_summary": dict(self.policy_summary),
         }
 
 
@@ -406,6 +412,40 @@ def build_report(
         (k, v) for k, v in list(report.catch_all_reason_distribution.items())[:top_n]
     ]
     report.review_areas = _review_areas(report)
+
+    # Phase 2.2 — append a policy-summary slice. Best-effort: if the
+    # policy table is empty / missing / mid-migration, the summary
+    # is an empty dict and the renderer prints "no decisions yet".
+    try:
+        from tokenpak.proxy.intent_policy_report import build_policy_report
+
+        policy = build_policy_report(
+            window_days=window_days, db_path=path, now=now,
+        )
+        report.policy_summary = {
+            "total_decisions": policy.total_decisions,
+            "action_distribution": dict(policy.action_distribution),
+            "safety_flag_distribution": dict(policy.safety_flag_distribution),
+            "decision_reason_distribution": dict(policy.decision_reason_distribution),
+            "low_confidence_blocked": policy.low_confidence_blocked,
+            "low_confidence_safe_handled": policy.low_confidence_safe_handled,
+            "catch_all_safe_handled": policy.catch_all_safe_handled,
+            "unverified_provider_blocked": policy.unverified_provider_blocked,
+            "missing_slots_blocked": policy.missing_slots_blocked,
+            "budget_risk_flags": policy.budget_risk_flags,
+            "compression_profile_distribution": dict(
+                policy.compression_profile_distribution
+            ),
+            "cache_strategy_distribution": dict(policy.cache_strategy_distribution),
+            "delivery_strategy_distribution": dict(
+                policy.delivery_strategy_distribution
+            ),
+        }
+    except Exception:  # noqa: BLE001
+        # Read-side; never raise. An import failure here is a build
+        # bug we want surfaced via tests, not a runtime crash.
+        report.policy_summary = {}
+
     return report
 
 
@@ -514,6 +554,27 @@ def render_human(report: IntentReport) -> str:
     lines.append("  Phase 1 is observation-only. No user-facing behavior changes.")
     lines.append("  See docs/reference/intent-reporting.md for what NOT to infer.")
     lines.append("")
+
+    # Phase 2.2 — append the policy summary section if any decisions
+    # have been recorded.
+    summary = report.policy_summary or {}
+    if summary:
+        try:
+            from tokenpak.proxy.intent_policy_report import (
+                build_policy_report,
+            )
+            from tokenpak.proxy.intent_policy_report import (
+                render_human as _render_policy,
+            )
+
+            policy = build_policy_report(
+                window_days=report.window_days,
+                db_path=Path(report.db_path) if report.db_path else None,
+            )
+            lines.append(_render_policy(policy))
+        except Exception:  # noqa: BLE001
+            pass
+
     return "\n".join(lines)
 
 

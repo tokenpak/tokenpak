@@ -496,6 +496,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_json({"error": str(e)})
             return
+        if path.startswith("/api/intent/policy-report"):
+            # Phase 2.2 — observation-only dashboard / read-model
+            # surface over the intent_policy_decisions store. Reuses
+            # build_policy_report; never reads or emits raw prompt
+            # content. Default window 14d (matches /api/intent/report).
+            # MUST be checked before /api/intent/report below since
+            # both share the prefix.
+            from urllib.parse import parse_qs as _pqs
+            from urllib.parse import urlparse as _purl
+
+            from tokenpak.proxy.intent_policy_dashboard import (
+                collect_policy_dashboard as _i22_collect,
+            )
+            from tokenpak.proxy.intent_policy_dashboard import (
+                parse_window_or_default as _i22_window,
+            )
+
+            parsed_path = _purl(path)
+            qs = _pqs(parsed_path.query)
+            raw_window = (qs.get("window") or [""])[0]
+            try:
+                days = _i22_window(raw_window)
+            except ValueError as exc:
+                self._send_json_error(400, "bad_request", str(exc))
+                return
+            try:
+                payload = _i22_collect(window_days=days)
+            except Exception as exc:  # noqa: BLE001
+                self._send_json_error(
+                    500,
+                    "intent_policy_dashboard_failed",
+                    f"intent policy dashboard failed: {exc!r}",
+                )
+                return
+            self._send_json(payload)
+            return
         if path.startswith("/api/intent/report"):
             # Phase 1.1 — observation-only dashboard / read-model
             # surface over the Phase 0 intent_events store. Reuses

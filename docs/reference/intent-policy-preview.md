@@ -1,6 +1,8 @@
-# Intent Layer — Policy Preview (Phase 2.1)
+# Intent Layer — Policy Preview (Phase 2.1 / 2.2)
 
-> Phase 2.1 ships a **dry-run** intent policy engine. It evaluates every classified request against a pure-function policy and writes the decision to a separate SQLite table (`intent_policy_decisions`). **Nothing about the request changes.** No routing, no model swap, no body mutation, no header injection. The decisions are observational only — what a future opt-in suggest mode (Phase 2.4 per the spec) might recommend.
+> The intent policy engine is **dry-run only** through Phase 2.x. It evaluates every classified request against a pure-function policy and writes the decision to a separate SQLite table (`intent_policy_decisions`). **Nothing about the request changes.** No routing, no model swap, no body mutation, no header injection. The decisions are observational only — what a future opt-in suggest mode (Phase 2.4 per the spec) might recommend.
+
+> **Phase 2.2 (this update)** adds explain / report / dashboard surfaces over the engine's output. Phase 2.1 (the underlying engine, merged in PR #49) is unchanged — Phase 2.2 is observability only.
 
 ## Engine semantics
 
@@ -70,16 +72,63 @@ A future Phase 2.2 will read `~/.tokenpak/policy.yaml` per the spec §7 schema. 
 
 ## CLI
 
+Three surfaces all read from the same `intent_policy_decisions` table:
+
 ```bash
 # Render the most recent decision (operator-readable plain text)
 tokenpak intent policy-preview
 tokenpak intent policy-preview --last      # alias for default behavior
-
-# Same row, machine-readable JSON
 tokenpak intent policy-preview --json
+
+# Phase 2.2: every request explain now also surfaces the matching
+# policy decision (linked by contract_id) when one exists.
+tokenpak doctor --explain-last
+tokenpak doctor --explain-last --json
+
+# Phase 2.2: tokenpak intent report now appends a "Policy summary"
+# section after the Phase 1 distributions. The JSON output gains a
+# top-level "policy_summary" key.
+tokenpak intent report
+tokenpak intent report --window 14d --json
 ```
 
 Returns a friendly "no decisions yet" message when the table is empty (fresh install).
+
+## API (Phase 2.2)
+
+The dashboard endpoint is read-only and aggregate-only:
+
+```http
+GET /api/intent/policy-report
+GET /api/intent/policy-report?window=14d
+GET /api/intent/policy-report?window=7d
+GET /api/intent/policy-report?window=0d        # all rows
+```
+
+Returns the dashboard payload — eight cards + four operator-panel slices + metadata. The metadata block includes `dry_run_preview_only: true` and a `preview_label: "DRY-RUN / PREVIEW ONLY — no routing decisions made"` so consumers can render the warning clearly. Schema version: `intent-policy-dashboard-v1`.
+
+Errors:
+
+- `400 bad_request` — malformed `window` parameter.
+- `500 intent_policy_dashboard_failed` — internal failure (rare, defensive).
+
+Read-only. The endpoint never writes to the telemetry store, never invokes a provider, never mutates adapter state.
+
+## Dashboard panel
+
+The local dashboard at `/dashboard/` (served by the proxy when running) renders an "Intent Policy" section below the Phase 1.1 "Intent Layer" panel. Same data, UI shape:
+
+- Total dry-run decisions (the headline number)
+- Budget risk flags (reserved in 2.1; counted forward-compatibly)
+- Top recommended actions (with percentages)
+- Top safety flags
+- Suggested compression profiles
+- Suggested cache policies
+- Suggested delivery policies
+- Auto-routing blocked reasons
+- Operator review areas
+
+The window badge always reads `DRY-RUN / PREVIEW ONLY — no routing decisions made` so an operator scanning the dashboard never confuses the preview with enforcement.
 
 ## Telemetry
 
