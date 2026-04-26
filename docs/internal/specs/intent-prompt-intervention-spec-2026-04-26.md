@@ -1,7 +1,7 @@
 # Intent Prompt Intervention — design / spec only (PI-0)
 
 **Date**: 2026-04-26
-**Status**: design draft, awaiting Kevin ratification
+**Status**: ✅ ratified + implemented through PI-3 (closeout 2026-04-26)
 **Authors**: Sue (design) / Kevin (review)
 **Workstream**: Intent Layer follow-on (post-Intent-Advisory-MVP)
 **Foundation**:
@@ -9,7 +9,27 @@
   - Phase 2 unified policy engine spec — `docs/internal/specs/phase2-intent-policy-engine-spec-2026-04-25.md`
   - Phase 2.4 suggest mode — `docs/internal/specs/phase2.4-suggest-mode-spec-2026-04-26.md`
   - Phase 2.5 confirmation mode — `docs/internal/specs/phase2.5-confirm-mode-spec-2026-04-26.md`
-**Implements** (when ratified, in PI-1+ sub-phases): nothing yet — PI-0 (this PR) is **spec only**.
+**Implements** (closeout 2026-04-26): see "Implementation status" below.
+
+---
+
+## Implementation status (closeout 2026-04-26)
+
+The §10 sub-phase plan landed as four PRs against `main`:
+
+| Sub-phase | PR | Layer |
+|---|---|---|
+| PI-1 | #58 | `PromptPatch` builder + `intent_patches` table |
+| PI-2 | #59 | Claude Code Companion read-only preview surface |
+| PI-3 | #60 | Companion-side opt-in injection (`apply_patch_to_companion_context`) |
+| PI-4 | — | **Not started**; requires explicit Kevin approval before any code lands |
+
+Operator-facing reference docs:
+
+- `docs/reference/claude-code-intent-preview.md` — PI-2 read-only preview
+- `docs/reference/claude-code-intent-injection.md` — PI-3 opt-in injection
+
+Closeout milestone: `docs/internal/milestones/claude-code-intent-guidance-mvp-2026-04-26.md`. After that closeout, the workstream pivots away from Intent work; PI-4 is parked.
 
 ---
 

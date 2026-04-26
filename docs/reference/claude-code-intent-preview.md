@@ -153,9 +153,11 @@ The sentinel-substring privacy contract is asserted across the read model, the C
 ## Cross-references
 
 - `docs/internal/specs/intent-prompt-intervention-spec-2026-04-26.md` — the PI-0 unified spec (§6 covers the Claude Code strategy; §10 covers the rollout)
+- `docs/reference/claude-code-intent-injection.md` — PI-3 companion-side opt-in injection (the next sub-phase that can flip `applied = true`)
 - `docs/reference/intent-layer-phase-0.md` — Phase 0 fundamentals
 - `docs/reference/intent-policy-preview.md` — Phase 2.1 / 2.2 policy preview
 - `docs/reference/intent-suggest-mode.md` — Phase 2.4.3 suggest mode
-- `docs/internal/milestones/intent-advisory-mvp-2026-04-26.md` — Intent Advisory MVP closeout
+- `docs/internal/milestones/intent-advisory-mvp-2026-04-26.md` — Intent Advisory MVP closeout (predecessor)
+- `docs/internal/milestones/claude-code-intent-guidance-mvp-2026-04-26.md` — Claude Code Intent Guidance Injection MVP closeout (this sub-arc's closeout)
 
-PI-3 (companion-side injection) requires explicit Kevin approval before any code lands.
+PI-4 (target=`system` + `rewrite_prompt`) requires explicit Kevin approval before any code lands.

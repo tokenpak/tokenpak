@@ -10,6 +10,8 @@
   - `docs/internal/specs/phase2.4-suggest-mode-spec-2026-04-26.md` — suggest mode sub-spec
   - `docs/internal/specs/phase2.5-confirm-mode-spec-2026-04-26.md` — confirmation mode sub-spec
 
+**Successor milestone (2026-04-26)**: [Claude Code Intent Guidance Injection MVP](claude-code-intent-guidance-mvp-2026-04-26.md) — PI-0 spec + PI-1 builder + PI-2 preview surface + PI-3 companion-side opt-in injection. Built on top of this MVP's `intent_events` / `intent_policy_decisions` / `intent_suggestions` tables.
+
 This document closes out the Intent Advisory workstream at the **MVP milestone**. The milestone is reached when an operator can: (a) observe how the proxy classifies requests, (b) inspect what a future intent-aware policy engine *would* recommend, (c) opt in to advisory suggestions on every operator-facing surface, and (d) read a ratified design contract for the confirmation handshake that comes next. All four are now true.
 
 This is a **closeout document**, not an implementation gate. The next item on the roadmap is Phase 2.5.1 (confirmation request builder); it requires explicit approval before any code lands.
