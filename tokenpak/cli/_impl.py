@@ -553,6 +553,104 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_intent_patches(args) -> None:
+    """Phase PI-1 — internal/dev inspector for intent_patches.
+
+    Read-only. The four directive-mandated labels appear in every
+    render path:
+
+      - PREVIEW ONLY
+      - NOT APPLIED
+      - NO PROMPT MUTATION
+      - NO CLAUDE CODE INJECTION YET
+    """
+    import json as _json
+
+    from tokenpak.proxy.intent_prompt_patch_telemetry import (
+        get_default_patch_store,
+    )
+
+    payload = get_default_patch_store().fetch_latest()
+    if getattr(args, "patches_json", False):
+        if payload is None:
+            print(_json.dumps({"patch": None, "labels": [
+                "PREVIEW ONLY",
+                "NOT APPLIED",
+                "NO PROMPT MUTATION",
+                "NO CLAUDE CODE INJECTION YET",
+            ]}, indent=2, sort_keys=True))
+        else:
+            payload = dict(payload)
+            payload["labels"] = [
+                "PREVIEW ONLY",
+                "NOT APPLIED",
+                "NO PROMPT MUTATION",
+                "NO CLAUDE CODE INJECTION YET",
+            ]
+            print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+        sys.exit(0)
+
+    if payload is None:
+        print(
+            "\nTOKENPAK  |  Intent patches (PI-1 internal inspector)\n"
+            "──────────────────────────────\n"
+            "\n"
+            "  PREVIEW ONLY  ·  NOT APPLIED  ·  NO PROMPT MUTATION  ·  NO CLAUDE CODE INJECTION YET\n"
+            "\n"
+            "  No prompt patches yet.\n"
+            "\n"
+            "  PI-1 ships the PromptPatch builder + intent_patches table\n"
+            "  + this internal inspector. There is no production write\n"
+            "  path in PI-1 — the builder is library code that PI-2 will\n"
+            "  integrate into operator-facing surfaces, and PI-3 will\n"
+            "  integrate into the Claude Code Companion injection path.\n"
+        )
+        sys.exit(0)
+
+    lines: list[str] = []
+    lines.append("")
+    lines.append("TOKENPAK  |  Intent patches (PI-1 internal inspector)")
+    lines.append("──────────────────────────────")
+    lines.append("")
+    lines.append("  PREVIEW ONLY  ·  NOT APPLIED  ·  NO PROMPT MUTATION  ·  NO CLAUDE CODE INJECTION YET")
+    lines.append("")
+    lines.append(f"  patch_id:                  {payload['patch_id']}")
+    lines.append(f"  contract_id:               {payload['contract_id']}")
+    lines.append(f"  decision_id:               {payload['decision_id']}")
+    lines.append(f"  suggestion_id:             {payload['suggestion_id']}")
+    lines.append(f"  created_at:                {payload['created_at']}")
+    lines.append("")
+    lines.append(f"  mode:                      {payload['mode']}")
+    lines.append(f"  target:                    {payload['target']}")
+    lines.append(f"  applied:                   {payload['applied']}  (always False in PI-1)")
+    lines.append(f"  requires_confirmation:     {payload['requires_confirmation']}")
+    lines.append(f"  source:                    {payload['source']}")
+    lines.append("")
+    lines.append(f"  confidence:                {payload['confidence']:.4f}")
+    flags = payload.get("safety_flags") or []
+    flags_str = ", ".join(flags) if flags else "(none)"
+    lines.append(f"  safety_flags:              {flags_str}")
+    lines.append(f"  reason:                    {payload['reason']}")
+    lines.append(f"  original_hash:             {payload['original_hash']}")
+    lines.append("")
+    lines.append("  patch_text (preview, would be inserted into target if PI-3 applied it):")
+    for line in payload["patch_text"].splitlines():
+        lines.append(f"    {line}")
+    lines.append("")
+    lines.append(
+        "  This is a preview only. Phase PI-1 has no production write"
+    )
+    lines.append(
+        "  path; this row was constructed by tests / future-phase wiring."
+    )
+    lines.append(
+        "  No prompt has been mutated. No Claude Code injection has occurred."
+    )
+    lines.append("")
+    print("\n".join(lines))
+    sys.exit(0)
+
+
 def cmd_intent_config(args) -> None:
     """Phase 2.4.3 — show / validate the intent_policy config.
 
@@ -2470,6 +2568,31 @@ def build_parser():
         help="Emit machine-readable JSON instead of human-readable.",
     )
     p_intent_config.set_defaults(func=cmd_intent_config)
+
+    # Phase PI-1 — internal/dev inspector for the latest row in
+    # intent_patches. Read-only. Builder + table exist; this CLI
+    # is the only PI-1 surface. Broader surfaces are PI-2 work;
+    # actual application is PI-3 / PI-4 (companion-side, opt-in).
+    p_intent_patches = p_intent_sub.add_parser(
+        "patches",
+        help=(
+            "Show the latest dry-run prompt-patch (PI-1; "
+            "internal/dev inspector; read-only; not applied)."
+        ),
+    )
+    p_intent_patches.add_argument(
+        "--last",
+        dest="patches_last",
+        action="store_true",
+        help="Show the most recent patch (default behavior).",
+    )
+    p_intent_patches.add_argument(
+        "--json",
+        dest="patches_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable.",
+    )
+    p_intent_patches.set_defaults(func=cmd_intent_patches)
 
     p_adapter = sub.add_parser(
         "adapter",
