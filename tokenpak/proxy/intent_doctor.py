@@ -312,6 +312,52 @@ def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str
                             p["requires_user_confirmation"]
                         ),
                     }
+
+            # Phase 2.4.2 — pull every linked policy suggestion.
+            # Linked by decision_id since 2.4.1 wrote one row per
+            # eligible decision. Best-effort: missing table or empty
+            # set renders as the friendly "(none)" line in the
+            # suggestion section.
+            policy_suggestions: list[dict[str, Any]] = []
+            sugg_table = conn.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='intent_suggestions'"
+            ).fetchone()
+            if (
+                sugg_table is not None
+                and policy_decision is not None
+                and policy_decision.get("decision_id")
+            ):
+                for srow in conn.execute(
+                    "SELECT suggestion_id, decision_id, contract_id, "
+                    "timestamp, suggestion_type, title, message, "
+                    "recommended_action, confidence, safety_flags, "
+                    "requires_confirmation, user_visible, expires_at, "
+                    "source FROM intent_suggestions "
+                    "WHERE decision_id = ? "
+                    "ORDER BY timestamp DESC",
+                    (policy_decision["decision_id"],),
+                ).fetchall():
+                    try:
+                        sflags = json.loads(srow["safety_flags"] or "[]")
+                    except (TypeError, json.JSONDecodeError):
+                        sflags = []
+                    policy_suggestions.append({
+                        "suggestion_id": srow["suggestion_id"],
+                        "decision_id": srow["decision_id"],
+                        "contract_id": srow["contract_id"],
+                        "timestamp": srow["timestamp"],
+                        "suggestion_type": srow["suggestion_type"],
+                        "title": srow["title"],
+                        "message": srow["message"],
+                        "recommended_action": srow["recommended_action"],
+                        "confidence": srow["confidence"],
+                        "safety_flags": sflags,
+                        "requires_confirmation": bool(srow["requires_confirmation"]),
+                        "user_visible": bool(srow["user_visible"]),
+                        "expires_at": srow["expires_at"],
+                        "source": srow["source"],
+                    })
     except sqlite3.DatabaseError:
         return None
 
@@ -332,6 +378,7 @@ def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str
         "tokens_out": row["tokens_out"],
         "latency_ms": row["latency_ms"],
         "policy_decision": policy_decision,
+        "policy_suggestions": policy_suggestions,
     }
 
 
@@ -432,6 +479,40 @@ def render_explain_last(payload: Optional[Dict[str, Any]] = None) -> str:
         lines.append("")
         lines.append("    DRY-RUN / PREVIEW ONLY — no routing decision was made.")
         lines.append("")
+
+    # Phase 2.4.2 — render every linked policy suggestion. Section
+    # is always emitted (with "(none)" when empty) so the operator
+    # has a stable layout to scan.
+    suggestions = p.get("policy_suggestions") or []
+    lines.append(
+        "  Policy Suggestions (Phase 2.4.2 — advisory / no-op / default-off):"
+    )
+    if not suggestions:
+        lines.append("    (none recorded yet for this decision)")
+    else:
+        for s in suggestions:
+            lines.append("")
+            lines.append(f"    [{s['suggestion_type']}] {s['title']}")
+            lines.append(f"      suggestion_id:        {s['suggestion_id']}")
+            lines.append(f"      confidence:           {s['confidence']:.4f}")
+            sflags = s.get("safety_flags") or []
+            sflags_str = ", ".join(sflags) if sflags else "(none)"
+            lines.append(f"      safety_flags:         {sflags_str}")
+            if s.get("recommended_action"):
+                lines.append(
+                    f"      recommended_action:   {s['recommended_action']}"
+                )
+            lines.append(f"      requires_confirmation: {s['requires_confirmation']}")
+            lines.append(f"      user_visible:         {s['user_visible']}")
+            if s.get("expires_at"):
+                lines.append(f"      expires_at:           {s['expires_at']}")
+            lines.append("      message:")
+            lines.append(f"        {s['message']}")
+    lines.append("")
+    lines.append(
+        "    Suggestions are advisory only. TokenPak has not changed routing."
+    )
+    lines.append("")
     return "\n".join(lines)
 
 
