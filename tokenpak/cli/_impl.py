@@ -553,6 +553,211 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_claude_code_intent(args) -> None:
+    """PI-2 — Claude Code Companion intent preview (full chain).
+
+    Renders the latest event + decision + suggestion + patch row
+    chain with Claude-Code-specific identity labels. Read-only.
+    """
+    import json as _json
+
+    from tokenpak.proxy.intent_claude_code_preview import (
+        PREVIEW_LABELS,
+        collect_latest_preview,
+    )
+
+    payload = collect_latest_preview()
+    if getattr(args, "cc_intent_json", False):
+        if payload is None:
+            print(_json.dumps({
+                "preview": None,
+                "labels": list(PREVIEW_LABELS),
+            }, indent=2, sort_keys=True))
+        else:
+            print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+        sys.exit(0)
+
+    lines: list[str] = []
+    lines.append("")
+    lines.append("TOKENPAK  |  Claude Code Companion Intent Preview (PI-2)")
+    lines.append("──────────────────────────────")
+    lines.append("")
+    for label in PREVIEW_LABELS:
+        lines.append(f"  · {label}")
+    lines.append("")
+
+    if payload is None:
+        lines.append("  No intent_events rows yet.")
+        lines.append("")
+        lines.append("  PI-2 surfaces a Claude-Code-shaped view over the existing")
+        lines.append("  intent_events / intent_policy_decisions /")
+        lines.append("  intent_suggestions / intent_patches tables. Send a")
+        lines.append("  Claude Code request through the proxy and re-run this")
+        lines.append("  command. See `tokenpak doctor --intent` for activation.")
+        lines.append("")
+        print("\n".join(lines))
+        sys.exit(0)
+
+    lines.append("  Identity:")
+    lines.append(f"    source_client:           {payload['source_client']}")
+    lines.append(f"    format_adapter:          {payload['format_adapter']}")
+    lines.append(f"    credential_provider:     {payload['credential_provider']}")
+    lines.append(f"    wire_emission:           {payload['wire_emission']}")
+    lines.append("")
+
+    event = payload["event"]
+    lines.append("  Latest classified request (Phase 0):")
+    lines.append(f"    request_id:              {event['request_id']}")
+    lines.append(f"    contract_id:             {event['contract_id']}")
+    lines.append(f"    timestamp:               {event['timestamp']}")
+    lines.append(f"    intent_class:            {event['intent_class']}")
+    lines.append(f"    confidence:              {event['intent_confidence']:.4f}")
+    lines.append(f"    slots_present:           {event['intent_slots_present']}")
+    lines.append(f"    slots_missing:           {event['intent_slots_missing']}")
+    lines.append(f"    intent_source:           {event['intent_source']}")
+    catch = event.get("catch_all_reason")
+    lines.append(f"    catch_all_reason:        {catch if catch else '(none)'}")
+    lines.append(f"    tip_headers_emitted:     {event['tip_headers_emitted']}")
+    lines.append(f"    tip_headers_stripped:    {event['tip_headers_stripped']}")
+    lines.append("")
+
+    decision = payload.get("decision")
+    if decision is None:
+        lines.append("  Linked policy decision: (none recorded yet for this contract)")
+    else:
+        lines.append("  Linked policy decision (Phase 2.1 dry-run):")
+        lines.append(f"    decision_id:             {decision['decision_id']}")
+        lines.append(f"    mode:                    {decision['mode']}")
+        lines.append(f"    action:                  {decision['action']}")
+        lines.append(f"    decision_reason:         {decision['decision_reason']}")
+        sflags = decision.get("safety_flags") or []
+        lines.append(
+            f"    safety_flags:            {', '.join(sflags) if sflags else '(none)'}"
+        )
+    lines.append("")
+
+    suggestion = payload.get("suggestion")
+    if suggestion is None:
+        lines.append("  Linked policy suggestion: (none recorded yet)")
+    else:
+        lines.append("  Linked policy suggestion (Phase 2.4.1 advisory):")
+        lines.append(f"    suggestion_id:           {suggestion['suggestion_id']}")
+        lines.append(f"    type:                    {suggestion['suggestion_type']}")
+        lines.append(f"    title:                   {suggestion['title']}")
+        if suggestion.get("recommended_action"):
+            lines.append(
+                f"    recommended_action:      {suggestion['recommended_action']}"
+            )
+    lines.append("")
+
+    patch = payload.get("patch")
+    if patch is None:
+        lines.append("  Linked prompt patch: (none recorded yet)")
+        lines.append("")
+        lines.append("  No patch was generated for this contract — either")
+        lines.append("  prompt_intervention is disabled, the eligibility gates")
+        lines.append("  rejected the case, or no template applied.")
+    else:
+        lines.append("  Linked prompt patch (PI-1 preview):")
+        lines.append(f"    patch_id:                {patch['patch_id']}")
+        lines.append(f"    mode:                    {patch['mode']}")
+        lines.append(f"    target:                  {patch['target']}")
+        lines.append(f"    applied:                 {patch['applied']}  (always False in PI-1/PI-2)")
+        lines.append(f"    confidence:              {patch['confidence']:.4f}")
+        pflags = patch.get("safety_flags") or []
+        lines.append(
+            f"    safety_flags:            {', '.join(pflags) if pflags else '(none)'}"
+        )
+        lines.append(f"    reason:                  {patch['reason']}")
+        lines.append("")
+        lines.append("    patch_text (preview, would be inserted into target if PI-3 applied it):")
+        for line in patch["patch_text"].splitlines():
+            lines.append(f"      {line}")
+    lines.append("")
+    lines.append("  This is a preview only. PI-2 has no application path; PI-3")
+    lines.append("  is the first sub-phase that will inject guidance into the")
+    lines.append("  Claude Code Companion's companion_context — and only on")
+    lines.append("  explicit opt-in via prompt_intervention config.")
+    lines.append("")
+    print("\n".join(lines))
+    sys.exit(0)
+
+
+def cmd_claude_code_patches(args) -> None:
+    """PI-2 — Claude Code Companion patch-only preview.
+
+    Renders the latest patch row tagged with Claude-Code-specific
+    identity labels. Read-only.
+    """
+    import json as _json
+
+    from tokenpak.proxy.intent_claude_code_preview import (
+        PREVIEW_LABELS,
+        collect_latest_patch_preview,
+    )
+
+    payload = collect_latest_patch_preview()
+    if getattr(args, "cc_patches_json", False):
+        if payload is None:
+            print(_json.dumps({
+                "patch": None,
+                "labels": list(PREVIEW_LABELS),
+            }, indent=2, sort_keys=True))
+        else:
+            print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+        sys.exit(0)
+
+    lines: list[str] = []
+    lines.append("")
+    lines.append("TOKENPAK  |  Claude Code Companion Patch Preview (PI-2)")
+    lines.append("──────────────────────────────")
+    lines.append("")
+    for label in PREVIEW_LABELS:
+        lines.append(f"  · {label}")
+    lines.append("")
+
+    if payload is None:
+        lines.append("  No prompt patches yet.")
+        lines.append("")
+        lines.append("  PI-2 surfaces a Claude-Code-shaped view over the")
+        lines.append("  intent_patches table. Run a Claude Code request through")
+        lines.append("  the proxy with prompt_intervention.enabled = true and")
+        lines.append("  re-run this command.")
+        lines.append("")
+        print("\n".join(lines))
+        sys.exit(0)
+
+    lines.append("  Identity:")
+    lines.append(f"    source_client:           {payload['source_client']}")
+    lines.append(f"    format_adapter:          {payload['format_adapter']}")
+    lines.append(f"    credential_provider:     {payload['credential_provider']}")
+    lines.append(f"    wire_emission:           {payload['wire_emission']}")
+    lines.append("")
+    p = payload["patch"]
+    lines.append("  Latest patch:")
+    lines.append(f"    patch_id:                {p['patch_id']}")
+    lines.append(f"    contract_id:             {p['contract_id']}")
+    lines.append(f"    decision_id:             {p['decision_id']}")
+    lines.append(f"    suggestion_id:           {p['suggestion_id']}")
+    lines.append(f"    created_at:              {p['created_at']}")
+    lines.append(f"    mode:                    {p['mode']}")
+    lines.append(f"    target:                  {p['target']}")
+    lines.append(f"    applied:                 {p['applied']}  (always False in PI-1/PI-2)")
+    lines.append(f"    confidence:              {p['confidence']:.4f}")
+    pflags = p.get("safety_flags") or []
+    lines.append(
+        f"    safety_flags:            {', '.join(pflags) if pflags else '(none)'}"
+    )
+    lines.append(f"    reason:                  {p['reason']}")
+    lines.append("")
+    lines.append("  patch_text (preview, would be inserted into target if PI-3 applied it):")
+    for line in p["patch_text"].splitlines():
+        lines.append(f"    {line}")
+    lines.append("")
+    print("\n".join(lines))
+    sys.exit(0)
+
+
 def cmd_intent_patches(args) -> None:
     """Phase PI-1 — internal/dev inspector for intent_patches.
 
@@ -2593,6 +2798,62 @@ def build_parser():
         help="Emit machine-readable JSON instead of human-readable.",
     )
     p_intent_patches.set_defaults(func=cmd_intent_patches)
+
+    # PI-2 — Claude Code Companion preview surface (read-only).
+    # Two subcommands: `intent` (full chain: event → decision →
+    # suggestion → patch) and `patches` (patch-only).
+    p_claude_code = sub.add_parser(
+        "claude-code",
+        help=(
+            "Claude Code Companion intent / patch preview "
+            "(PI-2; read-only)."
+        ),
+    )
+    p_claude_code_sub = p_claude_code.add_subparsers(
+        dest="claude_code_cmd", required=False,
+    )
+
+    p_cc_intent = p_claude_code_sub.add_parser(
+        "intent",
+        help=(
+            "Show the latest Claude Code intent preview "
+            "(event + decision + suggestion + patch chain)."
+        ),
+    )
+    p_cc_intent.add_argument(
+        "--last",
+        dest="cc_intent_last",
+        action="store_true",
+        help="Show the most recent intent preview (default behavior).",
+    )
+    p_cc_intent.add_argument(
+        "--json",
+        dest="cc_intent_json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+    p_cc_intent.set_defaults(func=cmd_claude_code_intent)
+
+    p_cc_patches = p_claude_code_sub.add_parser(
+        "patches",
+        help=(
+            "Show the latest Claude Code patch preview "
+            "(patch-only view)."
+        ),
+    )
+    p_cc_patches.add_argument(
+        "--last",
+        dest="cc_patches_last",
+        action="store_true",
+        help="Show the most recent patch (default behavior).",
+    )
+    p_cc_patches.add_argument(
+        "--json",
+        dest="cc_patches_json",
+        action="store_true",
+        help="Emit machine-readable JSON.",
+    )
+    p_cc_patches.set_defaults(func=cmd_claude_code_patches)
 
     p_adapter = sub.add_parser(
         "adapter",
