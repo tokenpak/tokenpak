@@ -91,6 +91,9 @@ def collect_intent_view() -> Dict[str, Any]:
         "would_emit_headers": False,
         "intent_events_db": {"path": None, "row_count": None},
         "errors": [],
+        # Phase 2.4.3 — active policy config snapshot.
+        "policy_config": None,
+        "policy_config_path": None,
     }
 
     try:
@@ -131,6 +134,20 @@ def collect_intent_view() -> Dict[str, Any]:
         out["would_emit_headers"] = any(a["declares_label"] for a in adapters)
     except Exception as exc:  # noqa: BLE001
         out["errors"].append(f"adapter registry unreachable: {exc!r}")
+
+    # Phase 2.4.3 — active policy config snapshot.
+    try:
+        from tokenpak.proxy.intent_policy_config_loader import (
+            resolve_active_config_path,
+        )
+        from tokenpak.proxy.intent_policy_engine import load_default_config
+
+        cfg = load_default_config()
+        out["policy_config"] = cfg.to_dict()
+        cpath = resolve_active_config_path()
+        out["policy_config_path"] = str(cpath) if cpath is not None else None
+    except Exception as exc:  # noqa: BLE001
+        out["errors"].append(f"policy config unreachable: {exc!r}")
 
     try:
         db_path = _intent_db_path()
@@ -216,6 +233,35 @@ def render_intent_view(view: Optional[Dict[str, Any]] = None) -> str:
         for e in v["errors"]:
             lines.append(f"    ! {e}")
         lines.append("")
+
+    # Phase 2.4.3 — active config snapshot.
+    cfg = v.get("policy_config")
+    cpath = v.get("policy_config_path")
+    lines.append("  Active policy config (Phase 2.4.3):")
+    lines.append(f"    config_path:               {cpath or '(none — using defaults)'}")
+    if cfg:
+        surface = cfg.get("suggestion_surface", {})
+        active_label = (
+            "Suggest mode active"
+            if cfg.get("mode") == "suggest"
+            else "observe_only (default)"
+        )
+        lines.append(f"    mode:                      {cfg.get('mode')}  ({active_label})")
+        lines.append(f"    dry_run:                   {cfg.get('dry_run')}  (locked True in 2.4.3)")
+        lines.append(f"    allow_auto_routing:        {cfg.get('allow_auto_routing')}  (locked False in 2.4.3)")
+        lines.append(f"    allow_unverified_providers:{cfg.get('allow_unverified_providers')}")
+        lines.append(f"    show_suggestions:          {cfg.get('show_suggestions')}")
+        lines.append(f"    suggestion_surface.cli:        {surface.get('cli')}")
+        lines.append(f"    suggestion_surface.dashboard:  {surface.get('dashboard')}")
+        lines.append(f"    suggestion_surface.api:        {surface.get('api')}")
+        lines.append(f"    suggestion_surface.response_headers: {surface.get('response_headers')}  (locked False in 2.4.3)")
+        lines.append(f"    low_confidence_threshold:  {cfg.get('low_confidence_threshold')}")
+    lines.append("")
+    lines.append("    Safety posture: dry_run=True, allow_auto_routing=False,")
+    lines.append("    response_headers=False — no routing / model / provider /")
+    lines.append("    request mutation regardless of mode.")
+    lines.append("    TokenPak has not changed routing.")
+    lines.append("")
 
     lines.append("  Run `tokenpak doctor --explain-last` to inspect the most")
     lines.append("  recent classification (full intent_events row).")
@@ -379,7 +425,22 @@ def collect_explain_last(*, db_path: Optional[Path] = None) -> Optional[Dict[str
         "latency_ms": row["latency_ms"],
         "policy_decision": policy_decision,
         "policy_suggestions": policy_suggestions,
+        "policy_config": _resolve_policy_config_snapshot(),
     }
+
+
+def _resolve_policy_config_snapshot() -> Optional[Dict[str, Any]]:
+    """Best-effort load of the active config for explain-last.
+
+    Pulled out so the explain return shape is stable — a config-
+    loader failure renders ``None`` instead of breaking the row.
+    """
+    try:
+        from tokenpak.proxy.intent_policy_engine import load_default_config
+
+        return load_default_config().to_dict()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def render_explain_last(payload: Optional[Dict[str, Any]] = None) -> str:
@@ -513,6 +574,34 @@ def render_explain_last(payload: Optional[Dict[str, Any]] = None) -> str:
         "    Suggestions are advisory only. TokenPak has not changed routing."
     )
     lines.append("")
+
+    # Phase 2.4.3 — active config snapshot at the bottom of the
+    # explain output so the operator sees what gating was in effect
+    # for this row.
+    cfg = p.get("policy_config")
+    if cfg:
+        surface = cfg.get("suggestion_surface", {})
+        active = (
+            "Suggest mode active"
+            if cfg.get("mode") == "suggest"
+            else "observe_only (default)"
+        )
+        lines.append(
+            "  Active policy config snapshot (Phase 2.4.3):"
+        )
+        lines.append(f"    mode:                      {cfg.get('mode')}  ({active})")
+        lines.append(f"    show_suggestions:          {cfg.get('show_suggestions')}")
+        lines.append(
+            f"    suggestion surfaces enabled: cli={surface.get('cli')}, "
+            f"dashboard={surface.get('dashboard')}, api={surface.get('api')}"
+        )
+        lines.append(
+            f"    response_headers:          {surface.get('response_headers')}  "
+            f"(locked False in 2.4.3)"
+        )
+        lines.append(f"    dry_run:                   {cfg.get('dry_run')}  (locked True)")
+        lines.append(f"    allow_auto_routing:        {cfg.get('allow_auto_routing')}  (locked False)")
+        lines.append("")
     return "\n".join(lines)
 
 

@@ -111,13 +111,35 @@ SAFETY_UNVERIFIED_PROVIDER: str = "unverified_provider"
 
 
 @dataclass(frozen=True)
+class SuggestionSurfaceConfig:
+    """Per-surface visibility flags for the Phase 2.4.3 suggest mode.
+
+    ``response_headers`` is **always forced False** by the loader
+    until a future ratification — wire-side ``X-TokenPak-
+    Suggestion-*`` emission stays gated by the Standard #23 §4.3
+    capability check on top of this flag and is not in 2.4.3 scope.
+    """
+
+    cli: bool = True
+    dashboard: bool = True
+    api: bool = True
+    response_headers: bool = False  # forced False; cannot be enabled in 2.4.3
+
+
+@dataclass(frozen=True)
 class PolicyEngineConfig:
     """Engine-side projection of the ``intent_policy`` config block.
 
-    Phase 2.1 covers exactly the five fields the directive
-    enumerates. The Phase 2 spec §7 defines additional fields
-    (``budget_caps``, ``class_rules``, ``class_groups``) that
-    later sub-phases will plumb in.
+    Phase 2.1 covered five fields; Phase 2.4.3 adds the suggest-
+    mode visibility controls (``show_suggestions``,
+    ``suggestion_surface``) per Phase 2.4 spec §3.
+
+    Three safety invariants enforced by the config loader (cannot
+    be disabled by user config):
+
+      - ``dry_run`` is forced ``True``.
+      - ``allow_auto_routing`` is forced ``False``.
+      - ``suggestion_surface.response_headers`` is forced ``False``.
     """
 
     mode: str = "observe_only"  # observe_only | suggest | confirm | enforce
@@ -126,20 +148,53 @@ class PolicyEngineConfig:
     allow_unverified_providers: bool = False
     low_confidence_threshold: float = 0.65
 
+    # Phase 2.4.3 — suggest mode visibility.
+    show_suggestions: bool = False
+    suggestion_surface: SuggestionSurfaceConfig = field(
+        default_factory=SuggestionSurfaceConfig
+    )
+
+    def is_suggest_mode(self) -> bool:
+        """True iff the host has explicitly opted in to suggest mode."""
+        return self.mode == "suggest"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON-serialisable view used by doctor / dashboard / API."""
+        return {
+            "mode": self.mode,
+            "dry_run": self.dry_run,
+            "allow_auto_routing": self.allow_auto_routing,
+            "allow_unverified_providers": self.allow_unverified_providers,
+            "low_confidence_threshold": self.low_confidence_threshold,
+            "show_suggestions": self.show_suggestions,
+            "suggestion_surface": {
+                "cli": self.suggestion_surface.cli,
+                "dashboard": self.suggestion_surface.dashboard,
+                "api": self.suggestion_surface.api,
+                "response_headers": self.suggestion_surface.response_headers,
+            },
+        }
+
 
 _DEFAULT_CONFIG: PolicyEngineConfig = PolicyEngineConfig()
 
 
 def load_default_config() -> PolicyEngineConfig:
-    """Return the Phase 2.1 default config.
+    """Return the active config for this host.
 
-    Phase 2.1 ships without a config-file loader; the directive
-    explicitly limits scope to the dry-run engine. The Phase 2.2
-    sub-phase will add ``~/.tokenpak/policy.yaml`` parsing per the
-    spec §7 schema. Until then, the default config is the only
-    config a host can have.
+    Phase 2.4.3 wires the loader: tries ``~/.tokenpak/policy.yaml``
+    via :mod:`tokenpak.proxy.intent_policy_config_loader`. Missing
+    file, parse error, or any safety-override violation falls back
+    to the hard-coded ``_DEFAULT_CONFIG`` (observe_only).
     """
-    return _DEFAULT_CONFIG
+    try:
+        from tokenpak.proxy.intent_policy_config_loader import (
+            load_policy_config_safely,
+        )
+
+        return load_policy_config_safely()
+    except Exception:  # noqa: BLE001
+        return _DEFAULT_CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +507,7 @@ __all__ = [
     "SAFETY_LOW_CONFIDENCE",
     "SAFETY_MISSING_SLOTS",
     "SAFETY_UNVERIFIED_PROVIDER",
+    "SuggestionSurfaceConfig",
     "evaluate_policy",
     "load_default_config",
     "make_decision_id",

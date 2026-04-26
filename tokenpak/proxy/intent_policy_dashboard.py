@@ -178,6 +178,17 @@ def collect_policy_dashboard(
     # operator_panel contract is unchanged from 2.2. Phase 2.4.2's
     # additive ``suggestions`` section is identified by its own
     # noop_default_off flag inside the suggestions block above.
+    # Phase 2.4.3 — active policy config snapshot for the
+    # dashboard. JS reads this to badge "Suggest mode active"
+    # when appropriate.
+    active_config: Dict[str, Any] = {}
+    try:
+        from tokenpak.proxy.intent_policy_engine import load_default_config
+
+        active_config = load_default_config().to_dict()
+    except Exception:  # noqa: BLE001
+        active_config = {}
+
     metadata: Dict[str, Any] = {
         "schema_version": DASHBOARD_SCHEMA_VERSION,
         "phase": "intent-layer-phase-2.2",
@@ -190,6 +201,12 @@ def collect_policy_dashboard(
         "window_days": report.window_days,
         "window_cutoff_iso": report.window_cutoff_iso,
         "telemetry_store_path": report.db_path,
+        # Phase 2.4.3 — active policy config snapshot.
+        "active_policy_config": active_config,
+        "suggest_mode_active": (
+            active_config.get("mode") == "suggest"
+            and bool(active_config.get("show_suggestions"))
+        ),
     }
 
     return {
