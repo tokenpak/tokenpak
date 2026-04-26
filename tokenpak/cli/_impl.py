@@ -87,6 +87,7 @@ _COMMAND_GROUPS = {
         ("fleet", "Multi-machine proxy fleet status"),
         ("aggregate", "Aggregate request ledger across machines"),
         ("requests", "Live request explorer"),
+        ("intent", "Intent Layer observation + reporting (read-only)"),
     ],
     "Advanced": [
         ("trigger", "Manage event triggers"),
