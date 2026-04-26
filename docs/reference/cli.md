@@ -611,6 +611,22 @@ options:
   --once                Print once and exit
 ```
 
+### `tokenpak intent`
+
+Intent Layer observation + reporting (read-only)
+
+```
+usage: tokenpak intent [-h] {report} ...
+
+positional arguments:
+  {report}
+    report    Summarize the intent_events telemetry over a window. Read-only;
+              never reads or emits raw prompt text.
+
+options:
+  -h, --help  show this help message and exit
+```
+
 ## Advanced
 
 ### `tokenpak trigger`
