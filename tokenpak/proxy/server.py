@@ -1620,10 +1620,48 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         config_low_confidence_threshold=_i21_cfg.low_confidence_threshold,
                     )
                 )
+
+                # Phase 2.4.1 — build + persist suggestions. Pure
+                # function over the decision; suppressed by the §4
+                # eligibility gates when not applicable. Never
+                # affects dispatch; same side-channel posture as
+                # the policy decision write above.
+                from tokenpak.proxy.intent_suggestion import (
+                    SuggestionBuilderContext as _I241Ctx,
+                )
+                from tokenpak.proxy.intent_suggestion import (
+                    build_suggestions as _i241_build,
+                )
+                from tokenpak.proxy.intent_suggestion_telemetry import (
+                    IntentSuggestionRow as _I241Row,
+                )
+                from tokenpak.proxy.intent_suggestion_telemetry import (
+                    get_default_suggestion_store as _i241_store,
+                )
+
+                _i241_ctx = _I241Ctx(
+                    config=_i21_cfg,
+                    adapter_capabilities=(
+                        request_adapter.capabilities
+                        if request_adapter is not None
+                        else frozenset()
+                    ),
+                    provider_verified=None,
+                    required_slots=(),
+                )
+                _i241_suggestions = _i241_build(
+                    decision=_i21_decision,
+                    contract=_intent_contract,
+                    ctx=_i241_ctx,
+                )
+                _i241_ts = datetime.now().isoformat(timespec="seconds")
+                for _s in _i241_suggestions:
+                    _i241_store().write(_I241Row(suggestion=_s, timestamp=_i241_ts))
             except Exception:
                 # Side-channel — never break the request on engine /
-                # telemetry failures. Phase 2.1 is observation-only;
-                # if the engine misbehaves, the proxy continues.
+                # telemetry failures. Phase 2.1 / 2.4.1 are
+                # observation-only; if the engine misbehaves, the
+                # proxy continues.
                 pass
 
         try:
