@@ -25,6 +25,9 @@ def get_dashboard_files():
         "index.html": DASHBOARD_DIR / "index.html",
         "metrics.js": DASHBOARD_DIR / "metrics.js",
         "charts.js": DASHBOARD_DIR / "charts.js",
+        # Phase 1.1 — intent dashboard cards. Read-only; consumes
+        # /api/intent/report?window=14d.
+        "intent.js": DASHBOARD_DIR / "intent.js",
         "styles.css": DASHBOARD_DIR / "styles.css",
     }
 

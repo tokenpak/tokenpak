@@ -496,6 +496,39 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._send_json({"error": str(e)})
             return
+        if path.startswith("/api/intent/report"):
+            # Phase 1.1 — observation-only dashboard / read-model
+            # surface over the Phase 0 intent_events store. Reuses
+            # the Phase 1 query layer; never reads or emits raw
+            # prompt content. Default window is 14d (matches the
+            # proposal's observation default).
+            from urllib.parse import parse_qs
+            from urllib.parse import urlparse as _urlparse
+
+            from tokenpak.proxy.intent_dashboard import (
+                collect_dashboard,
+                parse_window_or_default,
+            )
+
+            parsed_path = _urlparse(path)
+            qs = parse_qs(parsed_path.query)
+            raw_window = (qs.get("window") or [""])[0]
+            try:
+                days = parse_window_or_default(raw_window)
+            except ValueError as exc:
+                self._send_json_error(400, "bad_request", str(exc))
+                return
+            try:
+                payload = collect_dashboard(window_days=days)
+            except Exception as exc:  # noqa: BLE001 — read-only path
+                self._send_json_error(
+                    500,
+                    "intent_dashboard_failed",
+                    f"intent dashboard failed: {exc!r}",
+                )
+                return
+            self._send_json(payload)
+            return
         if path == "/traces":
             traces = ps.trace_storage.get_all()
             self._send_json({"traces": [t.to_dict() for t in traces], "count": len(traces)})
