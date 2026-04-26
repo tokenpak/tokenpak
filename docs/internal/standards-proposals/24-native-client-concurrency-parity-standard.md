@@ -1,13 +1,15 @@
 # Standard #24 (proposal) — Native Client Concurrency Parity
 
-**Status**: 🟡 **proposal** — awaiting Kevin ratification
+**Status**: 🟡 **ratified in principle (2026-04-26)** — promotion to vault gated on NCP-1 data
 **Date**: 2026-04-26
 **Workstream**: NCP (Native Client Concurrency Parity) diagnostic
 **Authors**: Sue (draft) / Kevin (review)
-**Canonical home (when ratified)**: `~/vault/02_COMMAND_CENTER/tokenpak-standards-internal/24-native-client-concurrency-parity-standard.md`
-**Companion diagnostic plan**: `docs/internal/specs/native-client-concurrency-parity-diagnostic-2026-04-26.md`
+**Canonical home (when promoted)**: `~/vault/02_COMMAND_CENTER/tokenpak-standards-internal/24-native-client-concurrency-parity-standard.md`
+**Companion docs**:
+  - Diagnostic plan: `docs/internal/specs/native-client-concurrency-parity-diagnostic-2026-04-26.md`
+  - A/B test protocol: `docs/internal/specs/ncp-1-ab-test-protocol-2026-04-26.md`
 
-> This is a **proposal**. Until ratified, no code path is required to honour it. Once ratified, the standard is promoted to the vault and binds every TokenPak surface that fronts an interactive client (Claude Code, Codex, Cursor, etc.).
+> Kevin **ratified the five invariants and the fail-safe contract in principle on 2026-04-26**. Promotion to the canonical vault location is gated on NCP-1 data either confirming or adjusting the measurement thresholds (specifically the H1 cache-hit-delta threshold and H2 session-id rotation-ratio threshold). Until promoted, no code path is required to honour the standard, but the invariants ARE the design contract for any NCP-x implementation work.
 
 ---
 
