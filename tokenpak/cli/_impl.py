@@ -553,37 +553,76 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def _intent_intervention_status_line() -> str:
+    """PI-3 operator-safety output. Reads
+    :func:`load_prompt_intervention_config_safely` and returns the
+    one-line status banner the directive § 6 mandates.
+    """
+    from tokenpak.proxy.intent_policy_config_loader import (
+        load_prompt_intervention_config_safely,
+    )
+
+    cfg = load_prompt_intervention_config_safely()
+    if cfg.is_claude_code_companion_active() and not cfg.require_confirmation:
+        return (
+            "Prompt intervention is enabled for Claude Code companion "
+            "context only. User messages are preserved."
+        )
+    return "Prompt intervention is disabled. Guidance is preview-only."
+
+
 def cmd_claude_code_intent(args) -> None:
     """PI-2 — Claude Code Companion intent preview (full chain).
 
     Renders the latest event + decision + suggestion + patch row
     chain with Claude-Code-specific identity labels. Read-only.
+    PI-3 extension: when the latest patch row is applied, the
+    label set swaps to :data:`APPLIED_LABELS` and the patch
+    section renders the four audit columns.
     """
     import json as _json
 
     from tokenpak.proxy.intent_claude_code_preview import (
-        PREVIEW_LABELS,
         collect_latest_preview,
+        labels_for_patch,
     )
 
     payload = collect_latest_preview()
     if getattr(args, "cc_intent_json", False):
         if payload is None:
+            from tokenpak.proxy.intent_claude_code_preview import (
+                PREVIEW_LABELS,
+            )
             print(_json.dumps({
                 "preview": None,
                 "labels": list(PREVIEW_LABELS),
+                "intervention_status": _intent_intervention_status_line(),
             }, indent=2, sort_keys=True))
         else:
-            print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+            payload_with_status = dict(payload)
+            payload_with_status["intervention_status"] = (
+                _intent_intervention_status_line()
+            )
+            print(_json.dumps(
+                payload_with_status, indent=2, sort_keys=True, default=str
+            ))
         sys.exit(0)
 
+    labels = (
+        labels_for_patch(payload.get("patch")) if payload else None
+    )
     lines: list[str] = []
     lines.append("")
     lines.append("TOKENPAK  |  Claude Code Companion Intent Preview (PI-2)")
     lines.append("──────────────────────────────")
     lines.append("")
-    for label in PREVIEW_LABELS:
+    if labels is None:
+        from tokenpak.proxy.intent_claude_code_preview import PREVIEW_LABELS
+        labels = PREVIEW_LABELS
+    for label in labels:
         lines.append(f"  · {label}")
+    lines.append("")
+    lines.append(f"  {_intent_intervention_status_line()}")
     lines.append("")
 
     if payload is None:
@@ -658,11 +697,29 @@ def cmd_claude_code_intent(args) -> None:
         lines.append("  prompt_intervention is disabled, the eligibility gates")
         lines.append("  rejected the case, or no template applied.")
     else:
-        lines.append("  Linked prompt patch (PI-1 preview):")
+        applied = bool(patch.get("applied"))
+        if applied:
+            lines.append("  Linked prompt patch (PI-3 — Applied):")
+        else:
+            lines.append("  Linked prompt patch (PI-1 preview):")
         lines.append(f"    patch_id:                {patch['patch_id']}")
         lines.append(f"    mode:                    {patch['mode']}")
         lines.append(f"    target:                  {patch['target']}")
-        lines.append(f"    applied:                 {patch['applied']}  (always False in PI-1/PI-2)")
+        lines.append(f"    applied:                 {patch['applied']}")
+        if applied:
+            lines.append(
+                f"    applied_at:              {patch.get('applied_at') or '(unknown)'}"
+            )
+            lines.append(
+                f"    applied_surface:         {patch.get('applied_surface') or '(unknown)'}"
+            )
+            lines.append(
+                f"    application_mode:        {patch.get('application_mode') or '(unknown)'}"
+            )
+            if patch.get("application_id"):
+                lines.append(
+                    f"    application_id:          {patch['application_id']}"
+                )
         lines.append(f"    confidence:              {patch['confidence']:.4f}")
         pflags = patch.get("safety_flags") or []
         lines.append(
@@ -670,14 +727,20 @@ def cmd_claude_code_intent(args) -> None:
         )
         lines.append(f"    reason:                  {patch['reason']}")
         lines.append("")
-        lines.append("    patch_text (preview, would be inserted into target if PI-3 applied it):")
+        if applied:
+            lines.append(
+                "    patch_text (Injected into Claude Code companion context):"
+            )
+        else:
+            lines.append(
+                "    patch_text (preview, would be inserted into target if PI-3 applied it):"
+            )
         for line in patch["patch_text"].splitlines():
             lines.append(f"      {line}")
     lines.append("")
-    lines.append("  This is a preview only. PI-2 has no application path; PI-3")
-    lines.append("  is the first sub-phase that will inject guidance into the")
-    lines.append("  Claude Code Companion's companion_context — and only on")
-    lines.append("  explicit opt-in via prompt_intervention config.")
+    lines.append("  PI-3 is the first sub-phase that may inject guidance into")
+    lines.append("  the Claude Code Companion's companion_context — and only")
+    lines.append("  on explicit opt-in via prompt_intervention config.")
     lines.append("")
     print("\n".join(lines))
     sys.exit(0)
@@ -687,13 +750,17 @@ def cmd_claude_code_patches(args) -> None:
     """PI-2 — Claude Code Companion patch-only preview.
 
     Renders the latest patch row tagged with Claude-Code-specific
-    identity labels. Read-only.
+    identity labels. Read-only. PI-3 extension: when the latest
+    patch row is applied, the label set swaps to
+    :data:`APPLIED_LABELS` and the four audit columns are
+    rendered.
     """
     import json as _json
 
     from tokenpak.proxy.intent_claude_code_preview import (
         PREVIEW_LABELS,
         collect_latest_patch_preview,
+        labels_for_patch,
     )
 
     payload = collect_latest_patch_preview()
@@ -702,9 +769,16 @@ def cmd_claude_code_patches(args) -> None:
             print(_json.dumps({
                 "patch": None,
                 "labels": list(PREVIEW_LABELS),
+                "intervention_status": _intent_intervention_status_line(),
             }, indent=2, sort_keys=True))
         else:
-            print(_json.dumps(payload, indent=2, sort_keys=True, default=str))
+            payload_with_status = dict(payload)
+            payload_with_status["intervention_status"] = (
+                _intent_intervention_status_line()
+            )
+            print(_json.dumps(
+                payload_with_status, indent=2, sort_keys=True, default=str
+            ))
         sys.exit(0)
 
     lines: list[str] = []
@@ -712,17 +786,20 @@ def cmd_claude_code_patches(args) -> None:
     lines.append("TOKENPAK  |  Claude Code Companion Patch Preview (PI-2)")
     lines.append("──────────────────────────────")
     lines.append("")
-    for label in PREVIEW_LABELS:
+    labels = labels_for_patch(payload["patch"]) if payload else PREVIEW_LABELS
+    for label in labels:
         lines.append(f"  · {label}")
+    lines.append("")
+    lines.append(f"  {_intent_intervention_status_line()}")
     lines.append("")
 
     if payload is None:
         lines.append("  No prompt patches yet.")
         lines.append("")
-        lines.append("  PI-2 surfaces a Claude-Code-shaped view over the")
-        lines.append("  intent_patches table. Run a Claude Code request through")
-        lines.append("  the proxy with prompt_intervention.enabled = true and")
-        lines.append("  re-run this command.")
+        lines.append("  Run a Claude Code request through the proxy with")
+        lines.append("  prompt_intervention.enabled = true and")
+        lines.append("  surfaces.claude_code_companion = true, then re-run")
+        lines.append("  this command.")
         lines.append("")
         print("\n".join(lines))
         sys.exit(0)
@@ -734,7 +811,11 @@ def cmd_claude_code_patches(args) -> None:
     lines.append(f"    wire_emission:           {payload['wire_emission']}")
     lines.append("")
     p = payload["patch"]
-    lines.append("  Latest patch:")
+    applied = bool(p.get("applied"))
+    if applied:
+        lines.append("  Latest patch (Applied):")
+    else:
+        lines.append("  Latest patch (preview):")
     lines.append(f"    patch_id:                {p['patch_id']}")
     lines.append(f"    contract_id:             {p['contract_id']}")
     lines.append(f"    decision_id:             {p['decision_id']}")
@@ -742,7 +823,21 @@ def cmd_claude_code_patches(args) -> None:
     lines.append(f"    created_at:              {p['created_at']}")
     lines.append(f"    mode:                    {p['mode']}")
     lines.append(f"    target:                  {p['target']}")
-    lines.append(f"    applied:                 {p['applied']}  (always False in PI-1/PI-2)")
+    lines.append(f"    applied:                 {p['applied']}")
+    if applied:
+        lines.append(
+            f"    applied_at:              {p.get('applied_at') or '(unknown)'}"
+        )
+        lines.append(
+            f"    applied_surface:         {p.get('applied_surface') or '(unknown)'}"
+        )
+        lines.append(
+            f"    application_mode:        {p.get('application_mode') or '(unknown)'}"
+        )
+        if p.get("application_id"):
+            lines.append(
+                f"    application_id:          {p['application_id']}"
+            )
     lines.append(f"    confidence:              {p['confidence']:.4f}")
     pflags = p.get("safety_flags") or []
     lines.append(
@@ -750,7 +845,14 @@ def cmd_claude_code_patches(args) -> None:
     )
     lines.append(f"    reason:                  {p['reason']}")
     lines.append("")
-    lines.append("  patch_text (preview, would be inserted into target if PI-3 applied it):")
+    if applied:
+        lines.append(
+            "  patch_text (Injected into Claude Code companion context):"
+        )
+    else:
+        lines.append(
+            "  patch_text (preview, would be inserted into target if PI-3 applied it):"
+        )
     for line in p["patch_text"].splitlines():
         lines.append(f"    {line}")
     lines.append("")
