@@ -72,6 +72,33 @@ PREVIEW_LABELS = (
     "Telemetry-only; no TIP intent headers emitted",
 )
 
+# PI-3 — labels rendered on patch rows where ``applied = True``.
+# Replaces the PREVIEW_LABELS set per the PI-2 doc footer note:
+# "PI-3 will update the PI-2 surface labels (e.g. 'NOT APPLIED'
+# becomes 'Applied for this one request' only on the specific row
+# that was applied)."
+APPLIED_LABELS = (
+    "Claude Code Companion Intent Guidance",
+    "Applied for this one request",
+    "Injected into Claude Code companion context",
+    "User message preserved",
+    "Proxy path remains byte-preserved-passthrough",
+    "Telemetry-only; no TIP intent headers emitted",
+)
+
+
+def labels_for_patch(patch: Optional[Dict[str, Any]]) -> tuple:
+    """Pick :data:`APPLIED_LABELS` when the row records a successful
+    application, else fall back to :data:`PREVIEW_LABELS`.
+    """
+    if patch is None:
+        return PREVIEW_LABELS
+    if not patch.get("applied"):
+        return PREVIEW_LABELS
+    if patch.get("applied_surface") != "claude_code_companion":
+        return PREVIEW_LABELS
+    return APPLIED_LABELS
+
 
 def _intent_db_path() -> Path:
     """Resolved telemetry.db path. Mirrors :mod:`intent_contract`."""
@@ -197,12 +224,7 @@ def collect_latest_preview(
                 and _table_exists(conn, "intent_patches")
             ):
                 p = conn.execute(
-                    "SELECT patch_id, contract_id, decision_id, "
-                    "suggestion_id, created_at, mode, target, "
-                    "original_hash, patch_text, reason, "
-                    "confidence, safety_flags, "
-                    "requires_confirmation, applied, source "
-                    "FROM intent_patches "
+                    "SELECT * FROM intent_patches "
                     "WHERE suggestion_id = ? "
                     "ORDER BY created_at DESC LIMIT 1",
                     (suggestion["suggestion_id"],),
@@ -212,6 +234,7 @@ def collect_latest_preview(
                         pflags = json.loads(p["safety_flags"] or "[]")
                     except (TypeError, json.JSONDecodeError):
                         pflags = []
+                    p_keys = set(p.keys())
                     patch = {
                         "patch_id": p["patch_id"],
                         "contract_id": p["contract_id"],
@@ -230,6 +253,25 @@ def collect_latest_preview(
                         ),
                         "applied": bool(p["applied"]),
                         "source": p["source"],
+                        # PI-3 audit columns — None on pre-PI-3 rows.
+                        "applied_at": (
+                            p["applied_at"] if "applied_at" in p_keys else None
+                        ),
+                        "applied_surface": (
+                            p["applied_surface"]
+                            if "applied_surface" in p_keys
+                            else None
+                        ),
+                        "application_mode": (
+                            p["application_mode"]
+                            if "application_mode" in p_keys
+                            else None
+                        ),
+                        "application_id": (
+                            p["application_id"]
+                            if "application_id" in p_keys
+                            else None
+                        ),
                     }
     except sqlite3.DatabaseError:
         return None
@@ -245,8 +287,9 @@ def collect_latest_preview(
         "decision": decision,
         "suggestion": suggestion,
         "patch": patch,
-        # Directive-mandated label set
-        "labels": list(PREVIEW_LABELS),
+        # Directive-mandated label set; PI-3 swaps to APPLIED_LABELS
+        # for rows that were successfully applied.
+        "labels": list(labels_for_patch(patch)),
     }
 
 
@@ -303,11 +346,12 @@ def collect_latest_patch_preview(
         "credential_provider": CREDENTIAL_PROVIDER_CLAUDE_CODE,
         "wire_emission": WIRE_EMISSION_TELEMETRY_ONLY,
         "patch": p,
-        "labels": list(PREVIEW_LABELS),
+        "labels": list(labels_for_patch(p)),
     }
 
 
 __all__ = [
+    "APPLIED_LABELS",
     "CREDENTIAL_PROVIDER_CLAUDE_CODE",
     "FORMAT_ADAPTER_ANTHROPIC",
     "PREVIEW_LABELS",
@@ -315,4 +359,5 @@ __all__ = [
     "WIRE_EMISSION_TELEMETRY_ONLY",
     "collect_latest_patch_preview",
     "collect_latest_preview",
+    "labels_for_patch",
 ]

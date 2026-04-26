@@ -56,7 +56,11 @@ CREATE TABLE IF NOT EXISTS intent_patches (
     safety_flags          TEXT NOT NULL,    -- JSON array
     requires_confirmation INTEGER NOT NULL,
     applied               INTEGER NOT NULL,
-    source                TEXT NOT NULL
+    source                TEXT NOT NULL,
+    applied_at            TEXT,             -- PI-3: ISO-8601 when injection succeeded
+    applied_surface       TEXT,             -- PI-3: e.g. 'claude_code_companion'
+    application_mode      TEXT,             -- PI-3: 'inject_guidance' (PI-3 only mode)
+    application_id        TEXT              -- PI-3: opaque caller-side application token
 );
 CREATE INDEX IF NOT EXISTS idx_patches_suggestion
     ON intent_patches (suggestion_id);
@@ -66,7 +70,16 @@ CREATE INDEX IF NOT EXISTS idx_patches_mode
     ON intent_patches (mode, created_at);
 CREATE INDEX IF NOT EXISTS idx_patches_applied
     ON intent_patches (applied, created_at);
+CREATE INDEX IF NOT EXISTS idx_patches_applied_surface
+    ON intent_patches (applied_surface, applied_at);
 """
+
+_PI_3_ADDITIVE_COLUMNS = (
+    "applied_at",
+    "applied_surface",
+    "application_mode",
+    "application_id",
+)
 
 
 @dataclass
@@ -96,6 +109,18 @@ class IntentPatchStore:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
             conn.executescript(_INTENT_PATCHES_DDL)
+            # PI-3 additive migration: pre-PI-3 hosts have an
+            # intent_patches table without applied_at /
+            # applied_surface / application_mode / application_id.
+            # SQLite has no ADD COLUMN IF NOT EXISTS, so swallow
+            # the duplicate-column error per migration column.
+            for col in _PI_3_ADDITIVE_COLUMNS:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE intent_patches ADD COLUMN {col} TEXT"
+                    )
+                except sqlite3.OperationalError:
+                    pass
             conn.commit()
             self._conn = conn
         return self._conn
@@ -141,6 +166,50 @@ class IntentPatchStore:
     def write_many(self, rows: Iterable[IntentPatchRow]) -> None:
         for r in rows:
             self.write(r)
+
+    def mark_applied(
+        self,
+        *,
+        patch_id: str,
+        applied_surface: str,
+        application_mode: str,
+        application_id: Optional[str],
+        applied_at: str,
+    ) -> bool:
+        """Flip ``applied = True`` and stamp PI-3 audit columns.
+
+        Returns ``True`` when exactly one row was updated. Returns
+        ``False`` on missing patch, already-applied patch, or any
+        SQLite error. Idempotent guard: refuses to flip a row that
+        is already ``applied = 1``.
+
+        PI-3 only — the only caller is
+        :func:`tokenpak.companion.intent_injection.apply_patch_to_companion_context`
+        on a successful insertion.
+        """
+        if not self._db_path.is_file():
+            return False
+        try:
+            with self._LOCK:
+                conn = self._connect()
+                cur = conn.execute(
+                    "UPDATE intent_patches SET "
+                    "applied = 1, applied_at = ?, "
+                    "applied_surface = ?, application_mode = ?, "
+                    "application_id = ? "
+                    "WHERE patch_id = ? AND applied = 0",
+                    (
+                        applied_at,
+                        applied_surface,
+                        application_mode,
+                        application_id,
+                        patch_id,
+                    ),
+                )
+                conn.commit()
+                return cur.rowcount == 1
+        except sqlite3.DatabaseError:
+            return False
 
     def fetch_latest(self) -> Optional[dict[str, Any]]:
         """Return the most recent row as a dict, or ``None``."""

@@ -23,12 +23,33 @@ Resolution order:
 
 The loader is read-only. It does not write to ``policy.yaml`` and
 never modifies any other on-disk state.
+
+Phase PI-3 extension
+--------------------
+
+The loader also parses the ``intent_policy.prompt_intervention``
+sub-block into a :class:`PromptInterventionRuntimeConfig`:
+
+  - ``enabled`` (default ``False``)
+  - ``mode`` — only ``"inject_guidance"``, ``"preview_only"``,
+    ``"ask_clarification"`` are accepted; ``"rewrite_prompt"`` is
+    rejected to ``preview_only``.
+  - ``target`` — only ``"companion_context"`` is accepted in
+    PI-3; ``"system"`` is downgraded with a warning;
+    ``"user_message"`` is rejected outright.
+  - ``require_confirmation`` (default ``True``)
+  - ``allow_byte_preserve_override`` — **forced** ``False``
+    (PI-3 § 1 invariant).
+  - ``surfaces.claude_code_companion`` (default ``False``)
+  - ``surfaces.proxy`` — **forced** ``False`` (PI-3 § 1
+    invariant; the proxy never injects in PI-3).
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -51,6 +72,61 @@ PERMITTED_MODES_2_4_3: Tuple[str, ...] = ("observe_only", "suggest")
 """Modes Phase 2.4.3 will accept as the resolved value. Anything
 else (including ``confirm`` / ``enforce``) is downgraded to
 ``observe_only`` with a warning."""
+
+
+# ---------------------------------------------------------------------------
+# Phase PI-3 — prompt_intervention sub-block
+# ---------------------------------------------------------------------------
+
+
+PI_3_VALID_MODES: Tuple[str, ...] = (
+    "preview_only",
+    "inject_guidance",
+    "ask_clarification",
+)
+"""``rewrite_prompt`` is intentionally absent — PI-4-only."""
+
+PI_3_VALID_TARGETS: Tuple[str, ...] = ("companion_context",)
+"""``system`` is reserved (PI-4 ratification); ``user_message`` is
+reserved indefinitely. PI-3 only accepts ``companion_context``."""
+
+
+@dataclass(frozen=True)
+class PromptInterventionSurfaces:
+    """Per-surface enable flags. ``proxy`` is forced ``False``."""
+
+    claude_code_companion: bool = False
+    proxy: bool = False  # forced False per PI-3 § 1
+
+
+@dataclass(frozen=True)
+class PromptInterventionRuntimeConfig:
+    """Resolved ``intent_policy.prompt_intervention`` block.
+
+    Mirrors :class:`tokenpak.proxy.intent_prompt_patch.PromptInterventionConfig`
+    but adds the ``surfaces`` sub-mapping that PI-3 introduces. Default is
+    all-off — same posture as the upstream PI-1 dataclass.
+    """
+
+    enabled: bool = False
+    mode: str = "preview_only"
+    target: str = "companion_context"
+    require_confirmation: bool = True
+    allow_byte_preserve_override: bool = False  # forced False
+    surfaces: PromptInterventionSurfaces = field(
+        default_factory=PromptInterventionSurfaces
+    )
+
+    def is_claude_code_companion_active(self) -> bool:
+        """True iff every gate aligns to allow companion-side injection."""
+        return (
+            self.enabled
+            and self.mode == "inject_guidance"
+            and self.target == "companion_context"
+            and self.surfaces.claude_code_companion
+            and not self.surfaces.proxy
+            and not self.allow_byte_preserve_override
+        )
 
 
 def _candidate_paths() -> List[Path]:
@@ -159,6 +235,123 @@ def _resolve_suggestion_surface(
         dashboard=dashboard,
         api=api,
         response_headers=False,  # forced
+    )
+
+
+def _resolve_prompt_intervention(
+    raw: Any, *, warnings_out: List[str]
+) -> PromptInterventionRuntimeConfig:
+    """Parse the ``prompt_intervention`` sub-block per PI-3 § 1.
+
+    Force-applied invariants:
+      - ``allow_byte_preserve_override`` → ``False``
+      - ``surfaces.proxy`` → ``False``
+      - ``target == "user_message"`` → reject (downgrade to default)
+      - ``mode == "rewrite_prompt"`` → reject (downgrade to ``preview_only``)
+    """
+    if raw is None:
+        return PromptInterventionRuntimeConfig()
+    if not isinstance(raw, dict):
+        warnings_out.append(
+            "intent_policy.prompt_intervention must be a mapping; "
+            "falling back to defaults (disabled)."
+        )
+        return PromptInterventionRuntimeConfig()
+
+    enabled = _safe_bool(raw.get("enabled"), False)
+
+    raw_mode = raw.get("mode", "preview_only")
+    if not isinstance(raw_mode, str):
+        warnings_out.append(
+            f"intent_policy.prompt_intervention.mode must be a string; got "
+            f"{type(raw_mode).__name__!r}; defaulting to preview_only."
+        )
+        mode = "preview_only"
+    elif raw_mode == "rewrite_prompt":
+        warnings_out.append(
+            "intent_policy.prompt_intervention.mode='rewrite_prompt' is "
+            "unsupported in PI-3; downgrading to preview_only."
+        )
+        mode = "preview_only"
+    elif raw_mode not in PI_3_VALID_MODES:
+        warnings_out.append(
+            f"intent_policy.prompt_intervention.mode={raw_mode!r} is not a "
+            f"known value; defaulting to preview_only."
+        )
+        mode = "preview_only"
+    else:
+        mode = raw_mode
+
+    raw_target = raw.get("target", "companion_context")
+    if not isinstance(raw_target, str):
+        warnings_out.append(
+            f"intent_policy.prompt_intervention.target must be a string; got "
+            f"{type(raw_target).__name__!r}; defaulting to companion_context."
+        )
+        target = "companion_context"
+    elif raw_target == "user_message":
+        warnings_out.append(
+            "intent_policy.prompt_intervention.target='user_message' is "
+            "reserved indefinitely; rejecting and defaulting to "
+            "companion_context."
+        )
+        target = "companion_context"
+    elif raw_target == "system":
+        warnings_out.append(
+            "intent_policy.prompt_intervention.target='system' is reserved "
+            "for PI-4; downgrading to companion_context."
+        )
+        target = "companion_context"
+    elif raw_target not in PI_3_VALID_TARGETS:
+        warnings_out.append(
+            f"intent_policy.prompt_intervention.target={raw_target!r} is not "
+            f"a known value; defaulting to companion_context."
+        )
+        target = "companion_context"
+    else:
+        target = raw_target
+
+    require_confirmation = _safe_bool(raw.get("require_confirmation"), True)
+
+    raw_byte_preserve = _safe_bool(
+        raw.get("allow_byte_preserve_override"), False
+    )
+    if raw_byte_preserve:
+        warnings_out.append(
+            "intent_policy.prompt_intervention.allow_byte_preserve_override "
+            "cannot be enabled in PI-3; forced to False."
+        )
+    allow_byte_preserve_override = False  # forced
+
+    raw_surfaces = raw.get("surfaces")
+    if raw_surfaces is None:
+        surfaces = PromptInterventionSurfaces()
+    elif not isinstance(raw_surfaces, dict):
+        warnings_out.append(
+            "intent_policy.prompt_intervention.surfaces must be a mapping; "
+            "falling back to defaults (all surfaces off)."
+        )
+        surfaces = PromptInterventionSurfaces()
+    else:
+        cc = _safe_bool(raw_surfaces.get("claude_code_companion"), False)
+        proxy_raw = _safe_bool(raw_surfaces.get("proxy"), False)
+        if proxy_raw:
+            warnings_out.append(
+                "intent_policy.prompt_intervention.surfaces.proxy cannot be "
+                "enabled in PI-3; forced to False."
+            )
+        surfaces = PromptInterventionSurfaces(
+            claude_code_companion=cc,
+            proxy=False,  # forced
+        )
+
+    return PromptInterventionRuntimeConfig(
+        enabled=enabled,
+        mode=mode,
+        target=target,
+        require_confirmation=require_confirmation,
+        allow_byte_preserve_override=allow_byte_preserve_override,
+        surfaces=surfaces,
     )
 
 
@@ -289,6 +482,50 @@ def resolve_active_config_path() -> Optional[Path]:
     return None
 
 
+def parse_prompt_intervention_block(
+    raw: Any,
+) -> Tuple[PromptInterventionRuntimeConfig, List[str]]:
+    """Public wrapper around :func:`_resolve_prompt_intervention`.
+
+    Pure function. Returns ``(config, warnings)``. Used by the
+    PI-3 application library and the CLI validator.
+    """
+    warnings_out: List[str] = []
+    cfg = _resolve_prompt_intervention(raw, warnings_out=warnings_out)
+    return cfg, warnings_out
+
+
+def load_prompt_intervention_config_safely(
+    *, candidate_path: Optional[Path] = None
+) -> PromptInterventionRuntimeConfig:
+    """Resolve + parse the active host's ``prompt_intervention`` block.
+
+    Always returns a :class:`PromptInterventionRuntimeConfig`; never
+    raises. ``candidate_path`` overrides the search path.
+    """
+    path = candidate_path
+    if path is None:
+        for cand in _candidate_paths():
+            if cand.is_file():
+                path = cand
+                break
+    if path is None or not path.is_file():
+        return PromptInterventionRuntimeConfig()
+
+    raw = _read_yaml_safely(path)
+    if raw is None:
+        return PromptInterventionRuntimeConfig()
+
+    intent_block = raw.get("intent_policy") if isinstance(raw, dict) else None
+    if not isinstance(intent_block, dict):
+        return PromptInterventionRuntimeConfig()
+    pi_block = intent_block.get("prompt_intervention")
+    cfg, warnings = parse_prompt_intervention_block(pi_block)
+    for w in warnings:
+        logger.warning("intent_policy_config_loader: %s", w)
+    return cfg
+
+
 # Helper used by surfaces (CLI / dashboard / API) to decide whether
 # to render the "Suggest mode active" badge for a given surface.
 def is_surface_active(cfg: PolicyEngineConfig, surface: str) -> bool:
@@ -313,9 +550,15 @@ def is_surface_active(cfg: PolicyEngineConfig, surface: str) -> bool:
 
 __all__ = [
     "PERMITTED_MODES_2_4_3",
+    "PI_3_VALID_MODES",
+    "PI_3_VALID_TARGETS",
+    "PromptInterventionRuntimeConfig",
+    "PromptInterventionSurfaces",
     "VALID_MODES",
     "is_surface_active",
     "load_policy_config_safely",
+    "load_prompt_intervention_config_safely",
     "parse_intent_policy_block",
+    "parse_prompt_intervention_block",
     "resolve_active_config_path",
 ]
