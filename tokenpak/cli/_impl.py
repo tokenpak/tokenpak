@@ -553,6 +553,93 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_intent_config(args) -> None:
+    """Phase 2.4.3 — show / validate the intent_policy config.
+
+    Read-only over ``~/.tokenpak/policy.yaml`` (or
+    ``$TOKENPAK_HOME/policy.yaml``). Always exits 0 — a missing
+    file is a valid state (host runs the default observe_only
+    config). Exits non-zero only when ``--validate`` cannot read
+    a file that DOES exist.
+    """
+    import json as _json
+
+    from tokenpak.proxy.intent_policy_config_loader import (
+        load_policy_config_safely,
+        parse_intent_policy_block,
+        resolve_active_config_path,
+    )
+
+    cfg_path = resolve_active_config_path()
+    cfg = load_policy_config_safely()
+
+    # Re-parse to surface warnings (the load function logs but
+    # doesn't return them; for the CLI we want the list).
+    warnings: list[str] = []
+    if getattr(args, "config_validate", False) and cfg_path is not None:
+        try:
+            import yaml
+
+            with cfg_path.open("r", encoding="utf-8") as f:
+                raw = yaml.safe_load(f) or {}
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"[intent config] error: failed to read {cfg_path}: {exc}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        block = raw.get("intent_policy") if isinstance(raw, dict) else None
+        _, warnings = parse_intent_policy_block(block)
+
+    if getattr(args, "config_json", False):
+        payload = {
+            "config_path": str(cfg_path) if cfg_path else None,
+            "active_config": cfg.to_dict(),
+            "warnings": warnings,
+            "suggest_mode_active": cfg.is_suggest_mode() and cfg.show_suggestions,
+        }
+        print(_json.dumps(payload, indent=2, sort_keys=True))
+        sys.exit(0)
+
+    lines: list[str] = []
+    lines.append("")
+    lines.append("TOKENPAK  |  Intent policy config (Phase 2.4.3)")
+    lines.append("──────────────────────────────")
+    lines.append("")
+    lines.append(f"  config_path:               {cfg_path or '(none — using defaults)'}")
+    lines.append(f"  mode:                      {cfg.mode}")
+    if cfg.is_suggest_mode() and cfg.show_suggestions:
+        lines.append("    → Suggest mode active. Suggestions are advisory only;")
+        lines.append("      TokenPak has not changed routing.")
+    else:
+        lines.append("    → observe_only (default). No suggest-mode badging.")
+    lines.append(f"  dry_run:                   {cfg.dry_run}  (locked True in 2.4.3)")
+    lines.append(f"  allow_auto_routing:        {cfg.allow_auto_routing}  (locked False in 2.4.3)")
+    lines.append(f"  allow_unverified_providers:{cfg.allow_unverified_providers}")
+    lines.append(f"  show_suggestions:          {cfg.show_suggestions}")
+    lines.append("  suggestion_surface:")
+    lines.append(f"    cli:                     {cfg.suggestion_surface.cli}")
+    lines.append(f"    dashboard:               {cfg.suggestion_surface.dashboard}")
+    lines.append(f"    api:                     {cfg.suggestion_surface.api}")
+    lines.append(
+        f"    response_headers:        {cfg.suggestion_surface.response_headers}  "
+        f"(locked False in 2.4.3)"
+    )
+    lines.append(f"  low_confidence_threshold:  {cfg.low_confidence_threshold}")
+    lines.append("")
+    if warnings:
+        lines.append("  Warnings (safety overrides + invalid values):")
+        for w in warnings:
+            lines.append(f"    ! {w}")
+        lines.append("")
+    lines.append("  Safety posture: dry_run=True, allow_auto_routing=False,")
+    lines.append("  response_headers=False — no routing / model / provider /")
+    lines.append("  request mutation regardless of mode.")
+    lines.append("")
+    print("\n".join(lines))
+    sys.exit(0)
+
+
 def cmd_intent_suggestions(args) -> None:
     """Phase 2.4.1 — show the latest dry-run policy suggestion.
 
@@ -2352,6 +2439,37 @@ def build_parser():
         help="Emit machine-readable JSON instead of human-readable.",
     )
     p_intent_suggestions.set_defaults(func=cmd_intent_suggestions)
+
+    # Phase 2.4.3 — minimal config inspector / validator. Read-only.
+    p_intent_config = p_intent_sub.add_parser(
+        "config",
+        help=(
+            "Show or validate the intent_policy config "
+            "(Phase 2.4.3; read-only)."
+        ),
+    )
+    p_intent_config.add_argument(
+        "--show",
+        dest="config_show",
+        action="store_true",
+        help="Show the active policy config (default behavior).",
+    )
+    p_intent_config.add_argument(
+        "--validate",
+        dest="config_validate",
+        action="store_true",
+        help=(
+            "Re-parse the config file and report safety overrides + "
+            "warnings. Exits non-zero only on file-read errors."
+        ),
+    )
+    p_intent_config.add_argument(
+        "--json",
+        dest="config_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable.",
+    )
+    p_intent_config.set_defaults(func=cmd_intent_config)
 
     p_adapter = sub.add_parser(
         "adapter",
