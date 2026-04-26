@@ -289,7 +289,10 @@ class TestDashboardShape:
 
     def test_top_level_shape(self, tmp_path: Path):
         payload = collect_policy_dashboard(window_days=14, db_path=tmp_path / "nope.db")
-        assert set(payload) == {"metadata", "cards", "operator_panel"}
+        # Phase 2.2 required keys (still enforced). Phase 2.4.2
+        # additively adds a "suggestions" key — allowed but not
+        # required by this assertion.
+        assert {"metadata", "cards", "operator_panel"}.issubset(set(payload))
 
     def test_cards_keys(self, tmp_path: Path):
         payload = collect_policy_dashboard(window_days=14, db_path=tmp_path / "nope.db")

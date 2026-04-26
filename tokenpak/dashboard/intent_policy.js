@@ -71,6 +71,72 @@ async function fetchAndUpdateIntentPolicyDashboard() {
             }
         }
     }
+
+    // Phase 2.4.2 — Advisory Suggestions sub-section. Every label
+    // makes clear: advisory / no-op / default-off.
+    const sugg = payload.suggestions || {};
+    setText('intent-policy-suggestions-total', sugg.total ?? 0);
+    setText('intent-policy-suggestions-expired', sugg.expired_count ?? 0);
+    setText(
+        'intent-policy-suggestions-visible',
+        `${sugg.user_visible_true_count ?? 0} / ${sugg.user_visible_false_count ?? 0}`,
+    );
+
+    const typesBody = document.getElementById('intent-policy-suggestions-types-body');
+    if (typesBody) {
+        typesBody.innerHTML = '';
+        const items = sugg.type_distribution || [];
+        if (items.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="2"><em>(no advisory suggestions yet)</em></td>`;
+            typesBody.appendChild(tr);
+        } else {
+            for (const it of items) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${escapeHtml(it.suggestion_type)}</td><td>${it.count}</td>`;
+                typesBody.appendChild(tr);
+            }
+        }
+    }
+
+    const safetyBody = document.getElementById('intent-policy-suggestions-safety-body');
+    if (safetyBody) {
+        safetyBody.innerHTML = '';
+        const items = sugg.safety_flag_distribution || [];
+        if (items.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="2"><em>(none)</em></td>`;
+            safetyBody.appendChild(tr);
+        } else {
+            for (const it of items) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${escapeHtml(it.safety_flag)}</td><td>${it.count}</td>`;
+                safetyBody.appendChild(tr);
+            }
+        }
+    }
+
+    const latestUl = document.getElementById('intent-policy-suggestions-latest');
+    if (latestUl) {
+        latestUl.innerHTML = '';
+        const latest = sugg.latest || [];
+        if (latest.length === 0) {
+            const li = document.createElement('li');
+            li.textContent = '(no advisory suggestions yet — TokenPak has not changed routing)';
+            latestUl.appendChild(li);
+        } else {
+            for (const s of latest.slice(0, 5)) {
+                const li = document.createElement('li');
+                const expiredTag = s.expires_at ? ` (expires ${escapeHtml(s.expires_at)})` : '';
+                li.innerHTML = (
+                    `<strong>[${escapeHtml(s.suggestion_type)}]</strong> `
+                    + escapeHtml(s.title)
+                    + ` <em>(advisory only; TokenPak has not changed routing)${expiredTag}</em>`
+                );
+                latestUl.appendChild(li);
+            }
+        }
+    }
 }
 
 function renderActionTable(items, bodyId) {

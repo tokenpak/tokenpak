@@ -125,11 +125,68 @@ def collect_policy_dashboard(
         "recommended_review_areas": list(report.review_areas),
     }
 
+    # Phase 2.4.2 — surface the advisory-suggestions slice under
+    # a dedicated top-level key. Reuses build_suggestion_report
+    # (Phase 2.4.2) so privacy / window invariants flow through.
+    suggestions_section: Dict[str, Any] = {}
+    try:
+        from tokenpak.proxy.intent_suggestion_report import build_suggestion_report
+
+        sugg = build_suggestion_report(
+            window_days=window_days, db_path=db_path, now=now,
+        )
+        suggestions_section = {
+            "advisory_label": (
+                "Suggestions are advisory only. TokenPak has not "
+                "changed routing."
+            ),
+            "noop_default_off": True,
+            "total": sugg.total_suggestions,
+            "type_distribution": [
+                {"suggestion_type": t, "count": c}
+                for t, c in sugg.suggestion_type_distribution.items()
+            ],
+            "safety_flag_distribution": [
+                {"safety_flag": f, "count": c}
+                for f, c in sorted(
+                    sugg.safety_flag_distribution.items(),
+                    key=lambda kv: -kv[1],
+                )
+            ],
+            "recommended_action_distribution": [
+                {"recommended_action": a, "count": c}
+                for a, c in sugg.recommended_action_distribution.items()
+            ],
+            "user_visible_true_count": sugg.user_visible_true_count,
+            "user_visible_false_count": sugg.user_visible_false_count,
+            "expired_count": sugg.expired_count,
+            "latest": list(sugg.latest_suggestions),
+        }
+    except Exception:  # noqa: BLE001
+        # Read-only path; never raise. Pre-2.4.1 hosts will see an
+        # empty section with the dry-run / advisory labelling.
+        suggestions_section = {
+            "advisory_label": (
+                "Suggestions are advisory only. TokenPak has not "
+                "changed routing."
+            ),
+            "noop_default_off": True,
+            "total": 0,
+        }
+
+    # ``phase`` stays at intent-layer-phase-2.2 because the cards /
+    # operator_panel contract is unchanged from 2.2. Phase 2.4.2's
+    # additive ``suggestions`` section is identified by its own
+    # noop_default_off flag inside the suggestions block above.
     metadata: Dict[str, Any] = {
         "schema_version": DASHBOARD_SCHEMA_VERSION,
         "phase": "intent-layer-phase-2.2",
         "dry_run_preview_only": True,
         "preview_label": "DRY-RUN / PREVIEW ONLY — no routing decisions made",
+        "suggestions_label": (
+            "Suggestions are advisory only. TokenPak has not "
+            "changed routing."
+        ),
         "window_days": report.window_days,
         "window_cutoff_iso": report.window_cutoff_iso,
         "telemetry_store_path": report.db_path,
@@ -139,6 +196,7 @@ def collect_policy_dashboard(
         "metadata": metadata,
         "cards": cards,
         "operator_panel": operator_panel,
+        "suggestions": suggestions_section,
     }
 
 

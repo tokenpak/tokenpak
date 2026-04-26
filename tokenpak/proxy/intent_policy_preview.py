@@ -12,13 +12,29 @@ from typing import Any, Dict, List, Optional
 
 
 def collect_latest() -> Optional[Dict[str, Any]]:
-    """Return the most recent ``intent_policy_decisions`` row.
+    """Return the most recent ``intent_policy_decisions`` row plus
+    its linked suggestions (Phase 2.4.2).
 
-    Returns ``None`` when no decision has been recorded yet.
+    Returns ``None`` when no decision has been recorded yet. When
+    the policy decision exists but the suggestions table has no
+    matching rows (or the table doesn't exist), the
+    ``policy_suggestions`` key is the empty list.
     """
     from tokenpak.proxy.intent_policy_telemetry import get_default_policy_store
+    from tokenpak.proxy.intent_suggestion_telemetry import (
+        get_default_suggestion_store,
+    )
 
-    return get_default_policy_store().fetch_latest()
+    payload = get_default_policy_store().fetch_latest()
+    if payload is None:
+        return None
+    payload = dict(payload)  # copy so we don't mutate the store's view
+    decision_id = payload.get("decision_id")
+    suggestions: list[Dict[str, Any]] = []
+    if decision_id:
+        suggestions = get_default_suggestion_store().fetch_for_decision(decision_id)
+    payload["policy_suggestions"] = suggestions
+    return payload
 
 
 def render_human(payload: Optional[Dict[str, Any]] = None) -> str:
@@ -97,6 +113,38 @@ def render_human(payload: Optional[Dict[str, Any]] = None) -> str:
     lines.append("  no routing, no model swap, no body mutation. See")
     lines.append("  docs/internal/specs/phase2-intent-policy-engine-spec-2026-04-25.md")
     lines.append("  for the rollout plan.")
+    lines.append("")
+
+    # Phase 2.4.2 — render every linked policy suggestion. Always
+    # emit the section header (with "(none)" when empty) so the
+    # operator scanning the output has a stable layout.
+    sugg_list = p.get("policy_suggestions") or []
+    lines.append(
+        "  Linked policy suggestions (Phase 2.4.2 — advisory / no-op / default-off):"
+    )
+    if not sugg_list:
+        lines.append("    (none recorded for this decision)")
+    else:
+        for s in sugg_list:
+            lines.append("")
+            lines.append(f"    [{s['suggestion_type']}] {s['title']}")
+            lines.append(f"      suggestion_id:        {s['suggestion_id']}")
+            lines.append(f"      confidence:           {s['confidence']:.4f}")
+            sflags = s.get("safety_flags") or []
+            sflags_str = ", ".join(sflags) if sflags else "(none)"
+            lines.append(f"      safety_flags:         {sflags_str}")
+            if s.get("recommended_action"):
+                lines.append(
+                    f"      recommended_action:   {s['recommended_action']}"
+                )
+            lines.append(f"      requires_confirmation: {s['requires_confirmation']}")
+            lines.append(f"      user_visible:         {s['user_visible']}")
+            if s.get("expires_at"):
+                lines.append(f"      expires_at:           {s['expires_at']}")
+    lines.append("")
+    lines.append(
+        "    Suggestions are advisory only. TokenPak has not changed routing."
+    )
     lines.append("")
     return "\n".join(lines)
 

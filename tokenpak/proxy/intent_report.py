@@ -133,6 +133,12 @@ class IntentReport:
     # Empty dict on a fresh DB or pre-2.1 hosts.
     policy_summary: Dict[str, Any] = field(default_factory=dict)
 
+    # Phase 2.4.2 — suggestions summary (advisory / no-op /
+    # default-off). Populated by build_report() from the
+    # intent_suggestions table. Empty dict on a fresh DB or
+    # pre-2.4.1 hosts.
+    suggestions_summary: Dict[str, Any] = field(default_factory=dict)
+
     def to_dict(self) -> Dict[str, Any]:
         """JSON-friendly dict (tuples → 2-element lists)."""
         return {
@@ -156,6 +162,7 @@ class IntentReport:
             "top_catch_all_reasons": [list(t) for t in self.top_catch_all_reasons],
             "review_areas": list(self.review_areas),
             "policy_summary": dict(self.policy_summary),
+            "suggestions_summary": dict(self.suggestions_summary),
         }
 
 
@@ -446,6 +453,26 @@ def build_report(
         # bug we want surfaced via tests, not a runtime crash.
         report.policy_summary = {}
 
+    # Phase 2.4.2 — append a suggestions summary slice. Same
+    # best-effort posture as the policy summary above.
+    try:
+        from tokenpak.proxy.intent_suggestion_report import build_suggestion_report
+
+        sugg = build_suggestion_report(
+            window_days=window_days, db_path=path, now=now,
+        )
+        report.suggestions_summary = {
+            "total_suggestions": sugg.total_suggestions,
+            "suggestion_type_distribution": dict(sugg.suggestion_type_distribution),
+            "recommended_action_distribution": dict(sugg.recommended_action_distribution),
+            "safety_flag_distribution": dict(sugg.safety_flag_distribution),
+            "user_visible_true_count": sugg.user_visible_true_count,
+            "user_visible_false_count": sugg.user_visible_false_count,
+            "expired_count": sugg.expired_count,
+        }
+    except Exception:  # noqa: BLE001
+        report.suggestions_summary = {}
+
     return report
 
 
@@ -572,6 +599,26 @@ def render_human(report: IntentReport) -> str:
                 db_path=Path(report.db_path) if report.db_path else None,
             )
             lines.append(_render_policy(policy))
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Phase 2.4.2 — append the advisory suggestions summary if
+    # any rows exist for this window.
+    sugg_summary = report.suggestions_summary or {}
+    if sugg_summary and sugg_summary.get("total_suggestions", 0) > 0:
+        try:
+            from tokenpak.proxy.intent_suggestion_report import (
+                build_suggestion_report,
+            )
+            from tokenpak.proxy.intent_suggestion_report import (
+                render_human as _render_sugg,
+            )
+
+            sugg = build_suggestion_report(
+                window_days=report.window_days,
+                db_path=Path(report.db_path) if report.db_path else None,
+            )
+            lines.append(_render_sugg(sugg))
         except Exception:  # noqa: BLE001
             pass
 
