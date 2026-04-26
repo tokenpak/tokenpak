@@ -553,6 +553,74 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_intent_suggestions(args) -> None:
+    """Phase 2.4.1 — show the latest dry-run policy suggestion.
+
+    Read-only over ``intent_suggestions``. Minimal internal /
+    dev-facing inspector; broad surfaces (CLI report, dashboard
+    panel, API) are Phase 2.4.2 deliverables.
+    """
+    import json as _json
+
+    from tokenpak.proxy.intent_suggestion_telemetry import (
+        get_default_suggestion_store,
+    )
+
+    payload = get_default_suggestion_store().fetch_latest()
+    if getattr(args, "suggestions_json", False):
+        print(_json.dumps(payload if payload is not None else None, indent=2, sort_keys=True, default=str))
+        sys.exit(0)
+
+    if payload is None:
+        print(
+            "\nTOKENPAK  |  Intent suggestions (Phase 2.4.1 dry-run inspector)\n"
+            "──────────────────────────────\n"
+            "\n"
+            "  No policy suggestions yet.\n"
+            "\n"
+            "  The Phase 2.4.1 builder writes one row whenever the\n"
+            "  Phase 2.1 engine emits a suggest_* / warn_only-with-\n"
+            "  missing_slots decision and the §4 eligibility gates\n"
+            "  pass. Send a request via `tokenpak proxy` and re-run\n"
+            "  this command. See `tokenpak doctor --intent` for the\n"
+            "  classifier activation state.\n"
+        )
+        sys.exit(0)
+
+    lines = []
+    lines.append("")
+    lines.append("TOKENPAK  |  Intent suggestions (Phase 2.4.1 dry-run inspector)")
+    lines.append("──────────────────────────────")
+    lines.append("")
+    lines.append(f"  suggestion_id:             {payload['suggestion_id']}")
+    lines.append(f"  decision_id:               {payload['decision_id']}")
+    lines.append(f"  contract_id:               {payload['contract_id']}")
+    lines.append(f"  timestamp:                 {payload['timestamp']}")
+    lines.append("")
+    lines.append(f"  type:                      {payload['suggestion_type']}")
+    lines.append(f"  title:                     {payload['title']}")
+    lines.append("")
+    lines.append("  message:")
+    lines.append(f"    {payload['message']}")
+    lines.append("")
+    if payload.get("recommended_action"):
+        lines.append(f"  recommended_action:        {payload['recommended_action']}")
+    lines.append(f"  confidence:                {payload['confidence']:.4f}")
+    flags = payload.get("safety_flags") or []
+    flags_str = ", ".join(flags) if flags else "(none)"
+    lines.append(f"  safety_flags:              {flags_str}")
+    lines.append(f"  requires_confirmation:     {payload['requires_confirmation']}")
+    lines.append(f"  user_visible:              {payload['user_visible']}")
+    lines.append(f"  source:                    {payload['source']}")
+    lines.append("")
+    lines.append("  DRY-RUN / PREVIEW ONLY — no routing, model swap,")
+    lines.append("  or body mutation has occurred. Phase 2.4.1 builder")
+    lines.append("  is observation-only; broad surfaces ship in 2.4.2.")
+    lines.append("")
+    print("\n".join(lines))
+    sys.exit(0)
+
+
 def cmd_intent_policy_preview(args) -> None:
     """Phase 2.1 — show the latest dry-run policy decision.
 
@@ -2259,6 +2327,31 @@ def build_parser():
         help="Emit machine-readable JSON instead of the human-readable view.",
     )
     p_intent_policy_preview.set_defaults(func=cmd_intent_policy_preview)
+
+    # Phase 2.4.1 — minimal read-only inspector for the latest row
+    # in intent_suggestions. Internal/dev-facing only; broad
+    # surfaces (CLI report extension, dashboard panel, API key)
+    # are Phase 2.4.2 work.
+    p_intent_suggestions = p_intent_sub.add_parser(
+        "suggestions",
+        help=(
+            "Show the latest dry-run policy suggestion (Phase 2.4.1; "
+            "internal/dev inspector; read-only)."
+        ),
+    )
+    p_intent_suggestions.add_argument(
+        "--last",
+        dest="suggestions_last",
+        action="store_true",
+        help="Show the most recent suggestion (default behavior).",
+    )
+    p_intent_suggestions.add_argument(
+        "--json",
+        dest="suggestions_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-readable.",
+    )
+    p_intent_suggestions.set_defaults(func=cmd_intent_suggestions)
 
     p_adapter = sub.add_parser(
         "adapter",

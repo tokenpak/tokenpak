@@ -616,14 +616,16 @@ options:
 Intent Layer observation + reporting (read-only)
 
 ```
-usage: tokenpak intent [-h] {report,policy-preview} ...
+usage: tokenpak intent [-h] {report,policy-preview,suggestions} ...
 
 positional arguments:
-  {report,policy-preview}
+  {report,policy-preview,suggestions}
     report              Summarize the intent_events telemetry over a window.
                         Read-only; never reads or emits raw prompt text.
     policy-preview      Show the latest intent policy decision (Phase 2.1 dry-
                         run; read-only).
+    suggestions         Show the latest dry-run policy suggestion (Phase
+                        2.4.1; internal/dev inspector; read-only).
 
 options:
   -h, --help            show this help message and exit
