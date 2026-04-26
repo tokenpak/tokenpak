@@ -552,6 +552,37 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_intent_report(args) -> None:
+    """Phase 1 — summarize intent_events telemetry over a window.
+
+    Read-only; never reads or emits raw prompt text. Caller selects
+    a window via ``--window Nd`` (default 14d, matching the
+    proposal's 2-week observation default) and the report shape
+    via ``--json`` (machine-readable) or default (operator-readable
+    plain text).
+    """
+    from tokenpak.proxy.intent_report import (
+        build_report,
+        parse_window,
+        render_human,
+        render_json,
+    )
+
+    raw_window = getattr(args, "window", "14d")
+    try:
+        days = parse_window(raw_window)
+    except ValueError as exc:
+        print(f"[intent report] error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    report = build_report(window_days=days)
+    if getattr(args, "report_json", False):
+        print(render_json(report))
+    else:
+        print(render_human(report))
+    sys.exit(0)
+
+
 def cmd_adapter_scaffold(args) -> int:
     """Scaffold a new provider adapter from its docs URL.
 
@@ -2155,6 +2186,34 @@ def build_parser():
     )
     p_codex.add_argument("extra_args", nargs=argparse.REMAINDER)
     p_codex.set_defaults(func=cmd_codex)
+
+    # ── Intent Layer Phase 1: observation/reporting ──────────────────
+    p_intent = sub.add_parser(
+        "intent",
+        help="Intent Layer observation + reporting (read-only)",
+    )
+    p_intent_sub = p_intent.add_subparsers(dest="intent_cmd", required=False)
+    p_intent_report = p_intent_sub.add_parser(
+        "report",
+        help=(
+            "Summarize the intent_events telemetry over a window. "
+            "Read-only; never reads or emits raw prompt text."
+        ),
+    )
+    p_intent_report.add_argument(
+        "--window",
+        dest="window",
+        default="14d",
+        help="Window size in days, e.g. '14d' (default), '7d', '30d'. "
+        "Use '0d' or '' to read every row regardless of age.",
+    )
+    p_intent_report.add_argument(
+        "--json",
+        dest="report_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of the human-readable report",
+    )
+    p_intent_report.set_defaults(func=cmd_intent_report)
 
     p_adapter = sub.add_parser(
         "adapter",
