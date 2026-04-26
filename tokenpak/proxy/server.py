@@ -1527,6 +1527,69 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # Side-channel; never break the request on telemetry failures.
                 pass
 
+        # ── Intent Layer Phase 2.1 — dry-run policy engine ─────────
+        # Pure evaluation over the Phase 0 contract + request
+        # context. No mutation of fwd_headers, body, or any dispatch
+        # state — Phase 2.1 is observational only. Decision lands
+        # in the intent_policy_decisions table; later sub-phases
+        # add CLI explain + dashboard preview + opt-in suggest.
+        if _intent_contract is not None:
+            try:
+                from tokenpak.proxy.intent_policy_engine import (
+                    PolicyInput as _I21Input,
+                )
+                from tokenpak.proxy.intent_policy_engine import (
+                    evaluate_policy as _i21_evaluate,
+                )
+                from tokenpak.proxy.intent_policy_engine import (
+                    load_default_config as _i21_config,
+                )
+                from tokenpak.proxy.intent_policy_telemetry import (
+                    IntentPolicyDecisionRow as _I21Row,
+                )
+                from tokenpak.proxy.intent_policy_telemetry import (
+                    get_default_policy_store as _i21_store,
+                )
+
+                _i21_cfg = _i21_config()
+                _i21_input = _I21Input(
+                    intent_class=_intent_contract.intent_class,
+                    confidence=_intent_contract.confidence,
+                    slots_present=_intent_contract.slots_present,
+                    slots_missing=_intent_contract.slots_missing,
+                    catch_all_reason=_intent_contract.catch_all_reason,
+                    provider=_resolved_provider or "",
+                    model=model or "",
+                    estimated_cost_usd=None,
+                    adapter_capabilities=(
+                        request_adapter.capabilities
+                        if request_adapter is not None
+                        else frozenset()
+                    ),
+                    delivery_target_capabilities=frozenset(),
+                    live_verified_status=None,
+                    required_slots=(),
+                )
+                _i21_decision = _i21_evaluate(_i21_input, _i21_cfg)
+                _i21_store().write(
+                    _I21Row(
+                        request_id=_req_id,
+                        contract_id=_intent_contract.contract_id,
+                        timestamp=datetime.now().isoformat(timespec="seconds"),
+                        decision=_i21_decision,
+                        config_mode=_i21_cfg.mode,
+                        config_dry_run=_i21_cfg.dry_run,
+                        config_allow_auto_routing=_i21_cfg.allow_auto_routing,
+                        config_allow_unverified_providers=_i21_cfg.allow_unverified_providers,
+                        config_low_confidence_threshold=_i21_cfg.low_confidence_threshold,
+                    )
+                )
+            except Exception:
+                # Side-channel — never break the request on engine /
+                # telemetry failures. Phase 2.1 is observation-only;
+                # if the engine misbehaves, the proxy continues.
+                pass
+
         try:
             pool = self.server.proxy_server._connection_pool  # type: ignore[attr-defined]
             _cb_success = False  # track whether request succeeded for circuit breaker

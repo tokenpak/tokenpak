@@ -553,6 +553,27 @@ def cmd_codex(args):
     launch_codex(extra_args=extra)
 
 
+def cmd_intent_policy_preview(args) -> None:
+    """Phase 2.1 — show the latest dry-run policy decision.
+
+    Read-only over the ``intent_policy_decisions`` table. The
+    ``--last`` flag is the default behavior; passing ``--json``
+    returns the row as machine-readable JSON.
+    """
+    from tokenpak.proxy.intent_policy_preview import (
+        collect_latest,
+        render_human,
+        render_json,
+    )
+
+    payload = collect_latest()
+    if getattr(args, "preview_json", False):
+        print(render_json(payload))
+    else:
+        print(render_human(payload))
+    sys.exit(0)
+
+
 def cmd_intent_report(args) -> None:
     """Phase 1 — summarize intent_events telemetry over a window.
 
@@ -2215,6 +2236,29 @@ def build_parser():
         help="Emit machine-readable JSON instead of the human-readable report",
     )
     p_intent_report.set_defaults(func=cmd_intent_report)
+
+    # Phase 2.1 — dry-run policy preview. Read-only over the
+    # intent_policy_decisions table; renders the latest row.
+    p_intent_policy_preview = p_intent_sub.add_parser(
+        "policy-preview",
+        help=(
+            "Show the latest intent policy decision (Phase 2.1 dry-run; "
+            "read-only)."
+        ),
+    )
+    p_intent_policy_preview.add_argument(
+        "--last",
+        dest="preview_last",
+        action="store_true",
+        help="Show the most recent policy decision (default behavior).",
+    )
+    p_intent_policy_preview.add_argument(
+        "--json",
+        dest="preview_json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of the human-readable view.",
+    )
+    p_intent_policy_preview.set_defaults(func=cmd_intent_policy_preview)
 
     p_adapter = sub.add_parser(
         "adapter",
