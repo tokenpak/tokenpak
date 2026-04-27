@@ -601,6 +601,78 @@ class TestParityTraceCoverage:
         assert "Q9 — NCP-3I-v3 pre-dispatch death" in md
         assert "handler_entry=3" in md
 
+    def test_dim9_ncp3a_terminal_early_returns_excluded_from_deaths(self, tmp_path):
+        """NCP-3A — traces ending at request_rejected or
+        dispatch_subprocess_complete are intentional terminations and
+        must NOT be counted in pre_upstream_death_count.
+        """
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = []
+        # trace-die-1: silent death at adapter_detected (no terminal event).
+        for evt in ("handler_entry", "auth_gate_pass", "route_resolved",
+                    "body_read_complete", "adapter_detected"):
+            rows.append({"trace_id": "trace-die", "event_type": evt, "ts": ts})
+        # trace-rej: ends at request_rejected (auth/circuit/validation).
+        for evt in ("handler_entry", "auth_gate_pass", "route_resolved",
+                    "body_read_complete", "adapter_detected",
+                    "request_rejected"):
+            rows.append({"trace_id": "trace-rej", "event_type": evt, "ts": ts + 10})
+        # trace-sub: ends at dispatch_subprocess_complete (subprocess success).
+        for evt in ("handler_entry", "auth_gate_pass", "route_resolved",
+                    "body_read_complete", "adapter_detected",
+                    "dispatch_subprocess_complete"):
+            rows.append({"trace_id": "trace-sub", "event_type": evt, "ts": ts + 20})
+        self._seed_parity_trace(db, rows=rows)
+
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+
+        # last_stage_distribution still includes ALL terminals.
+        last = d9["last_stage_distribution"]
+        assert last.get("adapter_detected") == 1
+        assert last.get("request_rejected") == 1
+        assert last.get("dispatch_subprocess_complete") == 1
+
+        # Only the silent-death trace counts as a pre-upstream death.
+        assert d9["pre_upstream_death_count"] == 1
+        pre = d9["pre_upstream_death_stage_distribution"]
+        assert pre == {"adapter_detected": 1}
+
+        # The other two are reported under early_return_*.
+        assert d9["early_return_count"] == 2
+        er = d9["early_return_stage_distribution"]
+        assert er.get("request_rejected") == 1
+        assert er.get("dispatch_subprocess_complete") == 1
+
+    def test_dim9_ncp3a_synthesis_renders_q10(self, tmp_path):
+        """When early-return terminals are present, Q10 summary line
+        appears alongside Q9.
+        """
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = []
+        for evt in ("handler_entry", "adapter_detected", "request_rejected"):
+            rows.append({"trace_id": "trace-rej", "event_type": evt, "ts": ts})
+        for evt in ("handler_entry", "adapter_detected",
+                    "dispatch_subprocess_complete"):
+            rows.append({"trace_id": "trace-sub", "event_type": evt, "ts": ts + 1})
+        self._seed_parity_trace(db, rows=rows)
+
+        out = tmp_path / "report.md"
+        rc = inspect.main([
+            "--db-path", str(db),
+            "--window-minutes", "0",
+            "--output", str(out),
+        ])
+        assert rc == 0
+        md = out.read_text()
+        assert "Q10 — NCP-3A-enrichment terminal early-returns" in md
+        assert "request_rejected=1" in md
+        assert "dispatch_subprocess_complete=1" in md
+
 
 # ── 12. structural — no dispatch / behavior imports ───────────────────
 

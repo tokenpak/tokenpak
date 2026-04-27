@@ -97,6 +97,17 @@ EVENT_BODY_READ_COMPLETE: str = "body_read_complete"
 EVENT_ADAPTER_DETECTED: str = "adapter_detected"
 EVENT_BEFORE_DISPATCH: str = "before_dispatch"
 
+# NCP-3A-enrichment terminal early-return events. The proxy can
+# leave the adapter_detected → before_dispatch span via paths that
+# do not reach upstream_attempt_start: subprocess companion dispatch
+# (returns the upstream's response from a CLI subprocess) and
+# explicit rejections (auth 401, circuit-breaker 503, validator
+# 400). Without these terminals, the harness mis-classified those
+# requests as "silent deaths at adapter_detected" — they are in
+# fact intentional terminations.
+EVENT_DISPATCH_SUBPROCESS_COMPLETE: str = "dispatch_subprocess_complete"
+EVENT_REQUEST_REJECTED: str = "request_rejected"
+
 ALL_EVENTS: frozenset = frozenset({
     EVENT_HANDLER_ENTRY,
     EVENT_REQUEST_CLASSIFIED,
@@ -112,12 +123,17 @@ ALL_EVENTS: frozenset = frozenset({
     EVENT_BODY_READ_COMPLETE,
     EVENT_ADAPTER_DETECTED,
     EVENT_BEFORE_DISPATCH,
+    EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+    EVENT_REQUEST_REJECTED,
 })
 
 # NCP-3I-v3 — canonical pre-dispatch lifecycle order. Used by
 # inspect_session_lanes.py to render per-trace progression and
 # identify the LAST observed event (= the stage where the
-# request died).
+# request died). NCP-3A-enrichment inserts the two terminal
+# early-return events between adapter_detected and before_dispatch
+# so that the harness's "latest stage" pick prefers them over
+# adapter_detected when both are present in a trace.
 LIFECYCLE_ORDER: tuple = (
     EVENT_HANDLER_ENTRY,
     EVENT_AUTH_GATE_PASS,
@@ -125,6 +141,8 @@ LIFECYCLE_ORDER: tuple = (
     EVENT_BODY_READ_COMPLETE,
     EVENT_REQUEST_CLASSIFIED,
     EVENT_ADAPTER_DETECTED,
+    EVENT_REQUEST_REJECTED,
+    EVENT_DISPATCH_SUBPROCESS_COMPLETE,
     EVENT_BEFORE_DISPATCH,
     EVENT_UPSTREAM_ATTEMPT_START,
     EVENT_STREAM_START,
@@ -134,6 +152,16 @@ LIFECYCLE_ORDER: tuple = (
     EVENT_RETRY_BOUNDARY,
     EVENT_REQUEST_COMPLETION,
 )
+
+# NCP-3A-enrichment — events that signal an INTENTIONAL terminal
+# decision before upstream_attempt_start. The harness excludes
+# traces ending here from the pre-upstream "death" cohort: they
+# are completed (subprocess) or explicitly rejected (auth /
+# circuit / validation), not silent failures.
+TERMINAL_EARLY_RETURN_EVENTS: frozenset = frozenset({
+    EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+    EVENT_REQUEST_REJECTED,
+})
 
 
 # Documented value sets for the "free-form-ish" TEXT columns.
@@ -564,9 +592,11 @@ __all__ = [
     "EVENT_AUTH_GATE_PASS",
     "EVENT_BEFORE_DISPATCH",
     "EVENT_BODY_READ_COMPLETE",
+    "EVENT_DISPATCH_SUBPROCESS_COMPLETE",
     "EVENT_HANDLER_ENTRY",
     "EVENT_REQUEST_CLASSIFIED",
     "EVENT_REQUEST_COMPLETION",
+    "EVENT_REQUEST_REJECTED",
     "EVENT_RETRY_BOUNDARY",
     "EVENT_ROUTE_RESOLVED",
     "EVENT_STREAM_ABORT",
@@ -581,6 +611,7 @@ __all__ = [
     "RETRY_OWNERS",
     "RETRY_PHASES",
     "RETRY_SIGNALS",
+    "TERMINAL_EARLY_RETURN_EVENTS",
     "begin_stream",
     "current_lane_id",
     "emit",

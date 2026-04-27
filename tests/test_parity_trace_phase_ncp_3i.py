@@ -790,3 +790,102 @@ class TestPreDispatchLifecycleV3:
         emit(EVENT_AUTH_GATE_PASS, trace_id="t-disabled-v3")
         emit(EVENT_BEFORE_DISPATCH, trace_id="t-disabled-v3")
         assert store.fetch_for_trace("t-disabled-v3") == []
+
+
+# ── 14. NCP-3A-enrichment terminal early-return events ────────────────
+
+
+class TestNCP3AEnrichmentEvents:
+    """Terminal early-return events: subprocess companion dispatch
+    success and intentional rejection (auth/circuit/validation).
+
+    These events were added so the harness can distinguish silent
+    pre-dispatch deaths from intentional terminations on paths that
+    do not reach upstream_attempt_start.
+    """
+
+    def test_terminal_event_constants_exist(self):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            EVENT_REQUEST_REJECTED,
+            TERMINAL_EARLY_RETURN_EVENTS,
+        )
+        assert EVENT_DISPATCH_SUBPROCESS_COMPLETE == "dispatch_subprocess_complete"
+        assert EVENT_REQUEST_REJECTED == "request_rejected"
+        assert EVENT_DISPATCH_SUBPROCESS_COMPLETE in TERMINAL_EARLY_RETURN_EVENTS
+        assert EVENT_REQUEST_REJECTED in TERMINAL_EARLY_RETURN_EVENTS
+        assert len(TERMINAL_EARLY_RETURN_EVENTS) == 2
+
+    def test_terminal_events_in_all_events_and_lifecycle(self):
+        from tokenpak.proxy.parity_trace import (
+            ALL_EVENTS,
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            EVENT_REQUEST_REJECTED,
+            LIFECYCLE_ORDER,
+        )
+        assert EVENT_DISPATCH_SUBPROCESS_COMPLETE in ALL_EVENTS
+        assert EVENT_REQUEST_REJECTED in ALL_EVENTS
+        assert EVENT_DISPATCH_SUBPROCESS_COMPLETE in LIFECYCLE_ORDER
+        assert EVENT_REQUEST_REJECTED in LIFECYCLE_ORDER
+
+    def test_terminal_events_positioned_before_upstream_attempt_start(self):
+        """Both terminal events must be ordered AFTER adapter_detected and
+        BEFORE upstream_attempt_start so the harness's last-stage pick
+        prefers them when both are present in a trace.
+        """
+        from tokenpak.proxy.parity_trace import (
+            EVENT_ADAPTER_DETECTED,
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            EVENT_REQUEST_REJECTED,
+            EVENT_UPSTREAM_ATTEMPT_START,
+            LIFECYCLE_ORDER,
+        )
+        idx_adapter = LIFECYCLE_ORDER.index(EVENT_ADAPTER_DETECTED)
+        idx_reject = LIFECYCLE_ORDER.index(EVENT_REQUEST_REJECTED)
+        idx_subproc = LIFECYCLE_ORDER.index(EVENT_DISPATCH_SUBPROCESS_COMPLETE)
+        idx_upstream = LIFECYCLE_ORDER.index(EVENT_UPSTREAM_ATTEMPT_START)
+        assert idx_adapter < idx_reject < idx_upstream
+        assert idx_adapter < idx_subproc < idx_upstream
+
+    def test_terminal_events_persist(self, store, env_enabled):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_ADAPTER_DETECTED,
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            EVENT_HANDLER_ENTRY,
+            EVENT_REQUEST_REJECTED,
+        )
+        # Reject path: handler_entry → adapter_detected → request_rejected.
+        emit(EVENT_HANDLER_ENTRY, trace_id="t-rejected")
+        emit(EVENT_ADAPTER_DETECTED, trace_id="t-rejected", notes="generic")
+        emit(EVENT_REQUEST_REJECTED, trace_id="t-rejected", notes="auth_invalid:no creds")
+        rows = store.fetch_for_trace("t-rejected")
+        types = [r["event_type"] for r in rows]
+        assert types[-1] == EVENT_REQUEST_REJECTED
+        # Notes carries the rejection class for downstream filtering.
+        assert any(
+            r["event_type"] == EVENT_REQUEST_REJECTED
+            and r["notes"]
+            and r["notes"].startswith("auth_invalid")
+            for r in rows
+        )
+
+        # Subprocess success path.
+        emit(EVENT_HANDLER_ENTRY, trace_id="t-subproc")
+        emit(EVENT_ADAPTER_DETECTED, trace_id="t-subproc", notes="claude_cli")
+        emit(
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            trace_id="t-subproc",
+            notes="subprocess_companion:status=200",
+        )
+        rows = store.fetch_for_trace("t-subproc")
+        types = [r["event_type"] for r in rows]
+        assert types[-1] == EVENT_DISPATCH_SUBPROCESS_COMPLETE
+
+    def test_terminal_events_disabled_no_op(self, store, env_disabled):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+            EVENT_REQUEST_REJECTED,
+        )
+        emit(EVENT_REQUEST_REJECTED, trace_id="t-off")
+        emit(EVENT_DISPATCH_SUBPROCESS_COMPLETE, trace_id="t-off")
+        assert store.fetch_for_trace("t-off") == []
