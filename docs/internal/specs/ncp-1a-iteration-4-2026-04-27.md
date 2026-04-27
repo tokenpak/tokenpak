@@ -232,6 +232,92 @@ Per the directive's iter-4 acceptance criteria:
 
 ---
 
+## 11. Empty-harness-but-visible-retry condition (post-write addendum)
+
+After this iter-4 doc was drafted, three harness JSON snapshots from
+`tests/baselines/ncp-3-trace/` (timestamps 2026-04-27 12:36 / 12:38 /
+12:43 UTC, filename suffix `-2tp-retry-native-healthy`) were inspected.
+All three report:
+
+- `claude_code_event_count = 0`
+- `dim1_session_collapse.verdict = "no_data"`
+- `dim5_provider_audit.distribution = {}`
+- `dim6_retry_count.retry_event_lower_bound = 0`
+
+**Visible TUI retries + zero TokenPak telemetry rows** is itself a
+diagnostic finding. There are two interpretations:
+
+### Interpretation A — different host
+
+The captures were produced on the TokenPak development host (which
+this iteration was authored on); Kevin's actual concurrent-TUI test
+likely ran on a separate operator host with its own proxy + telemetry.
+Re-running the harness on the operator host would surface the rows.
+
+This is the "harness ran on the wrong machine" case — straightforward
+and resolved by pointing the harness at the right `~/.tokenpak/telemetry.db`.
+
+### Interpretation B — pre-handler failure (HIGH-impact for NCP-3I scope)
+
+If the captures were produced on the same host the test ran on, **the
+absence of `tp_events` rows for failing requests is itself H9a-class
+evidence**: the failures are happening *before* TokenPak's request
+handler completes a write. Specifically:
+
+- TokenPak writes `tp_events` rows at request completion (see
+  `tokenpak/proxy/monitor.py` queued writer).
+- If the CLI's local retry fires because the proxy hasn't accepted /
+  processed the connection in time (pool lock contention, OAuth
+  refresh waiter queue, etc.), the failing request **never completes a
+  TokenPak log entry**.
+- The visible "Retrying in 8s · attempt 4/10" message is then
+  attributed to `retry_owner = claude_code_client` operating on a
+  request that **TokenPak's existing telemetry cannot see**.
+
+This interpretation strengthens the NCP-3I recommendation in two ways:
+
+1. **NCP-3I instrumentation must hook at connection-acceptance time,
+   not just request-handler-completion time.** Otherwise the
+   instrumentation will continue to miss the very failures it's
+   designed to characterize. Specifically:
+     - Add a row to `tp_events` (or a new `tp_request_attempts` table)
+       at the moment the proxy ACCEPTS a connection / starts handling
+       a request, not just when it completes.
+     - Stamp `retry_phase`, `retry_owner` (provisionally
+       `claude_code_client` if no upstream response was received),
+       `retry_signal` (`timeout` / `connection_reset` / `unknown` for
+       pre-completion failures).
+2. **H9a (pool lock) ranking should rise.** If interpretation B is
+   confirmed, H9a is no longer "MEDIUM" but a strong candidate
+   alongside H4 / H9b / H2 — the TP proxy is slow to accept second
+   concurrent connections, and the CLI's local retry compensates.
+
+### Recommendation given the ambiguity
+
+Before NCP-3I implementation: **operator confirms which interpretation
+applies** by running, on the same host as the failing test:
+
+```bash
+# On the host where the 2 TP TUI sessions retried:
+ls -la ~/.tokenpak/telemetry.db          # verify the file exists
+sqlite3 ~/.tokenpak/telemetry.db \
+    "SELECT COUNT(*) FROM tp_events
+     WHERE ts > strftime('%s','now','-30 minutes')"
+# (use sqlite3 if available, or run the harness against the live
+# telemetry.db on that host)
+```
+
+If the count is **non-zero** but the harness shows zero Claude-Code-shaped
+rows, the test is interpretation A (different host AND/OR provider-slug
+mismatch — see iter-4 §3 of the I-0 audit).
+
+If the count is **zero**, interpretation B is supported and NCP-3I
+must include connection-acceptance-time instrumentation in addition to
+request-completion-time instrumentation.
+
+**Either way, NCP-3I remains the correct next phase** — the difference
+is what NCP-3I must specifically instrument.
+
 ## 10. Cross-references
 
 - `docs/internal/specs/ncp-1a-iteration-1-2026-04-27.md` — 1v1 baseline + ABCD plan
