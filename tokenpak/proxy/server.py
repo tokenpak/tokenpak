@@ -767,6 +767,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         t0 = time.time()
         # Request ID: honour X-Request-ID from client, else generate UUID
         _req_id = _new_request_id(dict(self.headers))
+        # NCP-3I: emit a handler-entry trace BEFORE any other processing.
+        # Captures the iter-4 §11 "interp B" condition where requests
+        # fail before the proxy's completion-time logging runs. Off-path
+        # + gated by TOKENPAK_PARITY_TRACE_ENABLED (default false).
+        try:
+            from tokenpak.proxy import parity_trace as _pt
+            _pt.emit(
+                _pt.EVENT_HANDLER_ENTRY,
+                trace_id=_req_id,
+                request_id=_req_id,
+                notes=method,
+            )
+        except Exception:  # noqa: BLE001
+            pass
         ps = self.server.proxy_server  # type: ignore[attr-defined]
         parsed = urlparse(target_url)
 
@@ -1690,6 +1704,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass
+                # NCP-3I: upstream-attempt-start (streaming path).
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_UPSTREAM_ATTEMPT_START,
+                        trace_id=_req_id,
+                        body_bytes=(len(body) if body else 0),
+                        notes="stream",
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
                     # SC-02: accumulate headers we actually send so the
@@ -1818,6 +1843,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         body,
                     )
                 except Exception:
+                    pass
+                # NCP-3I: upstream-attempt-start (non-streaming path).
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_UPSTREAM_ATTEMPT_START,
+                        trace_id=_req_id,
+                        body_bytes=(len(body) if body else 0),
+                        notes="request",
+                    )
+                except Exception:  # noqa: BLE001
                     pass
                 resp = pool.request(method, target_url, content=body, headers=fwd_headers)
 

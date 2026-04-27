@@ -412,6 +412,134 @@ class TestMissingDb:
         assert rc == 2
 
 
+# ── 11.5. NCP-3I dim 9 parity-trace coverage ──────────────────────────
+
+
+class TestParityTraceCoverage:
+    """Verify the harness consumes the NCP-3I tp_parity_trace table."""
+
+    def _seed_parity_trace(self, db: Path, rows: list) -> None:
+        """Seed tp_parity_trace rows alongside tp_events.
+
+        Each row dict: trace_id, event_type, ts (epoch float).
+        """
+        conn = sqlite3.connect(str(db))
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS tp_parity_trace (
+                trace_id TEXT NOT NULL, event_type TEXT NOT NULL,
+                ts REAL NOT NULL, pid INTEGER, ppid INTEGER,
+                tokenpak_home TEXT, telemetry_db_path TEXT,
+                request_id TEXT, session_id TEXT, provider TEXT,
+                auth_plane TEXT, credential_class TEXT,
+                retry_phase TEXT, retry_owner TEXT, retry_signal TEXT,
+                retry_count INTEGER, retry_after_seconds REAL,
+                tool_command_first TEXT,
+                tool_result_stdout_chars INTEGER,
+                tool_result_stderr_chars INTEGER,
+                tool_result_tokens_est INTEGER,
+                body_bytes INTEGER, companion_added_chars INTEGER,
+                intent_guidance_chars INTEGER,
+                queue_wait_ms REAL, lock_wait_ms REAL,
+                sqlite_write_ms REAL, notes TEXT
+            );
+            """
+        )
+        for r in rows:
+            conn.execute(
+                "INSERT INTO tp_parity_trace (trace_id, event_type, ts) "
+                "VALUES (?,?,?)",
+                (r["trace_id"], r["event_type"], r["ts"]),
+            )
+        conn.commit()
+        conn.close()
+
+    def test_dim9_unavailable_when_table_missing(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+        assert d9["available"] is False
+
+    def test_dim9_zero_rows_when_window_empty(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        # Create the table but no rows.
+        self._seed_parity_trace(db, rows=[])
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+        assert d9["available"] is True
+        assert d9["row_count"] == 0
+
+    def test_dim9_interp_b_supported_entry_without_completion(self, tmp_path):
+        # 3 traces have handler_entry; 0 ever land in tp_events.
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])  # empty tp_events
+        ts = 1772562000.0
+        self._seed_parity_trace(
+            db,
+            rows=[
+                {"trace_id": f"trace-{i}", "event_type": "handler_entry",
+                 "ts": ts + i}
+                for i in range(3)
+            ],
+        )
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+        assert d9["available"] is True
+        assert d9["traces_with_handler_entry"] == 3
+        assert d9["traces_with_completion_in_tp_events"] == 0
+        assert d9["interp_b_count"] == 3
+        assert d9["verdict"] == "interp_b_supported"
+
+    def test_dim9_interp_a_clean_when_completions_match(self, tmp_path):
+        # 3 traces with handler_entry, all also in tp_events.
+        db = tmp_path / "telemetry.db"
+        ts_iso = "2026-04-27T12:00:00"
+        _seed(db, rows=[
+            {"ts": ts_iso, "session_id": "s", "request_id": f"trace-{i}",
+             "trace_id": f"trace-{i}", "duration_ms": 100}
+            for i in range(3)
+        ])
+        ts = 1772562000.0
+        self._seed_parity_trace(
+            db,
+            rows=[
+                {"trace_id": f"trace-{i}", "event_type": "handler_entry",
+                 "ts": ts + i}
+                for i in range(3)
+            ],
+        )
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+        assert d9["traces_with_handler_entry"] == 3
+        assert d9["traces_with_completion_in_tp_events"] == 3
+        assert d9["interp_b_count"] == 0
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_dim9_renders_in_synthesis(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(
+            db,
+            rows=[
+                {"trace_id": f"trace-{i}", "event_type": "handler_entry",
+                 "ts": ts + i}
+                for i in range(2)
+            ],
+        )
+        out = tmp_path / "report.md"
+        rc = inspect.main([
+            "--db-path", str(db),
+            "--window-minutes", "0",
+            "--output", str(out),
+        ])
+        assert rc == 0
+        md = out.read_text()
+        assert "Q8 — NCP-3I parity trace" in md
+
+
 # ── 12. structural — no dispatch / behavior imports ───────────────────
 
 
