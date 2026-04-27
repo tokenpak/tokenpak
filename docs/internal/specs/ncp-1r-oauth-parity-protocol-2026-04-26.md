@@ -64,7 +64,7 @@ Before running either variant, verify all six gates pass. If any gate fails, abo
 # 1. The OAuth credentials file exists and is recent.
 test -f ~/.claude/.credentials.json && \
     echo "✓ OAuth credentials present" || \
-    echo "✗ MISSING OAuth credentials — run 'claude auth login'"
+    echo "✗ MISSING OAuth credentials — run 'claude' once and complete the OAuth login flow"
 
 # 2. The credentials carry the OAuth path (not just an API key).
 python3 -c "
@@ -75,14 +75,32 @@ assert oauth and oauth.get('accessToken'), 'no claudeAiOauth.accessToken in cred
 print('✓ OAuth access token present, account_uuid=', oauth.get('account_uuid', '(unset)'))
 "
 
-# 3. TokenPak's claude-code provider is the active route.
-tokenpak creds list 2>/dev/null | grep -qi 'tokenpak-claude-code' && \
-    echo "✓ TokenPak claude-code provider available" || \
-    echo "✗ TokenPak claude-code provider not configured"
+# 3. The TokenPak Claude Code Companion launcher is available.
+#    (Variant B in §4 launches via this — it spawns claude with the
+#    companion's MCP server + UserPromptSubmit hook wired in, and
+#    keeps the OAuth/subscription auth plane intact.)
+tokenpak help --all 2>&1 | grep -q '^    claude ' && \
+    echo "✓ tokenpak claude launcher available" || \
+    echo "✗ tokenpak claude launcher missing — upgrade tokenpak"
 
-# 4. TokenPak is NOT pointed at an API-key bucket for the test.
-# (Inspect ~/.tokenpak/config.json or whichever config is active.)
-echo "→ Manually verify TokenPak's effective claude-code route uses tokenpak-claude-code, NOT anthropic API-key path."
+# 4. TokenPak's effective Claude Code path is the OAuth companion,
+#    not a generic Anthropic API-key route. Two checks:
+#
+#    a. The companion is NOT explicitly disabled. If
+#       TOKENPAK_COMPANION_ENABLED=false is set in the operator's
+#       environment, the launcher passthroughs to plain claude and
+#       there's no companion telemetry to compare. Re-enable.
+[ "${TOKENPAK_COMPANION_ENABLED:-1}" = "false" ] || \
+[ "${TOKENPAK_COMPANION_ENABLED:-1}" = "0" ] && \
+    echo "✗ TOKENPAK_COMPANION_ENABLED is false — re-enable for variant B" || \
+    echo "✓ TOKENPAK_COMPANION_ENABLED is on (default)"
+
+#    b. After the §5 run, every tp_events row from the test window
+#       MUST carry provider='tokenpak-claude-code'. Any row with
+#       provider='anthropic' indicates the request fell back to the
+#       generic API-key route — that's an I-0 violation and the
+#       run is invalid.
+echo "→ §4.3 post-run check: verify tp_events.provider='tokenpak-claude-code' on every row in the window."
 ```
 
 ### 2.2 I-3 (session model is independent across CLI invocations)
@@ -150,26 +168,35 @@ If the CLI exposes a non-mitmproxy diagnostic (e.g. `claude --debug` writing to 
 
 ### 4.1 Setup
 
+The variant B launch path is **`tokenpak claude`** — the launcher described in `tokenpak help claude`:
+
+> *Spawns `claude` with the companion's MCP server + UserPromptSubmit hook wired in. All arguments after `claude` (e.g. `--model`, `--print`) are forwarded verbatim to the claude binary. Set `TOKENPAK_COMPANION_ENABLED=false` to disable the companion and passthrough directly.*
+
+This is the only sanctioned variant-B path for NCP-1R. **Do NOT** launch `claude` directly with `ANTHROPIC_BASE_URL=http://127.0.0.1:…` — that bypasses the launcher's auth-plane preservation logic and risks routing through TokenPak's generic Anthropic API-key path instead of the OAuth/subscription companion path (an I-0 violation).
+
 ```bash
-# Start TokenPak (or verify it's already running with claude-code OAuth route).
-tokenpak serve &
-sleep 2
-curl -s http://127.0.0.1:8765/healthz   # sanity check
+# Start the proxy if it isn't already running.
+tokenpak start          # boots the proxy on the configured port (default 8766)
+tokenpak status         # verify health
 
-# Verify TokenPak's effective Claude Code route.
-tokenpak creds list 2>&1 | grep -i claude-code
-# Expected: tokenpak-claude-code (OAuth + claude-code-20250219 beta).
-# NOT expected: 'anthropic' (API-key path).
+# Belt-and-suspenders: ensure the companion path is NOT disabled.
+unset TOKENPAK_COMPANION_ENABLED   # default = on, which is what we want
+unset HTTPS_PROXY HTTP_PROXY       # don't double-proxy
 
-# Point Claude Code at TokenPak.
-export ANTHROPIC_BASE_URL=http://127.0.0.1:8765
-unset HTTPS_PROXY HTTP_PROXY        # don't double-proxy
-
-claude --version > ~/ncp1r-claude-version-B.txt
+# Launch Claude Code through TokenPak — companion + OAuth path.
+tokenpak claude --version > ~/ncp1r-claude-version-B.txt
 diff ~/ncp1r-claude-version-A.txt ~/ncp1r-claude-version-B.txt && \
     echo "✓ same CLI version on both sides" || \
     echo "✗ ABORT — CLI version differs"
+
+# Run the workload from §5 — `tokenpak claude` (no extra args by default,
+# or pass `--model …` / other flags as needed).
+tokenpak claude
 ```
+
+**Auth-plane verification (post-launch, before workload):**
+
+When variant B starts, TokenPak's `ClaudeCodeCredentialProvider` should pick up `~/.claude/.credentials.json` and inject the OAuth bearer + `claude-code-20250219` beta. The wire-side fingerprint MUST match native Claude Code, with one expected difference: TokenPak synthesizes a stable `X-Claude-Code-Session-Id` per proxy process (the I-3 deviation under measurement here).
 
 ### 4.2 What the operator records
 
@@ -178,26 +205,47 @@ For variant B, TokenPak telemetry captures most of what we need. The same observ
 - The capture script (`scripts/capture_parity_baseline.py`) reads `tp_events` + `tp_usage` + `intent_patches` and emits the standard JSON.
 - The `provider` field on every `tp_events` row MUST be `tokenpak-claude-code`. Any row with `provider='anthropic'` indicates an I-0 violation and the run is invalid.
 
-### 4.3 Capture
+### 4.3 Capture + auth-plane verification
 
 After the run completes:
 
 ```bash
+OUTPUT="tests/baselines/ncp-1r-parity/tokenpak-$(date -u +%Y%m%dT%H%M%SZ).json"
+
 scripts/capture_parity_baseline.py \
     --label tokenpak \
     --window-days 1 \
-    --output tests/baselines/ncp-1r-parity/tokenpak-$(date -u +%Y%m%dT%H%M%SZ).json
+    --output "$OUTPUT"
 
-# Verify auth plane in the JSON before submitting.
-python3 -c "
-import json, sys
-d = json.load(open('${OUTPUT_PATH}'))
-# All Claude-Code-shaped events should have provider=tokenpak-claude-code.
-# (The capture script's _claude_code_filter handles this; we re-verify here
-# for I-0 enforcement.)
-print('verify provider field in source telemetry: tp_events.provider should be tokenpak-claude-code on every row')
-"
+# I-0 post-run check: every tp_events row in the test window MUST
+# carry provider='tokenpak-claude-code'. Any 'anthropic' row indicates
+# the request fell back to the generic API-key route — that's an
+# auth-plane violation and the run is invalid.
+python3 <<'EOF'
+import os, sqlite3, datetime as dt
+db = os.path.expanduser(
+    os.environ.get('TOKENPAK_HOME', '~/.tokenpak') + '/telemetry.db'
+)
+since = (dt.datetime.now() - dt.timedelta(days=1)).isoformat()
+c = sqlite3.connect(db)
+rows = c.execute(
+    "SELECT provider, COUNT(*) FROM tp_events WHERE ts >= ? GROUP BY provider",
+    (since,),
+).fetchall()
+print('provider distribution in test window:')
+for p, n in rows:
+    flag = '✓' if (p or '').lower() == 'tokenpak-claude-code' else '✗'
+    print(f'  {flag} provider={p!r}: {n}')
+non_oauth = [p for p, _ in rows if (p or '').lower() != 'tokenpak-claude-code']
+if non_oauth:
+    print(f'\nAUTH-PLANE VIOLATION: rows with non-OAuth providers: {non_oauth}')
+    print('Re-run with: TOKENPAK_COMPANION_ENABLED unset, launch via `tokenpak claude`.')
+    raise SystemExit(2)
+print('\n✓ I-0 holds: every row in window used the OAuth/subscription path.')
+EOF
 ```
+
+If the I-0 check fails, fix the launch path (almost always: re-launch via `tokenpak claude` rather than `claude` with a `BASE_URL` override) and re-run. Do NOT proceed to the diff with mixed-plane data.
 
 ---
 
@@ -371,7 +419,7 @@ when the diff is inconclusive due to OAuth/subscription unobservability>
 
 ### 9.1 Common gotchas (NCP-1R-specific)
 
-- **Variant B routes through TokenPak's `anthropic` provider (API key) instead of `tokenpak-claude-code` (OAuth).** Symptom: `tp_events.provider='anthropic'` rows. Fix: re-check `tokenpak creds list`, ensure the claude-code-OAuth route is selected. Re-run the test — the previous data is invalid for I-0.
+- **Variant B routes through TokenPak's `anthropic` provider (API key) instead of `tokenpak-claude-code` (OAuth).** Symptom: `tp_events.provider='anthropic'` rows. Almost always caused by launching `claude` directly with `ANTHROPIC_BASE_URL=http://127.0.0.1:…` (which lands on the generic Anthropic API-compatible endpoint). Fix: re-launch via `tokenpak claude` (the launcher in `tokenpak help claude`) — that path wires the companion + the claude-code OAuth credential injector. Re-run the test; the previous data is invalid for I-0.
 - **Variant A and variant B Claude CLI versions differ.** Pinning matters because `User-Agent` matters for billing-pool routing. Re-run with the same version.
 - **TokenPak proxy was started under a different OS user / `TOKENPAK_HOME`.** TokenPak may pick up a different `~/.claude/.credentials.json`. Verify the OAuth account UUID matches between variants.
 - **Variant A used a proxy (`HTTPS_PROXY` was set).** The CLI may refuse OAuth through a TLS-intercepting proxy, OR the test inadvertently became an API-key test. Re-run with `unset HTTPS_PROXY`.
