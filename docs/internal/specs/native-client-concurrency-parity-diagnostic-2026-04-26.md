@@ -1,10 +1,17 @@
 # Native Client Concurrency Parity — diagnostic plan (NCP-0)
 
-**Date**: 2026-04-26
+**Date**: 2026-04-26 (NCP-1R-amended — see banner below)
 **Status**: 🟡 **diagnostic only** — no runtime behavior changes proposed
 **Workstream**: NCP (Native Client Concurrency Parity)
-**Authors**: Sue (diagnostic) / Kevin (review)
-**Companion standard proposal**: `docs/internal/standards-proposals/24-native-client-concurrency-parity-standard.md`
+**Authors**: Sue (diagnostic) / Kevin (review + auth-plane scoping correction)
+**Companion docs**:
+  - Standard proposal: `docs/internal/standards-proposals/24-native-client-concurrency-parity-standard.md`
+  - **Primary** (NCP-1R) protocol: `docs/internal/specs/ncp-1r-oauth-parity-protocol-2026-04-26.md`
+  - **Secondary** (harness validation) protocol: `docs/internal/specs/ncp-1-ab-test-protocol-2026-04-26.md`
+
+> ⚠️ **NCP-1R amendment (2026-04-26)**: the original §5 A/B test methodology was scoped against generic Anthropic API-key traffic. Kevin's scoping correction reframed the test target as **Claude Code OAuth/subscription** parity. The hypothesis matrix (§2) remains valid, but the measurement methodology is now governed by the NCP-1R OAuth-parity protocol. The §5 sections in this document below remain useful as harness validation, but the *primary* test methodology is in the NCP-1R protocol.
+
+> **Auth-plane scope (added NCP-1R)**: this diagnostic targets the **Claude Code OAuth/subscription** auth plane (Standard #24 §1.5). Hypothesis evidence collected on a different auth plane (API key, cloud provider, proxy passthrough) is not transferable. H2 (session-id collapse) in particular is an **auth-plane parity** issue — it only matters when both variants are on the OAuth/subscription bucket.
 
 > **Premise (from the directive):** TokenPak Companion Claude Code appears to hit upstream rate-limit / retry behavior with **fewer concurrent sessions** than native Claude Code TUI direct, on the same account. NCP-0 is the **measurement-and-evidence** phase. No knobs are flipped. No code is changed. The goal is to **find the cause** before proposing a fix.
 
