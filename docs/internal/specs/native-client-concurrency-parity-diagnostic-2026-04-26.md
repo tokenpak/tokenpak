@@ -13,6 +13,8 @@
 
 > **Auth-plane scope (added NCP-1R)**: this diagnostic targets the **Claude Code OAuth/subscription** auth plane (Standard #24 §1.5). Hypothesis evidence collected on a different auth plane (API key, cloud provider, proxy passthrough) is not transferable. H2 (session-id collapse) in particular is an **auth-plane parity** issue — it only matters when both variants are on the OAuth/subscription bucket.
 
+> ⚠️ **NCP-1A iteration 1 update (2026-04-27)**: operator confirmed 1 TokenPak session beside 1 native session reaches wall-clock parity (~3% delta, no retry messages). This **demotes H1/H3 to secondary** and **promotes H2/H4 + a new H9 (shared-lane contention)** to the top of the matrix. The full re-rank, the H9 sub-mechanisms (connection pool / OAuth refresh lane / session-id rotation lock / telemetry write lane), and the next operator test plan (A/B/C/D) live in `docs/internal/specs/ncp-1a-iteration-1-2026-04-27.md`. The §2 hypothesis matrix below is the original NCP-0 ranking; consult the iteration-1 doc for the current priority.
+
 > **Premise (from the directive):** TokenPak Companion Claude Code appears to hit upstream rate-limit / retry behavior with **fewer concurrent sessions** than native Claude Code TUI direct, on the same account. NCP-0 is the **measurement-and-evidence** phase. No knobs are flipped. No code is changed. The goal is to **find the cause** before proposing a fix.
 
 ---
