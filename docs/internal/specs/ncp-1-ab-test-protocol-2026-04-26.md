@@ -1,14 +1,17 @@
 # NCP-1 — Claude Code parity A/B test protocol
 
 **Date**: 2026-04-26
-**Status**: 🟡 **measurement-only** — no behavior changes proposed
+**Status**: 🟡 **SECONDARY — harness validation only** (NCP-1R 2026-04-26 supersedes for the OAuth/subscription parity question)
 **Workstream**: NCP (Native Client Concurrency Parity)
 **Authors**: Sue (protocol) / Kevin (review)
 **Companion docs**:
   - Standard proposal: `docs/internal/standards-proposals/24-native-client-concurrency-parity-standard.md`
   - Diagnostic plan: `docs/internal/specs/native-client-concurrency-parity-diagnostic-2026-04-26.md`
+  - **Primary** (NCP-1R) protocol: `docs/internal/specs/ncp-1r-oauth-parity-protocol-2026-04-26.md`
 
-> **Goal:** settle hypotheses **H1 (cache prefix disruption)** and **H2 (session-id collapse)** from NCP-0 by running a side-by-side A/B test against the same Anthropic OAuth account, identical prompts, identical concurrency. Capture the 20-metric measurement contract from Standard #24 §3 (or mark unavailable with a documented reason). Produce a results report. **No code path is modified during the test run.**
+> ⚠️ **Demoted to secondary on 2026-04-26 (NCP-1R revision).** This protocol uses mitmproxy to capture upstream traffic — that works for **Anthropic API-key** comparisons but **cannot settle the OAuth/subscription parity question** which is the actual product issue. Reasons: (a) mitmproxy MAY break the Claude Code OAuth flow (TLS intercept), (b) API-key buckets and OAuth/subscription seats are different rate-limit attribution dimensions (Standard #24 §1.5 + I-0). Use this protocol ONLY to validate that the capture / diff harness is wired correctly. Use `ncp-1r-oauth-parity-protocol-2026-04-26.md` for the real product test.
+
+> **Goal (secondary use):** validate the `capture_parity_baseline.py` + `diff_parity_baselines.py` harness end-to-end with API-key telemetry, where mitmproxy can faithfully record upstream `usage` blocks + `Retry-After` headers + `anthropic-ratelimit-*` headers. **No code path is modified during the test run.**
 
 ---
 
