@@ -70,14 +70,26 @@ class CircuitBreakerConfig:
     failure_threshold: int = 5  # failures in window before tripping
     recovery_timeout: float = 60.0  # seconds before OPEN → HALF_OPEN
     window_seconds: float = 60.0  # rolling failure counting window
+    # NCP-4 Phase A (B5) — advisory-mode providers. Listed providers
+    # have their breaker state recorded for telemetry but the proxy
+    # does NOT fast-fail their requests when the breaker is OPEN.
+    # Default: ``anthropic`` is advisory because the Claude Code TUI
+    # already retries on its own and the proxy-side fast-fail caused
+    # the cascade documented in #74 Phase 2.
+    advisory_providers: frozenset = frozenset({"anthropic"})
 
     @classmethod
     def from_env(cls) -> "CircuitBreakerConfig":
+        adv_raw = os.environ.get("TOKENPAK_CB_ADVISORY_PROVIDERS", "anthropic")
+        adv_set = frozenset(
+            p.strip() for p in adv_raw.split(",") if p.strip()
+        )
         return cls(
             enabled=os.environ.get("TOKENPAK_CB_ENABLED", "1") != "0",
             failure_threshold=int(os.environ.get("TOKENPAK_CB_FAILURE_THRESHOLD", "5")),
             recovery_timeout=float(os.environ.get("TOKENPAK_CB_RECOVERY_TIMEOUT", "60")),
             window_seconds=float(os.environ.get("TOKENPAK_CB_WINDOW_SECONDS", "60")),
+            advisory_providers=adv_set,
         )
 
 
@@ -290,6 +302,14 @@ class CircuitBreakerRegistry:
     def allow_request(self, provider: str) -> bool:
         """Returns True if the request should proceed for this provider."""
         return self._get_or_create(provider).allow_request()
+
+    def is_advisory(self, provider: str) -> bool:
+        """NCP-4 Phase A (B5) — return True if the provider is in the
+        advisory set. Callers (e.g. ``proxy/server.py``) should bypass
+        the fast-fail path for advisory providers; the breaker still
+        records failures and successes for telemetry, but its OPEN
+        state does not block requests."""
+        return provider in self._config.advisory_providers
 
     def record_success(self, provider: str) -> None:
         """Record a successful request for this provider."""
