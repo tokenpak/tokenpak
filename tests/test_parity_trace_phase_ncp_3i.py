@@ -676,3 +676,117 @@ class TestStreamIntegrityV2:
         finally:
             conn.close()
         assert "idx_parity_lane" in indexes
+
+
+# ── 14. NCP-3I-v3 pre-dispatch lifecycle events ───────────────────────
+
+
+class TestPreDispatchLifecycleV3:
+    """Cover the new lifecycle events that localize where a request
+    dies between handler_entry and upstream_attempt_start."""
+
+    def test_v3_event_constants_exist(self):
+        from tokenpak.proxy.parity_trace import (
+            ALL_EVENTS,
+            EVENT_ADAPTER_DETECTED,
+            EVENT_AUTH_GATE_PASS,
+            EVENT_BEFORE_DISPATCH,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_ROUTE_RESOLVED,
+        )
+        for evt in (
+            EVENT_AUTH_GATE_PASS,
+            EVENT_ROUTE_RESOLVED,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_ADAPTER_DETECTED,
+            EVENT_BEFORE_DISPATCH,
+        ):
+            assert evt in ALL_EVENTS, f"{evt!r} missing from ALL_EVENTS"
+
+    def test_lifecycle_order_includes_v3_events(self):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_AUTH_GATE_PASS,
+            EVENT_BEFORE_DISPATCH,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_HANDLER_ENTRY,
+            EVENT_UPSTREAM_ATTEMPT_START,
+            LIFECYCLE_ORDER,
+        )
+        # Order: handler_entry FIRST, upstream_attempt_start AFTER
+        # the pre-dispatch events.
+        assert LIFECYCLE_ORDER[0] == EVENT_HANDLER_ENTRY
+        idx_handler = LIFECYCLE_ORDER.index(EVENT_HANDLER_ENTRY)
+        idx_auth = LIFECYCLE_ORDER.index(EVENT_AUTH_GATE_PASS)
+        idx_body = LIFECYCLE_ORDER.index(EVENT_BODY_READ_COMPLETE)
+        idx_dispatch = LIFECYCLE_ORDER.index(EVENT_BEFORE_DISPATCH)
+        idx_upstream = LIFECYCLE_ORDER.index(EVENT_UPSTREAM_ATTEMPT_START)
+        assert idx_handler < idx_auth < idx_body < idx_dispatch < idx_upstream
+
+    def test_pre_dispatch_chain_persists(self, store, env_enabled):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_ADAPTER_DETECTED,
+            EVENT_AUTH_GATE_PASS,
+            EVENT_BEFORE_DISPATCH,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_HANDLER_ENTRY,
+            EVENT_ROUTE_RESOLVED,
+        )
+        # Simulate a request reaching adapter_detected then dying.
+        for evt in (
+            EVENT_HANDLER_ENTRY,
+            EVENT_AUTH_GATE_PASS,
+            EVENT_ROUTE_RESOLVED,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_ADAPTER_DETECTED,
+        ):
+            emit(evt, trace_id="t-died-mid-pipeline")
+            time.sleep(0.0005)
+        # before_dispatch + upstream_attempt_start NOT emitted.
+        rows = store.fetch_for_trace("t-died-mid-pipeline")
+        types = [r["event_type"] for r in rows]
+        assert EVENT_HANDLER_ENTRY in types
+        assert EVENT_ADAPTER_DETECTED in types
+        assert EVENT_BEFORE_DISPATCH not in types
+
+    def test_full_chain_persists(self, store, env_enabled):
+        """A successful request hits every pre-dispatch hook + the
+        upstream_attempt_start hook."""
+        from tokenpak.proxy.parity_trace import (
+            EVENT_ADAPTER_DETECTED,
+            EVENT_AUTH_GATE_PASS,
+            EVENT_BEFORE_DISPATCH,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_HANDLER_ENTRY,
+            EVENT_ROUTE_RESOLVED,
+            EVENT_STREAM_COMPLETE,
+            EVENT_STREAM_START,
+            EVENT_UPSTREAM_ATTEMPT_START,
+        )
+        chain = (
+            EVENT_HANDLER_ENTRY,
+            EVENT_AUTH_GATE_PASS,
+            EVENT_ROUTE_RESOLVED,
+            EVENT_BODY_READ_COMPLETE,
+            EVENT_ADAPTER_DETECTED,
+            EVENT_BEFORE_DISPATCH,
+            EVENT_UPSTREAM_ATTEMPT_START,
+            EVENT_STREAM_START,
+            EVENT_STREAM_COMPLETE,
+        )
+        for evt in chain:
+            emit(evt, trace_id="t-full-chain")
+            time.sleep(0.0005)
+        rows = store.fetch_for_trace("t-full-chain")
+        types = [r["event_type"] for r in rows]
+        for evt in chain:
+            assert evt in types, f"{evt!r} missing from full chain"
+        assert len(rows) == len(chain)
+
+    def test_v3_events_with_disabled_env_no_op(self, store, env_disabled):
+        from tokenpak.proxy.parity_trace import (
+            EVENT_AUTH_GATE_PASS,
+            EVENT_BEFORE_DISPATCH,
+        )
+        emit(EVENT_AUTH_GATE_PASS, trace_id="t-disabled-v3")
+        emit(EVENT_BEFORE_DISPATCH, trace_id="t-disabled-v3")
+        assert store.fetch_for_trace("t-disabled-v3") == []

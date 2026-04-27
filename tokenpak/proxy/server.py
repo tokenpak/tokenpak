@@ -779,6 +779,23 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 request_id=_req_id,
                 notes=method,
             )
+            # NCP-3I-v3: auth_gate already passed (do_POST gates pre-call);
+            # emit a tautological-but-confirmed marker so the pre-dispatch
+            # lifecycle has its first checkpoint.
+            _pt.emit(
+                _pt.EVENT_AUTH_GATE_PASS,
+                trace_id=_req_id,
+                request_id=_req_id,
+            )
+            # NCP-3I-v3: route_resolved — by the time we're in
+            # _proxy_to_inner, do_POST has already chosen the route
+            # via ps.router.route(). Emit a confirmation marker.
+            _pt.emit(
+                _pt.EVENT_ROUTE_RESOLVED,
+                trace_id=_req_id,
+                request_id=_req_id,
+                notes=target_url[:200] if target_url else None,
+            )
         except Exception:  # noqa: BLE001
             pass
         ps = self.server.proxy_server  # type: ignore[attr-defined]
@@ -794,6 +811,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         content_length = int(self.headers.get("Content-Length", 0))
         body: Optional[bytes] = self.rfile.read(content_length) if content_length > 0 else None
+        # NCP-3I-v3: body_read_complete checkpoint. If the request dies
+        # between handler_entry and this point, the body read failed
+        # (or the rfile was closed by the client mid-handshake).
+        try:
+            from tokenpak.proxy import parity_trace as _pt
+            _pt.emit(
+                _pt.EVENT_BODY_READ_COMPLETE,
+                trace_id=_req_id,
+                body_bytes=(len(body) if body else 0),
+            )
+        except Exception:  # noqa: BLE001
+            pass
 
         model = "unknown"
         input_tokens = 0
@@ -826,6 +855,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _adapter.platform_name,
                 target_url[:60],
             )
+            # NCP-3I-v3: adapter_detected checkpoint.
+            try:
+                from tokenpak.proxy import parity_trace as _pt
+                _pt.emit(
+                    _pt.EVENT_ADAPTER_DETECTED,
+                    trace_id=_req_id,
+                    notes=str(_adapter.platform_name)[:200],
+                )
+            except Exception:  # noqa: BLE001
+                pass
             # v1.3.14 live-debug hook: when TOKENPAK_DUMP_HEADERS=1, emit
             # a one-line summary of inbound header names so we can see
             # exactly what OpenClaw / Codex / Claude CLI actually send.
@@ -1704,9 +1743,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass
-                # NCP-3I: upstream-attempt-start (streaming path).
+                # NCP-3I-v3: before_dispatch + upstream-attempt-start
+                # (streaming path). before_dispatch fires immediately
+                # before pool.stream is invoked — the last
+                # observable lifecycle event a request hits before the
+                # actual outbound HTTP call. If a trace shows
+                # before_dispatch but no upstream_attempt_start,
+                # something between them (rare — they're adjacent) is
+                # the death point.
                 try:
                     from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_BEFORE_DISPATCH,
+                        trace_id=_req_id,
+                        notes="stream",
+                    )
                     _pt.emit(
                         _pt.EVENT_UPSTREAM_ATTEMPT_START,
                         trace_id=_req_id,
@@ -1849,7 +1900,28 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             self.wfile.write(chunk)
                             self.wfile.flush()
                             _ncp3iv2_bytes_down += len(chunk)
-                        except (BrokenPipeError, ConnectionResetError):
+                        except (BrokenPipeError, ConnectionResetError) as _ncp_pipe_exc:
+                            # NCP-3I-v3 stream_abort hook (downstream
+                            # client closed mid-stream — H10b suspect).
+                            # Emit telemetry, then preserve original
+                            # behavior with `break`.
+                            try:
+                                from tokenpak.proxy import parity_trace as _pt
+                                _pt.emit(
+                                    _pt.EVENT_STREAM_ABORT,
+                                    trace_id=_req_id,
+                                    stream_aborted=1,
+                                    bytes_from_upstream=_ncp3iv2_bytes_up,
+                                    bytes_to_client=_ncp3iv2_bytes_down,
+                                    connection_closed_early=1,
+                                    stream_exception_class=type(_ncp_pipe_exc).__name__,
+                                    stream_exception_message_hash=_pt.hash_exception_message(_ncp_pipe_exc),
+                                    retry_signal="connection_reset",
+                                    retry_owner="claude_code_client",
+                                    lane_id=_ncp3iv2_lane,
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass
                             break
                         if should_log and is_messages:
                             sse_buffer += chunk
@@ -1918,9 +1990,15 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:
                     pass
-                # NCP-3I: upstream-attempt-start (non-streaming path).
+                # NCP-3I-v3: before_dispatch + upstream-attempt-start
+                # (non-streaming path).
                 try:
                     from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_BEFORE_DISPATCH,
+                        trace_id=_req_id,
+                        notes="request",
+                    )
                     _pt.emit(
                         _pt.EVENT_UPSTREAM_ATTEMPT_START,
                         trace_id=_req_id,
@@ -2235,6 +2313,25 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # failure is recorded in except block
 
         except Exception as exc:
+            # NCP-3I-v3 stream_abort hook for upstream-side exceptions
+            # (httpx errors, RemoteProtocolError, ReadTimeout etc.) that
+            # propagate past the with-block. This is the OTHER half of
+            # the H10 capture surface — the BrokenPipe path catches
+            # downstream client disconnects; this catches upstream
+            # provider failures.
+            try:
+                from tokenpak.proxy import parity_trace as _pt
+                _pt.emit(
+                    _pt.EVENT_STREAM_ABORT,
+                    trace_id=_req_id,
+                    stream_aborted=1,
+                    stream_exception_class=type(exc).__name__,
+                    stream_exception_message_hash=_pt.hash_exception_message(exc),
+                    retry_signal="unknown",
+                    retry_owner="upstream_provider",
+                )
+            except Exception:  # noqa: BLE001
+                pass
             # ── Circuit breaker: record failure ───────────────────────────
             if _cb_registry is not None and _cb_provider is not None:
                 _cb_registry.record_failure(_cb_provider)

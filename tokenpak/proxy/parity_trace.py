@@ -87,6 +87,16 @@ EVENT_STREAM_START: str = "stream_start"
 EVENT_STREAM_COMPLETE: str = "stream_complete"
 EVENT_STREAM_ABORT: str = "stream_abort"
 
+# NCP-3I-v3 pre-dispatch lifecycle events. Localize where a request
+# dies between handler_entry and upstream_attempt_start (per
+# iter-6 §1 finding: 4 of 4 traces had handler_entry without
+# upstream_attempt_start).
+EVENT_AUTH_GATE_PASS: str = "auth_gate_pass"
+EVENT_ROUTE_RESOLVED: str = "route_resolved"
+EVENT_BODY_READ_COMPLETE: str = "body_read_complete"
+EVENT_ADAPTER_DETECTED: str = "adapter_detected"
+EVENT_BEFORE_DISPATCH: str = "before_dispatch"
+
 ALL_EVENTS: frozenset = frozenset({
     EVENT_HANDLER_ENTRY,
     EVENT_REQUEST_CLASSIFIED,
@@ -97,7 +107,33 @@ ALL_EVENTS: frozenset = frozenset({
     EVENT_STREAM_START,
     EVENT_STREAM_COMPLETE,
     EVENT_STREAM_ABORT,
+    EVENT_AUTH_GATE_PASS,
+    EVENT_ROUTE_RESOLVED,
+    EVENT_BODY_READ_COMPLETE,
+    EVENT_ADAPTER_DETECTED,
+    EVENT_BEFORE_DISPATCH,
 })
+
+# NCP-3I-v3 — canonical pre-dispatch lifecycle order. Used by
+# inspect_session_lanes.py to render per-trace progression and
+# identify the LAST observed event (= the stage where the
+# request died).
+LIFECYCLE_ORDER: tuple = (
+    EVENT_HANDLER_ENTRY,
+    EVENT_AUTH_GATE_PASS,
+    EVENT_ROUTE_RESOLVED,
+    EVENT_BODY_READ_COMPLETE,
+    EVENT_REQUEST_CLASSIFIED,
+    EVENT_ADAPTER_DETECTED,
+    EVENT_BEFORE_DISPATCH,
+    EVENT_UPSTREAM_ATTEMPT_START,
+    EVENT_STREAM_START,
+    EVENT_STREAM_COMPLETE,
+    EVENT_STREAM_ABORT,
+    EVENT_UPSTREAM_ATTEMPT_FAILURE,
+    EVENT_RETRY_BOUNDARY,
+    EVENT_REQUEST_COMPLETION,
+)
 
 
 # Documented value sets for the "free-form-ish" TEXT columns.
@@ -524,15 +560,21 @@ def emit(
 
 __all__ = [
     "ALL_EVENTS",
+    "EVENT_ADAPTER_DETECTED",
+    "EVENT_AUTH_GATE_PASS",
+    "EVENT_BEFORE_DISPATCH",
+    "EVENT_BODY_READ_COMPLETE",
     "EVENT_HANDLER_ENTRY",
     "EVENT_REQUEST_CLASSIFIED",
     "EVENT_REQUEST_COMPLETION",
     "EVENT_RETRY_BOUNDARY",
+    "EVENT_ROUTE_RESOLVED",
     "EVENT_STREAM_ABORT",
     "EVENT_STREAM_COMPLETE",
     "EVENT_STREAM_START",
     "EVENT_UPSTREAM_ATTEMPT_FAILURE",
     "EVENT_UPSTREAM_ATTEMPT_START",
+    "LIFECYCLE_ORDER",
     "PARITY_TRACE_ENV",
     "ParityTraceRow",
     "ParityTraceStore",
