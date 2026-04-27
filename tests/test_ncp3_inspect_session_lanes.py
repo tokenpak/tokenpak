@@ -471,10 +471,13 @@ class TestParityTraceCoverage:
         assert d9["available"] is True
         assert d9["row_count"] == 0
 
-    def test_dim9_interp_b_supported_entry_without_completion(self, tmp_path):
-        # 3 traces have handler_entry; 0 ever land in tp_events.
+    def test_dim9_interp_b_supported_when_no_terminal_event(self, tmp_path):
+        # Issue #73: Q8 verdict is now driven by tp_parity_trace
+        # terminal events. 3 handler_entry traces with NO canonical
+        # terminal (stream_complete / dispatch_subprocess_complete /
+        # request_rejected / stream_abort) → silent-death cohort.
         db = tmp_path / "telemetry.db"
-        _seed(db, rows=[])  # empty tp_events
+        _seed(db, rows=[])  # empty tp_events — irrelevant to verdict
         ts = 1772562000.0
         self._seed_parity_trace(
             db,
@@ -488,32 +491,30 @@ class TestParityTraceCoverage:
         d9 = rep["dim9_parity_trace_coverage"]
         assert d9["available"] is True
         assert d9["traces_with_handler_entry"] == 3
-        assert d9["traces_with_completion_in_tp_events"] == 0
+        assert d9["traces_without_terminal_event"] == 3
+        assert d9["traces_with_wire_completion"] == 0
         assert d9["interp_b_count"] == 3
         assert d9["verdict"] == "interp_b_supported"
 
-    def test_dim9_interp_a_clean_when_completions_match(self, tmp_path):
-        # 3 traces with handler_entry, all also in tp_events.
+    def test_dim9_interp_a_clean_via_stream_complete(self, tmp_path):
+        # Issue #73: cleanliness is determined by tp_parity_trace
+        # stream_complete events, NOT tp_events rows.
         db = tmp_path / "telemetry.db"
-        ts_iso = "2026-04-27T12:00:00"
-        _seed(db, rows=[
-            {"ts": ts_iso, "session_id": "s", "request_id": f"trace-{i}",
-             "trace_id": f"trace-{i}", "duration_ms": 100}
-            for i in range(3)
-        ])
+        _seed(db, rows=[])  # zero tp_events rows — verdict still clean
         ts = 1772562000.0
-        self._seed_parity_trace(
-            db,
-            rows=[
-                {"trace_id": f"trace-{i}", "event_type": "handler_entry",
-                 "ts": ts + i}
-                for i in range(3)
-            ],
-        )
+        rows = []
+        for i in range(3):
+            rows.append({"trace_id": f"trace-{i}",
+                         "event_type": "handler_entry", "ts": ts + i})
+            rows.append({"trace_id": f"trace-{i}",
+                         "event_type": "stream_complete", "ts": ts + i + 0.5})
+        self._seed_parity_trace(db, rows=rows)
         rep = inspect.analyze(db_path=db, window_minutes=0)
         d9 = rep["dim9_parity_trace_coverage"]
         assert d9["traces_with_handler_entry"] == 3
-        assert d9["traces_with_completion_in_tp_events"] == 3
+        assert d9["traces_with_clean_wire_completion"] == 3
+        assert d9["traces_with_wire_completion"] == 3
+        assert d9["traces_without_terminal_event"] == 0
         assert d9["interp_b_count"] == 0
         assert d9["verdict"] == "interp_a_or_clean"
 
@@ -537,7 +538,7 @@ class TestParityTraceCoverage:
         ])
         assert rc == 0
         md = out.read_text()
-        assert "Q8 — NCP-3I parity trace" in md
+        assert "Q8 — wire-side completion" in md
 
     def test_dim9_v3_pre_dispatch_death_localization(self, tmp_path):
         """V3 — when traces die at different stages, the harness reports
@@ -672,6 +673,181 @@ class TestParityTraceCoverage:
         assert "Q10 — NCP-3A-enrichment terminal early-returns" in md
         assert "request_rejected=1" in md
         assert "dispatch_subprocess_complete=1" in md
+
+    # ── Issue #73 — wire-side completion canonicality ─────────────────
+
+    def test_wire_completion_via_stream_complete(self, tmp_path):
+        """handler_entry + stream_complete → counted as clean wire
+        completion; not silent death; verdict interp_a_or_clean."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = [
+            {"trace_id": "t-clean", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-clean", "event_type": "stream_complete",
+             "ts": ts + 0.5},
+        ]
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["traces_with_clean_wire_completion"] == 1
+        assert d9["traces_with_terminal_fast_fail"] == 0
+        assert d9["traces_with_terminal_abort"] == 0
+        assert d9["traces_with_wire_completion"] == 1
+        assert d9["traces_without_terminal_event"] == 0
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_wire_completion_via_request_rejected(self, tmp_path):
+        """handler_entry + request_rejected → terminal_fast_fail; not a
+        silent death; verdict interp_a_or_clean."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = [
+            {"trace_id": "t-rej", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-rej", "event_type": "request_rejected",
+             "ts": ts + 0.5},
+        ]
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["traces_with_terminal_fast_fail"] == 1
+        assert d9["traces_with_clean_wire_completion"] == 0
+        assert d9["traces_with_terminal_abort"] == 0
+        assert d9["traces_with_wire_completion"] == 1
+        assert d9["traces_without_terminal_event"] == 0
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_wire_completion_via_stream_abort(self, tmp_path):
+        """handler_entry + stream_abort → terminal_abort; not silent
+        death; verdict interp_a_or_clean."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = [
+            {"trace_id": "t-ab", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-ab", "event_type": "stream_abort",
+             "ts": ts + 0.5},
+        ]
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["traces_with_terminal_abort"] == 1
+        assert d9["traces_with_clean_wire_completion"] == 0
+        assert d9["traces_with_terminal_fast_fail"] == 0
+        assert d9["traces_with_wire_completion"] == 1
+        assert d9["traces_without_terminal_event"] == 0
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_wire_completion_via_subprocess_complete(self, tmp_path):
+        """handler_entry + dispatch_subprocess_complete → counted in
+        traces_with_wire_completion (subprocess class); verdict clean."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = [
+            {"trace_id": "t-sub", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-sub", "event_type": "dispatch_subprocess_complete",
+             "ts": ts + 0.5},
+        ]
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        # Subprocess does not increment the clean/fast_fail/abort
+        # buckets; it contributes only to the aggregate
+        # traces_with_wire_completion + the lifecycle event
+        # distribution.
+        assert d9["traces_with_clean_wire_completion"] == 0
+        assert d9["traces_with_terminal_fast_fail"] == 0
+        assert d9["traces_with_terminal_abort"] == 0
+        assert d9["traces_with_wire_completion"] == 1
+        assert d9["traces_without_terminal_event"] == 0
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_traces_without_terminal_event_is_silent_death(self, tmp_path):
+        """handler_entry without any of the four canonical terminals →
+        traces_without_terminal_event; verdict interp_b_supported."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        # 2 silent deaths + 1 clean completion → verdict still
+        # interp_b_supported because n_silent > 0.
+        rows = [
+            {"trace_id": "t-die-1", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-die-2", "event_type": "handler_entry",
+             "ts": ts + 1},
+            {"trace_id": "t-ok", "event_type": "handler_entry", "ts": ts + 2},
+            {"trace_id": "t-ok", "event_type": "stream_complete",
+             "ts": ts + 2.5},
+        ]
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["traces_with_handler_entry"] == 3
+        assert d9["traces_without_terminal_event"] == 2
+        assert d9["traces_with_clean_wire_completion"] == 1
+        assert d9["interp_b_count"] == 2
+        assert d9["verdict"] == "interp_b_supported"
+
+    def test_legacy_tp_events_field_kept_as_deprecated(self, tmp_path):
+        """The old tp_events stitch is preserved as
+        traces_with_completion_in_tp_events_deprecated for diagnostic
+        context, but does NOT influence the Q8 verdict."""
+        db = tmp_path / "telemetry.db"
+        # Seed a tp_events row that DOES match — old logic would have
+        # said "completion present, clean". We still need a parity-
+        # trace stream_complete to drive the new verdict to clean.
+        ts_iso = "2026-04-27T12:00:00"
+        _seed(db, rows=[
+            {"ts": ts_iso, "session_id": "s", "request_id": "t-x",
+             "trace_id": "t-x", "duration_ms": 100},
+        ])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-x", "event_type": "handler_entry", "ts": ts},
+            {"trace_id": "t-x", "event_type": "stream_complete",
+             "ts": ts + 0.5},
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert (
+            d9["traces_with_completion_in_tp_events_deprecated"] == 1
+        ), "deprecated field must remain available"
+        assert d9["traces_with_clean_wire_completion"] == 1
+        assert d9["verdict"] == "interp_a_or_clean"
+
+    def test_q8_verdict_unaffected_when_tp_events_empty(self, tmp_path):
+        """Issue #73 invariant: handler_entry + stream_complete with
+        ZERO tp_events rows still yields interp_a_or_clean. The old
+        logic would have fired interp_b_supported here (the bug)."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])  # zero tp_events rows
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": f"t-{i}", "event_type": "handler_entry",
+             "ts": ts + i}
+            for i in range(5)
+        ] + [
+            {"trace_id": f"t-{i}", "event_type": "stream_complete",
+             "ts": ts + i + 0.5}
+            for i in range(5)
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["traces_with_handler_entry"] == 5
+        assert d9["traces_with_clean_wire_completion"] == 5
+        assert d9["traces_with_completion_in_tp_events_deprecated"] == 0
+        # The deprecated count is 0/5 — old logic would have fired
+        # interp_b_supported. New logic: stream_complete present →
+        # clean.
+        assert d9["verdict"] == "interp_a_or_clean"
 
 
 # ── 12. structural — no dispatch / behavior imports ───────────────────
