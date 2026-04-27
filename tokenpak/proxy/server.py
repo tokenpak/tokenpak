@@ -1059,10 +1059,18 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
         # ── Circuit breaker check ──────────────────────────────────────────
         # Fast-fail immediately if the target provider's circuit is OPEN.
+        # NCP-4 Phase A (B5) — advisory-mode providers (default:
+        # ``anthropic``) skip the fast-fail. The breaker still records
+        # failures/successes via the record_* call sites below for
+        # telemetry, but does NOT block requests when state is OPEN.
+        # Reversible via TOKENPAK_CB_ADVISORY_PROVIDERS (empty disables).
         if should_log and is_messages:
             _cb_provider = provider_from_url(target_url)
             _cb_registry = get_circuit_breaker_registry()
-            if not _cb_registry.allow_request(_cb_provider):
+            if (
+                not _cb_registry.is_advisory(_cb_provider)
+                and not _cb_registry.allow_request(_cb_provider)
+            ):
                 import logging as _logging
 
                 _logging.getLogger(__name__).warning(
