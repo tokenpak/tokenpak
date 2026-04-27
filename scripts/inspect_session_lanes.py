@@ -353,6 +353,36 @@ _CANONICAL_TERMINAL_EVENTS: frozenset = frozenset({
     "stream_abort",
 })
 
+# Issue #74 phase 1 — allowed abort_phase classifier values, parsed
+# from the `notes` column on stream_abort rows. Legacy traces (no
+# `abort_phase=` prefix) classify as `unknown`. See
+# docs/internal/specs/ncp-3a-streaming-connect-2026-04-27.md.
+_ABORT_PHASE_VALUES: frozenset = frozenset({
+    "before_headers",
+    "after_headers_before_first_byte",
+    "mid_stream",
+    "client_disconnect",
+    "upstream_protocol_error",
+    "unknown",
+})
+
+
+def _parse_abort_phase(notes: Optional[str]) -> str:
+    """Extract the abort_phase value from a tp_parity_trace notes
+    field. Returns `unknown` when no `abort_phase=<value>` token is
+    present (legacy stream_abort rows pre-#74 phase 1) or when the
+    value is not in the documented enum."""
+    if not notes:
+        return "unknown"
+    for token in str(notes).split(","):
+        token = token.strip()
+        if token.startswith("abort_phase="):
+            value = token.split("=", 1)[1].strip()
+            if value in _ABORT_PHASE_VALUES:
+                return value
+            return "unknown"
+    return "unknown"
+
 
 def _dim_parity_trace_coverage(
     conn: sqlite3.Connection, since_iso: str, since_ts: float
@@ -375,7 +405,7 @@ def _dim_parity_trace_coverage(
             ),
         }
     rows = conn.execute(
-        "SELECT trace_id, event_type, ts FROM tp_parity_trace "
+        "SELECT trace_id, event_type, ts, notes FROM tp_parity_trace "
         "WHERE ts >= ?",
         (since_ts,),
     ).fetchall()
@@ -391,6 +421,10 @@ def _dim_parity_trace_coverage(
         }
     by_trace: Dict[str, Dict[str, int]] = {}
     event_counter: Counter = Counter()
+    # Issue #74 phase 1 — abort_phase distribution across stream_abort
+    # rows. Parsed per-row from the notes column; legacy rows without
+    # the `abort_phase=` prefix classify as `unknown`.
+    abort_phase_counter: Counter = Counter()
     for r in rows:
         tid = r["trace_id"]
         evt = r["event_type"]
@@ -398,6 +432,8 @@ def _dim_parity_trace_coverage(
         by_trace.setdefault(tid, {"events": 0, "phases": set()})
         by_trace[tid]["events"] += 1
         by_trace[tid]["phases"].add(evt)
+        if evt == "stream_abort":
+            abort_phase_counter[_parse_abort_phase(r["notes"])] += 1
 
     # Count traces by which lifecycle phases they hit.
     n_with_entry = sum(
@@ -552,6 +588,8 @@ def _dim_parity_trace_coverage(
         "early_return_stage_distribution": dict(
             Counter(early_return_traces.values())
         ),
+        # Issue #74 phase 1 — stream_abort phase classification.
+        "stream_abort_phase_distribution": dict(abort_phase_counter),
         "note": (
             "Issue #73: Q8 is now answered against tp_parity_trace "
             "terminal events (stream_complete, "
@@ -568,7 +606,13 @@ def _dim_parity_trace_coverage(
             "true pre-dispatch silent deaths. NCP-3A-enrichment: "
             "early_return_count / early_return_stage_distribution "
             "report traces that took an intentional early-return "
-            "path before upstream_attempt_start."
+            "path before upstream_attempt_start. "
+            "Issue #74 phase 1: stream_abort_phase_distribution "
+            "categorizes stream_abort events by abort_phase parsed "
+            "from the notes column (before_headers, "
+            "after_headers_before_first_byte, mid_stream, "
+            "client_disconnect, upstream_protocol_error); legacy "
+            "rows without an abort_phase= prefix classify as unknown."
         ),
     }
 
@@ -839,6 +883,26 @@ def _verdict_lines(report: Dict[str, Any]) -> List[str]:
                 "= successful subprocess companion dispatch; "
                 "request_rejected = auth/circuit/validation reject (see "
                 "notes column for sub-class)."
+            )
+        # Issue #74 phase 1 — stream_abort phase distribution (Q11).
+        abort_dist = d9.get("stream_abort_phase_distribution") or {}
+        abort_total = sum(abort_dist.values())
+        if abort_total > 0:
+            top = sorted(abort_dist.items(), key=lambda x: -x[1])
+            top_str = ", ".join(f"{k}={v}" for k, v in top)
+            out.append(
+                f"**Q11 — NCP-3A-streaming-connect stream_abort phase "
+                f"(issue #74):** {abort_total} stream_abort events "
+                f"classified by phase. Distribution (phase=count): "
+                f"{top_str}. before_headers = exception before "
+                "response headers; after_headers_before_first_byte = "
+                "headers received but no body bytes; mid_stream = "
+                "body partially streamed; client_disconnect = "
+                "downstream client closed mid-stream; "
+                "upstream_protocol_error = httpx "
+                "RemoteProtocolError / LocalProtocolError "
+                "(the #74 cohort signature). unknown = legacy row "
+                "emitted before the phase-1 classifier landed."
             )
     return out
 
