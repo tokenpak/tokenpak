@@ -447,9 +447,11 @@ class TestParityTraceCoverage:
         )
         for r in rows:
             conn.execute(
-                "INSERT INTO tp_parity_trace (trace_id, event_type, ts) "
-                "VALUES (?,?,?)",
-                (r["trace_id"], r["event_type"], r["ts"]),
+                "INSERT INTO tp_parity_trace "
+                "(trace_id, event_type, ts, notes) "
+                "VALUES (?,?,?,?)",
+                (r["trace_id"], r["event_type"], r["ts"],
+                 r.get("notes")),
             )
         conn.commit()
         conn.close()
@@ -821,6 +823,167 @@ class TestParityTraceCoverage:
         ), "deprecated field must remain available"
         assert d9["traces_with_clean_wire_completion"] == 1
         assert d9["verdict"] == "interp_a_or_clean"
+
+    # ── Issue #74 phase 1 — stream_abort phase classification ─────────
+
+    def _abort_row(self, trace_id, ts, notes):
+        return {"trace_id": trace_id, "event_type": "stream_abort",
+                "ts": ts, "notes": notes}
+
+    def test_stream_abort_phase_before_headers_classified(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-bh", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-bh", ts + 0.5,
+                            "abort_phase=before_headers"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {"before_headers": 1}
+        assert d9["traces_with_terminal_abort"] == 1
+
+    def test_stream_abort_phase_after_headers_before_first_byte_classified(
+        self, tmp_path
+    ):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-ahbf", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-ahbf", ts + 0.5,
+                            "abort_phase=after_headers_before_first_byte"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {
+            "after_headers_before_first_byte": 1
+        }
+
+    def test_stream_abort_phase_mid_stream_classified(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-ms", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-ms", ts + 0.5, "abort_phase=mid_stream"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {"mid_stream": 1}
+
+    def test_stream_abort_phase_client_disconnect_classified(self, tmp_path):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-cd", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-cd", ts + 0.5,
+                            "abort_phase=client_disconnect"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {
+            "client_disconnect": 1
+        }
+
+    def test_stream_abort_phase_upstream_protocol_error_classified(
+        self, tmp_path
+    ):
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-upe", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-upe", ts + 0.5,
+                            "abort_phase=upstream_protocol_error"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {
+            "upstream_protocol_error": 1
+        }
+
+    def test_stream_abort_legacy_notes_classified_unknown(self, tmp_path):
+        """Legacy stream_abort rows pre-#74 phase 1 (no abort_phase=
+        prefix in notes, or null notes) classify as unknown."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-legacy", "event_type": "handler_entry",
+             "ts": ts},
+            # notes=None (legacy rows have no notes field set)
+            self._abort_row("t-legacy", ts + 0.5, None),
+            {"trace_id": "t-other", "event_type": "handler_entry",
+             "ts": ts + 1},
+            # notes set but no abort_phase= prefix
+            self._abort_row("t-other", ts + 1.5,
+                            "circuit_breaker_open:anthropic"),
+        ])
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {"unknown": 2}
+
+    def test_stream_abort_phase_distribution_aggregates_multiple(
+        self, tmp_path
+    ):
+        """Multi-class distribution sums correctly."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        rows = [
+            {"trace_id": f"t-{i}", "event_type": "handler_entry",
+             "ts": ts + i}
+            for i in range(5)
+        ]
+        rows.append(self._abort_row("t-0", ts + 0.5,
+                                    "abort_phase=upstream_protocol_error"))
+        rows.append(self._abort_row("t-1", ts + 1.5,
+                                    "abort_phase=upstream_protocol_error"))
+        rows.append(self._abort_row("t-2", ts + 2.5,
+                                    "abort_phase=upstream_protocol_error"))
+        rows.append(self._abort_row("t-3", ts + 3.5,
+                                    "abort_phase=client_disconnect"))
+        rows.append(self._abort_row("t-4", ts + 4.5, None))  # legacy
+        self._seed_parity_trace(db, rows=rows)
+        d9 = inspect.analyze(
+            db_path=db, window_minutes=0
+        )["dim9_parity_trace_coverage"]
+        assert d9["stream_abort_phase_distribution"] == {
+            "upstream_protocol_error": 3,
+            "client_disconnect": 1,
+            "unknown": 1,
+        }
+
+    def test_q11_synthesis_renders_phase_breakdown(self, tmp_path):
+        """Markdown synthesis must include the Q11 line with the phase
+        distribution when stream_abort events are present."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": "t-x", "event_type": "handler_entry", "ts": ts},
+            self._abort_row("t-x", ts + 0.5,
+                            "abort_phase=upstream_protocol_error"),
+        ])
+        out = tmp_path / "report.md"
+        rc = inspect.main([
+            "--db-path", str(db),
+            "--window-minutes", "0",
+            "--output", str(out),
+        ])
+        assert rc == 0
+        md = out.read_text()
+        assert "Q11 — NCP-3A-streaming-connect stream_abort phase" in md
+        assert "upstream_protocol_error=1" in md
 
     def test_q8_verdict_unaffected_when_tp_events_empty(self, tmp_path):
         """Issue #73 invariant: handler_entry + stream_complete with

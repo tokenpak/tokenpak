@@ -1983,6 +1983,11 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                     retry_signal="connection_reset",
                                     retry_owner="claude_code_client",
                                     lane_id=_ncp3iv2_lane,
+                                    # NCP-3A-streaming-connect #74 phase 1:
+                                    # downstream client closed the socket
+                                    # while we were writing — categorical
+                                    # `client_disconnect`.
+                                    notes="abort_phase=client_disconnect",
                                 )
                             except Exception:  # noqa: BLE001
                                 pass
@@ -2385,14 +2390,42 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # provider failures.
             try:
                 from tokenpak.proxy import parity_trace as _pt
+                # NCP-3A-streaming-connect #74 phase 1 — abort_phase
+                # classification. RemoteProtocolError / LocalProtocolError
+                # are the #74 cohort signature; classify them as
+                # `upstream_protocol_error` regardless of byte phase so
+                # the bucket is targetable. For other exceptions, fall
+                # through to the phase axis based on whether response
+                # headers had been bound and bytes had been streamed.
+                _exc_name = type(exc).__name__
+                _abort_phase: str
+                if _exc_name in ("RemoteProtocolError", "LocalProtocolError"):
+                    _abort_phase = "upstream_protocol_error"
+                else:
+                    _frame = locals()
+                    _bytes_up = int(_frame.get("_ncp3iv2_bytes_up", 0) or 0)
+                    _resp_obj = _frame.get("resp", None)
+                    _headers_seen = (
+                        _resp_obj is not None
+                        and getattr(_resp_obj, "status_code", None) is not None
+                    )
+                    if _bytes_up > 0:
+                        _abort_phase = "mid_stream"
+                    elif _headers_seen:
+                        _abort_phase = "after_headers_before_first_byte"
+                    elif _resp_obj is None:
+                        _abort_phase = "before_headers"
+                    else:
+                        _abort_phase = "unknown"
                 _pt.emit(
                     _pt.EVENT_STREAM_ABORT,
                     trace_id=_req_id,
                     stream_aborted=1,
-                    stream_exception_class=type(exc).__name__,
+                    stream_exception_class=_exc_name,
                     stream_exception_message_hash=_pt.hash_exception_message(exc),
                     retry_signal="unknown",
                     retry_owner="upstream_provider",
+                    notes=f"abort_phase={_abort_phase}",
                 )
             except Exception:  # noqa: BLE001
                 pass

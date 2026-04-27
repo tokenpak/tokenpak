@@ -1,0 +1,87 @@
+{
+  "claude_code_event_count": 0,
+  "dim1_session_collapse": {
+    "collapse_ratio": null,
+    "distinct_request_ids": 0,
+    "distinct_session_ids": 0,
+    "verdict": "no_data"
+  },
+  "dim2_time_clustering": {
+    "spans": [],
+    "verdict": "insufficient_data"
+  },
+  "dim3_status_distribution": {},
+  "dim4_per_session_durations": {},
+  "dim5_provider_audit": {
+    "distribution": {},
+    "i0_violation": false,
+    "non_oauth_providers": []
+  },
+  "dim6_retry_count": {
+    "note": "Lower bound \u2014 current schema doesn't tag every retry. Real retry behavior may be higher; settle via the H4 'Retrying in 20s' visual evidence + the \u00a74.4 OAuth-fresh test.",
+    "retry_event_lower_bound": 0
+  },
+  "dim7_token_usage": {
+    "available": true,
+    "no_usage_rows": true
+  },
+  "dim8_interleaving": {
+    "interleave_score": null,
+    "verdict": "insufficient_data"
+  },
+  "dim9_parity_trace_coverage": {
+    "available": true,
+    "distinct_traces": 149,
+    "early_return_count": 13,
+    "early_return_stage_distribution": {
+      "dispatch_subprocess_complete": 1,
+      "request_rejected": 12
+    },
+    "event_type_distribution": {
+      "adapter_detected": 149,
+      "auth_gate_pass": 149,
+      "before_dispatch": 136,
+      "body_read_complete": 149,
+      "dispatch_subprocess_complete": 1,
+      "handler_entry": 149,
+      "request_rejected": 12,
+      "route_resolved": 149,
+      "stream_abort": 8,
+      "stream_complete": 86,
+      "stream_start": 88,
+      "upstream_attempt_start": 136
+    },
+    "interp_b_count": 42,
+    "last_stage_distribution": {
+      "dispatch_subprocess_complete": 1,
+      "request_rejected": 12,
+      "stream_abort": 8,
+      "stream_complete": 86,
+      "stream_start": 1,
+      "upstream_attempt_start": 41
+    },
+    "note": "Issue #73: Q8 is now answered against tp_parity_trace terminal events (stream_complete, dispatch_subprocess_complete, request_rejected, stream_abort) \u2014 NOT tp_events. interp_b_count = traces_without_terminal_event (handler_entry traces with no canonical terminal). traces_with_completion_in_tp_events_deprecated is preserved for diagnostic context only; it does not influence the verdict. NCP-3I-v3: last_stage_distribution shows which lifecycle stage each trace's LAST observed event was; pre_upstream_death_stage_distribution localizes true pre-dispatch silent deaths. NCP-3A-enrichment: early_return_count / early_return_stage_distribution report traces that took an intentional early-return path before upstream_attempt_start. Issue #74 phase 1: stream_abort_phase_distribution categorizes stream_abort events by abort_phase parsed from the notes column (before_headers, after_headers_before_first_byte, mid_stream, client_disconnect, upstream_protocol_error); legacy rows without an abort_phase= prefix classify as unknown.",
+    "pre_upstream_death_count": 0,
+    "pre_upstream_death_stage_distribution": {},
+    "row_count": 1212,
+    "stream_abort_phase_distribution": {
+      "unknown": 3,
+      "upstream_protocol_error": 5
+    },
+    "traces_with_clean_wire_completion": 86,
+    "traces_with_completion_in_tp_events_deprecated": 0,
+    "traces_with_handler_entry": 149,
+    "traces_with_terminal_abort": 8,
+    "traces_with_terminal_fast_fail": 12,
+    "traces_with_upstream_attempt_failure": 0,
+    "traces_with_upstream_attempt_start": 136,
+    "traces_with_wire_completion": 107,
+    "traces_without_terminal_event": 42,
+    "verdict": "interp_b_supported"
+  },
+  "generated_at": "2026-04-27T21:37:04.045293+00:00",
+  "schema_version": "ncp-3-trace-v1",
+  "window_end": "2026-04-27T21:37:04.045293+00:00",
+  "window_minutes": 30.0,
+  "window_start": "2026-04-27T21:07:04.045293+00:00"
+}
