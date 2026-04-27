@@ -13,6 +13,8 @@
 
 > **What changed from NCP-1**: the original protocol's mitmproxy-based capture was scoped against generic Anthropic API-key traffic. That cannot answer the OAuth/subscription parity question — different auth plane, different bucket, different rate-limit attribution. NCP-1R replaces the runbook with an OAuth/subscription-only protocol that observes CLI-side behavior + TokenPak telemetry.
 
+> ⚠️ **NCP-1A iteration 1 result (2026-04-27)**: 1 TP session vs 1 native session = wall-clock parity (~3%, no retries). The dominant cause hypothesis shifted to multi-concurrent TokenPak behavior. **Iteration-2 test plan (A / B / C / D) is in `docs/internal/specs/ncp-1a-iteration-1-2026-04-27.md` §3** — that's the next runbook the operator should follow before NCP-3 / NCP-4 implementation is scoped.
+
 ---
 
 ## 0. Reading guide
