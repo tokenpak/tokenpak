@@ -15,6 +15,8 @@
 
 > ⚠️ **Iter-3 strengthening (2026-04-27)**: 2 concurrent TP sessions retried while 1 native session ran healthily *at the same time*. Generic account quota ruled out as sole cause. See `docs/internal/specs/ncp-1a-iteration-3-2026-04-27.md`. The harness output Kevin runs against this NCP-3 plan §5 routes through the §6 decision tree as documented; iter-3 sharpens the priority ranking but does not change the decision tree itself.
 
+> ⚠️ **Iter-4 phase localization (2026-04-27)**: retry message captured as `Retrying in 8s · attempt 4/10` immediately after a local Bash tool result. The failure phase is **post-tool-result model continuation**, not initial dispatch. Five new diagnostic dimensions added in iter-4 (`retry_phase`, `tool_result_size`, `request_size_before_retry`, `retry_owner`, `retry_signal`) — none observable in current `tp_events` / `tp_usage`. Per iter-4 §3, the recommended next phase is **NCP-3I** (in-proxy instrumentation). The §3 instrumentation column-set is **extended** by iter-4 §6; the §6 decision tree gets a new **Q7** (retry-phase question) that takes precedence over Q1–Q6 when post-tool-result evidence is present. See `docs/internal/specs/ncp-1a-iteration-4-2026-04-27.md`.
+
 ---
 
 ## 0. Reading guide

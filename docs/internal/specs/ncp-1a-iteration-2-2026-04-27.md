@@ -12,6 +12,8 @@
 
 > ⚠️ **Iter-3 update (2026-04-27)**: stronger evidence captured — 2 TP sessions retried while 1 native session ran healthily *at the same time*. Generic account quota ruled out as sole cause. Hypothesis priority promoted: H2 / H9b / H4 / H9a-c. See iteration-3 doc for the cumulative ranking and the receiving form for the pending harness output.
 
+> ⚠️ **Iter-4 update (2026-04-27)**: retry localized to **post-tool-result continuation** phase. Five new diagnostic dimensions specified; existing telemetry insufficient. Recommended next phase: **NCP-3I** (in-proxy instrumentation). See `docs/internal/specs/ncp-1a-iteration-4-2026-04-27.md`.
+
 > **Headline:** the multi-concurrent-TokenPak regime reproduces the product issue. **Two TokenPak Claude Code sessions running concurrently degrade**, while a single TokenPak session beside a single native session is parity (iter-1). A previous run showed TokenPak displaying "Retrying in 20s" while native completed normally. The 1v1 → 2-on-2-TP comparison alone is enough to narrow the investigation; we proceed to NCP-3 diagnostic without waiting for C/D.
 
 ---
