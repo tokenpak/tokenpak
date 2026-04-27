@@ -35,7 +35,7 @@ import sqlite3
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 SCHEMA_VERSION: str = "ncp-3-trace-v1"
 
@@ -304,6 +304,122 @@ def _dim_token_usage(
     }
 
 
+# ── Dimension 9: parity-trace coverage (NCP-3I) ──────────────────────
+
+
+def _dim_parity_trace_coverage(
+    conn: sqlite3.Connection, since_iso: str, since_ts: float
+) -> Dict[str, Any]:
+    """Report on the new ``tp_parity_trace`` table from NCP-3I.
+
+    Specifically computes the iter-4 §11 interp-A-vs-B disambiguator:
+    how many distinct trace_ids fired a ``handler_entry`` event vs how
+    many completed (i.e. left a row in ``tp_events``). A large delta
+    is "interp B" — requests that never reached completion-time
+    logging.
+    """
+    if not _table_exists(conn, "tp_parity_trace"):
+        return {
+            "available": False,
+            "note": (
+                "tp_parity_trace not present — NCP-3I instrumentation "
+                "either hasn't been deployed on this host or "
+                "TOKENPAK_PARITY_TRACE_ENABLED has never been set."
+            ),
+        }
+    rows = conn.execute(
+        "SELECT trace_id, event_type, ts FROM tp_parity_trace "
+        "WHERE ts >= ?",
+        (since_ts,),
+    ).fetchall()
+    if not rows:
+        return {
+            "available": True,
+            "row_count": 0,
+            "note": (
+                "tp_parity_trace exists but no rows in window. Verify "
+                "TOKENPAK_PARITY_TRACE_ENABLED=true was set when the "
+                "test ran."
+            ),
+        }
+    by_trace: Dict[str, Dict[str, int]] = {}
+    event_counter: Counter = Counter()
+    for r in rows:
+        tid = r["trace_id"]
+        evt = r["event_type"]
+        event_counter[evt] += 1
+        by_trace.setdefault(tid, {"events": 0, "phases": set()})
+        by_trace[tid]["events"] += 1
+        by_trace[tid]["phases"].add(evt)
+
+    # Count traces by which lifecycle phases they hit.
+    n_with_entry = sum(
+        1 for d in by_trace.values() if "handler_entry" in d["phases"]
+    )
+    n_with_upstream_start = sum(
+        1
+        for d in by_trace.values()
+        if "upstream_attempt_start" in d["phases"]
+    )
+    n_with_upstream_failure = sum(
+        1
+        for d in by_trace.values()
+        if "upstream_attempt_failure" in d["phases"]
+    )
+
+    # Stitch to tp_events to derive how many parity-trace traces ALSO
+    # have a completion row in tp_events. The iter-4 §11 interp-B
+    # disambiguator is: (n_with_entry - n_with_completion).
+    n_with_completion: Optional[int] = None
+    if _table_exists(conn, "tp_events"):
+        trace_ids = list(by_trace.keys())
+        if trace_ids:
+            # Match either tp_events.trace_id OR tp_events.request_id.
+            placeholders = ",".join("?" for _ in trace_ids)
+            params = trace_ids + trace_ids
+            try:
+                completed = conn.execute(
+                    f"SELECT COUNT(DISTINCT COALESCE(trace_id, request_id)) "
+                    f"FROM tp_events "
+                    f"WHERE trace_id IN ({placeholders}) "
+                    f"   OR request_id IN ({placeholders})",
+                    params,
+                ).fetchone()[0]
+                n_with_completion = int(completed or 0)
+            except sqlite3.DatabaseError:
+                n_with_completion = None
+
+    interp_b_count = (
+        n_with_entry - n_with_completion
+        if n_with_completion is not None
+        else None
+    )
+    if interp_b_count is None:
+        verdict = "indeterminate"
+    elif interp_b_count > 0 and n_with_entry > 0:
+        verdict = "interp_b_supported"
+    else:
+        verdict = "interp_a_or_clean"
+
+    return {
+        "available": True,
+        "row_count": len(rows),
+        "distinct_traces": len(by_trace),
+        "event_type_distribution": dict(event_counter),
+        "traces_with_handler_entry": n_with_entry,
+        "traces_with_upstream_attempt_start": n_with_upstream_start,
+        "traces_with_upstream_attempt_failure": n_with_upstream_failure,
+        "traces_with_completion_in_tp_events": n_with_completion,
+        "interp_b_count": interp_b_count,
+        "verdict": verdict,
+        "note": (
+            "interp_b_count = traces that emitted handler_entry but "
+            "never completed in tp_events. iter-4 §11 interp B is "
+            "supported when interp_b_count > 0."
+        ),
+    }
+
+
 # ── Dimension 8: cross-session interleaving ──────────────────────────
 
 
@@ -412,6 +528,7 @@ def analyze(
             d6 = _dim_retry_count(claude_code)
             d7 = _dim_token_usage(conn, claude_code)
             d8 = _dim_interleaving(claude_code)
+            d9 = _dim_parity_trace_coverage(conn, since_iso, since_ts)
     except sqlite3.DatabaseError as exc:
         return {
             "schema_version": SCHEMA_VERSION,
@@ -433,6 +550,7 @@ def analyze(
         "dim6_retry_count": d6,
         "dim7_token_usage": d7,
         "dim8_interleaving": d8,
+        "dim9_parity_trace_coverage": d9,
     }
 
 
@@ -487,6 +605,44 @@ def _verdict_lines(report: Dict[str, Any]) -> List[str]:
             "occurred OR the schema didn't tag them. Settle visually "
             "via the §4 workload."
         )
+
+    # NCP-3I dim 9 — parity-trace coverage / iter-4 §11 interp A vs B.
+    d9 = report.get("dim9_parity_trace_coverage", {})
+    if not d9.get("available"):
+        out.append(
+            "**Q8 — NCP-3I parity trace:** unavailable. "
+            f"{d9.get('note', '')}"
+        )
+    elif d9.get("row_count", 0) == 0:
+        out.append(
+            "**Q8 — NCP-3I parity trace:** no rows in window. "
+            "If a test ran, verify TOKENPAK_PARITY_TRACE_ENABLED=true."
+        )
+    else:
+        verdict = d9.get("verdict")
+        ib = d9.get("interp_b_count")
+        ne = d9.get("traces_with_handler_entry")
+        nc = d9.get("traces_with_completion_in_tp_events")
+        if verdict == "interp_b_supported":
+            out.append(
+                "**Q8 — NCP-3I parity trace:** **iter-4 §11 interp B "
+                f"SUPPORTED.** {ib} of {ne} traces emitted handler_entry "
+                f"but never completed in tp_events (only {nc} did). The "
+                "missing requests fail before completion-time logging — "
+                "matches the visible-retry-but-empty-telemetry condition."
+            )
+        elif verdict == "interp_a_or_clean":
+            out.append(
+                f"**Q8 — NCP-3I parity trace:** {ne} traces with "
+                f"handler_entry, {nc} with tp_events completion — no "
+                "interp-B gap detected in window."
+            )
+        else:
+            out.append(
+                f"**Q8 — NCP-3I parity trace:** indeterminate "
+                f"(traces={d9.get('distinct_traces')}, "
+                f"completion={nc})."
+            )
     return out
 
 
@@ -517,6 +673,7 @@ def _render_markdown(report: Dict[str, Any]) -> str:
         "dim6_retry_count",
         "dim7_token_usage",
         "dim8_interleaving",
+        "dim9_parity_trace_coverage",
     ):
         lines.append(f"### {k}")
         lines.append("")
