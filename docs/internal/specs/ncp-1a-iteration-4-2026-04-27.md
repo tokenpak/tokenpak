@@ -1,7 +1,7 @@
 # NCP-1A iteration 4 — retry localizes to post-tool-result continuation
 
 **Date**: 2026-04-27
-**Status**: 🟡 **phase-localized evidence** — recommended next phase is **NCP-3I** (in-proxy instrumentation) per directive
+**Status**: 🟡 **superseded by iteration-5** — see banner below
 **Workstream**: NCP (Native Client Concurrency Parity)
 **Operator**: Kevin
 **Companion docs**:
@@ -9,6 +9,9 @@
   - Iteration 2 (2-TP concurrent degraded): `docs/internal/specs/ncp-1a-iteration-2-2026-04-27.md`
   - Iteration 3 (2 TP retry + 1 native healthy concurrently): `docs/internal/specs/ncp-1a-iteration-3-2026-04-27.md`
   - NCP-3 diagnostic plan: `docs/internal/reports/ncp-3-session-lane-trace-2026-04-27.md`
+  - **Iteration 5 (H10 streaming corruption + activation gap)**: `docs/internal/specs/ncp-1a-iteration-5-2026-04-27.md`
+
+> ⚠️ **Iter-5 update (2026-04-27)**: NCP-3I v1 captured nothing because the running proxy was started before `TOKENPAK_PARITY_TRACE_ENABLED` was set. New evidence (`API Error: JSON Parse error: Unterminated string` on a TokenPak session) promotes new hypothesis **H10** (streaming JSON/SSE corruption). NCP-3I-v2 ships activation verification + 16 stream-integrity columns + 9 new tests. See iter-5 doc.
 
 > **Headline:** the retry message `Retrying in 8s · attempt 4/10` was captured immediately after a local `Bash` tool result containing `git log` + `git status` + untracked-file output. **The failure phase is post-tool-result model continuation, not initial prompt dispatch.** This sharpens the picture: amplification of input tokens by the tool result + companion context + intent guidance + next-turn prompt may be pushing the request into a tier where retry / rate-limit fires.
 

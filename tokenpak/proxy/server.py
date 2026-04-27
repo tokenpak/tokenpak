@@ -1715,8 +1715,50 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     )
                 except Exception:  # noqa: BLE001
                     pass
+                # NCP-3I-v2: streaming-integrity counters + concurrent-stream
+                # gauge. Captures stream_start / stream_complete + byte
+                # counters for H10 (streaming JSON/SSE corruption under
+                # concurrency). Stream_abort is deferred to a future PR
+                # because wrapping the with-block in try/except requires
+                # re-indenting the 100-line streaming body — risky for a
+                # measurement-only phase. The lack of stream_abort row
+                # only matters when the upstream stream throws an
+                # exception (uncommon); for the H10 "JSON parse error"
+                # symptom (stream completes with truncated bytes), the
+                # stream_complete + bytes_to_client + sse_event_count
+                # already capture the signal.
+                _ncp3iv2_bytes_up = 0
+                _ncp3iv2_bytes_down = 0
+                _ncp3iv2_lane = ""
+                _ncp3iv2_concurrent = 0
+                _ncp3iv2_sse_events = 0
+                _ncp3iv2_last_event_type = None
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _ncp3iv2_lane = _pt.current_lane_id()
+                    _ncp3iv2_concurrent = _pt.begin_stream()
+                except Exception:  # noqa: BLE001
+                    pass
                 with pool.stream(method, target_url, content=body, headers=fwd_headers) as resp:
                     self.send_response(resp.status_code)
+                    # NCP-3I-v2 stream_start hook — captures upstream
+                    # status + content-type + concurrent-stream count
+                    # before the byte iteration begins.
+                    try:
+                        from tokenpak.proxy import parity_trace as _pt
+                        _pt.emit(
+                            _pt.EVENT_STREAM_START,
+                            trace_id=_req_id,
+                            stream_started=1,
+                            upstream_status=int(resp.status_code or 0),
+                            response_content_type=str(
+                                resp.headers.get("content-type") or ""
+                            ),
+                            lane_id=_ncp3iv2_lane,
+                            concurrent_stream_count=_ncp3iv2_concurrent,
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                     # SC-02: accumulate headers we actually send so the
                     # conformance observer can validate the outbound set.
                     # Parallel to send_header calls — no behavior change.
@@ -1801,9 +1843,12 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     for chunk in resp.iter_bytes(chunk_size=4096):
                         if not chunk:
                             continue
+                        # NCP-3I-v2 byte counter — purely additive.
+                        _ncp3iv2_bytes_up += len(chunk)
                         try:
                             self.wfile.write(chunk)
                             self.wfile.flush()
+                            _ncp3iv2_bytes_down += len(chunk)
                         except (BrokenPipeError, ConnectionResetError):
                             break
                         if should_log and is_messages:
@@ -1826,6 +1871,35 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     output_tokens = sse_usage.get("output_tokens", 0)
                     cache_read_tokens = sse_usage.get("cache_read_input_tokens", 0)
                     cache_creation_tokens = sse_usage.get("cache_creation_input_tokens", 0)
+                # NCP-3I-v2 stream_complete hook — fires when the
+                # `with pool.stream` block exits cleanly (i.e., the
+                # upstream connection closed without raising). Counts
+                # SSE events in the captured buffer (best-effort
+                # `event:` line count). Always followed by end_stream
+                # to keep the concurrent-stream gauge consistent.
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _ncp3iv2_sse_events = sse_buffer.count(b"event:")
+                    _pt.emit(
+                        _pt.EVENT_STREAM_COMPLETE,
+                        trace_id=_req_id,
+                        stream_completed=1,
+                        bytes_from_upstream=_ncp3iv2_bytes_up,
+                        bytes_to_client=_ncp3iv2_bytes_down,
+                        sse_event_count=_ncp3iv2_sse_events,
+                        lane_id=_ncp3iv2_lane,
+                        connection_closed_early=(
+                            1 if _ncp3iv2_bytes_down < _ncp3iv2_bytes_up else 0
+                        ),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                finally:
+                    try:
+                        from tokenpak.proxy import parity_trace as _pt
+                        _pt.end_stream()
+                    except Exception:  # noqa: BLE001
+                        pass
             else:
                 # ── Non-streaming path ────────────────────────────────────
                 # SC+1 / SC2-02: notify conformance observer of outbound

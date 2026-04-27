@@ -82,6 +82,11 @@ EVENT_UPSTREAM_ATTEMPT_FAILURE: str = "upstream_attempt_failure"
 EVENT_RETRY_BOUNDARY: str = "retry_boundary"
 EVENT_REQUEST_COMPLETION: str = "request_completion"
 
+# NCP-3I-v2 stream-integrity events (added for H10).
+EVENT_STREAM_START: str = "stream_start"
+EVENT_STREAM_COMPLETE: str = "stream_complete"
+EVENT_STREAM_ABORT: str = "stream_abort"
+
 ALL_EVENTS: frozenset = frozenset({
     EVENT_HANDLER_ENTRY,
     EVENT_REQUEST_CLASSIFIED,
@@ -89,6 +94,9 @@ ALL_EVENTS: frozenset = frozenset({
     EVENT_UPSTREAM_ATTEMPT_FAILURE,
     EVENT_RETRY_BOUNDARY,
     EVENT_REQUEST_COMPLETION,
+    EVENT_STREAM_START,
+    EVENT_STREAM_COMPLETE,
+    EVENT_STREAM_ABORT,
 })
 
 
@@ -124,7 +132,9 @@ _DEFAULT_DB_PATH = (
 )
 
 
-_DDL = """\
+# DDL split into two parts so v1 hosts upgrading get their schema
+# migrated BEFORE indexes that reference v2-only columns are created.
+_DDL_TABLE = """\
 CREATE TABLE IF NOT EXISTS tp_parity_trace (
     trace_id              TEXT NOT NULL,       -- ties events of one request
     event_type            TEXT NOT NULL,       -- one of ALL_EVENTS
@@ -158,16 +168,60 @@ CREATE TABLE IF NOT EXISTS tp_parity_trace (
     queue_wait_ms         REAL,
     lock_wait_ms          REAL,
     sqlite_write_ms       REAL,
+    lane_id               TEXT,                -- NCP-3I-v2 — "<pid>:<thread_id>"
+    concurrent_stream_count INTEGER,           -- NCP-3I-v2
+    -- NCP-3I-v2 stream-integrity dimensions (H10)
+    stream_started        INTEGER,
+    stream_completed      INTEGER,
+    stream_aborted        INTEGER,
+    upstream_status       INTEGER,
+    downstream_status     INTEGER,
+    response_content_type TEXT,
+    sse_event_count       INTEGER,
+    sse_last_event_type   TEXT,
+    bytes_from_upstream   INTEGER,
+    bytes_to_client       INTEGER,
+    json_parse_error_seen INTEGER,
+    stream_exception_class    TEXT,
+    stream_exception_message_hash TEXT,
+    connection_closed_early INTEGER,
     -- Free-form note (caller-supplied; MUST NOT contain prompt content)
     notes                 TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_parity_trace_id
-    ON tp_parity_trace (trace_id, ts);
-CREATE INDEX IF NOT EXISTS idx_parity_event_type
-    ON tp_parity_trace (event_type, ts);
-CREATE INDEX IF NOT EXISTS idx_parity_session
-    ON tp_parity_trace (session_id, ts);
 """
+
+# Indexes run AFTER the ALTER TABLE migrations so v1 hosts have the
+# referenced columns by the time the index is created.
+_DDL_INDEXES = (
+    "CREATE INDEX IF NOT EXISTS idx_parity_trace_id "
+    "ON tp_parity_trace (trace_id, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_parity_event_type "
+    "ON tp_parity_trace (event_type, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_parity_session "
+    "ON tp_parity_trace (session_id, ts)",
+    "CREATE INDEX IF NOT EXISTS idx_parity_lane "
+    "ON tp_parity_trace (lane_id, ts)",
+)
+
+# NCP-3I-v2 — additive columns for hosts upgrading from v1.
+_V2_ADDITIVE_COLUMNS: tuple = (
+    ("lane_id", "TEXT"),
+    ("concurrent_stream_count", "INTEGER"),
+    ("stream_started", "INTEGER"),
+    ("stream_completed", "INTEGER"),
+    ("stream_aborted", "INTEGER"),
+    ("upstream_status", "INTEGER"),
+    ("downstream_status", "INTEGER"),
+    ("response_content_type", "TEXT"),
+    ("sse_event_count", "INTEGER"),
+    ("sse_last_event_type", "TEXT"),
+    ("bytes_from_upstream", "INTEGER"),
+    ("bytes_to_client", "INTEGER"),
+    ("json_parse_error_seen", "INTEGER"),
+    ("stream_exception_class", "TEXT"),
+    ("stream_exception_message_hash", "TEXT"),
+    ("connection_closed_early", "INTEGER"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +277,24 @@ class ParityTraceRow:
     queue_wait_ms: Optional[float] = None
     lock_wait_ms: Optional[float] = None
     sqlite_write_ms: Optional[float] = None
+    lane_id: Optional[str] = None  # NCP-3I-v2: e.g. "<pid>:<thread_id>"
+    concurrent_stream_count: Optional[int] = None  # NCP-3I-v2
+
+    # NCP-3I-v2 — stream-integrity dimensions (H10)
+    stream_started: Optional[int] = None        # 0/1
+    stream_completed: Optional[int] = None      # 0/1
+    stream_aborted: Optional[int] = None        # 0/1
+    upstream_status: Optional[int] = None       # HTTP status from upstream
+    downstream_status: Optional[int] = None     # HTTP status sent to client
+    response_content_type: Optional[str] = None
+    sse_event_count: Optional[int] = None
+    sse_last_event_type: Optional[str] = None
+    bytes_from_upstream: Optional[int] = None
+    bytes_to_client: Optional[int] = None
+    json_parse_error_seen: Optional[int] = None  # 0/1
+    stream_exception_class: Optional[str] = None
+    stream_exception_message_hash: Optional[str] = None  # sha256-hex
+    connection_closed_early: Optional[int] = None  # 0/1
 
     # Free-form (caller-supplied; MUST NOT contain prompt / secret content)
     notes: Optional[str] = None
@@ -250,7 +322,25 @@ class ParityTraceStore:
         if self._conn is None:
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
-            conn.executescript(_DDL)
+            # 1. Create the table (idempotent — IF NOT EXISTS).
+            conn.executescript(_DDL_TABLE)
+            # 2. Apply v2 additive migration BEFORE creating indexes
+            #    that reference v2-only columns. SQLite has no
+            #    ADD COLUMN IF NOT EXISTS; swallow duplicate-column.
+            for col_name, col_type in _V2_ADDITIVE_COLUMNS:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE tp_parity_trace "
+                        f"ADD COLUMN {col_name} {col_type}"
+                    )
+                except sqlite3.OperationalError:
+                    pass
+            # 3. Now create indexes — all referenced columns exist.
+            for idx_sql in _DDL_INDEXES:
+                try:
+                    conn.execute(idx_sql)
+                except sqlite3.OperationalError:
+                    pass
             conn.commit()
             self._conn = conn
         return self._conn
@@ -329,6 +419,59 @@ def set_default_store(store: Optional[ParityTraceStore]) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# NCP-3I-v2 concurrent-stream counter + helpers
+# ---------------------------------------------------------------------------
+
+
+_CONCURRENT_STREAMS: int = 0
+_CONCURRENT_STREAMS_LOCK = threading.Lock()
+
+
+def begin_stream() -> int:
+    """Increment the concurrent-stream gauge; return the new value.
+    Off-path; never raises. Callers SHOULD pair with :func:`end_stream`."""
+    global _CONCURRENT_STREAMS
+    try:
+        with _CONCURRENT_STREAMS_LOCK:
+            _CONCURRENT_STREAMS += 1
+            return _CONCURRENT_STREAMS
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def end_stream() -> int:
+    """Decrement the concurrent-stream gauge; return the new value."""
+    global _CONCURRENT_STREAMS
+    try:
+        with _CONCURRENT_STREAMS_LOCK:
+            _CONCURRENT_STREAMS = max(0, _CONCURRENT_STREAMS - 1)
+            return _CONCURRENT_STREAMS
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def current_lane_id() -> str:
+    """Return ``"<pid>:<thread_id>"`` for the calling thread.
+    Useful as a stable lane identifier across multi-event traces."""
+    try:
+        return f"{os.getpid()}:{threading.get_ident()}"
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+def hash_exception_message(exc: BaseException) -> str:
+    """Return a sha256-hex of the exception's str(message). Allows
+    the operator to cluster identical errors without storing the
+    message text (which may include URL fragments / user data)."""
+    try:
+        import hashlib
+        msg = str(exc)
+        return hashlib.sha256(msg.encode("utf-8", "replace")).hexdigest()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def is_enabled() -> bool:
     """Return True iff ``TOKENPAK_PARITY_TRACE_ENABLED`` is set
     to a truthy value at this exact moment.
@@ -385,6 +528,9 @@ __all__ = [
     "EVENT_REQUEST_CLASSIFIED",
     "EVENT_REQUEST_COMPLETION",
     "EVENT_RETRY_BOUNDARY",
+    "EVENT_STREAM_ABORT",
+    "EVENT_STREAM_COMPLETE",
+    "EVENT_STREAM_START",
     "EVENT_UPSTREAM_ATTEMPT_FAILURE",
     "EVENT_UPSTREAM_ATTEMPT_START",
     "PARITY_TRACE_ENV",
@@ -393,8 +539,12 @@ __all__ = [
     "RETRY_OWNERS",
     "RETRY_PHASES",
     "RETRY_SIGNALS",
+    "begin_stream",
+    "current_lane_id",
     "emit",
+    "end_stream",
     "get_default_store",
+    "hash_exception_message",
     "is_enabled",
     "set_default_store",
 ]

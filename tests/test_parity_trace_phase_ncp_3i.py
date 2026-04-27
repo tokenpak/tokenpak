@@ -482,3 +482,197 @@ class TestConcurrentEmit:
         for idx in range(4):
             rows = store.fetch_for_trace(f"t-{idx}-0")
             assert len(rows) == 1
+
+
+# ── 13. NCP-3I-v2 stream-integrity dimensions ─────────────────────────
+
+
+class TestStreamIntegrityV2:
+    """Cover the H10 stream-integrity additions:
+       - new event constants (stream_start / complete / abort)
+       - new schema columns
+       - additive ALTER TABLE migration on v1 hosts
+       - concurrent-stream gauge helpers
+       - exception-message-hash helper
+       - inspect_session_lanes consumption (covered separately)
+    """
+
+    def test_new_event_constants_exist(self):
+        from tokenpak.proxy.parity_trace import (
+            ALL_EVENTS,
+            EVENT_STREAM_ABORT,
+            EVENT_STREAM_COMPLETE,
+            EVENT_STREAM_START,
+        )
+        assert EVENT_STREAM_START == "stream_start"
+        assert EVENT_STREAM_COMPLETE == "stream_complete"
+        assert EVENT_STREAM_ABORT == "stream_abort"
+        for evt in (
+            EVENT_STREAM_START,
+            EVENT_STREAM_COMPLETE,
+            EVENT_STREAM_ABORT,
+        ):
+            assert evt in ALL_EVENTS
+
+    def test_v2_columns_present_on_fresh_install(self, store, env_enabled):
+        from tokenpak.proxy.parity_trace import EVENT_STREAM_START
+        emit(
+            EVENT_STREAM_START,
+            trace_id="t-v2",
+            stream_started=1,
+            upstream_status=200,
+            response_content_type="text/event-stream",
+            sse_event_count=42,
+            sse_last_event_type="message_stop",
+            bytes_from_upstream=1024,
+            bytes_to_client=1024,
+            json_parse_error_seen=0,
+            stream_exception_class=None,
+            stream_exception_message_hash=None,
+            connection_closed_early=0,
+            lane_id="12345:67890",
+            concurrent_stream_count=2,
+        )
+        rows = store.fetch_for_trace("t-v2")
+        assert len(rows) == 1
+        r = rows[0]
+        assert r["stream_started"] == 1
+        assert r["upstream_status"] == 200
+        assert r["response_content_type"] == "text/event-stream"
+        assert r["sse_event_count"] == 42
+        assert r["sse_last_event_type"] == "message_stop"
+        assert r["bytes_from_upstream"] == 1024
+        assert r["bytes_to_client"] == 1024
+        assert r["json_parse_error_seen"] == 0
+        assert r["connection_closed_early"] == 0
+        assert r["lane_id"] == "12345:67890"
+        assert r["concurrent_stream_count"] == 2
+
+    def test_v1_db_migrates_to_v2_schema(self, tmp_path, env_enabled):
+        """Pre-v2 hosts have a tp_parity_trace table without the new
+        columns. The migration path adds them via ALTER TABLE."""
+        db_path = tmp_path / "telemetry.db"
+        # Simulate a v1-only schema by creating the table with the
+        # original column set explicitly.
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE tp_parity_trace (
+                trace_id TEXT NOT NULL, event_type TEXT NOT NULL,
+                ts REAL NOT NULL, pid INTEGER, ppid INTEGER,
+                tokenpak_home TEXT, telemetry_db_path TEXT,
+                request_id TEXT, session_id TEXT, provider TEXT,
+                auth_plane TEXT, credential_class TEXT,
+                retry_phase TEXT, retry_owner TEXT, retry_signal TEXT,
+                retry_count INTEGER, retry_after_seconds REAL,
+                tool_command_first TEXT,
+                tool_result_stdout_chars INTEGER,
+                tool_result_stderr_chars INTEGER,
+                tool_result_tokens_est INTEGER,
+                body_bytes INTEGER, companion_added_chars INTEGER,
+                intent_guidance_chars INTEGER,
+                queue_wait_ms REAL, lock_wait_ms REAL,
+                sqlite_write_ms REAL, notes TEXT
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        # Now bind the v2 store + write a row using the new fields.
+        # If the migration ran, the columns exist and the write
+        # succeeds.
+        s = ParityTraceStore(db_path=db_path)
+        set_default_store(s)
+        try:
+            from tokenpak.proxy.parity_trace import EVENT_STREAM_START
+            emit(
+                EVENT_STREAM_START,
+                trace_id="t-mig",
+                stream_started=1,
+                upstream_status=200,
+                bytes_from_upstream=512,
+            )
+            rows = s.fetch_for_trace("t-mig")
+            assert len(rows) == 1
+            assert rows[0]["stream_started"] == 1
+            assert rows[0]["bytes_from_upstream"] == 512
+        finally:
+            set_default_store(None)
+            s.close()
+
+    def test_concurrent_stream_counter_round_trip(self):
+        from tokenpak.proxy import parity_trace as _pt
+        # Reset any state from prior tests.
+        # (The counter is global; idempotent operations only.)
+        n0 = _pt.begin_stream()
+        n1 = _pt.begin_stream()
+        assert n1 == n0 + 1
+        n2 = _pt.end_stream()
+        assert n2 == n0
+        # Restore to baseline.
+        _pt.end_stream()
+
+    def test_concurrent_stream_counter_concurrent_threads(self):
+        import threading
+
+        from tokenpak.proxy import parity_trace as _pt
+        results = []
+
+        def worker():
+            n = _pt.begin_stream()
+            results.append(n)
+            _pt.end_stream()
+
+        threads = [threading.Thread(target=worker) for _ in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+        # All workers should have observed a positive count.
+        assert all(r > 0 for r in results)
+
+    def test_lane_id_format(self):
+        from tokenpak.proxy import parity_trace as _pt
+        lane = _pt.current_lane_id()
+        assert ":" in lane
+        pid_str, tid_str = lane.split(":", 1)
+        assert pid_str == str(os.getpid())
+        assert tid_str.isdigit()
+
+    def test_exception_message_hash_deterministic(self):
+        from tokenpak.proxy import parity_trace as _pt
+        e1 = ValueError("Unterminated string")
+        e2 = ValueError("Unterminated string")
+        h1 = _pt.hash_exception_message(e1)
+        h2 = _pt.hash_exception_message(e2)
+        assert h1 == h2
+        assert len(h1) == 64  # sha256 hex
+        # Different message → different hash.
+        e3 = ValueError("Different message")
+        assert _pt.hash_exception_message(e3) != h1
+
+    def test_exception_message_hash_does_not_leak_message(self):
+        from tokenpak.proxy import parity_trace as _pt
+        secret = "PROMPT_SECRET_NEVER_IN_HASH_OUTPUT_8jK3"
+        h = _pt.hash_exception_message(ValueError(secret))
+        # Hash hex is opaque; secret never appears.
+        assert secret not in h
+        assert len(h) == 64
+
+    def test_v2_schema_indexes_present(self, store, env_enabled):
+        """The ``idx_parity_lane`` index lands in v2."""
+        from tokenpak.proxy.parity_trace import EVENT_STREAM_START
+        emit(EVENT_STREAM_START, trace_id="t-idx")
+        conn = sqlite3.connect(str(store.db_path))
+        try:
+            indexes = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index' "
+                    "AND tbl_name='tp_parity_trace'"
+                ).fetchall()
+            ]
+        finally:
+            conn.close()
+        assert "idx_parity_lane" in indexes
