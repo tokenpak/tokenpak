@@ -340,6 +340,19 @@ _TERMINAL_EARLY_RETURN_EVENTS: frozenset = frozenset({
     "request_rejected",
 })
 
+# Issue #73 — canonical wire-side terminal events for proxy traffic.
+# A trace with handler_entry AND any of these has a terminal
+# wire-side event; the trace is NOT a silent death. A trace with
+# handler_entry and NONE of these is the true interp-B condition.
+# tp_events is no longer consulted for the Q8 verdict — see
+# docs/internal/specs/issue-73-tp-events-canonicality-2026-04-27.md.
+_CANONICAL_TERMINAL_EVENTS: frozenset = frozenset({
+    "stream_complete",
+    "dispatch_subprocess_complete",
+    "request_rejected",
+    "stream_abort",
+})
+
 
 def _dim_parity_trace_coverage(
     conn: sqlite3.Connection, since_iso: str, since_ts: float
@@ -401,10 +414,36 @@ def _dim_parity_trace_coverage(
         if "upstream_attempt_failure" in d["phases"]
     )
 
-    # Stitch to tp_events to derive how many parity-trace traces ALSO
-    # have a completion row in tp_events. The iter-4 §11 interp-B
-    # disambiguator is: (n_with_entry - n_with_completion).
-    n_with_completion: Optional[int] = None
+    # Issue #73 — canonical wire-side completion (tp_parity_trace).
+    # The Q8 verdict is now driven by terminal wire-side events from
+    # tp_parity_trace, NOT by stitching to tp_events. A handler_entry
+    # trace with at least one of the four canonical terminals
+    # (stream_complete, dispatch_subprocess_complete, request_rejected,
+    # stream_abort) is wire-completed. Traces with handler_entry and
+    # none of those are true silent deaths (the interp-B condition).
+    handler_entry_traces = [
+        d for d in by_trace.values() if "handler_entry" in d["phases"]
+    ]
+    n_with_clean_wire_completion = sum(
+        1 for d in handler_entry_traces if "stream_complete" in d["phases"]
+    )
+    n_with_terminal_fast_fail = sum(
+        1 for d in handler_entry_traces if "request_rejected" in d["phases"]
+    )
+    n_with_terminal_abort = sum(
+        1 for d in handler_entry_traces if "stream_abort" in d["phases"]
+    )
+    n_with_wire_completion = sum(
+        1
+        for d in handler_entry_traces
+        if d["phases"] & _CANONICAL_TERMINAL_EVENTS
+    )
+    n_without_terminal_event = n_with_entry - n_with_wire_completion
+
+    # Legacy tp_events stitch — kept for diagnostic context only,
+    # NOT used by the Q8 verdict (issue #73). Returned as
+    # `traces_with_completion_in_tp_events_deprecated`.
+    n_with_completion_legacy: Optional[int] = None
     if _table_exists(conn, "tp_events"):
         trace_ids = list(by_trace.keys())
         if trace_ids:
@@ -419,18 +458,17 @@ def _dim_parity_trace_coverage(
                     f"   OR request_id IN ({placeholders})",
                     params,
                 ).fetchone()[0]
-                n_with_completion = int(completed or 0)
+                n_with_completion_legacy = int(completed or 0)
             except sqlite3.DatabaseError:
-                n_with_completion = None
+                n_with_completion_legacy = None
 
-    interp_b_count = (
-        n_with_entry - n_with_completion
-        if n_with_completion is not None
-        else None
-    )
-    if interp_b_count is None:
+    # interp_b_count is preserved as an alias of
+    # traces_without_terminal_event so dependent tooling continues
+    # to compile, but its meaning is now wire-side, not tp_events.
+    interp_b_count = n_without_terminal_event
+    if n_with_entry == 0:
         verdict = "indeterminate"
-    elif interp_b_count > 0 and n_with_entry > 0:
+    elif n_without_terminal_event > 0:
         verdict = "interp_b_supported"
     else:
         verdict = "interp_a_or_clean"
@@ -490,7 +528,17 @@ def _dim_parity_trace_coverage(
         "traces_with_handler_entry": n_with_entry,
         "traces_with_upstream_attempt_start": n_with_upstream_start,
         "traces_with_upstream_attempt_failure": n_with_upstream_failure,
-        "traces_with_completion_in_tp_events": n_with_completion,
+        # Issue #73 — canonical wire-side completion fields.
+        "traces_with_wire_completion": n_with_wire_completion,
+        "traces_with_clean_wire_completion": n_with_clean_wire_completion,
+        "traces_with_terminal_fast_fail": n_with_terminal_fast_fail,
+        "traces_with_terminal_abort": n_with_terminal_abort,
+        "traces_without_terminal_event": n_without_terminal_event,
+        # Legacy tp_events stitch — diagnostic context only, NOT
+        # used by the Q8 verdict.
+        "traces_with_completion_in_tp_events_deprecated": (
+            n_with_completion_legacy
+        ),
         "interp_b_count": interp_b_count,
         "verdict": verdict,
         # NCP-3I-v3 — per-trace lifecycle progression
@@ -505,18 +553,22 @@ def _dim_parity_trace_coverage(
             Counter(early_return_traces.values())
         ),
         "note": (
-            "interp_b_count = traces that emitted handler_entry but "
-            "never completed in tp_events. iter-4 §11 interp B is "
-            "supported when interp_b_count > 0. NCP-3I-v3 added "
-            "last_stage_distribution: which lifecycle stage each "
-            "trace's LAST observed event was. Traces with last_stage "
-            "before 'upstream_attempt_start' AND not a terminal "
-            "early-return event are silent pre-dispatch deaths — "
-            "pre_upstream_death_stage_distribution localizes exactly "
-            "which stage. NCP-3A-enrichment added early_return_count "
-            "/ early_return_stage_distribution for traces that took "
-            "a known terminal early-return path (subprocess dispatch "
-            "success, auth/circuit/validation rejection)."
+            "Issue #73: Q8 is now answered against tp_parity_trace "
+            "terminal events (stream_complete, "
+            "dispatch_subprocess_complete, request_rejected, "
+            "stream_abort) — NOT tp_events. interp_b_count = "
+            "traces_without_terminal_event (handler_entry traces "
+            "with no canonical terminal). "
+            "traces_with_completion_in_tp_events_deprecated is "
+            "preserved for diagnostic context only; it does not "
+            "influence the verdict. NCP-3I-v3: "
+            "last_stage_distribution shows which lifecycle stage "
+            "each trace's LAST observed event was; "
+            "pre_upstream_death_stage_distribution localizes "
+            "true pre-dispatch silent deaths. NCP-3A-enrichment: "
+            "early_return_count / early_return_stage_distribution "
+            "report traces that took an intentional early-return "
+            "path before upstream_attempt_start."
         ),
     }
 
@@ -721,28 +773,37 @@ def _verdict_lines(report: Dict[str, Any]) -> List[str]:
         )
     else:
         verdict = d9.get("verdict")
-        ib = d9.get("interp_b_count")
         ne = d9.get("traces_with_handler_entry")
-        nc = d9.get("traces_with_completion_in_tp_events")
+        nw = d9.get("traces_with_wire_completion", 0)
+        n_silent = d9.get("traces_without_terminal_event", 0)
+        n_clean = d9.get("traces_with_clean_wire_completion", 0)
+        n_ff = d9.get("traces_with_terminal_fast_fail", 0)
+        n_ab = d9.get("traces_with_terminal_abort", 0)
         if verdict == "interp_b_supported":
             out.append(
-                "**Q8 — NCP-3I parity trace:** **iter-4 §11 interp B "
-                f"SUPPORTED.** {ib} of {ne} traces emitted handler_entry "
-                f"but never completed in tp_events (only {nc} did). The "
-                "missing requests fail before completion-time logging — "
-                "matches the visible-retry-but-empty-telemetry condition."
+                "**Q8 — wire-side completion (issue #73):** "
+                "**interp B SUPPORTED.** "
+                f"{n_silent} of {ne} handler_entry traces have NO "
+                "canonical terminal wire-side event "
+                "(stream_complete / dispatch_subprocess_complete / "
+                "request_rejected / stream_abort). True silent-death "
+                "cohort — investigate which stage these traces last "
+                "reached via pre_upstream_death_stage_distribution."
             )
         elif verdict == "interp_a_or_clean":
             out.append(
-                f"**Q8 — NCP-3I parity trace:** {ne} traces with "
-                f"handler_entry, {nc} with tp_events completion — no "
-                "interp-B gap detected in window."
+                "**Q8 — wire-side completion (issue #73):** "
+                f"{ne} handler_entry traces, {nw} with a canonical "
+                f"terminal wire-side event "
+                f"(clean={n_clean}, fast_fail={n_ff}, abort={n_ab}, "
+                f"subprocess={nw - n_clean - n_ff - n_ab}). No "
+                "silent-death cohort in window."
             )
         else:
             out.append(
-                f"**Q8 — NCP-3I parity trace:** indeterminate "
-                f"(traces={d9.get('distinct_traces')}, "
-                f"completion={nc})."
+                f"**Q8 — wire-side completion (issue #73):** "
+                f"indeterminate (traces={d9.get('distinct_traces')}, "
+                f"handler_entry={ne})."
             )
         # NCP-3I-v3 — pre-dispatch death localization (Q9).
         pre_count = d9.get("pre_upstream_death_count", 0)
