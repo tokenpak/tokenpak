@@ -13,6 +13,8 @@
 
 > **What's already known** (post-iter-2): single TP session beside single native is parity; 2 TP sessions concurrently degrade with a TP-side "Retrying in 20s" message visible. The fault lives in the TokenPak shared-lane behavior. NCP-3 narrows which lane.
 
+> ⚠️ **Iter-3 strengthening (2026-04-27)**: 2 concurrent TP sessions retried while 1 native session ran healthily *at the same time*. Generic account quota ruled out as sole cause. See `docs/internal/specs/ncp-1a-iteration-3-2026-04-27.md`. The harness output Kevin runs against this NCP-3 plan §5 routes through the §6 decision tree as documented; iter-3 sharpens the priority ranking but does not change the decision tree itself.
+
 ---
 
 ## 0. Reading guide
