@@ -307,6 +307,24 @@ def _dim_token_usage(
 # ── Dimension 9: parity-trace coverage (NCP-3I) ──────────────────────
 
 
+_NCP_3I_V3_LIFECYCLE: tuple = (
+    "handler_entry",
+    "auth_gate_pass",
+    "route_resolved",
+    "body_read_complete",
+    "request_classified",
+    "adapter_detected",
+    "before_dispatch",
+    "upstream_attempt_start",
+    "stream_start",
+    "stream_complete",
+    "stream_abort",
+    "upstream_attempt_failure",
+    "retry_boundary",
+    "request_completion",
+)
+
+
 def _dim_parity_trace_coverage(
     conn: sqlite3.Connection, since_iso: str, since_ts: float
 ) -> Dict[str, Any]:
@@ -401,6 +419,39 @@ def _dim_parity_trace_coverage(
     else:
         verdict = "interp_a_or_clean"
 
+    # NCP-3I-v3: per-trace lifecycle progression. For each trace,
+    # report the LAST observed event in the canonical lifecycle
+    # order, plus aggregate over all traces.
+    last_event_by_trace: Dict[str, str] = {}
+    last_stage_index_by_trace: Dict[str, int] = {}
+    for tid, d in by_trace.items():
+        # Walk lifecycle in reverse and pick the latest stage that
+        # this trace recorded.
+        last_idx = -1
+        last_evt = None
+        for i, evt in enumerate(_NCP_3I_V3_LIFECYCLE):
+            if evt in d["phases"]:
+                last_idx = i
+                last_evt = evt
+        last_event_by_trace[tid] = last_evt or "(unknown)"
+        last_stage_index_by_trace[tid] = last_idx
+
+    # Distribution of "where traces died" — which lifecycle stage
+    # each trace reached as its last observation.
+    last_stage_distribution: Counter = Counter(
+        last_event_by_trace.values()
+    )
+
+    # Death-localization summary: traces that died BEFORE
+    # upstream_attempt_start are the iter-6 §1 condition. Group
+    # them by the last stage they reached.
+    pre_upstream_idx = _NCP_3I_V3_LIFECYCLE.index("upstream_attempt_start")
+    pre_upstream_traces = {
+        tid: last_event_by_trace[tid]
+        for tid, idx in last_stage_index_by_trace.items()
+        if 0 <= idx < pre_upstream_idx
+    }
+
     return {
         "available": True,
         "row_count": len(rows),
@@ -412,10 +463,21 @@ def _dim_parity_trace_coverage(
         "traces_with_completion_in_tp_events": n_with_completion,
         "interp_b_count": interp_b_count,
         "verdict": verdict,
+        # NCP-3I-v3 — per-trace lifecycle progression
+        "last_stage_distribution": dict(last_stage_distribution),
+        "pre_upstream_death_count": len(pre_upstream_traces),
+        "pre_upstream_death_stage_distribution": dict(
+            Counter(pre_upstream_traces.values())
+        ),
         "note": (
             "interp_b_count = traces that emitted handler_entry but "
             "never completed in tp_events. iter-4 §11 interp B is "
-            "supported when interp_b_count > 0."
+            "supported when interp_b_count > 0. NCP-3I-v3 added "
+            "last_stage_distribution: which lifecycle stage each "
+            "trace's LAST observed event was. Traces with last_stage "
+            "before 'upstream_attempt_start' died in the pre-dispatch "
+            "path — pre_upstream_death_stage_distribution localizes "
+            "exactly which stage."
         ),
     }
 
@@ -642,6 +704,26 @@ def _verdict_lines(report: Dict[str, Any]) -> List[str]:
                 f"**Q8 — NCP-3I parity trace:** indeterminate "
                 f"(traces={d9.get('distinct_traces')}, "
                 f"completion={nc})."
+            )
+        # NCP-3I-v3 — pre-dispatch death localization (Q9).
+        pre_count = d9.get("pre_upstream_death_count", 0)
+        if pre_count > 0:
+            stage_dist = d9.get("pre_upstream_death_stage_distribution") or {}
+            top = sorted(stage_dist.items(), key=lambda x: -x[1])[:3]
+            top_str = ", ".join(f"{k}={v}" for k, v in top)
+            out.append(
+                f"**Q9 — NCP-3I-v3 pre-dispatch death:** {pre_count} "
+                f"traces died BEFORE upstream_attempt_start. Top stages "
+                f"(stage_at_death=count): {top_str}. The most common "
+                "last-observed stage is the death point — instrument "
+                "deeper there if needed."
+            )
+        else:
+            out.append(
+                "**Q9 — NCP-3I-v3 pre-dispatch death:** 0 traces died "
+                "before upstream_attempt_start in window. If a workload "
+                "ran, all requests reached dispatch — H10 is now a "
+                "stream-side hypothesis (check dim 8 / stream events)."
             )
     return out
 

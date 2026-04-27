@@ -539,6 +539,68 @@ class TestParityTraceCoverage:
         md = out.read_text()
         assert "Q8 — NCP-3I parity trace" in md
 
+    def test_dim9_v3_pre_dispatch_death_localization(self, tmp_path):
+        """V3 — when traces die at different stages, the harness reports
+        a per-stage breakdown that pinpoints where requests stop."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        # Three traces:
+        #   trace-1: died at handler_entry only
+        #   trace-2: died at body_read_complete (got past auth + route)
+        #   trace-3: reached upstream_attempt_start (no death pre-dispatch)
+        rows = []
+        rows.append({"trace_id": "trace-1", "event_type": "handler_entry",
+                     "ts": ts + 0})
+        for evt in ("handler_entry", "auth_gate_pass", "route_resolved",
+                    "body_read_complete"):
+            rows.append({"trace_id": "trace-2", "event_type": evt,
+                         "ts": ts + 10})
+        for evt in ("handler_entry", "auth_gate_pass", "route_resolved",
+                    "body_read_complete", "adapter_detected",
+                    "before_dispatch", "upstream_attempt_start"):
+            rows.append({"trace_id": "trace-3", "event_type": evt,
+                         "ts": ts + 20})
+        self._seed_parity_trace(db, rows=rows)
+        rep = inspect.analyze(db_path=db, window_minutes=0)
+        d9 = rep["dim9_parity_trace_coverage"]
+
+        # last_stage_distribution should show trace-1 died at
+        # handler_entry, trace-2 at body_read_complete, trace-3 at
+        # upstream_attempt_start.
+        last = d9["last_stage_distribution"]
+        assert last.get("handler_entry") == 1
+        assert last.get("body_read_complete") == 1
+        assert last.get("upstream_attempt_start") == 1
+
+        # Of the 3, exactly 2 died before upstream_attempt_start
+        # (trace-1 at handler_entry, trace-2 at body_read_complete).
+        assert d9["pre_upstream_death_count"] == 2
+        pre = d9["pre_upstream_death_stage_distribution"]
+        assert pre.get("handler_entry") == 1
+        assert pre.get("body_read_complete") == 1
+
+    def test_dim9_v3_synthesis_renders_q9(self, tmp_path):
+        """When pre-dispatch deaths exist, Q9 summary line appears."""
+        db = tmp_path / "telemetry.db"
+        _seed(db, rows=[])
+        ts = 1772562000.0
+        self._seed_parity_trace(db, rows=[
+            {"trace_id": f"trace-{i}", "event_type": "handler_entry",
+             "ts": ts + i}
+            for i in range(3)
+        ])
+        out = tmp_path / "report.md"
+        rc = inspect.main([
+            "--db-path", str(db),
+            "--window-minutes", "0",
+            "--output", str(out),
+        ])
+        assert rc == 0
+        md = out.read_text()
+        assert "Q9 — NCP-3I-v3 pre-dispatch death" in md
+        assert "handler_entry=3" in md
+
 
 # ── 12. structural — no dispatch / behavior imports ───────────────────
 

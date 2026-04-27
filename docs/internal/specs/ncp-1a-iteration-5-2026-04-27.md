@@ -1,7 +1,7 @@
 # NCP-1A iteration 5 — H10 streaming integrity + NCP-3I activation gap
 
 **Date**: 2026-04-27
-**Status**: 🟢 **NCP-3I-v2 landed** (this PR) — measurement-only; activation verification + streaming-integrity dimensions
+**Status**: 🟡 **superseded by iteration-6** — see banner below
 **Workstream**: NCP (Native Client Concurrency Parity)
 **Operator**: Kevin
 **Companion docs**:
@@ -10,6 +10,9 @@
   - Iteration 3 (2 TP retry + 1 native healthy): `docs/internal/specs/ncp-1a-iteration-3-2026-04-27.md`
   - Iteration 4 (post-tool-result + interp B): `docs/internal/specs/ncp-1a-iteration-4-2026-04-27.md`
   - NCP-3I v1 spec: `docs/internal/specs/ncp-3i-instrumentation-2026-04-27.md`
+  - **Iteration 6 (NCP-3I-v3 pre-dispatch lifecycle)**: `docs/internal/specs/ncp-1a-iteration-6-2026-04-27.md`
+
+> ⚠️ **Iter-6 update (2026-04-27)**: disambiguation confirmed real-workload `tokenpak claude` requests die between handler_entry and upstream_attempt_start. NCP-3I-v3 added 6 new lifecycle hooks in that gap (auth_gate_pass / route_resolved / body_read_complete / adapter_detected / before_dispatch / stream_abort) so the operator can localize exactly where requests stop.
 
 > **Headline:** during the 3-concurrent `tokenpak claude` repro, one TokenPak session displayed `API Error: JSON Parse error: Unterminated string`. This is a **streaming integrity** symptom — TokenPak may be forwarding a malformed / truncated / corrupted SSE response to Claude Code under concurrent load. Adds **H10**. Also: the previous NCP-3I run produced no `tp_parity_trace` table — the instrumentation isn't observing the actual `tokenpak claude` path. NCP-3I-v2 ships an **activation verification script** + **stream-integrity dimensions** + **schema migration** to address both findings.
 
