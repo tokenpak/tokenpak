@@ -1,13 +1,17 @@
 # NCP-1A iteration 1 — 1v1 baseline + concurrency priority shift
 
 **Date**: 2026-04-27
-**Status**: 🟡 **interim** — single result captured; A/B/C/D batch pending
+**Status**: 🟡 **superseded by iteration-2** — see banner below
 **Workstream**: NCP (Native Client Concurrency Parity)
 **Operator**: Kevin
 **Companion docs**:
   - Standard proposal: `docs/internal/standards-proposals/24-native-client-concurrency-parity-standard.md`
   - Diagnostic plan: `docs/internal/specs/native-client-concurrency-parity-diagnostic-2026-04-26.md`
   - Primary protocol: `docs/internal/specs/ncp-1r-oauth-parity-protocol-2026-04-26.md`
+  - **Iteration 2 (2-TP-concurrent degraded)**: `docs/internal/specs/ncp-1a-iteration-2-2026-04-27.md`
+  - **NCP-3 diagnostic plan**: `docs/internal/reports/ncp-3-session-lane-trace-2026-04-27.md`
+
+> ⚠️ **Iter-2 update (2026-04-27)**: A=parity, **B=degraded** (operator-confirmed); C/D pending. The investigation has narrowed enough to proceed to NCP-3 diagnostic without waiting for C/D. See iteration-2 doc for the updated evidence and NCP-3 plan for the next runbook.
 
 > **Headline:** the originally-suspected per-request overhead hypotheses (H1 / H3) are demoted; the originally-suspected concurrency hypotheses (H2 / H4 + new shared-lane category) are promoted. Operator confirms 1 TokenPak Claude Code session beside 1 native session reaches **wall-clock parity** (~3% difference) with **no retry messages**. The product issue therefore lives in the multi-concurrent-TokenPak regime, not in single-request overhead.
 
