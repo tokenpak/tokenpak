@@ -1,0 +1,71 @@
+{
+  "claude_code_event_count": 0,
+  "dim1_session_collapse": {
+    "collapse_ratio": null,
+    "distinct_request_ids": 0,
+    "distinct_session_ids": 0,
+    "verdict": "no_data"
+  },
+  "dim2_time_clustering": {
+    "spans": [],
+    "verdict": "insufficient_data"
+  },
+  "dim3_status_distribution": {},
+  "dim4_per_session_durations": {},
+  "dim5_provider_audit": {
+    "distribution": {},
+    "i0_violation": false,
+    "non_oauth_providers": []
+  },
+  "dim6_retry_count": {
+    "note": "Lower bound \u2014 current schema doesn't tag every retry. Real retry behavior may be higher; settle via the H4 'Retrying in 20s' visual evidence + the \u00a74.4 OAuth-fresh test.",
+    "retry_event_lower_bound": 0
+  },
+  "dim7_token_usage": {
+    "available": true,
+    "no_usage_rows": true
+  },
+  "dim8_interleaving": {
+    "interleave_score": null,
+    "verdict": "insufficient_data"
+  },
+  "dim9_parity_trace_coverage": {
+    "available": true,
+    "distinct_traces": 187,
+    "event_type_distribution": {
+      "adapter_detected": 187,
+      "auth_gate_pass": 187,
+      "before_dispatch": 132,
+      "body_read_complete": 187,
+      "handler_entry": 187,
+      "route_resolved": 187,
+      "stream_abort": 32,
+      "stream_complete": 86,
+      "stream_start": 92,
+      "upstream_attempt_start": 132
+    },
+    "interp_b_count": 187,
+    "last_stage_distribution": {
+      "adapter_detected": 55,
+      "stream_abort": 32,
+      "stream_complete": 86,
+      "upstream_attempt_start": 14
+    },
+    "note": "interp_b_count = traces that emitted handler_entry but never completed in tp_events. iter-4 \u00a711 interp B is supported when interp_b_count > 0. NCP-3I-v3 added last_stage_distribution: which lifecycle stage each trace's LAST observed event was. Traces with last_stage before 'upstream_attempt_start' died in the pre-dispatch path \u2014 pre_upstream_death_stage_distribution localizes exactly which stage.",
+    "pre_upstream_death_count": 55,
+    "pre_upstream_death_stage_distribution": {
+      "adapter_detected": 55
+    },
+    "row_count": 1409,
+    "traces_with_completion_in_tp_events": 0,
+    "traces_with_handler_entry": 187,
+    "traces_with_upstream_attempt_failure": 0,
+    "traces_with_upstream_attempt_start": 132,
+    "verdict": "interp_b_supported"
+  },
+  "generated_at": "2026-04-27T18:41:58.153291+00:00",
+  "schema_version": "ncp-3-trace-v1",
+  "window_end": "2026-04-27T18:41:58.153291+00:00",
+  "window_minutes": 30.0,
+  "window_start": "2026-04-27T18:11:58.153291+00:00"
+}

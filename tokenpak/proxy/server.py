@@ -1083,6 +1083,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         }
                     }
                 ).encode()
+                # NCP-3A-enrichment: terminal early-return marker. Without
+                # this emit, the trace's last observed event is
+                # adapter_detected and the harness mis-classifies it as a
+                # silent pre-upstream death. The reject is intentional
+                # (circuit breaker is OPEN) — record it as a terminal.
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_REQUEST_REJECTED,
+                        trace_id=_req_id,
+                        notes=f"circuit_breaker_open:{_cb_provider}"[:200],
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(err)))
@@ -1148,6 +1162,20 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             }
                         }
                     ).encode()
+                    # NCP-3A-enrichment: terminal early-return marker.
+                    # Notes carry only the rejection class; the
+                    # auth_err message is short and contains no header
+                    # values (see passthrough.validate_auth) so it is
+                    # safe to record verbatim, truncated.
+                    try:
+                        from tokenpak.proxy import parity_trace as _pt
+                        _pt.emit(
+                            _pt.EVENT_REQUEST_REJECTED,
+                            trace_id=_req_id,
+                            notes=f"auth_invalid:{auth_err or 'unknown'}"[:200],
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
                     self.send_response(401)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(err_body)))
@@ -1175,6 +1203,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         if not _val_result.valid and _rv.mode == "strict":
                             _err_payload = _val_result.to_error_response()
                             _err_body = json.dumps(_err_payload).encode()
+                            # NCP-3A-enrichment: terminal early-return
+                            # marker for strict-mode validator 400. Notes
+                            # carry the rejection class plus error count
+                            # only — never the offending body bytes.
+                            try:
+                                from tokenpak.proxy import parity_trace as _pt
+                                _err_count = (
+                                    len(getattr(_val_result, "errors", []) or [])
+                                )
+                                _pt.emit(
+                                    _pt.EVENT_REQUEST_REJECTED,
+                                    trace_id=_req_id,
+                                    notes=(
+                                        f"validation_strict:errors={_err_count}"
+                                    )[:200],
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass
                             self.send_response(400)
                             self.send_header("Content-Type", "application/json")
                             self.send_header("Content-Length", str(len(_err_body)))
@@ -1246,6 +1292,24 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 _resp = _be.dispatch(
                     _Req(body=body or b"", headers=dict(self.headers))
                 )
+                # NCP-3A-enrichment: terminal early-return marker for
+                # successful subprocess companion dispatch. The proxy
+                # never reaches before_dispatch on this branch (no
+                # outbound HTTP from this process); without the emit,
+                # the trace looks like a silent death at
+                # adapter_detected. Notes record dispatch class +
+                # upstream status so the harness can confirm success.
+                try:
+                    from tokenpak.proxy import parity_trace as _pt
+                    _pt.emit(
+                        _pt.EVENT_DISPATCH_SUBPROCESS_COMPLETE,
+                        trace_id=_req_id,
+                        notes=(
+                            f"subprocess_companion:status={_resp.status}"
+                        )[:200],
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 self.send_response(_resp.status)
                 for _hk, _hv in (_resp.headers or {}).items():
                     self.send_header(_hk, _hv)

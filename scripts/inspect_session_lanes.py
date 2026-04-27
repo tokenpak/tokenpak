@@ -314,6 +314,12 @@ _NCP_3I_V3_LIFECYCLE: tuple = (
     "body_read_complete",
     "request_classified",
     "adapter_detected",
+    # NCP-3A-enrichment terminal early-return events. Positioned
+    # between adapter_detected and before_dispatch so that a trace
+    # which records BOTH adapter_detected and one of these has
+    # last_stage = the terminal (correctly classified).
+    "request_rejected",
+    "dispatch_subprocess_complete",
     "before_dispatch",
     "upstream_attempt_start",
     "stream_start",
@@ -323,6 +329,16 @@ _NCP_3I_V3_LIFECYCLE: tuple = (
     "retry_boundary",
     "request_completion",
 )
+
+# NCP-3A-enrichment — events that signal an INTENTIONAL terminal
+# decision before upstream_attempt_start. Traces ending here are
+# excluded from the pre-upstream "death" cohort: they completed
+# (subprocess) or were explicitly rejected (auth / circuit /
+# validation), not silent failures.
+_TERMINAL_EARLY_RETURN_EVENTS: frozenset = frozenset({
+    "dispatch_subprocess_complete",
+    "request_rejected",
+})
 
 
 def _dim_parity_trace_coverage(
@@ -444,12 +460,26 @@ def _dim_parity_trace_coverage(
 
     # Death-localization summary: traces that died BEFORE
     # upstream_attempt_start are the iter-6 §1 condition. Group
-    # them by the last stage they reached.
+    # them by the last stage they reached. NCP-3A-enrichment:
+    # exclude traces whose last stage is a TERMINAL early-return
+    # event — those are intentional terminations (subprocess
+    # dispatch success, auth/circuit/validation rejection), not
+    # silent deaths.
     pre_upstream_idx = _NCP_3I_V3_LIFECYCLE.index("upstream_attempt_start")
     pre_upstream_traces = {
         tid: last_event_by_trace[tid]
         for tid, idx in last_stage_index_by_trace.items()
         if 0 <= idx < pre_upstream_idx
+        and last_event_by_trace[tid] not in _TERMINAL_EARLY_RETURN_EVENTS
+    }
+    # Traces that ended at a terminal early-return event are
+    # reported separately so the operator can see how many
+    # requests took each early-return path.
+    early_return_traces = {
+        tid: last_event_by_trace[tid]
+        for tid, idx in last_stage_index_by_trace.items()
+        if 0 <= idx < pre_upstream_idx
+        and last_event_by_trace[tid] in _TERMINAL_EARLY_RETURN_EVENTS
     }
 
     return {
@@ -469,15 +499,24 @@ def _dim_parity_trace_coverage(
         "pre_upstream_death_stage_distribution": dict(
             Counter(pre_upstream_traces.values())
         ),
+        # NCP-3A-enrichment — terminal early-return classification.
+        "early_return_count": len(early_return_traces),
+        "early_return_stage_distribution": dict(
+            Counter(early_return_traces.values())
+        ),
         "note": (
             "interp_b_count = traces that emitted handler_entry but "
             "never completed in tp_events. iter-4 §11 interp B is "
             "supported when interp_b_count > 0. NCP-3I-v3 added "
             "last_stage_distribution: which lifecycle stage each "
             "trace's LAST observed event was. Traces with last_stage "
-            "before 'upstream_attempt_start' died in the pre-dispatch "
-            "path — pre_upstream_death_stage_distribution localizes "
-            "exactly which stage."
+            "before 'upstream_attempt_start' AND not a terminal "
+            "early-return event are silent pre-dispatch deaths — "
+            "pre_upstream_death_stage_distribution localizes exactly "
+            "which stage. NCP-3A-enrichment added early_return_count "
+            "/ early_return_stage_distribution for traces that took "
+            "a known terminal early-return path (subprocess dispatch "
+            "success, auth/circuit/validation rejection)."
         ),
     }
 
@@ -724,6 +763,21 @@ def _verdict_lines(report: Dict[str, Any]) -> List[str]:
                 "before upstream_attempt_start in window. If a workload "
                 "ran, all requests reached dispatch — H10 is now a "
                 "stream-side hypothesis (check dim 8 / stream events)."
+            )
+        # NCP-3A-enrichment — terminal early-return classification (Q10).
+        er_count = d9.get("early_return_count", 0)
+        if er_count > 0:
+            er_dist = d9.get("early_return_stage_distribution") or {}
+            er_top = sorted(er_dist.items(), key=lambda x: -x[1])[:3]
+            er_top_str = ", ".join(f"{k}={v}" for k, v in er_top)
+            out.append(
+                f"**Q10 — NCP-3A-enrichment terminal early-returns:** "
+                f"{er_count} traces took a known early-return path "
+                f"(intentional terminations, NOT deaths). Distribution "
+                f"(stage=count): {er_top_str}. dispatch_subprocess_complete "
+                "= successful subprocess companion dispatch; "
+                "request_rejected = auth/circuit/validation reject (see "
+                "notes column for sub-class)."
             )
     return out
 
