@@ -1,7 +1,7 @@
 # NCP-1A iteration 3 — 2-TP retrying while 1-native healthy
 
 **Date**: 2026-04-27
-**Status**: 🟡 **strong concurrency-internal evidence captured** — harness output pending; next phase awaiting trace + explicit approval
+**Status**: 🟡 **superseded by iteration-4** — see banner below
 **Workstream**: NCP (Native Client Concurrency Parity)
 **Operator**: Kevin
 **Companion docs**:
@@ -9,6 +9,9 @@
   - Iteration 2 (2-TP concurrent degraded): `docs/internal/specs/ncp-1a-iteration-2-2026-04-27.md`
   - NCP-3 diagnostic plan: `docs/internal/reports/ncp-3-session-lane-trace-2026-04-27.md`
   - Standard #24 proposal: `docs/internal/standards-proposals/24-native-client-concurrency-parity-standard.md`
+  - **Iteration 4 (post-tool-result retry localization)**: `docs/internal/specs/ncp-1a-iteration-4-2026-04-27.md`
+
+> ⚠️ **Iter-4 update (2026-04-27)**: retry message localized to **post-tool-result model continuation** (not initial dispatch). Five new diagnostic dimensions added; existing telemetry insufficient; recommended next phase is **NCP-3I** (in-proxy instrumentation). H4 promoted to #1; H3 (token amplification) promoted MEDIUM → MEDIUM-HIGH for the post-tool-result phase specifically.
 
 > **Headline:** 2 concurrent TokenPak Claude Code sessions visibly retried while 1 native Claude Code session ran healthily *at the same time*. This is the strongest evidence to date that the failure mode is **TokenPak-internal**, not generic Anthropic account saturation. Promotes H2 / H9b / H4 / H9a-c. Demotes generic-quota and cache-prefix-only explanations.
 

@@ -15,6 +15,8 @@
 
 > ⚠️ **Iter-3 update (2026-04-27)**: 2 TP sessions retried while 1 native session ran healthily *at the same time* — the strongest evidence to date that the issue is TokenPak-internal, not generic Anthropic account saturation. Test C (2 native concurrent) is now indirectly settled (native concurrency is fine within the bucket). Test D (3 TP staggered 20 s) remains the only outstanding A/B/C/D variant; it discriminates H2 from H9b. See `docs/internal/specs/ncp-1a-iteration-3-2026-04-27.md`.
 
+> ⚠️ **Iter-4 update (2026-04-27)**: retry localized to **post-tool-result continuation** phase (not initial dispatch). Five new diagnostic dimensions specified; existing telemetry insufficient. Recommended next phase: **NCP-3I** (in-proxy instrumentation). See `docs/internal/specs/ncp-1a-iteration-4-2026-04-27.md`.
+
 > **Headline:** the originally-suspected per-request overhead hypotheses (H1 / H3) are demoted; the originally-suspected concurrency hypotheses (H2 / H4 + new shared-lane category) are promoted. Operator confirms 1 TokenPak Claude Code session beside 1 native session reaches **wall-clock parity** (~3% difference) with **no retry messages**. The product issue therefore lives in the multi-concurrent-TokenPak regime, not in single-request overhead.
 
 ---
