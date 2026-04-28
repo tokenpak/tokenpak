@@ -6,6 +6,9 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added (2026-04-28 — Phase 0, pmgtm v2)
+- **Headline benchmark CI gate** (`tests/benchmarks/test_headline_claim.py`, `tests/fixtures/headline_corpus.txt`) — Deterministic 9-message DevOps agent corpus (~8 kB) and a blocking pytest assertion that compression stays in [30, 50]%. Run locally: `make benchmark-headline`. Blocking job in CI per standard 21 §9.8. (P0-05 / pmgtm-v2 / M-A5)
+
 ### Added (2026-04-17 — companion/proxy REST architecture)
 - **Proxy `/tpk/v1/*` REST API** (`tokenpak/proxy/app_endpoints.py`) — nine endpoints for proxy-owned resources, distinct from the `/v1/*` LLM passthrough:
   - `GET /tpk/v1/health` — version, uptime, vault status

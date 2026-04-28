@@ -161,3 +161,29 @@ jobs:
           name: test-results-phase2-py${{ matrix.python-version }}
           path: reports/test-results-phase2-py${{ matrix.python-version }}.xml
           retention-days: 30
+
+  # Standard 21 §9.8 — process-enforced blocking.
+  # Do NOT merge a PR to main if this job is red.
+  # This job pins the 30-50% token reduction claim from the README.
+  # Run locally: make benchmark-headline
+  headline-benchmark:
+    name: Headline Benchmark (blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run headline benchmark
+        run: |
+          python -m pytest tests/benchmarks/test_headline_claim.py -v -s

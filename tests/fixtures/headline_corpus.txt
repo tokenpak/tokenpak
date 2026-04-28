@@ -1,0 +1,175 @@
+[system]
+You are a DevOps automation agent for the TokenPak platform.
+
+Your primary responsibilities:
+1. Monitor the TokenPakCompressionService running at /opt/tokenpak/services/compression-service/
+2. Manage the VaultIndexerServiceManager at /opt/tokenpak/services/vault-indexer/
+3. Operate the RequestRoutingGatewayService at /opt/tokenpak/services/request-router/
+
+Required environment variables:
+- TOKENPAK_COMPRESSION_KEY: authentication for TokenPakCompressionService
+- ANTHROPIC_UPSTREAM_API_KEY: forwarded to external APIs by RequestRoutingGatewayService
+- VAULT_INDEXER_STORAGE_PATH: filesystem root for VaultIndexerServiceManager
+
+Log files:
+- TokenPakCompressionService: /opt/tokenpak/logs/compression-service.log
+- VaultIndexerServiceManager: /opt/tokenpak/logs/vault-indexer-manager.log
+- RequestRoutingGatewayService: /opt/tokenpak/logs/request-routing-gateway.log
+
+Config files:
+- TokenPakCompressionService: /opt/tokenpak/config/compression-service.yaml
+- VaultIndexerServiceManager: /opt/tokenpak/config/vault-indexer-manager.yaml
+- RequestRoutingGatewayService: /opt/tokenpak/config/request-routing-gateway.yaml
+
+Tool definitions:
+- read_file(path): Read file content
+- execute_command(cmd): Run shell command
+- check_service_health(service_name): Return service health JSON
+- restart_service(service_name, reason): Restart with audit log
+
+Standard procedure:
+Step 1: Read /opt/tokenpak/logs/<service>.log
+Step 2: Read /opt/tokenpak/config/<service>.yaml
+Step 3: Verify environment variables (TOKENPAK_COMPRESSION_KEY, ANTHROPIC_UPSTREAM_API_KEY, VAULT_INDEXER_STORAGE_PATH)
+Step 4: Run check_service_health(<service_name>)
+Step 5: Report with severity, root cause, recommendation, rollback plan
+[user]
+The TokenPakCompressionService is showing high latency.
+Investigate /opt/tokenpak/logs/compression-service.log and /opt/tokenpak/config/compression-service.yaml.
+Check TOKENPAK_COMPRESSION_KEY is valid.
+Run check_service_health on TokenPakCompressionService.
+Provide a structured analysis report.
+[assistant]
+Starting analysis of TokenPakCompressionService.
+
+Step 1: Reading /opt/tokenpak/logs/compression-service.log...
+2026-04-28 10:00:01 INFO TokenPakCompressionService started
+2026-04-28 10:15:43 WARN High memory usage: 87% heap utilization in TokenPakCompressionService
+2026-04-28 10:15:44 WARN GC pause detected: 240ms
+2026-04-28 10:16:15 ERROR TokenPakCompressionService unresponsive for 450ms
+
+Step 2: Reading /opt/tokenpak/config/compression-service.yaml...
+service: TokenPakCompressionService
+heap_max_mb: 512
+log_path: /opt/tokenpak/logs/compression-service.log
+key_env: TOKENPAK_COMPRESSION_KEY
+
+Step 3: Verifying TOKENPAK_COMPRESSION_KEY...
+TOKENPAK_COMPRESSION_KEY: valid, expires 2026-06-01
+
+Step 4: Running check_service_health("TokenPakCompressionService")...
+{"service": "TokenPakCompressionService", "status": "degraded", "latency_p99_ms": 450}
+
+## Report: TokenPakCompressionService
+**Severity:** HIGH | **Status:** Degraded
+**Root Cause:** Heap exhaustion in TokenPakCompressionService — GC pauses at 91% heap
+**Action:** Increase heap_max_mb in /opt/tokenpak/config/compression-service.yaml
+**Rollback:** restart_service("TokenPakCompressionService", "heap-rollback")
+**Logs:** /opt/tokenpak/logs/compression-service.log
+**Env:** TOKENPAK_COMPRESSION_KEY verified
+[user]
+Now analyze VaultIndexerServiceManager.
+Check /opt/tokenpak/logs/vault-indexer-manager.log and /opt/tokenpak/config/vault-indexer-manager.yaml.
+Verify VAULT_INDEXER_STORAGE_PATH is correct.
+Run check_service_health on VaultIndexerServiceManager.
+Provide a structured analysis report.
+[assistant]
+Starting analysis of VaultIndexerServiceManager.
+
+Step 1: Reading /opt/tokenpak/logs/vault-indexer-manager.log...
+2026-04-28 10:00:05 INFO VaultIndexerServiceManager started
+2026-04-28 10:20:00 WARN Disk at VAULT_INDEXER_STORAGE_PATH: 94% full
+2026-04-28 10:20:01 ERROR ENOSPC at VAULT_INDEXER_STORAGE_PATH in VaultIndexerServiceManager
+2026-04-28 10:20:02 ERROR VaultIndexerServiceManager index write failed: disk full
+
+Step 2: Reading /opt/tokenpak/config/vault-indexer-manager.yaml...
+service: VaultIndexerServiceManager
+storage_path_env: VAULT_INDEXER_STORAGE_PATH
+log_path: /opt/tokenpak/logs/vault-indexer-manager.log
+prune_on_full: false
+
+Step 3: Verifying VAULT_INDEXER_STORAGE_PATH...
+VAULT_INDEXER_STORAGE_PATH=/data/vault — 94% full, 6% free
+
+Step 4: Running check_service_health("VaultIndexerServiceManager")...
+{"service": "VaultIndexerServiceManager", "status": "unhealthy", "disk_pct": 94, "error": "ENOSPC"}
+
+## Report: VaultIndexerServiceManager
+**Severity:** CRITICAL | **Status:** Unhealthy
+**Root Cause:** Disk full at VAULT_INDEXER_STORAGE_PATH — VaultIndexerServiceManager cannot write
+**Action:** Set prune_on_full: true in /opt/tokenpak/config/vault-indexer-manager.yaml
+**Rollback:** Restore VAULT_INDEXER_STORAGE_PATH/backups/ if corruption occurs
+**Logs:** /opt/tokenpak/logs/vault-indexer-manager.log
+**Env:** VAULT_INDEXER_STORAGE_PATH=/data/vault (94% full)
+[user]
+Finally check RequestRoutingGatewayService.
+Check /opt/tokenpak/logs/request-routing-gateway.log and /opt/tokenpak/config/request-routing-gateway.yaml.
+Verify ANTHROPIC_UPSTREAM_API_KEY is set.
+Run check_service_health on RequestRoutingGatewayService.
+Provide a structured analysis report.
+[assistant]
+Starting analysis of RequestRoutingGatewayService.
+
+Step 1: Reading /opt/tokenpak/logs/request-routing-gateway.log...
+2026-04-28 10:00:10 INFO RequestRoutingGatewayService started
+2026-04-28 10:10:00 INFO ANTHROPIC_UPSTREAM_API_KEY validated by RequestRoutingGatewayService
+2026-04-28 10:15:00 INFO RequestRoutingGatewayService healthy: 1250 rps, 42ms p99
+
+Step 2: Reading /opt/tokenpak/config/request-routing-gateway.yaml...
+service: RequestRoutingGatewayService
+api_key_env: ANTHROPIC_UPSTREAM_API_KEY
+log_path: /opt/tokenpak/logs/request-routing-gateway.log
+circuit_breaker_threshold: 0.05
+
+Step 3: Verifying ANTHROPIC_UPSTREAM_API_KEY...
+ANTHROPIC_UPSTREAM_API_KEY: valid, rate limit 100k tokens/min
+
+Step 4: Running check_service_health("RequestRoutingGatewayService")...
+{"service": "RequestRoutingGatewayService", "status": "healthy", "rps": 1250, "latency_p99_ms": 42}
+
+## Report: RequestRoutingGatewayService
+**Severity:** LOW | **Status:** Healthy
+**Root Cause:** None — RequestRoutingGatewayService operating normally
+**Action:** No action needed for RequestRoutingGatewayService
+**Next:** Re-check RequestRoutingGatewayService in 24h
+**Logs:** /opt/tokenpak/logs/request-routing-gateway.log
+**Env:** ANTHROPIC_UPSTREAM_API_KEY valid
+[user]
+Generate a fleet summary comparing all three services.
+Include status for TokenPakCompressionService, VaultIndexerServiceManager, and RequestRoutingGatewayService.
+Cross-reference /opt/tokenpak/logs/compression-service.log, /opt/tokenpak/logs/vault-indexer-manager.log, /opt/tokenpak/logs/request-routing-gateway.log.
+List required actions with priority, and confirm TOKENPAK_COMPRESSION_KEY, VAULT_INDEXER_STORAGE_PATH, ANTHROPIC_UPSTREAM_API_KEY status.
+[assistant]
+## Fleet Summary — TokenPak Infrastructure
+
+### Service Status Overview
+
+| Service | Status | Severity | Priority |
+|---------|--------|----------|----------|
+| TokenPakCompressionService | Degraded | HIGH | P1 |
+| VaultIndexerServiceManager | Unhealthy | CRITICAL | P0 |
+| RequestRoutingGatewayService | Healthy | LOW | — |
+
+### Required Actions (priority order)
+
+**P0 — CRITICAL: VaultIndexerServiceManager**
+- Root cause: Disk full at VAULT_INDEXER_STORAGE_PATH (94%)
+- Action: Enable prune_on_full in /opt/tokenpak/config/vault-indexer-manager.yaml
+- Evidence: /opt/tokenpak/logs/vault-indexer-manager.log
+- Env check: VAULT_INDEXER_STORAGE_PATH needs capacity
+
+**P1 — HIGH: TokenPakCompressionService**
+- Root cause: Heap exhaustion in TokenPakCompressionService (91%, 450ms p99)
+- Action: Increase heap in /opt/tokenpak/config/compression-service.yaml
+- Evidence: /opt/tokenpak/logs/compression-service.log
+- Env check: TOKENPAK_COMPRESSION_KEY is valid
+
+**HEALTHY: RequestRoutingGatewayService**
+- No action required
+- Evidence: /opt/tokenpak/logs/request-routing-gateway.log
+- Env check: ANTHROPIC_UPSTREAM_API_KEY is valid
+
+### Environment Variable Status
+- TOKENPAK_COMPRESSION_KEY: valid (expires 2026-06-01)
+- VAULT_INDEXER_STORAGE_PATH: /data/vault — CAPACITY ALERT (94% full)
+- ANTHROPIC_UPSTREAM_API_KEY: valid (rate limit: 100k tokens/min)

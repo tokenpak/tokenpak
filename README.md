@@ -68,6 +68,7 @@ Requirements: Python 3.10+. No external dependencies for core functionality.
 ## What's included (Free)
 
 - **Context compression** — 30–50% token reduction on real agent workloads, <50ms latency
+  Reproduce: `make benchmark-headline`
 - **Client integration** — one command wires Claude Code, Cursor, Aider, and 6 other clients
 - **Model routing** — send requests to the right model automatically, with fallback rules
 - **Cost tracking** — per model, per session, per agent; local SQLite, zero cloud
