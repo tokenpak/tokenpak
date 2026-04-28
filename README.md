@@ -63,6 +63,10 @@ See [docs/quickstart.md](docs/quickstart.md) for virtual-env setup and per-clien
 
 Requirements: Python 3.10+. No external dependencies for core functionality.
 
+Exposing the proxy beyond `127.0.0.1`? Set `TOKENPAK_PROXY_AUTH_TOKEN` to a
+shared secret to require `Authorization: Bearer <token>` on remote requests
+(see [docs/configuration/proxy-auth.md](docs/configuration/proxy-auth.md)).
+
 ---
 
 ## What's included (Free)

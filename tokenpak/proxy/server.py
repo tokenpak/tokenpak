@@ -58,6 +58,10 @@ from .passthrough import (
     _classify_route,
     LEGACY_HEADER_ALLOWLIST,
 )
+from .proxy_auth import (
+    check_proxy_auth as _check_proxy_auth,
+    strip_proxy_auth_for_upstream as _strip_proxy_auth_for_upstream,
+)
 from .headers import (
     forward_headers,
     CLAUDE_CODE_HEADER_ALLOWLIST,
@@ -415,6 +419,48 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # silence access log
         pass
 
+    # ------------------------------------------------------------------
+    # Proxy-level auth gate (P0-06 / A6)
+    # ------------------------------------------------------------------
+
+    def _enforce_proxy_auth(self) -> bool:
+        """Return True iff the request may proceed past the proxy auth gate.
+
+        On deny, sends the 401/403 response itself and returns False — the
+        verb handler must return immediately. On allow via the Bearer path,
+        sets ``self._tokenpak_user_id`` (SHA-256 hex of the supplied token)
+        and ``self._tokenpak_proxy_auth_header`` (the raw client header
+        value) for downstream telemetry + I5 stripping.
+        """
+        client_ip = self.client_address[0] if self.client_address else ""
+        decision = _check_proxy_auth(client_ip, self.headers)
+        # Always initialise the slots so downstream code can rely on them.
+        if not hasattr(self, "_tokenpak_user_id"):
+            self._tokenpak_user_id: Optional[str] = None
+        if not hasattr(self, "_tokenpak_proxy_auth_header"):
+            self._tokenpak_proxy_auth_header: Optional[str] = None
+        if not decision.allowed:
+            try:
+                self.send_response(decision.status_code)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(decision.error_body)))
+                self.send_header("Connection", "close")
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(decision.error_body)
+            except Exception:
+                pass
+            return False
+        if decision.user_id_hash:
+            self._tokenpak_user_id = decision.user_id_hash
+            # Capture the raw Authorization value so the upstream-forwarding
+            # path can strip exactly that string (I5 invariant).
+            for k, v in self.headers.items():
+                if isinstance(k, str) and k.lower() == "authorization":
+                    self._tokenpak_proxy_auth_header = v
+                    break
+        return True
+
     def send_error(self, code, message=None, explain=None):
         # Override the stdlib HTML error page. Every client hitting this
         # proxy is expecting an API-style JSON error, and leaking the
@@ -447,6 +493,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_CONNECT(self):
+        if not self._enforce_proxy_auth():
+            return
         host, _, port_str = self.path.partition(":")
         port = int(port_str) if port_str else 443
         self._tunnel(host, port)
@@ -488,6 +536,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_GET(self):
+        if not self._enforce_proxy_auth():
+            return
         ps = self.server.proxy_server
         path = self.path
 
@@ -658,6 +708,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if not self._enforce_proxy_auth():
+            return
         ps = self.server.proxy_server
 
         # App-level /tpk/v1/* POST endpoints — reserved for future compress,
@@ -735,6 +787,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_PUT(self):
+        if not self._enforce_proxy_auth():
+            return
         ps = self.server.proxy_server
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
@@ -745,6 +799,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_DELETE(self):
+        if not self._enforce_proxy_auth():
+            return
         ps = self.server.proxy_server
         if ps.shutdown.is_shutting_down and self.path.startswith("http"):
             self._send_503_shutdown()
@@ -1131,6 +1187,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         if body is not None:
             fwd_headers["Content-Length"] = str(len(body))
 
+        # ── I5 header-allowlist: strip the proxy auth Bearer ──────────
+        # When the proxy auth gate accepted the request via the Bearer path,
+        # the Authorization header carries OUR proxy token, not an upstream
+        # provider credential. It must not leak upstream. Subsequent injection
+        # paths (creds_router, codex OAuth) may set their own Authorization;
+        # those are upstream credentials and remain.
+        _client_auth = getattr(self, "_tokenpak_proxy_auth_header", None)
+        if _client_auth:
+            _strip_proxy_auth_for_upstream(fwd_headers, _client_auth)
+
         # ── Router-based credential injection (feature-flagged) ──────
         # When TOKENPAK_CREDS_ROUTER_ENABLED=1, select a credential via
         # the creds router and inject it. On any failure this is a
@@ -1438,6 +1504,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _provider_name = "openai"
                 elif "googleapis" in target_url:
                     _provider_name = "google"
+                _log_extra: Dict[str, Any] = {}
+                _uid = getattr(self, "_tokenpak_user_id", None)
+                if _uid:
+                    _log_extra["user_id"] = _uid
                 log_request(
                     request_id=_req_id,
                     client_ip=self.client_address[0] if self.client_address else "",
@@ -1450,6 +1520,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     latency_ms=latency_ms,
                     model=model,
                     provider=_provider_name,
+                    extra=_log_extra or None,
                 )
             except Exception:
                 pass  # logging must never break the proxy
@@ -1625,6 +1696,10 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             exc_msg = str(exc)
             # Log the failed request
             try:
+                _err_extra: Dict[str, Any] = {"error": exc_type, "error_message": exc_msg[:200]}
+                _uid = getattr(self, "_tokenpak_user_id", None)
+                if _uid:
+                    _err_extra["user_id"] = _uid
                 log_request(
                     request_id=_req_id,
                     client_ip=self.client_address[0] if self.client_address else "",
@@ -1634,7 +1709,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     response_status=502,
                     latency_ms=latency_ms,
                     model=model,
-                    extra={"error": exc_type, "error_message": exc_msg[:200]},
+                    extra=_err_extra,
                 )
             except Exception:
                 pass  # logging must never break the proxy
