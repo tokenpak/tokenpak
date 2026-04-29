@@ -496,6 +496,117 @@ def refresh_native_codex_profile():
     return changed > 0
 
 
+def _load_claude_oauth():
+    """Return (access_token, refresh_token, expires_ms) from ~/.claude/.credentials.json.
+
+    The Claude CLI stores its OAuth bundle under ``claudeAiOauth`` —
+    ``accessToken`` / ``refreshToken`` / ``expiresAt`` (ms-precision unix
+    epoch). Returns (None, None, None) on missing/corrupt file. Never
+    raises into the inject pipeline.
+    """
+    cred_path = Path.home() / ".claude" / ".credentials.json"
+    if not cred_path.is_file():
+        return (None, None, None)
+    try:
+        d = json.loads(cred_path.read_text())
+        oauth = d.get("claudeAiOauth", d)
+        access = oauth.get("accessToken") or oauth.get("access_token") or ""
+        refresh = oauth.get("refreshToken") or oauth.get("refresh_token") or ""
+        expires = oauth.get("expiresAt") or oauth.get("expires_at") or 0
+        if not access:
+            return (None, None, None)
+        return (access, refresh, int(expires) if expires else 0)
+    except Exception:
+        return (None, None, None)
+
+
+def refresh_native_claude_oauth():
+    """Sync ~/.claude/.credentials.json → tokenpak-claude-code:manual profile.
+
+    Path A from proposal `2026-04-29-suki-codex-rate-limit-failover-provisioning`.
+    OpenClaw's built-in model-failover (per ~/.openclaw-governor/openclaw.json
+    `agents.list[main].model.fallbacks`) selects
+    ``tokenpak-claude-code/claude-opus-4-7`` as the next candidate when
+    the Codex primary returns ``rate_limit``. The failover currently
+    throws ``FailoverError`` because the per-agent
+    ``tokenpak-claude-code:manual`` profile has no live OAuth. This
+    function provisions it from the host's existing Claude CLI
+    credentials so the failover actually completes.
+
+    Sync targets: BOTH the top-level openclaw.json
+    ``auth.profiles["tokenpak-claude-code:manual"]`` AND the per-agent
+    ``agents/*/agent/auth-profiles.json`` (OpenClaw reads the per-agent
+    one first; the top-level is the discovery seed).
+
+    Kill-switch: ``TOKENPAK_GOVERNOR_FAILOVER_DISABLED=1`` skips the
+    sync entirely (lets us revert behavior in one cron tick if a
+    refresh-token-reused incident reproduces — see
+    ``feedback_never_mirror_claude_creds``).
+
+    Same-host single-machine use only. Do NOT mirror to other hosts.
+    """
+    if os.environ.get("TOKENPAK_GOVERNOR_FAILOVER_DISABLED", "0").strip() in {"1", "true", "yes"}:
+        log("Skipping Claude OAuth sync — TOKENPAK_GOVERNOR_FAILOVER_DISABLED=1")
+        return False
+
+    access, refresh, expires_ms = _load_claude_oauth()
+    if not access:
+        return False
+
+    changed = 0
+    profile_key = "tokenpak-claude-code:manual"
+
+    # Top-level governor profile.
+    if MAIN_CONFIG.exists():
+        try:
+            cfg = load_json(MAIN_CONFIG)
+            profiles = cfg.setdefault("auth", {}).setdefault("profiles", {})
+            existing = profiles.get(profile_key, {})
+            if existing.get("access") != access:
+                profiles[profile_key] = {
+                    "provider": "tokenpak-claude-code",
+                    "type": "oauth",
+                    "access": access,
+                    "refresh": refresh or existing.get("refresh", ""),
+                    "expires": expires_ms or existing.get("expires", 0),
+                }
+                save_json(MAIN_CONFIG, cfg)
+                log(f"Refreshed Claude OAuth in top-level {profile_key}")
+                changed += 1
+        except Exception as e:
+            log(f"Warning: top-level claude oauth sync: {e}")
+
+    # Per-agent auth-profiles.json (the file OpenClaw actually reads at
+    # request-time; the failover throws FailoverError when this is the
+    # gap).
+    for af in glob(str(OPENCLAW_DIR / "agents/*/agent/auth-profiles.json")):
+        try:
+            path = Path(af)
+            auth = load_json(path)
+            profiles = auth.setdefault("profiles", {})
+            existing = profiles.get(profile_key, {})
+            if existing.get("access") == access:
+                continue  # already fresh
+            profiles[profile_key] = {
+                "provider": "tokenpak-claude-code",
+                "type": "oauth",
+                "access": access,
+                "refresh": refresh or existing.get("refresh", ""),
+                "expires": expires_ms or existing.get("expires", 0),
+            }
+            # Also ensure auth.order routes the failover provider through
+            # this profile.
+            order = auth.setdefault("order", {})
+            order.setdefault("tokenpak-claude-code", [profile_key])
+            save_json(path, auth)
+            log(f"Refreshed Claude OAuth in per-agent {path}")
+            changed += 1
+        except Exception as e:
+            log(f"Warning: per-agent claude oauth sync ({af}): {e}")
+
+    return changed > 0
+
+
 def sync_codex_jwt():
     """Mirror fresh JWT from openai-codex:default → tokenpak-openai-codex:default.
 
@@ -700,6 +811,15 @@ def main():
     if refresh_native_codex_profile():
         total = True
     if sync_codex_jwt():
+        total = True
+
+    # Claude OAuth sync — Path A from proposal
+    # 2026-04-29-suki-codex-rate-limit-failover-provisioning. Provisions the
+    # `tokenpak-claude-code:manual` auth profile so OpenClaw's built-in
+    # model-failover from gpt-5.5 → claude-opus-4-7 actually has credentials
+    # to use. Same-host single-machine only. Kill-switch:
+    # TOKENPAK_GOVERNOR_FAILOVER_DISABLED=1.
+    if refresh_native_claude_oauth():
         total = True
 
     # OAS-05: openclaw-adapter (Path C session-binding hook).
