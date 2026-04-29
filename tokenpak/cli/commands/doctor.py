@@ -397,6 +397,77 @@ def run_doctor(
                 f"Vault index         not found (run: tokenpak index <path>)",
             )
 
+    # === Check 7b: Registered vault paths staleness (VDS-03) ====================
+    # Reads ~/.tokenpak/vault.yaml + per-path index health (VDS-01) and warns
+    # when a registered directory's last rebuild is older than expected
+    # interval × 2, when the path is missing, when metadata is corrupt, or
+    # when the previous reindex failed. Manual schedules don't warn solely on
+    # age. Per VDS-03 spec — does not fail unrelated checks.
+    try:
+        from tokenpak.vault import doctor_check as _vds03
+
+        _vds03_findings, _vds03_err = _vds03.load_and_check()
+        if _vds03_err is not None:
+            _record(
+                "vault_paths_staleness",
+                "warn",
+                f"Vault paths        {_vds03_err}",
+                detail=_vds03_err,
+            )
+        elif not _vds03_findings:
+            _record(
+                "vault_paths_staleness",
+                "pass",
+                "Vault paths        no registered paths "
+                "(register with: tokenpak vault add <path>)",
+            )
+        else:
+            summary = _vds03.summarize(_vds03_findings)
+            for f in _vds03_findings:
+                _record(
+                    f"vault_path:{f.status}",
+                    f.severity,
+                    f"Vault path         {f.message}",
+                    detail=(
+                        f"path={f.path} status={f.status} schedule={f.schedule} "
+                        f"age_seconds={f.age_seconds} threshold_seconds={f.threshold_seconds} "
+                        f"last_indexed={f.last_indexed} last_index_status={f.last_index_status}"
+                    ),
+                )
+            warn_total = sum(
+                summary.get(k, 0) for k in ("stale", "missing", "never", "corrupt", "failed")
+            )
+            if warn_total == 0:
+                _record(
+                    "vault_paths_summary",
+                    "pass",
+                    f"Vault paths        all {summary.get('ok', 0)} registered path(s) fresh",
+                    detail=str(summary),
+                )
+            else:
+                _record(
+                    "vault_paths_summary",
+                    "warn",
+                    (
+                        f"Vault paths        "
+                        f"{summary.get('stale', 0)} stale / "
+                        f"{summary.get('missing', 0)} missing / "
+                        f"{summary.get('never', 0)} never / "
+                        f"{summary.get('corrupt', 0)} corrupt / "
+                        f"{summary.get('failed', 0)} failed "
+                        f"(of {sum(summary.values())} registered)"
+                    ),
+                    detail=str(summary),
+                )
+    except Exception as exc:
+        # Per spec: must not fail unrelated doctor checks. Bubble as a warn.
+        _record(
+            "vault_paths_staleness",
+            "warn",
+            f"Vault paths        check failed: {exc}",
+            detail=str(exc),
+        )
+
     # === Check 8: Recent error rate from last 100 requests ======================
     if db_path.exists():
         try:
