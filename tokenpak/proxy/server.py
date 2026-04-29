@@ -963,6 +963,44 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 pass
             input_tokens = _estimate_tokens_from_body(body)
 
+            # TIP-03: Observe-only optimization pipeline.
+            # Gated on TOKENPAK_OPTIMIZATION_PIPELINE (default off). Runs
+            # before any body-mutating stage; never returns a different
+            # body from what was passed in. Trace is stashed locally for
+            # future telemetry persistence (TIP-04+).
+            _optimization_trace = None
+            try:
+                from tokenpak.proxy.optimization import run_observe_only as _opt_run
+                _body_before_opt = body
+                body, _optimization_trace = _opt_run(
+                    request_id=_req_id,
+                    body=body,
+                    method="POST",
+                    path=self.path,
+                    headers=dict(self.headers),
+                    target_url=target_url,
+                    platform=_source_platform,
+                    route=_route,
+                    policy=_policy,
+                )
+                # Defensive: assert the pipeline did not mutate the body.
+                # Observe-only mode MUST be byte-identical.
+                if body is not _body_before_opt and body != _body_before_opt:
+                    import logging as _opt_log
+                    _opt_log.getLogger(__name__).error(
+                        "optimization.pipeline: observe-only mode mutated body "
+                        "(in=%d out=%d) — restoring original",
+                        len(_body_before_opt or b""), len(body or b""),
+                    )
+                    body = _body_before_opt
+            except Exception as _opt_exc:
+                # Fail-open: optimization scaffolding must never break a request.
+                import logging as _opt_log
+                _opt_log.getLogger(__name__).debug(
+                    "optimization.pipeline: skipped (%s: %s)",
+                    type(_opt_exc).__name__, _opt_exc,
+                )
+
             # CCG-11: Cache invalidator detection (log-only).
             # Skip transparent mode — transparent must remain side-effect-free.
             # Runs on original (pre-compression) body so semantic fields are intact.
