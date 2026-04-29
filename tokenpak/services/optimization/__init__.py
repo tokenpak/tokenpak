@@ -53,6 +53,8 @@ from .route_recipe_policy import (
 )
 from .stage import EligibilityResult, OptimizationStage
 from .trace import OptimizationTrace, StageTrace
+from .cache_stage import SemanticCacheStage, get_cached_response
+from .cache_trace import CacheMissReason, CacheStageTrace
 
 __all__ = [
     "OptimizationContext",
@@ -80,4 +82,9 @@ __all__ = [
     "RouteClassCompressionStage",
     "is_route_compression_enabled",
     "register_route_compression_stage",
+    # TIP-04 — semantic cache stage
+    "SemanticCacheStage",
+    "get_cached_response",
+    "CacheMissReason",
+    "CacheStageTrace",
 ]

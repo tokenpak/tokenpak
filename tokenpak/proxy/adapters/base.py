@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Mapping, Optional, Tuple
+from typing import Any, Callable, FrozenSet, Mapping, Optional, Tuple
 
 from .canonical import CanonicalRequest
 
@@ -15,6 +15,9 @@ class FormatAdapter(ABC):
     """Abstract format adapter for provider-specific payloads."""
 
     source_format: str = "unknown"
+    # TIP-1.0 capability labels this adapter publishes. Subclasses override
+    # with a frozenset of ``tip.<group>.<feature>`` label strings.
+    capabilities: FrozenSet[str] = frozenset()
 
     @abstractmethod
     def detect(self, path: str, headers: Mapping[str, str], body: Optional[bytes]) -> bool:
