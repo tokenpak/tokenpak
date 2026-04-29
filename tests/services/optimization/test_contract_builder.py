@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from tokenpak.proxy.optimization.contract_builder import (
+from tokenpak.services.optimization.contract_builder import (
     _LocalOptimizationContract,
     build_contract,
 )

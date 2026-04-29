@@ -1,8 +1,12 @@
-"""Generic proxy optimization pipeline (TIP-03).
+"""Generic optimization pipeline (TIP-03).
 
-Observe-only scaffolding for the proxy-layer optimization pipeline described
-in the TIP-First Codex Optimization Layer proposal (Phase 3 Component B,
-Phase 4 Milestone 2).
+Observe-only scaffolding for the optimization pipeline described in the
+TIP-First Codex Optimization Layer proposal (Phase 3 Component B, Phase 4
+Milestone 2). Pipeline composition lives under ``services/`` per
+``01-architecture-standard.md §1.3`` design invariant 1 ("services/ is
+the only place the compression → security → cache → routing → telemetry
+→ dispatch sequence exists"); ``proxy/server.py`` invokes
+``run_observe_only`` over the byte-preserved request.
 
 Public surface:
 
@@ -13,7 +17,7 @@ Public surface:
     OptimizationPipeline  — runs registered stages in observe-only mode
     OptimizationTrace     — collected trace of stage decisions
     StageTrace            — per-stage trace entry
-    build_contract        — proxy-layer contract builder (consumes TIP-02 if present)
+    build_contract        — services-layer contract builder (consumes TIP-02 if present)
     is_pipeline_enabled   — read TOKENPAK_OPTIMIZATION_PIPELINE flag
 
 The default mode is observe-only. Stages declare eligibility but the pipeline

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tokenpak.proxy.optimization.trace import OptimizationTrace, StageTrace
+from tokenpak.services.optimization.trace import OptimizationTrace, StageTrace
 
 
 def test_trace_to_dict_roundtrip():

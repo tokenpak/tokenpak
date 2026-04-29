@@ -1,8 +1,8 @@
 """Trace models for the optimization pipeline.
 
-These are proxy-layer mirror types: they carry just enough information for
-observe-only telemetry. When TIP-02 (``tokenpak.tip.trace_contract``) is
-available the pipeline can also emit a TIP-shaped trace — see
+These are services-layer mirror types: they carry just enough information
+for observe-only telemetry. When TIP-02 (``tokenpak.tip.trace_contract``)
+is available the pipeline can also emit a TIP-shaped trace — see
 ``trace.to_tip_dict()``.
 """
 

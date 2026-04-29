@@ -7,11 +7,11 @@ import os
 
 import pytest
 
-from tokenpak.proxy.optimization import (
+from tokenpak.services.optimization import (
     OptimizationPipeline,
     StageRegistry,
 )
-from tokenpak.proxy.optimization.pipeline import reset_default_pipeline
+from tokenpak.services.optimization.pipeline import reset_default_pipeline
 
 
 @pytest.fixture(autouse=True)

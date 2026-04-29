@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from tokenpak.proxy.optimization import (
+from tokenpak.services.optimization import (
     OptimizationPipeline,
     StageRegistry,
 )
-from tokenpak.proxy.optimization.context import OptimizationContext
-from tokenpak.proxy.optimization.stage import EligibilityResult, NoOpStage
-from tokenpak.proxy.optimization.trace import OptimizationTrace
+from tokenpak.services.optimization.context import OptimizationContext
+from tokenpak.services.optimization.stage import EligibilityResult, NoOpStage
+from tokenpak.services.optimization.trace import OptimizationTrace
 
 
 @dataclass
@@ -123,7 +123,7 @@ def test_pipeline_records_input_and_output_byte_counts(fresh_pipeline):
 
 
 def test_default_pipeline_is_singleton_until_reset():
-    from tokenpak.proxy.optimization.pipeline import (
+    from tokenpak.services.optimization.pipeline import (
         _get_default_pipeline,
         reset_default_pipeline,
     )
@@ -138,7 +138,7 @@ def test_default_pipeline_is_singleton_until_reset():
 def test_custom_registry_does_not_pollute_default(fresh_pipeline):
     fresh_pipeline.register(NoOpStage(name="custom"))
     # Default pipeline starts empty
-    from tokenpak.proxy.optimization.pipeline import _get_default_pipeline
+    from tokenpak.services.optimization.pipeline import _get_default_pipeline
     default = _get_default_pipeline()
     assert "custom" not in default.registry
     assert isinstance(default, OptimizationPipeline)

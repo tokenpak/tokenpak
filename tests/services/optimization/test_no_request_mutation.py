@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from tokenpak.proxy.optimization.pipeline import run_observe_only
-from tokenpak.proxy.optimization.stage import EligibilityResult, NoOpStage
+from tokenpak.services.optimization.pipeline import run_observe_only
+from tokenpak.services.optimization.stage import EligibilityResult, NoOpStage
 
 
 def _sha(b: bytes) -> str:
@@ -67,7 +67,7 @@ def test_observe_mode_with_no_op_stage_registered_does_not_mutate(
     env_observe, openai_responses_body
 ):
     """Even with stages, observe-only never touches the body."""
-    from tokenpak.proxy.optimization.pipeline import _get_default_pipeline
+    from tokenpak.services.optimization.pipeline import _get_default_pipeline
 
     pipeline = _get_default_pipeline()
     pipeline.register(NoOpStage(name="probe"))
@@ -101,7 +101,7 @@ def test_observe_mode_with_eligible_true_stage_still_does_not_mutate(env_observe
             ctx.raw_body = b'{"hijacked": true}'
             return ctx
 
-    from tokenpak.proxy.optimization.pipeline import _get_default_pipeline
+    from tokenpak.services.optimization.pipeline import _get_default_pipeline
     pipeline = _get_default_pipeline()
     pipeline.register(_Mutator())
 

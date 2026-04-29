@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tokenpak.proxy.optimization.policies import (
+from tokenpak.services.optimization.policies import (
     ENV_FLAG,
     MODE_OBSERVE,
     MODE_OFF,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tokenpak.proxy.optimization import StageRegistry
-from tokenpak.proxy.optimization.stage import NoOpStage
+from tokenpak.services.optimization import StageRegistry
+from tokenpak.services.optimization.stage import NoOpStage
 
 
 def test_empty_registry_is_empty():

@@ -964,13 +964,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             input_tokens = _estimate_tokens_from_body(body)
 
             # TIP-03: Observe-only optimization pipeline.
-            # Gated on TOKENPAK_OPTIMIZATION_PIPELINE (default off). Runs
-            # before any body-mutating stage; never returns a different
-            # body from what was passed in. Trace is stashed locally for
-            # future telemetry persistence (TIP-04+).
+            # Pipeline composition lives in services/optimization/ per
+            # 01-architecture-standard.md §1.3 invariant 1 (services/ owns
+            # all pipeline composition). proxy/server.py only invokes it
+            # over the byte-preserved request. Gated on
+            # TOKENPAK_OPTIMIZATION_PIPELINE (default off); runs before
+            # any body-mutating stage and never returns a different body
+            # in observe-only mode. Trace is stashed locally for future
+            # telemetry persistence (TIP-04+).
             _optimization_trace = None
             try:
-                from tokenpak.proxy.optimization import run_observe_only as _opt_run
+                from tokenpak.services.optimization import run_observe_only as _opt_run
                 _body_before_opt = body
                 body, _optimization_trace = _opt_run(
                     request_id=_req_id,
