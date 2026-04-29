@@ -882,8 +882,133 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
     return (path, content, block)  # type: ignore[return-value]
 
 
+def _cmd_reindex(args):
+    """``tokenpak index --reindex-all`` and ``--reindex-path <path>`` (VDS-01).
+
+    Reads registered directories from ``~/.tokenpak/vault.yaml`` and runs the
+    existing block-registry indexer against each one. Updates per-path index
+    health metadata in the same vault.yaml so VDS-03's doctor staleness check
+    can read it.
+
+    OSS — no license check. Schedule fields (`schedule`,
+    `expected_interval_seconds`) are written by the paid VDS-04 surface but
+    are merely passive metadata here; the OSS path always reindexes on
+    demand.
+    """
+    from tokenpak.vault import config as vault_config
+
+    cfg_path = vault_config.default_config_path()
+    cfg = vault_config.load(cfg_path)
+
+    targets: list[vault_config.VaultPathEntry] = []
+    if getattr(args, "reindex_all", False):
+        targets = list(cfg.paths)
+        if not targets:
+            print(
+                f"No registered vault paths in {cfg_path}.\n"
+                "Add one via `tokenpak vault add <path>` (paid) "
+                "or edit vault.yaml directly.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        requested = getattr(args, "reindex_path", None)
+        entry = cfg.find(requested)
+        if entry is None:
+            print(
+                f"Path not registered in {cfg_path}: {requested}\n"
+                "Register it before reindexing (`tokenpak vault add <path>` "
+                "in paid, or edit vault.yaml directly).",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        targets = [entry]
+
+    # Resolve the index registry DB path.  Honor TOKENPAK_VAULT_INDEX_PATH
+    # (proxy-compatible vault directory); fall back to the parser's --db.
+    index_root = vault_config.default_index_path()
+    db_override = os.environ.get("TOKENPAK_VAULT_INDEX_PATH")
+    if db_override:
+        index_root = Path(db_override).expanduser()
+        index_root.mkdir(parents=True, exist_ok=True)
+        registry_db = index_root / "registry.db"
+    elif getattr(args, "db", None) and args.db != ".tokenpak/registry.db":
+        registry_db = Path(args.db).expanduser()
+        registry_db.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        index_root.mkdir(parents=True, exist_ok=True)
+        registry_db = index_root / "registry.db"
+
+    overall_start = time.perf_counter()
+    any_failed = False
+
+    for entry in targets:
+        target_path = entry.path
+        if not Path(target_path).exists():
+            print(f"  ⚠ skipping (not found): {target_path}")
+            vault_config.update_index_health(
+                cfg, target_path, status="failed", duration_ms=0
+            )
+            any_failed = True
+            continue
+
+        print(f"Reindexing: {target_path}")
+        # Reuse the existing _do_index path. Build a fresh argparse-like Namespace
+        # so we don't mutate the caller's args.
+        sub_args = argparse.Namespace(
+            **{**vars(args), "directory": target_path, "db": str(registry_db)}
+        )
+        t0 = time.perf_counter()
+        try:
+            _do_index(sub_args)
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            files_indexed = _registry_file_count(str(registry_db))
+            vault_config.update_index_health(
+                cfg,
+                target_path,
+                status="ok",
+                duration_ms=duration_ms,
+                files_indexed=files_indexed,
+            )
+        except Exception as exc:
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            vault_config.update_index_health(
+                cfg,
+                target_path,
+                status="failed",
+                duration_ms=duration_ms,
+            )
+            print(f"  ✖ failed: {exc}", file=sys.stderr)
+            any_failed = True
+
+    # Persist the updated health metadata.
+    vault_config.save(cfg, cfg_path)
+
+    elapsed = time.perf_counter() - overall_start
+    print(
+        f"\nReindex summary: {len(targets)} path(s) in {elapsed:.2f}s "
+        f"(index root: {registry_db})"
+    )
+    if any_failed:
+        sys.exit(1)
+
+
+def _registry_file_count(db_path: str) -> int:
+    """Return the total file count from the registry DB, or 0 on error."""
+    try:
+        from tokenpak.core.registry import BlockRegistry
+
+        return int(BlockRegistry(db_path).get_stats().get("total_files", 0))
+    except Exception:
+        return 0
+
+
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
+    # --reindex-all / --reindex-path: VDS-01 OSS reindex flags driven by ~/.tokenpak/vault.yaml.
+    if getattr(args, "reindex_all", False) or getattr(args, "reindex_path", None):
+        return _cmd_reindex(args)
+
     # --status mode: show stats from BlockRegistry
     if getattr(args, "status", False):
         import os
@@ -2526,6 +2651,19 @@ def build_parser():
         "--no-treesitter",
         action="store_true",
         help="Force regex-based code processing (skip tree-sitter)",
+    )
+    p_index.add_argument(
+        "--reindex-all",
+        action="store_true",
+        dest="reindex_all",
+        help="Reindex every directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
+    )
+    p_index.add_argument(
+        "--reindex-path",
+        dest="reindex_path",
+        default=None,
+        metavar="PATH",
+        help="Reindex a single directory registered in ~/.tokenpak/vault.yaml (VDS-01)",
     )
     p_index.set_defaults(func=cmd_index)
 
