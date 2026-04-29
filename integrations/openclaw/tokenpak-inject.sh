@@ -557,21 +557,31 @@ def refresh_native_claude_oauth():
     profile_key = "tokenpak-claude-code:manual"
 
     # Top-level governor profile.
+    #
+    # IMPORTANT — schema is strict: openclaw.json ``auth.profiles[*]``
+    # accepts ONLY ``{provider, mode}``. Any of {type, access, refresh,
+    # expires, accountId, ...} triggers OpenClaw's config validator with
+    # ``Unrecognized keys`` and crashes every cycle until the entry is
+    # cleaned. The actual token material lives in the per-agent
+    # ``agents/*/agent/auth-profiles.json`` (handled below) — that file
+    # tolerates the full bundle.
+    #
+    # 2026-04-29 incident reproduced this: the original Path A
+    # implementation wrote the full bundle into both layers; cycles
+    # 11:00, 11:30, 12:00 all exited 1 in <15s with
+    # ``Invalid input (allowed: "api_key", "oauth", "token") +
+    # Unrecognized keys: "type", "access", "refresh", "expires"``. Fixed
+    # by restricting the top-level write to the schema-legal pair.
     if MAIN_CONFIG.exists():
         try:
             cfg = load_json(MAIN_CONFIG)
             profiles = cfg.setdefault("auth", {}).setdefault("profiles", {})
             existing = profiles.get(profile_key, {})
-            if existing.get("access") != access:
-                profiles[profile_key] = {
-                    "provider": "tokenpak-claude-code",
-                    "type": "oauth",
-                    "access": access,
-                    "refresh": refresh or existing.get("refresh", ""),
-                    "expires": expires_ms or existing.get("expires", 0),
-                }
+            desired = {"provider": "tokenpak-claude-code", "mode": "oauth"}
+            if existing != desired:
+                profiles[profile_key] = desired
                 save_json(MAIN_CONFIG, cfg)
-                log(f"Refreshed Claude OAuth in top-level {profile_key}")
+                log(f"Set top-level {profile_key} stub (provider+mode only)")
                 changed += 1
         except Exception as e:
             log(f"Warning: top-level claude oauth sync: {e}")
