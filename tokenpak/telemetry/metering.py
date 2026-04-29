@@ -126,6 +126,11 @@ class UsageMeter:
 
         Called after each request completes. Non-blocking.
 
+        Also forwards the event to the WS-5 license-server usage meter
+        (``tokenpak.licensing.usage_meter``) so that token counts keyed by
+        ``license_id`` reach the license server with graceful degradation.
+        Forwarding is best-effort and silent on failure.
+
         Args:
             model: Model name (e.g., "claude-sonnet")
             input_tokens: Input tokens processed
@@ -161,6 +166,22 @@ class UsageMeter:
         with self._pending_lock:
             self._pending_threads.append(thread)
         thread.start()
+
+        # WS-5 bridge: forward the event to the license-server usage meter
+        # so tokens reach the central /usage endpoint keyed by license_id.
+        # Lazy import + broad try/except so a missing/broken bridge module
+        # never breaks the local telemetry path.
+        try:
+            from tokenpak.licensing import usage_meter as _license_usage
+
+            _license_usage.record_usage(
+                tokens_in=input_tokens,
+                tokens_out=output_tokens,
+                model=model,
+                license_id=self.key_id,
+            )
+        except Exception:  # pragma: no cover — defensive
+            logger.debug("WS-5 license usage_meter forwarding skipped", exc_info=True)
 
     def flush(self, timeout: float = 5.0) -> None:
         """Wait for all pending background write threads to complete.
