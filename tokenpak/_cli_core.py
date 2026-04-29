@@ -233,6 +233,7 @@ _COMMAND_GROUPS = {
         ("dashboard", "Live dashboard"),
         ("timeline", "View savings trend"),
         ("attribution", "Savings by source"),
+        ("recommendations", "Ranked, telemetry-backed actions"),
         ("models", "Per-model breakdown"),
         ("forecast", "Cost projections"),
         ("debug", "Toggle debug logging"),
@@ -2874,6 +2875,7 @@ def build_parser():
     _build_status_parser(sub)
     _build_usage_parser(sub)
     _build_savings_parser(sub)
+    _build_recommendations_parser(sub)
     _build_compare_parser(sub)
     _build_leaderboard_parser(sub)
     _build_report_parser(sub)
@@ -3497,6 +3499,13 @@ def _build_savings_parser(sub):
     p_savings = sub.add_parser("savings", help="Show savings summary")
     p_savings.add_argument("--days", type=int, default=30, help="Rolling window in days")
     p_savings.set_defaults(func=cmd_savings)
+
+
+def _build_recommendations_parser(sub):
+    """Build `tokenpak recommendations` parser via the modular CLI command."""
+    from tokenpak.cli.commands.recommendations import build_parser
+
+    build_parser(sub)
 
 
 def _build_compare_parser(sub):
@@ -4410,6 +4419,7 @@ def main():
         "integrate",
         "openclaw",
         "savings",
+        "recommendations",
         "usage",
         "preview",
         "aggregate",
