@@ -80,8 +80,8 @@ def _db_writer_worker():
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved,cache_origin)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_origin,user_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -146,7 +146,8 @@ class Monitor:
                 injected_sources TEXT DEFAULT '',
                 cache_read_tokens INTEGER DEFAULT 0,
                 cache_creation_tokens INTEGER DEFAULT 0,
-                would_have_saved INTEGER DEFAULT 0
+                would_have_saved INTEGER DEFAULT 0,
+                user_id TEXT DEFAULT ''
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON requests(timestamp)")
@@ -173,6 +174,14 @@ class Monitor:
             pass
         try:
             conn.execute("ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'")
+        except sqlite3.OperationalError:
+            pass
+        # P0-06 (A6): user_id holds the SHA-256 hex of the proxy auth bearer
+        # token when the proxy auth gate accepted the request via the bearer
+        # path. Empty string for localhost / pre-A6 rows. Hash only — never the
+        # raw token.
+        try:
+            conn.execute("ALTER TABLE requests ADD COLUMN user_id TEXT DEFAULT ''")
         except sqlite3.OperationalError:
             pass
         conn.commit()
@@ -232,7 +241,12 @@ class Monitor:
         cache_creation_tokens=0,
         would_have_saved=0,
         cache_origin="unknown",
+        user_id="",
     ):
+        # P0-06 (A6): ``user_id`` is the SHA-256 hex of the proxy auth bearer
+        # token populated by ``_ProxyHandler._enforce_proxy_auth``. Defaults to
+        # "" for localhost / pre-A6 callers. The raw token MUST never be passed
+        # in — callers always use ``proxy_auth.hash_token(...)`` first.
         # Enqueue write instead of writing directly (async, <0.1ms return)
         insert_params = (
             datetime.now().isoformat(),
@@ -253,6 +267,7 @@ class Monitor:
             cache_creation_tokens,
             would_have_saved,
             cache_origin,
+            user_id or "",
         )
         _queued = False
         try:
@@ -264,8 +279,8 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved, cache_origin) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_origin, user_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params,
             )
             _conn.commit()

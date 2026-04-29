@@ -1583,6 +1583,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             cache_creation_tokens=cache_creation_tokens,
                             would_have_saved=int(saved),
                             cache_origin=_cache_origin,
+                            user_id=getattr(self, "_tokenpak_user_id", "") or "",
                         )
                     except Exception:
                         pass  # DB errors must never break the request

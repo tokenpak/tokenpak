@@ -392,3 +392,138 @@ class TestProxyHandlerIntegration:
             or _UpstreamMock.captured_headers.get("x-api-key")
         )
         assert upstream_xkey == upstream_api_key
+
+
+# ---------------------------------------------------------------------------
+# 4. telemetry-row.user_id — Monitor SQLite path (rework for QA finding 1)
+#
+# QA rejection (2026-04-28) required the accepted Bearer-path token hash to
+# flow into the canonical telemetry-row.user_id field via Monitor.log, with a
+# test that asserts the emitted row contains the hash and never the raw token.
+# This block exercises Monitor.log directly (the row writer is the same path
+# the proxy server uses at server.py:1567 — see also test_user_id_passed_to_monitor_log).
+# ---------------------------------------------------------------------------
+
+
+class TestMonitorTelemetryRowUserId:
+    """Asserts the SQLite telemetry row contains hash_token(token) and never
+    the raw token, for both the synchronous fallback and async-queue paths."""
+
+    def _fresh_db(self, tmp_path):
+        return str(tmp_path / "monitor.db")
+
+    def _last_row(self, db_path):
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT * FROM requests ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def test_user_id_column_present_in_schema(self, tmp_path):
+        """ALTER-TABLE migration adds user_id, and CREATE-TABLE includes it on
+        a fresh DB."""
+        from tokenpak.proxy.monitor import Monitor as _Monitor
+        m = _Monitor(self._fresh_db(tmp_path))
+        import sqlite3
+        conn = sqlite3.connect(m.db_path)
+        try:
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(requests)").fetchall()]
+        finally:
+            conn.close()
+        assert "user_id" in cols, f"user_id column missing — got {cols}"
+
+    def _force_sync_path(self, monkeypatch):
+        """Disable the async queue *after* Monitor construction (constructor
+        re-initialises the queue, so patching first is a no-op). Subsequent
+        ``Monitor.log`` calls then take the synchronous-fallback branch — same
+        write semantics, just deterministic for tests."""
+        from tokenpak.proxy import monitor as monitor_mod
+        monkeypatch.setattr(monitor_mod, "_DB_WRITE_QUEUE", None, raising=False)
+
+    def test_log_persists_user_id_hash_sync_path(self, tmp_path, monkeypatch):
+        """Force the synchronous fallback path (no background queue) and
+        verify the emitted row's user_id column == hash_token(token) and that
+        the raw token never appears anywhere in the row."""
+        from tokenpak.proxy.monitor import Monitor as _Monitor
+        m = _Monitor(self._fresh_db(tmp_path))
+        self._force_sync_path(monkeypatch)
+        token = "rotation-secret-AB-1234567890"
+        uid = hash_token(token)
+        m.log(
+            model="claude-3-5-sonnet",
+            input_tokens=10,
+            output_tokens=20,
+            cost=0.001,
+            latency_ms=42,
+            status_code=200,
+            endpoint="https://api.anthropic.com/v1/messages",
+            user_id=uid,
+        )
+        row = self._last_row(m.db_path)
+        assert row is not None
+        assert row["user_id"] == uid, f"user_id mismatch: got {row['user_id']!r}"
+        # I5-adjacent: no column may contain the raw token, even partially.
+        for k, v in row.items():
+            if isinstance(v, str):
+                assert token not in v, (
+                    f"raw token leaked to telemetry column {k!r}: {v!r}"
+                )
+
+    def test_log_default_user_id_is_empty_string(self, tmp_path, monkeypatch):
+        """Localhost / pre-A6 callers do not pass user_id → empty string."""
+        from tokenpak.proxy.monitor import Monitor as _Monitor
+        m = _Monitor(self._fresh_db(tmp_path))
+        self._force_sync_path(monkeypatch)
+        m.log(
+            model="claude-3-5-sonnet",
+            input_tokens=1,
+            output_tokens=1,
+            cost=0.0,
+            latency_ms=1,
+            status_code=200,
+            endpoint="https://api.anthropic.com/v1/messages",
+        )
+        row = self._last_row(m.db_path)
+        assert row is not None
+        assert row["user_id"] == "", f"expected '' default, got {row['user_id']!r}"
+
+    def test_user_id_passed_to_monitor_log(self):
+        """server.py:1569 must pass ``user_id=...`` through to ps.monitor.log
+        — AST-level assertion so the wire stays connected even if surrounding
+        code shifts. Equivalent in spirit to test_hmac_compare_digest_used."""
+        import ast
+        from pathlib import Path
+        src = Path(proxy_server.__file__).read_text()
+        tree = ast.parse(src)
+        found = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "log" and any(
+                    kw.arg == "user_id" for kw in node.keywords
+                ):
+                    # narrow to the ps.monitor.log call by checking attribute chain
+                    val = node.func.value
+                    if (
+                        isinstance(val, ast.Attribute)
+                        and val.attr == "monitor"
+                    ):
+                        found = True
+                        break
+            # also accept (less strictly) any `.log(user_id=...)` call as
+            # belt-and-suspenders for refactors.
+            if isinstance(node, ast.Call) and any(
+                isinstance(kw.arg, str) and kw.arg == "user_id" for kw in node.keywords
+            ):
+                if (
+                    isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "log"
+                ):
+                    found = True
+        assert found, (
+            "expected ps.monitor.log(... user_id=...) wire in tokenpak/proxy/server.py"
+        )

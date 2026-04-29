@@ -72,9 +72,16 @@ curl https://your-proxy-host:8766/v1/messages \
   ``tests/proxy/test_proxy_auth.py::test_path4_…`` against an in-process
   mock upstream.
 - **Telemetry identity** — on a successful Bearer match, the request emits
-  ``user_id`` = SHA-256 hex of the token into the structured request log
-  (``~/.tokenpak/logs/...``) under the ``extra.user_id`` key. The raw token
-  is never logged, persisted, or copied between requests.
+  ``user_id`` = SHA-256 hex of the token into:
+    1. the SQLite ``requests`` table (``~/.tokenpak/monitor.db``) via
+       ``Monitor.log`` — this is the canonical telemetry-row identity that
+       ``tokenpak status`` and downstream rollups read; and
+    2. the structured JSON request log (``~/.tokenpak/logs/proxy-*.log``)
+       under the ``extra.user_id`` key.
+  The raw token is never logged, persisted, or copied between requests.
+  Schema migration is additive (``ALTER TABLE requests ADD COLUMN user_id
+  TEXT DEFAULT ''``), so existing databases upgrade in place — pre-A6 rows
+  just have an empty ``user_id``.
 - **Timing-safe comparison** — ``hmac.compare_digest`` is used, not ``==``.
 
 ## Out of scope (today)
