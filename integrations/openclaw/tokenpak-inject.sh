@@ -45,6 +45,11 @@ set -euo pipefail
 
 PROXY_URL="${TOKENPAK_URL:-http://localhost:8766}"
 
+# Locate this script's own directory so the embedded Python can find the
+# openclaw-adapter bundle that ships next to it under ./hooks/.
+TOKENPAK_INJECT_SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+export TOKENPAK_INJECT_SCRIPT_DIR
+
 # ── Mode flag ────────────────────────────────────────────────────────
 # Default = additive. Pass --exclusive (or set
 # TOKENPAK_INJECT_EXCLUSIVE=1) to also rewrite primary models +
@@ -528,6 +533,149 @@ def sync_codex_jwt():
             log(f"Warning: {af}: {e}")
     return changed > 0
 
+# ── 6. openclaw-adapter hook (Path C session-binding, OAS-05) ──────────
+#
+# The openclaw-adapter hook (initiative
+# 2026-04-28-openclaw-adapter-session-binding) writes
+# ``~/.openclaw/sessions/active.json`` on every ``message:received`` /
+# ``message:sent`` event so the tokenpak proxy can bind the session UUID
+# as ``journal.db.session_id``. Installing it on a fleet host:
+#   1. Copy bundle (``handler.js`` + ``HOOK.md`` + ``tests/test-active-json.js``)
+#      to ``~/.openclaw/hooks/openclaw-adapter/``.
+#   2. Add (or upgrade) ``hooks.internal.entries.openclaw-adapter`` in
+#      ``~/.openclaw/openclaw.json``.
+#   3. Idempotent — re-running is a clean no-op when nothing has changed,
+#      a clean upgrade when the bundle drifted.
+# Additive only (``feedback_tokenpak_additive_only``) — never removes the
+# user's existing hooks; never touches ``tokenpak-telemetry``.
+
+ADAPTER_BUNDLE_REL = "hooks/openclaw-adapter"
+
+
+def _resolve_adapter_bundle(script_dir):
+    """Find the openclaw-adapter source bundle.
+
+    The hook bundle lives under ``tokenpak/integrations/openclaw/hooks/``
+    (sibling of the Python package); the install script lives one level
+    up at ``integrations/openclaw/tokenpak-inject.sh``. Tolerate both
+    layouts so the script works whether invoked from the package or the
+    repo root.
+    """
+    candidates = [
+        script_dir / ADAPTER_BUNDLE_REL,
+        # Repo-root fallback: <repo>/tokenpak/integrations/openclaw/hooks/openclaw-adapter
+        script_dir.parent.parent
+            / "tokenpak" / "integrations" / "openclaw" / ADAPTER_BUNDLE_REL,
+    ]
+    for c in candidates:
+        if (c / "handler.js").is_file():
+            return c
+    return candidates[0]  # for the FAIL-message path
+
+
+def _read_hook_version(hook_md):
+    """Pull the ``version:`` field from a HOOK.md YAML frontmatter."""
+    try:
+        text = Path(hook_md).read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    in_front = False
+    for line in text.splitlines():
+        if line.strip() == "---":
+            if in_front:
+                break
+            in_front = True
+            continue
+        if not in_front:
+            continue
+        if line.startswith("version:"):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def _files_equal(a, b):
+    try:
+        return Path(a).read_bytes() == Path(b).read_bytes()
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def install_openclaw_adapter():
+    """Install / upgrade the ``openclaw-adapter`` hook bundle (OAS-05).
+
+    Returns True when the openclaw.json file was mutated (so the caller
+    knows a save is needed); False when nothing changed.
+    """
+    script_dir = Path(os.environ.get("TOKENPAK_INJECT_SCRIPT_DIR") or ".").resolve()
+    src_dir = _resolve_adapter_bundle(script_dir)
+    src_handler = src_dir / "handler.js"
+    src_hook_md = src_dir / "HOOK.md"
+    src_test = src_dir / "tests" / "test-active-json.js"
+
+    if not src_handler.is_file() or not src_hook_md.is_file():
+        log(f"[openclaw-adapter] FAIL: missing bundle in {src_dir}")
+        return False
+
+    target_dir = OPENCLAW_DIR / "hooks" / "openclaw-adapter"
+    tgt_handler = target_dir / "handler.js"
+    tgt_hook_md = target_dir / "HOOK.md"
+    tgt_test = target_dir / "tests" / "test-active-json.js"
+
+    src_version = _read_hook_version(src_hook_md) or "?"
+    tgt_version = _read_hook_version(tgt_hook_md)
+
+    bundle_uptodate = (
+        tgt_version == src_version
+        and _files_equal(src_handler, tgt_handler)
+        and _files_equal(src_hook_md, tgt_hook_md)
+        and (not src_test.is_file() or _files_equal(src_test, tgt_test))
+    )
+
+    if bundle_uptodate:
+        log(f"[openclaw-adapter] up-to-date (v{src_version})")
+    else:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "tests").mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src_handler, tgt_handler)
+        shutil.copy2(src_hook_md, tgt_hook_md)
+        if src_test.is_file():
+            shutil.copy2(src_test, tgt_test)
+        if tgt_version:
+            log(f"[openclaw-adapter] upgraded {tgt_version} -> {src_version}")
+        else:
+            log(f"[openclaw-adapter] installed v{src_version}")
+
+    # Patch openclaw.json (additive). When MAIN_CONFIG doesn't exist, the
+    # host hasn't been bootstrapped yet — surface that and bail without
+    # crashing the rest of the inject pipeline.
+    if not MAIN_CONFIG.exists():
+        log(f"[openclaw-adapter] WARN: {MAIN_CONFIG} missing — skipping config patch")
+        return False
+    config = load_json(MAIN_CONFIG)
+    hooks = config.setdefault("hooks", {})
+    internal = hooks.setdefault("internal", {})
+    entries = internal.setdefault("entries", {})
+
+    desired = {
+        "enabled": True,
+        "path": str(Path("~/.openclaw/hooks/openclaw-adapter")),
+    }
+    current = entries.get("openclaw-adapter") or {}
+    needs_patch = (
+        current.get("enabled") is not True
+        or current.get("path") != desired["path"]
+    )
+    if needs_patch:
+        merged = dict(current)
+        merged.update(desired)
+        entries["openclaw-adapter"] = merged
+        save_json(MAIN_CONFIG, config)
+        log(f"[openclaw-adapter] openclaw.json entry added/updated")
+        return True
+    log(f"[openclaw-adapter] openclaw.json entry already enabled")
+    return False
+
+
 def main():
     log(f"Proxy: {PROXY_URL}")
     total = False; all_pm = {}
@@ -553,6 +701,13 @@ def main():
         total = True
     if sync_codex_jwt():
         total = True
+
+    # OAS-05: openclaw-adapter (Path C session-binding hook).
+    try:
+        if install_openclaw_adapter():
+            total = True
+    except Exception as e:
+        log(f"[openclaw-adapter] WARN: install raised: {e}")
 
     log(f"Done — mirrored {len(all_pm)} providers" if total else "No changes needed")
 
