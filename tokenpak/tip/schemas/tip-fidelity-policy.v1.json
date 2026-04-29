@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tip-fidelity-policy.v1.json",
+  "title": "TIP Fidelity Policy",
+  "description": "Content preservation constraint for TIP optimization stages.",
+  "type": "string",
+  "enum": [
+    "lossless_required",
+    "semantic_safe",
+    "aggressive_ok",
+    "cache_response_safe",
+    "no_optimize"
+  ]
+}

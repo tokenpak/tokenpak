@@ -3322,6 +3322,35 @@ def cmd_savings(args):
         )
     )
 
+    # Attribution v2 breakdown (additive; only shown when TOKENPAK_ATTRIBUTION_V2 is set)
+    try:
+        from .services.optimization.attribution_stage import is_attribution_v2_enabled
+        if is_attribution_v2_enabled():
+            from .telemetry.savings import aggregate_attributions, format_savings_by_source
+            from .telemetry.storage import TelemetryDB
+            import pathlib
+            _db_path = pathlib.Path.home() / ".tokenpak" / "telemetry.db"
+            if _db_path.exists():
+                _db = TelemetryDB(_db_path)
+                _rows = _db.query_savings_by_source(days=days)
+                if _rows:
+                    from .telemetry.savings import SourceSummary
+                    by_source = {
+                        r["source"]: SourceSummary(
+                            source=r["source"],
+                            saved_tokens=r["saved_tokens"],
+                            estimated_cost_saved=r["estimated_cost_saved"],
+                            cost_available=bool(r["cost_available"]),
+                            request_count=r["request_count"],
+                            credited_to_tokenpak=bool(r["credited_to_tokenpak"]),
+                        )
+                        for r in _rows
+                    }
+                    print()
+                    print(format_savings_by_source(by_source, days=days))
+    except Exception:
+        pass
+
 
 def cmd_compare(args):
     """Show before/after cost comparison for last N requests."""

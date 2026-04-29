@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tip-compression-policy.v1.json",
+  "title": "TIP Compression Policy",
+  "description": "Per-request compression behavior contract for the TIP optimization pipeline.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "recipe_ids": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "target_ratio": {
+      "type": ["number", "null"],
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "default": null
+    },
+    "protected_span_types": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": []
+    },
+    "preserve_exact_blocks": {
+      "type": "boolean",
+      "default": true
+    },
+    "bypass_reason": {
+      "type": ["string", "null"],
+      "default": null
+    }
+  },
+  "additionalProperties": false
+}

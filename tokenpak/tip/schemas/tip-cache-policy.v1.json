@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tip-cache-policy.v1.json",
+  "title": "TIP Cache Policy",
+  "description": "Per-request cache behavior contract for the TIP optimization pipeline.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "semantic_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["request", "session", "agent", "workspace", "global"],
+      "default": "session"
+    },
+    "ttl_seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 300
+    },
+    "similarity_threshold": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "default": 0.96
+    },
+    "bypass_reason": {
+      "type": ["string", "null"],
+      "default": null
+    },
+    "provider_prompt_cache_key": {
+      "type": ["string", "null"],
+      "default": null
+    },
+    "allow_response_reuse": {
+      "type": "boolean",
+      "default": false
+    },
+    "allow_context_reuse": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "additionalProperties": false
+}

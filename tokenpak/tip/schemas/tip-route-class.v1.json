@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tip-route-class.v1.json",
+  "title": "TIP Optimization Route Class",
+  "description": "Semantic content type taxonomy for request classification in the TIP optimization pipeline.",
+  "type": "string",
+  "enum": [
+    "general_chat",
+    "status_check",
+    "configuration_inspection",
+    "code_generation",
+    "code_edit",
+    "code_review",
+    "debugging",
+    "test_failure",
+    "log_analysis",
+    "git_diff_review",
+    "shell_command_analysis",
+    "documentation_generation",
+    "summarization",
+    "research",
+    "planning",
+    "unknown"
+  ]
+}

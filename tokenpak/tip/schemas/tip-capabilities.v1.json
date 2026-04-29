@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "tip-capabilities.v1.json",
+  "title": "TIP Optimization Capability Set",
+  "description": "A frozenset of TIP capability label strings declared by a format or platform adapter.",
+  "type": "array",
+  "items": {
+    "type": "string",
+    "pattern": "^(tip|ext)\\.[a-z0-9._-]+$",
+    "description": "TIP capability label in format tip.<group>.<feature> or ext.<vendor>.<feature>"
+  },
+  "uniqueItems": true,
+  "examples": [
+    ["tip.compression.v1", "tip.cache.proxy-managed", "tip.telemetry.attribution.v1"]
+  ]
+}

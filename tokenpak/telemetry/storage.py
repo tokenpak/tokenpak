@@ -188,6 +188,47 @@ CREATE INDEX IF NOT EXISTS idx_rollup_provider_date
     ON tp_rollup_daily_provider (date);
 CREATE INDEX IF NOT EXISTS idx_rollup_agent_date
     ON tp_rollup_daily_agent (date);
+
+-- TIP-06: Savings attribution by source (NEVER overclaims TokenPak savings)
+CREATE TABLE IF NOT EXISTS tp_savings_attribution (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id          TEXT NOT NULL DEFAULT '',
+    timestamp           REAL NOT NULL DEFAULT 0,
+    source              TEXT NOT NULL DEFAULT 'unattributed',
+    raw_tokens          INTEGER NOT NULL DEFAULT 0,
+    sent_tokens         INTEGER NOT NULL DEFAULT 0,
+    saved_tokens        INTEGER NOT NULL DEFAULT 0,
+    estimated_cost_saved REAL NOT NULL DEFAULT 0,
+    cost_available      INTEGER NOT NULL DEFAULT 0,
+    credited_to_tokenpak INTEGER NOT NULL DEFAULT 0,
+    platform            TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_savings_attr_request
+    ON tp_savings_attribution (request_id);
+CREATE INDEX IF NOT EXISTS idx_savings_attr_source
+    ON tp_savings_attribution (source);
+CREATE INDEX IF NOT EXISTS idx_savings_attr_ts
+    ON tp_savings_attribution (timestamp);
+
+-- TIP-06: Cache miss reasons for observability
+CREATE TABLE IF NOT EXISTS tp_cache_miss_reasons (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id  TEXT NOT NULL DEFAULT '',
+    cache_type  TEXT NOT NULL DEFAULT 'semantic',
+    reason      TEXT NOT NULL DEFAULT 'unknown',
+    route_class TEXT NOT NULL DEFAULT '',
+    platform    TEXT NOT NULL DEFAULT '',
+    model       TEXT NOT NULL DEFAULT '',
+    timestamp   REAL NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_cache_miss_reason
+    ON tp_cache_miss_reasons (reason);
+CREATE INDEX IF NOT EXISTS idx_cache_miss_ts
+    ON tp_cache_miss_reasons (timestamp);
 """
 
 # ---------------------------------------------------------------------------
@@ -1317,6 +1358,116 @@ class TelemetryDB:
         """
         cur.execute(sql, params)
         return [_row_to_dict(cur, r) for r in cur.fetchall()]
+
+    # ------------------------------------------------------------------
+    # TIP-06: Savings attribution
+    # ------------------------------------------------------------------
+
+    def insert_savings_attribution(self, row: dict) -> None:
+        """Insert one savings attribution record."""
+        self.batch_insert_savings_attributions([row])
+
+    def batch_insert_savings_attributions(self, rows: list) -> None:
+        """Batch-insert savings attribution records."""
+        if not rows:
+            return
+        sql = """
+        INSERT INTO tp_savings_attribution
+            (request_id, timestamp, source, raw_tokens, sent_tokens,
+             saved_tokens, estimated_cost_saved, cost_available,
+             credited_to_tokenpak, platform, model, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """
+        self._conn.executemany(
+            sql,
+            [
+                (
+                    r.get("request_id", ""),
+                    r.get("timestamp", _now()),
+                    r.get("source", "unattributed"),
+                    int(r.get("raw_tokens", 0)),
+                    int(r.get("sent_tokens", 0)),
+                    int(r.get("saved_tokens", 0)),
+                    float(r.get("estimated_cost_saved", 0.0)),
+                    int(r.get("cost_available", 0)),
+                    int(r.get("credited_to_tokenpak", 0)),
+                    r.get("platform", ""),
+                    r.get("model", ""),
+                    r.get("notes", ""),
+                )
+                for r in rows
+            ],
+        )
+        self._conn.commit()
+
+    def query_savings_by_source(self, *, days: int = 7) -> list:
+        """Aggregate savings tokens and costs grouped by source.
+
+        Returns a list of dicts: source, saved_tokens, estimated_cost_saved,
+        cost_available, credited_to_tokenpak, request_count.
+        """
+        since = _now() - (days * 86400.0)
+        sql = """
+        SELECT
+            source,
+            SUM(saved_tokens)          AS saved_tokens,
+            SUM(estimated_cost_saved)  AS estimated_cost_saved,
+            MAX(cost_available)        AS cost_available,
+            MAX(credited_to_tokenpak)  AS credited_to_tokenpak,
+            COUNT(*)                   AS request_count
+        FROM tp_savings_attribution
+        WHERE timestamp >= ?
+        GROUP BY source
+        ORDER BY saved_tokens DESC
+        """
+        cur = self._conn.cursor()
+        cur.execute(sql, (since,))
+        return [_row_to_dict(cur, r) for r in cur.fetchall()]
+
+    # ------------------------------------------------------------------
+    # TIP-06: Cache miss reasons
+    # ------------------------------------------------------------------
+
+    def insert_cache_miss(self, row: dict) -> None:
+        """Insert one cache miss reason record."""
+        sql = """
+        INSERT INTO tp_cache_miss_reasons
+            (request_id, cache_type, reason, route_class, platform, model, timestamp)
+        VALUES (?,?,?,?,?,?,?)
+        """
+        self._conn.execute(
+            sql,
+            (
+                row.get("request_id", ""),
+                row.get("cache_type", "semantic"),
+                row.get("reason", "unknown"),
+                row.get("route_class", ""),
+                row.get("platform", ""),
+                row.get("model", ""),
+                row.get("timestamp", _now()),
+            ),
+        )
+        self._conn.commit()
+
+    def query_cache_miss_summary(self, *, days: int = 7) -> list:
+        """Aggregate cache miss counts grouped by reason.
+
+        Returns a list of dicts: reason, count.
+        """
+        since = _now() - (days * 86400.0)
+        sql = """
+        SELECT
+            reason,
+            COUNT(*) AS count
+        FROM tp_cache_miss_reasons
+        WHERE timestamp >= ?
+        GROUP BY reason
+        ORDER BY count DESC
+        """
+        cur = self._conn.cursor()
+        cur.execute(sql, (since,))
+        return [_row_to_dict(cur, r) for r in cur.fetchall()]
+
 
 # Alias for backward-compat
 TelemetryStorage = TelemetryDB

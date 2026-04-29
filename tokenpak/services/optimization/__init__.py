@@ -55,6 +55,12 @@ from .stage import EligibilityResult, OptimizationStage
 from .trace import OptimizationTrace, StageTrace
 from .cache_stage import SemanticCacheStage, get_cached_response
 from .cache_trace import CacheMissReason, CacheStageTrace
+from .attribution_stage import (
+    AttributionStage,
+    is_attribution_v2_enabled,
+    get_attributions,
+)
+from .telemetry_sink import TelemetrySink
 
 __all__ = [
     "OptimizationContext",
@@ -87,4 +93,9 @@ __all__ = [
     "get_cached_response",
     "CacheMissReason",
     "CacheStageTrace",
+    # TIP-06 — savings attribution + telemetry sink
+    "AttributionStage",
+    "is_attribution_v2_enabled",
+    "get_attributions",
+    "TelemetrySink",
 ]
