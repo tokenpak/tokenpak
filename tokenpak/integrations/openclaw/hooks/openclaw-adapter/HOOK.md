@@ -1,5 +1,6 @@
 ---
 name: openclaw-adapter
+version: 1.0
 description: "Bind OpenClaw session UUIDs to tokenpak proxy journal.db via filesystem rendezvous (active.json) — Path C design"
 homepage: https://docs.openclaw.ai/automation/hooks
 metadata:
