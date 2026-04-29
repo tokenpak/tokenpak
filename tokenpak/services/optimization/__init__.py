@@ -26,11 +26,31 @@ as immutable. Mutation belongs to follow-up tasks (TIP-04 onward) and lives
 behind a separate flag.
 """
 
+from .compression_stage import (
+    RouteClassCompressionStage,
+    is_stage_enabled as is_route_compression_enabled,
+    register_with_default_pipeline as register_route_compression_stage,
+)
 from .context import OptimizationContext
 from .contract_builder import build_contract
 from .pipeline import OptimizationPipeline, run_observe_only
 from .policies import is_pipeline_enabled
+from .protected_spans import (
+    ProtectedSpan,
+    SpanType,
+    detect_protected_spans,
+    rewrite_outside_spans,
+)
 from .registry import StageRegistry
+from .route_recipe_policy import (
+    DEFAULT_POLICIES,
+    FidelityTier,
+    RouteClass,
+    RoutePolicy,
+    apply_policy,
+    get_route_policy,
+    select_recipes,
+)
 from .stage import EligibilityResult, OptimizationStage
 from .trace import OptimizationTrace, StageTrace
 
@@ -45,4 +65,19 @@ __all__ = [
     "build_contract",
     "is_pipeline_enabled",
     "run_observe_only",
+    # TIP-05 — route-class compression policy
+    "RouteClass",
+    "FidelityTier",
+    "RoutePolicy",
+    "DEFAULT_POLICIES",
+    "get_route_policy",
+    "select_recipes",
+    "apply_policy",
+    "SpanType",
+    "ProtectedSpan",
+    "detect_protected_spans",
+    "rewrite_outside_spans",
+    "RouteClassCompressionStage",
+    "is_route_compression_enabled",
+    "register_route_compression_stage",
 ]
