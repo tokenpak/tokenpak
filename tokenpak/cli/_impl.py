@@ -1358,8 +1358,83 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
     return (path, content, block)  # type: ignore[return-value]
 
 
+def _do_reindex_registered(paths_to_index, args):
+    """Reindex one or more registered vault paths (VDS-01)."""
+    from tokenpak.vault.config import (
+        VaultPathEntry,
+        load_config,
+        save_config,
+        update_health,
+    )
+
+    if not paths_to_index:
+        print("No registered paths to reindex.")
+        print("Register paths first via `tokenpak vault add <path>` (paid)")
+        print(f"or by editing ~/.tokenpak/vault.yaml directly (OSS).")
+        return
+
+    config = load_config()
+    success_count = 0
+    fail_count = 0
+
+    for entry in paths_to_index:
+        target = entry.expanded_path()
+        if not os.path.isdir(target):
+            print(f"⚠ skipping {entry.path}: not a directory ({target})")
+            update_health(entry.path, "error", notes="path is not a directory")
+            fail_count += 1
+            continue
+        print(f"Reindexing: {target}")
+        # Set the directory on args, then call the inner indexer
+        args.directory = target
+        try:
+            _do_index(args)
+            now_ts = int(time.time())
+            entry.last_indexed_ts = now_ts
+            entry.last_index_health = "ok"
+            update_health(entry.path, "ok", ts=now_ts)
+            success_count += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"✖ failed to reindex {target}: {e}", file=sys.stderr)
+            update_health(entry.path, "error", notes=str(e)[:200])
+            fail_count += 1
+
+    # Persist the updated last_indexed_ts/health back to vault.yaml
+    save_config(config)
+    print()
+    print(f"Reindex complete: {success_count} succeeded, {fail_count} failed.")
+    if fail_count > 0:
+        sys.exit(1)
+
+
 def cmd_index(args):
     """Index a directory with parallel processing and batch transactions."""
+    # --reindex-all / --reindex-path: VDS-01 vault.yaml-driven reindex
+    reindex_all = getattr(args, "reindex_all", False)
+    reindex_path = getattr(args, "reindex_path", None)
+    if reindex_all or reindex_path:
+        from tokenpak.vault.config import load_config
+
+        config = load_config()
+        if reindex_all and reindex_path:
+            print("error: --reindex-all and --reindex-path are mutually exclusive",
+                  file=sys.stderr)
+            sys.exit(2)
+        if reindex_path:
+            entry = config.find_path(reindex_path)
+            if entry is None:
+                print(f"error: path {reindex_path!r} is not registered in "
+                      f"~/.tokenpak/vault.yaml", file=sys.stderr)
+                print("registered paths:", file=sys.stderr)
+                for p in config.paths:
+                    print(f"  - {p.path}", file=sys.stderr)
+                sys.exit(1)
+            _do_reindex_registered([entry], args)
+            return
+        # --reindex-all
+        _do_reindex_registered(config.paths, args)
+        return
+
     # --status mode: show stats from BlockRegistry
     if getattr(args, "status", False):
         import os
@@ -3133,6 +3208,19 @@ def build_parser():
         "--no-treesitter",
         action="store_true",
         help="Force regex-based code processing (skip tree-sitter)",
+    )
+    # VDS-01 (2026-04-28): vault.yaml-driven reindex flags. Manual triggers
+    # for registered vault directories without cron/script archaeology.
+    p_index.add_argument(
+        "--reindex-all",
+        action="store_true",
+        help="Reindex every path registered in ~/.tokenpak/vault.yaml",
+    )
+    p_index.add_argument(
+        "--reindex-path",
+        type=str,
+        default=None,
+        help="Reindex one specific path registered in ~/.tokenpak/vault.yaml",
     )
     p_index.set_defaults(func=cmd_index)
 
