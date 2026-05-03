@@ -1361,7 +1361,6 @@ def _process_file(args: Tuple) -> Optional[Tuple[str, Block]]:
 def _do_reindex_registered(paths_to_index, args):
     """Reindex one or more registered vault paths (VDS-01)."""
     from tokenpak.vault.config import (
-        VaultPathEntry,
         load_config,
         save_config,
         update_health,
@@ -1370,7 +1369,7 @@ def _do_reindex_registered(paths_to_index, args):
     if not paths_to_index:
         print("No registered paths to reindex.")
         print("Register paths first via `tokenpak vault add <path>` (paid)")
-        print(f"or by editing ~/.tokenpak/vault.yaml directly (OSS).")
+        print("or by editing ~/.tokenpak/vault.yaml directly (OSS).")
         return
 
     config = load_config()

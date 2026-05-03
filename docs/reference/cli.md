@@ -169,7 +169,8 @@ usage: tokenpak index [-h] [--status] [--budget BUDGET] [--workers WORKERS]
                       [--auto-workers] [--recalibrate]
                       [--calibration-rounds CALIBRATION_ROUNDS]
                       [--max-workers MAX_WORKERS] [--watch]
-                      [--debounce DEBOUNCE] [--no-treesitter]
+                      [--debounce DEBOUNCE] [--no-treesitter] [--reindex-all]
+                      [--reindex-path REINDEX_PATH]
                       [directory]
 
 positional arguments:
@@ -191,6 +192,11 @@ options:
   --watch               Watch directory and auto-reindex on file changes
   --debounce DEBOUNCE   Debounce delay in ms for watch mode (default: 500)
   --no-treesitter       Force regex-based code processing (skip tree-sitter)
+  --reindex-all         Reindex every path registered in
+                        ~/.tokenpak/vault.yaml
+  --reindex-path REINDEX_PATH
+                        Reindex one specific path registered in
+                        ~/.tokenpak/vault.yaml
 ```
 
 ### `tokenpak search`
