@@ -24,7 +24,6 @@ import pytest
 
 from tokenpak.services.routing_service import platform_bridge as pb
 
-
 _FRESH_UUID = "11111111-2222-3333-4444-555555555555"
 
 
