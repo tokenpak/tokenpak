@@ -55,8 +55,13 @@ Kevin's ratification 2026-04-24:
 
 from __future__ import annotations
 
+import json
+import os
+import re
+import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Mapping, Optional
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 HeaderMap = Mapping[str, str]
 
@@ -69,13 +74,20 @@ class PlatformOrigin:
     session id. ``declared_provider`` is the tokenpak provider name the
     caller claims (``tokenpak-claude-code`` / ``tokenpak-anthropic`` /
     ``tokenpak-openai-codex`` / etc.); when absent, the selector falls
-    back to the platform's default_provider.
+    back to the platform's default_provider. ``attribution_source``
+    follows the never-over-claim rule from
+    ``feedback_status_attribution_contract`` — set to a definite source
+    when one is available, otherwise ``"unknown"``. For OpenClaw-UA
+    traffic the value is one of:
+    ``"openclaw_active_session_file"`` (read fresh + valid active.json)
+    or ``"anonymous_user_agent_only"`` (no file / stale / malformed).
     """
 
     platform_name: str
     session_id: Optional[str] = None
     declared_provider: Optional[str] = None
     extra: Dict[str, str] = field(default_factory=dict)
+    attribution_source: str = "unknown"
 
 
 @dataclass(frozen=True)
@@ -151,6 +163,7 @@ def detect_origin(headers: HeaderMap) -> Optional[PlatformOrigin]:
                 session_id=origin.session_id,
                 declared_provider=explicit_provider,
                 extra=origin.extra,
+                attribution_source=origin.attribution_source,
             )
         return origin
     return None
@@ -163,11 +176,64 @@ def detect_origin(headers: HeaderMap) -> Optional[PlatformOrigin]:
 # the call site.
 
 
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_ACTIVE_FILE = Path.home() / ".openclaw" / "sessions" / "active.json"
+
+
+def _active_ttl_sec() -> int:
+    """Stale-TTL cutoff in seconds; configurable via env."""
+    try:
+        return int(os.environ.get("OPENCLAW_ACTIVE_TTL_SEC", "300"))
+    except (TypeError, ValueError):
+        return 300
+
+
+# 1-second mtime-keyed cache to avoid hammering the filesystem on burst
+# traffic. ``payload`` is the parsed JSON (or sentinel ``False`` when the
+# last read failed parse / schema). Reset by setting ``read_ts=0``.
+_active_cache: Dict[str, Any] = {"mtime": 0.0, "payload": None, "read_ts": 0.0}
+
+
+def _read_active_json() -> Optional[dict]:
+    """Read ``~/.openclaw/sessions/active.json`` with a 1s mtime cache.
+
+    Returns the parsed dict on success, ``None`` on any failure
+    (missing, permission denied, malformed, IO error). Never raises.
+    """
+    try:
+        st = _ACTIVE_FILE.stat()
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+    now = time.time()
+    if (
+        _active_cache["payload"] is not None
+        and _active_cache["mtime"] == st.st_mtime
+        and now - _active_cache["read_ts"] < 1.0
+    ):
+        cached = _active_cache["payload"]
+        return cached if isinstance(cached, dict) else None
+    try:
+        with _ACTIVE_FILE.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError):
+        _active_cache["mtime"] = st.st_mtime
+        _active_cache["payload"] = None
+        _active_cache["read_ts"] = now
+        return None
+    _active_cache["mtime"] = st.st_mtime
+    _active_cache["payload"] = payload if isinstance(payload, dict) else None
+    _active_cache["read_ts"] = now
+    return payload if isinstance(payload, dict) else None
+
+
 def _openclaw_extract(headers: HeaderMap) -> Optional[PlatformOrigin]:
-    # Highest-confidence signal: explicit session header (aspirational;
-    # real OpenClaw traffic doesn't currently set this, but adapters
-    # that wrap OpenClaw can, and we preserve it for session-mapper
-    # integration).
+    # Highest-confidence per-request signal: explicit session header.
+    # Real OpenClaw traffic doesn't currently set this, but it stays
+    # supported for adapters that wrap OpenClaw and for tests that
+    # need to bypass the file-rendezvous path.
     session_id = headers.get("x-openclaw-session", "").strip()
     if session_id:
         return PlatformOrigin(
@@ -180,13 +246,56 @@ def _openclaw_extract(headers: HeaderMap) -> Optional[PlatformOrigin]:
     # The inspection was done against the installed binary at
     # /home/sue/.nvm/.../openclaw/dist — no other client uses this UA.
     ua = headers.get("user-agent", "").strip().lower()
-    if ua.startswith("openclaw"):
+    if not ua.startswith("openclaw"):
+        return None  # not OpenClaw — no FS access (G6)
+
+    # OAS-11 Path C: User-Agent says openclaw → the openclaw-adapter
+    # hook (OAS-02) writes ~/.openclaw/sessions/active.json on every
+    # message:received/sent event with the live session UUID. Read it,
+    # validate, and bind the session_id. On any failure mode we
+    # degrade to anonymous attribution rather than over-claim.
+    payload = _read_active_json()
+    if payload is None:
         return PlatformOrigin(
             platform_name="openclaw",
-            session_id=None,  # no per-request session to map
+            session_id=None,
             declared_provider=None,
+            attribution_source="anonymous_user_agent_only",
         )
-    return None
+    if payload.get("schema_version") != "1.0":
+        return PlatformOrigin(
+            platform_name="openclaw",
+            session_id=None,
+            declared_provider=None,
+            attribution_source="anonymous_user_agent_only",
+        )
+    uuid = payload.get("session_uuid")
+    if not isinstance(uuid, str) or not _UUID_RE.match(uuid):
+        return PlatformOrigin(
+            platform_name="openclaw",
+            session_id=None,
+            declared_provider=None,
+            attribution_source="anonymous_user_agent_only",
+        )
+    last_ts = payload.get("last_event_ts", 0)
+    try:
+        last_ts_f = float(last_ts)
+    except (TypeError, ValueError):
+        last_ts_f = 0.0
+    age = time.time() - last_ts_f
+    if age > _active_ttl_sec() or age < 0:
+        return PlatformOrigin(
+            platform_name="openclaw",
+            session_id=None,
+            declared_provider=None,
+            attribution_source="anonymous_user_agent_only",
+        )
+    return PlatformOrigin(
+        platform_name="openclaw",
+        session_id=uuid,
+        declared_provider=None,
+        attribution_source="openclaw_active_session_file",
+    )
 
 
 def _codex_extract(headers: HeaderMap) -> Optional[PlatformOrigin]:

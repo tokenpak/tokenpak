@@ -81,8 +81,8 @@ def _db_writer_worker():
                            (timestamp,model,request_type,input_tokens,output_tokens,estimated_cost,
                             latency_ms,status_code,endpoint,compilation_mode,protected_tokens,
                             compressed_tokens,injected_tokens,injected_sources,cache_read_tokens,cache_creation_tokens,
-                            would_have_saved,cache_origin)
-                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            would_have_saved,cache_origin,attribution_source)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         insert_params,
                     )
                     conn.commit()
@@ -176,6 +176,12 @@ class Monitor:
             conn.execute("ALTER TABLE requests ADD COLUMN cache_origin TEXT DEFAULT 'unknown'")
         except sqlite3.OperationalError:
             pass
+        try:
+            conn.execute(
+                "ALTER TABLE requests ADD COLUMN attribution_source TEXT DEFAULT 'unknown'"
+            )
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS budget_alerts (
@@ -234,6 +240,7 @@ class Monitor:
         would_have_saved=0,
         cache_origin="unknown",
         request_id=None,
+        attribution_source="unknown",
     ):
         # SC-02: forward a TIP-shaped row to any installed conformance
         # observer before the DB write. No-op when no observer is
@@ -300,6 +307,7 @@ class Monitor:
             cache_creation_tokens,
             would_have_saved,
             cache_origin,
+            attribution_source if isinstance(attribution_source, str) else "unknown",
         )
         _queued = False
         try:
@@ -311,8 +319,8 @@ class Monitor:
                 "INSERT INTO requests (timestamp, model, request_type, input_tokens, output_tokens, "
                 "estimated_cost, latency_ms, status_code, endpoint, compilation_mode, protected_tokens, "
                 "compressed_tokens, injected_tokens, injected_sources, cache_read_tokens, cache_creation_tokens, "
-                "would_have_saved, cache_origin) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "would_have_saved, cache_origin, attribution_source) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 insert_params,
             )
             _conn.commit()
