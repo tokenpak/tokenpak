@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections import defaultdict
 from typing import Any
 
 from .history import load_records

@@ -24,12 +24,10 @@ from __future__ import annotations
 import http.server
 import json
 import socket
-import statistics
 import threading
 import time
 import urllib.request
 from dataclasses import dataclass
-
 
 _CANNED_RESPONSE = {
     "id": "msg_bench_001",
