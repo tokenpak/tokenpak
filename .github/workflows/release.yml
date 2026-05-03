@@ -237,7 +237,7 @@ jobs:
           cat RELEASE_NOTES.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2  # floating major tag — release.yml-native pre-F-01
+        uses: softprops/action-gh-release@v3  # floating major tag — release.yml-native pre-F-01
         with:
           name: TokenPak v${{ steps.version.outputs.VERSION }}
           body_path: RELEASE_NOTES.md
