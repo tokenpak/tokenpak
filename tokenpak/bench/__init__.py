@@ -11,6 +11,12 @@ exploratory measurement.
 """
 from __future__ import annotations
 
-from .suite import run_quick
-
 __all__ = ["run_quick"]
+
+
+def __getattr__(name: str):
+    # Lazy re-export so `python -m tokenpak.bench.suite` doesn't double-import.
+    if name == "run_quick":
+        from .suite import run_quick
+        return run_quick
+    raise AttributeError(name)

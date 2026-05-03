@@ -42,16 +42,16 @@ def run() -> TipConformanceResult:
         failure_summary: list[str] = []
         for r in results:
             status = getattr(r.status, "value", str(r.status))
-            if status not in ("pass", "PASS"):
+            if status not in ("ok", "OK"):
                 failure_summary.append(f"{getattr(r, 'name', '?')}: {status} — {getattr(r, 'summary', '')}")
 
         return TipConformanceResult(
             metric_id="C2",
             metric_name="tip_runtime_conformance_pass",
             passed=passed,
-            pass_count=int(counts.get("pass", 0)),
+            pass_count=int(counts.get("ok", 0)),
             fail_count=int(counts.get("fail", 0)),
-            error_count=int(counts.get("error", counts.get("tooling-error", 0))),
+            error_count=int(counts.get("warn", 0)),
             total_count=int(sum(counts.values())) if isinstance(counts, dict) else len(results),
             duration_ms=(time.perf_counter() - t0) * 1000,
             failure_summary=failure_summary[:5],
