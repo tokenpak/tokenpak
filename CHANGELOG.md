@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-05-03
+
+### Added — VDS-01 OSS vault discovery / config (PR #86)
+
+A user-facing config schema and CLI surface for managing tokenpak's vault paths without the paid `tokenpak vault add` command.
+
+- `tokenpak/vault/config.py` — `vault.yaml` v1 schema parser + loader.
+- `tokenpak index --reindex-all` — reindexes every registered vault path.
+- `tokenpak index --reindex-path <path>` — reindexes a single registered subtree.
+- `docs/reference/cli.md` regenerated to cover the new flags.
+
+OSS users can now hand-edit `~/.tokenpak/vault.yaml` and reindex via the CLI; paid users continue to use `tokenpak vault add` as the convenience entry point.
+
 ## [1.4.0] - 2026-05-03
 
 This release consolidates the work merged on `main` since `v1.3.22` (Apr 25). The previously-staged but never-tagged `1.3.23` content (Codex format adapter) is included here under "Codex format adapter restored." Three large initiatives shipped on top of it: **Intent Layer**, **Native Client Concurrency Parity (NCP)**, and **OpenClaw Path C session-binding via governor failover**.
