@@ -34,6 +34,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -333,13 +334,49 @@ def _journal_write(session_id: str, tokens_est: int, cost_est: float,
         pass
 
 
-def _resolve_route_class() -> str:
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
+def _resolve_route_class(session_id: str = "") -> str:
     """Best-effort: ask the shared classifier for the current route class.
 
     Falls back to ``"generic"`` if the services layer isn't importable
     (e.g. during a partial install). Never raises — this is
     performance-critical pre-send code.
+
+    2026-04-29 (TBR follow-up Fix 2): Claude Code's hook spawn
+    mechanism does NOT propagate ``CLAUDECODE=1`` or
+    ``CLAUDE_CODE_SESSION_ID`` via env to the hook subprocess (verified
+    against journal data — recent interactive sessions classify as
+    "generic" despite a UUID session_id being present in the payload).
+    Claude Code DOES pass the session_id through the hook payload, so
+    a UUID-shaped ``session_id`` is a strong, env-independent Claude
+    Code signal. When that signal is present, we infer the
+    sub-classification from ``CLAUDE_CODE_ENTRYPOINT`` (which IS set
+    in the parent shell) and default to ``claude-code-tui``.
+
+    Without this short-circuit, ``_should_enrich`` returns False and
+    the entire capsule + vault enrichment path is skipped on Kevin's
+    interactive sessions.
     """
+    # Claude Code payload session_id signal — env-independent.
+    if session_id and _UUID_RE.match(session_id):
+        entry = os.environ.get("CLAUDE_CODE_ENTRYPOINT", "").lower()
+        if entry == "cron":
+            return "claude-code-cron"
+        if entry == "cli":
+            return "claude-code-cli"
+        if entry == "sdk":
+            return "claude-code-sdk"
+        if entry == "ide":
+            return "claude-code-ide"
+        return "claude-code-tui"
+
+    # Fallback: original env-based path (still works when fleet wrappers
+    # like agent-claude-worker.sh set CLAUDECODE=1 explicitly).
     try:
         # §5.2-C — pure local helper: the companion hook needs the
         # RouteClass name to stamp its local journal row. We're not
@@ -417,7 +454,7 @@ def run(payload: Dict[str, Any]) -> int:
     # Tag the journal row with the canonical route class so status +
     # dashboards can group companion activity the same way they group
     # proxy-side traffic. Single source of truth.
-    route_class = _resolve_route_class()
+    route_class = _resolve_route_class(session_id)
 
     # Persist journal + running cost (best-effort, never blocks the hook).
     _journal_write(session_id, tokens_est, cost_est, prompt_preview, route_class)
