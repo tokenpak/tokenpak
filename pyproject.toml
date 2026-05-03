@@ -49,6 +49,10 @@ classifiers = [
     "Topic :: Utilities",
     "Typing :: Typed",
 ]
+# Slim core dependencies — Standard 02 §9 / Constitution 00 compliance.
+# Anything that drags in torch / nvidia-* / scipy / pandas / a multi-hundred-MB
+# transitive belongs in [project.optional-dependencies] below, not here.
+# See proposals/2026-05-01-tokenpak-install-footprint-extras-split.md.
 dependencies = [
     "aiohttp>=3.9.0",
     "pyyaml>=6.0",
@@ -67,6 +71,50 @@ dependencies = [
 file = "LICENSE"
 
 [project.optional-dependencies]
+# Heavy feature extras — opt-in. Every import site for these is wrapped in
+# try/except ImportError with a clear "install tokenpak[<extra>]" message.
+# See proposals/2026-05-01-tokenpak-install-footprint-extras-split.md.
+retrieval = [
+    # Pulls torch + nvidia/* (~5 GB) — opt-in only.
+    "sentence-transformers>=2.2.0",
+]
+code-compression = [
+    # tree-sitter-languages has no Python 3.13 wheel (dormant package);
+    # pinned below 3.13 until a migration to modern per-language tree-sitter
+    # bindings ships in 1.1.0. Features that import it will raise ImportError
+    # on 3.13 installations — acceptable per graceful-degradation pattern.
+    "tree-sitter-languages>=1.8.0; python_version < '3.13'",
+]
+intelligence = [
+    # scipy is the only intelligence-tier dep currently imported (guarded in
+    # tokenpak/intelligence/ab_optimizer.py). scikit-learn / sympy were
+    # candidates in the proposal but no source file imports them today, so
+    # adding them would violate Standard 02 §9 ("New runtime deps require a
+    # PR note explaining what they do, why stdlib won't work, and what
+    # happens when they're missing"). Add them here when a real consumer
+    # lands.
+    "scipy>=1.10.0",
+]
+data = [
+    "pandas>=1.3.0",
+]
+compression = [
+    # llmlingua is the heavy compression engine; the slim default uses the
+    # deterministic span_extractor pipeline. Guarded import in
+    # tokenpak/compression/engines/llmlingua.py.
+    "llmlingua>=0.1.0",
+]
+integrations-litellm = [
+    # litellm router middleware. Guarded imports in
+    # tokenpak/integrations/litellm/{proxy,middleware,__init__}.py.
+    "litellm>=1.0.0",
+]
+# Convenience meta-extra — `pip install tokenpak[full]` restores the legacy
+# "everything bundled" install behavior for callers who don't want to pick
+# extras individually.
+full = [
+    "tokenpak[retrieval,code-compression,intelligence,data,compression,integrations-litellm]",
+]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23.0",

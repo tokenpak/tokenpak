@@ -4,7 +4,31 @@ All notable changes to TokenPak are documented in this file.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [Unreleased] — install footprint extras split (TIP7-001)
+
+### Changed — slim core install (Standard 02 §9 / Constitution 00)
+
+The default `pip install tokenpak` no longer pulls torch / CUDA / scipy / pandas / litellm / llmlingua / sentence-transformers / tree-sitter-languages as hard dependencies. These have been moved to named optional extras under `[project.optional-dependencies]` so the slim core matches the public "no external dependencies for core functionality" claim.
+
+**Migration — breaking install change for users who depend on the heavy features:**
+
+| If you used… | Install with… |
+|---|---|
+| Vector retrieval / cross-encoder rerank (`tokenpak.retrieval.vector_local`, `tokenpak.compression.span_extractor`) | `pip install tokenpak[retrieval]` |
+| Tree-sitter code-aware compression (`tokenpak.compression.processors.code_treesitter`) | `pip install tokenpak[code-compression]` |
+| A/B optimizer significance tests (`tokenpak.intelligence.ab_optimizer`, scipy.stats) | `pip install tokenpak[intelligence]` |
+| Pandas-based reporting | `pip install tokenpak[data]` |
+| LLMLingua compression engine | `pip install tokenpak[compression]` |
+| LiteLLM router middleware (`tokenpak.integrations.litellm.*`) | `pip install tokenpak[integrations-litellm]` |
+| Everything bundled (legacy 1.5.0 behavior) | `pip install tokenpak[full]` |
+
+Every guarded import site already raises `ImportError` with the install hint when a feature extra is missing — runtime behavior is unchanged for users who add the extra. CI and the dev workflow now use `pip install -e .[full,dev]`.
+
+The new test `tests/test_dependencies_extras.py` enforces the slim-core invariant on every PR; it fails if any heavy package re-enters `[project.dependencies]` or any required extra is removed.
+
+Source: `02_COMMAND_CENTER/proposals/2026-05-01-tokenpak-install-footprint-extras-split.md`.
+
+## [1.5.0] - 2026-05-03
 
 ### Added (2026-04-28 — Phase 0, pmgtm v2)
 - **Proxy-level auth gate (`TOKENPAK_PROXY_AUTH_TOKEN`)** — opt-in middleware in `tokenpak/proxy/proxy_auth.py`, wired into `_ProxyHandler` (`server.py`). Localhost stays trusted; non-localhost requests now require `Authorization: Bearer <token>` whenever the env var is set, else 403. `hmac.compare_digest` for timing-safe comparison; SHA-256 hex of the token populates the new `user_id` column on the SQLite `requests` table (canonical telemetry-row identity, written via `Monitor.log`) and `extra.user_id` on the structured JSON request log — the raw token is never logged. Schema migration is additive (`ALTER TABLE requests ADD COLUMN user_id TEXT DEFAULT ''`), back-compatible with pre-A6 rows. I5 header-allowlist enforced: the proxy auth Bearer is stripped before forwarding upstream so the upstream provider only ever sees its own `x-api-key`. Tests in `tests/proxy/test_proxy_auth.py` cover all four gating paths, the I5 invariant against an in-process mock upstream, and a SQLite read-back asserting the row's `user_id` is the hash and never the raw token. Docs at `docs/configuration/proxy-auth.md`. Prerequisite for any future Team-tier RBAC. (P0-06 / pmgtm-v2 / M-A6, AC-A6 — standards 02 §11, 03 CLI-UX, 21 §10)
