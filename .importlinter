@@ -34,7 +34,7 @@ include_external_packages = False
 name = Six-tier dependency layering (Architecture §2)
 type = layers
 layers =
-    tokenpak.cli | tokenpak.sdk | tokenpak.companion | tokenpak.dashboard | tokenpak.alerts
+    tokenpak.cli | tokenpak.sdk | tokenpak.companion | tokenpak.dashboard | tokenpak.alerts | tokenpak.bench
     tokenpak.proxy | tokenpak.orchestration | tokenpak.plugins
     tokenpak.services
     tokenpak.telemetry | tokenpak.routing
@@ -116,6 +116,13 @@ ignore_imports =
     ; subcommand module.
     tokenpak.cli._impl -> tokenpak.companion.templates.user_templates
     ;
+    ; cli -> bench (Standard 24, §5.2-C — pure local helper):
+    ; CLI surface for `tokenpak bench --quick` and `tokenpak bench compare`.
+    ; bench is a separate entrypoint per Architecture §2, but the CLI
+    ; remains its primary user-facing invocation surface.
+    tokenpak.cli._impl -> tokenpak.bench.suite
+    tokenpak.cli._impl -> tokenpak.bench.compare
+    ;
     ; Canonical proxy.server + proxy.capsule_integration cross-tier
     ; edges that survived the agent/proxy consolidation (initiative
     ; 2026-04-20-tokenpak-agent-proxy-consolidation, landed 2026-04-20).
@@ -157,6 +164,7 @@ source_modules =
     tokenpak.companion
     tokenpak.dashboard
     tokenpak.alerts
+    tokenpak.bench
 forbidden_modules =
     tokenpak.services
 ignore_imports =
@@ -271,6 +279,17 @@ ignore_imports =
     tokenpak.companion.hooks.pre_send -> tokenpak.services.diagnostics.conformance
     tokenpak.companion.journal.store -> tokenpak.services.diagnostics.conformance
     tokenpak.companion.mcp_server._impl -> tokenpak.services.diagnostics.conformance
+    ;
+    ; === bench suite — controlled benchmark entrypoint (Standard 24) ===
+    ; §5.2-C (pure local helper; never invokes a provider in --quick).
+    ; tokenpak.bench is a separate entrypoint tier per Architecture §2,
+    ; introduced 2026-05-03 alongside Standard 24 (status: draft).
+    ; The bench suite invokes the conformance runner programmatically
+    ; for the C2 metric and the heuristic compression engine for V1-V3.
+    ; CLI surfaces the suite via `tokenpak bench --quick`.
+    tokenpak.cli._impl -> tokenpak.bench.suite
+    tokenpak.cli._impl -> tokenpak.bench.compare
+    tokenpak.bench.runners.tip_conformance -> tokenpak.services.diagnostics.conformance
 
 [importlinter:contract:entrypoints-dont-import-pipeline-primitives]
 name = Entrypoints don't reach for pipeline primitives directly (Architecture §2)
@@ -281,6 +300,7 @@ source_modules =
     tokenpak.companion
     tokenpak.dashboard
     tokenpak.alerts
+    tokenpak.bench
 forbidden_modules =
     tokenpak.compression
     tokenpak.cache
@@ -296,6 +316,13 @@ ignore_imports =
     ; editor concerns, not request execution.
     tokenpak.cli._impl -> tokenpak.routing.rules
     tokenpak.cli._impl -> tokenpak.security
+    ;
+    ; === bench suite — controlled benchmark entrypoint (Standard 24) ===
+    ; §5.2-C — bench measures the heuristic compression engine on frozen
+    ; fixtures (V1-V3) without invoking any provider. The pipeline-primitive
+    ; import is intrinsic to what the suite is measuring, not bench using
+    ; the engine for execution.
+    tokenpak.bench.runners.compression -> tokenpak.compression.engines.heuristic
     ;
     ; Canonical proxy.server transitive edges into cache and metrics.
     ; Agent/proxy consolidation landed 2026-04-20; these edges remain

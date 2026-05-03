@@ -1944,6 +1944,33 @@ def cmd_benchmark(args):
         run_compression_benchmark(file=file_arg, use_samples=use_samples, as_json=as_json)
 
 
+def cmd_bench_quick(args) -> int:
+    """Run the controlled benchmark suite's --quick tier (Standard 24)."""
+    from ..bench.suite import run_quick
+
+    json_output = bool(getattr(args, "json", False))
+    report = run_quick(json_output=json_output)
+    if json_output:
+        out = {
+            "suite_version": report.suite_version,
+            "tokenpak_version": report.tokenpak_version,
+            "tokenpak_commit": report.tokenpak_commit,
+            "host": report.host,
+            "run_id": report.run_id,
+            "duration_ms": report.duration_ms,
+            "records": report.records,
+        }
+        print(json.dumps(out, indent=2))
+    return 0
+
+
+def cmd_bench_compare(args) -> int:
+    """Diff two recorded benchmark runs (Standard 24 §7.3)."""
+    from ..bench.compare import compare
+
+    return compare(args.a, args.b)
+
+
 def cmd_calibrate(args):
     """Run static worker calibration and save host profile."""
     result = calibrate_workers(args.directory, max_workers=args.max_workers, rounds=args.rounds)
@@ -3299,6 +3326,23 @@ def build_parser():
         "--compare", action="store_true", help="Compare baseline vs optimized (latency mode only)"
     )
     p_bench.set_defaults(func=cmd_benchmark)
+
+    # `tokenpak bench` — controlled benchmark suite per Standard 24
+    # (separate from `tokenpak benchmark` above, which is the legacy ad-hoc
+    # compression/latency benchmark).
+    p_bench2 = sub.add_parser(
+        "bench",
+        help="Controlled, version-tracked benchmark suite (Standard 24)",
+    )
+    bench_sub = p_bench2.add_subparsers(dest="bench_cmd")
+    p_bench_compare = bench_sub.add_parser("compare", help="Compare two recorded runs")
+    p_bench_compare.add_argument("a", help="run-id prefix, tokenpak_version, or 'latest'")
+    p_bench_compare.add_argument("b", help="run-id prefix, tokenpak_version, or 'latest'")
+    p_bench_compare.set_defaults(func=cmd_bench_compare)
+    # Default action when no subcommand is given: --quick
+    p_bench2.add_argument("--quick", action="store_true", help="Run the quick tier (< 30s, mock upstreams only) [default if no subcommand]")
+    p_bench2.add_argument("--json", action="store_true", help="Emit JSON instead of human-readable")
+    p_bench2.set_defaults(func=cmd_bench_quick)
 
     p_cal = sub.add_parser("calibrate", help="Calibrate best worker count for this host")
     p_cal.add_argument("directory", help="Directory to sample for calibration")
