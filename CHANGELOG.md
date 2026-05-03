@@ -5,7 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.23] - 2026-04-24
+## [1.4.0] - 2026-05-03
+
+This release consolidates the work merged on `main` since `v1.3.22` (Apr 25). The previously-staged but never-tagged `1.3.23` content (Codex format adapter) is included here under "Codex format adapter restored." Three large initiatives shipped on top of it: **Intent Layer**, **Native Client Concurrency Parity (NCP)**, and **OpenClaw Path C session-binding via governor failover**.
+
+### Added — Intent Layer (PRs #46–#55, #57–#60; closeout #56, #61)
+
+A new observation→advisory→opt-in-suggestion→opt-in-injection pipeline for understanding and (optionally) shaping prompt-side intent before traffic leaves the local boundary. All phases are dry-run or opt-in; nothing is forced.
+
+- `tokenpak intent report` (Phase 1) — observation-only intent reporting CLI surface.
+- Intent dashboard / read-model (Phase 1.1).
+- Intent policy engine — design (Phase 2), dry-run engine (Phase 2.1), explain / report / dashboard preview (Phase 2.2).
+- Opt-in suggest mode — spec (Phase 2.4), `PolicySuggestion` builder + telemetry (Phase 2.4.1), display surfaces (Phase 2.4.2), config (Phase 2.4.3).
+- Confirmation mode — design / spec (Phase 2.5).
+- **PromptPatch (Intent Prompt Intervention)** — design (PI-0), `PromptPatch` builder + `intent_patches` table (PI-1), Claude Code Companion intent preview surface (PI-2), opt-in companion-side `PromptPatch` injection (PI-3).
+- Closeout milestone docs for Intent Advisory MVP and Claude Code Intent Guidance Injection MVP.
+
+### Added — Native Client Concurrency Parity (NCP) (PRs #62–#72, #77–#78, #80–#81)
+
+Diagnostic, instrumentation, and advisory mitigation for native vs. tokenpak-proxied concurrency parity gaps observed under Claude Code's multi-lane traffic.
+
+- Diagnostic + standard proposal (NCP-0).
+- Claude Code parity A/B test harness + operator protocol (NCP-1).
+- OAuth / subscription parity redesign — auth-plane scoping correction (NCP-1r), launcher-path fix (NCP-1r-fix).
+- 1v1 baseline + hypothesis re-rank + A/B/C/D plan (NCP-1a iter-1); 2-TP retry + 1-native healthy concurrent observation (iter-3); retry localizes to post-tool-result continuation (iter-4).
+- Session-lane diagnostic plan + iter-2 update + read-only inspection harness (NCP-3).
+- In-proxy parity-trace instrumentation v1 (NCP-3I), activation verification + H10 stream-integrity (NCP-3I-v2), pre-dispatch lifecycle hooks + `stream_abort` (NCP-3I-v3).
+- Terminal early-return events for `adapter_detected → before_dispatch` death cohort (NCP-3A enrichment).
+- `tp_parity_trace` canonicality for wire-side completion (issue #73).
+- `stream_abort` phase classification (issue #74 phase 1).
+- **Advisory circuit-breaker mode for `anthropic`** (NCP-4 phase A) — opt-in, observe-only by default; flips to enforce only after operator-configured soak.
+
+### Added — OpenClaw Path C session-binding (PR #82)
+
+Governor failover provisioning batch (5 commits) shipping the Path C filesystem-rendezvous pattern for OpenClaw v2026.3.23-2 (which has no outbound-request mutation surface).
+
+- `tokenpak/integrations/openclaw/hooks/openclaw-adapter/` — `HOOK.md` (manifest), `handler.js`, `tests/test-active-json.js`.
+- `tokenpak/services/routing_service/platform_bridge.py` — `_openclaw_extract` reads `~/.openclaw/sessions/active.json` for cross-platform `session_id` attribution.
+- `integrations/openclaw/tokenpak-inject.sh` — installer that adds the `openclaw-adapter` hook bundle non-destructively.
 
 ### Added — `OpenAICodexResponsesAdapter` (Codex format adapter restored)
 
