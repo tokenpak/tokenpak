@@ -1,0 +1,21 @@
+{
+  "fixtures": {
+    "aider_corpus.txt": {
+      "sha256": "51aa72c92bce2ac98a6b29e950f2e81ad6a142da7586458cef21c35f0a9c52c5",
+      "size_bytes": 7527
+    },
+    "byte_fidelity_corpus.jsonl": {
+      "sha256": "f4900ab099d0568444d16d1e6ef9e620fd9ee3a94d4d5cf496dde24143bf837f",
+      "size_bytes": 3048
+    },
+    "cursor_corpus.txt": {
+      "sha256": "5dca68579a015fe21034127474e3909facf05ebc1cf0b2641bf6d7acc2d82bc0",
+      "size_bytes": 6048
+    },
+    "headline_corpus.txt": {
+      "sha256": "d52786c83129950097f553ddc12493cae9d4c7c2b41bc2f77ba3d075a0440098",
+      "size_bytes": 7313
+    }
+  },
+  "suite_version": "1.0.0"
+}
